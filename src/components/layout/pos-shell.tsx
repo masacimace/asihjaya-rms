@@ -1,0 +1,548 @@
+"use client";
+
+import {
+  Bell,
+  ChevronRight,
+  Clock3,
+  LayoutDashboard,
+  Menu,
+  MoreHorizontal,
+  Pause,
+  Printer,
+  ReceiptText,
+  ScanBarcode,
+  Search,
+  ShoppingBag,
+  Store,
+  UsersRound,
+  Wifi,
+  X,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { UserMenu } from "@/components/auth/user-menu";
+import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
+
+import { cn } from "@/lib/utils";
+
+type PosShellUser = {
+  fullName: string;
+  roleLabel: string;
+  canAccessAdmin: boolean;
+  outletName: string;
+};
+
+type PosShellStatus = {
+  outletName: string;
+  registerName: string | null;
+  shift: {
+    status: "open" | "closed" | "not_configured";
+    openedAt: string | Date | null;
+    openingCash: string | null;
+    expectedCash: string | null;
+    label: string;
+  };
+  hardware: {
+    status: "online" | "stale" | "offline" | "disabled" | "not_configured";
+    label: string;
+    agentName: string | null;
+    lastSeenAt: string | Date | null;
+    hasConfigWarnings: boolean;
+  };
+};
+
+type PosWorkspaceCommand = {
+  type: "search" | "scan";
+  value: string;
+};
+
+const POS_WORKSPACE_COMMAND_EVENT = "asihjaya:pos-workspace-command";
+const POS_PENDING_COMMAND_STORAGE_KEY =
+  "asihjaya:pos-workspace-pending-command";
+
+const fallbackStatus: PosShellStatus = {
+  outletName: "Outlet belum dipilih",
+  registerName: null,
+  shift: {
+    status: "not_configured",
+    openedAt: null,
+    openingCash: null,
+    expectedCash: null,
+    label: "Shift belum dicek",
+  },
+  hardware: {
+    status: "not_configured",
+    label: "Hardware Hub belum dicek",
+    agentName: null,
+    lastSeenAt: null,
+    hasConfigWarnings: false,
+  },
+};
+
+const navigation = [
+  { label: "POS", href: "/pos", icon: ShoppingBag },
+  { label: "Transaksi", href: "/pos/transaksi", icon: ReceiptText },
+  { label: "Pelanggan", href: "/pos/pelanggan", icon: UsersRound },
+  { label: "Ditahan", href: "/pos/ditahan", icon: Pause },
+  { label: "Shift Saat Ini", href: "/pos/shift", icon: Clock3 },
+] as const;
+
+type SidebarContentProps = {
+  pathname: string;
+  canAccessAdmin: boolean;
+  onNavigate?: () => void;
+};
+
+function isNavigationActive(pathname: string, href: string) {
+  return href === "/pos" ? pathname === href : pathname.startsWith(href);
+}
+
+function formatStatusTime(value: string | Date | null) {
+  if (!value) {
+    return null;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function getShiftStatusLabel(status: PosShellStatus["shift"]) {
+  if (status.status !== "open") {
+    return status.label;
+  }
+
+  const openedAt = formatStatusTime(status.openedAt);
+
+  return openedAt ? `Shift aktif sejak ${openedAt}` : status.label;
+}
+
+function getShiftStatusClassName(status: PosShellStatus["shift"]["status"]) {
+  if (status === "open") {
+    return "text-[var(--success)]";
+  }
+
+  if (status === "closed") {
+    return "text-amber-700";
+  }
+
+  return "text-red-600";
+}
+
+function getHardwareStatusClassName(
+  status: PosShellStatus["hardware"]["status"],
+) {
+  if (status === "online") {
+    return "text-[var(--success)]";
+  }
+
+  if (status === "stale") {
+    return "text-amber-700";
+  }
+
+  return "text-red-600";
+}
+
+function SidebarContent({
+  pathname,
+  canAccessAdmin,
+  onNavigate,
+}: SidebarContentProps) {
+  return (
+    <>
+      <Link
+        href="/pos"
+        onClick={onNavigate}
+        className="mb-8 flex items-center gap-3 px-2"
+      >
+        <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+          <Store className="size-5" />
+        </div>
+
+        <div className="min-w-0">
+          <p className="font-semibold tracking-wide text-neutral-950">
+            ASIHJAYA
+          </p>
+          <p className="truncate text-xs text-[var(--muted)]">Aplikasi POS</p>
+        </div>
+      </Link>
+
+      <nav className="space-y-1">
+        {navigation.map(({ label, href, icon: Icon }) => {
+          const active = isNavigationActive(pathname, href);
+
+          return (
+            <Link
+              key={href}
+              href={href}
+              onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
+                active
+                  ? "bg-[var(--accent-soft)] text-neutral-950"
+                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
+              )}
+            >
+              <Icon
+                className={cn(
+                  "size-[18px] shrink-0",
+                  active && "text-[var(--accent)]",
+                )}
+              />
+
+              <span>{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {canAccessAdmin ? (
+        <div className="mt-auto pt-6">
+          <Link
+            href="/admin"
+            onClick={onNavigate}
+            className="group flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-3 transition-all hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
+          >
+            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] transition-transform group-hover:scale-105">
+              <LayoutDashboard className="size-5" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-neutral-950">
+                Dashboard Admin
+              </p>
+              <p className="truncate text-xs text-[var(--muted)]">
+                Kelola operasional
+              </p>
+            </div>
+
+            <ChevronRight className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
+          </Link>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+export function PosShell({
+  children,
+  user,
+  status,
+}: {
+  children: ReactNode;
+  user: PosShellUser;
+  status?: PosShellStatus;
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const operationalStatus = status ?? fallbackStatus;
+  const shiftLabel = getShiftStatusLabel(operationalStatus.shift);
+
+  const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [topbarQuery, setTopbarQuery] = useState("");
+
+  function sendPosWorkspaceCommand(command: PosWorkspaceCommand) {
+    const normalizedValue = command.value.trim();
+
+    if (!normalizedValue && command.type === "scan") {
+      return;
+    }
+
+    const nextCommand = { ...command, value: normalizedValue };
+
+    if (typeof window !== "undefined" && pathname === "/pos") {
+      window.dispatchEvent(
+        new CustomEvent(POS_WORKSPACE_COMMAND_EVENT, {
+          detail: nextCommand,
+        }),
+      );
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(
+        POS_PENDING_COMMAND_STORAGE_KEY,
+        JSON.stringify(nextCommand),
+      );
+    }
+
+    router.push("/pos");
+  }
+
+  function handleTopbarSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    sendPosWorkspaceCommand({ type: "search", value: topbarQuery });
+  }
+
+  return (
+    <div className="min-h-screen bg-[var(--background)] lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
+      {/* Sidebar desktop */}
+      <aside className="sticky top-0 hidden h-screen flex-col border-r border-[var(--border)] bg-white p-5 lg:flex">
+        <SidebarContent
+          pathname={pathname}
+          canAccessAdmin={user.canAccessAdmin}
+        />
+      </aside>
+
+      {/* Navigation drawer tablet/mobile */}
+      {isNavigationOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label="Tutup navigasi"
+            className="absolute inset-0 bg-black/30 backdrop-blur-[1px]"
+            onClick={() => setIsNavigationOpen(false)}
+          />
+
+          <aside className="relative z-10 flex h-full w-[min(86vw,300px)] flex-col border-r border-[var(--border)] bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex justify-end">
+              <button
+                type="button"
+                aria-label="Tutup menu"
+                onClick={() => setIsNavigationOpen(false)}
+                className="grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <SidebarContent
+              pathname={pathname}
+              canAccessAdmin={user.canAccessAdmin}
+              onNavigate={() => setIsNavigationOpen(false)}
+            />
+          </aside>
+        </div>
+      ) : null}
+
+      {/* Menu lainnya mobile */}
+      {isMoreOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label="Tutup menu lainnya"
+            className="absolute inset-0 bg-black/30 backdrop-blur-[1px]"
+            onClick={() => setIsMoreOpen(false)}
+          />
+
+          <section className="absolute inset-x-0 bottom-0 z-10 rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl">
+            <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-neutral-200" />
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-neutral-950">Menu Lainnya</h2>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  Akses fungsi pendukung POS.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                aria-label="Tutup"
+                onClick={() => setIsMoreOpen(false)}
+                className="grid size-10 place-items-center rounded-xl text-neutral-500 hover:bg-neutral-100"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              <button
+                type="button"
+                className="flex items-center gap-3 rounded-2xl border border-[var(--border)] p-4 text-left"
+              >
+                <Printer className="size-5 text-[var(--accent)]" />
+                <span className="text-sm font-medium">
+                  Pemeriksaan Perangkat
+                </span>
+              </button>
+
+              {user.canAccessAdmin ? (
+                <Link
+                  href="/admin"
+                  onClick={() => setIsMoreOpen(false)}
+                  className="flex items-center gap-3 rounded-2xl border border-[var(--border)] p-4"
+                >
+                  <LayoutDashboard className="size-5 text-[var(--accent)]" />
+                  <span className="text-sm font-medium">
+                    Kembali ke Dashboard Admin
+                  </span>
+                </Link>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      <div className="flex min-h-screen min-w-0 flex-col">
+        {/* Topbar */}
+        <header className="sticky top-0 z-40 flex h-[72px] items-center gap-3 border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur sm:px-5 lg:px-6">
+          <button
+            type="button"
+            aria-label="Buka navigasi"
+            onClick={() => setIsNavigationOpen(true)}
+            className="grid size-10 shrink-0 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950 lg:hidden"
+          >
+            <Menu className="size-5" />
+          </button>
+
+          <div className="min-w-0 lg:hidden">
+            <p className="truncate text-sm font-semibold text-neutral-950">
+              ASIHJAYA POS
+            </p>
+            <p className="truncate text-xs text-[var(--muted)]">
+              {user.outletName}
+            </p>
+          </div>
+
+          <form
+            onSubmit={handleTopbarSearchSubmit}
+            className="hidden h-11 w-full max-w-[560px] items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-4 text-sm md:flex"
+          >
+            <Search className="size-4 shrink-0 text-neutral-400" />
+
+            <input
+              type="search"
+              value={topbarQuery}
+              onChange={(event) => setTopbarQuery(event.target.value)}
+              placeholder="Cari SKU, barcode, nama, dan serial..."
+              className="min-w-0 flex-1 bg-transparent text-neutral-950 outline-none placeholder:text-neutral-400"
+            />
+
+            <kbd className="hidden rounded-md border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-1 text-[10px] text-[var(--muted)] xl:inline-flex">
+              Enter
+            </kbd>
+          </form>
+
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setIsScannerOpen(true)}
+              className="hidden h-10 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 sm:flex"
+            >
+              <ScanBarcode className="size-4" />
+              <span className="hidden xl:inline">Scan Barcode</span>
+            </button>
+
+            <button
+              type="button"
+              aria-label="Notifikasi"
+              className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
+            >
+              <Bell className="size-5" />
+
+              <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-white bg-[var(--accent)]" />
+            </button>
+
+            <UserMenu
+              fullName={user.fullName}
+              roleLabel={user.roleLabel}
+              currentArea="pos"
+              canAccessAdmin={user.canAccessAdmin}
+            />
+          </div>
+        </header>
+
+        <main className="min-h-0 flex-1 pb-[112px] lg:pb-0">{children}</main>
+
+        {/* Status bar desktop */}
+        <footer className="hidden h-12 shrink-0 items-center justify-between border-t border-[var(--border)] bg-white px-5 text-xs text-[var(--muted)] lg:flex lg:px-6">
+          <div className="flex items-center gap-6">
+            <span className="flex items-center gap-2 text-[var(--success)]">
+              <span className="size-2 rounded-full bg-current shadow-[0_0_0_4px_rgba(31,138,85,0.12)]" />
+              Online
+            </span>
+
+            <span className="flex items-center gap-2">
+              <Store className="size-4" />
+              {user.outletName}
+            </span>
+
+            <span
+              className={cn(
+                "flex items-center gap-2",
+                getShiftStatusClassName(operationalStatus.shift.status),
+              )}
+            >
+              <Clock3 className="size-4" />
+              {shiftLabel}
+            </span>
+          </div>
+
+          <span
+            className={cn(
+              "flex items-center gap-2",
+              getHardwareStatusClassName(operationalStatus.hardware.status),
+            )}
+          >
+            <Printer className="size-4" />
+            {operationalStatus.hardware.label}
+          </span>
+        </footer>
+      </div>
+
+      {/* Status dan navigation mobile */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-white lg:hidden">
+        <div className="flex h-9 items-center justify-between border-b border-[var(--border)] px-4 text-[11px] text-[var(--muted)]">
+          <span className="flex items-center gap-2 text-[var(--success)]">
+            <Wifi className="size-3.5" />
+            Online
+          </span>
+
+          <span className="truncate">
+            {operationalStatus.outletName || user.outletName} · {shiftLabel}
+          </span>
+        </div>
+
+        <nav className="grid h-[72px] grid-cols-4 pb-[env(safe-area-inset-bottom)]">
+          {navigation.slice(0, 3).map(({ label, href, icon: Icon }) => {
+            const active = isNavigationActive(pathname, href);
+
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 text-[11px] font-medium",
+                  active ? "text-[var(--accent)]" : "text-neutral-500",
+                )}
+              >
+                <Icon className="size-5" />
+                <span>{label}</span>
+              </Link>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => setIsMoreOpen(true)}
+            className="flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-neutral-500"
+          >
+            <MoreHorizontal className="size-5" />
+            <span>Lainnya</span>
+          </button>
+        </nav>
+      </div>
+
+      <CameraScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={(result) => {
+          setIsScannerOpen(false);
+          sendPosWorkspaceCommand({ type: "scan", value: result });
+        }}
+      />
+    </div>
+  );
+}
