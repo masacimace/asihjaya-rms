@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Clock3,
   LayoutDashboard,
-  Menu,
   MoreHorizontal,
   Pause,
   Printer,

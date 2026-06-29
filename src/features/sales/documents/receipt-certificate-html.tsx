@@ -316,6 +316,7 @@ const styles = String.raw`
     display: grid;
     width: 14mm;
     height: 14mm;
+    overflow: hidden;
     place-items: center;
     justify-self: center;
     border: 0.18mm solid rgba(179, 122, 31, 0.26);
@@ -325,6 +326,18 @@ const styles = String.raw`
     font-size: 4.8pt;
     font-weight: 800;
     text-align: center;
+  }
+
+  .aj-thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .aj-thumb-fallback {
+    padding: 1mm;
+    line-height: 1.1;
   }
 
   .aj-product-name {
@@ -682,6 +695,40 @@ function getThumbnailLabel(item: ReceiptCertificateData["items"][number]) {
   return item.snapshot.categoryName ?? "Produk";
 }
 
+function getProductImageKey(item: ReceiptCertificateData["items"][number]) {
+  return item.snapshot.imageKey ?? item.snapshot.productImageKey ?? null;
+}
+
+function getMediaImageUrl(imageKey: string) {
+  const normalizedKey = imageKey
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `/media/${normalizedKey}`;
+}
+
+function ProductThumbnail({
+  item,
+}: {
+  item: ReceiptCertificateData["items"][number];
+}) {
+  const imageKey = getProductImageKey(item);
+
+  if (!imageKey) {
+    return <div className="aj-thumb aj-thumb-fallback">{getThumbnailLabel(item)}</div>;
+  }
+
+  return (
+    <div className="aj-thumb">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={getMediaImageUrl(imageKey)} alt={getItemName(item)} />
+    </div>
+  );
+}
+
+
 function getPaymentSummary(data: ReceiptCertificateData) {
   if (data.payments.length === 0) {
     return "Pembayaran tercatat";
@@ -817,7 +864,7 @@ export function ReceiptCertificateHtmlDocument({
               {visibleItems.map((item) => (
                 <div className="aj-product-row" key={item.lineNumber}>
                   <div className="aj-code">{getProductCode(item)}</div>
-                  <div className="aj-thumb">{getThumbnailLabel(item)}</div>
+                  <ProductThumbnail item={item} />
                   <div>
                     <div className="aj-product-name">{getItemName(item)}</div>
                     <div className="aj-product-meta">

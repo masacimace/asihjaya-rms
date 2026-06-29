@@ -6,6 +6,8 @@ import {
   organizations,
   outlets,
   payments,
+  productItems,
+  productMasters,
   registers,
   saleItems,
   sales,
@@ -43,6 +45,8 @@ type SaleItemSnapshot = {
   color?: string | null;
   gemstone?: string | null;
   sellingAmount?: string | null;
+  imageKey?: string | null;
+  productImageKey?: string | null;
 };
 
 export type ReceiptCertificateData = {
@@ -123,6 +127,8 @@ function toSafeSnapshot(value: Record<string, unknown>): SaleItemSnapshot {
     color: readString("color"),
     gemstone: readString("gemstone"),
     sellingAmount: readString("sellingAmount"),
+    imageKey: readString("imageKey"),
+    productImageKey: readString("productImageKey"),
   };
 }
 
@@ -196,8 +202,12 @@ export async function getReceiptCertificateData({
       discountAmount: saleItems.discountAmount,
       finalPriceAmount: saleItems.finalPriceAmount,
       snapshot: saleItems.snapshot,
+      itemImageKey: productItems.imageKey,
+      productImageKey: productMasters.imageKey,
     })
     .from(saleItems)
+    .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
+    .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
     .where(eq(saleItems.saleId, saleId))
     .orderBy(asc(saleItems.lineNumber));
 
@@ -251,13 +261,21 @@ export async function getReceiptCertificateData({
       completedAt: sale.completedAt,
       notes: sale.notes,
     },
-    items: itemRows.map((item) => ({
-      lineNumber: item.lineNumber,
-      listPriceAmount: item.listPriceAmount,
-      discountAmount: item.discountAmount,
-      finalPriceAmount: item.finalPriceAmount,
-      snapshot: toSafeSnapshot(item.snapshot),
-    })),
+    items: itemRows.map((item) => {
+      const snapshot = toSafeSnapshot(item.snapshot);
+
+      return {
+        lineNumber: item.lineNumber,
+        listPriceAmount: item.listPriceAmount,
+        discountAmount: item.discountAmount,
+        finalPriceAmount: item.finalPriceAmount,
+        snapshot: {
+          ...snapshot,
+          imageKey: snapshot.imageKey ?? item.itemImageKey,
+          productImageKey: snapshot.productImageKey ?? item.productImageKey,
+        },
+      };
+    }),
     payments: paymentRows.map((payment) => ({
       method: payment.method,
       provider: payment.provider,
