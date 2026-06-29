@@ -3096,7 +3096,7 @@ export function PosWorkspace({
               >
                 {category.name}
                 {category.totalAvailableItems > 0 ? (
-                  <span className="ml-2 text-[10px] text-current/60">
+                  <span className="ml-2 rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] text-[var(--accent)]">
                     {category.totalAvailableItems}
                   </span>
                 ) : null}

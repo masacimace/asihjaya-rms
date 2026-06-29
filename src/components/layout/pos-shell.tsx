@@ -565,7 +565,7 @@ export function PosShell({
               alt="Logo Asihjaya"
               width={120}
               height={34}
-              className="h-13 w-auto object-contain"
+              className="h-12 w-auto object-contain"
               priority
             />
           </div>

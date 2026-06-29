@@ -37,7 +37,7 @@ export function UserMenu({
         onClick={() => setIsOpen((current) => !current)}
         className="flex items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition hover:bg-neutral-100 sm:px-2"
       >
-        <CircleUserRound className="size-9 shrink-0 text-neutral-500" />
+        <CircleUserRound className="size-7 shrink-0 text-neutral-500" />
 
         <div className="hidden min-w-0 sm:block">
           <p className="max-w-36 truncate text-xs font-medium text-neutral-950">
