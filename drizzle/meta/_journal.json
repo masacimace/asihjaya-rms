@@ -36,6 +36,13 @@
       "when": 1782682788057,
       "tag": "0004_friendly_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782810000000,
+      "tag": "0005_item_display_name",
+      "breakpoints": true
     }
   ]
 }

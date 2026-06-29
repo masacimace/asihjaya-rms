@@ -1,16 +1,4 @@
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  gte,
-  ilike,
-  inArray,
-  or,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -55,10 +43,7 @@ type ScannedPosItemRow = PosAvailableItem & {
   categoryIsActive: boolean;
 };
 
-const itemAvailabilityLabels: Record<
-  ScannedPosItemRow["availability"],
-  string
-> = {
+const itemAvailabilityLabels: Record<ScannedPosItemRow["availability"], string> = {
   draft: "masih draft",
   available: "tersedia",
   reserved: "sedang di-reserve",
@@ -80,9 +65,7 @@ const itemLocationLabels: Record<ScannedPosItemRow["locationState"], string> = {
   repair: "perbaikan",
 };
 
-function mapScannedRowToAvailableItem(
-  row: ScannedPosItemRow,
-): PosAvailableItem {
+function mapScannedRowToAvailableItem(row: ScannedPosItemRow): PosAvailableItem {
   return {
     id: row.id,
     sku: row.sku,
@@ -256,137 +239,125 @@ export async function getPosInitialData({
     };
   }
 
-  const [registerRows, categoryRows, itemRows, customerRows] =
-    await Promise.all([
-      db
-        .select({
-          id: registers.id,
-          code: registers.code,
-          name: registers.name,
-          isHardwareHub: registers.isHardwareHub,
-        })
-        .from(registers)
-        .where(
-          and(eq(registers.outletId, outlet.id), eq(registers.isActive, true)),
-        )
-        .orderBy(desc(registers.isHardwareHub), asc(registers.name))
-        .limit(1),
+  const [registerRows, categoryRows, itemRows, customerRows] = await Promise.all([
+    db
+      .select({
+        id: registers.id,
+        code: registers.code,
+        name: registers.name,
+        isHardwareHub: registers.isHardwareHub,
+      })
+      .from(registers)
+      .where(and(eq(registers.outletId, outlet.id), eq(registers.isActive, true)))
+      .orderBy(desc(registers.isHardwareHub), asc(registers.name))
+      .limit(1),
 
-      db
-        .select({
-          id: productCategories.id,
-          code: productCategories.code,
-          name: productCategories.name,
-          totalAvailableItems: count(productItems.id),
-        })
-        .from(productCategories)
-        .leftJoin(
-          productMasters,
-          and(
-            eq(productMasters.categoryId, productCategories.id),
-            eq(productMasters.organizationId, organizationId),
-            eq(productMasters.status, "active"),
-          ),
-        )
-        .leftJoin(
-          productItems,
-          and(
-            eq(productItems.productMasterId, productMasters.id),
-            eq(productItems.organizationId, organizationId),
-            eq(productItems.currentOutletId, outlet.id),
-            eq(productItems.isActive, true),
-            eq(productItems.availability, "available"),
-            eq(productItems.condition, "good"),
-            eq(productItems.locationState, "outlet"),
-            activeHeldItemNotExistsCondition(),
-          ),
-        )
-        .where(
-          and(
-            eq(productCategories.organizationId, organizationId),
-            eq(productCategories.isActive, true),
-          ),
-        )
-        .groupBy(
-          productCategories.id,
-          productCategories.code,
-          productCategories.name,
-          productCategories.displayOrder,
-        )
-        .orderBy(
-          asc(productCategories.displayOrder),
-          asc(productCategories.name),
-        ),
-
-      db
-        .select({
-          id: productItems.id,
-          sku: productItems.sku,
-          barcode: productItems.barcode,
-          qrValue: productItems.qrValue,
-          serialNumber: productItems.serialNumber,
-          weightGram: productItems.weightGram,
-          purityPercent: productItems.purityPercent,
-          exchangePurityPercent: productItems.exchangePurityPercent,
-          size: productItems.size,
-          color: productItems.color,
-          gemstone: productItems.gemstone,
-          sellingAmount: productItems.sellingAmount,
-          imageKey: productItems.imageKey,
-          productImageKey: productMasters.imageKey,
-          productId: productMasters.id,
-          productCode: productMasters.code,
-          productName: productMasters.name,
-          categoryId: productCategories.id,
-          categoryName: productCategories.name,
-          outletId: outlets.id,
-          outletCode: outlets.code,
-          outletName: outlets.name,
-        })
-        .from(productItems)
-        .innerJoin(
-          productMasters,
-          eq(productItems.productMasterId, productMasters.id),
-        )
-        .innerJoin(
-          productCategories,
+    db
+      .select({
+        id: productCategories.id,
+        code: productCategories.code,
+        name: productCategories.name,
+        totalAvailableItems: count(productItems.id),
+      })
+      .from(productCategories)
+      .leftJoin(
+        productMasters,
+        and(
           eq(productMasters.categoryId, productCategories.id),
-        )
-        .leftJoin(outlets, eq(productItems.currentOutletId, outlets.id))
-        .where(
-          and(
-            eq(productItems.organizationId, organizationId),
-            eq(productItems.currentOutletId, outlet.id),
-            eq(productItems.isActive, true),
-            eq(productItems.availability, "available"),
-            eq(productItems.condition, "good"),
-            eq(productItems.locationState, "outlet"),
-            eq(productMasters.status, "active"),
-            eq(productCategories.isActive, true),
-            activeHeldItemNotExistsCondition(),
-          ),
-        )
-        .orderBy(desc(productItems.updatedAt), asc(productItems.sku))
-        .limit(POS_INITIAL_ITEM_LIMIT),
+          eq(productMasters.organizationId, organizationId),
+          eq(productMasters.status, "active"),
+        ),
+      )
+      .leftJoin(
+        productItems,
+        and(
+          eq(productItems.productMasterId, productMasters.id),
+          eq(productItems.organizationId, organizationId),
+          eq(productItems.currentOutletId, outlet.id),
+          eq(productItems.isActive, true),
+          eq(productItems.availability, "available"),
+          eq(productItems.condition, "good"),
+          eq(productItems.locationState, "outlet"),
+          activeHeldItemNotExistsCondition(),
+        ),
+      )
+      .where(
+        and(
+          eq(productCategories.organizationId, organizationId),
+          eq(productCategories.isActive, true),
+        ),
+      )
+      .groupBy(
+        productCategories.id,
+        productCategories.code,
+        productCategories.name,
+        productCategories.displayOrder,
+      )
+      .orderBy(asc(productCategories.displayOrder), asc(productCategories.name)),
 
-      db
-        .select({
-          id: customers.id,
-          customerCode: customers.customerCode,
-          fullName: customers.fullName,
-          phone: customers.phone,
-          email: customers.email,
-        })
-        .from(customers)
-        .where(
-          and(
-            eq(customers.organizationId, organizationId),
-            eq(customers.isActive, true),
-          ),
-        )
-        .orderBy(asc(customers.fullName), desc(customers.createdAt))
-        .limit(80),
-    ]);
+    db
+      .select({
+        id: productItems.id,
+        sku: productItems.sku,
+        barcode: productItems.barcode,
+        qrValue: productItems.qrValue,
+        serialNumber: productItems.serialNumber,
+        weightGram: productItems.weightGram,
+        purityPercent: productItems.purityPercent,
+        exchangePurityPercent: productItems.exchangePurityPercent,
+        size: productItems.size,
+        color: productItems.color,
+        gemstone: productItems.gemstone,
+        sellingAmount: productItems.sellingAmount,
+        imageKey: productItems.imageKey,
+        productImageKey: productMasters.imageKey,
+        productId: productMasters.id,
+        productCode: productMasters.code,
+        productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
+        categoryId: productCategories.id,
+        categoryName: productCategories.name,
+        outletId: outlets.id,
+        outletCode: outlets.code,
+        outletName: outlets.name,
+      })
+      .from(productItems)
+      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+      .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
+      .leftJoin(outlets, eq(productItems.currentOutletId, outlets.id))
+      .where(
+        and(
+          eq(productItems.organizationId, organizationId),
+          eq(productItems.currentOutletId, outlet.id),
+          eq(productItems.isActive, true),
+          eq(productItems.availability, "available"),
+          eq(productItems.condition, "good"),
+          eq(productItems.locationState, "outlet"),
+          eq(productMasters.status, "active"),
+          eq(productCategories.isActive, true),
+          activeHeldItemNotExistsCondition(),
+        ),
+      )
+      .orderBy(desc(productItems.updatedAt), asc(productItems.sku))
+      .limit(POS_INITIAL_ITEM_LIMIT),
+
+    db
+      .select({
+        id: customers.id,
+        customerCode: customers.customerCode,
+        fullName: customers.fullName,
+        phone: customers.phone,
+        email: customers.email,
+      })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.organizationId, organizationId),
+          eq(customers.isActive, true),
+        ),
+      )
+      .orderBy(asc(customers.fullName), desc(customers.createdAt))
+      .limit(80),
+  ]);
 
   const register = registerRows[0] ?? null;
 
@@ -471,7 +442,7 @@ export async function lookupPosItemByScanValue({
       productImageKey: productMasters.imageKey,
       productId: productMasters.id,
       productCode: productMasters.code,
-      productName: productMasters.name,
+      productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
       categoryId: productCategories.id,
       categoryName: productCategories.name,
       outletId: outlets.id,
@@ -485,14 +456,8 @@ export async function lookupPosItemByScanValue({
       categoryIsActive: productCategories.isActive,
     })
     .from(productItems)
-    .innerJoin(
-      productMasters,
-      eq(productItems.productMasterId, productMasters.id),
-    )
-    .innerJoin(
-      productCategories,
-      eq(productMasters.categoryId, productCategories.id),
-    )
+    .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+    .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
     .leftJoin(outlets, eq(productItems.currentOutletId, outlets.id))
     .where(
       and(
@@ -565,6 +530,7 @@ export async function lookupPosItemByScanValue({
   };
 }
 
+
 const HARDWARE_ONLINE_WINDOW_MS = 2 * 60 * 1000;
 const HARDWARE_STALE_WINDOW_MS = 10 * 60 * 1000;
 
@@ -607,9 +573,7 @@ function readConfigWarnings(value: unknown) {
   const warnings = record.config_warnings;
 
   return Array.isArray(warnings)
-    ? warnings.filter(
-        (warning): warning is string => typeof warning === "string",
-      )
+    ? warnings.filter((warning): warning is string => typeof warning === "string")
     : [];
 }
 
@@ -617,13 +581,15 @@ function getHardwareStatus({
   agent,
   now,
 }: {
-  agent: {
-    name: string;
-    status: "online" | "offline" | "disabled";
-    isActive: boolean;
-    lastSeenAt: Date | null;
-    capabilities: Record<string, unknown> | null;
-  } | null;
+  agent:
+    | {
+        name: string;
+        status: "online" | "offline" | "disabled";
+        isActive: boolean;
+        lastSeenAt: Date | null;
+        capabilities: Record<string, unknown> | null;
+      }
+    | null;
   now: Date;
 }): PosShellStatus["hardware"] {
   if (!agent) {
@@ -663,7 +629,7 @@ function getHardwareStatus({
   if (agent.status === "online" && diffMs <= HARDWARE_ONLINE_WINDOW_MS) {
     return {
       status: hasConfigWarnings ? "stale" : "online",
-      label: hasConfigWarnings ? "Hardware perlu cek" : "Hardware Hub Online",
+      label: hasConfigWarnings ? "Hardware perlu cek" : "Printer siap",
       agentName: agent.name,
       lastSeenAt: agent.lastSeenAt,
       hasConfigWarnings,
@@ -682,7 +648,7 @@ function getHardwareStatus({
 
   return {
     status: "offline",
-    label: "Hardware Hub Offline",
+    label: "Hardware Hub offline",
     agentName: agent.name,
     lastSeenAt: agent.lastSeenAt,
     hasConfigWarnings,
@@ -690,11 +656,13 @@ function getHardwareStatus({
 }
 
 function getOutletHardwareBadgeStatus(
-  agent: {
-    status: "online" | "offline" | "disabled";
-    isActive: boolean;
-    lastSeenAt: Date | null;
-  } | null,
+  agent:
+    | {
+        status: "online" | "offline" | "disabled";
+        isActive: boolean;
+        lastSeenAt: Date | null;
+      }
+    | null,
   now: Date,
 ): "online" | "offline" {
   if (!agent?.isActive || agent.status !== "online" || !agent.lastSeenAt) {
@@ -792,8 +760,7 @@ export async function getPosShellStatus({
         {
           id: "register-not-configured",
           title: "Register belum tersedia",
-          description:
-            "POS belum bisa memproses transaksi sampai register aktif tersedia untuk outlet ini.",
+          description: "POS belum bisa memproses transaksi sampai register aktif tersedia untuk outlet ini.",
           href: "/pos/shift",
           actionLabel: "Cek shift kasir",
           tone: "danger",
@@ -839,10 +806,7 @@ export async function getPosShellStatus({
             eq(hardwareAgents.registerId, register.id),
           ),
         )
-        .orderBy(
-          desc(hardwareAgents.lastSeenAt),
-          desc(hardwareAgents.updatedAt),
-        )
+        .orderBy(desc(hardwareAgents.lastSeenAt), desc(hardwareAgents.updatedAt))
         .limit(1),
 
       db
@@ -876,10 +840,7 @@ export async function getPosShellStatus({
     ]);
 
   const activeShift = activeShiftRows[0] ?? null;
-  const hardware = getHardwareStatus({
-    agent: agentRows[0] ?? null,
-    now: new Date(),
-  });
+  const hardware = getHardwareStatus({ agent: agentRows[0] ?? null, now: new Date() });
   const heldCartSummary = heldCartSummaryRows[0] ?? {
     activeCount: 0,
     totalItems: 0,
@@ -892,8 +853,7 @@ export async function getPosShellStatus({
     notifications.push({
       id: "shift-closed",
       title: "Shift kasir belum aktif",
-      description:
-        "Buka shift terlebih dahulu sebelum menerima pembayaran POS.",
+      description: "Buka shift terlebih dahulu sebelum menerima pembayaran POS.",
       href: "/pos/shift",
       actionLabel: "Buka Shift Kasir",
       tone: "danger",
@@ -917,8 +877,7 @@ export async function getPosShellStatus({
     notifications.push({
       id: "failed-print-jobs",
       title: `${failedPrintJobCount} nota gagal dicetak`,
-      description:
-        "Ada job cetak nota/certificate yang gagal dan perlu dicek ulang.",
+      description: "Ada job cetak nota/certificate yang gagal dan perlu dicek ulang.",
       href: "/pos/transaksi?range=all",
       actionLabel: "Cek Transaksi",
       tone: "danger",
@@ -1165,9 +1124,7 @@ export async function getPosHeldCartListData({
         isHardwareHub: registers.isHardwareHub,
       })
       .from(registers)
-      .where(
-        and(eq(registers.outletId, outlet.id), eq(registers.isActive, true)),
-      )
+      .where(and(eq(registers.outletId, outlet.id), eq(registers.isActive, true)))
       .orderBy(desc(registers.isHardwareHub), asc(registers.name))
       .limit(1),
 
@@ -1227,14 +1184,8 @@ export async function getPosHeldCartListData({
       })
       .from(posHeldCartItems)
       .innerJoin(posHeldCarts, eq(posHeldCartItems.heldCartId, posHeldCarts.id))
-      .innerJoin(
-        productItems,
-        eq(posHeldCartItems.productItemId, productItems.id),
-      )
-      .innerJoin(
-        productMasters,
-        eq(productItems.productMasterId, productMasters.id),
-      )
+      .innerJoin(productItems, eq(posHeldCartItems.productItemId, productItems.id))
+      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
       .where(
         and(
           eq(posHeldCarts.organizationId, organizationId),
@@ -1246,6 +1197,7 @@ export async function getPosHeldCartListData({
             ilike(productItems.sku, searchPattern),
             ilike(productItems.barcode, searchPattern),
             ilike(productItems.serialNumber, searchPattern),
+            ilike(productItems.displayName, searchPattern),
             ilike(productMasters.code, searchPattern),
             ilike(productMasters.name, searchPattern),
           ),
@@ -1328,7 +1280,7 @@ export async function getPosHeldCartListData({
             productImageKey: productMasters.imageKey,
             productId: productMasters.id,
             productCode: productMasters.code,
-            productName: productMasters.name,
+            productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
             categoryId: productCategories.id,
             categoryName: productCategories.name,
             outletId: outlets.id,
@@ -1336,18 +1288,9 @@ export async function getPosHeldCartListData({
             outletName: outlets.name,
           })
           .from(posHeldCartItems)
-          .innerJoin(
-            productItems,
-            eq(posHeldCartItems.productItemId, productItems.id),
-          )
-          .innerJoin(
-            productMasters,
-            eq(productItems.productMasterId, productMasters.id),
-          )
-          .innerJoin(
-            productCategories,
-            eq(productMasters.categoryId, productCategories.id),
-          )
+          .innerJoin(productItems, eq(posHeldCartItems.productItemId, productItems.id))
+          .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+          .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
           .leftJoin(outlets, eq(productItems.currentOutletId, outlets.id))
           .where(
             and(
@@ -1403,13 +1346,9 @@ export async function getPosHeldCartListData({
     heldCarts,
     summary: {
       totalHeldCarts: heldCarts.length,
-      totalItems: heldCarts.reduce(
-        (total, heldCart) => total + heldCart.itemCount,
-        0,
-      ),
+      totalItems: heldCarts.reduce((total, heldCart) => total + heldCart.itemCount, 0),
       totalAmount: heldCarts.reduce(
-        (total, heldCart) =>
-          total + parseTransactionAmount(heldCart.totalAmount),
+        (total, heldCart) => total + parseTransactionAmount(heldCart.totalAmount),
         0,
       ),
     },
@@ -1490,10 +1429,7 @@ export async function getPosCustomerListData({
 
   const outletWithHardwareStatus = {
     ...outlet,
-    hardwareStatus: getOutletHardwareBadgeStatus(
-      hardwareAgent ?? null,
-      new Date(),
-    ),
+    hardwareStatus: getOutletHardwareBadgeStatus(hardwareAgent ?? null, new Date()),
   };
 
   const filters: SQL[] = [
@@ -1580,8 +1516,7 @@ export async function getPosCustomerListData({
     current.totalTransactions += 1;
     current.totalAmount += parseTransactionAmount(sale.totalAmount);
 
-    const currentLastDate =
-      current.lastTransaction?.completedAt?.getTime() ?? 0;
+    const currentLastDate = current.lastTransaction?.completedAt?.getTime() ?? 0;
     const saleDate = (sale.completedAt ?? sale.createdAt).getTime();
 
     if (!current.lastTransaction || saleDate >= currentLastDate) {
@@ -1596,30 +1531,28 @@ export async function getPosCustomerListData({
     customerMetrics.set(sale.customerId, current);
   }
 
-  const customerList = customerRows.map(
-    (customer): PosCustomerListData["customers"][number] => {
-      const metrics = customerMetrics.get(customer.id) ?? {
-        totalTransactions: 0,
-        totalAmount: 0,
-        lastTransaction: null,
-      };
+  const customerList = customerRows.map((customer): PosCustomerListData["customers"][number] => {
+    const metrics = customerMetrics.get(customer.id) ?? {
+      totalTransactions: 0,
+      totalAmount: 0,
+      lastTransaction: null,
+    };
 
-      return {
-        id: customer.id,
-        customerCode: customer.customerCode,
-        fullName: customer.fullName,
-        phone: customer.phone,
-        email: customer.email,
-        address: customer.address,
-        notes: customer.notes,
-        isActive: customer.isActive,
-        createdAt: customer.createdAt,
-        totalTransactions: metrics.totalTransactions,
-        totalAmount: metrics.totalAmount,
-        lastTransaction: metrics.lastTransaction,
-      };
-    },
-  );
+    return {
+      id: customer.id,
+      customerCode: customer.customerCode,
+      fullName: customer.fullName,
+      phone: customer.phone,
+      email: customer.email,
+      address: customer.address,
+      notes: customer.notes,
+      isActive: customer.isActive,
+      createdAt: customer.createdAt,
+      totalTransactions: metrics.totalTransactions,
+      totalAmount: metrics.totalAmount,
+      lastTransaction: metrics.lastTransaction,
+    };
+  });
 
   return {
     outlet: outletWithHardwareStatus,
@@ -1680,9 +1613,7 @@ export async function getPosShiftOverviewData({
         isHardwareHub: registers.isHardwareHub,
       })
       .from(registers)
-      .where(
-        and(eq(registers.outletId, outlet.id), eq(registers.isActive, true)),
-      )
+      .where(and(eq(registers.outletId, outlet.id), eq(registers.isActive, true)))
       .orderBy(desc(registers.isHardwareHub), asc(registers.name))
       .limit(1),
 
@@ -1826,25 +1757,18 @@ export async function getPosShiftOverviewData({
   }
 
   for (const item of itemRows) {
-    itemCountBySaleId.set(
-      item.saleId,
-      (itemCountBySaleId.get(item.saleId) ?? 0) + 1,
-    );
+    itemCountBySaleId.set(item.saleId, (itemCountBySaleId.get(item.saleId) ?? 0) + 1);
   }
 
-  const paidPayments = paymentRows.filter(
-    (payment) => payment.status === "paid",
-  );
+  const paidPayments = paymentRows.filter((payment) => payment.status === "paid");
   const cashPaymentAmount = paidPayments.reduce(
     (total, payment) =>
-      total +
-      (payment.method === "cash" ? parseTransactionAmount(payment.amount) : 0),
+      total + (payment.method === "cash" ? parseTransactionAmount(payment.amount) : 0),
     0,
   );
   const nonCashPaymentAmount = paidPayments.reduce(
     (total, payment) =>
-      total +
-      (payment.method !== "cash" ? parseTransactionAmount(payment.amount) : 0),
+      total + (payment.method !== "cash" ? parseTransactionAmount(payment.amount) : 0),
     0,
   );
   const paidAmount = paidPayments.reduce(
@@ -1861,12 +1785,7 @@ export async function getPosShiftOverviewData({
   );
   const paymentMethodMap = new Map<
     string,
-    {
-      method: string;
-      amount: number;
-      paymentCount: number;
-      saleIds: Set<string>;
-    }
+    { method: string; amount: number; paymentCount: number; saleIds: Set<string> }
   >();
 
   for (const payment of paidPayments) {
@@ -1888,8 +1807,7 @@ export async function getPosShiftOverviewData({
   for (const payment of paidPayments) {
     salePaymentTotals.set(
       payment.saleId,
-      (salePaymentTotals.get(payment.saleId) ?? 0) +
-        parseTransactionAmount(payment.amount),
+      (salePaymentTotals.get(payment.saleId) ?? 0) + parseTransactionAmount(payment.amount),
     );
   }
 
@@ -1902,10 +1820,7 @@ export async function getPosShiftOverviewData({
       paidAmount: number;
     }
   >([
-    [
-      "paid",
-      { status: "paid", transactionCount: 0, totalAmount: 0, paidAmount: 0 },
-    ],
+    ["paid", { status: "paid", transactionCount: 0, totalAmount: 0, paidAmount: 0 }],
     [
       "partial",
       { status: "partial", transactionCount: 0, totalAmount: 0, paidAmount: 0 },
@@ -2081,10 +1996,7 @@ export async function getPosTransactionListData({
 
   const outletWithHardwareStatus = {
     ...outlet,
-    hardwareStatus: getOutletHardwareBadgeStatus(
-      hardwareAgent ?? null,
-      new Date(),
-    ),
+    hardwareStatus: getOutletHardwareBadgeStatus(hardwareAgent ?? null, new Date()),
   };
 
   const filters: SQL[] = [
@@ -2112,10 +2024,7 @@ export async function getPosTransactionListData({
       .from(saleItems)
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
       .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
-      .innerJoin(
-        productMasters,
-        eq(productItems.productMasterId, productMasters.id),
-      )
+      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
       .where(
         and(
           eq(sales.organizationId, organizationId),
@@ -2124,6 +2033,7 @@ export async function getPosTransactionListData({
             ilike(productItems.sku, searchPattern),
             ilike(productItems.barcode, searchPattern),
             ilike(productItems.serialNumber, searchPattern),
+            ilike(productItems.displayName, searchPattern),
             ilike(productMasters.code, searchPattern),
             ilike(productMasters.name, searchPattern),
           ),
@@ -2201,23 +2111,14 @@ export async function getPosTransactionListData({
               saleId: saleItems.saleId,
               productItemId: saleItems.productItemId,
               sku: productItems.sku,
-              productName: productMasters.name,
+              productName: sql<string>`coalesce(${saleItems.snapshot}->>'productName', ${productItems.displayName}, ${productMasters.name})`,
               categoryName: productCategories.name,
               finalPriceAmount: saleItems.finalPriceAmount,
             })
             .from(saleItems)
-            .innerJoin(
-              productItems,
-              eq(saleItems.productItemId, productItems.id),
-            )
-            .innerJoin(
-              productMasters,
-              eq(productItems.productMasterId, productMasters.id),
-            )
-            .innerJoin(
-              productCategories,
-              eq(productMasters.categoryId, productCategories.id),
-            )
+            .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
+            .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+            .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
             .where(inArray(saleItems.saleId, saleIds))
             .orderBy(asc(saleItems.lineNumber)),
         ])
@@ -2238,61 +2139,59 @@ export async function getPosTransactionListData({
     itemsBySaleId.set(item.saleId, currentItems);
   }
 
-  const transactions = saleRows.map(
-    (sale): PosTransactionListData["transactions"][number] => {
-      const transactionPayments = paymentsBySaleId.get(sale.id) ?? [];
-      const transactionItems = itemsBySaleId.get(sale.id) ?? [];
-      const totalAmount = parseTransactionAmount(sale.totalAmount);
-      const paidAmount = transactionPayments.reduce(
-        (total, payment) =>
-          payment.status === "paid"
-            ? total + parseTransactionAmount(payment.amount)
-            : total,
-        0,
-      );
+  const transactions = saleRows.map((sale): PosTransactionListData["transactions"][number] => {
+    const transactionPayments = paymentsBySaleId.get(sale.id) ?? [];
+    const transactionItems = itemsBySaleId.get(sale.id) ?? [];
+    const totalAmount = parseTransactionAmount(sale.totalAmount);
+    const paidAmount = transactionPayments.reduce(
+      (total, payment) =>
+        payment.status === "paid"
+          ? total + parseTransactionAmount(payment.amount)
+          : total,
+      0,
+    );
 
-      return {
-        id: sale.id,
-        invoiceNumber: sale.invoiceNumber,
-        status: sale.status,
-        subtotalAmount: sale.subtotalAmount,
-        discountAmount: sale.discountAmount,
-        additionalFeeAmount: sale.additionalFeeAmount,
-        totalAmount: sale.totalAmount,
-        paidAmount,
-        paymentStatus:
-          paidAmount >= totalAmount
-            ? "paid"
-            : paidAmount > 0
-              ? "partial"
-              : "pending",
-        completedAt: sale.completedAt,
-        createdAt: sale.createdAt,
-        customerCode: sale.customerCode,
-        customerName: sale.customerName,
-        customerPhone: sale.customerPhone,
-        customerEmail: sale.customerEmail,
-        cashierName: sale.cashierName,
-        registerName: sale.registerName,
-        shiftId: sale.shiftId,
-        totalItems: transactionItems.length,
-        items: transactionItems.map((item) => ({
-          productItemId: item.productItemId,
-          sku: item.sku,
-          productName: item.productName,
-          categoryName: item.categoryName,
-          finalPriceAmount: item.finalPriceAmount,
-        })),
-        payments: transactionPayments.map((payment) => ({
-          method: payment.method,
-          provider: payment.provider,
-          amount: payment.amount,
-          status: payment.status,
-          providerReference: payment.providerReference,
-        })),
-      };
-    },
-  );
+    return {
+      id: sale.id,
+      invoiceNumber: sale.invoiceNumber,
+      status: sale.status,
+      subtotalAmount: sale.subtotalAmount,
+      discountAmount: sale.discountAmount,
+      additionalFeeAmount: sale.additionalFeeAmount,
+      totalAmount: sale.totalAmount,
+      paidAmount,
+      paymentStatus:
+        paidAmount >= totalAmount
+          ? "paid"
+          : paidAmount > 0
+            ? "partial"
+            : "pending",
+      completedAt: sale.completedAt,
+      createdAt: sale.createdAt,
+      customerCode: sale.customerCode,
+      customerName: sale.customerName,
+      customerPhone: sale.customerPhone,
+      customerEmail: sale.customerEmail,
+      cashierName: sale.cashierName,
+      registerName: sale.registerName,
+      shiftId: sale.shiftId,
+      totalItems: transactionItems.length,
+      items: transactionItems.map((item) => ({
+        productItemId: item.productItemId,
+        sku: item.sku,
+        productName: item.productName,
+        categoryName: item.categoryName,
+        finalPriceAmount: item.finalPriceAmount,
+      })),
+      payments: transactionPayments.map((payment) => ({
+        method: payment.method,
+        provider: payment.provider,
+        amount: payment.amount,
+        status: payment.status,
+        providerReference: payment.providerReference,
+      })),
+    };
+  });
 
   return {
     outlet: outletWithHardwareStatus,
@@ -2303,8 +2202,7 @@ export async function getPosTransactionListData({
     summary: {
       totalTransactions: transactions.length,
       totalAmount: transactions.reduce(
-        (total, transaction) =>
-          total + parseTransactionAmount(transaction.totalAmount),
+        (total, transaction) => total + parseTransactionAmount(transaction.totalAmount),
         0,
       ),
       paidAmount: transactions.reduce(
@@ -2318,6 +2216,7 @@ export async function getPosTransactionListData({
     },
   } satisfies PosTransactionListData;
 }
+
 
 type PaymentMetadata = Record<string, unknown> | null;
 
@@ -2438,7 +2337,7 @@ export async function getPosTransactionDetailData({
         sku: productItems.sku,
         barcode: productItems.barcode,
         serialNumber: productItems.serialNumber,
-        productName: productMasters.name,
+        productName: sql<string>`coalesce(${saleItems.snapshot}->>'productName', ${productItems.displayName}, ${productMasters.name})`,
         categoryName: productCategories.name,
         weightGram: productItems.weightGram,
         purityPercent: productItems.purityPercent,
@@ -2452,14 +2351,8 @@ export async function getPosTransactionDetailData({
       })
       .from(saleItems)
       .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
-      .innerJoin(
-        productMasters,
-        eq(productItems.productMasterId, productMasters.id),
-      )
-      .innerJoin(
-        productCategories,
-        eq(productMasters.categoryId, productCategories.id),
-      )
+      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+      .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
       .where(eq(saleItems.saleId, sale.id))
       .orderBy(asc(saleItems.lineNumber)),
 
@@ -2563,10 +2456,7 @@ export async function getPosTransactionDetailData({
       providerReference: payment.providerReference,
       paidAt: payment.paidAt,
       verifiedAt: payment.verifiedAt,
-      receivedAmount: getPaymentMetadataNumber(
-        payment.metadata,
-        "receivedAmount",
-      ),
+      receivedAmount: getPaymentMetadataNumber(payment.metadata, "receivedAmount"),
       changeAmount: getPaymentMetadataNumber(payment.metadata, "changeAmount"),
       note: getPaymentMetadataString(payment.metadata, "note"),
     })),

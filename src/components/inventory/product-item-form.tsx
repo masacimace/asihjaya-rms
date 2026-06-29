@@ -221,6 +221,22 @@ export function ProductItemForm({
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="block text-sm sm:col-span-2">
+            <span className="mb-2 block font-medium text-neutral-800">
+              Nama item di POS
+            </span>
+            <input
+              name="displayName"
+              maxLength={220}
+              className={inputClassName}
+              placeholder={`Opsional, contoh: ${product.name} 2.75g Size 17`}
+            />
+            <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
+              Jika dikosongkan, POS tetap memakai nama Master Product.
+            </p>
+            <FieldError message={state.fieldErrors?.displayName} />
+          </label>
+
           <label className="block text-sm">
             <span className="mb-2 block font-medium text-neutral-800">
               Berat aktual (gram)

@@ -93,6 +93,7 @@ export default async function ProductItemDetailPage({
     );
   const imageUrl = getImageUrl(item.imageKey ?? item.productImageKey);
   const usesCatalogPhoto = !item.imageKey && Boolean(item.productImageKey);
+  const itemDisplayName = item.displayName ?? item.productName;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -116,7 +117,7 @@ export default async function ProductItemDetailPage({
               </span>
             </div>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              {item.productName} · {item.barcode}
+              {itemDisplayName} · {item.barcode}
             </p>
           </div>
 
@@ -131,7 +132,7 @@ export default async function ProductItemDetailPage({
               </Link>
             ) : null}
 
-            <PrintLabelButton item={item} />
+            <PrintLabelButton item={{ ...item, productName: itemDisplayName }} />
 
             <Link
               href={`/admin/produk/${item.productId}`}
@@ -153,7 +154,7 @@ export default async function ProductItemDetailPage({
         <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
           <ProductImage
             src={imageUrl}
-            alt={`${item.productName} ${item.sku}`}
+            alt={`${itemDisplayName} ${item.sku}`}
             className="aspect-square w-full rounded-xl"
             badge={usesCatalogPhoto ? "Foto katalog" : "Foto item aktual"}
           />
@@ -210,7 +211,13 @@ export default async function ProductItemDetailPage({
           </div>
           <dl className="mt-5 grid gap-4 sm:grid-cols-2">
             <div>
-              <dt className="text-xs text-[var(--muted)]">Product</dt>
+              <dt className="text-xs text-[var(--muted)]">Nama item di POS</dt>
+              <dd className="mt-1 text-sm font-medium text-neutral-950">
+                {itemDisplayName}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--muted)]">Master Product</dt>
               <dd className="mt-1 text-sm font-medium text-neutral-950">
                 {item.productName} · {item.productCode}
               </dd>

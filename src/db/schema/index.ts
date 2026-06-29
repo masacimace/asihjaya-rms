@@ -536,6 +536,7 @@ export const productItems = pgTable(
     productMasterId: uuid("product_master_id")
       .notNull()
       .references(() => productMasters.id),
+    displayName: varchar("display_name", { length: 220 }),
 
     currentOutletId: uuid("current_outlet_id").references(() => outlets.id),
     sku: varchar("sku", { length: 80 }).notNull(),

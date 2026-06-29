@@ -224,6 +224,9 @@ export default async function ProductDetailPage({
                       <p className="font-mono text-sm font-semibold text-neutral-950">
                         {item.sku}
                       </p>
+                      <p className="mt-1 text-sm font-medium text-neutral-950">
+                        {item.displayName ?? product.name}
+                      </p>
                       <p className="mt-1 text-xs text-[var(--muted)]">
                         {item.barcode}
                       </p>

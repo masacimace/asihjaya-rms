@@ -148,6 +148,7 @@ type EditableItem = {
   id: string;
   sku: string;
   barcode: string;
+  displayName: string | null;
   weightGram: string | null;
   exchangePurityPercent: string | null;
   size: string | null;
@@ -220,6 +221,25 @@ export function ProductItemEditForm({
               SKU, barcode, dan Product tidak dapat diubah setelah item dibuat.
             </p>
           </div>
+        </div>
+
+        <div className="mt-5">
+          <label className="block text-sm">
+            <span className="mb-2 block font-medium text-neutral-800">
+              Nama item di POS
+            </span>
+            <input
+              name="displayName"
+              maxLength={220}
+              defaultValue={item.displayName ?? ""}
+              className={inputClassName}
+              placeholder={`Opsional, contoh: ${item.productName} ${item.weightGram ?? ""}g`}
+            />
+            <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
+              Jika dikosongkan, POS tetap memakai nama Master Product.
+            </p>
+            <FieldError message={state.fieldErrors?.displayName} />
+          </label>
         </div>
 
         <dl className="mt-5 grid gap-4 sm:grid-cols-2">

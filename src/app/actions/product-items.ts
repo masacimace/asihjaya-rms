@@ -234,6 +234,7 @@ export async function createProductItemAction(
   const submitIntent = readText(formData, "submitIntent");
   const targetAvailability =
     submitIntent === "available" ? "available" : "draft";
+  const displayName = readText(formData, "displayName");
   const weightRaw = readText(formData, "weightGram");
   const purityPercentRaw = readText(formData, "purityPercent");
   const exchangePurityRaw = readText(formData, "exchangePurityPercent");
@@ -275,6 +276,10 @@ export async function createProductItemAction(
     "Potongan per gram",
     { allowZero: true },
   );
+
+  if (displayName.length > 220) {
+    fieldErrors.displayName = "Nama item maksimal 220 karakter.";
+  }
 
   if (weight.error) fieldErrors.weightGram = weight.error;
   if (purityPercent.error) fieldErrors.purityPercent = purityPercent.error;
@@ -427,6 +432,7 @@ export async function createProductItemAction(
         id: itemId,
         organizationId: auth.organization.id,
         productMasterId: productId,
+        displayName: normalizeNullable(displayName),
         currentOutletId: validOutlet?.id ?? null,
         sku: identifiers.sku,
         barcode: identifiers.barcode,
@@ -484,6 +490,7 @@ export async function createProductItemAction(
           productMasterId: productId,
           productCode: product.code,
           productName: product.name,
+          displayName: normalizeNullable(displayName),
           currentOutletId: validOutlet?.id ?? null,
           outletCode: validOutlet?.code ?? null,
           outletName: validOutlet?.name ?? null,
@@ -551,6 +558,7 @@ export async function updateProductItemAction(
     .select({
       id: productItems.id,
       productMasterId: productItems.productMasterId,
+      displayName: productItems.displayName,
       currentOutletId: productItems.currentOutletId,
       sku: productItems.sku,
       barcode: productItems.barcode,
@@ -607,6 +615,7 @@ export async function updateProductItemAction(
   const isActivation =
     existing.availability === "draft" && submitIntent === "available";
   const targetAvailability = isActivation ? "available" : existing.availability;
+  const displayName = readText(formData, "displayName");
   const weightRaw = readText(formData, "weightGram");
   const exchangePurityRaw = readText(formData, "exchangePurityPercent");
   const itemSize = readText(formData, "size");
@@ -647,6 +656,10 @@ export async function updateProductItemAction(
     "Potongan per gram",
     { allowZero: true },
   );
+
+  if (displayName.length > 220) {
+    fieldErrors.displayName = "Nama item maksimal 220 karakter.";
+  }
 
   if (weight.error) fieldErrors.weightGram = weight.error;
   if (exchangePurity.error) {
@@ -804,6 +817,7 @@ export async function updateProductItemAction(
       await transaction
         .update(productItems)
         .set({
+          displayName: normalizeNullable(displayName),
           currentOutletId: finalOutlet?.id ?? null,
           weightGram: weight.value,
           exchangePurityPercent: exchangePurity.value,
@@ -861,6 +875,7 @@ export async function updateProductItemAction(
         entityType: "product_item",
         entityId: itemId,
         beforeData: {
+          displayName: existing.displayName,
           weightGram: existing.weightGram,
           exchangePurityPercent: existing.exchangePurityPercent,
           size: existing.size,
@@ -883,6 +898,7 @@ export async function updateProductItemAction(
           productMasterId: existing.productMasterId,
           productCode: existing.productCode,
           productName: existing.productName,
+          displayName: normalizeNullable(displayName),
           weightGram: weight.value,
           purityPercent: existing.purityPercent,
           exchangePurityPercent: exchangePurity.value,

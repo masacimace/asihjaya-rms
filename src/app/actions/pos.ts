@@ -776,6 +776,8 @@ type HeldCartActionItemRow = {
   isActive: boolean;
   productMasterId: string;
   productCode: string;
+  itemDisplayName: string | null;
+  masterProductName: string;
   productName: string;
   productImageKey: string | null;
   productStatus: "draft" | "active" | "inactive";
@@ -979,7 +981,9 @@ export async function holdPosCartAction(
           isActive: productItems.isActive,
           productMasterId: productMasters.id,
           productCode: productMasters.code,
-          productName: productMasters.name,
+          itemDisplayName: productItems.displayName,
+          masterProductName: productMasters.name,
+          productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
           productImageKey: productMasters.imageKey,
           productStatus: productMasters.status,
           categoryId: productCategories.id,
@@ -1145,6 +1149,8 @@ export async function holdPosCartAction(
               serialNumber: item!.serialNumber,
               productMasterId: item!.productMasterId,
               productCode: item!.productCode,
+              itemDisplayName: item!.itemDisplayName,
+              masterProductName: item!.masterProductName,
               productName: item!.productName,
               categoryId: item!.categoryId,
               categoryCode: item!.categoryCode,
@@ -1532,7 +1538,9 @@ export async function resumePosHeldCartAction({
           isActive: productItems.isActive,
           productMasterId: productMasters.id,
           productCode: productMasters.code,
-          productName: productMasters.name,
+          itemDisplayName: productItems.displayName,
+          masterProductName: productMasters.name,
+          productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
           productImageKey: productMasters.imageKey,
           productStatus: productMasters.status,
           categoryId: productCategories.id,
@@ -1968,7 +1976,9 @@ export async function completePosCheckoutAction(
           isActive: productItems.isActive,
           productMasterId: productMasters.id,
           productCode: productMasters.code,
-          productName: productMasters.name,
+          itemDisplayName: productItems.displayName,
+          masterProductName: productMasters.name,
+          productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
           productImageKey: productMasters.imageKey,
           productStatus: productMasters.status,
           categoryId: productCategories.id,
@@ -2149,6 +2159,8 @@ export async function completePosCheckoutAction(
               serialNumber: item!.serialNumber,
               productMasterId: item!.productMasterId,
               productCode: item!.productCode,
+              itemDisplayName: item!.itemDisplayName,
+              masterProductName: item!.masterProductName,
               productName: item!.productName,
               categoryId: item!.categoryId,
               categoryCode: item!.categoryCode,
