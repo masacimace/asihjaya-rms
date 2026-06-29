@@ -68,3 +68,7 @@ npm run routes:check
 npm run typecheck
 npm run lint
 npm run build
+
+## Sandbox Preveiw Nota Penjualan / Surat Jaminan
+
+http://localhost:3000/admin/penjualan/preview-nota/html
