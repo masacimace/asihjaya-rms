@@ -51,6 +51,17 @@ type PosShellStatus = {
     lastSeenAt: string | Date | null;
     hasConfigWarnings: boolean;
   };
+  notifications?: PosShellNotification[];
+};
+
+type PosShellNotification = {
+  id: string;
+  title: string;
+  description: string;
+  href: string;
+  actionLabel: string;
+  tone: "info" | "warning" | "danger";
+  icon: "held_cart" | "print" | "shift" | "hardware";
 };
 
 type PosWorkspaceCommand = {
@@ -79,6 +90,7 @@ const fallbackStatus: PosShellStatus = {
     lastSeenAt: null,
     hasConfigWarnings: false,
   },
+  notifications: [],
 };
 
 const navigation = [
@@ -175,6 +187,35 @@ function getHardwareStatusClassName(
   }
 
   return "text-red-600";
+}
+function getNotificationToneClassName(tone: PosShellNotification["tone"]) {
+  if (tone === "danger") {
+    return "border-red-100 bg-red-50 text-red-700";
+  }
+
+  if (tone === "warning") {
+    return "border-amber-100 bg-amber-50 text-amber-700";
+  }
+
+  return "border-[var(--accent-soft)] bg-[var(--accent-soft)] text-[var(--accent)]";
+}
+
+function NotificationIcon({
+  notification,
+}: {
+  notification: PosShellNotification;
+}) {
+  const iconClassName = "size-4";
+
+  if (notification.icon === "held_cart") {
+    return <Pause className={iconClassName} />;
+  }
+
+  if (notification.icon === "print" || notification.icon === "hardware") {
+    return <Printer className={iconClassName} />;
+  }
+
+  return <Clock3 className={iconClassName} />;
 }
 
 function SidebarContent({
@@ -353,10 +394,13 @@ export function PosShell({
   const router = useRouter();
   const operationalStatus = status ?? fallbackStatus;
   const shiftLabel = getShiftStatusLabel(operationalStatus.shift);
+  const notifications = operationalStatus.notifications ?? [];
+  const notificationCount = notifications.length;
 
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [topbarQuery, setTopbarQuery] = useState("");
 
   function sendPosWorkspaceCommand(command: PosWorkspaceCommand) {
@@ -413,6 +457,17 @@ export function PosShell({
           />
 
           <aside className="relative z-10 flex h-full w-[min(86vw,300px)] flex-col border-r border-[var(--border)] bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex justify-end">
+              <button
+                type="button"
+                aria-label="Tutup menu"
+                onClick={() => setIsNavigationOpen(false)}
+                className="grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
             <SidebarContent
               pathname={pathname}
               canAccessAdmin={user.canAccessAdmin}
@@ -554,15 +609,82 @@ export function PosShell({
               <span className="hidden xl:inline">Scan Barcode</span>
             </button>
 
-            <button
-              type="button"
-              aria-label="Notifikasi"
-              className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
-            >
-              <Bell className="size-5" />
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="Notifikasi POS"
+                aria-expanded={isNotificationsOpen}
+                onClick={() => setIsNotificationsOpen((isOpen) => !isOpen)}
+                className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
+              >
+                <Bell className="size-5" />
 
-              <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-white bg-[var(--accent)]" />
-            </button>
+                {notificationCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full border-2 border-white bg-[var(--accent)] px-1 text-[10px] font-bold leading-4 text-white">
+                    {notificationCount > 9 ? "9+" : notificationCount}
+                  </span>
+                ) : null}
+              </button>
+
+              {isNotificationsOpen ? (
+                <div className="absolute right-[-50px] top-full z-50 mt-2 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+                  <div className="border-b border-[var(--border)] px-4 py-3">
+                    <p className="text-sm font-semibold text-neutral-950">
+                      Notifikasi POS
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      Ringkasan operasional kasir yang perlu dicek.
+                    </p>
+                  </div>
+
+                  {notificationCount > 0 ? (
+                    <div className="max-h-[420px] overflow-y-auto p-2">
+                      {notifications.map((notification) => (
+                        <Link
+                          key={notification.id}
+                          href={notification.href}
+                          onClick={() => setIsNotificationsOpen(false)}
+                          className="group flex gap-3 rounded-2xl p-3 transition hover:bg-neutral-50"
+                        >
+                          <span
+                            className={cn(
+                              "grid size-10 shrink-0 place-items-center rounded-xl border",
+                              getNotificationToneClassName(notification.tone),
+                            )}
+                          >
+                            <NotificationIcon notification={notification} />
+                          </span>
+
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold text-neutral-950">
+                              {notification.title}
+                            </span>
+                            <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
+                              {notification.description}
+                            </span>
+                            <span className="mt-2 inline-flex text-xs font-semibold text-[var(--accent)] transition group-hover:translate-x-0.5">
+                              {notification.actionLabel} →
+                            </span>
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-6 text-center">
+                      <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                        <Bell className="size-5" />
+                      </div>
+                      <p className="mt-3 text-sm font-semibold text-neutral-950">
+                        Tidak ada notifikasi
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                        Semua operasional POS dalam kondisi aman.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
 
             <UserMenu
               fullName={user.fullName}

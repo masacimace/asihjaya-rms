@@ -285,7 +285,7 @@ function HeldCartCard({
               </span>
             </div>
 
-            <h2 className="mt-3 truncate text-lg font-semibold tracking-tight text-neutral-950">
+            <h2 className="mt-3 truncate text-sm font-semibold text-neutral-950">
               {getCustomerLabel(heldCart)}
             </h2>
             <p className="mt-1 line-clamp-2 text-sm leading-6 text-[var(--muted)]">

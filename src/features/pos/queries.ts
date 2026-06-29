@@ -568,6 +568,16 @@ export async function lookupPosItemByScanValue({
 const HARDWARE_ONLINE_WINDOW_MS = 2 * 60 * 1000;
 const HARDWARE_STALE_WINDOW_MS = 10 * 60 * 1000;
 
+export type PosShellNotification = {
+  id: string;
+  title: string;
+  description: string;
+  href: string;
+  actionLabel: string;
+  tone: "info" | "warning" | "danger";
+  icon: "held_cart" | "print" | "shift" | "hardware";
+};
+
 export type PosShellStatus = {
   outletName: string;
   registerName: string | null;
@@ -585,6 +595,7 @@ export type PosShellStatus = {
     lastSeenAt: Date | null;
     hasConfigWarnings: boolean;
   };
+  notifications: PosShellNotification[];
 };
 
 function readConfigWarnings(value: unknown) {
@@ -652,7 +663,7 @@ function getHardwareStatus({
   if (agent.status === "online" && diffMs <= HARDWARE_ONLINE_WINDOW_MS) {
     return {
       status: hasConfigWarnings ? "stale" : "online",
-      label: hasConfigWarnings ? "Hardware perlu cek" : "Hardware Hub online",
+      label: hasConfigWarnings ? "Hardware perlu cek" : "Hardware Hub Online",
       agentName: agent.name,
       lastSeenAt: agent.lastSeenAt,
       hasConfigWarnings,
@@ -671,7 +682,7 @@ function getHardwareStatus({
 
   return {
     status: "offline",
-    label: "Hardware Hub offline",
+    label: "Hardware Hub Offline",
     agentName: agent.name,
     lastSeenAt: agent.lastSeenAt,
     hasConfigWarnings,
@@ -719,6 +730,7 @@ export async function getPosShellStatus({
       lastSeenAt: null,
       hasConfigWarnings: false,
     },
+    notifications: [],
   };
 
   if (!outletId) {
@@ -776,49 +788,157 @@ export async function getPosShellStatus({
         lastSeenAt: null,
         hasConfigWarnings: false,
       },
+      notifications: [
+        {
+          id: "register-not-configured",
+          title: "Register belum tersedia",
+          description:
+            "POS belum bisa memproses transaksi sampai register aktif tersedia untuk outlet ini.",
+          href: "/pos/shift",
+          actionLabel: "Cek shift kasir",
+          tone: "danger",
+          icon: "shift",
+        },
+      ],
     };
   }
 
-  const [activeShiftRows, agentRows] = await Promise.all([
-    db
-      .select({
-        id: shifts.id,
-        openedAt: shifts.openedAt,
-        openingCash: shifts.openingCash,
-        expectedCash: shifts.expectedCash,
-      })
-      .from(shifts)
-      .where(
-        and(
-          eq(shifts.outletId, outlet.id),
-          eq(shifts.registerId, register.id),
-          eq(shifts.status, "open"),
-        ),
-      )
-      .orderBy(desc(shifts.openedAt))
-      .limit(1),
+  const [activeShiftRows, agentRows, heldCartSummaryRows, failedPrintJobRows] =
+    await Promise.all([
+      db
+        .select({
+          id: shifts.id,
+          openedAt: shifts.openedAt,
+          openingCash: shifts.openingCash,
+          expectedCash: shifts.expectedCash,
+        })
+        .from(shifts)
+        .where(
+          and(
+            eq(shifts.outletId, outlet.id),
+            eq(shifts.registerId, register.id),
+            eq(shifts.status, "open"),
+          ),
+        )
+        .orderBy(desc(shifts.openedAt))
+        .limit(1),
 
-    db
-      .select({
-        name: hardwareAgents.name,
-        status: hardwareAgents.status,
-        isActive: hardwareAgents.isActive,
-        lastSeenAt: hardwareAgents.lastSeenAt,
-        capabilities: hardwareAgents.capabilities,
-      })
-      .from(hardwareAgents)
-      .where(
-        and(
-          eq(hardwareAgents.organizationId, organizationId),
-          eq(hardwareAgents.outletId, outlet.id),
-          eq(hardwareAgents.registerId, register.id),
+      db
+        .select({
+          name: hardwareAgents.name,
+          status: hardwareAgents.status,
+          isActive: hardwareAgents.isActive,
+          lastSeenAt: hardwareAgents.lastSeenAt,
+          capabilities: hardwareAgents.capabilities,
+        })
+        .from(hardwareAgents)
+        .where(
+          and(
+            eq(hardwareAgents.organizationId, organizationId),
+            eq(hardwareAgents.outletId, outlet.id),
+            eq(hardwareAgents.registerId, register.id),
+          ),
+        )
+        .orderBy(
+          desc(hardwareAgents.lastSeenAt),
+          desc(hardwareAgents.updatedAt),
+        )
+        .limit(1),
+
+      db
+        .select({
+          activeCount: count(),
+          totalItems: sql<number>`coalesce(sum(${posHeldCarts.itemCount}), 0)::int`,
+          totalAmount: sql<string>`coalesce(sum(${posHeldCarts.totalAmount}), 0)::text`,
+        })
+        .from(posHeldCarts)
+        .where(
+          and(
+            eq(posHeldCarts.organizationId, organizationId),
+            eq(posHeldCarts.outletId, outlet.id),
+            eq(posHeldCarts.registerId, register.id),
+            eq(posHeldCarts.status, "active"),
+          ),
         ),
-      )
-      .orderBy(desc(hardwareAgents.lastSeenAt), desc(hardwareAgents.updatedAt))
-      .limit(1),
-  ]);
+
+      db
+        .select({ failedCount: count() })
+        .from(hardwareJobs)
+        .where(
+          and(
+            eq(hardwareJobs.organizationId, organizationId),
+            eq(hardwareJobs.outletId, outlet.id),
+            eq(hardwareJobs.registerId, register.id),
+            eq(hardwareJobs.jobType, "print_receipt_certificate"),
+            eq(hardwareJobs.status, "failed"),
+          ),
+        ),
+    ]);
 
   const activeShift = activeShiftRows[0] ?? null;
+  const hardware = getHardwareStatus({
+    agent: agentRows[0] ?? null,
+    now: new Date(),
+  });
+  const heldCartSummary = heldCartSummaryRows[0] ?? {
+    activeCount: 0,
+    totalItems: 0,
+    totalAmount: "0",
+  };
+  const failedPrintJobCount = failedPrintJobRows[0]?.failedCount ?? 0;
+  const notifications: PosShellNotification[] = [];
+
+  if (!activeShift) {
+    notifications.push({
+      id: "shift-closed",
+      title: "Shift kasir belum aktif",
+      description:
+        "Buka shift terlebih dahulu sebelum menerima pembayaran POS.",
+      href: "/pos/shift",
+      actionLabel: "Buka Shift Kasir",
+      tone: "danger",
+      icon: "shift",
+    });
+  }
+
+  if (heldCartSummary.activeCount > 0) {
+    notifications.push({
+      id: "held-carts",
+      title: `${heldCartSummary.activeCount} transaksi tertahan`,
+      description: `${heldCartSummary.totalItems} item sedang terkunci di transaksi tertahan.`,
+      href: "/pos/ditahan",
+      actionLabel: "Buka Tertahan",
+      tone: "warning",
+      icon: "held_cart",
+    });
+  }
+
+  if (failedPrintJobCount > 0) {
+    notifications.push({
+      id: "failed-print-jobs",
+      title: `${failedPrintJobCount} nota gagal dicetak`,
+      description:
+        "Ada job cetak nota/certificate yang gagal dan perlu dicek ulang.",
+      href: "/pos/transaksi?range=all",
+      actionLabel: "Cek Transaksi",
+      tone: "danger",
+      icon: "print",
+    });
+  }
+
+  if (hardware.status !== "online") {
+    notifications.push({
+      id: "hardware-status",
+      title: hardware.label,
+      description: hardware.agentName
+        ? `Perangkat ${hardware.agentName} perlu dicek sebelum silent print berjalan normal.`
+        : "Hardware Hub belum siap untuk silent print nota dan certificate.",
+      href: "/pos/shift",
+      actionLabel: "Cek Perangkat",
+      tone: hardware.status === "stale" ? "warning" : "danger",
+      icon: "hardware",
+    });
+  }
 
   return {
     outletName: outlet.name,
@@ -838,10 +958,8 @@ export async function getPosShellStatus({
           expectedCash: null,
           label: "Shift belum aktif",
         },
-    hardware: getHardwareStatus({
-      agent: agentRows[0] ?? null,
-      now: new Date(),
-    }),
+    hardware,
+    notifications,
   };
 }
 
