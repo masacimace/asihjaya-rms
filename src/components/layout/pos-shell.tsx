@@ -413,17 +413,6 @@ export function PosShell({
           />
 
           <aside className="relative z-10 flex h-full w-[min(86vw,300px)] flex-col border-r border-[var(--border)] bg-white p-5 shadow-2xl">
-            <div className="mb-4 flex justify-end">
-              <button
-                type="button"
-                aria-label="Tutup menu"
-                onClick={() => setIsNavigationOpen(false)}
-                className="grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-
             <SidebarContent
               pathname={pathname}
               canAccessAdmin={user.canAccessAdmin}
