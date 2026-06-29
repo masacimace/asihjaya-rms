@@ -58,6 +58,7 @@ export const receiptCertificateSampleData: ReceiptCertificateData = {
         color: "Gold",
         gemstone: null,
         sellingAmount: "3685000",
+        deductionPerGram: "50000",
       },
     },
     {
@@ -82,6 +83,7 @@ export const receiptCertificateSampleData: ReceiptCertificateData = {
         color: "Gold",
         gemstone: null,
         sellingAmount: "2150000",
+        deductionPerGram: "35000",
       },
     },
     {
@@ -106,6 +108,7 @@ export const receiptCertificateSampleData: ReceiptCertificateData = {
         color: "Gold",
         gemstone: null,
         sellingAmount: "1350000",
+        deductionPerGram: "25000",
       },
     },
   ],

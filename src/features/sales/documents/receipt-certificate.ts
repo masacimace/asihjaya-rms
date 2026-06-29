@@ -48,6 +48,7 @@ type SaleItemSnapshot = {
   color?: string | null;
   gemstone?: string | null;
   sellingAmount?: string | null;
+  deductionPerGram?: string | null;
   imageKey?: string | null;
   productImageKey?: string | null;
 };
@@ -136,6 +137,7 @@ function toSafeSnapshot(value: Record<string, unknown>): SaleItemSnapshot {
     color: readString("color"),
     gemstone: readString("gemstone"),
     sellingAmount: readString("sellingAmount"),
+    deductionPerGram: readString("deductionPerGram"),
     imageKey: readString("imageKey"),
     productImageKey: readString("productImageKey"),
   };
@@ -211,6 +213,7 @@ export async function getReceiptCertificateData({
       discountAmount: saleItems.discountAmount,
       finalPriceAmount: saleItems.finalPriceAmount,
       snapshot: saleItems.snapshot,
+      itemDeductionPerGram: productItems.deductionPerGram,
       itemDisplayName: productItems.displayName,
       masterProductName: productMasters.name,
       itemImageKey: productItems.imageKey,
@@ -286,6 +289,7 @@ export async function getReceiptCertificateData({
           masterProductName: snapshot.masterProductName ?? item.masterProductName,
           imageKey: snapshot.imageKey ?? item.itemImageKey,
           productImageKey: snapshot.productImageKey ?? item.productImageKey,
+          deductionPerGram: snapshot.deductionPerGram ?? item.itemDeductionPerGram,
         },
       };
     }),

@@ -3,11 +3,11 @@ import { createQrSvgDataUri } from "@/lib/qr-code/svg";
 import type { ReceiptCertificateData } from "./receipt-certificate";
 
 const receiptTerms = [
-  "Barang yang tercantum dalam nota telah diperiksa, disetujui, ditimbang, dan diterima oleh pembeli.",
-  "Barang dapat dijual kembali dalam keadaan utuh sesuai kebijakan toko dan harga pasar yang berlaku.",
-  "Barang permata cacat atau pecah tidak dapat diterima kembali.",
-  "Perhiasan batu dan sejenisnya hanya kami terima emasnya saja.",
-  "Nota ini wajib dibawa saat menjual kembali. Jika nota hilang, transaksi dapat ditolak.",
+  "1. Barang yang tercantum dalam nota telah diperiksa, disetujui, ditimbang, dan diterima oleh pembeli.",
+  "2. Barang dapat dijual kembali dalam keadaan utuh sesuai kebijakan toko dan harga pasar yang berlaku.",
+  "3. Barang permata cacat atau pecah tidak dapat diterima kembali.",
+  "4. Perhiasan batu dan sejenisnya hanya kami terima emasnya saja.",
+  "5. Nota ini wajib dibawa saat menjual kembali. Jika nota hilang, transaksi dapat ditolak.",
 ];
 
 const styles = String.raw`
@@ -270,9 +270,14 @@ const styles = String.raw`
     height: 100%;
   }
 
+  .aj-products-grid-single {
+    grid-auto-rows: auto;
+    height: auto;
+  }
+
   .aj-product-row {
     display: grid;
-    grid-template-columns: 18mm 22mm 1fr 16mm 18mm 32mm;
+    grid-template-columns: 18mm 22mm 1fr 16mm 18mm 24mm 28mm;
     align-items: center;
     column-gap: 3mm;
     padding: 0 4mm;
@@ -287,21 +292,33 @@ const styles = String.raw`
     color: #000;
     background: #f5f5dc;
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 6.4pt;
+    font-size: 5.8pt;
     font-weight: 900;
     letter-spacing: 0.02em;
   }
 
+  .aj-product-head > div {
+    text-align: left;
+  }
+
+  .aj-product-head .aj-head-center {
+    text-align: center;
+  }
+
+  .aj-product-head .aj-head-right {
+    text-align: right;
+  }
+
   .aj-code {
-    font-size: 6.8pt;
+    font-size: 6.3pt;
     font-weight: 800;
     text-align: center;
   }
 
   .aj-thumb {
     display: grid;
-    width: 14mm;
-    height: 14mm;
+    width: 16mm;
+    height: 16mm;
     overflow: hidden;
     place-items: center;
     justify-self: center;
@@ -348,7 +365,7 @@ const styles = String.raw`
     justify-self: center;
     color: #000;
     background: rgba(255, 253, 248, 0.92);
-    font-size: 5.8pt;
+    font-size: 6.8pt;
     font-weight: 900;
   }
 
@@ -356,6 +373,14 @@ const styles = String.raw`
     font-size: 6.8pt;
     font-weight: 800;
     text-align: center;
+  }
+
+  .aj-deduction {
+    color: var(--maroon);
+    font-size: 6.4pt;
+    font-weight: 900;
+    text-align: center;
+    white-space: nowrap;
   }
 
   .aj-price {
@@ -400,9 +425,8 @@ const styles = String.raw`
 
   .aj-terms {
     margin: 0;
-    padding-left: 3mm;
     color: #382f28;
-    font-size: 5.6pt;
+    font-size: 6.2pt;
     line-height: 1.36;
   }
 
@@ -463,7 +487,7 @@ const styles = String.raw`
 
   .aj-total-amount {
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 12.2pt;
+    font-size: 14.2pt;
     font-weight: 900;
     line-height: 1;
     white-space: nowrap;
@@ -572,6 +596,16 @@ function formatNegativeAmount(value: string | number | null | undefined) {
   }
 
   return `-${formatAmount(amount)}`;
+}
+
+function formatDeductionPerGram(value: string | number | null | undefined) {
+  const amount = toNumber(value);
+
+  if (amount <= 0) {
+    return "-";
+  }
+
+  return formatAmount(amount);
 }
 
 function getPaymentMetadataAmount(
@@ -845,14 +879,17 @@ export function ReceiptCertificateHtmlDocument({
           </section>
 
           <section className="aj-products-card">
-            <div className="aj-products-grid">
+            <div
+              className={`aj-products-grid${visibleItems.length <= 1 ? " aj-products-grid-single" : ""}`}
+            >
               <div className="aj-product-row aj-product-head">
-                <div>KODE</div>
-                <div>FOTO</div>
+                <div className="aj-head-center">KODE</div>
+                <div className="aj-head-center">FOTO</div>
                 <div>PRODUCT</div>
-                <div>KADAR ±%</div>
-                <div>GRAM</div>
-                <div>HARGA</div>
+                <div className="aj-head-center">KADAR ±%</div>
+                <div className="aj-head-center">GRAM</div>
+                <div className="aj-head-center">POTONGAN /GRAM</div>
+                <div className="aj-head-right">HARGA</div>
               </div>
               {visibleItems.map((item) => (
                 <div className="aj-product-row" key={item.lineNumber}>
@@ -869,6 +906,9 @@ export function ReceiptCertificateHtmlDocument({
                   </div>
                   <div className="aj-gram">
                     {formatGram(item.snapshot.weightGram)}
+                  </div>
+                  <div className="aj-deduction">
+                    {formatDeductionPerGram(item.snapshot.deductionPerGram)}
                   </div>
                   <div className="aj-price">
                     {formatAmount(item.finalPriceAmount)}
