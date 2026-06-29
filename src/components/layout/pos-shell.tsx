@@ -238,21 +238,33 @@ function SidebarContent({
       <Link
         href="/pos"
         onClick={onNavigate}
-        className="mb-8 flex items-center gap-3 px-2"
+        className="mb-6 flex items-center gap-2 rounded-2xl px-2 py-1.5 transition hover:bg-neutral-50"
       >
-        <div className="h-[52px] w-auto shrink-0">
+        <span className="grid shrink-0 place-items-center">
           <Image
-            src="/logo/logo-brand.png"
-            alt="Logo Asihjaya"
-            width={256}
-            height={40}
-            sizes="512px"
-            className="h-full w-auto object-contain"
+            src="/logo/asihjaya-brand-icon.png"
+            alt="Asihjaya"
+            width={128}
+            height={128}
+            className="h-15 w-auto object-contain"
             priority
           />
-        </div>
-      </Link>
+        </span>
 
+        <span className="min-w-0">
+          <Image
+            src="/logo/asihjaya-brand-text.png"
+            alt="Asihjaya"
+            width={140}
+            height={28}
+            className="h-8 w-auto object-contain"
+            priority
+          />
+          <span className="mt-0.5 block truncate text-xs font-medium text-[var(--muted)]">
+            Retail Sales Applications
+          </span>
+        </span>
+      </Link>
       <nav className="space-y-1">
         {navigation.map((item) => {
           const Icon = item.icon;
@@ -559,16 +571,35 @@ export function PosShell({
       <div className="flex min-h-screen min-w-0 flex-col">
         {/* Topbar */}
         <header className="sticky top-0 z-40 flex h-[72px] items-center gap-3 border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur sm:px-5 lg:px-6">
-          <div className="min-w-0 lg:hidden">
-            <Image
-              src="/logo/logo-brand.png"
-              alt="Logo Asihjaya"
-              width={120}
-              height={34}
-              className="h-12 w-auto object-contain"
-              priority
-            />
-          </div>
+          <Link
+            href="/pos"
+            className="flex min-w-0 items-center gap-2 lg:hidden"
+          >
+            <span className="grid size-14 shrink-0 place-items-center">
+              <Image
+                src="/logo/asihjaya-brand-icon.png"
+                alt="Asihjaya"
+                width={64}
+                height={64}
+                className="h-12 w-auto object-contain"
+                priority
+              />
+            </span>
+
+            <span className="min-w-0">
+              <Image
+                src="/logo/asihjaya-brand-text.png"
+                alt="Asihjaya"
+                width={112}
+                height={24}
+                className="h-7 w-auto object-contain"
+                priority
+              />
+              <span className="block truncate text-[12px] font-medium text-[var(--muted)]">
+                Sales Retail Applications
+              </span>
+            </span>
+          </Link>
 
           <form
             onSubmit={handleTopbarSearchSubmit}
