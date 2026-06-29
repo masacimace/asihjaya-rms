@@ -452,7 +452,7 @@ export function PosShell({
           <button
             type="button"
             aria-label="Tutup navigasi"
-            className="absolute inset-0 bg-black/30 backdrop-blur-[1px]"
+            className="absolute inset-0 backdrop-blur-[1px]"
             onClick={() => setIsNavigationOpen(false)}
           />
 
@@ -560,22 +560,13 @@ export function PosShell({
       <div className="flex min-h-screen min-w-0 flex-col">
         {/* Topbar */}
         <header className="sticky top-0 z-40 flex h-[72px] items-center gap-3 border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur sm:px-5 lg:px-6">
-          <button
-            type="button"
-            aria-label="Buka navigasi"
-            onClick={() => setIsNavigationOpen(true)}
-            className="grid size-10 shrink-0 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950 lg:hidden"
-          >
-            <Menu className="size-5" />
-          </button>
-
           <div className="min-w-0 lg:hidden">
             <Image
               src="/logo/logo-brand.png"
               alt="Logo Asihjaya"
               width={120}
               height={34}
-              className="h-11 w-auto object-contain"
+              className="h-10 w-auto object-contain"
               priority
             />
           </div>

@@ -867,7 +867,7 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
 
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <SummaryCard
-            title="Transaksi tampil"
+            title="Transaksi"
             value={String(data.summary.totalTransactions)}
             helper={`Filter: ${rangeLabels[data.range]}`}
             icon={<ReceiptText className="size-5" />}
