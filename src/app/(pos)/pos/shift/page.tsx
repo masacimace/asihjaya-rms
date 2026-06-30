@@ -555,7 +555,7 @@ export default async function PosShiftPage() {
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
-                                <p className="font-semibold text-neutral-950">
+                                <p className="font-semibold text-sm text-neutral-950">
                                   {transaction.invoiceNumber}
                                 </p>
                                 <PaymentStatusBadge
