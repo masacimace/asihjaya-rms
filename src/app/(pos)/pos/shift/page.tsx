@@ -522,9 +522,9 @@ export default async function PosShiftPage() {
                   </div>
                 </section>
 
-                <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
+                <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
                       <h2 className="font-semibold text-neutral-950">
                         Transaksi Terbaru
                       </h2>
@@ -534,7 +534,7 @@ export default async function PosShiftPage() {
                     </div>
                     <Link
                       href={shiftTransactionsHref}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
                     >
                       Lihat semua
                       <ArrowRight className="size-3.5" />
@@ -542,66 +542,91 @@ export default async function PosShiftPage() {
                   </div>
 
                   {data.recentTransactions.length === 0 ? (
-                    <p className="mt-4 rounded-2xl bg-neutral-50 p-4 text-sm leading-6 text-[var(--muted)]">
-                      Belum ada transaksi completed pada shift ini.
-                    </p>
+                    <div className="mt-4 rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 p-6 text-center">
+                      <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-white text-[var(--accent)] shadow-sm">
+                        <ReceiptText className="size-5" />
+                      </div>
+                      <p className="mt-3 text-sm font-semibold text-neutral-950">
+                        Belum ada transaksi completed
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                        Transaksi yang selesai pada shift ini akan otomatis
+                        muncul di sini.
+                      </p>
+                    </div>
                   ) : (
-                    <div className="mt-4 space-y-3">
-                      {data.recentTransactions.map((transaction) => (
-                        <article
-                          key={transaction.id}
-                          className="rounded-2xl border border-[var(--border)] p-3"
-                        >
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="font-semibold text-sm text-neutral-950">
-                                  {transaction.invoiceNumber}
-                                </p>
-                                <PaymentStatusBadge
-                                  status={transaction.paymentStatus}
-                                />
+                    <div className="scrollbar-clean mt-4 max-h-[560px] space-y-3 overflow-y-auto overscroll-contain pr-1">
+                      {data.recentTransactions.map((transaction) => {
+                        const hasDiscount =
+                          Number(transaction.discountAmount) > 0;
+
+                        return (
+                          <Link
+                            key={transaction.id}
+                            href={buildShiftTransactionDetailHref(
+                              activeShift.id,
+                              transaction.id,
+                            )}
+                            className="group block rounded-2xl border border-[var(--border)] bg-white p-4 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                          >
+                            <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                              <div className="flex min-w-0 gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                    <p className="max-w-full truncate text-sm font-semibold text-neutral-950">
+                                      {transaction.invoiceNumber}
+                                    </p>
+                                    <PaymentStatusBadge
+                                      status={transaction.paymentStatus}
+                                    />
+                                  </div>
+
+                                  <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                                    {formatDateTime(transaction.completedAt)} ·{" "}
+                                    {transaction.customerName ??
+                                      "Customer umum"}
+                                  </p>
+
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-700 transition group-hover:bg-white">
+                                      <ShoppingBag className="size-3.5" />
+                                      {transaction.totalItems} item
+                                    </span>
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-700 transition group-hover:bg-white">
+                                      <WalletCards className="size-3.5" />
+                                      {formatPaymentMethods(
+                                        transaction.paymentMethods,
+                                      )}
+                                    </span>
+                                    {hasDiscount ? (
+                                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">
+                                        Diskon{" "}
+                                        {formatMoney(
+                                          transaction.discountAmount,
+                                        )}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
                               </div>
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {formatDateTime(transaction.completedAt)} ·{" "}
-                                {transaction.customerName ?? "Customer umum"}
-                              </p>
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {transaction.totalItems} item ·{" "}
-                                {formatPaymentMethods(
-                                  transaction.paymentMethods,
-                                )}
-                              </p>
-                              {Number(transaction.discountAmount) > 0 ? (
-                                <p className="mt-1 text-xs text-red-600">
-                                  Diskon{" "}
-                                  {formatMoney(transaction.discountAmount)}
-                                </p>
-                              ) : null}
-                            </div>
-                            <div className="flex shrink-0 flex-col items-start gap-2 text-left sm:items-end sm:text-right">
-                              <div>
-                                <p className="text-sm font-semibold text-neutral-950">
-                                  {formatMoney(transaction.totalAmount)}
-                                </p>
-                                <p className="mt-1 text-xs text-[var(--muted)]">
-                                  Paid {formatMoney(transaction.paidAmount)}
-                                </p>
+
+                              <div className="flex shrink-0 items-end justify-between gap-3 border-t border-[var(--border)] pt-3 lg:flex-col lg:border-t-0 lg:pt-0 lg:text-right">
+                                <div>
+                                  <p className="text-sm font-semibold text-neutral-950">
+                                    {formatMoney(transaction.totalAmount)}
+                                  </p>
+                                  <p className="mt-1 text-xs text-[var(--muted)]">
+                                    Paid {formatMoney(transaction.paidAmount)}
+                                  </p>
+                                </div>
+                                <span className="grid size-9 place-items-center rounded-xl border border-[var(--border)] bg-white text-neutral-600 transition group-hover:border-[var(--accent)] group-hover:text-[var(--accent)]">
+                                  <ArrowRight className="size-4" />
+                                </span>
                               </div>
-                              <Link
-                                href={buildShiftTransactionDetailHref(
-                                  activeShift.id,
-                                  transaction.id,
-                                )}
-                                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                              >
-                                Detail
-                                <ArrowRight className="size-3.5" />
-                              </Link>
                             </div>
-                          </div>
-                        </article>
-                      ))}
+                          </Link>
+                        );
+                      })}
                     </div>
                   )}
                 </section>

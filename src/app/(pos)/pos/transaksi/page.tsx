@@ -346,7 +346,7 @@ function TransactionCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate font-semibold text-neutral-950">
+          <p className="truncate text-sm font-semibold text-neutral-950">
             {transaction.invoiceNumber}
           </p>
           <p className="mt-1 text-xs text-[var(--muted)]">
