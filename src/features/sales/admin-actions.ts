@@ -12,7 +12,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { createHardwareJobWithDuplicateGuard } from "@/lib/hardware/job-queue";
 
 const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HARDWARE_AGENT_ONLINE_WINDOW_MS = 90 * 1000;
 const HARDWARE_AGENT_STALE_WINDOW_MS = 5 * 60 * 1000;
 
@@ -127,10 +127,21 @@ function getReprintQueuedMessage({
   return `Job cetak ulang nota ${invoiceNumber} sudah masuk antrean, tetapi Hardware Hub sedang offline. Nyalakan Mini PC Hardware Hub agar job diproses.`;
 }
 
-export async function reprintAdminReceiptCertificateAction(formData: FormData) {
+export async function reprintAdminReceiptCertificateAction(
+  saleIdOrFormData: string | FormData,
+  returnToArg?: string,
+  formData?: FormData,
+) {
   const auth = await requirePermission("sales.view");
-  const saleId = readText(formData, "saleId");
-  const returnTo = readText(formData, "returnTo");
+  const isBoundAction = typeof saleIdOrFormData === "string";
+  const saleId = isBoundAction
+    ? saleIdOrFormData.trim()
+    : readText(saleIdOrFormData, "saleId");
+  const boundReturnTo = (returnToArg ?? "").trim();
+  const submittedReturnTo = formData ? readText(formData, "returnTo") : "";
+  const returnTo = isBoundAction
+    ? boundReturnTo || submittedReturnTo || `/admin/penjualan/${saleId}`
+    : readText(saleIdOrFormData, "returnTo");
 
   if (!UUID_PATTERN.test(saleId)) {
     redirectAdminSaleDetailWithFeedback({

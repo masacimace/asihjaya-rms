@@ -301,8 +301,14 @@ function ReprintDocumentAction({
   returnTo: string;
   disabled: boolean;
 }) {
+  const reprintAction = reprintAdminReceiptCertificateAction.bind(
+    null,
+    saleId,
+    returnTo,
+  );
+
   return (
-    <form action={reprintAdminReceiptCertificateAction} className="min-w-0">
+    <form action={reprintAction} className="min-w-0">
       <input type="hidden" name="saleId" value={saleId} />
       <input type="hidden" name="returnTo" value={returnTo} />
       <div className="flex min-h-16 min-w-0 items-center gap-3 rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-left">
