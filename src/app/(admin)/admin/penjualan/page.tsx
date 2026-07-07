@@ -1,272 +1,528 @@
 import {
-  ArrowDownRight,
-  ArrowUpRight,
+  ArrowRight,
   CalendarDays,
+  CreditCard,
+  Download,
   Filter,
-  Receipt,
+  Printer,
+  ReceiptText,
+  RefreshCw,
   Search,
+  ShoppingBag,
+  Store,
+  WalletCards,
 } from "lucide-react";
 import Link from "next/link";
-import { ExportExcelButton } from "@/components/penjualan/export-excel-button";
+
+import {
+  adminPaymentMethods,
+  adminSaleStatuses,
+  adminSalesDateRanges,
+  parseAdminSalesFilters,
+  type AdminPaymentMethod,
+  type AdminSalePrintStatus,
+  type AdminSaleStatus,
+  type AdminSalesDateRange,
+  type AdminSalesFilters,
+} from "@/features/sales/admin-contracts";
+import { getAdminSalesListData } from "@/features/sales/admin-queries";
+import { cn } from "@/lib/utils";
+import { requirePermission } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
-const MOCK_TRANSACTIONS = [
-  {
-    id: "trx-001",
-    receiptNo: "ORD/06/2026/440",
-    date: "2026-06-25T14:30:00Z",
-    type: "purchase",
-    customerName: "Kiki",
-    staffName: "Hanita",
-    totalItems: 1,
-    totalValue: 3685000,
-  },
-  {
-    id: "trx-002",
-    receiptNo: "ORD/06/2026/441",
-    date: "2026-06-25T14:45:00Z",
-    type: "buyback",
-    customerName: "Ibu Siti",
-    staffName: "Hanita",
-    totalItems: 2,
-    totalValue: -2150000,
-  },
-  {
-    id: "trx-003",
-    receiptNo: "ORD/06/2026/442",
-    date: "2026-06-25T15:10:00Z",
-    type: "purchase",
-    customerName: "Agus Santoso",
-    staffName: "Rini",
-    totalItems: 3,
-    totalValue: 12400000,
-  },
-  {
-    id: "trx-004",
-    receiptNo: "ORD/06/2026/443",
-    date: "2026-06-25T15:50:00Z",
-    type: "purchase",
-    customerName: "NN (Umum)",
-    staffName: "Danang",
-    totalItems: 1,
-    totalValue: 850000,
-  },
-  {
-    id: "trx-005",
-    receiptNo: "ORD/06/2026/444",
-    date: "2026-06-25T16:05:00Z",
-    type: "buyback",
-    customerName: "Nita Larasati",
-    staffName: "Hanita",
-    totalItems: 1,
-    totalValue: -8900000,
-  },
-];
+const saleStatusLabels: Record<AdminSaleStatus, string> = {
+  draft: "Draft",
+  awaiting_payment: "Menunggu Bayar",
+  completed: "Selesai",
+  cancelled: "Dibatalkan",
+  voided: "Void",
+  partially_refunded: "Refund Parsial",
+  refunded: "Refund",
+};
 
-function formatMoney(value: number) {
+const paymentMethodLabels: Record<AdminPaymentMethod, string> = {
+  cash: "Cash",
+  debit_card: "Debit",
+  credit_card: "Credit",
+  bank_transfer: "Transfer",
+  qris_manual: "QRIS Manual",
+  qris_gateway: "QRIS Gateway",
+  other: "Lainnya",
+};
+
+const dateRangeLabels: Record<AdminSalesDateRange, string> = {
+  today: "Hari ini",
+  yesterday: "Kemarin",
+  last7: "7 hari terakhir",
+  last30: "30 hari terakhir",
+  thisMonth: "Bulan ini",
+  all: "Semua waktu",
+};
+
+const printStatusLabels: Record<AdminSalePrintStatus, string> = {
+  not_queued: "Belum dicetak",
+  pending: "Print pending",
+  claimed: "Diklaim agent",
+  printing: "Sedang print",
+  completed: "Print selesai",
+  failed: "Print gagal",
+  cancelled: "Print batal",
+};
+
+function getSaleStatusClass(status: AdminSaleStatus) {
+  if (status === "completed") {
+    return "bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "awaiting_payment" || status === "partially_refunded") {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  if (status === "voided" || status === "refunded") {
+    return "bg-red-50 text-red-700";
+  }
+
+  return "bg-neutral-100 text-neutral-600";
+}
+
+function getPrintStatusClass(status: AdminSalePrintStatus) {
+  if (status === "completed") {
+    return "bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "failed") {
+    return "bg-red-50 text-red-700";
+  }
+
+  if (status === "pending" || status === "claimed" || status === "printing") {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  return "bg-neutral-100 text-neutral-600";
+}
+
+function formatMoney(value: number | string | null) {
+  const amount = typeof value === "string" ? Number(value) : (value ?? 0);
+
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
-  }).format(Math.abs(value));
+  }).format(Number.isFinite(amount) ? amount : 0);
 }
 
-function formatDate(isoString: string) {
-  const date = new Date(isoString);
+function formatInteger(value: number) {
+  return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatDateTime(value: Date | null) {
+  if (!value) {
+    return "-";
+  }
+
   return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
+    day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
+    timeZone: "Asia/Jakarta",
+  }).format(value);
 }
 
-export default function PenjualanListPage() {
+function buildAdminSalesListUrl(page: number, filters: AdminSalesFilters) {
+  const params = new URLSearchParams();
+
+  if (filters.search) params.set("q", filters.search);
+  if (filters.outletId) params.set("outletId", filters.outletId);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.paymentMethod) params.set("paymentMethod", filters.paymentMethod);
+  if (filters.dateRange !== "today") params.set("range", filters.dateRange);
+  if (page > 1) params.set("page", String(page));
+
+  const query = params.toString();
+
+  return query ? `/admin/penjualan?${query}` : "/admin/penjualan";
+}
+
+function getPaymentMethodLabel(methods: AdminPaymentMethod[]) {
+  if (methods.length === 0) {
+    return "Belum bayar";
+  }
+
+  if (methods.length === 1) {
+    return paymentMethodLabels[methods[0] ?? "other"];
+  }
+
+  return `Split: ${methods.map((method) => paymentMethodLabels[method]).join(" + ")}`;
+}
+
+export default async function PenjualanListPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const auth = await requirePermission("sales.view");
+  const filters = parseAdminSalesFilters(await searchParams);
+  const data = await getAdminSalesListData(auth, filters);
+  const isFiltered = Boolean(
+    filters.search ||
+      filters.outletId ||
+      filters.status ||
+      filters.paymentMethod ||
+      filters.dateRange !== "today",
+  );
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="mb-1 text-sm font-medium text-[var(--accent)]">
-            Kas & Transaksi
+          <p className="text-sm font-medium text-[var(--accent)]">
+            Sales Audit Center
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
             Riwayat Penjualan
           </h1>
-          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            Pantau seluruh nota transaksi harian, lacak penjualan, dan buyback.
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+            Pantau transaksi POS real dari outlet yang bisa kamu akses, termasuk
+            customer, kasir, item terjual, metode pembayaran, dan status dokumen.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50">
-            <CalendarDays className="size-4 text-neutral-500" />
-            Hari Ini (25 Juni 2026)
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={buildAdminSalesListUrl(data.page, data.filters)}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+          >
+            <RefreshCw className="size-4" />
+            Refresh
+          </Link>
+          <button
+            type="button"
+            disabled
+            className="inline-flex h-11 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-neutral-50 px-4 text-sm font-medium text-neutral-400"
+            title="Masuk scope ADMIN-R3B"
+          >
+            <Download className="size-4" />
+            Export R3B
           </button>
         </div>
       </header>
 
-      {/* Analytics Dashboard */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm font-medium text-neutral-500">
-              Total Uang Masuk (Kotor)
-            </p>
-            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600">
-              <ArrowUpRight className="size-5" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-neutral-950">Rp 16.935.000</p>
-          <p className="mt-2 text-xs font-medium text-emerald-600">
-            Dari 3 Transaksi Penjualan
+          <ReceiptText className="size-5 text-[var(--accent)]" />
+          <p className="mt-4 text-2xl font-semibold text-neutral-950">
+            {formatMoney(data.summary.totalAmount)}
+          </p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Total penjualan {data.period.label.toLowerCase()}
           </p>
         </article>
 
         <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm font-medium text-neutral-500">
-              Total Uang Keluar (Buyback)
-            </p>
-            <div className="rounded-lg bg-red-50 p-2 text-red-600">
-              <ArrowDownRight className="size-5" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-neutral-950">Rp 11.050.000</p>
-          <p className="mt-2 text-xs font-medium text-red-600">
-            Dari 2 Transaksi Pembelian/Buyback
+          <ShoppingBag className="size-5 text-violet-700" />
+          <p className="mt-4 text-2xl font-semibold text-neutral-950">
+            {formatInteger(data.summary.totalTransactions)}
+          </p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Transaksi cocok filter
           </p>
         </article>
 
-        <article className="rounded-2xl border border-[var(--border)] bg-[var(--accent)] p-5 text-white">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm font-medium text-white/80">
-              Total Saldo Bersih
-            </p>
-            <div className="rounded-lg bg-white/20 p-2 text-white">
-              <Receipt className="size-5" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-white">Rp 5.885.000</p>
-          <p className="mt-2 text-xs font-medium text-white/80">
-            Total Masuk dikurangi Total Keluar
+        <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
+          <WalletCards className="size-5 text-blue-700" />
+          <p className="mt-4 text-2xl font-semibold text-neutral-950">
+            {formatMoney(data.summary.averageTransactionAmount)}
           </p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Rata-rata transaksi
+          </p>
+        </article>
+
+        <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
+          <Store className="size-5 text-emerald-700" />
+          <p className="mt-4 text-2xl font-semibold text-neutral-950">
+            {formatMoney(data.summary.cashAmount)}
+          </p>
+          <p className="mt-1 text-xs text-[var(--muted)]">Pembayaran cash</p>
+        </article>
+
+        <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
+          <CreditCard className="size-5 text-amber-600" />
+          <p className="mt-4 text-2xl font-semibold text-neutral-950">
+            {formatMoney(data.summary.nonCashAmount)}
+          </p>
+          <p className="mt-1 text-xs text-[var(--muted)]">Non-cash payment</p>
         </article>
       </section>
 
-      {/* Filter Bar */}
-      <section className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-white p-4 sm:flex-row sm:items-center">
-        <label className="flex h-10 flex-1 items-center gap-3 rounded-xl border border-[var(--border)] px-3 focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]">
-          <Search className="size-4 shrink-0 text-neutral-400" />
-          <input
-            name="q"
-            type="search"
-            placeholder="Cari No. Nota, Pelanggan, atau Kasir..."
-            className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
-          />
-        </label>
-        <div className="flex shrink-0 items-center gap-2">
-          <button className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--border)] px-4 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
-            <Filter className="size-4" />
-            Filter Jenis
-          </button>
-          <ExportExcelButton data={MOCK_TRANSACTIONS} />
-        </div>
+      <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+        <form className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_180px_180px_190px_170px_auto]">
+          <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] px-3 focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]">
+            <Search className="size-4 shrink-0 text-neutral-400" />
+            <input
+              name="q"
+              type="search"
+              defaultValue={filters.search}
+              placeholder="Cari invoice, customer, SKU, barcode, kasir..."
+              className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
+            />
+          </label>
+
+          <select
+            name="range"
+            defaultValue={filters.dateRange}
+            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)]"
+          >
+            {adminSalesDateRanges.map((range) => (
+              <option key={range} value={range}>
+                {dateRangeLabels[range]}
+              </option>
+            ))}
+          </select>
+
+          <select
+            name="outletId"
+            defaultValue={filters.outletId ?? ""}
+            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)]"
+          >
+            <option value="">Semua outlet</option>
+            {data.outlets.map((outlet) => (
+              <option key={outlet.id} value={outlet.id}>
+                {outlet.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            name="status"
+            defaultValue={filters.status ?? ""}
+            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)]"
+          >
+            <option value="">Semua status</option>
+            {adminSaleStatuses.map((status) => (
+              <option key={status} value={status}>
+                {saleStatusLabels[status]}
+              </option>
+            ))}
+          </select>
+
+          <select
+            name="paymentMethod"
+            defaultValue={filters.paymentMethod ?? ""}
+            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)]"
+          >
+            <option value="">Semua payment</option>
+            {adminPaymentMethods.map((method) => (
+              <option key={method} value={method}>
+                {paymentMethodLabels[method]}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-medium !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+            >
+              <Filter className="size-4" />
+              Terapkan
+            </button>
+            {isFiltered ? (
+              <Link
+                href="/admin/penjualan"
+                className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+              >
+                Reset
+              </Link>
+            ) : null}
+          </div>
+        </form>
       </section>
 
-      {/* Transaction List */}
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-neutral-600">
-            <thead className="border-b border-[var(--border)] bg-neutral-50/50 text-xs text-neutral-500">
-              <tr>
-                <th className="whitespace-nowrap px-5 py-4 font-medium">
-                  Waktu & Kasir
-                </th>
-                <th className="whitespace-nowrap px-5 py-4 font-medium">
-                  Nomor Nota
-                </th>
-                <th className="whitespace-nowrap px-5 py-4 font-medium">
-                  Jenis
-                </th>
-                <th className="whitespace-nowrap px-5 py-4 font-medium">
-                  Pelanggan
-                </th>
-                <th className="whitespace-nowrap px-5 py-4 font-medium text-right">
-                  Total Nilai
-                </th>
-                <th className="px-5 py-4"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {MOCK_TRANSACTIONS.map((trx) => (
-                <tr
-                  key={trx.id}
-                  className="transition-colors hover:bg-neutral-50/50"
-                >
-                  <td className="whitespace-nowrap px-5 py-4">
-                    <p className="font-medium text-neutral-950">
-                      {formatDate(trx.date)}
-                    </p>
-                    <p className="mt-0.5 flex items-center gap-1.5 text-xs text-neutral-500">
-                      Kasir:{" "}
-                      <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-medium text-neutral-700">
-                        {trx.staffName}
-                      </span>
-                    </p>
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-4">
-                    <span className="font-mono text-sm text-neutral-950">
-                      {trx.receiptNo}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    {trx.type === "purchase" ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                        <ArrowUpRight className="size-3" />
-                        Penjualan
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
-                        <ArrowDownRight className="size-3" />
-                        Buyback
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-4">
-                    <p className="font-medium text-neutral-950">
-                      {trx.customerName}
-                    </p>
-                    <p className="text-xs text-neutral-500">
-                      {trx.totalItems} barang
-                    </p>
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-4 text-right">
-                    <p
-                      className={`font-semibold ${
-                        trx.type === "buyback"
-                          ? "text-red-600"
-                          : "text-emerald-600"
-                      }`}
-                    >
-                      {trx.type === "buyback" ? "-" : "+"}
-                      {formatMoney(trx.totalValue)}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <Link
-                      href={`/admin/penjualan/${trx.id}`}
-                      className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-neutral-700 transition hover:bg-neutral-100"
-                    >
-                      Lihat Nota
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex flex-col gap-2 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-neutral-950">
+              Transaksi POS Real Data
+            </h2>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {formatInteger(data.total)} transaksi ditemukan, {formatInteger(data.summary.totalItems)} item terjual.
+            </p>
+          </div>
+          <p className="inline-flex items-center gap-2 text-xs font-medium text-[var(--muted)]">
+            <CalendarDays className="size-4" />
+            Periode: {data.period.label}
+          </p>
         </div>
+
+        {data.rows.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-neutral-600">
+              <thead className="border-b border-[var(--border)] bg-neutral-50/70 text-xs text-neutral-500">
+                <tr>
+                  <th className="whitespace-nowrap px-5 py-4 font-medium">
+                    Invoice & Waktu
+                  </th>
+                  <th className="whitespace-nowrap px-5 py-4 font-medium">
+                    Customer
+                  </th>
+                  <th className="whitespace-nowrap px-5 py-4 font-medium">
+                    Outlet & Kasir
+                  </th>
+                  <th className="whitespace-nowrap px-5 py-4 font-medium">
+                    Item
+                  </th>
+                  <th className="whitespace-nowrap px-5 py-4 font-medium">
+                    Payment
+                  </th>
+                  <th className="whitespace-nowrap px-5 py-4 text-right font-medium">
+                    Total
+                  </th>
+                  <th className="whitespace-nowrap px-5 py-4 font-medium">
+                    Status
+                  </th>
+                  <th className="px-5 py-4" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {data.rows.map((sale) => (
+                  <tr key={sale.id} className="transition-colors hover:bg-neutral-50/60">
+                    <td className="whitespace-nowrap px-5 py-4 align-top">
+                      <p className="font-mono text-sm font-semibold text-neutral-950">
+                        {sale.invoiceNumber}
+                      </p>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        {formatDateTime(sale.completedAt ?? sale.createdAt)}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4 align-top">
+                      <p className="font-medium text-neutral-950">
+                        {sale.customerName ?? "Walk-in Customer"}
+                      </p>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        {sale.customerCode ?? sale.customerPhone ?? "Tanpa data customer"}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4 align-top">
+                      <p className="font-medium text-neutral-950">
+                        {sale.outletName}
+                      </p>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        {sale.registerName} • {sale.cashierName}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4 align-top">
+                      <p className="font-medium text-neutral-950">
+                        {sale.totalItems} item
+                      </p>
+                      <p className="mt-1 max-w-[220px] truncate text-xs text-neutral-500">
+                        {sale.items[0]?.productName ?? "Item belum tercatat"}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4 align-top">
+                      <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                        {getPaymentMethodLabel(sale.paymentMethods)}
+                      </span>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        Dibayar {formatMoney(sale.paidAmount)}
+                      </p>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4 text-right align-top">
+                      <p className="font-semibold text-neutral-950">
+                        {formatMoney(sale.totalAmount)}
+                      </p>
+                      {Number(sale.discountAmount) > 0 ? (
+                        <p className="mt-1 text-xs text-red-600">
+                          Diskon {formatMoney(sale.discountAmount)}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td className="px-5 py-4 align-top">
+                      <div className="flex flex-col items-start gap-1.5">
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
+                            getSaleStatusClass(sale.status),
+                          )}
+                        >
+                          {saleStatusLabels[sale.status]}
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium",
+                            getPrintStatusClass(sale.printStatus),
+                          )}
+                        >
+                          <Printer className="mr-1 size-3" />
+                          {printStatusLabels[sale.printStatus]}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-right align-top">
+                      <Link
+                        href={`/admin/penjualan/${sale.id}`}
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                      >
+                        Detail
+                        <ArrowRight className="size-3.5" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="grid place-items-center px-6 py-16 text-center">
+            <div className="grid size-14 place-items-center rounded-2xl bg-neutral-100 text-neutral-500">
+              <ReceiptText className="size-7" />
+            </div>
+            <h3 className="mt-4 text-base font-semibold text-neutral-950">
+              {isFiltered ? "Tidak ada transaksi yang cocok" : "Belum ada transaksi"}
+            </h3>
+            <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
+              {isFiltered
+                ? "Coba ubah keyword pencarian, periode tanggal, outlet, status, atau payment method."
+                : "Transaksi POS yang berhasil checkout akan muncul otomatis di halaman ini."}
+            </p>
+          </div>
+        )}
       </section>
+
+      {data.pageCount > 1 ? (
+        <nav className="flex items-center justify-between gap-3">
+          <Link
+            href={buildAdminSalesListUrl(Math.max(1, data.page - 1), data.filters)}
+            aria-disabled={data.page <= 1}
+            className={cn(
+              "flex h-10 items-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium transition",
+              data.page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-neutral-100",
+            )}
+          >
+            Sebelumnya
+          </Link>
+
+          <p className="text-sm text-[var(--muted)]">
+            Halaman {data.page} dari {data.pageCount}
+          </p>
+
+          <Link
+            href={buildAdminSalesListUrl(Math.min(data.pageCount, data.page + 1), data.filters)}
+            aria-disabled={data.page >= data.pageCount}
+            className={cn(
+              "flex h-10 items-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium transition",
+              data.page >= data.pageCount ? "pointer-events-none opacity-40" : "hover:bg-neutral-100",
+            )}
+          >
+            Berikutnya
+          </Link>
+        </nav>
+      ) : null}
     </div>
   );
 }

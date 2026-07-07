@@ -305,9 +305,11 @@ export default async function ProductCatalogPage({
 
                 <div className="hidden items-center gap-6 sm:flex">
                   <div className="text-sm">
-                    <p className="text-xs text-[var(--muted)] mb-0.5">Berat</p>
+                    <p className="text-xs text-[var(--muted)] mb-0.5">
+                      Total Berat (gram)
+                    </p>
                     <p className="font-semibold text-neutral-950">
-                      {product.totalWeightGram.toLocaleString("id-ID")} gram
+                      {product.totalWeightGram.toLocaleString("id-ID")}
                     </p>
                   </div>
                   <div className="text-sm">
