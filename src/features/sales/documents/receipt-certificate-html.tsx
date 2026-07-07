@@ -16,11 +16,35 @@ const styles = String.raw`
     margin: 0;
   }
 
+  html,
+  body {
+    min-height: 100%;
+    margin: 0;
+    background: #f4f1eb;
+  }
+
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
   .aj-preview-shell {
+    display: grid;
     width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    place-items: center;
     overflow: auto;
-    padding: 24px;
-    background: #fbfbfb;
+    padding: clamp(12px, 3vw, 32px);
+    background:
+      radial-gradient(circle at top, rgba(215, 173, 74, 0.15), transparent 34rem),
+      linear-gradient(180deg, #fffdf8 0%, #f4f1eb 100%);
+  }
+
+  .aj-receipt-stage {
+    display: block;
+    width: 210mm;
+    height: 148mm;
   }
 
   .aj-receipt-page,
@@ -44,7 +68,7 @@ const styles = String.raw`
     width: 210mm;
     height: 148mm;
     overflow: hidden;
-    margin: 0 auto;
+    margin: 0;
     padding: 6mm 7mm;
     color: var(--ink);
     background:#fafaf6;
@@ -533,9 +557,51 @@ const styles = String.raw`
     line-height: 1.2;
   }
 
-  @media screen and (max-width: 980px) {
+  @media screen and (max-width: 860px) {
+    .aj-receipt-stage {
+      zoom: 0.92;
+    }
+  }
+
+  @media screen and (max-width: 780px) {
+    .aj-receipt-stage {
+      zoom: 0.84;
+    }
+  }
+
+  @media screen and (max-width: 700px) {
+    .aj-receipt-stage {
+      zoom: 0.75;
+    }
+  }
+
+  @media screen and (max-width: 620px) {
+    .aj-receipt-stage {
+      zoom: 0.66;
+    }
+  }
+
+  @media screen and (max-width: 540px) {
+    .aj-receipt-stage {
+      zoom: 0.57;
+    }
+  }
+
+  @media screen and (max-width: 460px) {
+    .aj-receipt-stage {
+      zoom: 0.49;
+    }
+  }
+
+  @media screen and (max-width: 390px) {
+    .aj-receipt-stage {
+      zoom: 0.44;
+    }
+  }
+
+  @media screen and (max-height: 640px) and (min-width: 861px) {
     .aj-preview-shell {
-      padding: 12px;
+      align-items: start;
     }
   }
 
@@ -550,11 +616,19 @@ const styles = String.raw`
     }
 
     .aj-preview-shell {
+      display: block;
       width: 210mm;
       height: 148mm;
+      min-height: 148mm;
       overflow: hidden;
       padding: 0;
       background: #f9f9f9;
+    }
+
+    .aj-receipt-stage {
+      width: 210mm;
+      height: 148mm;
+      zoom: 1;
     }
 
     .aj-receipt-page {
@@ -802,10 +876,11 @@ export function ReceiptCertificateHtmlDocument({
   return (
     <div className="aj-preview-shell">
       <style dangerouslySetInnerHTML={{ __html: styles }} />
-      <article
-        className="aj-receipt-page"
-        aria-label="Nota dan certificate pembelian"
-      >
+      <div className="aj-receipt-stage">
+        <article
+          className="aj-receipt-page"
+          aria-label="Nota dan certificate pembelian"
+        >
         <div className="aj-watermark">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo/nota-logo.png" alt="" />
@@ -978,7 +1053,8 @@ export function ReceiptCertificateHtmlDocument({
             </section>
           </footer>
         </div>
-      </article>
+        </article>
+      </div>
     </div>
   );
 }

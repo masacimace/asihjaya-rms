@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
+  Download,
   ExternalLink,
+  Eye,
   FileText,
   Printer,
   ReceiptText,
@@ -159,6 +161,75 @@ function formatDecimal(value: string | null, suffix: string) {
   return `${new Intl.NumberFormat("id-ID", {
     maximumFractionDigits: 3,
   }).format(numberValue)}${suffix}`;
+}
+
+
+function buildDownloadHref(href: string) {
+  return `${href}?download=1`;
+}
+
+function DocumentActionLink({
+  href,
+  icon,
+  label,
+  description,
+  download,
+}: {
+  href: string;
+  icon: ReactNode;
+  label: string;
+  description: string;
+  download?: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      download={download}
+      className="flex min-h-16 min-w-0 items-center gap-3 rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-left transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
+    >
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-neutral-950">
+          {label}
+        </span>
+        <span className="mt-0.5 block text-xs leading-5 text-[var(--muted)]">
+          {description}
+        </span>
+      </span>
+    </a>
+  );
+}
+
+function DisabledDocumentAction({
+  icon,
+  label,
+  description,
+}: {
+  icon: ReactNode;
+  label: string;
+  description: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled
+      className="flex min-h-16 w-full cursor-not-allowed items-center gap-3 rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 px-4 py-3 text-left text-neutral-400"
+    >
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-neutral-100">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold">{label}</span>
+        <span className="mt-0.5 block text-xs leading-5">
+          {description}
+        </span>
+      </span>
+    </button>
+  );
 }
 
 function DetailSection({
@@ -493,25 +564,47 @@ export default async function SaleDetailPage({
               </div>
             ) : null}
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled
-                className="inline-flex h-10 cursor-not-allowed items-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-neutral-50 px-4 text-sm font-medium text-neutral-400"
-                title="Aktivasi download masuk scope ADMIN-R3B"
-              >
-                <FileText className="size-4" />
-                Download PDF R3B
-              </button>
-              <button
-                type="button"
-                disabled
-                className="inline-flex h-10 cursor-not-allowed items-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-neutral-50 px-4 text-sm font-medium text-neutral-400"
-                title="Reprint masuk scope ADMIN-R3B"
-              >
-                <Printer className="size-4" />
-                Reprint R3B
-              </button>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {sale.receiptCertificate.isReady ? (
+                <>
+                  <DocumentActionLink
+                    href={sale.receiptCertificate.htmlHref}
+                    icon={<Eye className="size-4" />}
+                    label="Preview dokumen"
+                    description="Buka layout HTML A5 untuk pengecekan cepat sebelum cetak."
+                  />
+                  <DocumentActionLink
+                    href={buildDownloadHref(sale.receiptCertificate.downloadHref)}
+                    icon={<Download className="size-4" />}
+                    label="Download PDF"
+                    description="Unduh nota/certificate A5 transaksi ini sebagai file PDF."
+                    download={`${sale.invoiceNumber}-nota-certificate-a5.pdf`}
+                  />
+                </>
+              ) : (
+                <>
+                  <DisabledDocumentAction
+                    icon={<Eye className="size-4" />}
+                    label="Preview belum tersedia"
+                    description="Dokumen aktif setelah transaksi berstatus selesai."
+                  />
+                  <DisabledDocumentAction
+                    icon={<Download className="size-4" />}
+                    label="Download belum tersedia"
+                    description="PDF belum bisa dibuat untuk transaksi yang belum selesai."
+                  />
+                </>
+              )}
+            </div>
+
+            <div className="mt-3 rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 p-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <Printer className="mt-0.5 size-4 shrink-0 text-neutral-400" />
+                <p className="text-xs leading-5 text-[var(--muted)]">
+                  Reprint ke hardware printer tetap masuk subfase R3B berikutnya.
+                  Di tahap ini admin sudah bisa preview dan download dokumen manual.
+                </p>
+              </div>
             </div>
           </DetailSection>
 

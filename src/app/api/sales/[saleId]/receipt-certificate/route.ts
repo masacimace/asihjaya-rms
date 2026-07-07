@@ -83,11 +83,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const filename = sanitizeFilename(
     `${documentData.sale.invoiceNumber}-nota-certificate-a5.pdf`,
   );
+  const shouldDownload = request.nextUrl.searchParams.get("download") === "1";
+  const dispositionType = shouldDownload ? "attachment" : "inline";
 
   return new Response(new Uint8Array(pdfBuffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${filename}"`,
+      "Content-Disposition": `${dispositionType}; filename="${filename}"`,
       "Cache-Control": "private, no-store, max-age=0",
     },
   });
