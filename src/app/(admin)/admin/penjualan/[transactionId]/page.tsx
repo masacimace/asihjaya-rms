@@ -173,12 +173,12 @@ function DetailSection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
       <div className="mb-5 flex items-start gap-3">
         <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
           {icon}
         </div>
-        <div>
+        <div className="min-w-0">
           <h2 className="text-base font-semibold text-neutral-950">{title}</h2>
           {description ? (
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
@@ -194,11 +194,11 @@ function DetailSection({
 
 function KeyValue({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
         {label}
       </p>
-      <div className="mt-1 text-sm font-medium text-neutral-950">{value}</div>
+      <div className="mt-1 break-words text-sm font-medium text-neutral-950">{value}</div>
     </div>
   );
 }
@@ -225,8 +225,8 @@ export default async function SaleDetailPage({
   const printStatus = latestPrintJob?.status ?? "not_queued";
 
   return (
-    <div className="space-y-6">
-      <nav className="flex flex-col gap-4 rounded-2xl border border-[var(--border)] bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mx-auto w-full max-w-[1400px] min-w-0 space-y-5 overflow-x-hidden sm:space-y-6">
+      <nav className="flex min-w-0 flex-col gap-4 rounded-2xl border border-[var(--border)] bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
         <Link
           href="/admin/penjualan"
           className="inline-flex items-center gap-2 text-sm font-medium text-neutral-500 transition hover:text-[var(--accent)]"
@@ -255,13 +255,13 @@ export default async function SaleDetailPage({
         </div>
       </nav>
 
-      <header className="rounded-2xl border border-[var(--border)] bg-white p-5 sm:p-6">
+      <header className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-6">
         <p className="text-sm font-medium text-[var(--accent)]">
           Detail Transaksi POS
         </p>
-        <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="font-mono text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
+        <div className="mt-2 flex min-w-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <h1 className="break-all font-mono text-xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
               {sale.invoiceNumber}
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
@@ -269,19 +269,19 @@ export default async function SaleDetailPage({
               outlet/register, kasir, status dokumen, sampai timeline operasional.
             </p>
           </div>
-          <div className="rounded-2xl bg-neutral-950 px-5 py-4 text-white">
+          <div className="w-full rounded-2xl bg-neutral-950 px-4 py-4 text-white sm:w-auto sm:px-5">
             <p className="text-xs font-medium uppercase tracking-wide text-white/60">
               Total Transaksi
             </p>
-            <p className="mt-1 text-2xl font-semibold text-white">
+            <p className="mt-1 break-words text-xl font-semibold text-white sm:text-2xl">
               {formatMoney(sale.totalAmount)}
             </p>
           </div>
         </div>
       </header>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <main className="space-y-6">
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-6">
+        <main className="min-w-0 space-y-5 sm:space-y-6">
           <DetailSection
             title="Ringkasan Transaksi"
             description="Informasi utama transaksi POS dan konteks operasionalnya."
@@ -304,8 +304,8 @@ export default async function SaleDetailPage({
             description="Detail item fisik jewelry yang tercatat pada transaksi ini."
             icon={<ShoppingBag className="size-5" />}
           >
-            <div className="overflow-x-auto rounded-2xl border border-[var(--border)]">
-              <table className="w-full text-left text-sm text-neutral-600">
+            <div className="w-full max-w-full overflow-x-auto rounded-2xl border border-[var(--border)]">
+              <table className="w-full min-w-[760px] text-left text-sm text-neutral-600">
                 <thead className="bg-neutral-50/80 text-xs text-neutral-500">
                   <tr>
                     <th className="whitespace-nowrap px-4 py-3 font-medium">Item</th>
@@ -372,7 +372,7 @@ export default async function SaleDetailPage({
                     key={payment.id}
                     className="rounded-2xl border border-[var(--border)] bg-neutral-50/60 p-4"
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-neutral-950">
                           {paymentMethodLabels[payment.method]}
@@ -421,7 +421,7 @@ export default async function SaleDetailPage({
                       {payment.providerReference ? (
                         <div className="flex justify-between gap-4">
                           <span>Referensi</span>
-                          <span className="font-mono font-medium text-neutral-900">
+                          <span className="min-w-0 break-all text-right font-mono font-medium text-neutral-900">
                             {payment.providerReference}
                           </span>
                         </div>
@@ -487,7 +487,7 @@ export default async function SaleDetailPage({
                 <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
                   Public verification URL
                 </p>
-                <p className="mt-1 break-all font-mono text-xs text-neutral-700">
+                <p className="mt-1 break-all font-mono text-xs leading-5 text-neutral-700">
                   {sale.receiptCertificate.verificationUrl}
                 </p>
               </div>
@@ -569,14 +569,14 @@ export default async function SaleDetailPage({
           </DetailSection>
         </main>
 
-        <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
+        <aside className="min-w-0 space-y-4 xl:sticky xl:top-6 xl:self-start">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
                   Invoice
                 </p>
-                <p className="mt-1 font-mono text-lg font-semibold text-neutral-950">
+                <p className="mt-1 break-all font-mono text-base font-semibold text-neutral-950 sm:text-lg">
                   {sale.invoiceNumber}
                 </p>
               </div>
@@ -617,7 +617,7 @@ export default async function SaleDetailPage({
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
             <h2 className="text-sm font-semibold text-neutral-950">
               Operasional
             </h2>
@@ -629,7 +629,7 @@ export default async function SaleDetailPage({
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
             <h2 className="text-sm font-semibold text-neutral-950">
               Print Jobs
             </h2>
@@ -640,7 +640,7 @@ export default async function SaleDetailPage({
                     key={job.id}
                     className="rounded-xl border border-[var(--border)] p-3 text-sm"
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
                       <div>
                         <p className="font-medium text-neutral-950">
                           {job.jobType.replaceAll("_", " ")}
@@ -671,7 +671,7 @@ export default async function SaleDetailPage({
             )}
           </section>
 
-          <section className="rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 p-5">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 p-4 sm:p-5">
             <h2 className="text-sm font-semibold text-neutral-950">
               Aksi Sensitif
             </h2>
