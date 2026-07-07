@@ -155,13 +155,22 @@ function buildAdminSalesListUrl(page: number, filters: AdminSalesFilters) {
   return query ? `/admin/penjualan?${query}` : "/admin/penjualan";
 }
 
-function buildAdminSalesExportUrl(filters: AdminSalesFilters) {
+function buildAdminSalesCsvExportUrl(filters: AdminSalesFilters) {
   const params = buildAdminSalesQueryParams(filters);
   const query = params.toString();
 
   return query
     ? `/admin/penjualan/export?${query}`
     : "/admin/penjualan/export";
+}
+
+function buildAdminSalesXlsxExportUrl(filters: AdminSalesFilters) {
+  const params = buildAdminSalesQueryParams(filters);
+  const query = params.toString();
+
+  return query
+    ? `/admin/penjualan/export/xlsx?${query}`
+    : "/admin/penjualan/export/xlsx";
 }
 
 function getPaymentMethodLabel(methods: AdminPaymentMethod[]) {
@@ -217,11 +226,18 @@ export default async function PenjualanListPage({
             Refresh
           </Link>
           <a
-            href={buildAdminSalesExportUrl(data.filters)}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-neutral-950 px-4 text-sm font-medium !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+            href={buildAdminSalesCsvExportUrl(data.filters)}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
           >
             <Download className="size-4" />
             Export CSV
+          </a>
+          <a
+            href={buildAdminSalesXlsxExportUrl(data.filters)}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-neutral-950 px-4 text-sm font-medium !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+          >
+            <Download className="size-4" />
+            Export XLSX
           </a>
         </div>
       </header>
