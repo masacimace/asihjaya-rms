@@ -2,16 +2,20 @@ import type { ReactNode } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
+  CheckCircle2,
   Download,
   ExternalLink,
   Eye,
   FileText,
+  Info,
   Printer,
   ReceiptText,
+  RotateCcw,
   ShieldCheck,
   ShoppingBag,
   UserRound,
   WalletCards,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -22,14 +26,38 @@ import {
   type AdminSaleStatus,
   type AdminSaleTimelineEvent,
 } from "@/features/sales/admin-contracts";
+import { reprintAdminReceiptCertificateAction } from "@/features/sales/admin-actions";
 import { getAdminSaleDetailData } from "@/features/sales/admin-queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
+
+import { ReprintSubmitButton } from "./reprint-button";
 
 export const runtime = "nodejs";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type SaleDetailFeedbackType = "success" | "error" | "info";
+type PageSearchParams = Record<string, string | string[] | undefined>;
+
+function getSearchParam(searchParams: PageSearchParams, key: string) {
+  const value = searchParams[key];
+
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function normalizeFeedbackType(value?: string): SaleDetailFeedbackType {
+  if (value === "success" || value === "error") {
+    return value;
+  }
+
+  return "info";
+}
+
+function buildSaleDetailHref(saleId: string) {
+  return `/admin/penjualan/${saleId}`;
+}
 
 const saleStatusLabels: Record<AdminSaleStatus, string> = {
   draft: "Draft",
@@ -163,7 +191,6 @@ function formatDecimal(value: string | null, suffix: string) {
   }).format(numberValue)}${suffix}`;
 }
 
-
 function buildDownloadHref(href: string) {
   return `${href}?download=1`;
 }
@@ -232,6 +259,79 @@ function DisabledDocumentAction({
   );
 }
 
+function SaleDetailFeedbackNotice({
+  type,
+  message,
+}: {
+  type: SaleDetailFeedbackType;
+  message: string;
+}) {
+  const icon =
+    type === "success" ? (
+      <CheckCircle2 className="size-4" />
+    ) : type === "error" ? (
+      <XCircle className="size-4" />
+    ) : (
+      <Info className="size-4" />
+    );
+
+  return (
+    <section
+      className={cn(
+        "flex min-w-0 items-start gap-3 rounded-2xl border p-4 text-sm leading-6",
+        type === "success"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+          : type === "error"
+            ? "border-red-200 bg-red-50 text-red-700"
+            : "border-amber-200 bg-amber-50 text-amber-800",
+      )}
+    >
+      <span className="mt-1 shrink-0">{icon}</span>
+      <p className="min-w-0 break-words">{message}</p>
+    </section>
+  );
+}
+
+function ReprintDocumentAction({
+  saleId,
+  returnTo,
+  disabled,
+}: {
+  saleId: string;
+  returnTo: string;
+  disabled: boolean;
+}) {
+  return (
+    <form action={reprintAdminReceiptCertificateAction} className="min-w-0">
+      <input type="hidden" name="saleId" value={saleId} />
+      <input type="hidden" name="returnTo" value={returnTo} />
+      <div className="flex min-h-16 min-w-0 items-center gap-3 rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-left">
+        <span
+          className={cn(
+            "grid size-10 shrink-0 place-items-center rounded-xl",
+            disabled
+              ? "bg-neutral-100 text-neutral-400"
+              : "bg-[var(--accent-soft)] text-[var(--accent)]",
+          )}
+        >
+          <RotateCcw className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-neutral-950">
+            Reprint nota
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-[var(--muted)]">
+            Kirim ulang PDF multi-page ke document printer Hardware Hub.
+          </p>
+          <div className="mt-3">
+            <ReprintSubmitButton disabled={disabled} />
+          </div>
+        </div>
+      </div>
+    </form>
+  );
+}
+
 function DetailSection({
   title,
   description,
@@ -276,10 +376,18 @@ function KeyValue({ label, value }: { label: string; value: ReactNode }) {
 
 export default async function SaleDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ transactionId: string }>;
+  searchParams?: Promise<PageSearchParams>;
 }) {
   const { transactionId } = await params;
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const feedbackMessage =
+    getSearchParam(resolvedSearchParams, "feedbackMessage")?.trim() ?? "";
+  const feedbackType = normalizeFeedbackType(
+    getSearchParam(resolvedSearchParams, "feedbackType"),
+  );
 
   if (!UUID_PATTERN.test(transactionId)) {
     notFound();
@@ -294,6 +402,8 @@ export default async function SaleDetailPage({
 
   const latestPrintJob = sale.hardwareJobs[0] ?? null;
   const printStatus = latestPrintJob?.status ?? "not_queued";
+  const currentDetailHref = buildSaleDetailHref(sale.id);
+  const canReprintReceiptCertificate = sale.receiptCertificate.isReady;
 
   return (
     <div className="mx-auto w-full max-w-[1400px] min-w-0 space-y-5 overflow-x-hidden sm:space-y-6">
@@ -325,6 +435,13 @@ export default async function SaleDetailPage({
           </span>
         </div>
       </nav>
+
+      {feedbackMessage ? (
+        <SaleDetailFeedbackNotice
+          type={feedbackType}
+          message={feedbackMessage}
+        />
+      ) : null}
 
       <header className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-6">
         <p className="text-sm font-medium text-[var(--accent)]">
@@ -564,7 +681,7 @@ export default async function SaleDetailPage({
               </div>
             ) : null}
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
               {sale.receiptCertificate.isReady ? (
                 <>
                   <DocumentActionLink
@@ -580,6 +697,11 @@ export default async function SaleDetailPage({
                     description="Unduh nota/certificate A5 transaksi ini sebagai file PDF."
                     download={`${sale.invoiceNumber}-nota-certificate-a5.pdf`}
                   />
+                  <ReprintDocumentAction
+                    saleId={sale.id}
+                    returnTo={currentDetailHref}
+                    disabled={!canReprintReceiptCertificate}
+                  />
                 </>
               ) : (
                 <>
@@ -593,6 +715,11 @@ export default async function SaleDetailPage({
                     label="Download belum tersedia"
                     description="PDF belum bisa dibuat untuk transaksi yang belum selesai."
                   />
+                  <DisabledDocumentAction
+                    icon={<RotateCcw className="size-4" />}
+                    label="Reprint belum tersedia"
+                    description="Cetak ulang aktif setelah transaksi berstatus selesai."
+                  />
                 </>
               )}
             </div>
@@ -601,8 +728,9 @@ export default async function SaleDetailPage({
               <div className="flex min-w-0 items-start gap-3">
                 <Printer className="mt-0.5 size-4 shrink-0 text-neutral-400" />
                 <p className="text-xs leading-5 text-[var(--muted)]">
-                  Reprint ke hardware printer tetap masuk subfase R3B berikutnya.
-                  Di tahap ini admin sudah bisa preview dan download dokumen manual.
+                  Reprint akan membuat 1 hardware job untuk transaksi ini. Karena
+                  template nota sudah 1 halaman per item, printer akan mencetak
+                  seluruh halaman product item dalam 1 job PDF multi-page.
                 </p>
               </div>
             </div>
@@ -723,9 +851,22 @@ export default async function SaleDetailPage({
           </section>
 
           <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-            <h2 className="text-sm font-semibold text-neutral-950">
-              Print Jobs
-            </h2>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-950">
+                  Print Jobs
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Status antrean printer terbaru untuk nota/certificate ini.
+                </p>
+              </div>
+              <Link
+                href={currentDetailHref}
+                className="shrink-0 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-semibold text-neutral-600 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+              >
+                Refresh
+              </Link>
+            </div>
             {sale.hardwareJobs.length > 0 ? (
               <div className="mt-4 space-y-3">
                 {sale.hardwareJobs.map((job) => (
@@ -734,8 +875,8 @@ export default async function SaleDetailPage({
                     className="rounded-xl border border-[var(--border)] p-3 text-sm"
                   >
                     <div className="flex min-w-0 items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-neutral-950">
+                      <div className="min-w-0">
+                        <p className="break-words font-medium text-neutral-950">
                           {job.jobType.replaceAll("_", " ")}
                         </p>
                         <p className="mt-1 text-xs text-[var(--muted)]">
@@ -744,22 +885,39 @@ export default async function SaleDetailPage({
                       </div>
                       <span
                         className={cn(
-                          "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                          "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
                           getPrintStatusClass(job.status),
                         )}
                       >
                         {printStatusLabels[job.status]}
                       </span>
                     </div>
+                    <div className="mt-3 grid gap-1 text-xs text-neutral-500">
+                      <div className="flex justify-between gap-3">
+                        <span>Dibuat</span>
+                        <span className="text-right font-medium text-neutral-700">
+                          {formatDateTime(job.createdAt)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>Update</span>
+                        <span className="text-right font-medium text-neutral-700">
+                          {formatDateTime(job.updatedAt)}
+                        </span>
+                      </div>
+                    </div>
                     {job.error ? (
-                      <p className="mt-2 text-xs text-red-600">{job.error}</p>
+                      <p className="mt-3 rounded-lg bg-red-50 p-2 text-xs leading-5 text-red-600">
+                        {job.error}
+                      </p>
                     ) : null}
                   </div>
                 ))}
               </div>
             ) : (
               <p className="mt-3 rounded-xl border border-dashed border-[var(--border)] p-4 text-sm text-[var(--muted)]">
-                Belum ada print job untuk transaksi ini.
+                Belum ada print job untuk transaksi ini. Klik Reprint nota untuk
+                membuat antrean printer baru.
               </p>
             )}
           </section>
@@ -769,8 +927,8 @@ export default async function SaleDetailPage({
               Aksi Sensitif
             </h2>
             <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              Void/refund dan reprint aktif penuh akan masuk subfase R3B/R3C
-              setelah audit dan approval guard siap.
+              Void/refund tetap masuk subfase R3C setelah audit dan approval
+              guard siap.
             </p>
             <button
               type="button"

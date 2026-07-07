@@ -747,6 +747,7 @@ export async function getAdminSaleDetailData({
           eq(hardwareJobs.organizationId, auth.organization.id),
           eq(hardwareJobs.sourceType, "sale"),
           eq(hardwareJobs.sourceId, sale.id),
+          eq(hardwareJobs.jobType, "print_receipt_certificate"),
         ),
       )
       .orderBy(desc(hardwareJobs.createdAt))
