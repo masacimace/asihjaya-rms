@@ -35,6 +35,7 @@ import {
   type AdminSaleDetailData,
   type AdminSaleListRow,
   type AdminSalePrintStatus,
+  type AdminSalesExportRow,
   type AdminSalesFilters,
   type AdminSalesListData,
   type AdminSalesPeriod,
@@ -613,6 +614,190 @@ export async function getAdminSalesListData(
     pageCount,
     pageSize: ADMIN_SALES_PAGE_SIZE,
   };
+}
+
+
+export async function getAdminSalesExportRows(
+  auth: AuthContext,
+  filters: AdminSalesFilters,
+): Promise<AdminSalesExportRow[]> {
+  const period = createSalesPeriod(filters.dateRange);
+  const { outletIds, conditions } = createSalesConditions({
+    auth,
+    filters,
+    period,
+  });
+
+  if (outletIds.length === 0) {
+    return [];
+  }
+
+  const whereClause = and(...conditions);
+
+  if (!whereClause) {
+    return [];
+  }
+
+  const saleRows = await db
+    .select({
+      id: sales.id,
+      invoiceNumber: sales.invoiceNumber,
+      status: sales.status,
+      subtotalAmount: sales.subtotalAmount,
+      discountAmount: sales.discountAmount,
+      additionalFeeAmount: sales.additionalFeeAmount,
+      totalAmount: sales.totalAmount,
+      completedAt: sales.completedAt,
+      createdAt: sales.createdAt,
+      outletCode: outlets.code,
+      outletName: outlets.name,
+      registerCode: registers.code,
+      registerName: registers.name,
+      cashierName: users.fullName,
+      customerCode: customers.customerCode,
+      customerName: customers.fullName,
+      customerPhone: customers.phone,
+    })
+    .from(sales)
+    .innerJoin(outlets, eq(sales.outletId, outlets.id))
+    .innerJoin(registers, eq(sales.registerId, registers.id))
+    .innerJoin(users, eq(sales.cashierId, users.id))
+    .leftJoin(customers, eq(sales.customerId, customers.id))
+    .where(whereClause)
+    .orderBy(desc(sales.completedAt), desc(sales.createdAt));
+
+  const saleIds = saleRows.map((sale) => sale.id);
+
+  if (saleIds.length === 0) {
+    return [];
+  }
+
+  const [paymentRows, itemRows, hardwareJobRows] = await Promise.all([
+    db
+      .select({
+        saleId: payments.saleId,
+        method: payments.method,
+        amount: payments.amount,
+        status: payments.status,
+        metadata: payments.metadata,
+        createdAt: payments.createdAt,
+      })
+      .from(payments)
+      .where(inArray(payments.saleId, saleIds))
+      .orderBy(asc(payments.createdAt)),
+
+    db
+      .select({
+        saleId: saleItems.saleId,
+        lineNumber: saleItems.lineNumber,
+        sku: productItems.sku,
+        barcode: productItems.barcode,
+        productName: sql<string>`coalesce(${saleItems.snapshot}->>'itemDisplayName', ${saleItems.snapshot}->>'productName', ${productItems.displayName}, ${productMasters.name})`,
+        categoryName: productCategories.name,
+        finalPriceAmount: saleItems.finalPriceAmount,
+      })
+      .from(saleItems)
+      .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
+      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+      .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
+      .where(inArray(saleItems.saleId, saleIds))
+      .orderBy(asc(saleItems.lineNumber)),
+
+    db
+      .select({
+        sourceId: hardwareJobs.sourceId,
+        status: hardwareJobs.status,
+        createdAt: hardwareJobs.createdAt,
+      })
+      .from(hardwareJobs)
+      .where(
+        and(
+          eq(hardwareJobs.organizationId, auth.organization.id),
+          eq(hardwareJobs.sourceType, "sale"),
+          eq(hardwareJobs.jobType, "print_receipt_certificate"),
+          inArray(hardwareJobs.sourceId, saleIds),
+        ),
+      )
+      .orderBy(desc(hardwareJobs.createdAt)),
+  ]);
+
+  const paymentsBySaleId = new Map<string, typeof paymentRows>();
+  const itemsBySaleId = new Map<string, typeof itemRows>();
+  const printStatusBySaleId = new Map<string, AdminSalePrintStatus>();
+
+  for (const payment of paymentRows) {
+    const currentPayments = paymentsBySaleId.get(payment.saleId) ?? [];
+    currentPayments.push(payment);
+    paymentsBySaleId.set(payment.saleId, currentPayments);
+  }
+
+  for (const item of itemRows) {
+    const currentItems = itemsBySaleId.get(item.saleId) ?? [];
+    currentItems.push(item);
+    itemsBySaleId.set(item.saleId, currentItems);
+  }
+
+  for (const job of hardwareJobRows) {
+    if (job.sourceId && !printStatusBySaleId.has(job.sourceId)) {
+      printStatusBySaleId.set(job.sourceId, normalizePrintStatus(job.status));
+    }
+  }
+
+  return saleRows.map((sale): AdminSalesExportRow => {
+    const salePayments = paymentsBySaleId.get(sale.id) ?? [];
+    const saleItemsRows = itemsBySaleId.get(sale.id) ?? [];
+    const paidPayments = salePayments.filter((payment) => payment.status === "paid");
+    const paidAmount = paidPayments.reduce(
+      (paymentTotal, payment) => paymentTotal + parseAmount(payment.amount),
+      0,
+    );
+    const receivedAmount = paidPayments.reduce(
+      (paymentTotal, payment) =>
+        paymentTotal + (getPaymentMetadataNumber(payment.metadata, "receivedAmount") ?? 0),
+      0,
+    );
+    const changeAmount = paidPayments.reduce(
+      (paymentTotal, payment) =>
+        paymentTotal + (getPaymentMetadataNumber(payment.metadata, "changeAmount") ?? 0),
+      0,
+    );
+    const paymentMethods = Array.from(
+      new Set(paidPayments.map((payment) => payment.method)),
+    );
+
+    return {
+      id: sale.id,
+      invoiceNumber: sale.invoiceNumber,
+      status: sale.status,
+      subtotalAmount: sale.subtotalAmount,
+      discountAmount: sale.discountAmount,
+      additionalFeeAmount: sale.additionalFeeAmount,
+      totalAmount: sale.totalAmount,
+      paidAmount,
+      receivedAmount,
+      changeAmount,
+      completedAt: sale.completedAt,
+      createdAt: sale.createdAt,
+      outletCode: sale.outletCode,
+      outletName: sale.outletName,
+      registerCode: sale.registerCode,
+      registerName: sale.registerName,
+      cashierName: sale.cashierName,
+      customerCode: sale.customerCode,
+      customerName: sale.customerName,
+      customerPhone: sale.customerPhone,
+      totalItems: saleItemsRows.length,
+      items: saleItemsRows.map((item) => ({
+        productName: item.productName,
+        sku: item.sku,
+        barcode: item.barcode,
+        categoryName: item.categoryName,
+        finalPriceAmount: item.finalPriceAmount,
+      })),
+      paymentMethods,
+      printStatus: printStatusBySaleId.get(sale.id) ?? "not_queued",
+    };
+  });
 }
 
 export async function getAdminSaleDetailData({

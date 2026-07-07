@@ -126,6 +126,42 @@ export type AdminSaleListRow = {
   printStatus: AdminSalePrintStatus;
 };
 
+
+export type AdminSalesExportItem = {
+  productName: string;
+  sku: string;
+  barcode: string;
+  categoryName: string;
+  finalPriceAmount: string;
+};
+
+export type AdminSalesExportRow = {
+  id: string;
+  invoiceNumber: string;
+  status: AdminSaleStatus;
+  subtotalAmount: string;
+  discountAmount: string;
+  additionalFeeAmount: string;
+  totalAmount: string;
+  paidAmount: number;
+  receivedAmount: number;
+  changeAmount: number;
+  completedAt: Date | null;
+  createdAt: Date;
+  outletCode: string;
+  outletName: string;
+  registerCode: string;
+  registerName: string;
+  cashierName: string;
+  customerCode: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  totalItems: number;
+  items: AdminSalesExportItem[];
+  paymentMethods: AdminPaymentMethod[];
+  printStatus: AdminSalePrintStatus;
+};
+
 export type AdminSalesListData = {
   filters: AdminSalesFilters;
   period: AdminSalesPeriod;

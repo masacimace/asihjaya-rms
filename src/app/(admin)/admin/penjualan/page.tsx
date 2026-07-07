@@ -133,7 +133,7 @@ function formatDateTime(value: Date | null) {
   }).format(value);
 }
 
-function buildAdminSalesListUrl(page: number, filters: AdminSalesFilters) {
+function buildAdminSalesQueryParams(filters: AdminSalesFilters) {
   const params = new URLSearchParams();
 
   if (filters.search) params.set("q", filters.search);
@@ -141,11 +141,27 @@ function buildAdminSalesListUrl(page: number, filters: AdminSalesFilters) {
   if (filters.status) params.set("status", filters.status);
   if (filters.paymentMethod) params.set("paymentMethod", filters.paymentMethod);
   if (filters.dateRange !== "today") params.set("range", filters.dateRange);
+
+  return params;
+}
+
+function buildAdminSalesListUrl(page: number, filters: AdminSalesFilters) {
+  const params = buildAdminSalesQueryParams(filters);
+
   if (page > 1) params.set("page", String(page));
 
   const query = params.toString();
 
   return query ? `/admin/penjualan?${query}` : "/admin/penjualan";
+}
+
+function buildAdminSalesExportUrl(filters: AdminSalesFilters) {
+  const params = buildAdminSalesQueryParams(filters);
+  const query = params.toString();
+
+  return query
+    ? `/admin/penjualan/export?${query}`
+    : "/admin/penjualan/export";
 }
 
 function getPaymentMethodLabel(methods: AdminPaymentMethod[]) {
@@ -200,15 +216,13 @@ export default async function PenjualanListPage({
             <RefreshCw className="size-4" />
             Refresh
           </Link>
-          <button
-            type="button"
-            disabled
-            className="inline-flex h-11 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-neutral-50 px-4 text-sm font-medium text-neutral-400"
-            title="Masuk scope ADMIN-R3B"
+          <a
+            href={buildAdminSalesExportUrl(data.filters)}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-neutral-950 px-4 text-sm font-medium !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
           >
             <Download className="size-4" />
-            Export R3B
-          </button>
+            Export CSV
+          </a>
         </div>
       </header>
 
