@@ -13,9 +13,11 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db";
 import {
+  approvals,
   auditLogs,
   customers,
   hardwareJobs,
@@ -42,6 +44,9 @@ import {
 } from "@/features/sales/admin-contracts";
 import { createReceiptVerificationUrl } from "@/features/sales/verification/receipt-token";
 import type { AuthContext } from "@/lib/auth/session";
+
+const approvalRequestedByUsers = alias(users, "sales_detail_approval_requested_by_users");
+const approvalApprovedByUsers = alias(users, "sales_detail_approval_approved_by_users");
 
 const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
 
@@ -867,7 +872,7 @@ export async function getAdminSaleDetailData({
     return null;
   }
 
-  const [paymentRows, itemRows, hardwareJobRows, auditLogRows] = await Promise.all([
+  const [paymentRows, itemRows, hardwareJobRows, approvalRows, auditLogRows] = await Promise.all([
     db
       .select({
         id: payments.id,
@@ -937,6 +942,39 @@ export async function getAdminSaleDetailData({
       )
       .orderBy(desc(hardwareJobs.createdAt))
       .limit(12),
+
+    db
+      .select({
+        id: approvals.id,
+        type: approvals.type,
+        status: approvals.status,
+        requestedByName: approvalRequestedByUsers.fullName,
+        approvedByName: approvalApprovedByUsers.fullName,
+        notes: approvals.notes,
+        responseNotes: approvals.responseNotes,
+        createdAt: approvals.createdAt,
+        resolvedAt: approvals.resolvedAt,
+        requestData: approvals.requestData,
+      })
+      .from(approvals)
+      .innerJoin(
+        approvalRequestedByUsers,
+        eq(approvals.requestedBy, approvalRequestedByUsers.id),
+      )
+      .leftJoin(
+        approvalApprovedByUsers,
+        eq(approvals.approvedBy, approvalApprovedByUsers.id),
+      )
+      .where(
+        and(
+          eq(approvals.organizationId, auth.organization.id),
+          eq(approvals.referenceType, "sale"),
+          eq(approvals.referenceId, sale.id),
+          inArray(approvals.type, ["void_receipt", "refund_transaction"]),
+        ),
+      )
+      .orderBy(desc(approvals.createdAt))
+      .limit(8),
 
     db
       .select({
@@ -1106,6 +1144,18 @@ export async function getAdminSaleDetailData({
       cancelledAt: job.cancelledAt,
     })),
     auditLogs: auditLogRows,
+    sensitiveApprovals: approvalRows.map((approval) => ({
+      id: approval.id,
+      type: approval.type as "void_receipt" | "refund_transaction",
+      status: approval.status,
+      requestedByName: approval.requestedByName,
+      approvedByName: approval.approvedByName,
+      notes: approval.notes,
+      responseNotes: approval.responseNotes,
+      createdAt: approval.createdAt,
+      resolvedAt: approval.resolvedAt,
+      requestData: approval.requestData,
+    })),
     timeline,
     receiptCertificate: {
       isReady: sale.status === "completed",

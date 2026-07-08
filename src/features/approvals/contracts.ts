@@ -11,6 +11,7 @@ export const adminApprovalTypes = [
   "all",
   "discount",
   "void_receipt",
+  "refund_transaction",
   "stock_adjustment",
   "other",
 ] as const;

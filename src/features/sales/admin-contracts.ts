@@ -213,6 +213,20 @@ export type AdminSaleHardwareJob = {
   cancelledAt: Date | null;
 };
 
+
+export type AdminSaleSensitiveApproval = {
+  id: string;
+  type: "void_receipt" | "refund_transaction";
+  status: "pending" | "approved" | "rejected";
+  requestedByName: string;
+  approvedByName: string | null;
+  notes: string | null;
+  responseNotes: string | null;
+  createdAt: Date;
+  resolvedAt: Date | null;
+  requestData: Record<string, unknown>;
+};
+
 export type AdminSaleAuditLog = {
   id: string;
   action: string;
@@ -277,6 +291,7 @@ export type AdminSaleDetailData = {
   payments: AdminSaleDetailPayment[];
   hardwareJobs: AdminSaleHardwareJob[];
   auditLogs: AdminSaleAuditLog[];
+  sensitiveApprovals: AdminSaleSensitiveApproval[];
   timeline: AdminSaleTimelineEvent[];
   receiptCertificate: {
     isReady: boolean;

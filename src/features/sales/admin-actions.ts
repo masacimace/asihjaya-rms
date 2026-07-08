@@ -2,12 +2,24 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { db } from "@/db";
-import { auditLogs, hardwareAgents, sales } from "@/db/schema";
+import {
+  approvals,
+  auditLogs,
+  customers,
+  hardwareAgents,
+  outlets,
+  payments,
+  registers,
+  saleItems,
+  sales,
+  users,
+} from "@/db/schema";
 import { requirePermission } from "@/lib/auth/session";
 import { createHardwareJobWithDuplicateGuard } from "@/lib/hardware/job-queue";
 
@@ -125,6 +137,326 @@ function getReprintQueuedMessage({
   }
 
   return `Job cetak ulang nota ${invoiceNumber} sudah masuk antrean, tetapi Hardware Hub sedang offline. Nyalakan Mini PC Hardware Hub agar job diproses.`;
+}
+
+
+async function getAdminRequestMetadata() {
+  const headerStore = await headers();
+  const forwardedFor = headerStore.get("x-forwarded-for");
+
+  return {
+    ipAddress:
+      forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
+      headerStore.get("x-real-ip")?.slice(0, 64) ??
+      null,
+    userAgent: headerStore.get("user-agent"),
+  };
+}
+
+type SaleSensitiveApprovalRequestType = "void" | "refund";
+
+function isSaleSensitiveApprovalRequestType(
+  value: string,
+): value is SaleSensitiveApprovalRequestType {
+  return value === "void" || value === "refund";
+}
+
+function getSaleSensitiveApprovalConfig(
+  requestType: SaleSensitiveApprovalRequestType,
+) {
+  if (requestType === "void") {
+    return {
+      approvalType: "void_receipt" as const,
+      action: "sale.void_approval_requested",
+      label: "void transaksi",
+      successMessage: "Request void transaksi berhasil dibuat dan menunggu approval manager/owner.",
+      duplicateMessage:
+        "Transaksi ini sudah memiliki request void yang masih menunggu atau sudah disetujui.",
+    };
+  }
+
+  return {
+    approvalType: "refund_transaction" as const,
+    action: "sale.refund_approval_requested",
+    label: "refund transaksi",
+    successMessage: "Request refund transaksi berhasil dibuat dan menunggu approval manager/owner.",
+    duplicateMessage:
+      "Transaksi ini sudah memiliki request refund yang masih menunggu atau sudah disetujui.",
+  };
+}
+
+function parseNumber(value: string | null | undefined) {
+  if (!value) return 0;
+
+  const parsedValue = Number(value);
+
+  return Number.isFinite(parsedValue) ? parsedValue : 0;
+}
+
+function formatPaymentMethodLabel(method: string) {
+  return method.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
+  const auth = await requirePermission("sales.view");
+  const saleId = readText(formData, "saleId");
+  const returnTo = readText(formData, "returnTo");
+  const requestTypeRaw = readText(formData, "requestType");
+  const reason = readText(formData, "reason").slice(0, 1000);
+
+  if (!UUID_PATTERN.test(saleId)) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo: "/admin/penjualan",
+      type: "error",
+      message: "Transaksi tidak valid untuk request void/refund.",
+    });
+  }
+
+  if (!isSaleSensitiveApprovalRequestType(requestTypeRaw)) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo,
+      type: "error",
+      message: "Jenis request void/refund tidak valid.",
+    });
+  }
+
+  if (reason.length < 8) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo,
+      type: "error",
+      message: "Alasan request minimal 8 karakter agar approval bisa ditinjau dengan jelas.",
+    });
+  }
+
+  const config = getSaleSensitiveApprovalConfig(requestTypeRaw);
+  const accessibleOutletIds = auth.outlets.map((outlet) => outlet.id);
+
+  if (accessibleOutletIds.length === 0) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo,
+      type: "error",
+      message:
+        "Outlet yang bisa diakses tidak ditemukan. Hubungi owner/admin untuk mengatur akses outlet.",
+    });
+  }
+
+  const [sale] = await db
+    .select({
+      id: sales.id,
+      organizationId: sales.organizationId,
+      outletId: sales.outletId,
+      registerId: sales.registerId,
+      shiftId: sales.shiftId,
+      cashierId: sales.cashierId,
+      invoiceNumber: sales.invoiceNumber,
+      status: sales.status,
+      subtotalAmount: sales.subtotalAmount,
+      discountAmount: sales.discountAmount,
+      totalAmount: sales.totalAmount,
+      completedAt: sales.completedAt,
+      createdAt: sales.createdAt,
+      outletCode: outlets.code,
+      outletName: outlets.name,
+      registerCode: registers.code,
+      registerName: registers.name,
+      cashierName: users.fullName,
+      customerCode: customers.customerCode,
+      customerName: customers.fullName,
+      customerPhone: customers.phone,
+    })
+    .from(sales)
+    .innerJoin(outlets, eq(sales.outletId, outlets.id))
+    .innerJoin(registers, eq(sales.registerId, registers.id))
+    .innerJoin(users, eq(sales.cashierId, users.id))
+    .leftJoin(customers, eq(sales.customerId, customers.id))
+    .where(
+      and(
+        eq(sales.id, saleId),
+        eq(sales.organizationId, auth.organization.id),
+        inArray(sales.outletId, accessibleOutletIds),
+      ),
+    )
+    .limit(1);
+
+  if (!sale) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo,
+      type: "error",
+      message:
+        "Transaksi tidak ditemukan atau bukan bagian dari outlet yang bisa kamu akses.",
+    });
+  }
+
+  if (sale.status !== "completed") {
+    redirectAdminSaleDetailWithFeedback({
+      saleId: sale.id,
+      returnTo,
+      type: "error",
+      message:
+        "Request void/refund hanya bisa dibuat untuk transaksi yang sudah completed.",
+    });
+  }
+
+  const existingApprovalRows = await db
+    .select({
+      id: approvals.id,
+      status: approvals.status,
+      createdAt: approvals.createdAt,
+    })
+    .from(approvals)
+    .where(
+      and(
+        eq(approvals.organizationId, auth.organization.id),
+        eq(approvals.type, config.approvalType),
+        eq(approvals.referenceType, "sale"),
+        eq(approvals.referenceId, sale.id),
+        inArray(approvals.status, ["pending", "approved"]),
+      ),
+    )
+    .orderBy(desc(approvals.createdAt))
+    .limit(1);
+
+  if (existingApprovalRows[0]) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId: sale.id,
+      returnTo,
+      type: "info",
+      message: config.duplicateMessage,
+    });
+  }
+
+  const [paymentRows, itemRows] = await Promise.all([
+    db
+      .select({
+        method: payments.method,
+        amount: payments.amount,
+        status: payments.status,
+      })
+      .from(payments)
+      .where(eq(payments.saleId, sale.id)),
+    db
+      .select({
+        id: saleItems.id,
+      })
+      .from(saleItems)
+      .where(eq(saleItems.saleId, sale.id)),
+  ]);
+
+  const paidPayments = paymentRows.filter((payment) => payment.status === "paid");
+  const paidAmount = paidPayments.reduce(
+    (total, payment) => total + parseNumber(payment.amount),
+    0,
+  );
+  const paymentMethods = Array.from(
+    new Set(paidPayments.map((payment) => payment.method)),
+  );
+  const now = new Date();
+  const requestMetadata = await getAdminRequestMetadata();
+
+  const [approval] = await db
+    .insert(approvals)
+    .values({
+      organizationId: auth.organization.id,
+      outletId: sale.outletId,
+      type: config.approvalType,
+      status: "pending",
+      requestedBy: auth.user.id,
+      referenceType: "sale",
+      referenceId: sale.id,
+      requestData: {
+        requestType: requestTypeRaw,
+        saleId: sale.id,
+        invoiceNumber: sale.invoiceNumber,
+        saleStatus: sale.status,
+        outletId: sale.outletId,
+        outletCode: sale.outletCode,
+        outletName: sale.outletName,
+        registerId: sale.registerId,
+        registerCode: sale.registerCode,
+        registerName: sale.registerName,
+        cashierId: sale.cashierId,
+        cashierName: sale.cashierName,
+        customerCode: sale.customerCode,
+        customerName: sale.customerName,
+        customerPhone: sale.customerPhone,
+        requesterName: auth.user.fullName,
+        subtotalAmount: parseNumber(sale.subtotalAmount),
+        discountAmount: parseNumber(sale.discountAmount),
+        totalAmount: parseNumber(sale.totalAmount),
+        paidAmount,
+        impactAmount: requestTypeRaw === "refund" ? paidAmount : parseNumber(sale.totalAmount),
+        itemCount: itemRows.length,
+        paymentMethods,
+        paymentMethodsLabel:
+          paymentMethods.length > 0
+            ? paymentMethods.map(formatPaymentMethodLabel).join(", ")
+            : "Belum ada payment paid",
+        completedAt: sale.completedAt?.toISOString() ?? null,
+        requestedAt: now.toISOString(),
+        reason,
+        executionStatus: "awaiting_r3c_2",
+      },
+      notes: reason,
+      createdAt: now,
+    })
+    .returning({ id: approvals.id });
+
+  if (!approval) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId: sale.id,
+      returnTo,
+      type: "error",
+      message: "Approval belum bisa dibuat karena terjadi kendala sistem.",
+    });
+  }
+
+  await db.insert(auditLogs).values({
+    organizationId: auth.organization.id,
+    outletId: sale.outletId,
+    actorUserId: auth.user.id,
+    action: config.action,
+    entityType: "sale",
+    entityId: sale.id,
+    beforeData: {
+      status: sale.status,
+      totalAmount: sale.totalAmount,
+      paidAmount,
+    },
+    afterData: {
+      approvalId: approval.id,
+      approvalType: config.approvalType,
+      requestType: requestTypeRaw,
+      status: "pending",
+      reason,
+    },
+    reason,
+    ipAddress: requestMetadata.ipAddress,
+    userAgent: requestMetadata.userAgent,
+    metadata: {
+      source: "admin.sales.detail",
+      approvalId: approval.id,
+      invoiceNumber: sale.invoiceNumber,
+      executionStatus: "awaiting_r3c_2",
+    },
+    createdAt: now,
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/penjualan");
+  revalidatePath(`/admin/penjualan/${sale.id}`);
+  revalidatePath("/admin/operasional/approval");
+
+  redirectAdminSaleDetailWithFeedback({
+    saleId: sale.id,
+    returnTo,
+    type: "success",
+    message: config.successMessage,
+  });
 }
 
 export async function reprintAdminReceiptCertificateAction(

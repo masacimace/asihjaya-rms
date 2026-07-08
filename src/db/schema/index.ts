@@ -1155,6 +1155,7 @@ export const approvalStatusEnum = pgEnum("approval_status", [
 export const approvalTypeEnum = pgEnum("approval_type", [
   "discount",
   "void_receipt",
+  "refund_transaction",
   "stock_adjustment",
   "other",
 ]);

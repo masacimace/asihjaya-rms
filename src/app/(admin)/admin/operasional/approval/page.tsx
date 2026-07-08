@@ -49,6 +49,7 @@ const approvalTypeLabels: Record<AdminApprovalType, string> = {
   all: "Semua tipe",
   discount: "Diskon Khusus",
   void_receipt: "Void Nota",
+  refund_transaction: "Refund Transaksi",
   stock_adjustment: "Penyesuaian Stok",
   other: "Lainnya",
 };
@@ -112,14 +113,13 @@ function getStatusMeta(status: AdminApprovalRow["status"]) {
 function getTypeTone(type: AdminApprovalRow["type"]) {
   if (type === "discount") return "bg-violet-50 text-violet-700";
   if (type === "void_receipt") return "bg-red-50 text-red-700";
+  if (type === "refund_transaction") return "bg-orange-50 text-orange-700";
   if (type === "stock_adjustment") return "bg-blue-50 text-blue-700";
 
   return "bg-neutral-100 text-neutral-700";
 }
 
-function getLineTone(
-  tone: AdminApprovalRow["summary"]["lines"][number]["tone"],
-) {
+function getLineTone(tone: AdminApprovalRow["summary"]["lines"][number]["tone"]) {
   if (tone === "danger") return "text-red-700";
   if (tone === "success") return "text-emerald-700";
   if (tone === "warning") return "text-amber-700";
@@ -211,12 +211,7 @@ function SummaryCard({
             {value}
           </p>
         </div>
-        <div
-          className={cn(
-            "grid size-11 place-items-center rounded-2xl ring-1",
-            toneClass,
-          )}
-        >
+        <div className={cn("grid size-11 place-items-center rounded-2xl ring-1", toneClass)}>
           {icon}
         </div>
       </div>
@@ -262,7 +257,12 @@ function ApprovalCard({ approval }: { approval: AdminApprovalRow }) {
   const StatusIcon = statusMeta.icon;
 
   return (
-    <article className={cn("rounded-3xl border bg-white p-5", statusMeta.card)}>
+    <article
+      className={cn(
+        "rounded-3xl border bg-white p-5",
+        statusMeta.card,
+      )}
+    >
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -302,9 +302,7 @@ function ApprovalCard({ approval }: { approval: AdminApprovalRow }) {
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3">
-              <p className="text-xs font-medium text-[var(--muted)]">
-                Requester
-              </p>
+              <p className="text-xs font-medium text-[var(--muted)]">Requester</p>
               <p className="mt-1 truncate text-sm font-bold text-neutral-950">
                 {approval.requestedByName}
               </p>
@@ -316,9 +314,7 @@ function ApprovalCard({ approval }: { approval: AdminApprovalRow }) {
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3">
-              <p className="text-xs font-medium text-[var(--muted)]">
-                Referensi
-              </p>
+              <p className="text-xs font-medium text-[var(--muted)]">Referensi</p>
               <p className="mt-1 truncate text-sm font-bold text-neutral-950">
                 {approval.referenceLabel ?? approval.referenceType ?? "-"}
               </p>
@@ -395,8 +391,8 @@ function EmptyState() {
         Tidak ada approval ditemukan
       </h2>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-        Coba ubah filter status, tipe approval, outlet, atau periode untuk
-        melihat request yang sudah diproses.
+        Coba ubah filter status, tipe approval, outlet, atau periode untuk melihat
+        request yang sudah diproses.
       </p>
     </div>
   );
@@ -407,14 +403,8 @@ export default async function ApprovalPage({ searchParams }: PageProps) {
   const query = await searchParams;
   const filters = parseAdminApprovalFilters(query);
   const data = await getAdminApprovalListData(auth, filters);
-  const previousPageUrl = buildApprovalListUrl(
-    Math.max(1, data.page - 1),
-    filters,
-  );
-  const nextPageUrl = buildApprovalListUrl(
-    Math.min(data.pageCount, data.page + 1),
-    filters,
-  );
+  const previousPageUrl = buildApprovalListUrl(Math.max(1, data.page - 1), filters);
+  const nextPageUrl = buildApprovalListUrl(Math.min(data.pageCount, data.page + 1), filters);
 
   return (
     <div className="space-y-6">
@@ -440,8 +430,8 @@ export default async function ApprovalPage({ searchParams }: PageProps) {
                 Kotak Masuk Approval
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-                Tinjau diskon khusus, pembatalan nota, penyesuaian stok, dan
-                request operasional lain dengan audit trail yang rapi.
+                Tinjau diskon khusus, pembatalan nota, penyesuaian stok, dan request
+                operasional lain dengan audit trail yang rapi.
               </p>
             </div>
 
@@ -508,8 +498,7 @@ export default async function ApprovalPage({ searchParams }: PageProps) {
               Filter Approval
             </h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              Cari request berdasarkan staff, outlet, invoice, catatan, atau
-              detail JSON request.
+              Cari request berdasarkan staff, outlet, invoice, catatan, atau detail JSON request.
             </p>
           </div>
           <Link
@@ -607,8 +596,7 @@ export default async function ApprovalPage({ searchParams }: PageProps) {
       {data.pageCount > 1 ? (
         <nav className="flex flex-col gap-3 rounded-3xl border border-[var(--border)] bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-[var(--muted)]">
-            Halaman{" "}
-            <span className="font-bold text-neutral-950">{data.page}</span> dari{" "}
+            Halaman <span className="font-bold text-neutral-950">{data.page}</span> dari{" "}
             <span className="font-bold text-neutral-950">{data.pageCount}</span>
           </p>
           <div className="flex gap-2">

@@ -31,6 +31,8 @@ import { getAdminSaleDetailData } from "@/features/sales/admin-queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+import { SaleSensitiveActionsCard } from "@/components/sales/sale-sensitive-actions-card";
+
 import { ReprintSubmitButton } from "./reprint-button";
 
 export const runtime = "nodejs";
@@ -928,22 +930,13 @@ export default async function SaleDetailPage({
             )}
           </section>
 
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 p-4 sm:p-5">
-            <h2 className="text-sm font-semibold text-neutral-950">
-              Aksi Sensitif
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              Void/refund tetap masuk subfase R3C setelah audit dan approval
-              guard siap.
-            </p>
-            <button
-              type="button"
-              disabled
-              className="mt-4 inline-flex h-10 w-full cursor-not-allowed items-center justify-center rounded-xl bg-neutral-200 px-4 text-sm font-medium text-neutral-500"
-            >
-              Void / Refund R3C
-            </button>
-          </section>
+          <SaleSensitiveActionsCard
+            saleId={sale.id}
+            invoiceNumber={sale.invoiceNumber}
+            saleStatus={sale.status}
+            returnTo={currentDetailHref}
+            approvals={sale.sensitiveApprovals}
+          />
         </aside>
       </div>
     </div>

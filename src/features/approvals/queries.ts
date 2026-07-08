@@ -149,6 +149,7 @@ function formatMoney(value: number) {
 function getApprovalTypeTitle(type: ApprovalType) {
   if (type === "discount") return "Permintaan Diskon Khusus";
   if (type === "void_receipt") return "Pembatalan Nota (Void)";
+  if (type === "refund_transaction") return "Refund Transaksi";
   if (type === "stock_adjustment") return "Penyesuaian Stok";
 
   return "Approval Operasional";
@@ -237,8 +238,25 @@ export function summarizeApprovalRequest(
   }
 
   if (type === "void_receipt") {
+    const impactAmount = getNumberValue(requestData, [
+      "impactAmount",
+      "totalAmount",
+      "paidAmount",
+      "amount",
+    ]);
+    const status = getRecordValue(requestData, ["saleStatus", "status"]);
+    const requester = getRecordValue(requestData, ["requesterName", "requestedByName"]);
     const lines = [
       invoice ? { label: "Nota", value: stringifyValue(invoice) } : null,
+      status ? { label: "Status transaksi", value: stringifyValue(status) } : null,
+      requester ? { label: "Requester", value: stringifyValue(requester) } : null,
+      impactAmount
+        ? {
+            label: "Nilai transaksi",
+            value: formatMoney(impactAmount),
+            tone: "danger" as const,
+          }
+        : null,
       reason ? { label: "Alasan void", value: stringifyValue(reason) } : null,
     ].filter(Boolean) as AdminApprovalRequestSummary["lines"];
 
@@ -246,10 +264,51 @@ export function summarizeApprovalRequest(
       title: "Pembatalan Nota (Void)",
       description: invoice
         ? `Permintaan pembatalan nota ${stringifyValue(invoice)}`
-        : "Kasir meminta pembatalan nota transaksi.",
+        : "Requester meminta pembatalan nota transaksi.",
       reason: reason ? stringifyValue(reason) : null,
-      impactLabel: null,
-      impactValue: null,
+      impactLabel: impactAmount ? "Nilai transaksi" : null,
+      impactValue: impactAmount,
+      lines,
+    };
+  }
+
+  if (type === "refund_transaction") {
+    const impactAmount = getNumberValue(requestData, [
+      "impactAmount",
+      "refundAmount",
+      "paidAmount",
+      "totalAmount",
+      "amount",
+    ]);
+    const paymentMethods = getRecordValue(requestData, [
+      "paymentMethodsLabel",
+      "paymentMethods",
+    ]);
+    const requester = getRecordValue(requestData, ["requesterName", "requestedByName"]);
+    const lines = [
+      invoice ? { label: "Nota", value: stringifyValue(invoice) } : null,
+      paymentMethods
+        ? { label: "Metode bayar", value: stringifyValue(paymentMethods) }
+        : null,
+      requester ? { label: "Requester", value: stringifyValue(requester) } : null,
+      impactAmount
+        ? {
+            label: "Estimasi refund",
+            value: formatMoney(impactAmount),
+            tone: "warning" as const,
+          }
+        : null,
+      reason ? { label: "Alasan refund", value: stringifyValue(reason) } : null,
+    ].filter(Boolean) as AdminApprovalRequestSummary["lines"];
+
+    return {
+      title: "Refund Transaksi",
+      description: invoice
+        ? `Permintaan refund untuk nota ${stringifyValue(invoice)}`
+        : "Requester meminta refund transaksi.",
+      reason: reason ? stringifyValue(reason) : null,
+      impactLabel: impactAmount ? "Estimasi refund" : null,
+      impactValue: impactAmount,
       lines,
     };
   }
