@@ -1012,10 +1012,10 @@ export default async function AdminDashboardPage({
               </h2>
 
               <Link
-                href="/admin/operasional"
+                href="/admin/operasional/approval"
                 className="text-xs font-medium text-[var(--accent)] hover:underline"
               >
-                Lihat semua
+                Lihat approval
               </Link>
             </div>
 

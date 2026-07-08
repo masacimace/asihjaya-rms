@@ -9,6 +9,8 @@ const legacyRoutes = [
   "/admin/produk/" + "varian",
 ];
 
+const retiredExactRoutes = ["/admin/operasional"];
+
 const expectedRouteFiles = [
   "app/page.tsx",
   "app/(public)/login/page.tsx",
@@ -50,7 +52,6 @@ const expectedRouteFiles = [
   "app/(admin)/admin/pelanggan/baru/page.tsx",
   "app/(admin)/admin/pelanggan/[customerId]/page.tsx",
   "app/(admin)/admin/pelanggan/[customerId]/edit/page.tsx",
-  "app/(admin)/admin/operasional/page.tsx",
   "app/(admin)/admin/operasional/shift/page.tsx",
   "app/(admin)/admin/operasional/kas/page.tsx",
   "app/(admin)/admin/operasional/approval/page.tsx",
@@ -126,6 +127,22 @@ async function main() {
         }
       });
     }
+
+    for (const retiredRoute of retiredExactRoutes) {
+      lines.forEach((line, index) => {
+        const usesRetiredRoute =
+          line.includes(`href="${retiredRoute}"`) ||
+          line.includes(`href='${retiredRoute}'`) ||
+          line.includes(`href: "${retiredRoute}"`) ||
+          line.includes(`href: '${retiredRoute}'`);
+
+        if (usesRetiredRoute) {
+          problems.push(
+            `${path.relative(process.cwd(), file)}:${index + 1} masih memakai route nonaktif ${retiredRoute}`,
+          );
+        }
+      });
+    }
   }
 
   if (problems.length > 0) {
@@ -141,7 +158,7 @@ async function main() {
 
   console.log("Pemeriksaan route berhasil.");
   console.log(
-    "Route Admin, POS, API, Media, Produk, Inventaris, Penjualan, Pelanggan, Operasional, dan Laporan tersedia tanpa referensi route lama.",
+    "Route Admin, POS, API, Media, Produk, Inventaris, Penjualan, Pelanggan, subroute Operasional, dan Laporan tersedia tanpa referensi route lama.",
   );
 }
 

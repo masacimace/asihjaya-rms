@@ -1,8 +1,9 @@
+import { notFound } from "next/navigation";
+
 const sectionNames: Record<string, string> = {
   penjualan: "Penjualan",
   inventaris: "Inventaris",
   pelanggan: "Pelanggan",
-  operasional: "Operasional",
   laporan: "Laporan",
   administrasi: "Administrasi",
   pengaturan: "Pengaturan",
@@ -14,6 +15,10 @@ export default async function AdminSectionPage({
   params: Promise<{ section: string }>;
 }) {
   const { section } = await params;
+  if (section === "operasional") {
+    notFound();
+  }
+
   const title = sectionNames[section] ?? "Modul";
 
   return (

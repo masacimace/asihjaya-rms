@@ -26,6 +26,7 @@ import { useState, type ReactNode } from "react";
 import { UserMenu } from "@/components/auth/user-menu";
 import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
 import { ApprovalDrawer } from "@/components/layout/approval-drawer";
+import type { AdminApprovalDrawerData } from "@/features/approvals/contracts";
 import { cn } from "@/lib/utils";
 
 type AdminShellUser = {
@@ -269,9 +270,11 @@ function SidebarContent({
 export function AdminShell({
   children,
   user,
+  approvalDrawerData,
 }: {
   children: ReactNode;
   user: AdminShellUser;
+  approvalDrawerData: AdminApprovalDrawerData;
 }) {
   const pathname = usePathname();
 
@@ -373,10 +376,11 @@ export function AdminShell({
               className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
             >
               <ClipboardCheck className="size-5" />
-              {/* Notification Badge */}
-              <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-red-600 text-[10px] font-bold text-white">
-                1
-              </span>
+              {approvalDrawerData.pendingCount > 0 ? (
+                <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-red-600 text-[10px] font-bold text-white">
+                  {approvalDrawerData.pendingCount > 9 ? "9+" : approvalDrawerData.pendingCount}
+                </span>
+              ) : null}
             </button>
 
             <button
@@ -415,6 +419,7 @@ export function AdminShell({
       <ApprovalDrawer
         isOpen={isApprovalOpen}
         onClose={() => setIsApprovalOpen(false)}
+        data={approvalDrawerData}
       />
     </div>
   );

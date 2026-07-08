@@ -242,11 +242,11 @@ export default async function ShiftPage({ searchParams }: PageProps) {
         <div>
           <div className="mb-2">
             <Link
-              href="/admin/operasional"
+              href="/admin"
               className="inline-flex items-center gap-2 text-sm font-medium text-neutral-500 hover:text-[var(--accent)]"
             >
               <ArrowLeft className="size-4" />
-              Kembali
+              Kembali ke Dashboard
             </Link>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">

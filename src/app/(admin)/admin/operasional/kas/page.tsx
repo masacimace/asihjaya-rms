@@ -349,11 +349,11 @@ export default async function KasPage({ searchParams }: PageProps) {
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <Link
-              href="/admin/operasional"
+              href="/admin"
               className="inline-flex items-center gap-2 text-sm font-medium text-white/60 transition hover:text-white"
             >
               <ArrowLeft className="size-4" />
-              Operasional
+              Dashboard
             </Link>
             <p className="mt-6 text-xs font-semibold uppercase tracking-[0.25em] text-white/45">
               ADMIN-R8

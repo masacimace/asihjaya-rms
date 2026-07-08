@@ -968,7 +968,7 @@ export async function getAdminDashboardData(
       id: "all-clear",
       title: "Operasional terlihat normal",
       description: "Belum ada payment pending, approval, atau print job gagal.",
-      href: "/admin/operasional",
+      href: "/admin/operasional/shift",
       tone: "success",
     });
   }
