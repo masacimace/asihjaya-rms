@@ -214,6 +214,13 @@ export type AdminSaleHardwareJob = {
 };
 
 
+export type AdminSaleSensitiveApprovalExecutionStatus =
+  | "awaiting_r3c_2"
+  | "void_executed"
+  | "refund_executed"
+  | "cancelled"
+  | null;
+
 export type AdminSaleSensitiveApproval = {
   id: string;
   type: "void_receipt" | "refund_transaction";
@@ -225,6 +232,9 @@ export type AdminSaleSensitiveApproval = {
   createdAt: Date;
   resolvedAt: Date | null;
   requestData: Record<string, unknown>;
+  executionStatus: AdminSaleSensitiveApprovalExecutionStatus;
+  executedAt: Date | null;
+  executedByName: string | null;
 };
 
 export type AdminSaleAuditLog = {

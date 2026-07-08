@@ -178,6 +178,45 @@ function getPaymentMetadataNumber(metadata: PaymentMetadata, key: string) {
   return null;
 }
 
+
+function getApprovalRequestDataString(
+  requestData: Record<string, unknown>,
+  key: string,
+) {
+  const value = requestData[key];
+
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function getSensitiveApprovalExecutionStatus(requestData: Record<string, unknown>) {
+  const value = getApprovalRequestDataString(requestData, "executionStatus");
+
+  if (
+    value === "awaiting_r3c_2" ||
+    value === "void_executed" ||
+    value === "refund_executed" ||
+    value === "cancelled"
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
+function getSensitiveApprovalExecutedAt(requestData: Record<string, unknown>) {
+  const value = getApprovalRequestDataString(requestData, "executedAt");
+
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function getPaymentMetadataString(metadata: PaymentMetadata, key: string) {
   if (!metadata) {
     return null;
@@ -1036,6 +1075,17 @@ export async function getAdminSaleDetailData({
           },
         ]
       : []),
+    ...(sale.status === "voided" && sale.cancelledAt
+      ? [
+          {
+            id: "voided",
+            label: "Transaksi void",
+            description: "Transaksi sudah dibatalkan penuh setelah approval void disetujui.",
+            createdAt: sale.cancelledAt,
+            tone: "danger" as const,
+          },
+        ]
+      : []),
     ...(hardwareJobRows.length > 0
       ? hardwareJobRows.slice(0, 3).map((job) => ({
           id: `hardware-${job.id}`,
@@ -1155,6 +1205,12 @@ export async function getAdminSaleDetailData({
       createdAt: approval.createdAt,
       resolvedAt: approval.resolvedAt,
       requestData: approval.requestData,
+      executionStatus: getSensitiveApprovalExecutionStatus(approval.requestData),
+      executedAt: getSensitiveApprovalExecutedAt(approval.requestData),
+      executedByName: getApprovalRequestDataString(
+        approval.requestData,
+        "executedByName",
+      ),
     })),
     timeline,
     receiptCertificate: {

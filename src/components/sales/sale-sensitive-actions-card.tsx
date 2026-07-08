@@ -4,13 +4,17 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
+  PlayCircle,
   RotateCcw,
   ShieldAlert,
   Undo2,
   XCircle,
 } from "lucide-react";
 
-import { requestSaleVoidRefundApprovalAction } from "@/features/sales/admin-actions";
+import {
+  executeApprovedSaleVoidAction,
+  requestSaleVoidRefundApprovalAction,
+} from "@/features/sales/admin-actions";
 import type {
   AdminSaleSensitiveApproval,
   AdminSaleStatus,
@@ -59,6 +63,16 @@ const approvalStatusLabels: Record<AdminSaleSensitiveApproval["status"], string>
   pending: "Menunggu approval",
   approved: "Disetujui",
   rejected: "Ditolak",
+};
+
+const executionStatusLabels: Record<
+  NonNullable<AdminSaleSensitiveApproval["executionStatus"]>,
+  string
+> = {
+  awaiting_r3c_2: "Menunggu eksekusi",
+  void_executed: "Void sudah dieksekusi",
+  refund_executed: "Refund sudah dieksekusi",
+  cancelled: "Eksekusi dibatalkan",
 };
 
 function formatDateTime(value: Date | null) {
@@ -132,6 +146,18 @@ function ApprovalStatusPanel({
               Diproses oleh {approval.approvedByName} pada {formatDateTime(approval.resolvedAt)}.
             </p>
           ) : null}
+          {approval.executionStatus ? (
+            <div className="mt-2 rounded-xl border border-white/80 bg-white/70 px-3 py-2 leading-5 text-neutral-700">
+              <p className="font-semibold">
+                {executionStatusLabels[approval.executionStatus]}
+              </p>
+              {approval.executedAt ? (
+                <p className="mt-1 text-xs">
+                  Dieksekusi oleh {approval.executedByName ?? "staff"} pada {formatDateTime(approval.executedAt)}.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {approval.responseNotes ? (
             <p className="mt-2 rounded-xl bg-white/70 px-3 py-2 leading-5 text-neutral-700">
               {approval.responseNotes}
@@ -140,6 +166,64 @@ function ApprovalStatusPanel({
         </div>
       </div>
     </div>
+  );
+}
+
+function ExecuteVoidForm({
+  saleId,
+  returnTo,
+  approval,
+  disabled,
+}: {
+  saleId: string;
+  returnTo: string;
+  approval: AdminSaleSensitiveApproval;
+  disabled: boolean;
+}) {
+  const alreadyExecuted = approval.executionStatus === "void_executed";
+
+  return (
+    <form
+      action={executeApprovedSaleVoidAction}
+      className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
+    >
+      <input type="hidden" name="saleId" value={saleId} />
+      <input type="hidden" name="approvalId" value={approval.id} />
+      <input type="hidden" name="returnTo" value={returnTo} />
+
+      <div className="flex items-start gap-3">
+        <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-white text-emerald-700 ring-1 ring-emerald-100">
+          <PlayCircle className="size-5" />
+        </div>
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-emerald-950">
+            Eksekusi Void Disetujui
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-emerald-800">
+            Approval void sudah disetujui. Eksekusi akan membatalkan transaksi penuh, mengembalikan item ke stok outlet, dan mencatat reversal kas cash bila ada.
+          </p>
+        </div>
+      </div>
+
+      <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-emerald-800">
+        Catatan eksekusi opsional
+      </label>
+      <textarea
+        name="executionNote"
+        maxLength={1000}
+        disabled={disabled || alreadyExecuted}
+        placeholder="Contoh: void dieksekusi setelah approval owner karena customer batal penuh."
+        className="mt-2 min-h-20 w-full resize-y rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-emerald-50 disabled:text-emerald-500"
+      />
+      <button
+        type="submit"
+        disabled={disabled || alreadyExecuted}
+        className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-emerald-700"
+      >
+        <PlayCircle className="size-4" />
+        {alreadyExecuted ? "Void sudah dieksekusi" : "Eksekusi void sekarang"}
+      </button>
+    </form>
   );
 }
 
@@ -158,7 +242,13 @@ function SensitiveActionForm({
 }) {
   const isCompleted = saleStatus === "completed";
   const blockingApproval = getBlockingApproval(latestApproval);
+  const hasExecutableVoidApproval =
+    meta.type === "void" &&
+    latestApproval?.status === "approved" &&
+    latestApproval.executionStatus !== "void_executed" &&
+    isCompleted;
   const disabled = !isCompleted || Boolean(blockingApproval);
+  const requestFormDisabled = disabled || hasExecutableVoidApproval;
 
   return (
     <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
@@ -181,8 +271,12 @@ function SensitiveActionForm({
       ) : null}
 
       <p className="mt-4 rounded-2xl bg-neutral-50 px-4 py-3 text-xs leading-5 text-[var(--muted)]">
-        {blockingApproval?.status === "approved"
-          ? "Approval sudah disetujui. Eksekusi perubahan transaksi akan diaktifkan pada R3C-2."
+        {blockingApproval?.status === "approved" && meta.type === "void"
+          ? latestApproval?.executionStatus === "void_executed"
+            ? "Void sudah dieksekusi. Transaksi, stok, kas cash, dan audit sudah diperbarui."
+            : "Approval void sudah disetujui. Gunakan tombol eksekusi di bawah untuk membatalkan transaksi penuh."
+          : blockingApproval?.status === "approved"
+            ? "Approval refund sudah disetujui. Eksekusi refund akan masuk ke subfase R3C-2B."
           : blockingApproval?.status === "pending"
             ? "Masih ada request yang menunggu approval. Tunggu keputusan manager/owner sebelum membuat request baru."
             : !isCompleted
@@ -202,19 +296,28 @@ function SensitiveActionForm({
           minLength={8}
           maxLength={1000}
           required
-          disabled={disabled}
+          disabled={requestFormDisabled}
           placeholder="Contoh: customer batal membeli karena salah item / perlu refund karena kesalahan nominal."
           className="min-h-24 w-full resize-y rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400"
         />
         <button
           type="submit"
-          disabled={disabled}
+          disabled={requestFormDisabled}
           className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
         >
           {meta.icon}
           {meta.buttonLabel}
         </button>
       </form>
+
+      {hasExecutableVoidApproval && latestApproval ? (
+        <ExecuteVoidForm
+          saleId={saleId}
+          returnTo={returnTo}
+          approval={latestApproval}
+          disabled={!isCompleted}
+        />
+      ) : null}
     </article>
   );
 }
@@ -255,7 +358,7 @@ export function SaleSensitiveActionsCard({
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <p>
-            Setelah approval disetujui, eksekusi void/refund tetap menunggu subfase R3C-2 agar reversal stok, kas, dan audit bisa berjalan aman.
+            Void yang sudah disetujui bisa dieksekusi dari halaman ini. Refund masih ditahan untuk subfase berikutnya agar aturan refund penuh/parsial bisa dipastikan aman.
           </p>
         </div>
       </div>

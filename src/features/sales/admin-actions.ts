@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -11,13 +11,17 @@ import { db } from "@/db";
 import {
   approvals,
   auditLogs,
+  cashMovements,
   customers,
   hardwareAgents,
+  inventoryMovements,
   outlets,
   payments,
+  productItems,
   registers,
   saleItems,
   sales,
+  shifts,
   users,
 } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/session";
@@ -456,6 +460,410 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
     returnTo,
     type: "success",
     message: config.successMessage,
+  });
+}
+
+
+type VoidExecutionRequestData = Record<string, unknown> & {
+  executionStatus?: string;
+};
+
+function getRequestDataExecutionStatus(requestData: Record<string, unknown>) {
+  const value = requestData.executionStatus;
+
+  return typeof value === "string" ? value : null;
+}
+
+function getCashPaidAmount(
+  paymentRows: Array<{ method: string; status: string; amount: string }>,
+) {
+  return paymentRows.reduce((total, payment) => {
+    if (payment.method !== "cash" || payment.status !== "paid") {
+      return total;
+    }
+
+    return total + parseNumber(payment.amount);
+  }, 0);
+}
+
+function getPaidAmount(
+  paymentRows: Array<{ status: string; amount: string }>,
+) {
+  return paymentRows.reduce((total, payment) => {
+    if (payment.status !== "paid") {
+      return total;
+    }
+
+    return total + parseNumber(payment.amount);
+  }, 0);
+}
+
+export async function executeApprovedSaleVoidAction(formData: FormData) {
+  const auth = await requirePermission("sales.view");
+  const saleId = readText(formData, "saleId");
+  const approvalId = readText(formData, "approvalId");
+  const returnTo = readText(formData, "returnTo");
+  const executionNote = readText(formData, "executionNote").slice(0, 1000);
+
+  if (!UUID_PATTERN.test(saleId) || !UUID_PATTERN.test(approvalId)) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo: "/admin/penjualan",
+      type: "error",
+      message: "Transaksi atau approval void tidak valid untuk dieksekusi.",
+    });
+  }
+
+  const accessibleOutletIds = auth.outlets.map((outlet) => outlet.id);
+
+  if (accessibleOutletIds.length === 0) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo,
+      type: "error",
+      message:
+        "Outlet yang bisa diakses tidak ditemukan. Hubungi owner/admin untuk mengatur akses outlet.",
+    });
+  }
+
+  const requestMetadata = await getAdminRequestMetadata();
+  const now = new Date();
+  let invoiceNumber = "transaksi";
+
+  const result = await db.transaction(async (tx) => {
+    const [sale] = await tx
+      .select({
+        id: sales.id,
+        organizationId: sales.organizationId,
+        outletId: sales.outletId,
+        registerId: sales.registerId,
+        shiftId: sales.shiftId,
+        cashierId: sales.cashierId,
+        invoiceNumber: sales.invoiceNumber,
+        status: sales.status,
+        subtotalAmount: sales.subtotalAmount,
+        discountAmount: sales.discountAmount,
+        additionalFeeAmount: sales.additionalFeeAmount,
+        totalAmount: sales.totalAmount,
+        completedAt: sales.completedAt,
+        cancelledAt: sales.cancelledAt,
+        notes: sales.notes,
+      })
+      .from(sales)
+      .where(
+        and(
+          eq(sales.id, saleId),
+          eq(sales.organizationId, auth.organization.id),
+          inArray(sales.outletId, accessibleOutletIds),
+        ),
+      )
+      .limit(1);
+
+    if (!sale) {
+      return {
+        ok: false as const,
+        message:
+          "Transaksi tidak ditemukan atau bukan bagian dari outlet yang bisa kamu akses.",
+      };
+    }
+
+    invoiceNumber = sale.invoiceNumber;
+
+    if (sale.status !== "completed") {
+      return {
+        ok: false as const,
+        message: "Void hanya bisa dieksekusi untuk transaksi yang masih completed.",
+      };
+    }
+
+    const [approval] = await tx
+      .select({
+        id: approvals.id,
+        type: approvals.type,
+        status: approvals.status,
+        requestedBy: approvals.requestedBy,
+        approvedBy: approvals.approvedBy,
+        referenceType: approvals.referenceType,
+        referenceId: approvals.referenceId,
+        requestData: approvals.requestData,
+        notes: approvals.notes,
+        responseNotes: approvals.responseNotes,
+        resolvedAt: approvals.resolvedAt,
+      })
+      .from(approvals)
+      .where(
+        and(
+          eq(approvals.id, approvalId),
+          eq(approvals.organizationId, auth.organization.id),
+          eq(approvals.outletId, sale.outletId),
+          eq(approvals.type, "void_receipt"),
+          eq(approvals.referenceType, "sale"),
+          eq(approvals.referenceId, sale.id),
+        ),
+      )
+      .limit(1);
+
+    if (!approval) {
+      return {
+        ok: false as const,
+        message:
+          "Approval void tidak ditemukan untuk transaksi ini. Ajukan approval void terlebih dahulu.",
+      };
+    }
+
+    if (approval.status !== "approved") {
+      return {
+        ok: false as const,
+        message:
+          "Approval void belum disetujui. Tunggu manager/owner approve sebelum eksekusi void.",
+      };
+    }
+
+    const approvalRequestData = approval.requestData as VoidExecutionRequestData;
+    const executionStatus = getRequestDataExecutionStatus(approvalRequestData);
+
+    if (executionStatus === "void_executed") {
+      return {
+        ok: false as const,
+        message: "Void untuk transaksi ini sudah pernah dieksekusi.",
+      };
+    }
+
+    const [paymentRows, itemRows] = await Promise.all([
+      tx
+        .select({
+          id: payments.id,
+          method: payments.method,
+          amount: payments.amount,
+          status: payments.status,
+          metadata: payments.metadata,
+        })
+        .from(payments)
+        .where(eq(payments.saleId, sale.id)),
+      tx
+        .select({
+          id: saleItems.id,
+          productItemId: saleItems.productItemId,
+          lineNumber: saleItems.lineNumber,
+          finalPriceAmount: saleItems.finalPriceAmount,
+          sku: productItems.sku,
+          barcode: productItems.barcode,
+          currentOutletId: productItems.currentOutletId,
+          availability: productItems.availability,
+          locationState: productItems.locationState,
+        })
+        .from(saleItems)
+        .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
+        .where(eq(saleItems.saleId, sale.id)),
+    ]);
+
+    if (itemRows.length === 0) {
+      return {
+        ok: false as const,
+        message: "Transaksi ini tidak memiliki item, sehingga void belum bisa dieksekusi.",
+      };
+    }
+
+    const productItemIds = itemRows.map((item) => item.productItemId);
+    const cashPaidAmount = getCashPaidAmount(paymentRows);
+    const paidAmount = getPaidAmount(paymentRows);
+    const reason =
+      executionNote ||
+      approval.notes ||
+      approval.responseNotes ||
+      "Void transaksi setelah approval manager/owner.";
+
+    await tx
+      .update(sales)
+      .set({
+        status: "voided",
+        cancelledAt: now,
+        updatedAt: now,
+        notes: sale.notes
+          ? `${sale.notes}\n\n[VOID ${now.toISOString()}] ${reason}`
+          : `[VOID ${now.toISOString()}] ${reason}`,
+      })
+      .where(eq(sales.id, sale.id));
+
+    await tx
+      .update(productItems)
+      .set({
+        availability: "available",
+        locationState: "outlet",
+        currentOutletId: sale.outletId,
+        updatedAt: now,
+      })
+      .where(inArray(productItems.id, productItemIds));
+
+    await tx.insert(inventoryMovements).values(
+      itemRows.map((item) => ({
+        organizationId: auth.organization.id,
+        itemId: item.productItemId,
+        movementType: "reversal" as const,
+        fromOutletId: null,
+        toOutletId: sale.outletId,
+        referenceType: "sale_void",
+        referenceId: sale.id,
+        reason,
+        metadata: {
+          source: "admin.sales.void_execution",
+          saleId: sale.id,
+          invoiceNumber: sale.invoiceNumber,
+          saleItemId: item.id,
+          lineNumber: item.lineNumber,
+          finalPriceAmount: parseNumber(item.finalPriceAmount),
+          previousAvailability: item.availability,
+          previousLocationState: item.locationState,
+          previousOutletId: item.currentOutletId,
+          approvalId: approval.id,
+        },
+        performedBy: auth.user.id,
+        approvedBy: approval.approvedBy,
+        occurredAt: now,
+        createdAt: now,
+      })),
+    );
+
+    if (paymentRows.length > 0) {
+      await tx
+        .update(payments)
+        .set({
+          status: "refunded",
+          updatedAt: now,
+          metadata: sql`coalesce(${payments.metadata}, '{}'::jsonb) || ${JSON.stringify({
+            voidedAt: now.toISOString(),
+            voidedBy: auth.user.id,
+            voidApprovalId: approval.id,
+            previousSaleStatus: sale.status,
+            voidReason: reason,
+          })}::jsonb`,
+        })
+        .where(
+          and(
+            eq(payments.saleId, sale.id),
+            inArray(payments.status, ["paid", "pending"]),
+          ),
+        );
+    }
+
+    if (cashPaidAmount > 0) {
+      await tx.insert(cashMovements).values({
+        shiftId: sale.shiftId,
+        type: "cash_refund",
+        amount: String(cashPaidAmount),
+        referenceType: "sale_void",
+        referenceId: sale.id,
+        reason: `Void ${sale.invoiceNumber}: ${reason}`.slice(0, 2000),
+        createdBy: auth.user.id,
+        createdAt: now,
+      });
+
+      await tx
+        .update(shifts)
+        .set({
+          expectedCash: sql`coalesce(${shifts.expectedCash}, 0) - ${String(cashPaidAmount)}`,
+          updatedAt: now,
+        })
+        .where(eq(shifts.id, sale.shiftId));
+    }
+
+    await tx
+      .update(approvals)
+      .set({
+        requestData: {
+          ...approvalRequestData,
+          executionStatus: "void_executed",
+          executedAt: now.toISOString(),
+          executedBy: auth.user.id,
+          executedByName: auth.user.fullName,
+          executionNote: reason,
+          saleStatusBefore: sale.status,
+          saleStatusAfter: "voided",
+          cashRefundAmount: cashPaidAmount,
+          paidAmount,
+          returnedItemCount: itemRows.length,
+        },
+        responseNotes: approval.responseNotes
+          ? `${approval.responseNotes}\n\nEksekusi void: ${reason}`
+          : `Eksekusi void: ${reason}`,
+      })
+      .where(eq(approvals.id, approval.id));
+
+    await tx.insert(auditLogs).values({
+      organizationId: auth.organization.id,
+      outletId: sale.outletId,
+      actorUserId: auth.user.id,
+      action: "sale.void_executed",
+      entityType: "sale",
+      entityId: sale.id,
+      beforeData: {
+        status: sale.status,
+        totalAmount: sale.totalAmount,
+        paidAmount,
+        cashPaidAmount,
+        paymentStatuses: paymentRows.map((payment) => ({
+          id: payment.id,
+          method: payment.method,
+          status: payment.status,
+          amount: payment.amount,
+        })),
+        itemStates: itemRows.map((item) => ({
+          productItemId: item.productItemId,
+          availability: item.availability,
+          locationState: item.locationState,
+          currentOutletId: item.currentOutletId,
+        })),
+      },
+      afterData: {
+        status: "voided",
+        approvalId: approval.id,
+        returnedItemCount: itemRows.length,
+        cashRefundAmount: cashPaidAmount,
+        paymentStatus: "refunded",
+      },
+      reason,
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      metadata: {
+        source: "admin.sales.detail",
+        approvalId: approval.id,
+        invoiceNumber: sale.invoiceNumber,
+        executionStatus: "void_executed",
+      },
+      createdAt: now,
+    });
+
+    return {
+      ok: true as const,
+      invoiceNumber: sale.invoiceNumber,
+      returnedItemCount: itemRows.length,
+      cashRefundAmount: cashPaidAmount,
+    };
+  });
+
+  if (!result.ok) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo,
+      type: "error",
+      message: result.message,
+    });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/penjualan");
+  revalidatePath(`/admin/penjualan/${saleId}`);
+  revalidatePath("/admin/inventaris");
+  revalidatePath("/admin/operasional/kas");
+  revalidatePath("/admin/operasional/shift");
+  revalidatePath("/admin/operasional/approval");
+  revalidatePath("/pos");
+
+  redirectAdminSaleDetailWithFeedback({
+    saleId,
+    returnTo,
+    type: "success",
+    message: `Void ${invoiceNumber} berhasil dieksekusi. Item kembali tersedia dan reversal kas cash sudah dicatat jika ada pembayaran cash.`,
   });
 }
 
