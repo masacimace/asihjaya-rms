@@ -107,7 +107,53 @@ export type PosCheckoutPayload = {
   idempotencyKey: string;
   customerId?: string | null;
   note?: string | null;
+  discountApprovalId?: string | null;
+  discountAmount?: number | null;
+  discountReason?: string | null;
 };
+
+
+export type PosDiscountApprovalPayload = {
+  itemIds: string[];
+  discountAmount: number;
+  reason: string;
+  customerId?: string | null;
+};
+
+export type PosDiscountApprovalStatus = "pending" | "approved" | "rejected";
+
+export type PosDiscountApproval = {
+  id: string;
+  status: PosDiscountApprovalStatus;
+  discountAmount: number;
+  reason: string;
+  responseNotes: string | null;
+  createdAtIso: string;
+  resolvedAtIso: string | null;
+};
+
+export type PosDiscountApprovalActionResult =
+  | {
+      status: "success";
+      message: string;
+      approval: PosDiscountApproval;
+    }
+  | {
+      status: "error";
+      message: string;
+      fieldErrors?: Record<string, string>;
+    };
+
+export type PosDiscountApprovalStatusResult =
+  | {
+      status: "found";
+      message: string;
+      approval: PosDiscountApproval;
+    }
+  | {
+      status: "not_found" | "error";
+      message: string;
+    };
 
 export type PosHoldCartPayload = {
   itemIds: string[];

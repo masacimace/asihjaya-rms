@@ -187,14 +187,38 @@ export function summarizeApprovalRequest(
   ]);
 
   if (type === "discount") {
+    const itemCount = getNumberValue(requestData, ["itemCount"]);
+    const customer = getRecordValue(requestData, ["customerName", "customerCode"]);
+    const requestedTotalAmount = getNumberValue(requestData, [
+      "requestedTotalAmount",
+      "totalAfterDiscount",
+      "finalTotal",
+    ]);
+    const discountPercent = getNumberValue(requestData, ["discountPercent"]);
+    const cartLabel = item
+      ? stringifyValue(item)
+      : itemCount
+        ? `${itemCount} item cart POS`
+        : null;
+
     const lines = [
-      item ? { label: "Item", value: stringifyValue(item) } : null,
-      price ? { label: "Harga", value: formatMoney(price) } : null,
+      cartLabel ? { label: "Item", value: cartLabel } : null,
+      customer ? { label: "Customer", value: stringifyValue(customer) } : null,
+      price ? { label: "Subtotal", value: formatMoney(price) } : null,
       discountAmount
         ? {
             label: "Diskon diminta",
-            value: formatMoney(discountAmount),
+            value: discountPercent
+              ? `${formatMoney(discountAmount)} (${discountPercent}%)`
+              : formatMoney(discountAmount),
             tone: "danger" as const,
+          }
+        : null,
+      requestedTotalAmount
+        ? {
+            label: "Total setelah diskon",
+            value: formatMoney(requestedTotalAmount),
+            tone: "success" as const,
           }
         : null,
       reason ? { label: "Alasan", value: stringifyValue(reason) } : null,
@@ -202,8 +226,8 @@ export function summarizeApprovalRequest(
 
     return {
       title: "Permintaan Diskon Khusus",
-      description: item
-        ? `Diskon khusus untuk ${stringifyValue(item)}`
+      description: cartLabel
+        ? `Diskon khusus untuk ${cartLabel}`
         : "Kasir meminta diskon di luar batas normal.",
       reason: reason ? stringifyValue(reason) : null,
       impactLabel: discountAmount ? "Nominal diskon" : null,

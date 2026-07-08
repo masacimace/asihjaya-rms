@@ -31,9 +31,11 @@ import { useRouter } from "next/navigation";
 import {
   closePosShiftAction,
   completePosCheckoutAction,
+  getPosDiscountApprovalStatusAction,
   holdPosCartAction,
   lookupPosScanValueAction,
   openPosShiftAction,
+  requestPosDiscountApprovalAction,
 } from "@/app/actions/pos";
 import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
 import {
@@ -43,6 +45,8 @@ import {
   type PosCategoryOption,
   type PosCheckoutActionResult,
   type PosCustomerOption,
+  type PosDiscountApproval,
+  type PosDiscountApprovalActionResult,
   type PosHeldCartActionResult,
   type PosHeldCartItem,
   type PosHeldCartSummary,
@@ -63,7 +67,13 @@ type PosWorkspaceProps = {
 type CartContentProps = {
   cartItems: PosAvailableItem[];
   subtotalAmount: number;
+  discountAmount: number;
   totalAmount: number;
+  discountApproval: PosDiscountApproval | null;
+  isDiscountPending: boolean;
+  discountFeedback: string | null;
+  canRequestDiscount: boolean;
+  discountDisabledReason: string;
   canCheckout: boolean;
   checkoutDisabledReason: string;
   customers: PosCustomerOption[];
@@ -78,10 +88,18 @@ type CartContentProps = {
   onClearCustomer: () => void;
   onRemoveItem: (itemId: string) => void;
   onClearCart: () => void;
+  onOpenDiscountDialog: () => void;
+  onRefreshDiscountApproval: () => void;
+  onClearDiscountApproval: () => void;
   onContinueToPayment: () => void;
   canHoldCart: boolean;
   holdCartDisabledReason: string;
   onOpenHoldDialog: () => void;
+};
+
+
+type ActiveDiscountApproval = PosDiscountApproval & {
+  appliedAtIso?: string | null;
 };
 
 type PosPaymentDraft = {
@@ -370,6 +388,20 @@ function removePendingHeldCartResumeState() {
 
 function getHeldCartErrorMessage(
   result: Extract<PosHeldCartActionResult, { status: "error" }>,
+) {
+  const fieldErrorMessages = Object.values(result.fieldErrors ?? {}).filter(
+    Boolean,
+  );
+
+  if (fieldErrorMessages.length === 0) {
+    return result.message;
+  }
+
+  return `${result.message} ${fieldErrorMessages.join(" ")}`;
+}
+
+function getDiscountApprovalErrorMessage(
+  result: Extract<PosDiscountApprovalActionResult, { status: "error" }>,
 ) {
   const fieldErrorMessages = Object.values(result.fieldErrors ?? {}).filter(
     Boolean,
@@ -903,7 +935,13 @@ function PosItemImage({
 function CartContent({
   cartItems,
   subtotalAmount,
+  discountAmount,
   totalAmount,
+  discountApproval,
+  isDiscountPending,
+  discountFeedback,
+  canRequestDiscount,
+  discountDisabledReason,
   canCheckout,
   checkoutDisabledReason,
   customers,
@@ -918,6 +956,9 @@ function CartContent({
   onClearCustomer,
   onRemoveItem,
   onClearCart,
+  onOpenDiscountDialog,
+  onRefreshDiscountApproval,
+  onClearDiscountApproval,
   onContinueToPayment,
   canHoldCart,
   holdCartDisabledReason,
@@ -1141,17 +1182,97 @@ function CartContent({
             </span>
           </div>
 
-          <div className="flex items-center justify-between">
-            <span className="text-[var(--muted)]">Diskon</span>
+          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[var(--muted)]">Diskon</span>
+              <span
+                className={cn(
+                  "font-semibold",
+                  discountAmount > 0 ? "text-red-600" : "text-neutral-800",
+                )}
+              >
+                {discountAmount > 0 ? `-${formatCurrency(discountAmount)}` : formatCurrency(0)}
+              </span>
+            </div>
 
-            <button
-              type="button"
-              disabled
-              className="flex items-center gap-1.5 font-medium text-neutral-300"
-            >
-              <BadgePercent className="size-4" />
-              Minta Diskon
-            </button>
+            {discountApproval ? (
+              <div className="mt-3 rounded-xl border border-[var(--border)] bg-white p-3 text-xs leading-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p
+                      className={cn(
+                        "font-semibold",
+                        discountApproval.status === "approved"
+                          ? "text-emerald-700"
+                          : discountApproval.status === "rejected"
+                            ? "text-red-700"
+                            : "text-amber-700",
+                      )}
+                    >
+                      {discountApproval.status === "approved"
+                        ? "Diskon disetujui"
+                        : discountApproval.status === "rejected"
+                          ? "Diskon ditolak"
+                          : "Menunggu approval"}
+                    </p>
+                    <p className="mt-1 text-[var(--muted)]">
+                      {discountApproval.reason || "Tidak ada alasan tambahan."}
+                    </p>
+                    {discountApproval.responseNotes ? (
+                      <p className="mt-1 text-neutral-700">
+                        Catatan manager: {discountApproval.responseNotes}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-1 font-semibold text-neutral-700">
+                    {discountApproval.id.slice(0, 8).toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {discountApproval.status === "pending" ? (
+                    <button
+                      type="button"
+                      onClick={onRefreshDiscountApproval}
+                      disabled={isDiscountPending}
+                      className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {isDiscountPending ? "Mengecek..." : "Cek Status"}
+                    </button>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={onClearDiscountApproval}
+                    className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                  >
+                    {discountApproval.status === "approved" ? "Hapus Diskon" : "Reset Request"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={!canRequestDiscount}
+                onClick={onOpenDiscountDialog}
+                title={discountDisabledReason}
+                className={cn(
+                  "mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition",
+                  canRequestDiscount
+                    ? "border-[var(--accent)] bg-white text-[var(--accent)] hover:bg-[var(--accent-soft)]"
+                    : "cursor-not-allowed border-[var(--border)] bg-neutral-100 text-neutral-400",
+                )}
+              >
+                <BadgePercent className="size-4" />
+                Minta Diskon
+              </button>
+            )}
+
+            {discountFeedback ? (
+              <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+                {discountFeedback}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex items-center justify-between border-t border-[var(--border)] pt-4">
@@ -1212,6 +1333,198 @@ function CartContent({
             </>
           ) : null}
         </p>
+      </div>
+    </div>
+  );
+}
+
+type DiscountApprovalDialogProps = {
+  cartItems: PosAvailableItem[];
+  subtotalAmount: number;
+  selectedCustomer: PosCustomerOption | null;
+  amountInput: string;
+  reasonInput: string;
+  feedback: string | null;
+  isPending: boolean;
+  onAmountInputChange: (value: string) => void;
+  onReasonInputChange: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+};
+
+function DiscountApprovalDialog({
+  cartItems,
+  subtotalAmount,
+  selectedCustomer,
+  amountInput,
+  reasonInput,
+  feedback,
+  isPending,
+  onAmountInputChange,
+  onReasonInputChange,
+  onCancel,
+  onSubmit,
+}: DiscountApprovalDialogProps) {
+  const parsedDiscountAmount = parsePaymentAmountInput(amountInput);
+  const projectedTotalAmount = Math.max(subtotalAmount - parsedDiscountAmount, 0);
+  const discountIsTooHigh = parsedDiscountAmount >= subtotalAmount && subtotalAmount > 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-3 backdrop-blur-sm sm:items-center sm:p-6">
+      <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+        <div className="border-b border-[var(--border)] p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+                Approval Diskon POS
+              </p>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight text-neutral-950">
+                Minta diskon manager/owner
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                Request akan masuk ke Riwayat Approval. Diskon baru bisa dipakai
+                setelah status disetujui.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              aria-label="Tutup form request diskon"
+              onClick={onCancel}
+              disabled={isPending}
+              className="grid size-9 shrink-0 place-items-center rounded-xl text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-50"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[70vh] overflow-y-auto p-4 sm:p-5">
+          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[var(--muted)]">Subtotal cart</span>
+              <span className="font-semibold text-neutral-950">
+                {formatCurrency(subtotalAmount)}
+              </span>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <span className="text-[var(--muted)]">Jumlah item</span>
+              <span className="font-semibold text-neutral-950">
+                {cartItems.length} item
+              </span>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <span className="text-[var(--muted)]">Customer</span>
+              <span className="truncate font-semibold text-neutral-950">
+                {selectedCustomer?.fullName ?? "Walk-in customer"}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-4">
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Nominal diskon diminta
+              </span>
+              <input
+                value={amountInput}
+                onChange={(event) =>
+                  onAmountInputChange(formatRupiahInput(event.target.value))
+                }
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="Contoh: 100.000"
+                className={cn(
+                  "h-12 w-full rounded-2xl border bg-white px-4 text-base font-semibold text-neutral-950 outline-none transition placeholder:text-sm placeholder:font-normal placeholder:text-neutral-400 focus:ring-4",
+                  discountIsTooHigh
+                    ? "border-red-300 focus:border-red-400 focus:ring-red-50"
+                    : "border-[var(--border)] focus:border-[var(--accent)] focus:ring-[var(--accent-soft)]",
+                )}
+              />
+              <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
+                Total setelah diskon: {formatCurrency(projectedTotalAmount)}.
+              </p>
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Alasan diskon
+              </span>
+              <textarea
+                value={reasonInput}
+                onChange={(event) => onReasonInputChange(event.target.value)}
+                maxLength={500}
+                rows={4}
+                placeholder="Contoh: Customer langganan, pembelian ulang, sudah disetujui negosiasi harga."
+                className="w-full resize-none rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+              />
+              <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
+                Minimal 5 karakter. Catatan ini akan terlihat di halaman approval.
+              </p>
+            </label>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Item dalam request
+            </p>
+            <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
+              {cartItems.map((item, index) => (
+                <div
+                  key={item.id}
+                  className="flex items-start justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-neutral-950">
+                      {index + 1}. {item.productName}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                      {item.sku} · {item.barcode}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs font-semibold text-neutral-950">
+                    {formatCurrency(item.sellingAmount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {feedback ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+              {feedback}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="grid gap-2 border-t border-[var(--border)] p-4 sm:grid-cols-[1fr_1.4fr] sm:p-5">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isPending}
+            className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={isPending || discountIsTooHigh}
+            className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent)]/90 disabled:cursor-wait disabled:opacity-70"
+          >
+            {isPending ? (
+              <>
+                <LoaderCircle className="size-4 animate-spin" />
+                Mengirim request...
+              </>
+            ) : (
+              <>
+                <BadgePercent className="size-4" />
+                Kirim Request Diskon
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -2285,6 +2598,13 @@ export function PosWorkspace({
   const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
   const [paymentNoteInput, setPaymentNoteInput] = useState("");
   const [paymentFeedback, setPaymentFeedback] = useState<string | null>(null);
+  const [discountApproval, setDiscountApproval] =
+    useState<ActiveDiscountApproval | null>(null);
+  const [discountFeedback, setDiscountFeedback] = useState<string | null>(null);
+  const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
+  const [discountAmountInput, setDiscountAmountInput] = useState("");
+  const [discountReasonInput, setDiscountReasonInput] = useState("");
+  const [isDiscountPending, startDiscountTransition] = useTransition();
   const [checkoutResult, setCheckoutResult] = useState<
     Extract<PosCheckoutActionResult, { status: "success" }>["sale"] | null
   >(null);
@@ -2426,7 +2746,29 @@ export function PosWorkspace({
     [cartItems],
   );
 
-  const totalAmount = subtotalAmount;
+  const approvedDiscountAmount =
+    discountApproval?.status === "approved" ? discountApproval.discountAmount : 0;
+  const totalAmount = Math.max(subtotalAmount - approvedDiscountAmount, 0);
+  const hasPendingDiscountApproval = discountApproval?.status === "pending";
+  const canRequestDiscount =
+    panelMode === "cart" &&
+    cartItems.length > 0 &&
+    payments.length === 0 &&
+    subtotalAmount > 0 &&
+    !discountApproval &&
+    Boolean(context.register) &&
+    Boolean(context.activeShift);
+  const discountDisabledReason = !cartItems.length
+    ? "Tambahkan item sebelum meminta diskon."
+    : payments.length > 0
+      ? "Diskon harus diajukan sebelum payment ditambahkan."
+      : !context.register
+        ? "Register aktif belum tersedia untuk outlet ini."
+        : !context.activeShift
+          ? "Shift aktif belum dibuka, request diskon belum bisa dibuat."
+          : discountApproval
+            ? "Selesaikan atau reset request diskon yang sedang aktif."
+            : "Minta approval diskon manager/owner.";
   const paidAmount = useMemo(
     () => payments.reduce((total, payment) => total + payment.amount, 0),
     [payments],
@@ -2440,27 +2782,33 @@ export function PosWorkspace({
   const canCheckout =
     cartItems.length > 0 &&
     Boolean(context.register) &&
-    Boolean(context.activeShift);
+    Boolean(context.activeShift) &&
+    !hasPendingDiscountApproval;
   const checkoutDisabledReason = !cartItems.length
     ? "Tambahkan minimal satu item sebelum lanjut ke pembayaran."
     : !context.register
       ? "Register aktif belum tersedia untuk outlet ini."
       : !context.activeShift
         ? "Shift aktif belum dibuka, checkout belum bisa dilanjutkan."
-        : "Lanjutkan ke pembayaran manual.";
+        : hasPendingDiscountApproval
+          ? "Request diskon masih pending. Cek status approval atau reset request."
+          : "Lanjutkan ke pembayaran manual.";
   const canFinalizePayment =
     canCheckout && payments.length > 0 && remainingAmount === 0;
   const canHoldCart =
     panelMode === "cart" &&
     cartItems.length > 0 &&
     payments.length === 0 &&
+    !discountApproval &&
     Boolean(context.register) &&
     Boolean(context.activeShift);
   const holdCartDisabledReason = !cartItems.length
     ? "Tambahkan minimal satu item sebelum transaksi bisa ditahan."
     : payments.length > 0
       ? "Transaksi yang sudah memiliki payment tidak bisa ditahan. Reset payment terlebih dahulu."
-      : !context.register
+      : discountApproval
+        ? "Transaksi dengan request diskon tidak bisa ditahan. Reset request diskon terlebih dahulu."
+        : !context.register
         ? "Register aktif belum tersedia untuk outlet ini."
         : !context.activeShift
           ? "Shift aktif belum dibuka, hold cart belum bisa dibuat."
@@ -2488,12 +2836,114 @@ export function PosWorkspace({
     resetPayments();
   }
 
+  function clearDiscountApproval(message?: string) {
+    setDiscountApproval(null);
+    setDiscountAmountInput("");
+    setDiscountReasonInput("");
+    setDiscountFeedback(message ?? null);
+    resetPaymentFlow();
+  }
+
+  function openDiscountDialog() {
+    if (!canRequestDiscount) {
+      setDiscountFeedback(discountDisabledReason);
+      return;
+    }
+
+    setDiscountAmountInput("");
+    setDiscountReasonInput("");
+    setDiscountFeedback(null);
+    setIsDiscountDialogOpen(true);
+  }
+
+  function closeDiscountDialog() {
+    if (isDiscountPending) {
+      return;
+    }
+
+    setIsDiscountDialogOpen(false);
+  }
+
+  function requestDiscountApproval() {
+    if (!canRequestDiscount) {
+      setDiscountFeedback(discountDisabledReason);
+      return;
+    }
+
+    const discountAmount = parsePaymentAmountInput(discountAmountInput);
+    const reason = discountReasonInput.trim();
+
+    if (!Number.isSafeInteger(discountAmount) || discountAmount <= 0) {
+      setDiscountFeedback("Nominal diskon harus lebih dari Rp0.");
+      return;
+    }
+
+    if (discountAmount >= subtotalAmount) {
+      setDiscountFeedback("Nominal diskon harus lebih kecil dari subtotal transaksi.");
+      return;
+    }
+
+    if (reason.length < 5) {
+      setDiscountFeedback("Alasan diskon minimal 5 karakter.");
+      return;
+    }
+
+    setDiscountFeedback("Mengirim request diskon...");
+
+    startDiscountTransition(async () => {
+      const result = await requestPosDiscountApprovalAction({
+        itemIds: cartItems.map((item) => item.id),
+        discountAmount,
+        reason,
+        customerId: selectedCustomer?.id ?? null,
+      });
+
+      if (result.status === "error") {
+        setDiscountFeedback(getDiscountApprovalErrorMessage(result));
+        return;
+      }
+
+      setDiscountApproval(result.approval);
+      setDiscountFeedback(result.message);
+      setIsDiscountDialogOpen(false);
+      resetPaymentFlow();
+      router.refresh();
+    });
+  }
+
+  function refreshDiscountApprovalStatus() {
+    if (!discountApproval) {
+      setDiscountFeedback("Belum ada approval diskon yang perlu dicek.");
+      return;
+    }
+
+    setDiscountFeedback("Mengecek status approval diskon...");
+
+    startDiscountTransition(async () => {
+      const result = await getPosDiscountApprovalStatusAction(discountApproval.id);
+
+      if (result.status !== "found") {
+        setDiscountFeedback(result.message);
+        return;
+      }
+
+      setDiscountApproval(result.approval);
+      setDiscountFeedback(result.message);
+      resetPaymentFlow();
+      router.refresh();
+    });
+  }
+
   function selectCustomer(customer: PosCustomerOption) {
     setSelectedCustomer(customer);
     setCustomerQuery(customer.fullName);
     setIsCustomerSelectorOpen(false);
     setCheckoutResult(null);
     resetPaymentFlow();
+    if (discountApproval) {
+      setDiscountApproval(null);
+      setDiscountFeedback("Request diskon direset karena customer transaksi berubah.");
+    }
     setCartFeedback(
       `Customer ${customer.fullName} dipilih untuk transaksi ini.`,
     );
@@ -2507,6 +2957,10 @@ export function PosWorkspace({
     setIsCustomerSelectorOpen(false);
     setCheckoutResult(null);
     resetPaymentFlow();
+    if (discountApproval) {
+      setDiscountApproval(null);
+      setDiscountFeedback("Request diskon direset karena customer transaksi berubah.");
+    }
 
     if (customerName) {
       setCartFeedback(`Customer ${customerName} dihapus dari transaksi.`);
@@ -2520,6 +2974,10 @@ export function PosWorkspace({
     setIsCustomerSelectorOpen(false);
     setCheckoutResult(null);
     resetPaymentFlow();
+    if (discountApproval) {
+      setDiscountApproval(null);
+      setDiscountFeedback(null);
+    }
     setCartFeedback("Keranjang transaksi direset.");
   }
 
@@ -2608,6 +3066,10 @@ export function PosWorkspace({
     setCartItems((currentItems) => [...currentItems, item]);
     setCheckoutResult(null);
     resetPaymentFlow();
+    if (discountApproval) {
+      setDiscountApproval(null);
+      setDiscountFeedback("Request diskon direset karena cart berubah.");
+    }
     setCartFeedback(`${item.sku} ditambahkan ke keranjang.`);
   }
 
@@ -2618,6 +3080,10 @@ export function PosWorkspace({
 
       if (removedItem) {
         resetPaymentFlow();
+        if (discountApproval) {
+          setDiscountApproval(null);
+          setDiscountFeedback("Request diskon direset karena cart berubah.");
+        }
         setCartFeedback(`${removedItem.sku} dihapus dari keranjang.`);
       }
 
@@ -2867,6 +3333,11 @@ export function PosWorkspace({
       idempotencyKey: createCheckoutIdempotencyKey(),
       customerId: selectedCustomer?.id ?? null,
       note: null,
+      discountApprovalId:
+        discountApproval?.status === "approved" ? discountApproval.id : null,
+      discountAmount: approvedDiscountAmount > 0 ? approvedDiscountAmount : null,
+      discountReason:
+        discountApproval?.status === "approved" ? discountApproval.reason : null,
     };
 
     startCheckoutTransition(async () => {
@@ -2885,6 +3356,8 @@ export function PosWorkspace({
       setCustomerQuery("");
       setIsCustomerSelectorOpen(false);
       setPayments([]);
+      setDiscountApproval(null);
+      setDiscountFeedback(null);
       resetPaymentForm();
       setPanelMode("success");
       setIsMobileCartOpen(true);
@@ -2896,7 +3369,13 @@ export function PosWorkspace({
     <CartContent
       cartItems={cartItems}
       subtotalAmount={subtotalAmount}
+      discountAmount={approvedDiscountAmount}
       totalAmount={totalAmount}
+      discountApproval={discountApproval}
+      isDiscountPending={isDiscountPending}
+      discountFeedback={discountFeedback}
+      canRequestDiscount={canRequestDiscount}
+      discountDisabledReason={discountDisabledReason}
       canCheckout={canCheckout}
       checkoutDisabledReason={checkoutDisabledReason}
       customers={customers}
@@ -2910,6 +3389,10 @@ export function PosWorkspace({
         if (selectedCustomer) {
           setSelectedCustomer(null);
           resetPaymentFlow();
+          if (discountApproval) {
+            setDiscountApproval(null);
+            setDiscountFeedback("Request diskon direset karena customer transaksi berubah.");
+          }
         }
       }}
       onCustomerInputFocus={() => setIsCustomerSelectorOpen(true)}
@@ -2920,6 +3403,11 @@ export function PosWorkspace({
       onClearCustomer={clearSelectedCustomer}
       onRemoveItem={removeItemFromCart}
       onClearCart={clearCart}
+      onOpenDiscountDialog={openDiscountDialog}
+      onRefreshDiscountApproval={refreshDiscountApprovalStatus}
+      onClearDiscountApproval={() =>
+        clearDiscountApproval("Request diskon direset dari cart.")
+      }
       onContinueToPayment={continueToPayment}
       canHoldCart={canHoldCart}
       holdCartDisabledReason={holdCartDisabledReason}
@@ -2980,6 +3468,22 @@ export function PosWorkspace({
 
   return (
     <>
+      {isDiscountDialogOpen ? (
+        <DiscountApprovalDialog
+          cartItems={cartItems}
+          subtotalAmount={subtotalAmount}
+          selectedCustomer={selectedCustomer}
+          amountInput={discountAmountInput}
+          reasonInput={discountReasonInput}
+          feedback={discountFeedback}
+          isPending={isDiscountPending}
+          onAmountInputChange={setDiscountAmountInput}
+          onReasonInputChange={setDiscountReasonInput}
+          onCancel={closeDiscountDialog}
+          onSubmit={requestDiscountApproval}
+        />
+      ) : null}
+
       {isHoldDialogOpen ? (
         <HoldCartDialog
           cartItems={cartItems}

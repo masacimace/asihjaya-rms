@@ -1,6 +1,6 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 
 import { db } from "@/db";
 import {
+  approvals,
   auditLogs,
   cashMovements,
   customers,
@@ -31,6 +32,10 @@ import {
 import {
   type PosCheckoutActionResult,
   type PosCheckoutPayload,
+  type PosDiscountApproval,
+  type PosDiscountApprovalActionResult,
+  type PosDiscountApprovalPayload,
+  type PosDiscountApprovalStatusResult,
   type PosHeldCartActionResult,
   type PosHeldCartItem,
   type PosHeldCartSummary,
@@ -320,6 +325,107 @@ function checkoutSuccess({
   };
 }
 
+function posDiscountFailure(
+  message: string,
+  fieldErrors?: Record<string, string>,
+): PosDiscountApprovalActionResult {
+  return {
+    status: "error",
+    message,
+    fieldErrors,
+  };
+}
+
+function mapPosDiscountApproval(row: {
+  id: string;
+  status: "pending" | "approved" | "rejected";
+  requestData: Record<string, unknown>;
+  notes: string | null;
+  responseNotes: string | null;
+  createdAt: Date;
+  resolvedAt: Date | null;
+}): PosDiscountApproval {
+  const rawAmount = row.requestData.discountAmount;
+  const discountAmount =
+    typeof rawAmount === "number"
+      ? rawAmount
+      : typeof rawAmount === "string"
+        ? Number(rawAmount)
+        : 0;
+
+  return {
+    id: row.id,
+    status: row.status,
+    discountAmount: Number.isSafeInteger(discountAmount) ? discountAmount : 0,
+    reason: String(row.requestData.reason ?? row.notes ?? "").slice(0, 500),
+    responseNotes: row.responseNotes,
+    createdAtIso: row.createdAt.toISOString(),
+    resolvedAtIso: row.resolvedAt?.toISOString() ?? null,
+  };
+}
+
+function createPosCartFingerprint({
+  outletId,
+  itemIds,
+  subtotalAmount,
+  discountAmount,
+}: {
+  outletId: string;
+  itemIds: string[];
+  subtotalAmount: number;
+  discountAmount: number;
+}) {
+  const source = JSON.stringify({
+    outletId,
+    itemIds: [...itemIds].sort(),
+    subtotalAmount,
+    discountAmount,
+  });
+
+  return createHash("sha256").update(source).digest("hex");
+}
+
+function getDiscountPercent(discountAmount: number, subtotalAmount: number) {
+  if (subtotalAmount <= 0) return 0;
+
+  return Number(((discountAmount / subtotalAmount) * 100).toFixed(2));
+}
+
+function allocateLineDiscounts({
+  itemAmounts,
+  discountAmount,
+}: {
+  itemAmounts: number[];
+  discountAmount: number;
+}) {
+  if (discountAmount <= 0) {
+    return itemAmounts.map(() => 0);
+  }
+
+  const subtotalAmount = itemAmounts.reduce((total, amount) => total + amount, 0);
+
+  if (subtotalAmount <= 0) {
+    return itemAmounts.map(() => 0);
+  }
+
+  let allocatedAmount = 0;
+
+  return itemAmounts.map((amount, index) => {
+    if (index === itemAmounts.length - 1) {
+      return Math.max(0, discountAmount - allocatedAmount);
+    }
+
+    const lineDiscount = Math.min(
+      amount,
+      Math.floor((amount / subtotalAmount) * discountAmount),
+    );
+
+    allocatedAmount += lineDiscount;
+
+    return lineDiscount;
+  });
+}
+
 function readText(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
@@ -551,6 +657,417 @@ async function getRequestMetadata() {
   return {
     ipAddress,
     userAgent: headerStore.get("user-agent"),
+  };
+}
+
+export async function requestPosDiscountApprovalAction(
+  payload: PosDiscountApprovalPayload,
+): Promise<PosDiscountApprovalActionResult> {
+  const auth = await requirePermission("sales.create");
+
+  if (!auth.permissionCodes.includes("pos.access")) {
+    return posDiscountFailure("User ini belum memiliki akses POS.");
+  }
+
+  const primaryOutlet =
+    auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
+
+  if (!primaryOutlet) {
+    return posDiscountFailure(
+      "Outlet aktif tidak ditemukan. Hubungi manager/admin untuk mengatur akses outlet staff ini.",
+    );
+  }
+
+  const fieldErrors: Record<string, string> = {};
+  const itemIds = Array.from(new Set(payload.itemIds ?? []));
+  const discountAmount = Number(payload.discountAmount);
+  const reason = normalizeRequiredText(payload.reason, 500);
+  const customerId = normalizeNullableText(payload.customerId, 36);
+
+  if (itemIds.length === 0) {
+    fieldErrors.items = "Tambahkan minimal satu item sebelum meminta diskon.";
+  }
+
+  if (itemIds.length > 50) {
+    fieldErrors.items = "Maksimal 50 item dalam satu request diskon.";
+  }
+
+  if (itemIds.some((itemId) => !UUID_PATTERN.test(itemId))) {
+    fieldErrors.items = "Ada item diskon yang tidak valid.";
+  }
+
+  if (!Number.isSafeInteger(discountAmount) || discountAmount <= 0) {
+    fieldErrors.discountAmount = "Nominal diskon harus lebih dari Rp0.";
+  }
+
+  if (reason.length < 5) {
+    fieldErrors.reason = "Alasan diskon minimal 5 karakter.";
+  }
+
+  if (customerId && !UUID_PATTERN.test(customerId)) {
+    fieldErrors.customerId = "Customer yang dipilih tidak valid.";
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return posDiscountFailure("Periksa kembali request diskon POS.", fieldErrors);
+  }
+
+  const requestMetadata = await getRequestMetadata();
+
+  try {
+    const approval = await db.transaction(async (transaction) => {
+      const now = new Date();
+
+      const registerRows = await transaction
+        .select({
+          id: registers.id,
+          code: registers.code,
+          name: registers.name,
+          outletId: registers.outletId,
+        })
+        .from(registers)
+        .where(getDefaultPosRegisterCondition(primaryOutlet.id))
+        .orderBy(registers.name)
+        .limit(1);
+
+      const register = registerRows[0];
+
+      if (!register) {
+        throw new CheckoutValidationError(DEFAULT_POS_REGISTER_MISSING_MESSAGE);
+      }
+
+      const activeShiftRows = await transaction
+        .select({ id: shifts.id, status: shifts.status })
+        .from(shifts)
+        .where(
+          and(
+            eq(shifts.outletId, primaryOutlet.id),
+            eq(shifts.registerId, register.id),
+            eq(shifts.status, "open"),
+          ),
+        )
+        .orderBy(sql`${shifts.openedAt} desc`)
+        .limit(1);
+
+      const activeShift = activeShiftRows[0];
+
+      if (!activeShift) {
+        throw new CheckoutValidationError(
+          "Shift aktif belum dibuka. Buka shift terlebih dahulu sebelum meminta diskon.",
+        );
+      }
+
+      const selectedCustomer = customerId
+        ? (
+            await transaction
+              .select({
+                id: customers.id,
+                customerCode: customers.customerCode,
+                fullName: customers.fullName,
+                phone: customers.phone,
+                email: customers.email,
+              })
+              .from(customers)
+              .where(
+                and(
+                  eq(customers.id, customerId),
+                  eq(customers.organizationId, auth.organization.id),
+                  eq(customers.isActive, true),
+                ),
+              )
+              .limit(1)
+          )[0]
+        : null;
+
+      if (customerId && !selectedCustomer) {
+        throw new CheckoutValidationError(
+          "Customer yang dipilih tidak ditemukan atau sudah tidak aktif.",
+        );
+      }
+
+      const itemRows = await transaction
+        .select({
+          id: productItems.id,
+          sku: productItems.sku,
+          barcode: productItems.barcode,
+          serialNumber: productItems.serialNumber,
+          currentOutletId: productItems.currentOutletId,
+          sellingAmount: productItems.sellingAmount,
+          availability: productItems.availability,
+          condition: productItems.condition,
+          locationState: productItems.locationState,
+          isActive: productItems.isActive,
+          productCode: productMasters.code,
+          productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
+          productStatus: productMasters.status,
+          categoryName: productCategories.name,
+          categoryIsActive: productCategories.isActive,
+        })
+        .from(productItems)
+        .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+        .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
+        .where(
+          and(
+            eq(productItems.organizationId, auth.organization.id),
+            inArray(productItems.id, itemIds),
+          ),
+        );
+
+      if (itemRows.length !== itemIds.length) {
+        throw new CheckoutValidationError(
+          "Sebagian item tidak ditemukan. Refresh POS lalu coba ulang.",
+        );
+      }
+
+      const itemMap = new Map(itemRows.map((item) => [item.id, item]));
+      const orderedItems = itemIds.map((itemId) => itemMap.get(itemId));
+
+      for (const item of orderedItems) {
+        if (!item) {
+          throw new CheckoutValidationError("Ada item diskon yang tidak ditemukan.");
+        }
+
+        if (
+          !item.isActive ||
+          item.productStatus !== "active" ||
+          !item.categoryIsActive ||
+          item.currentOutletId !== primaryOutlet.id ||
+          item.availability !== "available" ||
+          item.condition !== "good" ||
+          item.locationState !== "outlet"
+        ) {
+          throw new CheckoutValidationError(
+            `${item.sku} belum memenuhi syarat untuk request diskon POS. Refresh POS lalu coba ulang.`,
+          );
+        }
+
+        if (parseDbAmount(item.sellingAmount) <= 0) {
+          throw new CheckoutValidationError(`${item.sku} belum memiliki harga jual.`);
+        }
+      }
+
+      const subtotalAmount = orderedItems.reduce(
+        (total, item) => total + parseDbAmount(item!.sellingAmount),
+        0,
+      );
+
+      if (discountAmount >= subtotalAmount) {
+        throw new CheckoutValidationError(
+          "Nominal diskon harus lebih kecil dari subtotal transaksi.",
+        );
+      }
+
+      const cartFingerprint = createPosCartFingerprint({
+        outletId: primaryOutlet.id,
+        itemIds,
+        subtotalAmount,
+        discountAmount,
+      });
+
+      const existingRows = await transaction
+        .select({
+          id: approvals.id,
+          status: approvals.status,
+          requestData: approvals.requestData,
+          notes: approvals.notes,
+          responseNotes: approvals.responseNotes,
+          createdAt: approvals.createdAt,
+          resolvedAt: approvals.resolvedAt,
+        })
+        .from(approvals)
+        .where(
+          and(
+            eq(approvals.organizationId, auth.organization.id),
+            eq(approvals.outletId, primaryOutlet.id),
+            eq(approvals.requestedBy, auth.user.id),
+            eq(approvals.type, "discount"),
+            eq(approvals.status, "pending"),
+            sql`${approvals.requestData}->>'cartFingerprint' = ${cartFingerprint}`,
+          ),
+        )
+        .orderBy(sql`${approvals.createdAt} desc`)
+        .limit(1);
+
+      const existingApproval = existingRows[0];
+
+      if (existingApproval) {
+        return mapPosDiscountApproval(existingApproval);
+      }
+
+      const requestData = {
+        source: "pos.discount_request",
+        reason,
+        cartFingerprint,
+        outletId: primaryOutlet.id,
+        outletCode: primaryOutlet.code,
+        outletName: primaryOutlet.name,
+        registerId: register.id,
+        registerCode: register.code,
+        registerName: register.name,
+        shiftId: activeShift.id,
+        requestedBy: auth.user.id,
+        requesterName: auth.user.fullName,
+        customerId: selectedCustomer?.id ?? null,
+        customerCode: selectedCustomer?.customerCode ?? null,
+        customerName: selectedCustomer?.fullName ?? null,
+        itemCount: orderedItems.length,
+        subtotal: subtotalAmount,
+        subtotalAmount,
+        discountAmount,
+        requestedTotalAmount: subtotalAmount - discountAmount,
+        discountPercent: getDiscountPercent(discountAmount, subtotalAmount),
+        items: orderedItems.map((item) => ({
+          id: item!.id,
+          sku: item!.sku,
+          barcode: item!.barcode,
+          serialNumber: item!.serialNumber,
+          productCode: item!.productCode,
+          productName: item!.productName,
+          categoryName: item!.categoryName,
+          price: parseDbAmount(item!.sellingAmount),
+        })),
+      };
+
+      const insertedRows = await transaction
+        .insert(approvals)
+        .values({
+          organizationId: auth.organization.id,
+          outletId: primaryOutlet.id,
+          type: "discount",
+          status: "pending",
+          requestedBy: auth.user.id,
+          approvedBy: null,
+          referenceType: "pos_cart",
+          referenceId: null,
+          requestData,
+          notes: reason,
+          responseNotes: null,
+          createdAt: now,
+          resolvedAt: null,
+        })
+        .returning({
+          id: approvals.id,
+          status: approvals.status,
+          requestData: approvals.requestData,
+          notes: approvals.notes,
+          responseNotes: approvals.responseNotes,
+          createdAt: approvals.createdAt,
+          resolvedAt: approvals.resolvedAt,
+        });
+
+      const insertedApproval = insertedRows[0];
+
+      if (!insertedApproval) {
+        throw new Error("POS_DISCOUNT_APPROVAL_INSERT_FAILED");
+      }
+
+      await transaction.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet.id,
+        actorUserId: auth.user.id,
+        action: "approval.request_discount",
+        entityType: "approval",
+        entityId: insertedApproval.id,
+        beforeData: null,
+        afterData: {
+          status: "pending",
+          type: "discount",
+          requestData,
+        },
+        reason,
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+        metadata: {
+          source: "pos.discount_request",
+          cartFingerprint,
+          discountAmount,
+          subtotalAmount,
+        },
+        createdAt: now,
+      });
+
+      return mapPosDiscountApproval(insertedApproval);
+    });
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/operasional/approval");
+    revalidatePath("/pos");
+
+    return {
+      status: "success",
+      message:
+        approval.status === "pending"
+          ? "Request diskon dikirim. Tunggu manager/owner memproses approval."
+          : "Request diskon ditemukan.",
+      approval,
+    };
+  } catch (error) {
+    if (error instanceof CheckoutValidationError) {
+      return posDiscountFailure(error.message);
+    }
+
+    throw error;
+  }
+}
+
+export async function getPosDiscountApprovalStatusAction(
+  approvalId: string,
+): Promise<PosDiscountApprovalStatusResult> {
+  const auth = await requirePermission("pos.access");
+  const normalizedApprovalId = String(approvalId ?? "").trim();
+
+  if (!UUID_PATTERN.test(normalizedApprovalId)) {
+    return {
+      status: "error",
+      message: "ID approval diskon tidak valid.",
+    };
+  }
+
+  const primaryOutlet =
+    auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
+
+  const rows = await db
+    .select({
+      id: approvals.id,
+      status: approvals.status,
+      requestData: approvals.requestData,
+      notes: approvals.notes,
+      responseNotes: approvals.responseNotes,
+      createdAt: approvals.createdAt,
+      resolvedAt: approvals.resolvedAt,
+    })
+    .from(approvals)
+    .where(
+      and(
+        eq(approvals.id, normalizedApprovalId),
+        eq(approvals.organizationId, auth.organization.id),
+        eq(approvals.requestedBy, auth.user.id),
+        eq(approvals.type, "discount"),
+        primaryOutlet ? eq(approvals.outletId, primaryOutlet.id) : sql`true`,
+      ),
+    )
+    .limit(1);
+
+  const approval = rows[0];
+
+  if (!approval) {
+    return {
+      status: "not_found",
+      message: "Approval diskon tidak ditemukan untuk akun POS ini.",
+    };
+  }
+
+  const mappedApproval = mapPosDiscountApproval(approval);
+
+  return {
+    status: "found",
+    message:
+      mappedApproval.status === "approved"
+        ? "Diskon sudah disetujui. Diskon bisa diterapkan ke cart."
+        : mappedApproval.status === "rejected"
+          ? "Request diskon ditolak. Gunakan harga normal atau ajukan ulang."
+          : "Request diskon masih menunggu approval manager/owner.",
+    approval: mappedApproval,
   };
 }
 
@@ -1718,6 +2235,15 @@ export async function completePosCheckoutAction(
   const idempotencyKey = String(payload.idempotencyKey ?? "").trim();
   const customerId = normalizeNullableText(payload.customerId, 36);
   const saleNote = normalizeNullableText(payload.note, 240);
+  const discountApprovalId = normalizeNullableText(payload.discountApprovalId, 36);
+  const submittedDiscountAmount =
+    payload.discountAmount === null || payload.discountAmount === undefined
+      ? 0
+      : Number(payload.discountAmount);
+  const submittedDiscountReason = normalizeNullableText(
+    payload.discountReason,
+    500,
+  );
 
   if (itemIds.length === 0) {
     fieldErrors.items = "Tambahkan minimal satu item sebelum checkout.";
@@ -1737,6 +2263,18 @@ export async function completePosCheckoutAction(
 
   if (customerId && !UUID_PATTERN.test(customerId)) {
     fieldErrors.customerId = "Customer yang dipilih tidak valid.";
+  }
+
+  if (!Number.isSafeInteger(submittedDiscountAmount) || submittedDiscountAmount < 0) {
+    fieldErrors.discountAmount = "Nominal diskon tidak valid.";
+  }
+
+  if (submittedDiscountAmount > 0 && !discountApprovalId) {
+    fieldErrors.discountApprovalId = "Diskon POS wajib memakai approval manager/owner.";
+  }
+
+  if (discountApprovalId && !UUID_PATTERN.test(discountApprovalId)) {
+    fieldErrors.discountApprovalId = "Approval diskon tidak valid.";
   }
 
   const submittedPayments = payload.payments ?? [];
@@ -2074,11 +2612,95 @@ export async function completePosCheckoutAction(
         }
       }
 
-      const subtotalAmount = orderedItems.reduce(
-        (total, item) => total + parseDbAmount(item!.sellingAmount),
-        0,
+      const itemAmounts = orderedItems.map((item) =>
+        parseDbAmount(item!.sellingAmount),
       );
-      const totalAmount = subtotalAmount;
+      const subtotalAmount = itemAmounts.reduce((total, amount) => total + amount, 0);
+      let approvedDiscountAmount = 0;
+      let approvedDiscountReason: string | null = null;
+      let appliedDiscountApprovalId: string | null = null;
+
+      if (submittedDiscountAmount > 0) {
+        if (submittedDiscountAmount >= subtotalAmount) {
+          throw new CheckoutValidationError(
+            "Nominal diskon harus lebih kecil dari subtotal transaksi.",
+          );
+        }
+
+        const cartFingerprint = createPosCartFingerprint({
+          outletId: primaryOutlet.id,
+          itemIds,
+          subtotalAmount,
+          discountAmount: submittedDiscountAmount,
+        });
+
+        const approvalRows = await transaction
+          .select({
+            id: approvals.id,
+            status: approvals.status,
+            requestData: approvals.requestData,
+            notes: approvals.notes,
+            responseNotes: approvals.responseNotes,
+            referenceType: approvals.referenceType,
+            referenceId: approvals.referenceId,
+          })
+          .from(approvals)
+          .where(
+            and(
+              eq(approvals.id, discountApprovalId!),
+              eq(approvals.organizationId, auth.organization.id),
+              eq(approvals.outletId, primaryOutlet.id),
+              eq(approvals.requestedBy, auth.user.id),
+              eq(approvals.type, "discount"),
+              eq(approvals.referenceType, "pos_cart"),
+            ),
+          )
+          .limit(1);
+
+        const approval = approvalRows[0];
+
+        if (!approval) {
+          throw new CheckoutValidationError(
+            "Approval diskon tidak ditemukan untuk transaksi POS ini.",
+          );
+        }
+
+        if (approval.status !== "approved") {
+          throw new CheckoutValidationError(
+            approval.status === "rejected"
+              ? "Approval diskon ditolak. Hapus diskon atau ajukan ulang."
+              : "Approval diskon masih pending. Tunggu manager/owner approve terlebih dahulu.",
+          );
+        }
+
+        const approvalDiscountAmount = Number(approval.requestData.discountAmount ?? 0);
+        const approvalFingerprint = String(
+          approval.requestData.cartFingerprint ?? "",
+        );
+
+        if (
+          !Number.isSafeInteger(approvalDiscountAmount) ||
+          approvalDiscountAmount !== submittedDiscountAmount ||
+          approvalFingerprint !== cartFingerprint ||
+          approval.referenceId
+        ) {
+          throw new CheckoutValidationError(
+            "Approval diskon tidak cocok dengan cart saat ini. Hapus diskon lalu ajukan ulang.",
+          );
+        }
+
+        approvedDiscountAmount = submittedDiscountAmount;
+        approvedDiscountReason =
+          submittedDiscountReason ??
+          normalizeNullableText(String(approval.requestData.reason ?? approval.notes ?? ""), 500);
+        appliedDiscountApprovalId = approval.id;
+      }
+
+      const lineDiscounts = allocateLineDiscounts({
+        itemAmounts,
+        discountAmount: approvedDiscountAmount,
+      });
+      const totalAmount = subtotalAmount - approvedDiscountAmount;
       const totalPaidAmount = normalizedPayments.reduce(
         (total, payment) => total + payment.amount,
         0,
@@ -2086,13 +2708,13 @@ export async function completePosCheckoutAction(
 
       if (totalAmount <= 0) {
         throw new CheckoutValidationError(
-          "Total transaksi tidak valid. Periksa harga jual item.",
+          "Total transaksi tidak valid. Periksa harga jual item dan diskon.",
         );
       }
 
       if (totalPaidAmount !== totalAmount) {
         throw new CheckoutValidationError(
-          "Total pembayaran harus sama dengan total transaksi.",
+          "Total pembayaran harus sama dengan total transaksi setelah diskon.",
         );
       }
 
@@ -2114,7 +2736,8 @@ export async function completePosCheckoutAction(
           idempotencyKey,
           status: "completed",
           subtotalAmount: String(subtotalAmount),
-          discountAmount: "0",
+          discountAmount: String(approvedDiscountAmount),
+          discountReason: approvedDiscountReason,
           additionalFeeAmount: "0",
           totalAmount: String(totalAmount),
           completedAt: now,
@@ -2134,16 +2757,28 @@ export async function completePosCheckoutAction(
         throw new Error("SALE_INSERT_FAILED");
       }
 
+      if (appliedDiscountApprovalId) {
+        await transaction
+          .update(approvals)
+          .set({
+            referenceType: "sale",
+            referenceId: sale.id,
+          })
+          .where(eq(approvals.id, appliedDiscountApprovalId));
+      }
+
       await transaction.insert(saleItems).values(
         orderedItems.map((item, index) => {
-          const finalPriceAmount = parseDbAmount(item!.sellingAmount);
+          const listPriceAmount = parseDbAmount(item!.sellingAmount);
+          const lineDiscountAmount = lineDiscounts[index] ?? 0;
+          const finalPriceAmount = Math.max(listPriceAmount - lineDiscountAmount, 0);
 
           return {
             saleId: sale.id,
             productItemId: item!.id,
             lineNumber: index + 1,
-            listPriceAmount: String(finalPriceAmount),
-            discountAmount: "0",
+            listPriceAmount: String(listPriceAmount),
+            discountAmount: String(lineDiscountAmount),
             finalPriceAmount: String(finalPriceAmount),
             snapshot: {
               sku: item!.sku,
@@ -2297,6 +2932,9 @@ export async function completePosCheckoutAction(
           customerName: selectedCustomer?.fullName ?? null,
           itemCount: itemIds.length,
           subtotalAmount: String(subtotalAmount),
+          discountAmount: String(approvedDiscountAmount),
+          discountReason: approvedDiscountReason,
+          discountApprovalId: appliedDiscountApprovalId,
           totalAmount: String(totalAmount),
           payments: normalizedPayments.map((payment) => ({
             method: payment.method,
@@ -2312,6 +2950,7 @@ export async function completePosCheckoutAction(
           source: "pos.checkout",
           idempotencyKey,
           customerId: selectedCustomer?.id ?? null,
+          discountApprovalId: appliedDiscountApprovalId,
         },
         createdAt: now,
       });
