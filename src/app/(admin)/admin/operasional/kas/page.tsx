@@ -1,164 +1,676 @@
 import {
   ArrowDownRight,
   ArrowLeft,
+  ArrowRight,
   ArrowUpRight,
-  Plus,
+  Banknote,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Download,
+  Landmark,
+  MinusCircle,
+  PlusCircle,
+  ReceiptText,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Store,
+  WalletCards,
 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
+
+import { CashMovementForm } from "@/components/cash-movements/cash-movement-form";
+import {
+  parseAdminCashMovementFilters,
+  type AdminCashMovementFilters,
+  type AdminCashMovementRow,
+  type AdminCashMovementType,
+} from "@/features/cash-movements/contracts";
+import {
+  getAdminCashMovementListData,
+  getCashMovementSignedAmount,
+} from "@/features/cash-movements/queries";
+import { requirePermission } from "@/lib/auth/session";
+import { cn } from "@/lib/utils";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-const MOCK_CASH_MOVEMENTS = [
-  {
-    id: "cm-001",
-    date: "2026-06-25T10:30:00Z",
-    type: "cash_out",
-    amount: 50000,
-    reason: "Beli galon air minum",
-    createdBy: "Hanita",
-  },
-  {
-    id: "cm-002",
-    date: "2026-06-25T11:15:00Z",
-    type: "cash_in",
-    amount: 10000000,
-    reason: "Suntikan dana dari brankas untuk modal buyback",
-    createdBy: "Pemilik",
-  },
-  {
-    id: "cm-003",
-    date: "2026-06-25T13:45:00Z",
-    type: "cash_out",
-    amount: 150000,
-    reason: "Bayar uang keamanan & kebersihan pasar",
-    createdBy: "Hanita",
-  },
-];
+type PageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
-function formatMoney(value: number) {
+const movementTypeLabels: Record<AdminCashMovementType, string> = {
+  all: "Semua tipe",
+  opening_balance: "Modal Awal",
+  cash_sale: "Cash Sale",
+  cash_refund: "Refund Cash",
+  cash_in: "Kas Masuk",
+  cash_out: "Kas Keluar",
+  closing_adjustment: "Koreksi Closing",
+};
+
+const rangeLabels = {
+  today: "Hari ini",
+  "7d": "7 hari",
+  "30d": "30 hari",
+  all: "Semua periode",
+};
+
+function formatMoney(value: string | number | null) {
+  const amount = typeof value === "number" ? value : Number(value ?? 0);
+
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
+  }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+function formatSignedMoney(value: number) {
+  const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
+
+  return `${prefix}${formatMoney(Math.abs(value))}`;
+}
+
+function formatInteger(value: number) {
+  return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 0,
   }).format(value);
 }
 
-function formatDate(isoString: string) {
-  const date = new Date(isoString);
+function formatDateTime(value: Date) {
   return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
+    day: "2-digit",
     month: "short",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
+    timeZone: "Asia/Jakarta",
+  }).format(value);
 }
 
-export default function KasPage() {
+function buildCashQueryParams(filters: AdminCashMovementFilters) {
+  const params = new URLSearchParams();
+
+  if (filters.search) params.set("q", filters.search);
+  if (filters.outletId) params.set("outletId", filters.outletId);
+  if (filters.type !== "all") params.set("type", filters.type);
+  if (filters.range !== "today") params.set("range", filters.range);
+
+  return params;
+}
+
+function buildCashListUrl(page: number, filters: AdminCashMovementFilters) {
+  const params = buildCashQueryParams(filters);
+
+  if (page > 1) params.set("page", String(page));
+
+  const query = params.toString();
+
+  return query ? `/admin/operasional/kas?${query}` : "/admin/operasional/kas";
+}
+
+function getMovementTone(type: AdminCashMovementRow["type"]) {
+  if (type === "cash_in" || type === "cash_sale" || type === "opening_balance") {
+    return {
+      badge: "bg-emerald-50 text-emerald-700",
+      icon: ArrowUpRight,
+      amount: "text-emerald-700",
+      dot: "bg-emerald-500",
+    };
+  }
+
+  if (type === "cash_out" || type === "cash_refund") {
+    return {
+      badge: "bg-red-50 text-red-700",
+      icon: ArrowDownRight,
+      amount: "text-red-700",
+      dot: "bg-red-500",
+    };
+  }
+
+  return {
+    badge: "bg-amber-50 text-amber-700",
+    icon: RefreshCw,
+    amount: "text-amber-700",
+    dot: "bg-amber-500",
+  };
+}
+
+function FlashMessage({
+  type,
+  message,
+}: {
+  type?: string | string[];
+  message?: string | string[];
+}) {
+  const normalizedType = Array.isArray(type) ? type[0] : type;
+  const normalizedMessage = Array.isArray(message) ? message[0] : message;
+
+  if (!normalizedMessage) {
+    return null;
+  }
+
+  return (
+    <div
+      role="alert"
+      className={cn(
+        "rounded-2xl border px-4 py-3 text-sm leading-6",
+        normalizedType === "success"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-red-200 bg-red-50 text-red-700",
+      )}
+    >
+      {normalizedMessage}
+    </div>
+  );
+}
+
+function SummaryCard({
+  title,
+  value,
+  helper,
+  icon,
+  tone = "default",
+}: {
+  title: string;
+  value: ReactNode;
+  helper: string;
+  icon: ReactNode;
+  tone?: "default" | "success" | "danger" | "dark";
+}) {
+  return (
+    <article
+      className={cn(
+        "relative overflow-hidden rounded-2xl border p-5 shadow-sm shadow-neutral-950/[0.02]",
+        tone === "dark"
+          ? "border-neutral-800 bg-neutral-950 text-white"
+          : "border-[var(--border)] bg-white text-neutral-950",
+      )}
+    >
+      <div
+        className={cn(
+          "absolute -right-8 -top-8 size-24 rounded-full opacity-40 blur-2xl",
+          tone === "success" && "bg-emerald-100",
+          tone === "danger" && "bg-red-100",
+          tone === "dark" && "bg-white/20",
+          tone === "default" && "bg-[var(--accent-soft)]",
+        )}
+      />
+      <div className="relative flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p
+            className={cn(
+              "text-xs font-semibold uppercase tracking-wide",
+              tone === "dark" ? "text-white/55" : "text-[var(--muted)]",
+            )}
+          >
+            {title}
+          </p>
+          <p className="mt-3 truncate text-2xl font-semibold tracking-tight">
+            {value}
+          </p>
+          <p
+            className={cn(
+              "mt-2 text-xs leading-5",
+              tone === "dark" ? "text-white/55" : "text-[var(--muted)]",
+            )}
+          >
+            {helper}
+          </p>
+        </div>
+        <div
+          className={cn(
+            "grid size-11 shrink-0 place-items-center rounded-xl",
+            tone === "success" && "bg-emerald-50 text-emerald-600",
+            tone === "danger" && "bg-red-50 text-red-600",
+            tone === "dark" && "bg-white/10 text-white",
+            tone === "default" && "bg-[var(--accent-soft)] text-[var(--accent)]",
+          )}
+        >
+          {icon}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function MovementBadge({ type }: { type: AdminCashMovementRow["type"] }) {
+  const tone = getMovementTone(type);
+  const Icon = tone.icon;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
+        tone.badge,
+      )}
+    >
+      <Icon className="size-3" />
+      {movementTypeLabels[type]}
+    </span>
+  );
+}
+
+function ReferenceLink({ movement }: { movement: AdminCashMovementRow }) {
+  if (movement.referenceType === "sale" && movement.referenceId) {
+    return (
+      <Link
+        href={`/admin/penjualan/${movement.referenceId}`}
+        className="inline-flex items-center gap-1 font-medium text-[var(--accent)] hover:underline"
+      >
+        {movement.referenceLabel ?? "Transaksi"}
+        <ArrowRight className="size-3" />
+      </Link>
+    );
+  }
+
+  return <span>{movement.referenceLabel ?? "Manual"}</span>;
+}
+
+function MovementMobileCard({ movement }: { movement: AdminCashMovementRow }) {
+  const signedAmount = getCashMovementSignedAmount(movement);
+  const tone = getMovementTone(movement.type);
+
+  return (
+    <article className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm shadow-neutral-950/[0.02]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <MovementBadge type={movement.type} />
+          <p className="mt-3 text-sm font-semibold text-neutral-950">
+            {movement.reason || "Tanpa catatan"}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+            {formatDateTime(movement.createdAt)} · {movement.createdByName}
+          </p>
+        </div>
+        <p className={cn("shrink-0 text-right text-sm font-semibold", tone.amount)}>
+          {formatSignedMoney(signedAmount)}
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-2 rounded-2xl bg-neutral-50 p-3 text-xs text-[var(--muted)]">
+        <p className="flex items-center justify-between gap-3">
+          <span>Outlet</span>
+          <span className="truncate text-right font-medium text-neutral-800">
+            {movement.outletName}
+          </span>
+        </p>
+        <p className="flex items-center justify-between gap-3">
+          <span>Register</span>
+          <span className="truncate text-right font-medium text-neutral-800">
+            {movement.registerName}
+          </span>
+        </p>
+        <p className="flex items-center justify-between gap-3">
+          <span>Referensi</span>
+          <span className="truncate text-right font-medium text-neutral-800">
+            <ReferenceLink movement={movement} />
+          </span>
+        </p>
+      </div>
+    </article>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="grid place-items-center px-6 py-16 text-center">
+      <div className="grid size-14 place-items-center rounded-2xl bg-neutral-100 text-neutral-500">
+        <ReceiptText className="size-7" />
+      </div>
+      <h3 className="mt-4 font-semibold text-neutral-950">
+        Belum ada pergerakan kas
+      </h3>
+      <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
+        Coba ubah filter periode/outlet, atau catat kas masuk/keluar baru pada
+        shift aktif.
+      </p>
+    </div>
+  );
+}
+
+export default async function KasPage({ searchParams }: PageProps) {
+  const auth = await requirePermission("admin.access");
+  const query = await searchParams;
+  const filters = parseAdminCashMovementFilters(query);
+  const data = await getAdminCashMovementListData(auth, filters);
+
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="mb-2">
+      <header className="relative overflow-hidden rounded-[2rem] border border-neutral-800 bg-neutral-950 p-5 text-white shadow-sm sm:p-6">
+        <div className="absolute -right-20 -top-24 size-64 rounded-full bg-[var(--accent)]/25 blur-3xl" />
+        <div className="absolute -bottom-24 left-1/4 size-52 rounded-full bg-white/10 blur-3xl" />
+
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
             <Link
-              href="/admin"
-              className="inline-flex items-center gap-2 text-sm font-medium text-neutral-500 hover:text-[var(--accent)]"
+              href="/admin/operasional"
+              className="inline-flex items-center gap-2 text-sm font-medium text-white/60 transition hover:text-white"
             >
               <ArrowLeft className="size-4" />
-              Kembali
+              Operasional
             </Link>
+            <p className="mt-6 text-xs font-semibold uppercase tracking-[0.25em] text-white/45">
+              ADMIN-R8
+            </p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+              Pergerakan Kas & Petty Cash
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/65">
+              Pantau arus kas fisik outlet dari modal awal, cash sale, kas
+              masuk/keluar manual, refund cash, sampai koreksi closing shift.
+            </p>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
-            Pergerakan Kas (Petty Cash)
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            Catat semua uang fisik yang masuk atau keluar laci di luar transaksi perhiasan.
-          </p>
+
+          <div className="grid gap-2 rounded-2xl border border-white/10 bg-white/10 p-4 text-sm backdrop-blur sm:min-w-72">
+            <div className="flex items-center justify-between gap-3 text-white/55">
+              <span>Periode aktif</span>
+              <CalendarDays className="size-4" />
+            </div>
+            <p className="text-xl font-semibold">{data.periodLabel}</p>
+            <p className="text-xs leading-5 text-white/55">
+              {formatInteger(data.summary.totalMovements)} movement tercatat · {formatInteger(data.summary.activeShiftCount)} shift aktif
+            </p>
+          </div>
         </div>
-        <button className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-medium text-white transition hover:bg-[#8c5f1d]">
-          <Plus className="size-4" />
-          Catat Kas Baru
-        </button>
       </header>
 
-      {/* Stats Cards */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm font-medium text-neutral-500">
-              Total Kas Keluar Hari Ini
-            </p>
-            <div className="rounded-lg bg-red-50 p-2 text-red-600">
-              <ArrowDownRight className="size-5" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-neutral-950">Rp 200.000</p>
-          <p className="mt-2 text-xs font-medium text-red-600">
-            Dari 2 Transaksi
-          </p>
-        </article>
+      <FlashMessage type={query.type} message={query.message} />
 
-        <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm font-medium text-neutral-500">
-              Total Kas Masuk (Setoran)
-            </p>
-            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600">
-              <ArrowUpRight className="size-5" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-neutral-950">Rp 10.000.000</p>
-          <p className="mt-2 text-xs font-medium text-emerald-600">
-            Dari 1 Transaksi
-          </p>
-        </article>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          title="Net Movement"
+          value={formatSignedMoney(data.summary.netMovement)}
+          helper="Modal awal + cash sale + kas masuk - kas keluar/refund."
+          icon={<WalletCards className="size-5" />}
+          tone="dark"
+        />
+        <SummaryCard
+          title="Cash Sale"
+          value={formatMoney(data.summary.cashSales)}
+          helper="Pembayaran tunai dari transaksi POS pada periode ini."
+          icon={<ReceiptText className="size-5" />}
+          tone="success"
+        />
+        <SummaryCard
+          title="Kas Masuk Manual"
+          value={formatMoney(data.summary.manualCashIn)}
+          helper="Tambahan kas non-transaksi yang dicatat admin/kasir."
+          icon={<PlusCircle className="size-5" />}
+          tone="success"
+        />
+        <SummaryCard
+          title="Kas Keluar Manual"
+          value={formatMoney(data.summary.manualCashOut)}
+          helper="Pengeluaran operasional, setoran, atau penarikan kas."
+          icon={<MinusCircle className="size-5" />}
+          tone="danger"
+        />
       </section>
 
-      {/* Movement List */}
-      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-        <div className="border-b border-[var(--border)] px-5 py-4">
-          <h3 className="font-semibold text-neutral-950">Buku Kas Harian</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-neutral-600">
-            <thead className="bg-neutral-50/50 text-xs text-neutral-500">
-              <tr>
-                <th className="px-5 py-4 font-medium">Waktu</th>
-                <th className="px-5 py-4 font-medium">Tipe</th>
-                <th className="px-5 py-4 font-medium">Dicatat Oleh</th>
-                <th className="px-5 py-4 font-medium">Keterangan</th>
-                <th className="px-5 py-4 font-medium text-right">Nominal</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {MOCK_CASH_MOVEMENTS.map((mov) => (
-                <tr key={mov.id} className="transition-colors hover:bg-neutral-50/50">
-                  <td className="px-5 py-4 whitespace-nowrap">{formatDate(mov.date)}</td>
-                  <td className="px-5 py-4">
-                    {mov.type === "cash_in" ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                        <ArrowUpRight className="size-3" />
-                        Kas Masuk
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
-                        <ArrowDownRight className="size-3" />
-                        Kas Keluar
-                      </span>
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px] xl:items-start">
+        <div className="space-y-6">
+          <section className="rounded-[1.75rem] border border-[var(--border)] bg-white p-4 shadow-sm shadow-neutral-950/[0.02] sm:p-5">
+            <form className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_180px_180px_180px_auto] lg:items-end">
+              <label className="block text-sm">
+                <span className="mb-2 block font-medium text-neutral-800">
+                  Cari movement
+                </span>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+                  <input
+                    name="q"
+                    defaultValue={filters.search}
+                    placeholder="Catatan, invoice, outlet, staff..."
+                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-white pl-10 pr-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                  />
+                </div>
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-2 block font-medium text-neutral-800">
+                  Outlet
+                </span>
+                <select
+                  name="outletId"
+                  defaultValue={filters.outletId ?? ""}
+                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                >
+                  <option value="">Semua outlet</option>
+                  {data.outlets.map((outlet) => (
+                    <option key={outlet.id} value={outlet.id}>
+                      {outlet.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-2 block font-medium text-neutral-800">
+                  Tipe
+                </span>
+                <select
+                  name="type"
+                  defaultValue={filters.type}
+                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                >
+                  {Object.entries(movementTypeLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-2 block font-medium text-neutral-800">
+                  Periode
+                </span>
+                <select
+                  name="range"
+                  defaultValue={filters.range}
+                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                >
+                  {Object.entries(rangeLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:brightness-95 lg:flex-none"
+                >
+                  <Search className="size-4" />
+                  Filter
+                </button>
+                <Link
+                  href="/admin/operasional/kas"
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                  aria-label="Reset filter"
+                >
+                  <RefreshCw className="size-4" />
+                </Link>
+              </div>
+            </form>
+          </section>
+
+          <section className="overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-white shadow-sm shadow-neutral-950/[0.02]">
+            <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-semibold text-neutral-950">Buku Kas</h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Menampilkan {formatInteger(data.rows.length)} dari {formatInteger(data.total)} movement.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--border)] px-3 text-sm font-semibold text-neutral-400"
+                title="Export akan disambungkan pada fase laporan."
+              >
+                <Download className="size-4" />
+                Export CSV
+              </button>
+            </div>
+
+            {data.rows.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <>
+                <div className="hidden overflow-x-auto lg:block">
+                  <table className="w-full text-left text-sm text-neutral-600">
+                    <thead className="bg-neutral-50/80 text-xs text-neutral-500">
+                      <tr>
+                        <th className="px-5 py-4 font-semibold">Waktu</th>
+                        <th className="px-5 py-4 font-semibold">Movement</th>
+                        <th className="px-5 py-4 font-semibold">Outlet / Register</th>
+                        <th className="px-5 py-4 font-semibold">Dicatat Oleh</th>
+                        <th className="px-5 py-4 font-semibold">Referensi</th>
+                        <th className="px-5 py-4 text-right font-semibold">Nominal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {data.rows.map((movement) => {
+                        const signedAmount = getCashMovementSignedAmount(movement);
+                        const tone = getMovementTone(movement.type);
+
+                        return (
+                          <tr
+                            key={movement.id}
+                            className="align-top transition-colors hover:bg-neutral-50/70"
+                          >
+                            <td className="whitespace-nowrap px-5 py-4 text-neutral-800">
+                              {formatDateTime(movement.createdAt)}
+                            </td>
+                            <td className="px-5 py-4">
+                              <MovementBadge type={movement.type} />
+                              <p className="mt-2 max-w-xs text-xs leading-5 text-[var(--muted)]">
+                                {movement.reason || "Tanpa catatan"}
+                              </p>
+                            </td>
+                            <td className="px-5 py-4">
+                              <p className="font-medium text-neutral-950">
+                                {movement.outletName}
+                              </p>
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                {movement.registerName}
+                              </p>
+                            </td>
+                            <td className="px-5 py-4 font-medium text-neutral-900">
+                              {movement.createdByName}
+                            </td>
+                            <td className="px-5 py-4 text-xs text-[var(--muted)]">
+                              <ReferenceLink movement={movement} />
+                            </td>
+                            <td className={cn("whitespace-nowrap px-5 py-4 text-right font-semibold", tone.amount)}>
+                              {formatSignedMoney(signedAmount)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid gap-3 p-4 lg:hidden">
+                  {data.rows.map((movement) => (
+                    <MovementMobileCard key={movement.id} movement={movement} />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {data.pageCount > 1 ? (
+              <div className="flex flex-col gap-3 border-t border-[var(--border)] px-5 py-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[var(--muted)]">
+                  Halaman {formatInteger(data.page)} dari {formatInteger(data.pageCount)}
+                </p>
+                <div className="flex gap-2">
+                  <Link
+                    href={buildCashListUrl(Math.max(1, data.page - 1), filters)}
+                    className={cn(
+                      "inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 font-semibold transition hover:bg-neutral-50",
+                      data.page <= 1 && "pointer-events-none opacity-40",
                     )}
-                  </td>
-                  <td className="px-5 py-4 font-medium text-neutral-900">{mov.createdBy}</td>
-                  <td className="px-5 py-4">{mov.reason}</td>
-                  <td className="px-5 py-4 text-right font-medium text-neutral-900">
-                    <span className={mov.type === "cash_out" ? "text-red-600" : "text-emerald-600"}>
-                      {mov.type === "cash_out" ? "-" : "+"}
-                      {formatMoney(mov.amount)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  >
+                    <ChevronLeft className="size-4" />
+                    Sebelumnya
+                  </Link>
+                  <Link
+                    href={buildCashListUrl(Math.min(data.pageCount, data.page + 1), filters)}
+                    className={cn(
+                      "inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 font-semibold transition hover:bg-neutral-50",
+                      data.page >= data.pageCount && "pointer-events-none opacity-40",
+                    )}
+                  >
+                    Berikutnya
+                    <ChevronRight className="size-4" />
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+          </section>
         </div>
+
+        <aside className="space-y-4 xl:sticky xl:top-6">
+          <CashMovementForm activeShifts={data.activeShifts} />
+
+          <section className="rounded-[1.75rem] border border-[var(--border)] bg-white p-5 shadow-sm shadow-neutral-950/[0.02]">
+            <div className="flex items-start gap-3">
+              <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                <ShieldCheck className="size-5" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-neutral-950">Kontrol Audit</h2>
+                <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                  Semua kas manual disimpan append-only, memperbarui expected cash
+                  shift aktif, dan masuk ke audit log. Edit/delete movement
+                  sengaja tidak disediakan pada fase ini.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 text-sm">
+              <div className="flex items-center gap-3 rounded-2xl bg-neutral-50 p-3">
+                <Store className="size-4 text-neutral-500" />
+                <span className="text-[var(--muted)]">Outlet aktif:</span>
+                <span className="ml-auto font-semibold text-neutral-950">
+                  {formatInteger(data.outlets.length)}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl bg-neutral-50 p-3">
+                <Clock3 className="size-4 text-neutral-500" />
+                <span className="text-[var(--muted)]">Shift aktif:</span>
+                <span className="ml-auto font-semibold text-neutral-950">
+                  {formatInteger(data.summary.activeShiftCount)}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl bg-neutral-50 p-3">
+                <Landmark className="size-4 text-neutral-500" />
+                <span className="text-[var(--muted)]">Modal awal:</span>
+                <span className="ml-auto font-semibold text-neutral-950">
+                  {formatMoney(data.summary.openingBalance)}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl bg-neutral-50 p-3">
+                <Banknote className="size-4 text-neutral-500" />
+                <span className="text-[var(--muted)]">Refund cash:</span>
+                <span className="ml-auto font-semibold text-neutral-950">
+                  {formatMoney(data.summary.cashRefunds)}
+                </span>
+              </div>
+            </div>
+          </section>
+        </aside>
       </section>
     </div>
   );
