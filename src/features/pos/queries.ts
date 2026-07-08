@@ -20,6 +20,10 @@ import {
   users,
 } from "@/db/schema";
 import {
+  DEFAULT_POS_REGISTER_MISSING_MESSAGE,
+  getDefaultPosRegisterCondition,
+} from "@/features/pos/context";
+import {
   POS_INITIAL_ITEM_LIMIT,
   type PosAvailableItem,
   type PosCustomerOption,
@@ -248,8 +252,8 @@ export async function getPosInitialData({
         isHardwareHub: registers.isHardwareHub,
       })
       .from(registers)
-      .where(and(eq(registers.outletId, outlet.id), eq(registers.isActive, true)))
-      .orderBy(desc(registers.isHardwareHub), asc(registers.name))
+      .where(getDefaultPosRegisterCondition(outlet.id))
+      .orderBy(asc(registers.name))
       .limit(1),
 
     db
@@ -732,8 +736,8 @@ export async function getPosShellStatus({
       name: registers.name,
     })
     .from(registers)
-    .where(and(eq(registers.outletId, outlet.id), eq(registers.isActive, true)))
-    .orderBy(desc(registers.isHardwareHub), asc(registers.name))
+    .where(getDefaultPosRegisterCondition(outlet.id))
+    .orderBy(asc(registers.name))
     .limit(1);
 
   const register = registerRows[0] ?? null;
@@ -747,11 +751,11 @@ export async function getPosShellStatus({
         openedAt: null,
         openingCash: null,
         expectedCash: null,
-        label: "Register belum tersedia",
+        label: "Hardware Hub belum tersedia",
       },
       hardware: {
         status: "not_configured",
-        label: "Register belum tersedia",
+        label: "Hardware Hub belum tersedia",
         agentName: null,
         lastSeenAt: null,
         hasConfigWarnings: false,
@@ -759,8 +763,8 @@ export async function getPosShellStatus({
       notifications: [
         {
           id: "register-not-configured",
-          title: "Register belum tersedia",
-          description: "POS belum bisa memproses transaksi sampai register aktif tersedia untuk outlet ini.",
+          title: "Hardware Hub belum tersedia",
+          description: DEFAULT_POS_REGISTER_MISSING_MESSAGE,
           href: "/pos/shift",
           actionLabel: "Cek shift kasir",
           tone: "danger",
@@ -1124,8 +1128,8 @@ export async function getPosHeldCartListData({
         isHardwareHub: registers.isHardwareHub,
       })
       .from(registers)
-      .where(and(eq(registers.outletId, outlet.id), eq(registers.isActive, true)))
-      .orderBy(desc(registers.isHardwareHub), asc(registers.name))
+      .where(getDefaultPosRegisterCondition(outlet.id))
+      .orderBy(asc(registers.name))
       .limit(1),
 
     db
@@ -1613,8 +1617,8 @@ export async function getPosShiftOverviewData({
         isHardwareHub: registers.isHardwareHub,
       })
       .from(registers)
-      .where(and(eq(registers.outletId, outlet.id), eq(registers.isActive, true)))
-      .orderBy(desc(registers.isHardwareHub), asc(registers.name))
+      .where(getDefaultPosRegisterCondition(outlet.id))
+      .orderBy(asc(registers.name))
       .limit(1),
 
     db

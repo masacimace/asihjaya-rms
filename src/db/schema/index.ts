@@ -1146,30 +1146,6 @@ export const hardwareJobs = pgTable(
   ],
 );
 
-export const printJobStatusEnum = pgEnum("print_job_status", [
-  "pending",
-  "printing",
-  "completed",
-  "failed",
-]);
-
-export const printJobs = pgTable(
-  "print_jobs",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    status: printJobStatusEnum("status").notNull().default("pending"),
-    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
-    error: text("error"),
-    ...timestamps,
-  },
-  (table) => [
-    index("print_jobs_org_status_idx").on(table.organizationId, table.status),
-  ],
-);
-
 export const approvalStatusEnum = pgEnum("approval_status", [
   "pending",
   "approved",

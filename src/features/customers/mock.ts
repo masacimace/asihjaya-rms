@@ -1,0 +1,273 @@
+export type CustomerStatus = "active" | "inactive";
+
+export type CustomerRecord = {
+  id: string;
+  customerCode: string;
+  fullName: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  notes: string | null;
+  status: CustomerStatus;
+  joinedAt: string;
+  lastTransactionAt: string | null;
+  lastOutletName: string | null;
+  lastStaffName: string | null;
+  totalSpent: number;
+  transactionCount: number;
+  itemCount: number;
+  averageTicket: number;
+};
+
+export type CustomerTransactionRecord = {
+  id: string;
+  customerId: string;
+  receiptNo: string;
+  date: string;
+  kind: "purchase" | "buyback";
+  items: string;
+  total: number;
+  outlet: string;
+  staffName: string;
+};
+
+export const CUSTOMER_MOCK_DATA: CustomerRecord[] = [
+  {
+    id: "cus-1",
+    customerCode: "CUS-0001",
+    fullName: "Ibu Siti Aminah",
+    phone: "081234567890",
+    email: "siti.aminah@email.com",
+    address: "Jl. Melati No. 15, Ciledug",
+    notes: "Pelanggan rutin, prefer konfirmasi via WhatsApp.",
+    status: "active",
+    joinedAt: "2025-11-10T09:15:00Z",
+    lastTransactionAt: "2026-06-20T10:30:00Z",
+    lastOutletName: "Cabang Pusat Ciledug",
+    lastStaffName: "Mbak Rini",
+    totalSpent: 45000000,
+    transactionCount: 8,
+    itemCount: 11,
+    averageTicket: 5625000,
+  },
+  {
+    id: "cus-2",
+    customerCode: "CUS-0002",
+    fullName: "Budi Santoso",
+    phone: "085612341234",
+    email: null,
+    address: "Tangerang Selatan",
+    notes: null,
+    status: "active",
+    joinedAt: "2026-01-15T14:20:00Z",
+    lastTransactionAt: "2026-06-15T14:20:00Z",
+    lastOutletName: "Cabang Pusat Ciledug",
+    lastStaffName: "Mas Danang",
+    totalSpent: 12500000,
+    transactionCount: 2,
+    itemCount: 3,
+    averageTicket: 6250000,
+  },
+  {
+    id: "cus-3",
+    customerCode: "CUS-0003",
+    fullName: "Nita Larasati",
+    phone: "089988776655",
+    email: "nita.larasati@email.com",
+    address: "Bintaro Jaya Sektor 7",
+    notes: "Minta bukti detail item saat pembelian.",
+    status: "active",
+    joinedAt: "2025-09-02T08:00:00Z",
+    lastTransactionAt: "2026-06-24T16:45:00Z",
+    lastOutletName: "Cabang BSD",
+    lastStaffName: "Mbak Diah",
+    totalSpent: 75000000,
+    transactionCount: 12,
+    itemCount: 18,
+    averageTicket: 6250000,
+  },
+  {
+    id: "cus-4",
+    customerCode: "CUS-0004",
+    fullName: "H. Abdullah",
+    phone: "081122334455",
+    email: null,
+    address: "Cipondoh",
+    notes: "Akun lama, sering melakukan buyback dan tukar tambah.",
+    status: "active",
+    joinedAt: "2024-12-28T10:30:00Z",
+    lastTransactionAt: "2026-05-10T09:15:00Z",
+    lastOutletName: "Cabang Pusat Ciledug",
+    lastStaffName: "Mas Danang",
+    totalSpent: 120000000,
+    transactionCount: 15,
+    itemCount: 24,
+    averageTicket: 8000000,
+  },
+  {
+    id: "cus-5",
+    customerCode: "CUS-0005",
+    fullName: "Rina Kusuma",
+    phone: "087766554433",
+    email: null,
+    address: "Tidak diketahui",
+    notes: "Akun dinonaktifkan sementara karena verifikasi data belum lengkap.",
+    status: "inactive",
+    joinedAt: "2026-02-13T12:00:00Z",
+    lastTransactionAt: null,
+    lastOutletName: null,
+    lastStaffName: null,
+    totalSpent: 0,
+    transactionCount: 0,
+    itemCount: 0,
+    averageTicket: 0,
+  },
+  {
+    id: "cus-6",
+    customerCode: "CUS-0006",
+    fullName: "Ibu Desy",
+    phone: "081987654321",
+    email: "desy.pelanggan@email.com",
+    address: "Pondok Aren",
+    notes: null,
+    status: "active",
+    joinedAt: "2025-12-04T11:00:00Z",
+    lastTransactionAt: "2026-06-01T11:00:00Z",
+    lastOutletName: "Cabang BSD",
+    lastStaffName: "Mbak Rini",
+    totalSpent: 3500000,
+    transactionCount: 1,
+    itemCount: 1,
+    averageTicket: 3500000,
+  },
+  {
+    id: "cus-7",
+    customerCode: "CUS-0007",
+    fullName: "Toni Wijaya",
+    phone: "081211223344",
+    email: null,
+    address: "BSD City",
+    notes: "Minta follow-up stok cincin ukuran besar.",
+    status: "active",
+    joinedAt: "2025-08-19T13:30:00Z",
+    lastTransactionAt: "2026-04-20T13:30:00Z",
+    lastOutletName: "Cabang BSD",
+    lastStaffName: "Mbak Diah",
+    totalSpent: 28500000,
+    transactionCount: 4,
+    itemCount: 6,
+    averageTicket: 7125000,
+  },
+  {
+    id: "cus-8",
+    customerCode: "CUS-0008",
+    fullName: "Siska Saraswati",
+    phone: "085544332211",
+    email: null,
+    address: "Pamulang",
+    notes: null,
+    status: "active",
+    joinedAt: "2025-10-11T15:10:00Z",
+    lastTransactionAt: "2026-06-22T15:10:00Z",
+    lastOutletName: "Cabang Pusat Ciledug",
+    lastStaffName: "Mas Danang",
+    totalSpent: 15800000,
+    transactionCount: 3,
+    itemCount: 4,
+    averageTicket: 5266667,
+  },
+  {
+    id: "cus-9",
+    customerCode: "CUS-0009",
+    fullName: "Agus Setiawan",
+    phone: "089876543210",
+    email: "agus.setiawan@email.com",
+    address: "Cikokol",
+    notes: "Lebih sering transaksi tunai.",
+    status: "active",
+    joinedAt: "2025-07-03T10:05:00Z",
+    lastTransactionAt: "2026-05-28T10:05:00Z",
+    lastOutletName: "Cabang BSD",
+    lastStaffName: "Mbak Rini",
+    totalSpent: 8900000,
+    transactionCount: 2,
+    itemCount: 3,
+    averageTicket: 4450000,
+  },
+  {
+    id: "cus-10",
+    customerCode: "CUS-0010",
+    fullName: "Ibu Ratna",
+    phone: "081344556677",
+    email: null,
+    address: "Kebayoran Lama",
+    notes: "Suka meminta ringkasan transaksi terbaru.",
+    status: "active",
+    joinedAt: "2025-06-14T12:50:00Z",
+    lastTransactionAt: "2026-06-18T12:50:00Z",
+    lastOutletName: "Cabang Pusat Ciledug",
+    lastStaffName: "Mbak Diah",
+    totalSpent: 54000000,
+    transactionCount: 9,
+    itemCount: 13,
+    averageTicket: 6000000,
+  },
+];
+
+export const CUSTOMER_TRANSACTIONS: CustomerTransactionRecord[] = [
+  {
+    id: "trx-1",
+    customerId: "cus-1",
+    receiptNo: "RCP-260620-001",
+    date: "2026-06-20T10:30:00Z",
+    kind: "purchase",
+    items: "Cincin Anak Solitare (2.5g), Kalung Emas Polos (5g)",
+    total: 8500000,
+    outlet: "Cabang Pusat Ciledug",
+    staffName: "Mbak Rini",
+  },
+  {
+    id: "trx-2",
+    customerId: "cus-1",
+    receiptNo: "RCP-260115-045",
+    date: "2026-01-15T14:20:00Z",
+    kind: "buyback",
+    items: "Gelang Keroncong Anak (3g)",
+    total: -2800000,
+    outlet: "Cabang Pusat Ciledug",
+    staffName: "Mas Danang",
+  },
+  {
+    id: "trx-3",
+    customerId: "cus-1",
+    receiptNo: "RCP-251110-012",
+    date: "2025-11-10T09:15:00Z",
+    kind: "purchase",
+    items: "Anting Tindik Bayi (1g)",
+    total: 1200000,
+    outlet: "Cabang Pusat Ciledug",
+    staffName: "Mbak Rini",
+  },
+  {
+    id: "trx-4",
+    customerId: "cus-4",
+    receiptNo: "RCP-260510-021",
+    date: "2026-05-10T09:15:00Z",
+    kind: "buyback",
+    items: "Kalung Rantai 22K (8g)",
+    total: -7600000,
+    outlet: "Cabang Pusat Ciledug",
+    staffName: "Mas Danang",
+  },
+  {
+    id: "trx-5",
+    customerId: "cus-10",
+    receiptNo: "RCP-260618-019",
+    date: "2026-06-18T12:50:00Z",
+    kind: "purchase",
+    items: "Gelang Anak Motif Bunga (4g), Liontin Mini (2g)",
+    total: 5400000,
+    outlet: "Cabang Pusat Ciledug",
+    staffName: "Mbak Diah",
+  },
+];

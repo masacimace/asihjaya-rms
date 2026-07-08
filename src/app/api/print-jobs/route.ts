@@ -1,8 +1,12 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/db";
 import { registers } from "@/db/schema";
+import {
+  DEFAULT_POS_REGISTER_MISSING_MESSAGE,
+  getDefaultPosRegisterCondition,
+} from "@/features/pos/context";
 import { getCurrentAuth } from "@/lib/auth/session";
 import { createHardwareJobWithDuplicateGuard } from "@/lib/hardware/job-queue";
 
@@ -80,13 +84,13 @@ export async function POST(req: NextRequest) {
     const [register] = await db
       .select({ id: registers.id, code: registers.code, name: registers.name })
       .from(registers)
-      .where(and(eq(registers.outletId, primaryOutlet.id), eq(registers.isActive, true)))
-      .orderBy(desc(registers.isHardwareHub), asc(registers.createdAt))
+      .where(getDefaultPosRegisterCondition(primaryOutlet.id))
+      .orderBy(asc(registers.createdAt))
       .limit(1);
 
     if (!register) {
       return NextResponse.json(
-        { error: "Register aktif untuk antrean cetak belum tersedia." },
+        { error: DEFAULT_POS_REGISTER_MISSING_MESSAGE },
         { status: 400 },
       );
     }

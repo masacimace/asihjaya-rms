@@ -39,6 +39,11 @@ import {
   type PosScanLookupResult,
   type PosShiftActionState,
 } from "@/features/pos/contracts";
+import {
+  DEFAULT_POS_REGISTER_MISSING_MESSAGE,
+  DEFAULT_POS_REGISTER_SHIFT_MESSAGE,
+  getDefaultPosRegisterCondition,
+} from "@/features/pos/context";
 import { lookupPosItemByScanValue } from "@/features/pos/queries";
 import { requirePermission } from "@/lib/auth/session";
 import { createHardwareJobWithDuplicateGuard } from "@/lib/hardware/job-queue";
@@ -842,21 +847,14 @@ async function getPrimaryPosContextForHeldCart(auth: Awaited<ReturnType<typeof r
       outletId: registers.outletId,
     })
     .from(registers)
-    .where(
-      and(
-        eq(registers.outletId, primaryOutlet.id),
-        eq(registers.isActive, true),
-      ),
-    )
-    .orderBy(sql`${registers.isHardwareHub} desc`, registers.name)
+    .where(getDefaultPosRegisterCondition(primaryOutlet.id))
+    .orderBy(registers.name)
     .limit(1);
 
   const register = registerRows[0];
 
   if (!register) {
-    throw new CheckoutValidationError(
-      "Register aktif tidak ditemukan untuk outlet ini.",
-    );
+    throw new CheckoutValidationError(DEFAULT_POS_REGISTER_MISSING_MESSAGE);
   }
 
   return { primaryOutlet, register };
@@ -1886,21 +1884,14 @@ export async function completePosCheckoutAction(
           outletId: registers.outletId,
         })
         .from(registers)
-        .where(
-          and(
-            eq(registers.outletId, primaryOutlet.id),
-            eq(registers.isActive, true),
-          ),
-        )
-        .orderBy(sql`${registers.isHardwareHub} desc`, registers.name)
+        .where(getDefaultPosRegisterCondition(primaryOutlet.id))
+        .orderBy(registers.name)
         .limit(1);
 
       const register = registerRows[0];
 
       if (!register) {
-        throw new CheckoutValidationError(
-          "Register aktif tidak ditemukan untuk outlet ini.",
-        );
+        throw new CheckoutValidationError(DEFAULT_POS_REGISTER_MISSING_MESSAGE);
       }
 
       const activeShiftRows = await transaction
@@ -2676,6 +2667,7 @@ export async function openPosShiftAction(
         eq(registers.id, registerId),
         eq(registers.outletId, primaryOutlet.id),
         eq(registers.isActive, true),
+        eq(registers.isHardwareHub, true),
       ),
     )
     .limit(1);
@@ -2683,9 +2675,7 @@ export async function openPosShiftAction(
   const register = registerRows[0];
 
   if (!register) {
-    return failure(
-      "Register aktif tidak ditemukan untuk outlet ini. Hubungi manager/admin.",
-    );
+    return failure(DEFAULT_POS_REGISTER_SHIFT_MESSAGE);
   }
 
   const activeShiftRows = await db
