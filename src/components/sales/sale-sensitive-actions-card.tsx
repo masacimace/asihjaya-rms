@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import {
+  executeApprovedSaleRefundAction,
   executeApprovedSaleVoidAction,
   requestSaleVoidRefundApprovalAction,
 } from "@/features/sales/admin-actions";
@@ -50,9 +51,9 @@ const actionMetas: ActionMeta[] = [
     type: "refund",
     approvalType: "refund_transaction",
     title: "Ajukan Refund",
-    description: "Minta persetujuan refund sebelum kas/stok diubah pada tahap eksekusi.",
+    description: "Refund penuh setelah manager/owner menyetujui request.",
     helper:
-      "Tahap ini baru membuat request approval. Eksekusi refund penuh/parsial masuk R3C-2.",
+      "Gunakan untuk pengembalian penuh. Semua item transaksi akan kembali tersedia dan kas cash direversal jika ada.",
     buttonLabel: "Ajukan approval refund",
     icon: <Undo2 className="size-4" />,
     toneClass: "bg-orange-50 text-orange-700 ring-orange-100",
@@ -227,6 +228,64 @@ function ExecuteVoidForm({
   );
 }
 
+function ExecuteRefundForm({
+  saleId,
+  returnTo,
+  approval,
+  disabled,
+}: {
+  saleId: string;
+  returnTo: string;
+  approval: AdminSaleSensitiveApproval;
+  disabled: boolean;
+}) {
+  const alreadyExecuted = approval.executionStatus === "refund_executed";
+
+  return (
+    <form
+      action={executeApprovedSaleRefundAction}
+      className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4"
+    >
+      <input type="hidden" name="saleId" value={saleId} />
+      <input type="hidden" name="approvalId" value={approval.id} />
+      <input type="hidden" name="returnTo" value={returnTo} />
+
+      <div className="flex items-start gap-3">
+        <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-white text-orange-700 ring-1 ring-orange-100">
+          <PlayCircle className="size-5" />
+        </div>
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-orange-950">
+            Eksekusi Refund Penuh Disetujui
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-orange-800">
+            Approval refund sudah disetujui. Eksekusi akan mengubah transaksi menjadi refunded, mengembalikan semua item ke stok outlet, dan mencatat refund kas cash bila ada.
+          </p>
+        </div>
+      </div>
+
+      <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-orange-800">
+        Catatan eksekusi opsional
+      </label>
+      <textarea
+        name="executionNote"
+        maxLength={1000}
+        disabled={disabled || alreadyExecuted}
+        placeholder="Contoh: refund penuh dieksekusi setelah barang diterima kembali dari customer."
+        className="mt-2 min-h-20 w-full resize-y rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-orange-50 disabled:text-orange-500"
+      />
+      <button
+        type="submit"
+        disabled={disabled || alreadyExecuted}
+        className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-orange-600 px-4 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:bg-orange-200 disabled:text-orange-700"
+      >
+        <PlayCircle className="size-4" />
+        {alreadyExecuted ? "Refund sudah dieksekusi" : "Eksekusi refund penuh sekarang"}
+      </button>
+    </form>
+  );
+}
+
 function SensitiveActionForm({
   saleId,
   saleStatus,
@@ -247,8 +306,14 @@ function SensitiveActionForm({
     latestApproval?.status === "approved" &&
     latestApproval.executionStatus !== "void_executed" &&
     isCompleted;
+  const hasExecutableRefundApproval =
+    meta.type === "refund" &&
+    latestApproval?.status === "approved" &&
+    latestApproval.executionStatus !== "refund_executed" &&
+    isCompleted;
   const disabled = !isCompleted || Boolean(blockingApproval);
-  const requestFormDisabled = disabled || hasExecutableVoidApproval;
+  const requestFormDisabled =
+    disabled || hasExecutableVoidApproval || hasExecutableRefundApproval;
 
   return (
     <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
@@ -275,8 +340,10 @@ function SensitiveActionForm({
           ? latestApproval?.executionStatus === "void_executed"
             ? "Void sudah dieksekusi. Transaksi, stok, kas cash, dan audit sudah diperbarui."
             : "Approval void sudah disetujui. Gunakan tombol eksekusi di bawah untuk membatalkan transaksi penuh."
-          : blockingApproval?.status === "approved"
-            ? "Approval refund sudah disetujui. Eksekusi refund akan masuk ke subfase R3C-2B."
+          : blockingApproval?.status === "approved" && meta.type === "refund"
+            ? latestApproval?.executionStatus === "refund_executed"
+              ? "Refund penuh sudah dieksekusi. Transaksi, stok, kas cash, dan audit sudah diperbarui."
+              : "Approval refund sudah disetujui. Gunakan tombol eksekusi di bawah untuk memproses refund penuh."
           : blockingApproval?.status === "pending"
             ? "Masih ada request yang menunggu approval. Tunggu keputusan manager/owner sebelum membuat request baru."
             : !isCompleted
@@ -318,6 +385,15 @@ function SensitiveActionForm({
           disabled={!isCompleted}
         />
       ) : null}
+
+      {hasExecutableRefundApproval && latestApproval ? (
+        <ExecuteRefundForm
+          saleId={saleId}
+          returnTo={returnTo}
+          approval={latestApproval}
+          disabled={!isCompleted}
+        />
+      ) : null}
     </article>
   );
 }
@@ -349,7 +425,7 @@ export function SaleSensitiveActionsCard({
             Aksi Sensitif
           </h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Request void/refund untuk {invoiceNumber}. Tahap ini hanya membuat approval, belum mengubah transaksi, stok, atau kas.
+            Request dan eksekusi void/refund untuk {invoiceNumber}. Eksekusi hanya tersedia setelah approval manager/owner disetujui.
           </p>
         </div>
       </div>
@@ -358,7 +434,7 @@ export function SaleSensitiveActionsCard({
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <p>
-            Void yang sudah disetujui bisa dieksekusi dari halaman ini. Refund masih ditahan untuk subfase berikutnya agar aturan refund penuh/parsial bisa dipastikan aman.
+            Void dan refund penuh yang sudah disetujui bisa dieksekusi dari halaman ini. Partial refund belum diaktifkan agar ledger stok/kas tetap aman.
           </p>
         </div>
       </div>

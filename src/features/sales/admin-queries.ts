@@ -1086,6 +1086,17 @@ export async function getAdminSaleDetailData({
           },
         ]
       : []),
+    ...(sale.status === "refunded" && sale.cancelledAt
+      ? [
+          {
+            id: "refunded",
+            label: "Refund penuh dieksekusi",
+            description: "Transaksi sudah direfund penuh setelah approval refund disetujui.",
+            createdAt: sale.cancelledAt,
+            tone: "warning" as const,
+          },
+        ]
+      : []),
     ...(hardwareJobRows.length > 0
       ? hardwareJobRows.slice(0, 3).map((job) => ({
           id: `hardware-${job.id}`,

@@ -867,6 +867,387 @@ export async function executeApprovedSaleVoidAction(formData: FormData) {
   });
 }
 
+
+export async function executeApprovedSaleRefundAction(formData: FormData) {
+  const auth = await requirePermission("sales.view");
+  const saleId = readText(formData, "saleId");
+  const approvalId = readText(formData, "approvalId");
+  const returnTo = readText(formData, "returnTo");
+  const executionNote = readText(formData, "executionNote").slice(0, 1000);
+
+  if (!UUID_PATTERN.test(saleId) || !UUID_PATTERN.test(approvalId)) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo: "/admin/penjualan",
+      type: "error",
+      message: "Transaksi atau approval refund tidak valid untuk dieksekusi.",
+    });
+  }
+
+  const accessibleOutletIds = auth.outlets.map((outlet) => outlet.id);
+
+  if (accessibleOutletIds.length === 0) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo,
+      type: "error",
+      message:
+        "Outlet yang bisa diakses tidak ditemukan. Hubungi owner/admin untuk mengatur akses outlet.",
+    });
+  }
+
+  const requestMetadata = await getAdminRequestMetadata();
+  const now = new Date();
+  let invoiceNumber = "transaksi";
+
+  const result = await db.transaction(async (tx) => {
+    const [sale] = await tx
+      .select({
+        id: sales.id,
+        organizationId: sales.organizationId,
+        outletId: sales.outletId,
+        registerId: sales.registerId,
+        shiftId: sales.shiftId,
+        cashierId: sales.cashierId,
+        invoiceNumber: sales.invoiceNumber,
+        status: sales.status,
+        subtotalAmount: sales.subtotalAmount,
+        discountAmount: sales.discountAmount,
+        additionalFeeAmount: sales.additionalFeeAmount,
+        totalAmount: sales.totalAmount,
+        completedAt: sales.completedAt,
+        cancelledAt: sales.cancelledAt,
+        notes: sales.notes,
+      })
+      .from(sales)
+      .where(
+        and(
+          eq(sales.id, saleId),
+          eq(sales.organizationId, auth.organization.id),
+          inArray(sales.outletId, accessibleOutletIds),
+        ),
+      )
+      .limit(1);
+
+    if (!sale) {
+      return {
+        ok: false as const,
+        message:
+          "Transaksi tidak ditemukan atau bukan bagian dari outlet yang bisa kamu akses.",
+      };
+    }
+
+    invoiceNumber = sale.invoiceNumber;
+
+    if (sale.status !== "completed") {
+      return {
+        ok: false as const,
+        message: "Refund penuh hanya bisa dieksekusi untuk transaksi yang masih completed.",
+      };
+    }
+
+    const [approval] = await tx
+      .select({
+        id: approvals.id,
+        type: approvals.type,
+        status: approvals.status,
+        requestedBy: approvals.requestedBy,
+        approvedBy: approvals.approvedBy,
+        referenceType: approvals.referenceType,
+        referenceId: approvals.referenceId,
+        requestData: approvals.requestData,
+        notes: approvals.notes,
+        responseNotes: approvals.responseNotes,
+        resolvedAt: approvals.resolvedAt,
+      })
+      .from(approvals)
+      .where(
+        and(
+          eq(approvals.id, approvalId),
+          eq(approvals.organizationId, auth.organization.id),
+          eq(approvals.outletId, sale.outletId),
+          eq(approvals.type, "refund_transaction"),
+          eq(approvals.referenceType, "sale"),
+          eq(approvals.referenceId, sale.id),
+        ),
+      )
+      .limit(1);
+
+    if (!approval) {
+      return {
+        ok: false as const,
+        message:
+          "Approval refund tidak ditemukan untuk transaksi ini. Ajukan approval refund terlebih dahulu.",
+      };
+    }
+
+    if (approval.status !== "approved") {
+      return {
+        ok: false as const,
+        message:
+          "Approval refund belum disetujui. Tunggu manager/owner approve sebelum eksekusi refund.",
+      };
+    }
+
+    const approvalRequestData = approval.requestData as VoidExecutionRequestData;
+    const executionStatus = getRequestDataExecutionStatus(approvalRequestData);
+
+    if (executionStatus === "refund_executed") {
+      return {
+        ok: false as const,
+        message: "Refund untuk transaksi ini sudah pernah dieksekusi.",
+      };
+    }
+
+    const [paymentRows, itemRows] = await Promise.all([
+      tx
+        .select({
+          id: payments.id,
+          method: payments.method,
+          amount: payments.amount,
+          status: payments.status,
+          metadata: payments.metadata,
+        })
+        .from(payments)
+        .where(eq(payments.saleId, sale.id)),
+      tx
+        .select({
+          id: saleItems.id,
+          productItemId: saleItems.productItemId,
+          lineNumber: saleItems.lineNumber,
+          finalPriceAmount: saleItems.finalPriceAmount,
+          sku: productItems.sku,
+          barcode: productItems.barcode,
+          currentOutletId: productItems.currentOutletId,
+          availability: productItems.availability,
+          locationState: productItems.locationState,
+        })
+        .from(saleItems)
+        .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
+        .where(eq(saleItems.saleId, sale.id)),
+    ]);
+
+    if (itemRows.length === 0) {
+      return {
+        ok: false as const,
+        message: "Transaksi ini tidak memiliki item, sehingga refund belum bisa dieksekusi.",
+      };
+    }
+
+    const productItemIds = itemRows.map((item) => item.productItemId);
+    const cashPaidAmount = getCashPaidAmount(paymentRows);
+    const paidAmount = getPaidAmount(paymentRows);
+
+    if (paidAmount <= 0) {
+      return {
+        ok: false as const,
+        message: "Transaksi ini belum memiliki pembayaran paid, sehingga refund penuh belum bisa dieksekusi.",
+      };
+    }
+
+    const reason =
+      executionNote ||
+      approval.notes ||
+      approval.responseNotes ||
+      "Refund penuh setelah approval manager/owner.";
+
+    await tx
+      .update(sales)
+      .set({
+        status: "refunded",
+        cancelledAt: now,
+        updatedAt: now,
+        notes: sale.notes
+          ? `${sale.notes}\n\n[REFUND ${now.toISOString()}] ${reason}`
+          : `[REFUND ${now.toISOString()}] ${reason}`,
+      })
+      .where(eq(sales.id, sale.id));
+
+    await tx
+      .update(productItems)
+      .set({
+        availability: "available",
+        locationState: "outlet",
+        currentOutletId: sale.outletId,
+        updatedAt: now,
+      })
+      .where(inArray(productItems.id, productItemIds));
+
+    await tx.insert(inventoryMovements).values(
+      itemRows.map((item) => ({
+        organizationId: auth.organization.id,
+        itemId: item.productItemId,
+        movementType: "sale_return" as const,
+        fromOutletId: null,
+        toOutletId: sale.outletId,
+        referenceType: "sale_refund",
+        referenceId: sale.id,
+        reason,
+        metadata: {
+          source: "admin.sales.refund_execution",
+          saleId: sale.id,
+          invoiceNumber: sale.invoiceNumber,
+          saleItemId: item.id,
+          lineNumber: item.lineNumber,
+          finalPriceAmount: parseNumber(item.finalPriceAmount),
+          previousAvailability: item.availability,
+          previousLocationState: item.locationState,
+          previousOutletId: item.currentOutletId,
+          approvalId: approval.id,
+        },
+        performedBy: auth.user.id,
+        approvedBy: approval.approvedBy,
+        occurredAt: now,
+        createdAt: now,
+      })),
+    );
+
+    await tx
+      .update(payments)
+      .set({
+        status: "refunded",
+        updatedAt: now,
+        metadata: sql`coalesce(${payments.metadata}, '{}'::jsonb) || ${JSON.stringify({
+          refundedAt: now.toISOString(),
+          refundedBy: auth.user.id,
+          refundApprovalId: approval.id,
+          previousSaleStatus: sale.status,
+          refundReason: reason,
+          refundMode: "full",
+        })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(payments.saleId, sale.id),
+          inArray(payments.status, ["paid", "pending"]),
+        ),
+      );
+
+    if (cashPaidAmount > 0) {
+      await tx.insert(cashMovements).values({
+        shiftId: sale.shiftId,
+        type: "cash_refund",
+        amount: String(cashPaidAmount),
+        referenceType: "sale_refund",
+        referenceId: sale.id,
+        reason: `Refund penuh ${sale.invoiceNumber}: ${reason}`.slice(0, 2000),
+        createdBy: auth.user.id,
+        createdAt: now,
+      });
+
+      await tx
+        .update(shifts)
+        .set({
+          expectedCash: sql`coalesce(${shifts.expectedCash}, 0) - ${String(cashPaidAmount)}`,
+          updatedAt: now,
+        })
+        .where(eq(shifts.id, sale.shiftId));
+    }
+
+    await tx
+      .update(approvals)
+      .set({
+        requestData: {
+          ...approvalRequestData,
+          executionStatus: "refund_executed",
+          executedAt: now.toISOString(),
+          executedBy: auth.user.id,
+          executedByName: auth.user.fullName,
+          executionNote: reason,
+          saleStatusBefore: sale.status,
+          saleStatusAfter: "refunded",
+          cashRefundAmount: cashPaidAmount,
+          paidAmount,
+          refundMode: "full",
+          returnedItemCount: itemRows.length,
+        },
+        responseNotes: approval.responseNotes
+          ? `${approval.responseNotes}\n\nEksekusi refund penuh: ${reason}`
+          : `Eksekusi refund penuh: ${reason}`,
+      })
+      .where(eq(approvals.id, approval.id));
+
+    await tx.insert(auditLogs).values({
+      organizationId: auth.organization.id,
+      outletId: sale.outletId,
+      actorUserId: auth.user.id,
+      action: "sale.refund_executed",
+      entityType: "sale",
+      entityId: sale.id,
+      beforeData: {
+        status: sale.status,
+        totalAmount: sale.totalAmount,
+        paidAmount,
+        cashPaidAmount,
+        paymentStatuses: paymentRows.map((payment) => ({
+          id: payment.id,
+          method: payment.method,
+          status: payment.status,
+          amount: payment.amount,
+        })),
+        itemStates: itemRows.map((item) => ({
+          productItemId: item.productItemId,
+          availability: item.availability,
+          locationState: item.locationState,
+          currentOutletId: item.currentOutletId,
+        })),
+      },
+      afterData: {
+        status: "refunded",
+        approvalId: approval.id,
+        refundMode: "full",
+        returnedItemCount: itemRows.length,
+        cashRefundAmount: cashPaidAmount,
+        paymentStatus: "refunded",
+      },
+      reason,
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      metadata: {
+        source: "admin.sales.detail",
+        approvalId: approval.id,
+        invoiceNumber: sale.invoiceNumber,
+        executionStatus: "refund_executed",
+        refundMode: "full",
+      },
+      createdAt: now,
+    });
+
+    return {
+      ok: true as const,
+      invoiceNumber: sale.invoiceNumber,
+      returnedItemCount: itemRows.length,
+      cashRefundAmount: cashPaidAmount,
+      paidAmount,
+    };
+  });
+
+  if (!result.ok) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo,
+      type: "error",
+      message: result.message,
+    });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/penjualan");
+  revalidatePath(`/admin/penjualan/${saleId}`);
+  revalidatePath("/admin/inventaris");
+  revalidatePath("/admin/operasional/kas");
+  revalidatePath("/admin/operasional/shift");
+  revalidatePath("/admin/operasional/approval");
+  revalidatePath("/pos");
+
+  redirectAdminSaleDetailWithFeedback({
+    saleId,
+    returnTo,
+    type: "success",
+    message: `Refund penuh ${invoiceNumber} berhasil dieksekusi. Item kembali tersedia dan refund kas cash sudah dicatat jika ada pembayaran cash.`,
+  });
+}
+
 export async function reprintAdminReceiptCertificateAction(
   saleIdOrFormData: string | FormData,
   returnToArg?: string,
