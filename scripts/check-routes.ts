@@ -9,7 +9,7 @@ const legacyRoutes = [
   "/admin/produk/" + "varian",
 ];
 
-const retiredExactRoutes = ["/admin/operasional"];
+const retiredExactRoutes = ["/admin/operasional", "/admin/laporan/kas"];
 
 const expectedRouteFiles = [
   "app/page.tsx",

@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { BarChart3, Package, TrendingUp, Wallet } from "lucide-react";
+import { BarChart3, Package, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ReactNode } from "react";
@@ -24,12 +24,6 @@ const tabs = [
     href: "/admin/laporan/stok",
     description: "Mutasi dan aging",
     icon: Package,
-  },
-  {
-    name: "Arus Kas",
-    href: "/admin/laporan/kas",
-    description: "Cashflow dan shift",
-    icon: Wallet,
   },
 ];
 
@@ -65,9 +59,9 @@ export default function LaporanLayout({ children }: { children: ReactNode }) {
               Laporan Outlet
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">
-              Pusat analisa performa bisnis untuk omzet, stok, dan arus kas.
-              Halaman laporan bersifat read-only agar tidak bercampur dengan
-              aksi operasional harian.
+              Pusat analisa performa bisnis untuk ringkasan outlet, penjualan,
+              dan pergerakan stok. Detail operasional kas tetap dikelola dari
+              menu Operasional Kas agar laporan tetap fokus dan read-only.
             </p>
           </div>
         </div>
@@ -85,7 +79,7 @@ export default function LaporanLayout({ children }: { children: ReactNode }) {
                   className={cn(
                     "group inline-flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition",
                     isActive
-                      ? "border-neutral-900 bg-neutral-950 !text-white"
+                      ? "border-neutral-900 bg-neutral-950 text-white"
                       : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-950",
                   )}
                   aria-current={isActive ? "page" : undefined}
