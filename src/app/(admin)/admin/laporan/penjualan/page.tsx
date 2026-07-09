@@ -134,7 +134,9 @@ function getSalesChartMax(points: ReportSalesDailyPoint[]) {
   return Math.ceil(maxValue / step) * step;
 }
 
-function buildSalesReportUrl(params: Record<string, string | null | undefined>) {
+function buildSalesReportUrl(
+  params: Record<string, string | null | undefined>,
+) {
   const searchParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -145,7 +147,9 @@ function buildSalesReportUrl(params: Record<string, string | null | undefined>) 
 
   const query = searchParams.toString();
 
-  return query ? `/admin/laporan/penjualan?${query}` : "/admin/laporan/penjualan";
+  return query
+    ? `/admin/laporan/penjualan?${query}`
+    : "/admin/laporan/penjualan";
 }
 
 function StatCard({
@@ -199,7 +203,8 @@ function StatCard({
             tone === "success" && "bg-emerald-50 text-emerald-600",
             tone === "warning" && "bg-amber-50 text-amber-600",
             tone === "danger" && "bg-red-50 text-red-600",
-            tone === "default" && "bg-[var(--accent-soft)] text-[var(--accent)]",
+            tone === "default" &&
+              "bg-[var(--accent-soft)] text-[var(--accent)]",
           )}
         >
           {icon}
@@ -290,8 +295,8 @@ function SalesReportFilter({ data }: { data: ReportSalesData }) {
 
       <div className="mt-4 flex flex-col gap-2 border-t border-neutral-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs leading-5 text-[var(--muted)]">
-          KPI utama dihitung dari transaksi selesai pada periode ini. Filter status
-          dipakai untuk daftar transaksi dan breakdown status.
+          KPI utama dihitung dari transaksi selesai pada periode ini. Filter
+          status dipakai untuk daftar transaksi dan breakdown status.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Link
@@ -315,17 +320,27 @@ function SalesReportFilter({ data }: { data: ReportSalesData }) {
 
 function SalesTrendChart({ points }: { points: ReportSalesDailyPoint[] }) {
   const maxValue = getSalesChartMax(points);
-  const totalRevenue = points.reduce((total, point) => total + point.revenue, 0);
-  const bestPoint = points.reduce<ReportSalesDailyPoint | null>((best, point) => {
-    if (!best || point.revenue > best.revenue) return point;
+  const totalRevenue = points.reduce(
+    (total, point) => total + point.revenue,
+    0,
+  );
+  const totalTransactions = points.reduce(
+    (total, point) => total + point.transactionCount,
+    0,
+  );
+  const bestPoint = points.reduce<ReportSalesDailyPoint | null>(
+    (best, point) => {
+      if (!best || point.revenue > best.revenue) return point;
 
-    return best;
-  }, null);
+      return best;
+    },
+    null,
+  );
 
   return (
-    <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
+    <section className="min-w-0 self-start overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
             <LineChart className="size-3.5" />
             Tren penjualan
@@ -334,46 +349,62 @@ function SalesTrendChart({ points }: { points: ReportSalesDailyPoint[] }) {
             Omzet harian
           </h2>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Total {formatMoney(totalRevenue)} dari {formatInteger(points.reduce((total, point) => total + point.transactionCount, 0))} nota selesai.
+            Total {formatMoney(totalRevenue)} dari{" "}
+            {formatInteger(totalTransactions)} nota selesai.
           </p>
         </div>
-        <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm">
-          <p className="text-xs font-medium text-[var(--muted)]">Hari terbaik</p>
+        <div className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm sm:w-auto sm:min-w-32">
+          <p className="text-xs font-medium text-[var(--muted)]">
+            Hari terbaik
+          </p>
           <p className="mt-1 font-semibold text-neutral-950">
-            {bestPoint?.label ?? "-"} · {formatCompactMoney(bestPoint?.revenue ?? 0)}
+            {bestPoint?.label ?? "-"} ·{" "}
+            {formatCompactMoney(bestPoint?.revenue ?? 0)}
           </p>
         </div>
       </div>
 
-      <div className="mt-8 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="flex min-w-[760px] items-end gap-3">
-          {points.map((point) => {
-            const height = maxValue > 0 ? Math.max(4, Math.round((point.revenue / maxValue) * 100)) : 0;
+      <div className="mt-6 rounded-2xl border border-neutral-100 bg-neutral-50/70 p-3">
+        <div className="overflow-x-auto overscroll-x-contain pb-3 [scrollbar-width:thin]">
+          <div className="flex min-h-[244px] min-w-max items-end gap-3 px-1 sm:min-w-full sm:justify-between">
+            {points.map((point) => {
+              const height =
+                point.revenue > 0 && maxValue > 0
+                  ? Math.max(10, Math.round((point.revenue / maxValue) * 100))
+                  : 6;
 
-            return (
-              <div key={point.key} className="flex flex-1 flex-col items-center gap-3">
-                <div className="flex h-52 w-full items-end rounded-2xl border border-neutral-100 bg-neutral-50 px-2 py-2">
-                  <div
-                    className={cn(
-                      "w-full rounded-xl transition",
-                      point.revenue > 0 ? "bg-neutral-950" : "bg-neutral-200",
-                    )}
-                    style={{ height: `${height}%` }}
-                    title={`${point.label}: ${formatMoney(point.revenue)}`}
-                  />
+              return (
+                <div
+                  key={point.key}
+                  className="flex w-20 shrink-0 flex-col justify-end gap-3 sm:w-24"
+                >
+                  <div className="flex h-40 items-end rounded-2xl border border-neutral-100 bg-white p-2 sm:h-44">
+                    <div
+                      className={cn(
+                        "w-full rounded-xl transition",
+                        point.revenue > 0 ? "bg-neutral-950" : "bg-neutral-200",
+                      )}
+                      style={{ height: `${height}%` }}
+                      title={`${point.label}: ${formatMoney(point.revenue)}`}
+                    />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-semibold text-neutral-700">
+                      {formatCompactMoney(point.revenue)}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[var(--muted)]">
+                      {point.label}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <p className="text-xs font-semibold text-neutral-700">
-                    {formatCompactMoney(point.revenue)}
-                  </p>
-                  <p className="mt-1 text-[11px] text-[var(--muted)]">
-                    {point.label}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
+        <p className="border-t border-neutral-100 pt-3 text-xs text-[var(--muted)] sm:hidden">
+          Geser grafik ke kiri atau kanan untuk melihat semua hari pada periode
+          laporan.
+        </p>
       </div>
     </section>
   );
@@ -405,17 +436,24 @@ function PaymentBreakdown({ data }: { data: ReportSalesData }) {
           </p>
         ) : (
           data.paymentBreakdown.map((payment) => {
-            const width = maxAmount > 0 ? Math.max(8, Math.round((payment.amount / maxAmount) * 100)) : 0;
+            const width =
+              maxAmount > 0
+                ? Math.max(8, Math.round((payment.amount / maxAmount) * 100))
+                : 0;
 
             return (
-              <div key={payment.method} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+              <div
+                key={payment.method}
+                className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-neutral-950">
                       {paymentMethodLabels[payment.method]}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {formatInteger(payment.transactionCount)} payment · {payment.percentage.toFixed(1)}%
+                      {formatInteger(payment.transactionCount)} payment ·{" "}
+                      {payment.percentage.toFixed(1)}%
                     </p>
                   </div>
                   <p className="text-right text-sm font-semibold text-neutral-950">
@@ -487,7 +525,10 @@ function StatusBreakdown({ data }: { data: ReportSalesData }) {
 }
 
 function OutletLeaderboard({ data }: { data: ReportSalesData }) {
-  const maxRevenue = Math.max(...data.topOutlets.map((outlet) => outlet.revenue), 0);
+  const maxRevenue = Math.max(
+    ...data.topOutlets.map((outlet) => outlet.revenue),
+    0,
+  );
 
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
@@ -509,17 +550,25 @@ function OutletLeaderboard({ data }: { data: ReportSalesData }) {
           </p>
         ) : (
           data.topOutlets.map((outlet, index) => {
-            const width = maxRevenue > 0 ? Math.max(8, Math.round((outlet.revenue / maxRevenue) * 100)) : 0;
+            const width =
+              maxRevenue > 0
+                ? Math.max(8, Math.round((outlet.revenue / maxRevenue) * 100))
+                : 0;
 
             return (
-              <div key={outlet.outletId} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+              <div
+                key={outlet.outletId}
+                className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-neutral-950">
                       #{index + 1} {outlet.outletName}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {outlet.outletCode} · {formatInteger(outlet.transactionCount)} nota · {formatInteger(outlet.itemSold)} item
+                      {outlet.outletCode} ·{" "}
+                      {formatInteger(outlet.transactionCount)} nota ·{" "}
+                      {formatInteger(outlet.itemSold)} item
                     </p>
                   </div>
                   <p className="text-right text-sm font-semibold text-neutral-950">
@@ -599,7 +648,10 @@ function SalesTable({ rows }: { rows: ReportSalesRow[] }) {
           <tbody className="divide-y divide-neutral-100 bg-white">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-5 py-12 text-center text-sm text-[var(--muted)]">
+                <td
+                  colSpan={9}
+                  className="px-5 py-12 text-center text-sm text-[var(--muted)]"
+                >
                   Tidak ada transaksi yang cocok dengan filter laporan.
                 </td>
               </tr>
@@ -613,21 +665,33 @@ function SalesTable({ rows }: { rows: ReportSalesRow[] }) {
                     >
                       {sale.invoiceNumber}
                     </Link>
-                    <p className="mt-1 text-xs text-[var(--muted)]">{sale.cashierName}</p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {sale.cashierName}
+                    </p>
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-neutral-600">
-                    {formatDateTime(sale.completedAt ?? sale.cancelledAt ?? sale.createdAt)}
+                    {formatDateTime(
+                      sale.completedAt ?? sale.cancelledAt ?? sale.createdAt,
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4">
-                    <p className="font-medium text-neutral-800">{sale.outletName}</p>
-                    <p className="mt-1 text-xs text-[var(--muted)]">{sale.outletCode}</p>
+                    <p className="font-medium text-neutral-800">
+                      {sale.outletName}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {sale.outletCode}
+                    </p>
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-neutral-600">
                     {sale.customerName ?? "Walk-in"}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4">
-                    <p className="font-medium text-neutral-800">{formatInteger(sale.itemCount)} item</p>
-                    <p className="mt-1 text-xs text-[var(--muted)]">{formatGram(sale.weightSoldGram)} gr</p>
+                    <p className="font-medium text-neutral-800">
+                      {formatInteger(sale.itemCount)} item
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {formatGram(sale.weightSoldGram)} gr
+                    </p>
                   </td>
                   <td className="px-5 py-4">
                     <PaymentPills methods={sale.paymentMethods} />
@@ -677,7 +741,9 @@ function SalesTable({ rows }: { rows: ReportSalesRow[] }) {
                     {sale.invoiceNumber}
                   </Link>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    {formatDateTime(sale.completedAt ?? sale.cancelledAt ?? sale.createdAt)}
+                    {formatDateTime(
+                      sale.completedAt ?? sale.cancelledAt ?? sale.createdAt,
+                    )}
                   </p>
                 </div>
                 <span
@@ -692,34 +758,53 @@ function SalesTable({ rows }: { rows: ReportSalesRow[] }) {
 
               <div className="mt-4 grid gap-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 text-sm sm:grid-cols-2">
                 <div>
-                  <p className="text-xs font-medium text-[var(--muted)]">Outlet</p>
-                  <p className="mt-1 font-semibold text-neutral-950">{sale.outletName}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-[var(--muted)]">Pelanggan</p>
-                  <p className="mt-1 font-semibold text-neutral-950">{sale.customerName ?? "Walk-in"}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-[var(--muted)]">Item</p>
+                  <p className="text-xs font-medium text-[var(--muted)]">
+                    Outlet
+                  </p>
                   <p className="mt-1 font-semibold text-neutral-950">
-                    {formatInteger(sale.itemCount)} item · {formatGram(sale.weightSoldGram)} gr
+                    {sale.outletName}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[var(--muted)]">Kasir</p>
-                  <p className="mt-1 font-semibold text-neutral-950">{sale.cashierName}</p>
+                  <p className="text-xs font-medium text-[var(--muted)]">
+                    Pelanggan
+                  </p>
+                  <p className="mt-1 font-semibold text-neutral-950">
+                    {sale.customerName ?? "Walk-in"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-[var(--muted)]">
+                    Item
+                  </p>
+                  <p className="mt-1 font-semibold text-neutral-950">
+                    {formatInteger(sale.itemCount)} item ·{" "}
+                    {formatGram(sale.weightSoldGram)} gr
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-[var(--muted)]">
+                    Kasir
+                  </p>
+                  <p className="mt-1 font-semibold text-neutral-950">
+                    {sale.cashierName}
+                  </p>
                 </div>
               </div>
 
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-xs font-medium text-[var(--muted)]">Pembayaran</p>
+                  <p className="text-xs font-medium text-[var(--muted)]">
+                    Pembayaran
+                  </p>
                   <div className="mt-2">
                     <PaymentPills methods={sale.paymentMethods} />
                   </div>
                 </div>
                 <div className="text-left sm:text-right">
-                  <p className="text-xs font-medium text-[var(--muted)]">Total</p>
+                  <p className="text-xs font-medium text-[var(--muted)]">
+                    Total
+                  </p>
                   <p className="mt-1 text-lg font-semibold text-neutral-950">
                     {formatMoney(sale.totalAmount)}
                   </p>
@@ -736,7 +821,9 @@ function SalesTable({ rows }: { rows: ReportSalesRow[] }) {
   );
 }
 
-export default async function LaporanPenjualanPage({ searchParams }: PageProps) {
+export default async function LaporanPenjualanPage({
+  searchParams,
+}: PageProps) {
   const auth = await requirePermission("reports.view");
   const params = await searchParams;
   const filters = parseReportSalesFilters(params);
@@ -746,6 +833,38 @@ export default async function LaporanPenjualanPage({ searchParams }: PageProps) 
     data.summary.grossRevenue > 0
       ? (data.summary.cashRevenue / data.summary.grossRevenue) * 100
       : 0;
+  const snapshotMetrics = [
+    {
+      label: "Semua transaksi di tabel",
+      value: formatInteger(data.summary.allTransactionCount),
+      helper: "mengikuti filter status/search",
+      icon: ReceiptText,
+    },
+    {
+      label: "Cash revenue",
+      value: formatMoney(data.summary.cashRevenue),
+      helper: `${collectionRate.toFixed(1)}% dari omzet selesai`,
+      icon: WalletCards,
+    },
+    {
+      label: "Non-cash revenue",
+      value: formatMoney(data.summary.nonCashRevenue),
+      helper: "transfer, EDC, QRIS, dan lainnya",
+      icon: Banknote,
+    },
+    {
+      label: "Void/refund impact",
+      value: formatMoney(data.summary.voidRefundImpact),
+      helper: `${formatInteger(data.summary.voidRefundCount)} nota reversal`,
+      icon: RotateCcw,
+    },
+    {
+      label: "Rata-rata transaksi",
+      value: formatMoney(data.summary.averageTransactionAmount),
+      helper: "per nota selesai pada periode ini",
+      icon: LineChart,
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -789,23 +908,37 @@ export default async function LaporanPenjualanPage({ searchParams }: PageProps) 
 
         <div className="mt-6 grid gap-3 border-t border-neutral-100 pt-5 text-sm sm:grid-cols-3">
           <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-            <p className="text-xs font-medium text-[var(--muted)]">Periode aktif</p>
-            <p className="mt-2 font-semibold text-neutral-950">{data.period.label}</p>
-            <p className="mt-1 text-xs text-[var(--muted)]">{data.period.description}</p>
+            <p className="text-xs font-medium text-[var(--muted)]">
+              Periode aktif
+            </p>
+            <p className="mt-2 font-semibold text-neutral-950">
+              {data.period.label}
+            </p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {data.period.description}
+            </p>
           </div>
           <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
             <p className="text-xs font-medium text-[var(--muted)]">Outlet</p>
             <p className="mt-2 font-semibold text-neutral-950">
-              {data.selectedOutlet ? data.selectedOutlet.name : "Semua outlet akses saya"}
+              {data.selectedOutlet
+                ? data.selectedOutlet.name
+                : "Semua outlet akses saya"}
             </p>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              {data.selectedOutlet ? data.selectedOutlet.code : `${formatInteger(data.outlets.length)} outlet`}
+              {data.selectedOutlet
+                ? data.selectedOutlet.code
+                : `${formatInteger(data.outlets.length)} outlet`}
             </p>
           </div>
           <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-            <p className="text-xs font-medium text-[var(--muted)]">Filter aktif</p>
+            <p className="text-xs font-medium text-[var(--muted)]">
+              Filter aktif
+            </p>
             <p className="mt-2 font-semibold text-neutral-950">
-              {data.filters.status === "all" ? "Semua status" : saleStatusLabels[data.filters.status]}
+              {data.filters.status === "all"
+                ? "Semua status"
+                : saleStatusLabels[data.filters.status]}
             </p>
             <p className="mt-1 text-xs text-[var(--muted)]">
               {data.filters.paymentMethod === "all"
@@ -849,64 +982,54 @@ export default async function LaporanPenjualanPage({ searchParams }: PageProps) 
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
+      <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[1.35fr_0.65fr]">
         <SalesTrendChart points={data.dailySales} />
-        <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
+        <section className="min-w-0 self-start rounded-2xl border border-[var(--border)] bg-white p-5">
           <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
             <ShoppingBag className="size-3.5" />
             Snapshot sales
           </div>
-          <h2 className="mt-4 text-lg font-semibold text-neutral-950">
-            Kualitas transaksi
-          </h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Ringkasan cash/non-cash dan aktivitas transaksi.
-          </p>
+          <div className="mt-4 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-neutral-950">
+                Kualitas transaksi
+              </h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Ringkasan cash/non-cash dan aktivitas transaksi.
+              </p>
+            </div>
+          </div>
 
-          <div className="mt-6 grid gap-3">
-            {[
-              {
-                label: "Semua transaksi di tabel",
-                value: formatInteger(data.summary.allTransactionCount),
-                helper: "mengikuti filter status/search",
-                icon: ReceiptText,
-              },
-              {
-                label: "Cash revenue",
-                value: formatMoney(data.summary.cashRevenue),
-                helper: `${collectionRate.toFixed(1)}% dari omzet selesai`,
-                icon: WalletCards,
-              },
-              {
-                label: "Non-cash revenue",
-                value: formatMoney(data.summary.nonCashRevenue),
-                helper: "transfer, EDC, QRIS, dan lainnya",
-                icon: Banknote,
-              },
-              {
-                label: "Void/refund impact",
-                value: formatMoney(data.summary.voidRefundImpact),
-                helper: `${formatInteger(data.summary.voidRefundCount)} nota reversal`,
-                icon: RotateCcw,
-              },
-            ].map((item) => {
-              const Icon = item.icon;
+          <div className="mt-6 max-h-[282px] overflow-y-auto overscroll-y-contain pr-1 [scrollbar-width:thin]">
+            <div className="grid gap-3">
+              {snapshotMetrics.map((item) => {
+                const Icon = item.icon;
 
-              return (
-                <div key={item.label} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">{item.label}</p>
-                      <p className="mt-2 text-lg font-semibold text-neutral-950">{item.value}</p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">{item.helper}</p>
+                return (
+                  <div
+                    key={item.label}
+                    className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium text-[var(--muted)]">
+                          {item.label}
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-neutral-950">
+                          {item.value}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">
+                          {item.helper}
+                        </p>
+                      </div>
+                      <span className="grid size-10 place-items-center rounded-xl bg-white text-neutral-500">
+                        <Icon className="size-5" />
+                      </span>
                     </div>
-                    <span className="grid size-10 place-items-center rounded-xl bg-white text-neutral-500">
-                      <Icon className="size-5" />
-                    </span>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </section>
       </div>
