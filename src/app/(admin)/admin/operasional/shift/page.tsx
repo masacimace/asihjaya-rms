@@ -3,13 +3,12 @@ import {
   CheckCircle2,
   Clock,
   PlayCircle,
-  StopCircle,
   WalletCards,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { closeShiftFromDashboardAction } from "@/app/actions/shifts";
+import { CloseShiftForm } from "@/components/shifts/close-shift-form";
 import type { ShiftSummary } from "@/features/shifts/contracts";
 import { getShiftDashboard } from "@/features/shifts/queries";
 import { requirePermission } from "@/lib/auth/session";
@@ -56,10 +55,18 @@ function formatDate(value: Date | null) {
   }).format(value);
 }
 
+function getExpectedCash(shift: ShiftSummary) {
+  if (shift.status === "closed") {
+    return shift.expectedCash;
+  }
+
+  return shift.cashSummary.expectedCash;
+}
+
 function StatusPill({ status }: { status: ShiftSummary["status"] }) {
   if (status === "open") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
         <span className="size-1.5 rounded-full bg-emerald-500" />
         Aktif
       </span>
@@ -68,7 +75,7 @@ function StatusPill({ status }: { status: ShiftSummary["status"] }) {
 
   if (status === "closing") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
         <Clock className="size-3" />
         Closing
       </span>
@@ -76,9 +83,17 @@ function StatusPill({ status }: { status: ShiftSummary["status"] }) {
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
       <CheckCircle2 className="size-3" />
       Selesai
+    </span>
+  );
+}
+
+function SectionBadge({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex w-fit items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
+      {children}
     </span>
   );
 }
@@ -88,23 +103,41 @@ function SummaryCard({
   value,
   helper,
   icon,
+  tone = "neutral",
 }: {
   title: string;
   value: ReactNode;
   helper: string;
   icon: ReactNode;
+  tone?: "neutral" | "success" | "warning";
 }) {
   return (
-    <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
+    <article
+      className={cn(
+        "rounded-3xl border bg-white p-5",
+        tone === "success" && "border-emerald-200 bg-emerald-50/40",
+        tone === "warning" && "border-amber-200 bg-amber-50/40",
+        tone === "neutral" && "border-[var(--border)]",
+      )}
+    >
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-medium text-[var(--muted)]">{title}</p>
           <p className="mt-2 text-2xl font-semibold tracking-tight text-neutral-950">
             {value}
           </p>
           <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{helper}</p>
         </div>
-        <div className="grid size-11 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+        <div
+          className={cn(
+            "grid size-11 shrink-0 place-items-center rounded-2xl border",
+            tone === "success" &&
+              "border-emerald-200 bg-white text-emerald-700",
+            tone === "warning" && "border-amber-200 bg-white text-amber-700",
+            tone === "neutral" &&
+              "border-[var(--border)] bg-neutral-50 text-neutral-700",
+          )}
+        >
           {icon}
         </div>
       </div>
@@ -112,102 +145,96 @@ function SummaryCard({
   );
 }
 
-function CloseShiftForm({ shift }: { shift: ShiftSummary }) {
+function CashStat({
+  label,
+  value,
+  highlighted = false,
+}: {
+  label: string;
+  value: ReactNode;
+  highlighted?: boolean;
+}) {
   return (
-    <form
-      action={closeShiftFromDashboardAction}
-      className="mt-5 rounded-2xl border border-red-100 bg-red-50/50 p-4"
+    <div
+      className={cn(
+        "rounded-2xl border p-4",
+        highlighted
+          ? "border-[var(--accent)]/20 bg-[var(--accent-soft)] text-[var(--accent)]"
+          : "border-[var(--border)] bg-neutral-50/70 text-neutral-950",
+      )}
     >
-      <input type="hidden" name="shiftId" value={shift.id} />
-
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] lg:items-end">
-        <label className="block text-sm">
-          <span className="mb-2 block font-medium text-neutral-800">
-            Kas fisik aktual
-          </span>
-          <input
-            name="actualCash"
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="Contoh: 2500000"
-            className="h-10 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-          />
-          <p className="mt-1 text-xs text-[var(--muted)]">
-            Expected: {formatMoney(shift.cashSummary.expectedCash)}
-          </p>
-        </label>
-
-        <label className="block text-sm">
-          <span className="mb-2 block font-medium text-neutral-800">
-            Catatan selisih
-          </span>
-          <input
-            name="varianceReason"
-            maxLength={500}
-            placeholder="Wajib jika kas fisik berbeda dari expected cash"
-            className="h-10 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-          />
-        </label>
-
-        <button
-          type="submit"
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700"
-        >
-          <StopCircle className="size-4" />
-          Tutup Shift
-        </button>
-      </div>
-    </form>
+      <p
+        className={cn(
+          "text-xs",
+          highlighted ? "text-current/70" : "text-[var(--muted)]",
+        )}
+      >
+        {label}
+      </p>
+      <p className="mt-1 text-base font-semibold tracking-tight">{value}</p>
+    </div>
   );
 }
 
 function ActiveShiftCard({ shift }: { shift: ShiftSummary }) {
   return (
-    <article className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex gap-4">
-          <div className="grid size-12 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600">
-            <PlayCircle className="size-6" />
+    <article className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+      <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)] lg:p-6">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <SectionBadge>
+              <PlayCircle className="size-3.5" />
+              Shift aktif
+            </SectionBadge>
+            <StatusPill status={shift.status} />
           </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-neutral-950">
+
+          <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="grid size-14 shrink-0 place-items-center rounded-3xl border border-emerald-200 bg-emerald-50 text-emerald-700">
+              <WalletCards className="size-7" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-xl font-semibold tracking-tight text-neutral-950">
                 {shift.registerName}
               </h2>
-              <StatusPill status={shift.status} />
+              <p className="mt-1 text-sm text-neutral-600">
+                {shift.outletName} · {shift.registerCode}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                Dibuka oleh{" "}
+                <span className="font-medium text-neutral-800">
+                  {shift.openedByName ?? "-"}
+                </span>{" "}
+                pada {formatDate(shift.openedAt)}. Expected cash dihitung dari
+                modal awal, cash sale, kas masuk/keluar, dan refund cash.
+              </p>
             </div>
-            <p className="mt-1 text-sm text-neutral-500">
-              {shift.outletName} · Dibuka oleh {shift.openedByName ?? "-"} pada {formatDate(shift.openedAt)}
-            </p>
-            <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-              Expected cash dihitung dari modal awal, pembayaran cash, kas masuk/keluar, dan refund cash yang tercatat di shift ini.
-            </p>
           </div>
         </div>
 
-        <div className="grid gap-3 text-sm sm:grid-cols-3 lg:min-w-[420px]">
-          <div className="rounded-2xl bg-neutral-50 p-3">
-            <p className="text-xs text-[var(--muted)]">Modal awal</p>
-            <p className="mt-1 font-semibold text-neutral-950">
-              {formatMoney(shift.cashSummary.openingBalance)}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-neutral-50 p-3">
-            <p className="text-xs text-[var(--muted)]">Cash sale</p>
-            <p className="mt-1 font-semibold text-neutral-950">
-              {formatMoney(shift.cashSummary.cashSales)}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-[var(--accent-soft)] p-3 text-[var(--accent)]">
-            <p className="text-xs text-current/70">Expected cash</p>
-            <p className="mt-1 font-semibold">
-              {formatMoney(shift.cashSummary.expectedCash)}
-            </p>
-          </div>
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+          <CashStat
+            label="Modal awal"
+            value={formatMoney(shift.cashSummary.openingBalance)}
+          />
+          <CashStat
+            label="Cash sale"
+            value={formatMoney(shift.cashSummary.cashSales)}
+          />
+          <CashStat
+            label="Expected cash"
+            value={formatMoney(shift.cashSummary.expectedCash)}
+            highlighted
+          />
         </div>
       </div>
 
-      <CloseShiftForm shift={shift} />
+      <div className="border-t border-[var(--border)] bg-neutral-50/50 p-4 sm:p-5 lg:p-6">
+        <CloseShiftForm
+          shiftId={shift.id}
+          expectedCashLabel={formatMoney(shift.cashSummary.expectedCash)}
+        />
+      </div>
     </article>
   );
 }
@@ -231,30 +258,136 @@ function FlashMessage({ type, message }: { type?: string; message?: string }) {
   );
 }
 
+function VarianceText({ shift }: { shift: ShiftSummary }) {
+  const variance = Number(shift.cashVariance ?? 0);
+
+  if (shift.status !== "closed") {
+    return <span className="text-neutral-400">-</span>;
+  }
+
+  return (
+    <span
+      className={cn(
+        "font-semibold",
+        variance > 0 && "text-emerald-700",
+        variance < 0 && "text-red-700",
+        variance === 0 && "text-neutral-700",
+      )}
+    >
+      {formatSignedMoney(shift.cashVariance)}
+    </span>
+  );
+}
+
+function RecentShiftMobileCard({ shift }: { shift: ShiftSummary }) {
+  return (
+    <article className="rounded-3xl border border-[var(--border)] bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-neutral-950">{shift.outletName}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {shift.registerCode} · {shift.registerName}
+          </p>
+        </div>
+        <StatusPill status={shift.status} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-3">
+          <p className="text-xs text-[var(--muted)]">Dibuka</p>
+          <p className="mt-1 font-medium text-neutral-950">
+            {formatDate(shift.openedAt)}
+          </p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {shift.openedByName ?? "-"}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-3">
+          <p className="text-xs text-[var(--muted)]">Ditutup</p>
+          <p className="mt-1 font-medium text-neutral-950">
+            {formatDate(shift.closedAt)}
+          </p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {shift.closedByName ?? "-"}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+        <div className="rounded-2xl bg-neutral-50 p-3">
+          <p className="text-xs text-[var(--muted)]">Expected</p>
+          <p className="mt-1 font-semibold text-neutral-950">
+            {formatMoney(getExpectedCash(shift))}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-neutral-50 p-3">
+          <p className="text-xs text-[var(--muted)]">Aktual</p>
+          <p className="mt-1 font-semibold text-neutral-950">
+            {shift.actualCash ? formatMoney(shift.actualCash) : "-"}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-neutral-50 p-3">
+          <p className="text-xs text-[var(--muted)]">Selisih</p>
+          <p className="mt-1">
+            <VarianceText shift={shift} />
+          </p>
+        </div>
+      </div>
+
+      {shift.varianceReason ? (
+        <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+          {shift.varianceReason}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
 export default async function ShiftPage({ searchParams }: PageProps) {
   const auth = await requirePermission("shifts.manage");
   const params = await searchParams;
   const dashboard = await getShiftDashboard(auth);
+  const hasScrollableHistory = dashboard.recentShifts.length >= 6;
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="mb-2">
+      <header className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
             <Link
               href="/admin"
-              className="inline-flex items-center gap-2 text-sm font-medium text-neutral-500 hover:text-[var(--accent)]"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-500 transition hover:text-[var(--accent)]"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
             </Link>
+            <h1 className="mt-4 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
+              Shift Kasir
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+              Pantau shift aktif, rekonsiliasi expected cash, tutup shift kasir,
+              dan cek riwayat variance dari outlet yang kamu kelola.
+            </p>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
-            Shift Closing & Cash Reconciliation
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-            Pantau shift aktif, hitung expected cash, input kas fisik aktual, dan tutup shift dengan audit log.
-          </p>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[360px]">
+            <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-4">
+              <p className="text-xs font-medium text-[var(--muted)]">
+                Shift aktif
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-neutral-950">
+                {dashboard.totals.activeShifts}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-4">
+              <p className="text-xs font-medium text-[var(--muted)]">
+                40 shift terakhir
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-neutral-950">
+                {dashboard.recentShifts.length}
+              </p>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -266,6 +399,7 @@ export default async function ShiftPage({ searchParams }: PageProps) {
           value={dashboard.totals.activeShifts}
           helper="Register yang masih bisa menerima transaksi POS."
           icon={<Clock className="size-5" />}
+          tone="success"
         />
         <SummaryCard
           title="Expected Cash Aktif"
@@ -284,29 +418,30 @@ export default async function ShiftPage({ searchParams }: PageProps) {
           value={formatSignedMoney(dashboard.totals.totalVarianceClosed)}
           helper="Akumulasi variance dari 40 shift terakhir."
           icon={<CheckCircle2 className="size-5" />}
+          tone={
+            dashboard.totals.totalVarianceClosed === 0 ? "neutral" : "warning"
+          }
         />
       </section>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-neutral-950">
-              Shift Aktif
-            </h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Tutup shift dari sini setelah kasir menghitung uang fisik di laci.
-            </p>
-          </div>
+      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
+        <div>
+          <h2 className="mt-4 text-xl font-semibold tracking-tight text-neutral-950">
+            Shift yang sedang berjalan
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+            Tutup shift dari sini setelah kasir menghitung uang fisik di laci.
+          </p>
         </div>
 
         {dashboard.activeShifts.length > 0 ? (
-          <div className="space-y-4">
+          <div className="mt-5 space-y-4">
             {dashboard.activeShifts.map((shift) => (
               <ActiveShiftCard key={shift.id} shift={shift} />
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
+          <div className="mt-5 rounded-3xl border border-dashed border-[var(--border)] bg-neutral-50/60 p-8 text-center">
             <Clock className="mx-auto size-12 text-neutral-300" />
             <h2 className="mt-3 text-lg font-semibold text-neutral-950">
               Tidak ada shift aktif
@@ -318,90 +453,116 @@ export default async function ShiftPage({ searchParams }: PageProps) {
         )}
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-        <div className="border-b border-[var(--border)] px-5 py-4">
-          <h3 className="font-semibold text-neutral-950">Riwayat Shift Terakhir</h3>
-          <p className="mt-1 text-xs text-[var(--muted)]">
-            Menampilkan 40 shift terakhir dari outlet yang bisa kamu akses.
-          </p>
+      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+        <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+          <div>
+            <SectionBadge>
+              <CheckCircle2 className="size-3.5" />
+              Ledger shift
+            </SectionBadge>
+            <h3 className="mt-4 text-xl font-semibold tracking-tight text-neutral-950">
+              Riwayat shift terakhir
+            </h3>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Menampilkan 40 shift terakhir dari outlet yang bisa kamu akses.
+            </p>
+          </div>
+          {hasScrollableHistory ? (
+            <p className="rounded-full border border-[var(--border)] bg-neutral-50 px-3 py-1 text-xs font-medium text-[var(--muted)]">
+              Scroll daftar untuk melihat shift lainnya.
+            </p>
+          ) : null}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-neutral-600">
-            <thead className="bg-neutral-50/50 text-xs text-neutral-500">
-              <tr>
-                <th className="px-5 py-4 font-medium">Status</th>
-                <th className="px-5 py-4 font-medium">Outlet / Register</th>
-                <th className="px-5 py-4 font-medium">Dibuka</th>
-                <th className="px-5 py-4 font-medium">Ditutup</th>
-                <th className="px-5 py-4 font-medium text-right">Expected</th>
-                <th className="px-5 py-4 font-medium text-right">Aktual</th>
-                <th className="px-5 py-4 font-medium text-right">Selisih</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {dashboard.recentShifts.map((shift) => {
-                const variance = Number(shift.cashVariance ?? 0);
 
-                return (
-                  <tr key={shift.id} className="transition-colors hover:bg-neutral-50/50">
-                    <td className="px-5 py-4 align-top">
-                      <StatusPill status={shift.status} />
-                    </td>
-                    <td className="px-5 py-4 align-top">
-                      <p className="font-medium text-neutral-900">{shift.outletName}</p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {shift.registerCode} · {shift.registerName}
-                      </p>
-                    </td>
-                    <td className="px-5 py-4 align-top">
-                      <p>{formatDate(shift.openedAt)}</p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {shift.openedByName ?? "-"}
-                      </p>
-                    </td>
-                    <td className="px-5 py-4 align-top">
-                      <p>{formatDate(shift.closedAt)}</p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {shift.closedByName ?? "-"}
-                      </p>
-                    </td>
-                    <td className="px-5 py-4 text-right align-top font-medium text-neutral-900">
-                      {formatMoney(
-                        shift.status === "closed"
-                          ? shift.expectedCash
-                          : shift.cashSummary.expectedCash,
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-right align-top font-medium text-neutral-900">
-                      {shift.actualCash ? formatMoney(shift.actualCash) : "-"}
-                    </td>
-                    <td className="px-5 py-4 text-right align-top">
-                      {shift.status === "closed" ? (
-                        <span
-                          className={cn(
-                            "font-semibold",
-                            variance > 0 && "text-emerald-700",
-                            variance < 0 && "text-red-700",
-                            variance === 0 && "text-neutral-700",
-                          )}
-                        >
-                          {formatSignedMoney(shift.cashVariance)}
-                        </span>
-                      ) : (
-                        <span className="text-neutral-400">-</span>
-                      )}
-                      {shift.varianceReason ? (
-                        <p className="mt-1 max-w-52 text-xs leading-5 text-[var(--muted)]">
-                          {shift.varianceReason}
+        {dashboard.recentShifts.length > 0 ? (
+          <>
+            <div className="hidden overflow-x-auto lg:block">
+              <div className="min-w-[1180px]">
+                <div className="grid grid-cols-[130px_minmax(240px,1fr)_170px_170px_150px_150px_150px] gap-4 border-b border-[var(--border)] bg-neutral-50/80 px-6 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
+                  <div>Status</div>
+                  <div>Outlet / Register</div>
+                  <div>Dibuka</div>
+                  <div>Ditutup</div>
+                  <div className="text-right">Expected</div>
+                  <div className="text-right">Aktual</div>
+                  <div className="text-right">Selisih</div>
+                </div>
+                <div
+                  className={cn(
+                    "divide-y divide-[var(--border)]",
+                    hasScrollableHistory && "max-h-[520px] overflow-y-auto",
+                  )}
+                >
+                  {dashboard.recentShifts.map((shift) => (
+                    <div
+                      key={shift.id}
+                      className="grid grid-cols-[130px_minmax(240px,1fr)_170px_170px_150px_150px_150px] gap-4 px-6 py-4 text-sm text-neutral-700 transition-colors hover:bg-neutral-50/60"
+                    >
+                      <div className="min-w-0">
+                        <StatusPill status={shift.status} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-neutral-950">
+                          {shift.outletName}
                         </p>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                          {shift.registerCode} · {shift.registerName}
+                        </p>
+                      </div>
+                      <div className="min-w-0">
+                        <p>{formatDate(shift.openedAt)}</p>
+                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                          {shift.openedByName ?? "-"}
+                        </p>
+                      </div>
+                      <div className="min-w-0">
+                        <p>{formatDate(shift.closedAt)}</p>
+                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                          {shift.closedByName ?? "-"}
+                        </p>
+                      </div>
+                      <div className="text-right font-semibold text-neutral-950">
+                        {formatMoney(getExpectedCash(shift))}
+                      </div>
+                      <div className="text-right font-semibold text-neutral-950">
+                        {shift.actualCash ? formatMoney(shift.actualCash) : "-"}
+                      </div>
+                      <div className="text-right">
+                        <VarianceText shift={shift} />
+                        {shift.varianceReason ? (
+                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
+                            {shift.varianceReason}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={cn(
+                "space-y-3 p-4 lg:hidden",
+                hasScrollableHistory && "max-h-[620px] overflow-y-auto",
+              )}
+            >
+              {dashboard.recentShifts.map((shift) => (
+                <RecentShiftMobileCard key={shift.id} shift={shift} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="p-8 text-center">
+            <CheckCircle2 className="mx-auto size-12 text-neutral-300" />
+            <h3 className="mt-3 text-lg font-semibold text-neutral-950">
+              Belum ada riwayat shift
+            </h3>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Riwayat akan muncul setelah shift POS dibuka atau ditutup.
+            </p>
+          </div>
+        )}
       </section>
     </div>
   );

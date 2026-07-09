@@ -433,7 +433,7 @@ export default async function ApprovalPage({ searchParams }: PageProps) {
                   Kembali ke Dashboard
                 </Link>
               </div>
-              <h1 className="mt-5 text-3xl font-bold tracking-tight text-neutral-950 sm:text-4xl">
+              <h1 className="mt-5 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
                 Kotak Masuk Approval
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
