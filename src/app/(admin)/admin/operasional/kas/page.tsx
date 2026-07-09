@@ -366,35 +366,35 @@ export default async function KasPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <header className="relative overflow-hidden rounded-[2rem] border border-neutral-800 bg-neutral-950 p-5 text-white sm:p-6">
-        <div className="absolute -right-20 -top-24 size-64 rounded-full bg-[var(--accent)]/25 blur-3xl" />
-        <div className="absolute -bottom-24 left-1/4 size-52 rounded-full bg-white/10 blur-3xl" />
-
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+      <header className="overflow-hidden rounded-[2rem] border border-neutral-200 bg-white">
+        <div className="grid gap-5 border-b border-neutral-100 bg-white p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="min-w-0">
             <Link
               href="/admin"
-              className="inline-flex items-center gap-2 text-sm font-medium text-white/60 transition hover:text-white"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-500 transition hover:text-[var(--accent)]"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
             </Link>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-              Pergerakan Kas & Petty Cash
+
+            <h1 className="mt-4 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
+              Pergerakan Kas
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/65">
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-neutral-600">
               Pantau arus kas fisik outlet dari modal awal, cash sale, kas
               masuk/keluar manual, refund cash, sampai koreksi closing shift.
             </p>
           </div>
 
-          <div className="grid gap-2 rounded-2xl border border-white/10 bg-white/10 p-4 text-sm backdrop-blur sm:min-w-72">
-            <div className="flex items-center justify-between gap-3 text-white/55">
-              <span>Periode aktif</span>
+          <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-600 sm:min-w-72">
+            <div className="flex items-center justify-between gap-3 text-neutral-500">
+              <p className="text-xs font-semibold uppercase">Periode aktif</p>
               <CalendarDays className="size-4" />
             </div>
-            <p className="text-xl font-semibold">{data.periodLabel}</p>
-            <p className="text-xs leading-5 text-white/55">
+            <p className="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
+              {data.periodLabel}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-neutral-500">
               {formatInteger(data.summary.totalMovements)} movement tercatat ·{" "}
               {formatInteger(data.summary.activeShiftCount)} shift aktif
             </p>
