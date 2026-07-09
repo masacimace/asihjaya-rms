@@ -904,7 +904,7 @@ export default async function LaporanDashboardPage({
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
                 <TrendingUp className="size-3.5" />
-                Ringkasan real-data
+                Ringkasan Laporan Outlet
               </span>
               <span className="inline-flex rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
                 {data.period.label}

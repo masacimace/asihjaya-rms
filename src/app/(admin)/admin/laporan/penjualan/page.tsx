@@ -933,9 +933,9 @@ export default async function LaporanPenjualanPage({
       <section className="rounded-[2rem] border border-[var(--border)] bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
+            <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
               <ReceiptText className="size-3.5" />
-              Real-data sales report
+              Ringkasan Sales Report
             </div>
             <h1 className="mt-5 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
               Laporan Penjualan
@@ -966,10 +966,10 @@ export default async function LaporanPenjualanPage({
                         : data.filters.paymentMethod,
                   },
                 })}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-black px-4 text-sm font-semibold !text-white"
               >
                 <Download className="size-4" />
-                CSV
+                Export CSV
               </Link>
               <Link
                 href={buildSalesReportExportUrl({
@@ -988,10 +988,10 @@ export default async function LaporanPenjualanPage({
                         : data.filters.paymentMethod,
                   },
                 })}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-black px-4 text-sm font-semibold !text-white"
               >
                 <Download className="size-4" />
-                XLSX
+                Export XLSX
               </Link>
             </div>
           </div>

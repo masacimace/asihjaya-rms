@@ -5,7 +5,6 @@ import {
   ArrowUpRight,
   Boxes,
   CalendarDays,
-  Download,
   Gem,
   History,
   Layers3,
@@ -157,30 +156,6 @@ function buildStockReportUrl(
   const query = searchParams.toString();
 
   return query ? `/admin/laporan/stok?${query}` : "/admin/laporan/stok";
-}
-
-function buildStockReportExportUrl({
-  format,
-  params,
-}: {
-  format: "csv" | "xlsx";
-  params: Record<string, string | null | undefined>;
-}) {
-  const searchParams = new URLSearchParams();
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value) {
-      searchParams.set(key, value);
-    }
-  });
-
-  const basePath =
-    format === "xlsx"
-      ? "/admin/laporan/stok/export/xlsx"
-      : "/admin/laporan/stok/export";
-  const query = searchParams.toString();
-
-  return query ? `${basePath}?${query}` : basePath;
 }
 
 function StatCard({
@@ -464,7 +439,7 @@ function StockSnapshot({ data }: { data: ReportStockData }) {
         Ringkasan keluar-masuk item fisik berdasarkan inventory ledger.
       </p>
 
-      <div className="mt-5 max-h-[16rem] space-y-3 overflow-y-auto pr-1 [scrollbar-width:thin]">
+      <div className="mt-5 h-[16rem] space-y-3 overflow-y-auto pr-1 [scrollbar-width:thin]">
         {cards.map((card) => (
           <div
             key={card.label}
@@ -768,13 +743,19 @@ function StockDistribution({ data }: { data: ReportStockData }) {
   );
 }
 
-function MovementTable({ movements }: { movements: ReportStockMovementRow[] }) {
+function MovementTable({
+  movements,
+  refreshHref,
+}: {
+  movements: ReportStockMovementRow[];
+  refreshHref: string;
+}) {
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <span className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
-            <History className="size-3.5" /> Ledger stok
+            <History className="size-3.5" /> Ledger stock Movement
           </span>
           <h2 className="mt-4 text-lg font-semibold text-neutral-950">
             Riwayat pergerakan stok
@@ -783,96 +764,113 @@ function MovementTable({ movements }: { movements: ReportStockMovementRow[] }) {
             Maksimal 80 movement terbaru sesuai filter laporan.
           </p>
         </div>
+
+        <Link
+          href={refreshHref}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)]/40 hover:text-[var(--accent)] sm:w-auto"
+        >
+          Refresh laporan <ArrowRight className="size-4" />
+        </Link>
       </div>
 
       <div className="mt-5 hidden overflow-x-auto rounded-2xl border border-neutral-100 lg:block">
-        <table className="min-w-full divide-y divide-neutral-100 text-sm">
-          <thead className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            <tr>
-              <th className="px-4 py-3">Waktu</th>
-              <th className="px-4 py-3">Item</th>
-              <th className="px-4 py-3">Movement</th>
-              <th className="px-4 py-3">Arah outlet</th>
-              <th className="px-4 py-3">Reference</th>
-              <th className="px-4 py-3 text-right">Gramasi</th>
-              <th className="px-4 py-3">Operator</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100 bg-white">
-            {movements.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-10 text-center text-sm text-[var(--muted)]"
+        <div className="min-w-[84rem] text-sm">
+          <div className="grid grid-cols-[9.5rem_minmax(16rem,1fr)_10rem_minmax(13rem,0.75fr)_minmax(18rem,1.15fr)_8rem_minmax(11rem,0.8fr)] bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+            <div className="px-5 py-3">Waktu</div>
+            <div className="px-5 py-3">Item</div>
+            <div className="px-5 py-3">Movement</div>
+            <div className="px-5 py-3">Arah outlet</div>
+            <div className="px-5 py-3">Reference</div>
+            <div className="px-5 py-3 text-right">Gramasi</div>
+            <div className="px-5 py-3">Operator</div>
+          </div>
+
+          {movements.length === 0 ? (
+            <div className="px-4 py-10 text-center text-sm text-[var(--muted)]">
+              Belum ada movement sesuai filter.
+            </div>
+          ) : (
+            <div
+              className={cn(
+                "divide-y divide-neutral-100 bg-white",
+                movements.length >= 5 && "max-h-[30rem] overflow-y-auto",
+              )}
+            >
+              {movements.map((movement) => (
+                <div
+                  key={movement.id}
+                  className="grid grid-cols-[9.5rem_minmax(16rem,1fr)_10rem_minmax(13rem,0.75fr)_minmax(18rem,1.15fr)_8rem_minmax(11rem,0.8fr)] items-start"
                 >
-                  Belum ada movement sesuai filter.
-                </td>
-              </tr>
-            ) : (
-              movements.map((movement) => (
-                <tr key={movement.id} className="align-top">
-                  <td className="whitespace-nowrap px-4 py-4 text-neutral-700">
+                  <div className="whitespace-nowrap px-5 py-4 text-neutral-700">
                     {formatDateTime(movement.occurredAt)}
-                  </td>
-                  <td className="px-4 py-4">
+                  </div>
+                  <div className="min-w-0 px-5 py-4">
                     <Link
                       href={`/admin/inventaris/item/${movement.itemId}`}
-                      className="font-semibold text-neutral-950 hover:text-[var(--accent)]"
+                      className="block truncate font-semibold text-neutral-950 hover:text-[var(--accent)]"
                     >
                       {movement.productName}
                     </Link>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
+                    <p className="mt-1 truncate text-xs text-[var(--muted)]">
                       {movement.sku} · {movement.categoryName}
                     </p>
-                  </td>
-                  <td className="px-4 py-4">
+                  </div>
+                  <div className="px-5 py-4">
                     <span
                       className={cn(
-                        "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+                        "inline-flex max-w-full rounded-full border px-2.5 py-1 text-xs font-semibold",
                         movementTypeStyles[movement.movementType],
                       )}
                     >
                       {movementTypeLabels[movement.movementType]}
                     </span>
-                  </td>
-                  <td className="px-4 py-4 text-neutral-700">
-                    <p>{movement.fromOutletName ?? "-"}</p>
-                    <p className="text-xs text-[var(--muted)]">
+                  </div>
+                  <div className="min-w-0 px-5 py-4 text-neutral-700">
+                    <p className="truncate">{movement.fromOutletName ?? "-"}</p>
+                    <p className="truncate text-xs text-[var(--muted)]">
                       →{" "}
                       {movement.toOutletName ??
                         movement.currentOutletName ??
                         "-"}
                     </p>
-                  </td>
-                  <td className="px-4 py-4 text-neutral-700">
+                  </div>
+                  <div className="min-w-0 px-5 py-4 text-neutral-700">
                     {movement.invoiceNumber ? (
                       <Link
                         href={`/admin/penjualan/${movement.referenceId}`}
-                        className="font-semibold text-[var(--accent)] hover:underline"
+                        className="block truncate font-semibold text-[var(--accent)] hover:underline"
                       >
                         {movement.invoiceNumber}
                       </Link>
                     ) : (
-                      <span>{movement.referenceType ?? "-"}</span>
+                      <span className="block truncate">
+                        {movement.referenceType ?? "-"}
+                      </span>
                     )}
-                    <p className="mt-1 max-w-[16rem] truncate text-xs text-[var(--muted)]">
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
                       {movement.reason ?? "Tanpa catatan"}
                     </p>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-4 text-right font-semibold text-neutral-950">
+                  </div>
+                  <div className="whitespace-nowrap px-5 py-4 text-right font-semibold text-neutral-950">
                     {formatGram(movement.weightGram)} g
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-4 text-neutral-700">
-                    {movement.performerName}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                  </div>
+                  <div className="min-w-0 px-5 py-4 text-neutral-700">
+                    <p className="truncate">{movement.performerName}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="mt-5 space-y-3 lg:hidden">
+      {movements.length >= 5 ? (
+        <p className="mt-3 hidden text-xs text-[var(--muted)] lg:block">
+          Scroll daftar untuk melihat movement stok lainnya.
+        </p>
+      ) : null}
+
+      <div className="mt-5 lg:hidden">
         {movements.length === 0 ? (
           <EmptyState
             icon={<History className="size-5" />}
@@ -880,59 +878,72 @@ function MovementTable({ movements }: { movements: ReportStockMovementRow[] }) {
             description="Ubah filter untuk melihat movement stok pada periode lain."
           />
         ) : (
-          movements.map((movement) => (
-            <article
-              key={movement.id}
-              className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs text-[var(--muted)]">
-                    {formatDateTime(movement.occurredAt)}
-                  </p>
-                  <Link
-                    href={`/admin/inventaris/item/${movement.itemId}`}
-                    className="mt-1 block truncate font-semibold text-neutral-950 hover:text-[var(--accent)]"
+          <div
+            className={cn(
+              "space-y-3",
+              movements.length >= 5 && "max-h-[38rem] overflow-y-auto pr-1",
+            )}
+          >
+            {movements.map((movement) => (
+              <article
+                key={movement.id}
+                className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-[var(--muted)]">
+                      {formatDateTime(movement.occurredAt)}
+                    </p>
+                    <Link
+                      href={`/admin/inventaris/item/${movement.itemId}`}
+                      className="mt-1 block truncate font-semibold text-neutral-950 hover:text-[var(--accent)]"
+                    >
+                      {movement.productName}
+                    </Link>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {movement.sku} · {movement.categoryName}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold",
+                      movementTypeStyles[movement.movementType],
+                    )}
                   >
-                    {movement.productName}
-                  </Link>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {movement.sku} · {movement.categoryName}
-                  </p>
+                    {movementTypeLabels[movement.movementType]}
+                  </span>
                 </div>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold",
-                    movementTypeStyles[movement.movementType],
-                  )}
-                >
-                  {movementTypeLabels[movement.movementType]}
-                </span>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                <MetricPill
-                  label="Outlet"
-                  value={`${movement.fromOutletName ?? "-"} → ${movement.toOutletName ?? movement.currentOutletName ?? "-"}`}
-                />
-                <MetricPill
-                  label="Gramasi"
-                  value={`${formatGram(movement.weightGram)} g`}
-                />
-                <MetricPill label="Operator" value={movement.performerName} />
-                <MetricPill
-                  label="Ref"
-                  value={
-                    movement.invoiceNumber ?? movement.referenceType ?? "-"
-                  }
-                />
-              </div>
-              <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
-                {movement.reason ?? "Tanpa catatan movement."}
-              </p>
-            </article>
-          ))
+                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                  <MetricPill
+                    label="Outlet"
+                    value={`${movement.fromOutletName ?? "-"} → ${movement.toOutletName ?? movement.currentOutletName ?? "-"}`}
+                  />
+                  <MetricPill
+                    label="Gramasi"
+                    value={`${formatGram(movement.weightGram)} g`}
+                  />
+                  <MetricPill label="Operator" value={movement.performerName} />
+                  <MetricPill
+                    label="Ref"
+                    value={
+                      movement.invoiceNumber ?? movement.referenceType ?? "-"
+                    }
+                  />
+                </div>
+                <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
+                  {movement.reason ?? "Tanpa catatan movement."}
+                </p>
+              </article>
+            ))}
+          </div>
         )}
       </div>
+
+      {movements.length >= 5 ? (
+        <p className="mt-3 text-xs text-[var(--muted)] lg:hidden">
+          Swipe daftar ke atas atau bawah untuk melihat movement stok lainnya.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -948,8 +959,8 @@ export default async function LaporanStokPage({ searchParams }: PageProps) {
       <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <span className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
-              <Package className="size-3.5" /> Real-data inventory movement
+            <span className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
+              <Package className="size-3.5" /> Ringkasan Inventory Movement
             </span>
             <h1 className="mt-4 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
               Laporan Pergerakan Stok
@@ -968,40 +979,6 @@ export default async function LaporanStokPage({ searchParams }: PageProps) {
               <Store className="size-4 text-[var(--accent)]" />
               {data.selectedOutlet?.name ?? "Semua outlet"}
             </div>
-            <Link
-              href={buildStockReportExportUrl({
-                format: "csv",
-                params: {
-                  range: data.filters.range,
-                  outletId: data.filters.outletId,
-                  q: data.filters.query,
-                  movementType:
-                    data.filters.movementType === "all"
-                      ? null
-                      : data.filters.movementType,
-                },
-              })}
-              className="inline-flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-            >
-              <Download className="size-4" /> CSV
-            </Link>
-            <Link
-              href={buildStockReportExportUrl({
-                format: "xlsx",
-                params: {
-                  range: data.filters.range,
-                  outletId: data.filters.outletId,
-                  q: data.filters.query,
-                  movementType:
-                    data.filters.movementType === "all"
-                      ? null
-                      : data.filters.movementType,
-                },
-              })}
-              className="inline-flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-            >
-              <Download className="size-4" /> XLSX
-            </Link>
           </div>
         </div>
       </section>
@@ -1051,24 +1028,18 @@ export default async function LaporanStokPage({ searchParams }: PageProps) {
         <SlowMovingList items={data.slowMovingItems} />
       </section>
 
-      <MovementTable movements={data.movements} />
-
-      <div className="flex justify-end">
-        <Link
-          href={buildStockReportUrl({
-            range: data.filters.range,
-            outletId: data.filters.outletId ?? undefined,
-            movementType:
-              data.filters.movementType === "all"
-                ? undefined
-                : data.filters.movementType,
-            q: data.filters.query || undefined,
-          })}
-          className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)]/40 hover:text-[var(--accent)]"
-        >
-          Refresh laporan <ArrowRight className="size-4" />
-        </Link>
-      </div>
+      <MovementTable
+        movements={data.movements}
+        refreshHref={buildStockReportUrl({
+          range: data.filters.range,
+          outletId: data.filters.outletId ?? undefined,
+          movementType:
+            data.filters.movementType === "all"
+              ? undefined
+              : data.filters.movementType,
+          q: data.filters.query || undefined,
+        })}
+      />
     </div>
   );
 }
