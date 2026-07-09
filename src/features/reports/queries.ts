@@ -4,6 +4,7 @@ import {
   desc,
   eq,
   gte,
+  ilike,
   inArray,
   isNull,
   lt,
@@ -30,9 +31,16 @@ import type {
   ReportCashSnapshot,
   ReportOutletPerformanceRow,
   ReportPaymentBreakdownRow,
+  ReportPaymentMethod,
   ReportPeriodMetadata,
   ReportPeriodRange,
   ReportRecentSaleRow,
+  ReportSaleStatus,
+  ReportSalesData,
+  ReportSalesFilters,
+  ReportSalesPaymentBreakdownRow,
+  ReportSalesRow,
+  ReportSalesStatusBreakdownRow,
   ReportSummaryData,
   ReportSummaryFilters,
   ReportTrendPoint,
@@ -647,5 +655,482 @@ export async function getReportSummaryData(
     outletPerformance,
     recentSales,
     cashSnapshot,
+  };
+}
+
+function createEmptySalesData(
+  auth: AuthContext,
+  filters: ReportSalesFilters,
+  period: ReportPeriodMetadata,
+): ReportSalesData {
+  return {
+    filters,
+    period,
+    outlets: auth.outlets,
+    selectedOutlet: null,
+    summary: {
+      grossRevenue: 0,
+      completedTransactionCount: 0,
+      allTransactionCount: 0,
+      itemSold: 0,
+      weightSoldGram: 0,
+      grossProfit: 0,
+      discountAmount: 0,
+      averageTransactionAmount: 0,
+      voidRefundImpact: 0,
+      voidRefundCount: 0,
+      cashRevenue: 0,
+      nonCashRevenue: 0,
+    },
+    dailySales: createTrendSkeleton(period.trendStart, period.trendEnd).map(
+      (point) => ({ ...point, itemSold: 0, grossProfit: 0 }),
+    ),
+    paymentBreakdown: [],
+    statusBreakdown: [],
+    topOutlets: [],
+    sales: [],
+  };
+}
+
+function buildPaymentMethodCondition(
+  filters: Pick<ReportSalesFilters, "paymentMethod">,
+) {
+  if (filters.paymentMethod === "all") return undefined;
+
+  return sql<boolean>`exists (
+    select 1
+    from payments as report_payment_filter
+    where report_payment_filter.sale_id = ${sales.id}
+      and report_payment_filter.method = ${filters.paymentMethod}
+  )`;
+}
+
+function buildSalesSearchCondition(filters: Pick<ReportSalesFilters, "query">) {
+  if (!filters.query) return undefined;
+
+  const keyword = `%${filters.query}%`;
+
+  return or(
+    ilike(sales.invoiceNumber, keyword),
+    ilike(customers.fullName, keyword),
+    ilike(users.fullName, keyword),
+    ilike(outlets.name, keyword),
+    ilike(outlets.code, keyword),
+  );
+}
+
+function toPaymentMethods(value: unknown): ReportPaymentMethod[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.filter(
+    (method): method is ReportPaymentMethod =>
+      method === "cash" ||
+      method === "debit_card" ||
+      method === "credit_card" ||
+      method === "bank_transfer" ||
+      method === "qris_manual" ||
+      method === "qris_gateway" ||
+      method === "other",
+  );
+}
+
+export async function getReportSalesData(
+  auth: AuthContext,
+  filters: ReportSalesFilters,
+): Promise<ReportSalesData> {
+  const outletIds = getAccessibleOutletIds(auth, filters.outletId);
+  const now = new Date();
+  const period = createPeriodMetadata({ range: filters.range, now });
+  const selectedOutlet = filters.outletId
+    ? auth.outlets.find((outlet) => outlet.id === filters.outletId) ?? null
+    : null;
+
+  if (outletIds.length === 0) {
+    return createEmptySalesData(auth, filters, period);
+  }
+
+  const paymentMethodCondition = buildPaymentMethodCondition(filters);
+  const searchCondition = buildSalesSearchCondition(filters);
+  const activityAtSql = sql<Date>`coalesce(${sales.completedAt}, ${sales.cancelledAt}, ${sales.createdAt})`;
+  const completedSalesWhere = and(
+    eq(sales.organizationId, auth.organization.id),
+    inArray(sales.outletId, outletIds),
+    eq(sales.status, "completed"),
+    gte(sales.completedAt, period.currentStart),
+    lt(sales.completedAt, period.currentEnd),
+    paymentMethodCondition,
+  );
+  const listSalesWhere = and(
+    eq(sales.organizationId, auth.organization.id),
+    inArray(sales.outletId, outletIds),
+    sql<boolean>`${activityAtSql} >= ${period.currentStart}`,
+    sql<boolean>`${activityAtSql} < ${period.currentEnd}`,
+    filters.status === "all" ? undefined : eq(sales.status, filters.status),
+    paymentMethodCondition,
+    searchCondition,
+  );
+  const dailyBucketSql = sql<string>`to_char(${sales.completedAt} at time zone 'Asia/Jakarta', 'YYYY-MM-DD')`;
+
+  const [
+    salesSummaryRows,
+    itemSummaryRows,
+    voidRefundRows,
+    cashRevenueRows,
+    allTransactionRows,
+    dailySalesRows,
+    dailyItemRows,
+    paymentRows,
+    statusRows,
+    topOutletRows,
+    saleRows,
+  ] = await Promise.all([
+    db
+      .select({
+        grossRevenue: sql<number>`coalesce(sum(${sales.totalAmount}), 0)`.mapWith(Number),
+        completedTransactionCount: count(),
+        discountAmount: sql<number>`coalesce(sum(${sales.discountAmount}), 0)`.mapWith(Number),
+        averageTransactionAmount: sql<number>`coalesce(avg(${sales.totalAmount}), 0)`.mapWith(Number),
+      })
+      .from(sales)
+      .where(completedSalesWhere),
+
+    db
+      .select({
+        itemSold: count(),
+        weightSoldGram: sql<number>`coalesce(sum(coalesce(${productItems.weightGram}, 0)::numeric), 0)`.mapWith(Number),
+        grossProfit: sql<number>`coalesce(sum(${saleItems.finalPriceAmount}::numeric - coalesce(${productItems.costAmount}, 0)::numeric), 0)`.mapWith(Number),
+      })
+      .from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
+      .where(completedSalesWhere),
+
+    db
+      .select({
+        amount: sql<number>`coalesce(sum(${sales.totalAmount}), 0)`.mapWith(Number),
+        transactionCount: count(),
+      })
+      .from(sales)
+      .where(
+        and(
+          eq(sales.organizationId, auth.organization.id),
+          inArray(sales.outletId, outletIds),
+          or(eq(sales.status, "voided"), eq(sales.status, "refunded")),
+          gte(sales.cancelledAt, period.currentStart),
+          lt(sales.cancelledAt, period.currentEnd),
+          paymentMethodCondition,
+        ),
+      ),
+
+    db
+      .select({
+        cashRevenue: sql<number>`coalesce(sum(${payments.amount}), 0)`.mapWith(Number),
+      })
+      .from(payments)
+      .innerJoin(sales, eq(payments.saleId, sales.id))
+      .where(
+        and(
+          eq(sales.organizationId, auth.organization.id),
+          inArray(sales.outletId, outletIds),
+          eq(sales.status, "completed"),
+          eq(payments.status, "paid"),
+          eq(payments.method, "cash"),
+          gte(sales.completedAt, period.currentStart),
+          lt(sales.completedAt, period.currentEnd),
+        ),
+      ),
+
+    db
+      .select({ transactionCount: count() })
+      .from(sales)
+      .innerJoin(outlets, eq(sales.outletId, outlets.id))
+      .innerJoin(users, eq(sales.cashierId, users.id))
+      .leftJoin(customers, eq(sales.customerId, customers.id))
+      .where(listSalesWhere),
+
+    db
+      .select({
+        bucket: dailyBucketSql,
+        revenue: sql<number>`coalesce(sum(${sales.totalAmount}), 0)`.mapWith(Number),
+        transactionCount: count(),
+      })
+      .from(sales)
+      .where(
+        and(
+          eq(sales.organizationId, auth.organization.id),
+          inArray(sales.outletId, outletIds),
+          eq(sales.status, "completed"),
+          gte(sales.completedAt, period.trendStart),
+          lt(sales.completedAt, period.trendEnd),
+          paymentMethodCondition,
+        ),
+      )
+      .groupBy(dailyBucketSql)
+      .orderBy(dailyBucketSql),
+
+    db
+      .select({
+        bucket: dailyBucketSql,
+        itemSold: count(),
+        grossProfit: sql<number>`coalesce(sum(${saleItems.finalPriceAmount}::numeric - coalesce(${productItems.costAmount}, 0)::numeric), 0)`.mapWith(Number),
+      })
+      .from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
+      .where(
+        and(
+          eq(sales.organizationId, auth.organization.id),
+          inArray(sales.outletId, outletIds),
+          eq(sales.status, "completed"),
+          gte(sales.completedAt, period.trendStart),
+          lt(sales.completedAt, period.trendEnd),
+          paymentMethodCondition,
+        ),
+      )
+      .groupBy(dailyBucketSql)
+      .orderBy(dailyBucketSql),
+
+    db
+      .select({
+        method: payments.method,
+        amount: sql<number>`coalesce(sum(${payments.amount}), 0)`.mapWith(Number),
+        transactionCount: count(),
+      })
+      .from(payments)
+      .innerJoin(sales, eq(payments.saleId, sales.id))
+      .where(
+        and(
+          eq(sales.organizationId, auth.organization.id),
+          inArray(sales.outletId, outletIds),
+          eq(sales.status, "completed"),
+          eq(payments.status, "paid"),
+          gte(sales.completedAt, period.currentStart),
+          lt(sales.completedAt, period.currentEnd),
+        ),
+      )
+      .groupBy(payments.method)
+      .orderBy(desc(sql`coalesce(sum(${payments.amount}), 0)`)),
+
+    db
+      .select({
+        status: sales.status,
+        transactionCount: count(),
+        amount: sql<number>`coalesce(sum(${sales.totalAmount}), 0)`.mapWith(Number),
+      })
+      .from(sales)
+      .innerJoin(outlets, eq(sales.outletId, outlets.id))
+      .innerJoin(users, eq(sales.cashierId, users.id))
+      .leftJoin(customers, eq(sales.customerId, customers.id))
+      .where(
+        and(
+          eq(sales.organizationId, auth.organization.id),
+          inArray(sales.outletId, outletIds),
+          sql<boolean>`${activityAtSql} >= ${period.currentStart}`,
+          sql<boolean>`${activityAtSql} < ${period.currentEnd}`,
+          paymentMethodCondition,
+          searchCondition,
+        ),
+      )
+      .groupBy(sales.status)
+      .orderBy(desc(sql`count(*)`)),
+
+    db
+      .select({
+        outletId: outlets.id,
+        outletCode: outlets.code,
+        outletName: outlets.name,
+        revenue: sql<number>`coalesce(sum(${sales.totalAmount}), 0)`.mapWith(Number),
+        transactionCount: count(),
+        itemSold: sql<number>`(
+          select count(*)::integer
+          from ${saleItems} as report_top_sale_items
+          inner join ${sales} as report_top_sales
+            on report_top_sale_items.sale_id = report_top_sales.id
+          where report_top_sales.outlet_id = ${outlets.id}
+            and report_top_sales.organization_id = ${auth.organization.id}
+            and report_top_sales.status = 'completed'
+            and report_top_sales.completed_at >= ${period.currentStart}
+            and report_top_sales.completed_at < ${period.currentEnd}
+        )`.mapWith(Number),
+      })
+      .from(sales)
+      .innerJoin(outlets, eq(sales.outletId, outlets.id))
+      .where(completedSalesWhere)
+      .groupBy(outlets.id, outlets.code, outlets.name)
+      .orderBy(desc(sql`coalesce(sum(${sales.totalAmount}), 0)`))
+      .limit(5),
+
+    db
+      .select({
+        id: sales.id,
+        invoiceNumber: sales.invoiceNumber,
+        outletName: outlets.name,
+        outletCode: outlets.code,
+        customerName: customers.fullName,
+        cashierName: users.fullName,
+        status: sales.status,
+        subtotalAmount: sales.subtotalAmount,
+        discountAmount: sales.discountAmount,
+        totalAmount: sales.totalAmount,
+        completedAt: sales.completedAt,
+        cancelledAt: sales.cancelledAt,
+        createdAt: sales.createdAt,
+        itemCount: sql<number>`(
+          select count(*)::integer
+          from ${saleItems} as report_row_sale_items
+          where report_row_sale_items.sale_id = ${sales.id}
+        )`.mapWith(Number),
+        weightSoldGram: sql<number>`coalesce((
+          select sum(coalesce(report_row_product_items.weight_gram, 0)::numeric)
+          from ${saleItems} as report_row_sale_items
+          inner join ${productItems} as report_row_product_items
+            on report_row_sale_items.product_item_id = report_row_product_items.id
+          where report_row_sale_items.sale_id = ${sales.id}
+        ), 0)`.mapWith(Number),
+        grossProfit: sql<number>`coalesce((
+          select sum(report_row_sale_items.final_price_amount::numeric - coalesce(report_row_product_items.cost_amount, 0)::numeric)
+          from ${saleItems} as report_row_sale_items
+          inner join ${productItems} as report_row_product_items
+            on report_row_sale_items.product_item_id = report_row_product_items.id
+          where report_row_sale_items.sale_id = ${sales.id}
+        ), 0)`.mapWith(Number),
+        paymentMethods: sql<ReportPaymentMethod[]>`coalesce(array_agg(distinct ${payments.method}) filter (where ${payments.id} is not null), '{}')`,
+      })
+      .from(sales)
+      .innerJoin(outlets, eq(sales.outletId, outlets.id))
+      .innerJoin(users, eq(sales.cashierId, users.id))
+      .leftJoin(customers, eq(sales.customerId, customers.id))
+      .leftJoin(payments, eq(payments.saleId, sales.id))
+      .where(listSalesWhere)
+      .groupBy(
+        sales.id,
+        sales.invoiceNumber,
+        outlets.name,
+        outlets.code,
+        customers.fullName,
+        users.fullName,
+        sales.status,
+        sales.subtotalAmount,
+        sales.discountAmount,
+        sales.totalAmount,
+        sales.completedAt,
+        sales.cancelledAt,
+        sales.createdAt,
+      )
+      .orderBy(desc(activityAtSql))
+      .limit(50),
+  ]);
+
+  const salesSummary = salesSummaryRows[0];
+  const itemSummary = itemSummaryRows[0];
+  const voidRefund = voidRefundRows[0];
+  const cashRevenue = cashRevenueRows[0]?.cashRevenue ?? 0;
+  const grossRevenue = salesSummary?.grossRevenue ?? 0;
+
+  const dailyRevenueMap = new Map(
+    dailySalesRows.map((row) => [
+      row.bucket,
+      {
+        revenue: row.revenue,
+        transactionCount: row.transactionCount,
+      },
+    ]),
+  );
+  const dailyItemMap = new Map(
+    dailyItemRows.map((row) => [
+      row.bucket,
+      {
+        itemSold: row.itemSold,
+        grossProfit: row.grossProfit,
+      },
+    ]),
+  );
+
+  const dailySales = createTrendSkeleton(period.trendStart, period.trendEnd).map(
+    (point) => {
+      const revenueSource = dailyRevenueMap.get(point.key);
+      const itemSource = dailyItemMap.get(point.key);
+
+      return {
+        ...point,
+        revenue: revenueSource?.revenue ?? 0,
+        transactionCount: revenueSource?.transactionCount ?? 0,
+        itemSold: itemSource?.itemSold ?? 0,
+        grossProfit: itemSource?.grossProfit ?? 0,
+      };
+    },
+  );
+
+  const paymentTotal = paymentRows.reduce((total, row) => total + row.amount, 0);
+  const paymentBreakdown: ReportSalesPaymentBreakdownRow[] = paymentRows.map(
+    (row) => ({
+      method: row.method,
+      amount: row.amount,
+      transactionCount: row.transactionCount,
+      percentage: paymentTotal > 0 ? (row.amount / paymentTotal) * 100 : 0,
+    }),
+  );
+
+  const statusBreakdown: ReportSalesStatusBreakdownRow[] = statusRows.map(
+    (row) => ({
+      status: row.status as ReportSaleStatus,
+      transactionCount: row.transactionCount,
+      amount: row.amount,
+    }),
+  );
+
+  const topOutlets: ReportOutletPerformanceRow[] = topOutletRows.map((row) => ({
+    outletId: row.outletId,
+    outletCode: row.outletCode,
+    outletName: row.outletName,
+    revenue: row.revenue,
+    transactionCount: row.transactionCount,
+    itemSold: row.itemSold,
+  }));
+
+  const salesRows: ReportSalesRow[] = saleRows.map((row) => ({
+    id: row.id,
+    invoiceNumber: row.invoiceNumber,
+    outletName: row.outletName,
+    outletCode: row.outletCode,
+    customerName: row.customerName,
+    cashierName: row.cashierName,
+    status: row.status as ReportSaleStatus,
+    paymentMethods: toPaymentMethods(row.paymentMethods),
+    subtotalAmount: parseAmount(row.subtotalAmount),
+    discountAmount: parseAmount(row.discountAmount),
+    totalAmount: parseAmount(row.totalAmount),
+    itemCount: row.itemCount,
+    weightSoldGram: row.weightSoldGram,
+    grossProfit: row.grossProfit,
+    completedAt: row.completedAt,
+    cancelledAt: row.cancelledAt,
+    createdAt: row.createdAt,
+  }));
+
+  return {
+    filters,
+    period,
+    outlets: auth.outlets,
+    selectedOutlet,
+    summary: {
+      grossRevenue,
+      completedTransactionCount: salesSummary?.completedTransactionCount ?? 0,
+      allTransactionCount: allTransactionRows[0]?.transactionCount ?? 0,
+      itemSold: itemSummary?.itemSold ?? 0,
+      weightSoldGram: itemSummary?.weightSoldGram ?? 0,
+      grossProfit: itemSummary?.grossProfit ?? 0,
+      discountAmount: salesSummary?.discountAmount ?? 0,
+      averageTransactionAmount: salesSummary?.averageTransactionAmount ?? 0,
+      voidRefundImpact: voidRefund?.amount ?? 0,
+      voidRefundCount: voidRefund?.transactionCount ?? 0,
+      cashRevenue,
+      nonCashRevenue: Math.max(grossRevenue - cashRevenue, 0),
+    },
+    dailySales,
+    paymentBreakdown,
+    statusBreakdown,
+    topOutlets,
+    sales: salesRows,
   };
 }
