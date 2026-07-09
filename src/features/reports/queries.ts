@@ -11,6 +11,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db";
 import {
@@ -20,6 +21,8 @@ import {
   inventoryMovements,
   outlets,
   payments,
+  productCategories,
+  productMasters,
   productItems,
   saleItems,
   sales,
@@ -36,11 +39,20 @@ import type {
   ReportPeriodRange,
   ReportRecentSaleRow,
   ReportSaleStatus,
+  ReportInventoryMovementType,
+  ReportSlowMovingStockRow,
   ReportSalesData,
   ReportSalesFilters,
   ReportSalesPaymentBreakdownRow,
   ReportSalesRow,
   ReportSalesStatusBreakdownRow,
+  ReportStockCategoryRow,
+  ReportStockData,
+  ReportStockFilters,
+  ReportStockMovementRow,
+  ReportStockOutletRow,
+  ReportStockProductPerformanceRow,
+  ReportStockTrendPoint,
   ReportSummaryData,
   ReportSummaryFilters,
   ReportTrendPoint,
@@ -1132,5 +1144,433 @@ export async function getReportSalesData(
     statusBreakdown,
     topOutlets,
     sales: salesRows,
+  };
+}
+
+function createEmptyStockData(
+  auth: AuthContext,
+  filters: ReportStockFilters,
+  period: ReportPeriodMetadata,
+): ReportStockData {
+  return {
+    filters,
+    period,
+    outlets: auth.outlets,
+    selectedOutlet: null,
+    summary: {
+      availableItemCount: 0,
+      availableWeightGram: 0,
+      availableCostValue: 0,
+      movementCount: 0,
+      stockInCount: 0,
+      stockOutCount: 0,
+      saleCount: 0,
+      returnCount: 0,
+      adjustmentCount: 0,
+    },
+    movementTrend: createTrendSkeleton(period.trendStart, period.trendEnd).map(
+      (point) => ({
+        key: point.key,
+        label: point.label,
+        stockInCount: 0,
+        stockOutCount: 0,
+        returnCount: 0,
+      }),
+    ),
+    outletStock: [],
+    categoryStock: [],
+    fastMovingProducts: [],
+    slowMovingItems: [],
+    movements: [],
+  };
+}
+
+function createStockTrendSkeleton(
+  period: ReportPeriodMetadata,
+): ReportStockTrendPoint[] {
+  return createTrendSkeleton(period.trendStart, period.trendEnd).map((point) => ({
+    key: point.key,
+    label: point.label,
+    stockInCount: 0,
+    stockOutCount: 0,
+    returnCount: 0,
+  }));
+}
+
+export async function getReportStockData(
+  auth: AuthContext,
+  filters: ReportStockFilters,
+): Promise<ReportStockData> {
+  const outletIds = getAccessibleOutletIds(auth, filters.outletId);
+  const now = new Date();
+  const period = createPeriodMetadata({ range: filters.range, now });
+  const selectedOutlet = filters.outletId
+    ? auth.outlets.find((outlet) => outlet.id === filters.outletId) ?? null
+    : null;
+
+  if (outletIds.length === 0) {
+    return createEmptyStockData(auth, filters, period);
+  }
+
+  const fromOutlet = alias(outlets, "report_stock_from_outlet");
+  const toOutlet = alias(outlets, "report_stock_to_outlet");
+  const currentOutlet = alias(outlets, "report_stock_current_outlet");
+  const movementOutletCondition = or(
+    inArray(inventoryMovements.fromOutletId, outletIds),
+    inArray(inventoryMovements.toOutletId, outletIds),
+    inArray(productItems.currentOutletId, outletIds),
+  );
+  const stockSearchKeyword = filters.query ? `%${filters.query}%` : null;
+  const searchCondition = stockSearchKeyword
+    ? or(
+        ilike(productItems.sku, stockSearchKeyword),
+        ilike(productItems.barcode, stockSearchKeyword),
+        ilike(productItems.displayName, stockSearchKeyword),
+        ilike(productMasters.code, stockSearchKeyword),
+        ilike(productMasters.name, stockSearchKeyword),
+        ilike(productCategories.name, stockSearchKeyword),
+        ilike(fromOutlet.name, stockSearchKeyword),
+        ilike(toOutlet.name, stockSearchKeyword),
+        ilike(currentOutlet.name, stockSearchKeyword),
+        ilike(users.fullName, stockSearchKeyword),
+        ilike(inventoryMovements.reason, stockSearchKeyword),
+        ilike(sales.invoiceNumber, stockSearchKeyword),
+      )
+    : undefined;
+  const movementTypeCondition =
+    filters.movementType === "all"
+      ? undefined
+      : eq(inventoryMovements.movementType, filters.movementType);
+  const movementWhere = and(
+    eq(inventoryMovements.organizationId, auth.organization.id),
+    movementOutletCondition,
+    gte(inventoryMovements.occurredAt, period.currentStart),
+    lt(inventoryMovements.occurredAt, period.currentEnd),
+    movementTypeCondition,
+    searchCondition,
+  );
+  const availableStockWhere = and(
+    eq(productItems.organizationId, auth.organization.id),
+    eq(productItems.isActive, true),
+    eq(productItems.availability, "available"),
+    inArray(productItems.currentOutletId, outletIds),
+  );
+  const movementBucketSql = sql<string>`to_char(${inventoryMovements.occurredAt} at time zone 'Asia/Jakarta', 'YYYY-MM-DD')`;
+  const outletIdSqlList = sql.join(
+    outletIds.map((outletId) => sql`${outletId}`),
+    sql`, `,
+  );
+
+  const [
+    stockSummaryRows,
+    movementSummaryRows,
+    trendRows,
+    outletStockRows,
+    categoryStockRows,
+    fastMovingRows,
+    slowMovingRows,
+    movementRows,
+  ] = await Promise.all([
+    db
+      .select({
+        availableItemCount: count(),
+        availableWeightGram: sql<number>`coalesce(sum(coalesce(${productItems.weightGram}, 0)::numeric), 0)`.mapWith(Number),
+        availableCostValue: sql<number>`coalesce(sum(coalesce(${productItems.costAmount}, 0)::numeric), 0)`.mapWith(Number),
+      })
+      .from(productItems)
+      .where(availableStockWhere),
+
+    db
+      .select({
+        movementCount: count(),
+        stockInCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('goods_receipt', 'transfer_in', 'reservation_release', 'sale_return', 'repair_in', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
+        stockOutCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale', 'transfer_out', 'reservation', 'repair_out', 'damaged', 'lost') then 1 else 0 end), 0)`.mapWith(Number),
+        saleCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} = 'sale' then 1 else 0 end), 0)`.mapWith(Number),
+        returnCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale_return', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
+        adjustmentCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('adjustment', 'damaged', 'lost') then 1 else 0 end), 0)`.mapWith(Number),
+      })
+      .from(inventoryMovements)
+      .innerJoin(productItems, eq(inventoryMovements.itemId, productItems.id))
+      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+      .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
+      .leftJoin(fromOutlet, eq(inventoryMovements.fromOutletId, fromOutlet.id))
+      .leftJoin(toOutlet, eq(inventoryMovements.toOutletId, toOutlet.id))
+      .leftJoin(currentOutlet, eq(productItems.currentOutletId, currentOutlet.id))
+      .innerJoin(users, eq(inventoryMovements.performedBy, users.id))
+      .leftJoin(
+        sales,
+        and(
+          eq(inventoryMovements.referenceId, sales.id),
+          or(
+            eq(inventoryMovements.referenceType, "sale"),
+            eq(inventoryMovements.referenceType, "sale_void"),
+            eq(inventoryMovements.referenceType, "sale_refund"),
+          ),
+        ),
+      )
+      .where(movementWhere),
+
+    db
+      .select({
+        bucket: movementBucketSql,
+        stockInCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('goods_receipt', 'transfer_in', 'reservation_release', 'sale_return', 'repair_in', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
+        stockOutCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale', 'transfer_out', 'reservation', 'repair_out', 'damaged', 'lost') then 1 else 0 end), 0)`.mapWith(Number),
+        returnCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale_return', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
+      })
+      .from(inventoryMovements)
+      .innerJoin(productItems, eq(inventoryMovements.itemId, productItems.id))
+      .where(
+        and(
+          eq(inventoryMovements.organizationId, auth.organization.id),
+          movementOutletCondition,
+          gte(inventoryMovements.occurredAt, period.trendStart),
+          lt(inventoryMovements.occurredAt, period.trendEnd),
+          movementTypeCondition,
+        ),
+      )
+      .groupBy(movementBucketSql)
+      .orderBy(movementBucketSql),
+
+    db
+      .select({
+        outletId: outlets.id,
+        outletCode: outlets.code,
+        outletName: outlets.name,
+        availableItemCount: count(),
+        availableWeightGram: sql<number>`coalesce(sum(coalesce(${productItems.weightGram}, 0)::numeric), 0)`.mapWith(Number),
+        availableCostValue: sql<number>`coalesce(sum(coalesce(${productItems.costAmount}, 0)::numeric), 0)`.mapWith(Number),
+      })
+      .from(productItems)
+      .innerJoin(outlets, eq(productItems.currentOutletId, outlets.id))
+      .where(availableStockWhere)
+      .groupBy(outlets.id, outlets.code, outlets.name)
+      .orderBy(desc(sql`count(*)`)),
+
+    db
+      .select({
+        categoryId: productCategories.id,
+        categoryName: productCategories.name,
+        itemCount: count(),
+        weightGram: sql<number>`coalesce(sum(coalesce(${productItems.weightGram}, 0)::numeric), 0)`.mapWith(Number),
+        costValue: sql<number>`coalesce(sum(coalesce(${productItems.costAmount}, 0)::numeric), 0)`.mapWith(Number),
+      })
+      .from(productItems)
+      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+      .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
+      .where(availableStockWhere)
+      .groupBy(productCategories.id, productCategories.name)
+      .orderBy(desc(sql`count(*)`))
+      .limit(8),
+
+    db
+      .select({
+        productId: productMasters.id,
+        productCode: productMasters.code,
+        productName: productMasters.name,
+        categoryName: productCategories.name,
+        soldCount: count(),
+        soldWeightGram: sql<number>`coalesce(sum(coalesce(${productItems.weightGram}, 0)::numeric), 0)`.mapWith(Number),
+        revenue: sql<number>`coalesce(sum(${saleItems.finalPriceAmount}::numeric), 0)`.mapWith(Number),
+        availableCount: sql<number>`(
+          select count(*)::integer
+          from ${productItems} as report_available_product_items
+          where report_available_product_items.product_master_id = ${productMasters.id}
+            and report_available_product_items.organization_id = ${auth.organization.id}
+            and report_available_product_items.availability = 'available'
+            and report_available_product_items.current_outlet_id in (${outletIdSqlList})
+        )`.mapWith(Number),
+      })
+      .from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
+      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+      .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
+      .where(
+        and(
+          eq(sales.organizationId, auth.organization.id),
+          inArray(sales.outletId, outletIds),
+          eq(sales.status, "completed"),
+          gte(sales.completedAt, period.currentStart),
+          lt(sales.completedAt, period.currentEnd),
+        ),
+      )
+      .groupBy(
+        productMasters.id,
+        productMasters.code,
+        productMasters.name,
+        productCategories.name,
+      )
+      .orderBy(desc(sql`count(*)`), desc(sql`coalesce(sum(${saleItems.finalPriceAmount}::numeric), 0)`))
+      .limit(6),
+
+    db
+      .select({
+        itemId: productItems.id,
+        sku: productItems.sku,
+        barcode: productItems.barcode,
+        productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
+        outletName: outlets.name,
+        weightGram: productItems.weightGram,
+        sellingAmount: productItems.sellingAmount,
+        stockAgeDays: sql<number>`greatest(0, floor(extract(epoch from (now() - ${productItems.createdAt})) / 86400))`.mapWith(Number),
+        createdAt: productItems.createdAt,
+      })
+      .from(productItems)
+      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+      .leftJoin(outlets, eq(productItems.currentOutletId, outlets.id))
+      .where(availableStockWhere)
+      .orderBy(productItems.createdAt)
+      .limit(6),
+
+    db
+      .select({
+        id: inventoryMovements.id,
+        itemId: productItems.id,
+        sku: productItems.sku,
+        barcode: productItems.barcode,
+        productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
+        categoryName: productCategories.name,
+        movementType: inventoryMovements.movementType,
+        fromOutletName: fromOutlet.name,
+        toOutletName: toOutlet.name,
+        currentOutletName: currentOutlet.name,
+        performerName: users.fullName,
+        referenceType: inventoryMovements.referenceType,
+        referenceId: inventoryMovements.referenceId,
+        invoiceNumber: sales.invoiceNumber,
+        reason: inventoryMovements.reason,
+        weightGram: productItems.weightGram,
+        costAmount: productItems.costAmount,
+        sellingAmount: productItems.sellingAmount,
+        occurredAt: inventoryMovements.occurredAt,
+      })
+      .from(inventoryMovements)
+      .innerJoin(productItems, eq(inventoryMovements.itemId, productItems.id))
+      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+      .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
+      .leftJoin(fromOutlet, eq(inventoryMovements.fromOutletId, fromOutlet.id))
+      .leftJoin(toOutlet, eq(inventoryMovements.toOutletId, toOutlet.id))
+      .leftJoin(currentOutlet, eq(productItems.currentOutletId, currentOutlet.id))
+      .innerJoin(users, eq(inventoryMovements.performedBy, users.id))
+      .leftJoin(
+        sales,
+        and(
+          eq(inventoryMovements.referenceId, sales.id),
+          or(
+            eq(inventoryMovements.referenceType, "sale"),
+            eq(inventoryMovements.referenceType, "sale_void"),
+            eq(inventoryMovements.referenceType, "sale_refund"),
+          ),
+        ),
+      )
+      .where(movementWhere)
+      .orderBy(desc(inventoryMovements.occurredAt))
+      .limit(80),
+  ]);
+
+  const stockSummary = stockSummaryRows[0];
+  const movementSummary = movementSummaryRows[0];
+  const trendMap = new Map(
+    trendRows.map((row) => [
+      row.bucket,
+      {
+        stockInCount: row.stockInCount,
+        stockOutCount: row.stockOutCount,
+        returnCount: row.returnCount,
+      },
+    ]),
+  );
+  const movementTrend = createStockTrendSkeleton(period).map((point) => {
+    const source = trendMap.get(point.key);
+
+    return {
+      ...point,
+      stockInCount: source?.stockInCount ?? 0,
+      stockOutCount: source?.stockOutCount ?? 0,
+      returnCount: source?.returnCount ?? 0,
+    };
+  });
+  const outletStock: ReportStockOutletRow[] = outletStockRows.map((row) => ({
+    outletId: row.outletId,
+    outletCode: row.outletCode,
+    outletName: row.outletName,
+    availableItemCount: row.availableItemCount,
+    availableWeightGram: row.availableWeightGram,
+    availableCostValue: row.availableCostValue,
+  }));
+  const categoryStock: ReportStockCategoryRow[] = categoryStockRows.map((row) => ({
+    categoryId: row.categoryId,
+    categoryName: row.categoryName,
+    itemCount: row.itemCount,
+    weightGram: row.weightGram,
+    costValue: row.costValue,
+  }));
+  const fastMovingProducts: ReportStockProductPerformanceRow[] = fastMovingRows.map(
+    (row) => ({
+      productId: row.productId,
+      productCode: row.productCode,
+      productName: row.productName,
+      categoryName: row.categoryName,
+      soldCount: row.soldCount,
+      soldWeightGram: row.soldWeightGram,
+      revenue: row.revenue,
+      availableCount: row.availableCount,
+    }),
+  );
+  const slowMovingItems: ReportSlowMovingStockRow[] = slowMovingRows.map((row) => ({
+    itemId: row.itemId,
+    sku: row.sku,
+    barcode: row.barcode,
+    productName: row.productName,
+    outletName: row.outletName,
+    weightGram: parseAmount(row.weightGram),
+    sellingAmount: parseAmount(row.sellingAmount),
+    stockAgeDays: row.stockAgeDays,
+    createdAt: row.createdAt,
+  }));
+  const movements: ReportStockMovementRow[] = movementRows.map((row) => ({
+    id: row.id,
+    itemId: row.itemId,
+    sku: row.sku,
+    barcode: row.barcode,
+    productName: row.productName,
+    categoryName: row.categoryName,
+    movementType: row.movementType as ReportInventoryMovementType,
+    fromOutletName: row.fromOutletName,
+    toOutletName: row.toOutletName,
+    currentOutletName: row.currentOutletName,
+    performerName: row.performerName,
+    referenceType: row.referenceType,
+    referenceId: row.referenceId,
+    invoiceNumber: row.invoiceNumber,
+    reason: row.reason,
+    weightGram: parseAmount(row.weightGram),
+    costAmount: parseAmount(row.costAmount),
+    sellingAmount: parseAmount(row.sellingAmount),
+    occurredAt: row.occurredAt,
+  }));
+
+  return {
+    filters,
+    period,
+    outlets: auth.outlets,
+    selectedOutlet,
+    summary: {
+      availableItemCount: stockSummary?.availableItemCount ?? 0,
+      availableWeightGram: stockSummary?.availableWeightGram ?? 0,
+      availableCostValue: stockSummary?.availableCostValue ?? 0,
+      movementCount: movementSummary?.movementCount ?? 0,
+      stockInCount: movementSummary?.stockInCount ?? 0,
+      stockOutCount: movementSummary?.stockOutCount ?? 0,
+      saleCount: movementSummary?.saleCount ?? 0,
+      returnCount: movementSummary?.returnCount ?? 0,
+      adjustmentCount: movementSummary?.adjustmentCount ?? 0,
+    },
+    movementTrend,
+    outletStock,
+    categoryStock,
+    fastMovingProducts,
+    slowMovingItems,
+    movements,
   };
 }

@@ -192,6 +192,146 @@ export type ReportSalesData = {
   sales: ReportSalesRow[];
 };
 
+
+
+export type ReportInventoryMovementType =
+  | "goods_receipt"
+  | "sale"
+  | "sale_return"
+  | "transfer_out"
+  | "transfer_in"
+  | "reservation"
+  | "reservation_release"
+  | "adjustment"
+  | "damaged"
+  | "lost"
+  | "repair_out"
+  | "repair_in"
+  | "reversal";
+
+export type ReportStockMovementFilter = "all" | ReportInventoryMovementType;
+
+export type ReportStockFilters = ReportSummaryFilters & {
+  query: string;
+  movementType: ReportStockMovementFilter;
+};
+
+export type ReportStockSummary = {
+  availableItemCount: number;
+  availableWeightGram: number;
+  availableCostValue: number;
+  movementCount: number;
+  stockInCount: number;
+  stockOutCount: number;
+  saleCount: number;
+  returnCount: number;
+  adjustmentCount: number;
+};
+
+export type ReportStockTrendPoint = {
+  key: string;
+  label: string;
+  stockInCount: number;
+  stockOutCount: number;
+  returnCount: number;
+};
+
+export type ReportStockOutletRow = {
+  outletId: string;
+  outletCode: string;
+  outletName: string;
+  availableItemCount: number;
+  availableWeightGram: number;
+  availableCostValue: number;
+};
+
+export type ReportStockCategoryRow = {
+  categoryId: string;
+  categoryName: string;
+  itemCount: number;
+  weightGram: number;
+  costValue: number;
+};
+
+export type ReportStockProductPerformanceRow = {
+  productId: string;
+  productCode: string;
+  productName: string;
+  categoryName: string;
+  soldCount: number;
+  soldWeightGram: number;
+  revenue: number;
+  availableCount: number;
+};
+
+export type ReportSlowMovingStockRow = {
+  itemId: string;
+  sku: string;
+  barcode: string;
+  productName: string;
+  outletName: string | null;
+  weightGram: number;
+  sellingAmount: number;
+  stockAgeDays: number;
+  createdAt: Date;
+};
+
+export type ReportStockMovementRow = {
+  id: string;
+  itemId: string;
+  sku: string;
+  barcode: string;
+  productName: string;
+  categoryName: string;
+  movementType: ReportInventoryMovementType;
+  fromOutletName: string | null;
+  toOutletName: string | null;
+  currentOutletName: string | null;
+  performerName: string;
+  referenceType: string | null;
+  referenceId: string | null;
+  invoiceNumber: string | null;
+  reason: string | null;
+  weightGram: number;
+  costAmount: number;
+  sellingAmount: number;
+  occurredAt: Date;
+};
+
+export type ReportStockData = {
+  filters: ReportStockFilters;
+  period: ReportPeriodMetadata;
+  outlets: ReportSummaryData["outlets"];
+  selectedOutlet: ReportSummaryData["selectedOutlet"];
+  summary: ReportStockSummary;
+  movementTrend: ReportStockTrendPoint[];
+  outletStock: ReportStockOutletRow[];
+  categoryStock: ReportStockCategoryRow[];
+  fastMovingProducts: ReportStockProductPerformanceRow[];
+  slowMovingItems: ReportSlowMovingStockRow[];
+  movements: ReportStockMovementRow[];
+};
+
+export const reportStockMovementOptions: Array<{
+  value: ReportStockMovementFilter;
+  label: string;
+}> = [
+  { value: "all", label: "Semua movement" },
+  { value: "goods_receipt", label: "Barang masuk" },
+  { value: "sale", label: "Terjual" },
+  { value: "sale_return", label: "Retur penjualan" },
+  { value: "reversal", label: "Reversal/Void" },
+  { value: "transfer_out", label: "Transfer keluar" },
+  { value: "transfer_in", label: "Transfer masuk" },
+  { value: "reservation", label: "Reservasi" },
+  { value: "reservation_release", label: "Lepas reservasi" },
+  { value: "adjustment", label: "Adjustment" },
+  { value: "damaged", label: "Rusak" },
+  { value: "lost", label: "Hilang" },
+  { value: "repair_out", label: "Keluar repair" },
+  { value: "repair_in", label: "Masuk repair" },
+];
+
 export const reportPeriodOptions: Array<{
   value: ReportPeriodRange;
   label: string;
@@ -282,3 +422,24 @@ export function parseReportSalesFilters(
     paymentMethod,
   };
 }
+
+export function parseReportStockFilters(
+  params: Record<string, string | string[] | undefined>,
+): ReportStockFilters {
+  const baseFilters = parseReportSummaryFilters(params);
+  const rawQuery = getSingleParam(params.q)?.trim() ?? "";
+  const rawMovementType = getSingleParam(params.movementType);
+
+  const movementType: ReportStockMovementFilter = reportStockMovementOptions.some(
+    (option) => option.value === rawMovementType,
+  )
+    ? (rawMovementType as ReportStockMovementFilter)
+    : "all";
+
+  return {
+    ...baseFilters,
+    query: rawQuery,
+    movementType,
+  };
+}
+
