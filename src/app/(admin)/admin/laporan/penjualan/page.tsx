@@ -134,9 +134,7 @@ function getSalesChartMax(points: ReportSalesDailyPoint[]) {
   return Math.ceil(maxValue / step) * step;
 }
 
-function buildSalesReportUrl(
-  params: Record<string, string | null | undefined>,
-) {
+function buildSalesReportUrl(params: Record<string, string | null | undefined>) {
   const searchParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -147,9 +145,31 @@ function buildSalesReportUrl(
 
   const query = searchParams.toString();
 
-  return query
-    ? `/admin/laporan/penjualan?${query}`
-    : "/admin/laporan/penjualan";
+  return query ? `/admin/laporan/penjualan?${query}` : "/admin/laporan/penjualan";
+}
+
+function buildSalesReportExportUrl({
+  format,
+  params,
+}: {
+  format: "csv" | "xlsx";
+  params: Record<string, string | null | undefined>;
+}) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) {
+      searchParams.set(key, value);
+    }
+  });
+
+  const basePath =
+    format === "xlsx"
+      ? "/admin/laporan/penjualan/export/xlsx"
+      : "/admin/laporan/penjualan/export";
+  const query = searchParams.toString();
+
+  return query ? `${basePath}?${query}` : basePath;
 }
 
 function StatCard({
@@ -203,8 +223,7 @@ function StatCard({
             tone === "success" && "bg-emerald-50 text-emerald-600",
             tone === "warning" && "bg-amber-50 text-amber-600",
             tone === "danger" && "bg-red-50 text-red-600",
-            tone === "default" &&
-              "bg-[var(--accent-soft)] text-[var(--accent)]",
+            tone === "default" && "bg-[var(--accent-soft)] text-[var(--accent)]",
           )}
         >
           {icon}
@@ -295,8 +314,8 @@ function SalesReportFilter({ data }: { data: ReportSalesData }) {
 
       <div className="mt-4 flex flex-col gap-2 border-t border-neutral-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs leading-5 text-[var(--muted)]">
-          KPI utama dihitung dari transaksi selesai pada periode ini. Filter
-          status dipakai untuk daftar transaksi dan breakdown status.
+          KPI utama dihitung dari transaksi selesai pada periode ini. Filter status
+          dipakai untuk daftar transaksi dan breakdown status.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Link
@@ -320,22 +339,16 @@ function SalesReportFilter({ data }: { data: ReportSalesData }) {
 
 function SalesTrendChart({ points }: { points: ReportSalesDailyPoint[] }) {
   const maxValue = getSalesChartMax(points);
-  const totalRevenue = points.reduce(
-    (total, point) => total + point.revenue,
-    0,
-  );
+  const totalRevenue = points.reduce((total, point) => total + point.revenue, 0);
   const totalTransactions = points.reduce(
     (total, point) => total + point.transactionCount,
     0,
   );
-  const bestPoint = points.reduce<ReportSalesDailyPoint | null>(
-    (best, point) => {
-      if (!best || point.revenue > best.revenue) return point;
+  const bestPoint = points.reduce<ReportSalesDailyPoint | null>((best, point) => {
+    if (!best || point.revenue > best.revenue) return point;
 
-      return best;
-    },
-    null,
-  );
+    return best;
+  }, null);
 
   return (
     <section className="min-w-0 self-start overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-5">
@@ -349,17 +362,13 @@ function SalesTrendChart({ points }: { points: ReportSalesDailyPoint[] }) {
             Omzet harian
           </h2>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Total {formatMoney(totalRevenue)} dari{" "}
-            {formatInteger(totalTransactions)} nota selesai.
+            Total {formatMoney(totalRevenue)} dari {formatInteger(totalTransactions)} nota selesai.
           </p>
         </div>
         <div className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm sm:w-auto sm:min-w-32">
-          <p className="text-xs font-medium text-[var(--muted)]">
-            Hari terbaik
-          </p>
+          <p className="text-xs font-medium text-[var(--muted)]">Hari terbaik</p>
           <p className="mt-1 font-semibold text-neutral-950">
-            {bestPoint?.label ?? "-"} ·{" "}
-            {formatCompactMoney(bestPoint?.revenue ?? 0)}
+            {bestPoint?.label ?? "-"} · {formatCompactMoney(bestPoint?.revenue ?? 0)}
           </p>
         </div>
       </div>
@@ -402,8 +411,7 @@ function SalesTrendChart({ points }: { points: ReportSalesDailyPoint[] }) {
           </div>
         </div>
         <p className="border-t border-neutral-100 pt-3 text-xs text-[var(--muted)] sm:hidden">
-          Geser grafik ke kiri atau kanan untuk melihat semua hari pada periode
-          laporan.
+          Geser grafik ke kiri atau kanan untuk melihat semua hari pada periode laporan.
         </p>
       </div>
     </section>
@@ -436,24 +444,17 @@ function PaymentBreakdown({ data }: { data: ReportSalesData }) {
           </p>
         ) : (
           data.paymentBreakdown.map((payment) => {
-            const width =
-              maxAmount > 0
-                ? Math.max(8, Math.round((payment.amount / maxAmount) * 100))
-                : 0;
+            const width = maxAmount > 0 ? Math.max(8, Math.round((payment.amount / maxAmount) * 100)) : 0;
 
             return (
-              <div
-                key={payment.method}
-                className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
-              >
+              <div key={payment.method} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-neutral-950">
                       {paymentMethodLabels[payment.method]}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {formatInteger(payment.transactionCount)} payment ·{" "}
-                      {payment.percentage.toFixed(1)}%
+                      {formatInteger(payment.transactionCount)} payment · {payment.percentage.toFixed(1)}%
                     </p>
                   </div>
                   <p className="text-right text-sm font-semibold text-neutral-950">
@@ -525,10 +526,7 @@ function StatusBreakdown({ data }: { data: ReportSalesData }) {
 }
 
 function OutletLeaderboard({ data }: { data: ReportSalesData }) {
-  const maxRevenue = Math.max(
-    ...data.topOutlets.map((outlet) => outlet.revenue),
-    0,
-  );
+  const maxRevenue = Math.max(...data.topOutlets.map((outlet) => outlet.revenue), 0);
 
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
@@ -550,25 +548,17 @@ function OutletLeaderboard({ data }: { data: ReportSalesData }) {
           </p>
         ) : (
           data.topOutlets.map((outlet, index) => {
-            const width =
-              maxRevenue > 0
-                ? Math.max(8, Math.round((outlet.revenue / maxRevenue) * 100))
-                : 0;
+            const width = maxRevenue > 0 ? Math.max(8, Math.round((outlet.revenue / maxRevenue) * 100)) : 0;
 
             return (
-              <div
-                key={outlet.outletId}
-                className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
-              >
+              <div key={outlet.outletId} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-neutral-950">
                       #{index + 1} {outlet.outletName}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {outlet.outletCode} ·{" "}
-                      {formatInteger(outlet.transactionCount)} nota ·{" "}
-                      {formatInteger(outlet.itemSold)} item
+                      {outlet.outletCode} · {formatInteger(outlet.transactionCount)} nota · {formatInteger(outlet.itemSold)} item
                     </p>
                   </div>
                   <p className="text-right text-sm font-semibold text-neutral-950">
@@ -648,10 +638,7 @@ function SalesTable({ rows }: { rows: ReportSalesRow[] }) {
           <tbody className="divide-y divide-neutral-100 bg-white">
             {rows.length === 0 ? (
               <tr>
-                <td
-                  colSpan={9}
-                  className="px-5 py-12 text-center text-sm text-[var(--muted)]"
-                >
+                <td colSpan={9} className="px-5 py-12 text-center text-sm text-[var(--muted)]">
                   Tidak ada transaksi yang cocok dengan filter laporan.
                 </td>
               </tr>
@@ -665,33 +652,21 @@ function SalesTable({ rows }: { rows: ReportSalesRow[] }) {
                     >
                       {sale.invoiceNumber}
                     </Link>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      {sale.cashierName}
-                    </p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">{sale.cashierName}</p>
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-neutral-600">
-                    {formatDateTime(
-                      sale.completedAt ?? sale.cancelledAt ?? sale.createdAt,
-                    )}
+                    {formatDateTime(sale.completedAt ?? sale.cancelledAt ?? sale.createdAt)}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4">
-                    <p className="font-medium text-neutral-800">
-                      {sale.outletName}
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      {sale.outletCode}
-                    </p>
+                    <p className="font-medium text-neutral-800">{sale.outletName}</p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">{sale.outletCode}</p>
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-neutral-600">
                     {sale.customerName ?? "Walk-in"}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4">
-                    <p className="font-medium text-neutral-800">
-                      {formatInteger(sale.itemCount)} item
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      {formatGram(sale.weightSoldGram)} gr
-                    </p>
+                    <p className="font-medium text-neutral-800">{formatInteger(sale.itemCount)} item</p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">{formatGram(sale.weightSoldGram)} gr</p>
                   </td>
                   <td className="px-5 py-4">
                     <PaymentPills methods={sale.paymentMethods} />
@@ -741,9 +716,7 @@ function SalesTable({ rows }: { rows: ReportSalesRow[] }) {
                     {sale.invoiceNumber}
                   </Link>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    {formatDateTime(
-                      sale.completedAt ?? sale.cancelledAt ?? sale.createdAt,
-                    )}
+                    {formatDateTime(sale.completedAt ?? sale.cancelledAt ?? sale.createdAt)}
                   </p>
                 </div>
                 <span
@@ -758,53 +731,34 @@ function SalesTable({ rows }: { rows: ReportSalesRow[] }) {
 
               <div className="mt-4 grid gap-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 text-sm sm:grid-cols-2">
                 <div>
-                  <p className="text-xs font-medium text-[var(--muted)]">
-                    Outlet
-                  </p>
+                  <p className="text-xs font-medium text-[var(--muted)]">Outlet</p>
+                  <p className="mt-1 font-semibold text-neutral-950">{sale.outletName}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-[var(--muted)]">Pelanggan</p>
+                  <p className="mt-1 font-semibold text-neutral-950">{sale.customerName ?? "Walk-in"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-[var(--muted)]">Item</p>
                   <p className="mt-1 font-semibold text-neutral-950">
-                    {sale.outletName}
+                    {formatInteger(sale.itemCount)} item · {formatGram(sale.weightSoldGram)} gr
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[var(--muted)]">
-                    Pelanggan
-                  </p>
-                  <p className="mt-1 font-semibold text-neutral-950">
-                    {sale.customerName ?? "Walk-in"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-[var(--muted)]">
-                    Item
-                  </p>
-                  <p className="mt-1 font-semibold text-neutral-950">
-                    {formatInteger(sale.itemCount)} item ·{" "}
-                    {formatGram(sale.weightSoldGram)} gr
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-[var(--muted)]">
-                    Kasir
-                  </p>
-                  <p className="mt-1 font-semibold text-neutral-950">
-                    {sale.cashierName}
-                  </p>
+                  <p className="text-xs font-medium text-[var(--muted)]">Kasir</p>
+                  <p className="mt-1 font-semibold text-neutral-950">{sale.cashierName}</p>
                 </div>
               </div>
 
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-xs font-medium text-[var(--muted)]">
-                    Pembayaran
-                  </p>
+                  <p className="text-xs font-medium text-[var(--muted)]">Pembayaran</p>
                   <div className="mt-2">
                     <PaymentPills methods={sale.paymentMethods} />
                   </div>
                 </div>
                 <div className="text-left sm:text-right">
-                  <p className="text-xs font-medium text-[var(--muted)]">
-                    Total
-                  </p>
+                  <p className="text-xs font-medium text-[var(--muted)]">Total</p>
                   <p className="mt-1 text-lg font-semibold text-neutral-950">
                     {formatMoney(sale.totalAmount)}
                   </p>
@@ -821,9 +775,7 @@ function SalesTable({ rows }: { rows: ReportSalesRow[] }) {
   );
 }
 
-export default async function LaporanPenjualanPage({
-  searchParams,
-}: PageProps) {
+export default async function LaporanPenjualanPage({ searchParams }: PageProps) {
   const auth = await requirePermission("reports.view");
   const params = await searchParams;
   const filters = parseReportSalesFilters(params);
@@ -894,51 +846,64 @@ export default async function LaporanPenjualanPage({
             >
               Reset tabel
             </Link>
-            <button
-              type="button"
-              disabled
-              title="Export akan disambungkan pada fase R11E."
-              className="inline-flex h-11 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm font-semibold text-neutral-400"
-            >
-              <Download className="size-4" />
-              Export CSV/XLSX
-            </button>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+              <Link
+                href={buildSalesReportExportUrl({
+                  format: "csv",
+                  params: {
+                    range: data.filters.range,
+                    outletId: data.filters.outletId,
+                    q: data.filters.query,
+                    status: data.filters.status === "all" ? null : data.filters.status,
+                    paymentMethod:
+                      data.filters.paymentMethod === "all" ? null : data.filters.paymentMethod,
+                  },
+                })}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+              >
+                <Download className="size-4" />
+                CSV
+              </Link>
+              <Link
+                href={buildSalesReportExportUrl({
+                  format: "xlsx",
+                  params: {
+                    range: data.filters.range,
+                    outletId: data.filters.outletId,
+                    q: data.filters.query,
+                    status: data.filters.status === "all" ? null : data.filters.status,
+                    paymentMethod:
+                      data.filters.paymentMethod === "all" ? null : data.filters.paymentMethod,
+                  },
+                })}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+              >
+                <Download className="size-4" />
+                XLSX
+              </Link>
+            </div>
           </div>
         </div>
 
         <div className="mt-6 grid gap-3 border-t border-neutral-100 pt-5 text-sm sm:grid-cols-3">
           <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-            <p className="text-xs font-medium text-[var(--muted)]">
-              Periode aktif
-            </p>
-            <p className="mt-2 font-semibold text-neutral-950">
-              {data.period.label}
-            </p>
-            <p className="mt-1 text-xs text-[var(--muted)]">
-              {data.period.description}
-            </p>
+            <p className="text-xs font-medium text-[var(--muted)]">Periode aktif</p>
+            <p className="mt-2 font-semibold text-neutral-950">{data.period.label}</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">{data.period.description}</p>
           </div>
           <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
             <p className="text-xs font-medium text-[var(--muted)]">Outlet</p>
             <p className="mt-2 font-semibold text-neutral-950">
-              {data.selectedOutlet
-                ? data.selectedOutlet.name
-                : "Semua outlet akses saya"}
+              {data.selectedOutlet ? data.selectedOutlet.name : "Semua outlet akses saya"}
             </p>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              {data.selectedOutlet
-                ? data.selectedOutlet.code
-                : `${formatInteger(data.outlets.length)} outlet`}
+              {data.selectedOutlet ? data.selectedOutlet.code : `${formatInteger(data.outlets.length)} outlet`}
             </p>
           </div>
           <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-            <p className="text-xs font-medium text-[var(--muted)]">
-              Filter aktif
-            </p>
+            <p className="text-xs font-medium text-[var(--muted)]">Filter aktif</p>
             <p className="mt-2 font-semibold text-neutral-950">
-              {data.filters.status === "all"
-                ? "Semua status"
-                : saleStatusLabels[data.filters.status]}
+              {data.filters.status === "all" ? "Semua status" : saleStatusLabels[data.filters.status]}
             </p>
             <p className="mt-1 text-xs text-[var(--muted)]">
               {data.filters.paymentMethod === "all"
@@ -1000,27 +965,18 @@ export default async function LaporanPenjualanPage({
             </div>
           </div>
 
-          <div className="mt-6 max-h-[282px] overflow-y-auto overscroll-y-contain pr-1 [scrollbar-width:thin]">
+          <div className="mt-6 max-h-[292px] overflow-y-auto overscroll-y-contain pr-1 [scrollbar-width:thin]">
             <div className="grid gap-3">
               {snapshotMetrics.map((item) => {
                 const Icon = item.icon;
 
                 return (
-                  <div
-                    key={item.label}
-                    className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
-                  >
+                  <div key={item.label} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs font-medium text-[var(--muted)]">
-                          {item.label}
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-neutral-950">
-                          {item.value}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {item.helper}
-                        </p>
+                        <p className="text-xs font-medium text-[var(--muted)]">{item.label}</p>
+                        <p className="mt-2 text-lg font-semibold text-neutral-950">{item.value}</p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">{item.helper}</p>
                       </div>
                       <span className="grid size-10 place-items-center rounded-xl bg-white text-neutral-500">
                         <Icon className="size-5" />

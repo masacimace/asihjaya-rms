@@ -9,7 +9,15 @@ const legacyRoutes = [
   "/admin/produk/" + "varian",
 ];
 
-const retiredExactRoutes = ["/admin/operasional", "/admin/laporan/kas"];
+const retiredExactRoutes = [
+  "/admin/operasional",
+  "/admin/laporan/kas",
+  "/admin/laporan/export",
+  "/admin/laporan/export/xlsx",
+];
+
+const retiredRouteFiles = [
+];
 
 const expectedRouteFiles = [
   "app/page.tsx",
@@ -58,8 +66,14 @@ const expectedRouteFiles = [
   "app/(admin)/admin/operasional/hardware/page.tsx",
   "app/(admin)/admin/laporan/page.tsx",
   "app/(admin)/admin/laporan/penjualan/page.tsx",
+  "app/(admin)/admin/laporan/penjualan/export/route.ts",
+  "app/(admin)/admin/laporan/penjualan/export/xlsx/route.ts",
   "app/(admin)/admin/laporan/stok/page.tsx",
+  "app/(admin)/admin/laporan/stok/export/route.ts",
+  "app/(admin)/admin/laporan/stok/export/xlsx/route.ts",
   "app/(admin)/admin/laporan/kas/page.tsx",
+  "app/(admin)/admin/operasional/kas/export/route.ts",
+  "app/(admin)/admin/operasional/kas/export/xlsx/route.ts",
 
   "app/(pos)/pos/layout.tsx",
   "app/(pos)/pos/page.tsx",
@@ -112,6 +126,17 @@ async function main() {
     }
   }
 
+  for (const retiredFile of retiredRouteFiles) {
+    const absolutePath = path.join(sourceRoot, retiredFile);
+
+    try {
+      await access(absolutePath);
+      problems.push(`Route file harus dihapus karena sudah tidak dipakai: ${retiredFile}`);
+    } catch {
+      // File memang sudah tidak ada, sesuai yang diharapkan.
+    }
+  }
+
   const sourceFiles = await walkDirectory(sourceRoot);
 
   for (const file of sourceFiles) {
@@ -158,7 +183,7 @@ async function main() {
 
   console.log("Pemeriksaan route berhasil.");
   console.log(
-    "Route Admin, POS, API, Media, Produk, Inventaris, Penjualan, Pelanggan, subroute Operasional, dan Laporan tersedia tanpa referensi route lama.",
+    "Route Admin, POS, API, Media, Produk, Inventaris, Penjualan, Pelanggan, subroute Operasional, Laporan detail, dan route export aktif tersedia tanpa referensi route lama.",
   );
 }
 

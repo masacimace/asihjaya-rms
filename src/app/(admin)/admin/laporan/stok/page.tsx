@@ -143,9 +143,7 @@ function getTrendMax(points: ReportStockTrendPoint[]) {
   return Math.max(maxValue, 4);
 }
 
-function buildStockReportUrl(
-  params: Record<string, string | null | undefined>,
-) {
+function buildStockReportUrl(params: Record<string, string | null | undefined>) {
   const searchParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -157,6 +155,30 @@ function buildStockReportUrl(
   const query = searchParams.toString();
 
   return query ? `/admin/laporan/stok?${query}` : "/admin/laporan/stok";
+}
+
+function buildStockReportExportUrl({
+  format,
+  params,
+}: {
+  format: "csv" | "xlsx";
+  params: Record<string, string | null | undefined>;
+}) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) {
+      searchParams.set(key, value);
+    }
+  });
+
+  const basePath =
+    format === "xlsx"
+      ? "/admin/laporan/stok/export/xlsx"
+      : "/admin/laporan/stok/export";
+  const query = searchParams.toString();
+
+  return query ? `${basePath}?${query}` : basePath;
 }
 
 function StatCard({
@@ -210,8 +232,7 @@ function StatCard({
             tone === "success" && "bg-emerald-50 text-emerald-600",
             tone === "warning" && "bg-amber-50 text-amber-600",
             tone === "danger" && "bg-red-50 text-red-600",
-            tone === "default" &&
-              "bg-[var(--accent-soft)] text-[var(--accent)]",
+            tone === "default" && "bg-[var(--accent-soft)] text-[var(--accent)]",
           )}
         >
           {icon}
@@ -310,9 +331,7 @@ function StockTrendChart({ points }: { points: ReportStockTrendPoint[] }) {
           </p>
         </div>
         <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm">
-          <p className="text-xs font-semibold text-[var(--muted)]">
-            Puncak mutasi
-          </p>
+          <p className="text-xs font-semibold text-[var(--muted)]">Puncak mutasi</p>
           <p className="mt-1 font-semibold text-neutral-950">
             {formatInteger(maxValue)} movement
           </p>
@@ -322,20 +341,12 @@ function StockTrendChart({ points }: { points: ReportStockTrendPoint[] }) {
       <div className="mt-6 overflow-x-auto pb-3 [scrollbar-width:thin]">
         <div
           className="grid min-w-max gap-3"
-          style={{
-            gridTemplateColumns: `repeat(${points.length}, minmax(74px, 1fr))`,
-          }}
+          style={{ gridTemplateColumns: `repeat(${points.length}, minmax(74px, 1fr))` }}
         >
           {points.map((point) => {
             const inHeight = Math.max((point.stockInCount / maxValue) * 132, 8);
-            const outHeight = Math.max(
-              (point.stockOutCount / maxValue) * 132,
-              8,
-            );
-            const returnHeight = Math.max(
-              (point.returnCount / maxValue) * 132,
-              8,
-            );
+            const outHeight = Math.max((point.stockOutCount / maxValue) * 132, 8);
+            const returnHeight = Math.max((point.returnCount / maxValue) * 132, 8);
 
             return (
               <div key={point.key} className="min-w-[74px]">
@@ -359,14 +370,10 @@ function StockTrendChart({ points }: { points: ReportStockTrendPoint[] }) {
                 <div className="mt-3 text-center">
                   <p className="text-xs font-semibold text-neutral-900">
                     {formatInteger(
-                      point.stockInCount +
-                        point.stockOutCount +
-                        point.returnCount,
+                      point.stockInCount + point.stockOutCount + point.returnCount,
                     )}
                   </p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {point.label}
-                  </p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">{point.label}</p>
                 </div>
               </div>
             );
@@ -440,16 +447,14 @@ function StockSnapshot({ data }: { data: ReportStockData }) {
         Ringkasan keluar-masuk item fisik berdasarkan inventory ledger.
       </p>
 
-      <div className="mt-5 h-[15rem] space-y-3 overflow-y-auto pr-1 [scrollbar-width:thin]">
+      <div className="mt-5 max-h-[25.5rem] space-y-3 overflow-y-auto pr-1 [scrollbar-width:thin]">
         {cards.map((card) => (
           <div
             key={card.label}
             className="flex items-center justify-between gap-4 rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
           >
             <div>
-              <p className="text-xs font-semibold text-[var(--muted)]">
-                {card.label}
-              </p>
+              <p className="text-xs font-semibold text-[var(--muted)]">{card.label}</p>
               <p className="mt-2 text-xl font-semibold text-neutral-950">
                 {card.value}
               </p>
@@ -465,11 +470,7 @@ function StockSnapshot({ data }: { data: ReportStockData }) {
   );
 }
 
-function FastMovingList({
-  products,
-}: {
-  products: ReportStockProductPerformanceRow[];
-}) {
+function FastMovingList({ products }: { products: ReportStockProductPerformanceRow[] }) {
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -508,8 +509,7 @@ function FastMovingList({
                     {product.productName}
                   </p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    {product.categoryName} · tersedia{" "}
-                    {formatInteger(product.availableCount)} item
+                    {product.categoryName} · tersedia {formatInteger(product.availableCount)} item
                   </p>
                 </div>
                 <div className="text-right">
@@ -520,18 +520,9 @@ function FastMovingList({
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-                <MetricPill
-                  label="Gramasi"
-                  value={`${formatGram(product.soldWeightGram)} g`}
-                />
-                <MetricPill
-                  label="Revenue"
-                  value={formatMoney(product.revenue)}
-                />
-                <MetricPill
-                  label="Sisa"
-                  value={`${formatInteger(product.availableCount)} item`}
-                />
+                <MetricPill label="Gramasi" value={`${formatGram(product.soldWeightGram)} g`} />
+                <MetricPill label="Revenue" value={formatMoney(product.revenue)} />
+                <MetricPill label="Sisa" value={`${formatInteger(product.availableCount)} item`} />
               </div>
             </div>
           ))
@@ -570,15 +561,12 @@ function SlowMovingList({ items }: { items: ReportSlowMovingStockRow[] }) {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-[var(--accent)]">
-                    {item.sku}
-                  </p>
+                  <p className="text-xs font-semibold text-[var(--accent)]">{item.sku}</p>
                   <p className="mt-1 truncate font-semibold text-neutral-950">
                     {item.productName}
                   </p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    {item.outletName ?? "Tanpa outlet"} · masuk{" "}
-                    {formatShortDate(item.createdAt)}
+                    {item.outletName ?? "Tanpa outlet"} · masuk {formatShortDate(item.createdAt)}
                   </p>
                 </div>
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-right">
@@ -590,14 +578,8 @@ function SlowMovingList({ items }: { items: ReportSlowMovingStockRow[] }) {
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
                 <MetricPill label="Barcode" value={item.barcode} />
-                <MetricPill
-                  label="Gramasi"
-                  value={`${formatGram(item.weightGram)} g`}
-                />
-                <MetricPill
-                  label="Harga label"
-                  value={formatMoney(item.sellingAmount)}
-                />
+                <MetricPill label="Gramasi" value={`${formatGram(item.weightGram)} g`} />
+                <MetricPill label="Harga label" value={formatMoney(item.sellingAmount)} />
               </div>
             </Link>
           ))
@@ -672,9 +654,7 @@ function StockDistribution({ data }: { data: ReportStockData }) {
                     <p className="truncate font-semibold text-neutral-950">
                       {row.outletName}
                     </p>
-                    <p className="text-xs text-[var(--muted)]">
-                      {row.outletCode}
-                    </p>
+                    <p className="text-xs text-[var(--muted)]">{row.outletCode}</p>
                   </div>
                   <p className="font-semibold text-neutral-950">
                     {formatInteger(row.availableItemCount)} item
@@ -689,8 +669,7 @@ function StockDistribution({ data }: { data: ReportStockData }) {
                   />
                 </div>
                 <p className="mt-2 text-xs text-[var(--muted)]">
-                  {formatGram(row.availableWeightGram)} g · modal{" "}
-                  {formatMoney(row.availableCostValue)}
+                  {formatGram(row.availableWeightGram)} g · modal {formatMoney(row.availableCostValue)}
                 </p>
               </div>
             ))
@@ -732,8 +711,7 @@ function StockDistribution({ data }: { data: ReportStockData }) {
                   />
                 </div>
                 <p className="mt-2 text-xs text-[var(--muted)]">
-                  {formatGram(row.weightGram)} g · modal{" "}
-                  {formatMoney(row.costValue)}
+                  {formatGram(row.weightGram)} g · modal {formatMoney(row.costValue)}
                 </p>
               </div>
             ))
@@ -777,10 +755,7 @@ function MovementTable({ movements }: { movements: ReportStockMovementRow[] }) {
           <tbody className="divide-y divide-neutral-100 bg-white">
             {movements.length === 0 ? (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-10 text-center text-sm text-[var(--muted)]"
-                >
+                <td colSpan={7} className="px-4 py-10 text-center text-sm text-[var(--muted)]">
                   Belum ada movement sesuai filter.
                 </td>
               </tr>
@@ -813,12 +788,7 @@ function MovementTable({ movements }: { movements: ReportStockMovementRow[] }) {
                   </td>
                   <td className="px-4 py-4 text-neutral-700">
                     <p>{movement.fromOutletName ?? "-"}</p>
-                    <p className="text-xs text-[var(--muted)]">
-                      →{" "}
-                      {movement.toOutletName ??
-                        movement.currentOutletName ??
-                        "-"}
-                    </p>
+                    <p className="text-xs text-[var(--muted)]">→ {movement.toOutletName ?? movement.currentOutletName ?? "-"}</p>
                   </td>
                   <td className="px-4 py-4 text-neutral-700">
                     {movement.invoiceNumber ? (
@@ -890,17 +860,9 @@ function MovementTable({ movements }: { movements: ReportStockMovementRow[] }) {
                   label="Outlet"
                   value={`${movement.fromOutletName ?? "-"} → ${movement.toOutletName ?? movement.currentOutletName ?? "-"}`}
                 />
-                <MetricPill
-                  label="Gramasi"
-                  value={`${formatGram(movement.weightGram)} g`}
-                />
+                <MetricPill label="Gramasi" value={`${formatGram(movement.weightGram)} g`} />
                 <MetricPill label="Operator" value={movement.performerName} />
-                <MetricPill
-                  label="Ref"
-                  value={
-                    movement.invoiceNumber ?? movement.referenceType ?? "-"
-                  }
-                />
+                <MetricPill label="Ref" value={movement.invoiceNumber ?? movement.referenceType ?? "-"} />
               </div>
               <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
                 {movement.reason ?? "Tanpa catatan movement."}
@@ -931,8 +893,7 @@ export default async function LaporanStokPage({ searchParams }: PageProps) {
               Laporan Pergerakan Stok
             </h1>
             <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              Analisa stok jewelry serialized berdasarkan ledger inventory,
-              penjualan, retur, void, dan penerimaan barang.
+              Analisa stok jewelry serialized berdasarkan ledger inventory, penjualan, retur, void, dan penerimaan barang.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -944,14 +905,36 @@ export default async function LaporanStokPage({ searchParams }: PageProps) {
               <Store className="size-4 text-[var(--accent)]" />
               {data.selectedOutlet?.name ?? "Semua outlet"}
             </div>
-            <button
-              type="button"
-              disabled
-              title="Export akan disambungkan pada fase R11E."
-              className="inline-flex cursor-not-allowed items-center gap-2 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-semibold text-neutral-400"
+            <Link
+              href={buildStockReportExportUrl({
+                format: "csv",
+                params: {
+                  range: data.filters.range,
+                  outletId: data.filters.outletId,
+                  q: data.filters.query,
+                  movementType:
+                    data.filters.movementType === "all" ? null : data.filters.movementType,
+                },
+              })}
+              className="inline-flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
             >
-              <Download className="size-4" /> Export CSV
-            </button>
+              <Download className="size-4" /> CSV
+            </Link>
+            <Link
+              href={buildStockReportExportUrl({
+                format: "xlsx",
+                params: {
+                  range: data.filters.range,
+                  outletId: data.filters.outletId,
+                  q: data.filters.query,
+                  movementType:
+                    data.filters.movementType === "all" ? null : data.filters.movementType,
+                },
+              })}
+              className="inline-flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+            >
+              <Download className="size-4" /> XLSX
+            </Link>
           </div>
         </div>
       </section>
@@ -1008,10 +991,7 @@ export default async function LaporanStokPage({ searchParams }: PageProps) {
           href={buildStockReportUrl({
             range: data.filters.range,
             outletId: data.filters.outletId ?? undefined,
-            movementType:
-              data.filters.movementType === "all"
-                ? undefined
-                : data.filters.movementType,
+            movementType: data.filters.movementType === "all" ? undefined : data.filters.movementType,
             q: data.filters.query || undefined,
           })}
           className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)]/40 hover:text-[var(--accent)]"

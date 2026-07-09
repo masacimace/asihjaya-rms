@@ -410,6 +410,84 @@ export async function getAdminCashMovementListData(
   };
 }
 
+
+export async function getAdminCashMovementExportRows(
+  auth: AuthContext,
+  filters: AdminCashMovementFilters,
+): Promise<AdminCashMovementRow[]> {
+  const outletIds = getAccessibleOutletIds(auth, filters.outletId);
+  const { conditions } = createMovementConditions({
+    auth,
+    filters,
+    outletIds,
+  });
+  const whereClause = and(...conditions);
+
+  if (!whereClause) {
+    return [];
+  }
+
+  const rows = await db
+    .select({
+      id: cashMovements.id,
+      shiftId: cashMovements.shiftId,
+      type: cashMovements.type,
+      amount: cashMovements.amount,
+      referenceType: cashMovements.referenceType,
+      referenceId: cashMovements.referenceId,
+      reason: cashMovements.reason,
+      createdAt: cashMovements.createdAt,
+      createdByName: users.fullName,
+      outletId: outlets.id,
+      outletCode: outlets.code,
+      outletName: outlets.name,
+      registerId: registers.id,
+      registerCode: registers.code,
+      registerName: registers.name,
+      shiftStatus: shifts.status,
+      shiftOpenedAt: shifts.openedAt,
+      saleInvoiceNumber: sales.invoiceNumber,
+    })
+    .from(cashMovements)
+    .innerJoin(shifts, eq(cashMovements.shiftId, shifts.id))
+    .innerJoin(outlets, eq(shifts.outletId, outlets.id))
+    .innerJoin(registers, eq(shifts.registerId, registers.id))
+    .innerJoin(users, eq(cashMovements.createdBy, users.id))
+    .leftJoin(
+      sales,
+      and(
+        eq(cashMovements.referenceId, sales.id),
+        eq(cashMovements.referenceType, "sale"),
+      ),
+    )
+    .where(whereClause)
+    .orderBy(desc(cashMovements.createdAt))
+    .limit(10000);
+
+  return rows.map((row) => ({
+    id: row.id,
+    shiftId: row.shiftId,
+    type: row.type,
+    amount: row.amount,
+    referenceType: row.referenceType,
+    referenceId: row.referenceId,
+    referenceLabel:
+      row.saleInvoiceNumber ??
+      (row.referenceType === "shift" ? "Shift kasir" : row.referenceType),
+    reason: row.reason,
+    createdAt: row.createdAt,
+    createdByName: row.createdByName,
+    outletId: row.outletId,
+    outletCode: row.outletCode,
+    outletName: row.outletName,
+    registerId: row.registerId,
+    registerCode: row.registerCode,
+    registerName: row.registerName,
+    shiftStatus: row.shiftStatus,
+    shiftOpenedAt: row.shiftOpenedAt,
+  }));
+}
+
 export function getCashMovementSignedAmount(row: Pick<AdminCashMovementRow, "type" | "amount">) {
   return getSignedMovementAmount(row.type, parseAmount(row.amount));
 }

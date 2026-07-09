@@ -6,7 +6,6 @@ import {
   Banknote,
   Boxes,
   CalendarDays,
-  Download,
   Gem,
   Landmark,
   LineChart,
@@ -827,14 +826,6 @@ export default async function LaporanDashboardPage({ searchParams }: PageProps) 
                 7 hari terakhir
                 <ArrowRight className="size-4" />
               </Link>
-              <button
-                disabled
-                title="Export akan disambungkan pada fase R11E."
-                className="inline-flex items-center justify-between rounded-xl border border-dashed border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-400"
-              >
-                Export summary
-                <Download className="size-4" />
-              </button>
             </div>
           </div>
         </div>
@@ -940,9 +931,9 @@ export default async function LaporanDashboardPage({ searchParams }: PageProps) 
               </p>
             </div>
             <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-              <p className="font-semibold text-neutral-950">R11D/R11E</p>
+              <p className="font-semibold text-neutral-950">R11E</p>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Arus kas real-data dan export CSV/XLSX konsisten.
+                Export CSV/XLSX tetap tersedia di laporan detail dan buku kas operasional.
               </p>
             </div>
           </div>

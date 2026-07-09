@@ -114,6 +114,17 @@ function buildCashListUrl(page: number, filters: AdminCashMovementFilters) {
   return query ? `/admin/operasional/kas?${query}` : "/admin/operasional/kas";
 }
 
+function buildCashExportUrl(format: "csv" | "xlsx", filters: AdminCashMovementFilters) {
+  const params = buildCashQueryParams(filters);
+  const query = params.toString();
+  const basePath =
+    format === "xlsx"
+      ? "/admin/operasional/kas/export/xlsx"
+      : "/admin/operasional/kas/export";
+
+  return query ? `${basePath}?${query}` : basePath;
+}
+
 function getMovementTone(type: AdminCashMovementRow["type"]) {
   if (type === "cash_in" || type === "cash_sale" || type === "opening_balance") {
     return {
@@ -186,7 +197,7 @@ function SummaryCard({
   return (
     <article
       className={cn(
-        "relative overflow-hidden rounded-2xl border p-5 shadow-sm shadow-neutral-950/[0.02]",
+        "relative overflow-hidden rounded-2xl border p-5",
         tone === "dark"
           ? "border-neutral-800 bg-neutral-950 text-white"
           : "border-[var(--border)] bg-white text-neutral-950",
@@ -277,7 +288,7 @@ function MovementMobileCard({ movement }: { movement: AdminCashMovementRow }) {
   const tone = getMovementTone(movement.type);
 
   return (
-    <article className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm shadow-neutral-950/[0.02]">
+    <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <MovementBadge type={movement.type} />
@@ -342,7 +353,7 @@ export default async function KasPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <header className="relative overflow-hidden rounded-[2rem] border border-neutral-800 bg-neutral-950 p-5 text-white shadow-sm sm:p-6">
+      <header className="relative overflow-hidden rounded-[2rem] border border-neutral-800 bg-neutral-950 p-5 text-white sm:p-6">
         <div className="absolute -right-20 -top-24 size-64 rounded-full bg-[var(--accent)]/25 blur-3xl" />
         <div className="absolute -bottom-24 left-1/4 size-52 rounded-full bg-white/10 blur-3xl" />
 
@@ -415,7 +426,7 @@ export default async function KasPage({ searchParams }: PageProps) {
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px] xl:items-start">
         <div className="space-y-6">
-          <section className="rounded-[1.75rem] border border-[var(--border)] bg-white p-4 shadow-sm shadow-neutral-950/[0.02] sm:p-5">
+          <section className="rounded-[1.75rem] border border-[var(--border)] bg-white p-4 sm:p-5">
             <form className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_180px_180px_180px_auto] lg:items-end">
               <label className="block text-sm">
                 <span className="mb-2 block font-medium text-neutral-800">
@@ -503,7 +514,7 @@ export default async function KasPage({ searchParams }: PageProps) {
             </form>
           </section>
 
-          <section className="overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-white shadow-sm shadow-neutral-950/[0.02]">
+          <section className="overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-white">
             <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="font-semibold text-neutral-950">Buku Kas</h2>
@@ -511,15 +522,22 @@ export default async function KasPage({ searchParams }: PageProps) {
                   Menampilkan {formatInteger(data.rows.length)} dari {formatInteger(data.total)} movement.
                 </p>
               </div>
-              <button
-                type="button"
-                disabled
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--border)] px-3 text-sm font-semibold text-neutral-400"
-                title="Export akan disambungkan pada fase laporan."
-              >
-                <Download className="size-4" />
-                Export CSV
-              </button>
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                <Link
+                  href={buildCashExportUrl("csv", filters)}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                >
+                  <Download className="size-4" />
+                  CSV
+                </Link>
+                <Link
+                  href={buildCashExportUrl("xlsx", filters)}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                >
+                  <Download className="size-4" />
+                  XLSX
+                </Link>
+              </div>
             </div>
 
             {data.rows.length === 0 ? (
@@ -624,7 +642,7 @@ export default async function KasPage({ searchParams }: PageProps) {
         <aside className="space-y-4 xl:sticky xl:top-6">
           <CashMovementForm activeShifts={data.activeShifts} />
 
-          <section className="rounded-[1.75rem] border border-[var(--border)] bg-white p-5 shadow-sm shadow-neutral-950/[0.02]">
+          <section className="rounded-[1.75rem] border border-[var(--border)] bg-white p-5">
             <div className="flex items-start gap-3">
               <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
                 <ShieldCheck className="size-5" />

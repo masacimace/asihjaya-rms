@@ -749,6 +749,7 @@ function toPaymentMethods(value: unknown): ReportPaymentMethod[] {
 export async function getReportSalesData(
   auth: AuthContext,
   filters: ReportSalesFilters,
+  options: { rowLimit?: number } = {},
 ): Promise<ReportSalesData> {
   const outletIds = getAccessibleOutletIds(auth, filters.outletId);
   const now = new Date();
@@ -1030,7 +1031,7 @@ export async function getReportSalesData(
         sales.createdAt,
       )
       .orderBy(desc(activityAtSql))
-      .limit(50),
+      .limit(options.rowLimit ?? 50),
   ]);
 
   const salesSummary = salesSummaryRows[0];
@@ -1200,6 +1201,7 @@ function createStockTrendSkeleton(
 export async function getReportStockData(
   auth: AuthContext,
   filters: ReportStockFilters,
+  options: { movementLimit?: number } = {},
 ): Promise<ReportStockData> {
   const outletIds = getAccessibleOutletIds(auth, filters.outletId);
   const now = new Date();
@@ -1465,7 +1467,7 @@ export async function getReportStockData(
       )
       .where(movementWhere)
       .orderBy(desc(inventoryMovements.occurredAt))
-      .limit(80),
+      .limit(options.movementLimit ?? 80),
   ]);
 
   const stockSummary = stockSummaryRows[0];
