@@ -1,84 +1,125 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { BarChart3, TrendingUp, Package, Wallet } from "lucide-react";
+import { BarChart3, Package, TrendingUp, Wallet } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ReactNode } from "react";
 
 const tabs = [
   {
     name: "Ringkasan",
     href: "/admin/laporan",
+    description: "Executive overview",
     icon: BarChart3,
   },
   {
     name: "Penjualan",
     href: "/admin/laporan/penjualan",
+    description: "Omzet dan transaksi",
     icon: TrendingUp,
   },
   {
     name: "Pergerakan Stok",
     href: "/admin/laporan/stok",
+    description: "Mutasi dan aging",
     icon: Package,
   },
   {
     name: "Arus Kas",
     href: "/admin/laporan/kas",
+    description: "Cashflow dan shift",
     icon: Wallet,
   },
 ];
 
+function buildTabHref(href: string, searchParams: URLSearchParams) {
+  const preservedParams = new URLSearchParams();
+
+  for (const key of ["range", "outletId"]) {
+    const value = searchParams.get(key);
+
+    if (value) {
+      preservedParams.set(key, value);
+    }
+  }
+
+  const query = preservedParams.toString();
+
+  return query ? `${href}?${query}` : href;
+}
+
 export default function LaporanLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
-            Laporan Outlet
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            Pantau performa penjualan, stok, dan arus kas harian secara real-time.
-          </p>
+      <header className="overflow-hidden rounded-[2rem] border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-100 bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-800 p-5 text-white sm:p-6">
+          <div className="max-w-4xl">
+            <p className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
+              ADMIN-R11
+            </p>
+            <h1 className="mt-5 text-2xl font-semibold tracking-tight sm:text-3xl">
+              Laporan Outlet
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">
+              Pusat analisa performa bisnis untuk omzet, stok, dan arus kas.
+              Halaman laporan bersifat read-only agar tidak bercampur dengan
+              aksi operasional harian.
+            </p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto bg-white px-3 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <nav className="flex min-w-max gap-2" aria-label="Tabs laporan">
+            {tabs.map((tab) => {
+              const isActive = pathname === tab.href;
+              const Icon = tab.icon;
+
+              return (
+                <Link
+                  key={tab.name}
+                  href={buildTabHref(tab.href, searchParams)}
+                  className={cn(
+                    "group inline-flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition",
+                    isActive
+                      ? "border-neutral-900 bg-neutral-950 !text-white"
+                      : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-950",
+                  )}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  <span
+                    className={cn(
+                      "grid size-10 place-items-center rounded-xl",
+                      isActive
+                        ? "bg-white/10 text-white"
+                        : "bg-neutral-100 text-neutral-500 group-hover:text-neutral-800",
+                    )}
+                  >
+                    <Icon className="size-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold">
+                      {tab.name}
+                    </span>
+                    <span
+                      className={cn(
+                        "mt-0.5 block text-xs",
+                        isActive ? "text-white/55" : "text-neutral-500",
+                      )}
+                    >
+                      {tab.description}
+                    </span>
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
         </div>
       </header>
 
-      {/* Tabs Navigation */}
-      <div className="border-b border-[var(--border)] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        <nav className="-mb-px flex space-x-6" aria-label="Tabs">
-          {tabs.map((tab) => {
-            const isActive = pathname === tab.href;
-            return (
-              <Link
-                key={tab.name}
-                href={tab.href}
-                className={cn(
-                  "group inline-flex items-center gap-2 border-b-2 py-4 px-1 text-sm font-medium transition-colors whitespace-nowrap",
-                  isActive
-                    ? "border-[var(--accent)] text-[var(--accent)]"
-                    : "border-transparent text-neutral-500 hover:border-neutral-300 hover:text-neutral-700",
-                )}
-                aria-current={isActive ? "page" : undefined}
-              >
-                <tab.icon
-                  className={cn(
-                    "size-5",
-                    isActive
-                      ? "text-[var(--accent)]"
-                      : "text-neutral-400 group-hover:text-neutral-500",
-                  )}
-                  aria-hidden="true"
-                />
-                {tab.name}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Content Area */}
       <main>{children}</main>
     </div>
   );
