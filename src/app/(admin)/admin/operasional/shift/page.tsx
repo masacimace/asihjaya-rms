@@ -361,6 +361,7 @@ export default async function ShiftPage({ searchParams }: PageProps) {
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
             </Link>
+
             <h1 className="mt-4 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
               Shift Kasir
             </h1>
@@ -476,67 +477,77 @@ export default async function ShiftPage({ searchParams }: PageProps) {
 
         {dashboard.recentShifts.length > 0 ? (
           <>
-            <div className="hidden overflow-x-auto lg:block">
-              <div className="min-w-[1180px]">
-                <div className="grid grid-cols-[130px_minmax(240px,1fr)_170px_170px_150px_150px_150px] gap-4 border-b border-[var(--border)] bg-neutral-50/80 px-6 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
-                  <div>Status</div>
-                  <div>Outlet / Register</div>
-                  <div>Dibuka</div>
-                  <div>Ditutup</div>
-                  <div className="text-right">Expected</div>
-                  <div className="text-right">Aktual</div>
-                  <div className="text-right">Selisih</div>
-                </div>
-                <div
-                  className={cn(
-                    "divide-y divide-[var(--border)]",
-                    hasScrollableHistory && "max-h-[520px] overflow-y-auto",
-                  )}
-                >
-                  {dashboard.recentShifts.map((shift) => (
-                    <div
-                      key={shift.id}
-                      className="grid grid-cols-[130px_minmax(240px,1fr)_170px_170px_150px_150px_150px] gap-4 px-6 py-4 text-sm text-neutral-700 transition-colors hover:bg-neutral-50/60"
-                    >
-                      <div className="min-w-0">
-                        <StatusPill status={shift.status} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-neutral-950">
-                          {shift.outletName}
-                        </p>
-                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                          {shift.registerCode} · {shift.registerName}
-                        </p>
-                      </div>
-                      <div className="min-w-0">
-                        <p>{formatDate(shift.openedAt)}</p>
-                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                          {shift.openedByName ?? "-"}
-                        </p>
-                      </div>
-                      <div className="min-w-0">
-                        <p>{formatDate(shift.closedAt)}</p>
-                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                          {shift.closedByName ?? "-"}
-                        </p>
-                      </div>
-                      <div className="text-right font-semibold text-neutral-950">
-                        {formatMoney(getExpectedCash(shift))}
-                      </div>
-                      <div className="text-right font-semibold text-neutral-950">
-                        {shift.actualCash ? formatMoney(shift.actualCash) : "-"}
-                      </div>
-                      <div className="text-right">
-                        <VarianceText shift={shift} />
-                        {shift.varianceReason ? (
-                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
-                            {shift.varianceReason}
-                          </p>
-                        ) : null}
-                      </div>
+            <div className="hidden p-4 lg:block lg:p-5">
+              <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[1120px]">
+                    <div className="grid grid-cols-[112px_minmax(220px,1.2fr)_minmax(160px,0.85fr)_minmax(160px,0.85fr)_140px_140px_180px] items-center gap-3 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-500">
+                      <div>Status</div>
+                      <div>Outlet / Register</div>
+                      <div>Dibuka</div>
+                      <div>Ditutup</div>
+                      <div className="text-right">Expected</div>
+                      <div className="text-right">Aktual</div>
+                      <div className="text-right">Selisih</div>
                     </div>
-                  ))}
+                    <div
+                      className={cn(
+                        "divide-y divide-[var(--border)]",
+                        hasScrollableHistory && "max-h-[500px] overflow-y-auto",
+                      )}
+                    >
+                      {dashboard.recentShifts.map((shift) => (
+                        <div
+                          key={shift.id}
+                          className="grid grid-cols-[112px_minmax(220px,1.2fr)_minmax(160px,0.85fr)_minmax(160px,0.85fr)_140px_140px_180px] items-start gap-3 px-5 py-4 text-sm text-neutral-700 transition-colors hover:bg-neutral-50/60"
+                        >
+                          <div className="min-w-0 pt-0.5">
+                            <StatusPill status={shift.status} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-neutral-950">
+                              {shift.outletName}
+                            </p>
+                            <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                              {shift.registerCode} · {shift.registerName}
+                            </p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-neutral-900">
+                              {formatDate(shift.openedAt)}
+                            </p>
+                            <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                              {shift.openedByName ?? "-"}
+                            </p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-neutral-900">
+                              {formatDate(shift.closedAt)}
+                            </p>
+                            <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                              {shift.closedByName ?? "-"}
+                            </p>
+                          </div>
+                          <div className="text-right font-semibold tabular-nums text-neutral-950">
+                            {formatMoney(getExpectedCash(shift))}
+                          </div>
+                          <div className="text-right font-semibold tabular-nums text-neutral-950">
+                            {shift.actualCash
+                              ? formatMoney(shift.actualCash)
+                              : "-"}
+                          </div>
+                          <div className="min-w-0 text-right tabular-nums">
+                            <VarianceText shift={shift} />
+                            {shift.varianceReason ? (
+                              <p className="ml-auto mt-1 line-clamp-2 max-w-[170px] text-xs leading-5 text-[var(--muted)]">
+                                {shift.varianceReason}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
