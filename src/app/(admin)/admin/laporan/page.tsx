@@ -51,7 +51,10 @@ const paymentMethodLabels: Record<ReportPaymentMethod, string> = {
   other: "Lainnya",
 };
 
-const saleStatusLabels: Record<ReportSummaryData["recentSales"][number]["status"], string> = {
+const saleStatusLabels: Record<
+  ReportSummaryData["recentSales"][number]["status"],
+  string
+> = {
   draft: "Draft",
   awaiting_payment: "Menunggu Bayar",
   completed: "Selesai",
@@ -110,7 +113,10 @@ function buildReportUrl(params: Record<string, string | null | undefined>) {
   return query ? `/admin/laporan?${query}` : "/admin/laporan";
 }
 
-function getComparison(metric: ReportComparisonMetric, comparisonLabel: string) {
+function getComparison(
+  metric: ReportComparisonMetric,
+  comparisonLabel: string,
+) {
   const delta = metric.current - metric.previous;
 
   if (metric.previous === 0) {
@@ -241,7 +247,8 @@ function MetricCard({
             tone === "success" && "bg-emerald-50 text-emerald-600",
             tone === "warning" && "bg-amber-50 text-amber-600",
             tone === "danger" && "bg-red-50 text-red-600",
-            tone === "default" && "bg-[var(--accent-soft)] text-[var(--accent)]",
+            tone === "default" &&
+              "bg-[var(--accent-soft)] text-[var(--accent)]",
           )}
         >
           {icon}
@@ -257,9 +264,15 @@ function MetricCard({
             comparison.tone === "neutral" && "bg-neutral-100 text-neutral-600",
           )}
         >
-          {comparison.tone === "up" ? <ArrowUpRight className="size-3" /> : null}
-          {comparison.tone === "down" ? <ArrowDownRight className="size-3" /> : null}
-          {comparison.tone === "neutral" ? <RefreshCw className="size-3" /> : null}
+          {comparison.tone === "up" ? (
+            <ArrowUpRight className="size-3" />
+          ) : null}
+          {comparison.tone === "down" ? (
+            <ArrowDownRight className="size-3" />
+          ) : null}
+          {comparison.tone === "neutral" ? (
+            <RefreshCw className="size-3" />
+          ) : null}
           <span>{comparison.value}</span>
           <span className="font-medium opacity-70">{comparison.label}</span>
         </div>
@@ -295,7 +308,7 @@ function ReportFilter({ data }: { data: ReportSummaryData }) {
               defaultValue={data.filters.outletId ?? "all"}
               className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
             >
-              <option value="all">Semua outlet akses saya</option>
+              <option value="all">Semua outlet</option>
               {data.outlets.map((outlet) => (
                 <option key={outlet.id} value={outlet.id}>
                   {outlet.name} ({outlet.code})
@@ -327,16 +340,20 @@ function ReportFilter({ data }: { data: ReportSummaryData }) {
 
 function SalesTrendChart({ points }: { points: ReportTrendPoint[] }) {
   const maxValue = getChartMax(points);
-  const totalRevenue = points.reduce((total, point) => total + point.revenue, 0);
+  const totalRevenue = points.reduce(
+    (total, point) => total + point.revenue,
+    0,
+  );
   const bestPoint = points.reduce(
     (best, point) => (point.revenue > best.revenue ? point : best),
     points[0] ?? { key: "empty", label: "-", revenue: 0, transactionCount: 0 },
   );
+  const shouldScroll = points.length > 6;
 
   return (
-    <section className="rounded-2xl border border-[var(--border)] bg-white p-5 lg:col-span-2">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-5 lg:col-span-2">
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
             <LineChart className="size-3.5" />
             Tren omzet
@@ -344,32 +361,41 @@ function SalesTrendChart({ points }: { points: ReportTrendPoint[] }) {
           <h2 className="mt-4 text-lg font-semibold text-neutral-950">
             Penjualan bersih per hari
           </h2>
-          <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-            Total {formatMoney(totalRevenue)} dari {points.length} bucket periode.
-            Hari terbaik: {bestPoint.label}.
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+            Total {formatMoney(totalRevenue)} dari {points.length} bucket
+            periode. Hari terbaik: {bestPoint.label}.
           </p>
         </div>
         <Link
           href="/admin/laporan/penjualan"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent)] hover:underline"
+          className="inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-[var(--accent)] hover:underline"
         >
           Buka laporan penjualan
           <ArrowRight className="size-4" />
         </Link>
       </div>
 
-      <div className="mt-8 overflow-x-auto pb-2">
-        <div className="flex min-w-[620px] items-end gap-3 border-b border-neutral-100 px-1 pt-8">
+      {shouldScroll ? (
+        <p className="mt-5 text-xs font-medium text-[var(--muted)] sm:hidden">
+          Geser grafik ke kiri atau kanan untuk melihat semua periode.
+        </p>
+      ) : null}
+
+      <div className="-mx-2 mt-6 max-w-full overflow-x-auto overscroll-x-contain px-2 pb-3">
+        <div className="flex min-w-max items-end gap-3 border-b border-neutral-100 pb-2 sm:min-w-full">
           {points.map((point) => {
-            const height = Math.max(8, Math.round((point.revenue / maxValue) * 190));
+            const height = Math.max(
+              10,
+              Math.round((point.revenue / maxValue) * 132),
+            );
 
             return (
               <div
                 key={point.key}
-                className="group flex h-60 flex-1 flex-col items-center justify-end"
+                className="group flex w-16 shrink-0 flex-col items-center sm:w-auto sm:min-w-16 sm:flex-1"
               >
-                <div className="mb-2 opacity-0 transition group-hover:opacity-100">
-                  <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-center text-xs">
+                <div className="relative flex h-40 w-full items-end justify-center overflow-hidden rounded-2xl border border-neutral-100 bg-neutral-50 px-2 py-2">
+                  <div className="pointer-events-none absolute left-1/2 top-2 z-10 w-max -translate-x-1/2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-center text-xs opacity-0 transition group-hover:opacity-100">
                     <p className="font-semibold text-neutral-950">
                       {formatMoney(point.revenue)}
                     </p>
@@ -377,16 +403,16 @@ function SalesTrendChart({ points }: { points: ReportTrendPoint[] }) {
                       {formatInteger(point.transactionCount)} nota
                     </p>
                   </div>
+                  <div
+                    className={cn(
+                      "w-full max-w-12 rounded-xl transition",
+                      point.revenue > 0
+                        ? "bg-[var(--accent)]"
+                        : "bg-neutral-200",
+                    )}
+                    style={{ height }}
+                  />
                 </div>
-                <div
-                  className={cn(
-                    "w-full max-w-12 rounded-t-2xl border border-b-0 transition",
-                    point.revenue > 0
-                      ? "border-[var(--accent)]/25 bg-[var(--accent)]"
-                      : "border-neutral-200 bg-neutral-100",
-                  )}
-                  style={{ height }}
-                />
                 <p className="mt-3 text-center text-[11px] font-medium text-neutral-500">
                   {point.label}
                 </p>
@@ -432,7 +458,8 @@ function PaymentBreakdown({ data }: { data: ReportSummaryData }) {
           </p>
         ) : (
           data.paymentBreakdown.map((row) => {
-            const percentage = total > 0 ? Math.round((row.amount / total) * 100) : 0;
+            const percentage =
+              total > 0 ? Math.round((row.amount / total) * 100) : 0;
 
             return (
               <div key={row.method}>
@@ -503,17 +530,25 @@ function OutletPerformance({ data }: { data: ReportSummaryData }) {
           </p>
         ) : (
           data.outletPerformance.map((outlet, index) => {
-            const percentage = maxRevenue > 0 ? Math.max(8, Math.round((outlet.revenue / maxRevenue) * 100)) : 0;
+            const percentage =
+              maxRevenue > 0
+                ? Math.max(8, Math.round((outlet.revenue / maxRevenue) * 100))
+                : 0;
 
             return (
-              <div key={outlet.outletId} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+              <div
+                key={outlet.outletId}
+                className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-neutral-950">
                       #{index + 1} {outlet.outletName}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {outlet.outletCode} · {formatInteger(outlet.transactionCount)} nota · {formatInteger(outlet.itemSold)} item
+                      {outlet.outletCode} ·{" "}
+                      {formatInteger(outlet.transactionCount)} nota ·{" "}
+                      {formatInteger(outlet.itemSold)} item
                     </p>
                   </div>
                   <p className="text-right text-sm font-semibold text-neutral-950">
@@ -607,11 +642,31 @@ function OperationalSnapshot({ data }: { data: ReportSummaryData }) {
 
 function CashSnapshot({ data }: { data: ReportSummaryData }) {
   const rows = [
-    { label: "Cash sale", value: data.cashSnapshot.cashSales, tone: "text-emerald-700" },
-    { label: "Refund cash", value: -data.cashSnapshot.cashRefunds, tone: "text-red-700" },
-    { label: "Kas masuk manual", value: data.cashSnapshot.manualCashIn, tone: "text-emerald-700" },
-    { label: "Kas keluar manual", value: -data.cashSnapshot.manualCashOut, tone: "text-red-700" },
-    { label: "Koreksi closing", value: data.cashSnapshot.closingAdjustments, tone: "text-amber-700" },
+    {
+      label: "Cash sale",
+      value: data.cashSnapshot.cashSales,
+      tone: "text-emerald-700",
+    },
+    {
+      label: "Refund cash",
+      value: -data.cashSnapshot.cashRefunds,
+      tone: "text-red-700",
+    },
+    {
+      label: "Kas masuk manual",
+      value: data.cashSnapshot.manualCashIn,
+      tone: "text-emerald-700",
+    },
+    {
+      label: "Kas keluar manual",
+      value: -data.cashSnapshot.manualCashOut,
+      tone: "text-red-700",
+    },
+    {
+      label: "Koreksi closing",
+      value: data.cashSnapshot.closingAdjustments,
+      tone: "text-amber-700",
+    },
   ];
 
   return (
@@ -643,7 +698,10 @@ function CashSnapshot({ data }: { data: ReportSummaryData }) {
 
       <div className="mt-6 divide-y divide-neutral-100 rounded-2xl border border-neutral-100 bg-neutral-50">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+          <div
+            key={row.label}
+            className="flex items-center justify-between gap-4 px-4 py-3 text-sm"
+          >
             <span className="text-[var(--muted)]">{row.label}</span>
             <span className={cn("font-semibold", row.tone)}>
               {formatMoney(row.value)}
@@ -656,6 +714,9 @@ function CashSnapshot({ data }: { data: ReportSummaryData }) {
 }
 
 function RecentSales({ data }: { data: ReportSummaryData }) {
+  const shouldScroll = data.recentSales.length >= 5;
+  const tableGridClass = "grid grid-cols-[1.25fr_0.9fr_1fr_1fr_0.75fr_0.85fr]";
+
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-white p-5 lg:col-span-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -685,56 +746,97 @@ function RecentSales({ data }: { data: ReportSummaryData }) {
           Belum ada transaksi pada periode ini.
         </div>
       ) : (
-        <div className="mt-6 overflow-hidden rounded-2xl border border-neutral-100">
-          <div className="hidden overflow-x-auto lg:block">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-neutral-100 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Invoice</th>
-                  <th className="px-4 py-3 font-semibold">Outlet</th>
-                  <th className="px-4 py-3 font-semibold">Pelanggan</th>
-                  <th className="px-4 py-3 font-semibold">Kasir</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 text-right font-semibold">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100 bg-white">
-                {data.recentSales.map((sale) => (
-                  <tr key={sale.id} className="transition hover:bg-neutral-50">
-                    <td className="px-4 py-4">
-                      <Link
-                        href={`/admin/penjualan/${sale.id}`}
-                        className="font-semibold text-[var(--accent)] hover:underline"
-                      >
-                        {sale.invoiceNumber}
-                      </Link>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {formatDateTime(sale.completedAt ?? sale.createdAt)}
-                      </p>
-                    </td>
-                    <td className="px-4 py-4 text-neutral-700">{sale.outletName}</td>
-                    <td className="px-4 py-4 text-neutral-700">{sale.customerName ?? "Walk-in"}</td>
-                    <td className="px-4 py-4 text-neutral-700">{sale.cashierName}</td>
-                    <td className="px-4 py-4">
-                      <span className={cn(
+        <>
+          {shouldScroll ? (
+            <p className="mt-4 text-xs font-medium text-[var(--muted)]">
+              Scroll daftar untuk melihat aktivitas transaksi lainnya.
+            </p>
+          ) : null}
+
+          <div className="mt-3 hidden overflow-hidden rounded-2xl border border-neutral-100 lg:block">
+            <div
+              className={cn(
+                tableGridClass,
+                "border-b border-neutral-100 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500",
+              )}
+            >
+              <div className="px-4 py-3 font-semibold">Invoice</div>
+              <div className="px-4 py-3 font-semibold">Outlet</div>
+              <div className="px-4 py-3 font-semibold">Pelanggan</div>
+              <div className="px-4 py-3 font-semibold">Kasir</div>
+              <div className="px-4 py-3 font-semibold">Status</div>
+              <div className="px-4 py-3 text-right font-semibold">Total</div>
+            </div>
+            <div
+              className={cn(
+                "divide-y divide-neutral-100 bg-white",
+                shouldScroll &&
+                  "max-h-[24rem] overflow-y-auto overscroll-contain",
+              )}
+            >
+              {data.recentSales.map((sale) => (
+                <div
+                  key={sale.id}
+                  className={cn(
+                    tableGridClass,
+                    "items-center text-sm transition hover:bg-neutral-50",
+                  )}
+                >
+                  <div className="min-w-0 px-4 py-4">
+                    <Link
+                      href={`/admin/penjualan/${sale.id}`}
+                      className="truncate font-semibold text-[var(--accent)] hover:underline"
+                    >
+                      {sale.invoiceNumber}
+                    </Link>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {formatDateTime(sale.completedAt ?? sale.createdAt)}
+                    </p>
+                  </div>
+                  <div className="min-w-0 px-4 py-4 text-neutral-700">
+                    <span className="block truncate">{sale.outletName}</span>
+                  </div>
+                  <div className="min-w-0 px-4 py-4 text-neutral-700">
+                    <span className="block truncate">
+                      {sale.customerName ?? "Walk-in"}
+                    </span>
+                  </div>
+                  <div className="min-w-0 px-4 py-4 text-neutral-700">
+                    <span className="block truncate">{sale.cashierName}</span>
+                  </div>
+                  <div className="px-4 py-4">
+                    <span
+                      className={cn(
                         "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-                        sale.status === "completed" && "bg-emerald-50 text-emerald-700",
-                        (sale.status === "voided" || sale.status === "refunded") && "bg-red-50 text-red-700",
-                        sale.status !== "completed" && sale.status !== "voided" && sale.status !== "refunded" && "bg-neutral-100 text-neutral-600",
-                      )}>
-                        {saleStatusLabels[sale.status]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-right font-semibold text-neutral-950">
-                      {formatMoney(sale.totalAmount)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        sale.status === "completed" &&
+                          "bg-emerald-50 text-emerald-700",
+                        (sale.status === "voided" ||
+                          sale.status === "refunded") &&
+                          "bg-red-50 text-red-700",
+                        sale.status !== "completed" &&
+                          sale.status !== "voided" &&
+                          sale.status !== "refunded" &&
+                          "bg-neutral-100 text-neutral-600",
+                      )}
+                    >
+                      {saleStatusLabels[sale.status]}
+                    </span>
+                  </div>
+                  <div className="px-4 py-4 text-right font-semibold text-neutral-950">
+                    {formatMoney(sale.totalAmount)}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="divide-y divide-neutral-100 lg:hidden">
+          <div
+            className={cn(
+              "mt-3 divide-y divide-neutral-100 overflow-hidden rounded-2xl border border-neutral-100 lg:hidden",
+              shouldScroll &&
+                "max-h-[28rem] overflow-y-auto overscroll-contain",
+            )}
+          >
             {data.recentSales.map((sale) => (
               <Link
                 key={sale.id}
@@ -755,28 +857,44 @@ function RecentSales({ data }: { data: ReportSummaryData }) {
                   </p>
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[var(--muted)]">
-                  <span>{formatDateTime(sale.completedAt ?? sale.createdAt)}</span>
+                  <span>
+                    {formatDateTime(sale.completedAt ?? sale.createdAt)}
+                  </span>
                   <span>{saleStatusLabels[sale.status]}</span>
                 </div>
               </Link>
             ))}
           </div>
-        </div>
+        </>
       )}
     </section>
   );
 }
 
-export default async function LaporanDashboardPage({ searchParams }: PageProps) {
+export default async function LaporanDashboardPage({
+  searchParams,
+}: PageProps) {
   const auth = await requirePermission("admin.access");
   const query = await searchParams;
   const filters = parseReportSummaryFilters(query);
   const data = await getReportSummaryData(auth, filters);
 
-  const revenueComparison = getComparison(data.summary.revenue, data.period.comparisonLabel);
-  const transactionComparison = getComparison(data.summary.transactionCount, data.period.comparisonLabel);
-  const weightComparison = getComparison(data.summary.weightSoldGram, data.period.comparisonLabel);
-  const profitComparison = getComparison(data.summary.grossProfit, data.period.comparisonLabel);
+  const revenueComparison = getComparison(
+    data.summary.revenue,
+    data.period.comparisonLabel,
+  );
+  const transactionComparison = getComparison(
+    data.summary.transactionCount,
+    data.period.comparisonLabel,
+  );
+  const weightComparison = getComparison(
+    data.summary.weightSoldGram,
+    data.period.comparisonLabel,
+  );
+  const profitComparison = getComparison(
+    data.summary.grossProfit,
+    data.period.comparisonLabel,
+  );
 
   return (
     <div className="space-y-6">
@@ -813,14 +931,20 @@ export default async function LaporanDashboardPage({ searchParams }: PageProps) 
             </p>
             <div className="mt-3 grid gap-2">
               <Link
-                href={buildReportUrl({ range: "today", outletId: data.filters.outletId })}
+                href={buildReportUrl({
+                  range: "today",
+                  outletId: data.filters.outletId,
+                })}
                 className="inline-flex items-center justify-between rounded-xl bg-white px-3 py-2 text-sm font-semibold text-neutral-700 transition hover:text-neutral-950"
               >
                 Hari ini
                 <ArrowRight className="size-4" />
               </Link>
               <Link
-                href={buildReportUrl({ range: "last7", outletId: data.filters.outletId })}
+                href={buildReportUrl({
+                  range: "last7",
+                  outletId: data.filters.outletId,
+                })}
                 className="inline-flex items-center justify-between rounded-xl bg-white px-3 py-2 text-sm font-semibold text-neutral-700 transition hover:text-neutral-950"
               >
                 7 hari terakhir
@@ -907,38 +1031,7 @@ export default async function LaporanDashboardPage({ searchParams }: PageProps) 
         <CashSnapshot data={data} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <RecentSales data={data} />
-        <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
-            <RefreshCw className="size-3.5" />
-            Roadmap laporan
-          </div>
-          <h2 className="mt-4 text-lg font-semibold text-neutral-950">
-            Fase berikutnya
-          </h2>
-          <div className="mt-5 space-y-3 text-sm text-neutral-700">
-            <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-              <p className="font-semibold text-neutral-950">R11B — Penjualan</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Detail laporan omzet, laba, diskon, dan metode pembayaran.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-              <p className="font-semibold text-neutral-950">R11C — Stok</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Mutasi stok, fast moving, slow moving, dan aging inventory.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-              <p className="font-semibold text-neutral-950">R11E</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Export CSV/XLSX tetap tersedia di laporan detail dan buku kas operasional.
-              </p>
-            </div>
-          </div>
-        </section>
-      </div>
+      <RecentSales data={data} />
     </div>
   );
 }

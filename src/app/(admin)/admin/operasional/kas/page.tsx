@@ -114,7 +114,10 @@ function buildCashListUrl(page: number, filters: AdminCashMovementFilters) {
   return query ? `/admin/operasional/kas?${query}` : "/admin/operasional/kas";
 }
 
-function buildCashExportUrl(format: "csv" | "xlsx", filters: AdminCashMovementFilters) {
+function buildCashExportUrl(
+  format: "csv" | "xlsx",
+  filters: AdminCashMovementFilters,
+) {
   const params = buildCashQueryParams(filters);
   const query = params.toString();
   const basePath =
@@ -126,7 +129,11 @@ function buildCashExportUrl(format: "csv" | "xlsx", filters: AdminCashMovementFi
 }
 
 function getMovementTone(type: AdminCashMovementRow["type"]) {
-  if (type === "cash_in" || type === "cash_sale" || type === "opening_balance") {
+  if (
+    type === "cash_in" ||
+    type === "cash_sale" ||
+    type === "opening_balance"
+  ) {
     return {
       badge: "bg-emerald-50 text-emerald-700",
       icon: ArrowUpRight,
@@ -240,7 +247,8 @@ function SummaryCard({
             tone === "success" && "bg-emerald-50 text-emerald-600",
             tone === "danger" && "bg-red-50 text-red-600",
             tone === "dark" && "bg-white/10 text-white",
-            tone === "default" && "bg-[var(--accent-soft)] text-[var(--accent)]",
+            tone === "default" &&
+              "bg-[var(--accent-soft)] text-[var(--accent)]",
           )}
         >
           {icon}
@@ -299,7 +307,12 @@ function MovementMobileCard({ movement }: { movement: AdminCashMovementRow }) {
             {formatDateTime(movement.createdAt)} · {movement.createdByName}
           </p>
         </div>
-        <p className={cn("shrink-0 text-right text-sm font-semibold", tone.amount)}>
+        <p
+          className={cn(
+            "shrink-0 text-right text-sm font-semibold",
+            tone.amount,
+          )}
+        >
           {formatSignedMoney(signedAmount)}
         </p>
       </div>
@@ -364,11 +377,8 @@ export default async function KasPage({ searchParams }: PageProps) {
               className="inline-flex items-center gap-2 text-sm font-medium text-white/60 transition hover:text-white"
             >
               <ArrowLeft className="size-4" />
-              Dashboard
+              Kembali ke Dashboard
             </Link>
-            <p className="mt-6 text-xs font-semibold uppercase tracking-[0.25em] text-white/45">
-              ADMIN-R8
-            </p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
               Pergerakan Kas & Petty Cash
             </h1>
@@ -385,7 +395,8 @@ export default async function KasPage({ searchParams }: PageProps) {
             </div>
             <p className="text-xl font-semibold">{data.periodLabel}</p>
             <p className="text-xs leading-5 text-white/55">
-              {formatInteger(data.summary.totalMovements)} movement tercatat · {formatInteger(data.summary.activeShiftCount)} shift aktif
+              {formatInteger(data.summary.totalMovements)} movement tercatat ·{" "}
+              {formatInteger(data.summary.activeShiftCount)} shift aktif
             </p>
           </div>
         </div>
@@ -519,7 +530,8 @@ export default async function KasPage({ searchParams }: PageProps) {
               <div>
                 <h2 className="font-semibold text-neutral-950">Buku Kas</h2>
                 <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                  Menampilkan {formatInteger(data.rows.length)} dari {formatInteger(data.total)} movement.
+                  Menampilkan {formatInteger(data.rows.length)} dari{" "}
+                  {formatInteger(data.total)} movement.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
@@ -550,15 +562,22 @@ export default async function KasPage({ searchParams }: PageProps) {
                       <tr>
                         <th className="px-5 py-4 font-semibold">Waktu</th>
                         <th className="px-5 py-4 font-semibold">Movement</th>
-                        <th className="px-5 py-4 font-semibold">Outlet / Register</th>
-                        <th className="px-5 py-4 font-semibold">Dicatat Oleh</th>
+                        <th className="px-5 py-4 font-semibold">
+                          Outlet / Register
+                        </th>
+                        <th className="px-5 py-4 font-semibold">
+                          Dicatat Oleh
+                        </th>
                         <th className="px-5 py-4 font-semibold">Referensi</th>
-                        <th className="px-5 py-4 text-right font-semibold">Nominal</th>
+                        <th className="px-5 py-4 text-right font-semibold">
+                          Nominal
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border)]">
                       {data.rows.map((movement) => {
-                        const signedAmount = getCashMovementSignedAmount(movement);
+                        const signedAmount =
+                          getCashMovementSignedAmount(movement);
                         const tone = getMovementTone(movement.type);
 
                         return (
@@ -589,7 +608,12 @@ export default async function KasPage({ searchParams }: PageProps) {
                             <td className="px-5 py-4 text-xs text-[var(--muted)]">
                               <ReferenceLink movement={movement} />
                             </td>
-                            <td className={cn("whitespace-nowrap px-5 py-4 text-right font-semibold", tone.amount)}>
+                            <td
+                              className={cn(
+                                "whitespace-nowrap px-5 py-4 text-right font-semibold",
+                                tone.amount,
+                              )}
+                            >
                               {formatSignedMoney(signedAmount)}
                             </td>
                           </tr>
@@ -610,7 +634,8 @@ export default async function KasPage({ searchParams }: PageProps) {
             {data.pageCount > 1 ? (
               <div className="flex flex-col gap-3 border-t border-[var(--border)] px-5 py-4 text-sm sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-[var(--muted)]">
-                  Halaman {formatInteger(data.page)} dari {formatInteger(data.pageCount)}
+                  Halaman {formatInteger(data.page)} dari{" "}
+                  {formatInteger(data.pageCount)}
                 </p>
                 <div className="flex gap-2">
                   <Link
@@ -624,10 +649,14 @@ export default async function KasPage({ searchParams }: PageProps) {
                     Sebelumnya
                   </Link>
                   <Link
-                    href={buildCashListUrl(Math.min(data.pageCount, data.page + 1), filters)}
+                    href={buildCashListUrl(
+                      Math.min(data.pageCount, data.page + 1),
+                      filters,
+                    )}
                     className={cn(
                       "inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 font-semibold transition hover:bg-neutral-50",
-                      data.page >= data.pageCount && "pointer-events-none opacity-40",
+                      data.page >= data.pageCount &&
+                        "pointer-events-none opacity-40",
                     )}
                   >
                     Berikutnya
@@ -648,10 +677,12 @@ export default async function KasPage({ searchParams }: PageProps) {
                 <ShieldCheck className="size-5" />
               </div>
               <div>
-                <h2 className="font-semibold text-neutral-950">Kontrol Audit</h2>
+                <h2 className="font-semibold text-neutral-950">
+                  Kontrol Audit
+                </h2>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                  Semua kas manual disimpan append-only, memperbarui expected cash
-                  shift aktif, dan masuk ke audit log. Edit/delete movement
+                  Semua kas manual disimpan append-only, memperbarui expected
+                  cash shift aktif, dan masuk ke audit log. Edit/delete movement
                   sengaja tidak disediakan pada fase ini.
                 </p>
               </div>

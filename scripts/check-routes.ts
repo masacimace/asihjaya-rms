@@ -16,8 +16,7 @@ const retiredExactRoutes = [
   "/admin/laporan/export/xlsx",
 ];
 
-const retiredRouteFiles = [
-];
+const retiredRouteFiles: string[] = [];
 
 const expectedRouteFiles = [
   "app/page.tsx",

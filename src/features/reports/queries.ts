@@ -731,19 +731,33 @@ function buildSalesSearchCondition(filters: Pick<ReportSalesFilters, "query">) {
   );
 }
 
-function toPaymentMethods(value: unknown): ReportPaymentMethod[] {
-  if (!Array.isArray(value)) return [];
-
-  return value.filter(
-    (method): method is ReportPaymentMethod =>
-      method === "cash" ||
-      method === "debit_card" ||
-      method === "credit_card" ||
-      method === "bank_transfer" ||
-      method === "qris_manual" ||
-      method === "qris_gateway" ||
-      method === "other",
+function isReportPaymentMethod(value: string): value is ReportPaymentMethod {
+  return (
+    value === "cash" ||
+    value === "debit_card" ||
+    value === "credit_card" ||
+    value === "bank_transfer" ||
+    value === "qris_manual" ||
+    value === "qris_gateway" ||
+    value === "other"
   );
+}
+
+function toPaymentMethods(value: unknown): ReportPaymentMethod[] {
+  const rawMethods = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value
+          .replace(/^\{/, "")
+          .replace(/\}$/, "")
+          .split(",")
+          .map((method) => method.replace(/^"|"$/g, "").trim())
+          .filter(Boolean)
+      : [];
+
+  return rawMethods
+    .map((method) => String(method))
+    .filter(isReportPaymentMethod);
 }
 
 export async function getReportSalesData(
