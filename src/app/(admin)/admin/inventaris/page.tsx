@@ -248,8 +248,8 @@ export default async function InventoryPage({
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
-        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_23rem] lg:items-end lg:p-7">
+      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_23rem] lg:items-start lg:p-7">
           <div>
             <Link
               href="/admin"
@@ -453,7 +453,7 @@ export default async function InventoryPage({
         ) : null}
       </section>
 
-      <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
+      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
         <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-semibold text-neutral-950">

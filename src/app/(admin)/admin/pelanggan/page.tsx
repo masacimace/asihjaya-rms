@@ -316,7 +316,7 @@ export default async function CustomerListPage({
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
-        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-end lg:p-7">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-start lg:p-7">
           <div>
             <Link
               href="/admin"
