@@ -115,16 +115,35 @@ export async function getProductItemOverview(organizationId: string) {
   const rows = await db
     .select({
       availability: productItems.availability,
+      condition: productItems.condition,
       total: count(),
+      totalWeightGram: sql<string>`coalesce(sum(${productItems.weightGram}), 0)`,
+      totalCostAmount: sql<string>`coalesce(sum(${productItems.costAmount}), 0)`,
     })
     .from(productItems)
-    .where(eq(productItems.organizationId, organizationId))
-    .groupBy(productItems.availability);
+    .where(
+      and(
+        eq(productItems.organizationId, organizationId),
+        eq(productItems.isActive, true),
+      ),
+    )
+    .groupBy(productItems.availability, productItems.condition);
 
   const totalFor = (
     availability: "draft" | "available" | "reserved" | "sold",
   ) =>
-    Number(rows.find((row) => row.availability === availability)?.total ?? 0);
+    rows
+      .filter((row) => row.availability === availability)
+      .reduce((sum, row) => sum + Number(row.total), 0);
+
+  const sumForAvailable = (field: "totalWeightGram" | "totalCostAmount") =>
+    rows
+      .filter((row) => row.availability === "available")
+      .reduce((sum, row) => sum + Number(row[field] ?? 0), 0);
+
+  const attention = rows
+    .filter((row) => row.condition !== "good")
+    .reduce((sum, row) => sum + Number(row.total), 0);
 
   return {
     total: rows.reduce((sum, row) => sum + Number(row.total), 0),
@@ -132,6 +151,9 @@ export async function getProductItemOverview(organizationId: string) {
     available: totalFor("available"),
     reserved: totalFor("reserved"),
     sold: totalFor("sold"),
+    availableWeightGram: sumForAvailable("totalWeightGram"),
+    availableCostAmount: sumForAvailable("totalCostAmount"),
+    attention,
   };
 }
 
