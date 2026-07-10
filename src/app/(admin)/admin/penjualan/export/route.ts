@@ -88,12 +88,10 @@ function toCsvAmount(value: string | number | null | undefined) {
   const amount = Number(value ?? 0);
 
   if (!Number.isFinite(amount)) {
-    return "0";
+    return 0;
   }
 
-  return new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 0,
-  }).format(Math.round(amount));
+  return Math.round(amount);
 }
 
 function sanitizeCsvText(value: string) {
@@ -141,7 +139,7 @@ function getPaymentMethodLabel(row: Awaited<ReturnType<typeof getAdminSalesExpor
 }
 
 function buildCsv(rows: Awaited<ReturnType<typeof getAdminSalesExportRows>>) {
-  const csvRows = [csvHeaders];
+  const csvRows: Array<Array<string | number>> = [csvHeaders];
 
   for (const row of rows) {
     csvRows.push([

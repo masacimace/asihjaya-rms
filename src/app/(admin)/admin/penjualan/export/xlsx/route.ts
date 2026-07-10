@@ -97,16 +97,16 @@ function formatDateTime(value: Date | null) {
   }).format(value);
 }
 
-function toDisplayAmount(value: string | number | null | undefined) {
+const rupiahNumberFormat = '[$Rp-421] #,##0';
+
+function toNumericAmount(value: string | number | null | undefined) {
   const amount = Number(value ?? 0);
 
   if (!Number.isFinite(amount)) {
-    return "0";
+    return 0;
   }
 
-  return new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 0,
-  }).format(Math.round(amount));
+  return Math.round(amount);
 }
 
 function sanitizeWorksheetText(value: string | number | null | undefined) {
@@ -154,13 +154,13 @@ function buildTransactionRows(rows: Awaited<ReturnType<typeof getAdminSalesExpor
     sanitizeWorksheetText(row.customerPhone ?? ""),
     row.totalItems,
     getPaymentMethodLabel(row),
-    toDisplayAmount(row.subtotalAmount),
-    toDisplayAmount(row.discountAmount),
-    toDisplayAmount(row.additionalFeeAmount),
-    toDisplayAmount(row.totalAmount),
-    toDisplayAmount(row.paidAmount),
-    toDisplayAmount(row.receivedAmount),
-    toDisplayAmount(row.changeAmount),
+    toNumericAmount(row.subtotalAmount),
+    toNumericAmount(row.discountAmount),
+    toNumericAmount(row.additionalFeeAmount),
+    toNumericAmount(row.totalAmount),
+    toNumericAmount(row.paidAmount),
+    toNumericAmount(row.receivedAmount),
+    toNumericAmount(row.changeAmount),
     printStatusLabels[row.printStatus],
     formatDateTime(row.createdAt),
     formatDateTime(row.completedAt),
@@ -179,12 +179,16 @@ function buildItemRows(rows: Awaited<ReturnType<typeof getAdminSalesExportRows>>
       sanitizeWorksheetText(item.categoryName),
       sanitizeWorksheetText(item.sku),
       sanitizeWorksheetText(item.barcode),
-      toDisplayAmount(item.finalPriceAmount),
+      toNumericAmount(item.finalPriceAmount),
     ]),
   );
 }
 
-function createWorksheet(data: unknown[][], columnWidths: Array<{ wch: number }>) {
+function createWorksheet(
+  data: unknown[][],
+  columnWidths: Array<{ wch: number }>,
+  amountColumnIndexes: number[] = [],
+) {
   const worksheet = XLSX.utils.aoa_to_sheet(data);
   const lastColumn = XLSX.utils.encode_col(Math.max((data[0]?.length ?? 1) - 1, 0));
   const lastRow = Math.max(data.length, 1);
@@ -193,6 +197,17 @@ function createWorksheet(data: unknown[][], columnWidths: Array<{ wch: number }>
   worksheet["!autofilter"] = {
     ref: `A1:${lastColumn}${lastRow}`,
   };
+
+  for (let rowIndex = 1; rowIndex < data.length; rowIndex += 1) {
+    for (const columnIndex of amountColumnIndexes) {
+      const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+      const cell = worksheet[cellRef];
+
+      if (cell && cell.t === "n") {
+        cell.z = rupiahNumberFormat;
+      }
+    }
+  }
 
   return worksheet;
 }
@@ -205,7 +220,7 @@ function buildWorkbook(rows: Awaited<ReturnType<typeof getAdminSalesExportRows>>
   const transactionWorksheet = createWorksheet(
     [transactionHeaders, ...transactionRows],
     [
-      { wch: 26 },
+      { wch: 28 },
       { wch: 22 },
       { wch: 18 },
       { wch: 14 },
@@ -217,24 +232,25 @@ function buildWorkbook(rows: Awaited<ReturnType<typeof getAdminSalesExportRows>>
       { wch: 24 },
       { wch: 18 },
       { wch: 12 },
-      { wch: 22 },
-      { wch: 16 },
-      { wch: 16 },
+      { wch: 24 },
       { wch: 18 },
-      { wch: 16 },
-      { wch: 16 },
-      { wch: 20 },
-      { wch: 16 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 22 },
+      { wch: 18 },
       { wch: 18 },
       { wch: 22 },
       { wch: 22 },
     ],
+    [13, 14, 15, 16, 17, 18, 19],
   );
 
   const itemWorksheet = createWorksheet(
     [itemHeaders, ...itemRows],
     [
-      { wch: 26 },
+      { wch: 28 },
       { wch: 22 },
       { wch: 24 },
       { wch: 24 },
@@ -243,8 +259,9 @@ function buildWorkbook(rows: Awaited<ReturnType<typeof getAdminSalesExportRows>>
       { wch: 20 },
       { wch: 18 },
       { wch: 20 },
-      { wch: 16 },
+      { wch: 18 },
     ],
+    [9],
   );
 
   XLSX.utils.book_append_sheet(workbook, transactionWorksheet, "Transaksi");
