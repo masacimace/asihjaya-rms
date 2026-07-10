@@ -417,7 +417,8 @@ export default async function PenjualanListPage({
           <div className="w-full rounded-2xl border border-neutral-200 bg-neutral-50/70 p-4 xl:max-w-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-medium text-neutral-500">
+                <p className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-700 ring-1 ring-[var(--border)]">
+                  <CalendarDays className="size-3.5 text-[var(--accent)]" />
                   Periode aktif
                 </p>
                 <p className="mt-1 text-lg font-semibold text-neutral-950">
@@ -428,36 +429,33 @@ export default async function PenjualanListPage({
                   ini.
                 </p>
               </div>
-              <div className="grid size-11 shrink-0 place-items-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700">
-                <ReceiptText className="size-5" />
-              </div>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
               <Link
                 href={buildAdminSalesListUrl(data.page, data.filters)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
               >
                 <RefreshCw className="size-4" />
                 Refresh
               </Link>
               <Link
                 href="/pos"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-950 bg-neutral-950 px-3 text-sm font-medium !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-950 bg-neutral-950 px-3 text-xs font-medium !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
               >
                 <MonitorUp className="size-4" />
                 Buka POS
               </Link>
               <a
                 href={buildAdminSalesCsvExportUrl(data.filters)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
               >
                 <Download className="size-4" />
                 CSV
               </a>
               <a
                 href={buildAdminSalesXlsxExportUrl(data.filters)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
               >
                 <Download className="size-4" />
                 XLSX
@@ -474,7 +472,7 @@ export default async function PenjualanListPage({
               <p className="text-xs font-medium text-[var(--muted)]">
                 Omzet transaksi
               </p>
-              <p className="mt-2 text-lg font-semibold text-neutral-950 sm:text-2xl">
+              <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
                 {formatMoney(data.summary.totalAmount)}
               </p>
             </div>
@@ -493,7 +491,7 @@ export default async function PenjualanListPage({
               <p className="text-xs font-medium text-[var(--muted)]">
                 Transaksi
               </p>
-              <p className="mt-2 text-lg font-semibold text-neutral-950 sm:text-2xl">
+              <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
                 {formatInteger(data.summary.totalTransactions)}
               </p>
             </div>
@@ -510,7 +508,7 @@ export default async function PenjualanListPage({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-medium text-[var(--muted)]">Dibayar</p>
-              <p className="mt-2 text-lg font-semibold text-neutral-950 sm:text-2xl">
+              <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
                 {formatMoney(data.summary.paidAmount)}
               </p>
             </div>
@@ -530,7 +528,7 @@ export default async function PenjualanListPage({
               <p className="text-xs font-medium text-[var(--muted)]">
                 Perlu perhatian
               </p>
-              <p className="mt-2 text-lg font-semibold text-neutral-950 sm:text-2xl">
+              <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
                 {formatInteger(voidRefundRows + failedPrintRows)}
               </p>
             </div>
