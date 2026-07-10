@@ -291,6 +291,7 @@ export async function getOutletsWithRegisters(organizationId: string) {
       name: outlets.name,
       address: outlets.address,
       phone: outlets.phone,
+      googleMapsEmbedUrl: outlets.googleMapsEmbedUrl,
       isActive: outlets.isActive,
       createdAt: outlets.createdAt,
     })
@@ -604,6 +605,7 @@ export async function getOutletDetail(
       name: outlets.name,
       address: outlets.address,
       phone: outlets.phone,
+      googleMapsEmbedUrl: outlets.googleMapsEmbedUrl,
       isActive: outlets.isActive,
       createdAt: outlets.createdAt,
       updatedAt: outlets.updatedAt,

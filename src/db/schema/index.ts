@@ -167,6 +167,7 @@ export const outlets = pgTable(
     name: varchar("name", { length: 160 }).notNull(),
     address: text("address"),
     phone: varchar("phone", { length: 32 }),
+    googleMapsEmbedUrl: text("google_maps_embed_url"),
     isActive: boolean("is_active").default(true).notNull(),
     ...timestamps,
   },

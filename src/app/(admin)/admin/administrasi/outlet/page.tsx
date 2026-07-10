@@ -4,9 +4,9 @@ import {
   Building2,
   Cpu,
   MapPin,
+  MapPinned,
   Phone,
   Plus,
-  Sparkles,
   Store,
 } from "lucide-react";
 import Link from "next/link";
@@ -15,6 +15,28 @@ import { AdministrationTabs } from "@/components/administration/administration-t
 import { getAdministrationAccess } from "@/features/administration/access";
 import { getOutletsWithRegisters } from "@/features/administration/queries";
 import { requirePermission } from "@/lib/auth/session";
+
+function getSafeGoogleMapsEmbedUrl(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+
+    if (
+      url.protocol === "https:" &&
+      url.hostname === "www.google.com" &&
+      url.pathname === "/maps/embed"
+    ) {
+      return value;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
 
 export default async function OutletPage() {
   const auth = await requirePermission("outlets.manage");
@@ -41,12 +63,11 @@ export default async function OutletPage() {
           <div>
             <Link
               href="/admin"
-              className="inline-flex items-center gap-2 bg-white px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"
+              className="inline-flex items-center gap-2 bg-white px-3 py-2 text-sm font-semibold text-neutral-900"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
             </Link>
-
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Daftar Outlet
             </h1>
@@ -61,8 +82,8 @@ export default async function OutletPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-700 ring-1 ring-[var(--border)]">
-                  <Sparkles className="size-3.5 text-[var(--accent)]" />
-                  Outlet online
+                  <Store className="size-3.5 text-[var(--accent)]" />
+                  Status outlet
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-neutral-950">
                   {activeOutletCount} lokasi
@@ -71,10 +92,6 @@ export default async function OutletPage() {
                   {activeRegisters} dari {totalRegisters} register aktif dan
                   siap dipakai di seluruh outlet.
                 </p>
-              </div>
-
-              <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)] ring-1 ring-amber-100">
-                <Store className="size-5" />
               </div>
             </div>
 
@@ -95,6 +112,10 @@ export default async function OutletPage() {
         {outletList.map((outlet) => {
           const hardwareHub = outlet.registers.find(
             (register) => register.isHardwareHub,
+          );
+
+          const safeMapsEmbedUrl = getSafeGoogleMapsEmbedUrl(
+            outlet.googleMapsEmbedUrl,
           );
 
           return (
@@ -152,6 +173,34 @@ export default async function OutletPage() {
                       : "Hardware hub belum ditentukan"}
                   </span>
                 </div>
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-2xl border border-[var(--border)] bg-neutral-50">
+                {safeMapsEmbedUrl ? (
+                  <iframe
+                    src={safeMapsEmbedUrl}
+                    title={`Lokasi outlet ${outlet.name}`}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    className="h-52 w-full border-0"
+                    allowFullScreen
+                  />
+                ) : (
+                  <div className="flex min-h-52 flex-col items-center justify-center px-5 py-8 text-center">
+                    <div className="grid size-11 place-items-center rounded-2xl bg-white text-neutral-400 ring-1 ring-[var(--border)]">
+                      <MapPinned className="size-5" />
+                    </div>
+
+                    <p className="mt-3 text-sm font-semibold text-neutral-900">
+                      Maps belum diatur
+                    </p>
+
+                    <p className="mt-1 max-w-xs text-xs leading-5 text-[var(--muted)]">
+                      Tambahkan Google Maps Embed URL di detail outlet agar
+                      lokasi toko tampil di card ini.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="mt-5 grid grid-cols-2 gap-3">

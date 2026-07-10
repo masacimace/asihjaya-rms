@@ -5,7 +5,6 @@ import {
   LockKeyhole,
   Plus,
   ShieldCheck,
-  Sparkles,
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -94,7 +93,7 @@ export default async function RolesPage({
           <div>
             <Link
               href="/admin"
-              className="inline-flex items-center gap-2 bg-white px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"
+              className="inline-flex items-center gap-2 bg-white px-3 py-2 text-sm font-semibold text-neutral-900"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
@@ -113,7 +112,7 @@ export default async function RolesPage({
 
           <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-4">
             <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-700 ring-1 ring-[var(--border)]">
-              <Sparkles className="size-3.5 text-[var(--accent)]" />
+              <LockKeyhole className="size-3.5 text-[var(--accent)]" />
               Kontrol akses
             </div>
             <p className="mt-3 text-2xl font-semibold text-neutral-950">

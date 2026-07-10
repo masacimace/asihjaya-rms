@@ -4,6 +4,7 @@ import {
   Building2,
   MonitorSmartphone,
   ShieldCheck,
+  Sparkles,
   UserCheck,
   UsersRound,
 } from "lucide-react";
@@ -133,7 +134,8 @@ export default async function AdministrationPage() {
           </div>
 
           <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-4">
-            <p className="text-xs font-semibold uppercase text-neutral-500">
+            <p className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-700 ring-1 ring-[var(--border)]">
+              <Sparkles className="size-3.5 text-[var(--accent)]" />
               Status akses
             </p>
             <p className="mt-2 text-2xl font-semibold text-neutral-950">

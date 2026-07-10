@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Building2,
   Cpu,
+  MapPinned,
   MonitorSmartphone,
   Save,
 } from "lucide-react";
@@ -30,6 +31,7 @@ type OutletData = {
   name: string;
   address: string | null;
   phone: string | null;
+  googleMapsEmbedUrl: string | null;
   isActive: boolean;
 };
 
@@ -187,7 +189,34 @@ export function OutletForm(props: OutletFormProps) {
             <FieldError message={state.fieldErrors?.phone} />
           </label>
 
-          <div />
+          <label className="block text-sm sm:col-span-2">
+            <span className="mb-2 block font-medium text-neutral-800">
+              Google Maps Embed URL
+            </span>
+
+            <div className="relative">
+              <MapPinned className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+
+              <input
+                name="googleMapsEmbedUrl"
+                type="url"
+                inputMode="url"
+                defaultValue={
+                  props.mode === "edit"
+                    ? (props.outlet.googleMapsEmbedUrl ?? "")
+                    : ""
+                }
+                className={`${inputClassName} pl-9`}
+                placeholder="https://www.google.com/maps/embed?..."
+              />
+            </div>
+
+            <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+              Buka Google Maps, pilih lokasi outlet, klik Share, pilih Embed a map, lalu salin nilai URL dari atribut iframe src.
+            </p>
+
+            <FieldError message={state.fieldErrors?.googleMapsEmbedUrl} />
+          </label>
 
           <label className="block text-sm sm:col-span-2">
             <span className="mb-2 block font-medium text-neutral-800">

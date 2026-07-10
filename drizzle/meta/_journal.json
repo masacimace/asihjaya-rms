@@ -57,6 +57,13 @@
       "when": 1783549637347,
       "tag": "0007_add_refund_approval_type",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783559000000,
+      "tag": "0008_add_outlet_google_maps_embed_url",
+      "breakpoints": true
     }
   ]
 }

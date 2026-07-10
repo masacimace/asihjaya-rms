@@ -26,6 +26,9 @@ const REGISTER_CODE_PATTERN = /^[A-Z0-9][A-Z0-9_-]{1,31}$/;
 
 const PHONE_PATTERN = /^[0-9+().\-\s]{6,32}$/;
 
+const GOOGLE_MAPS_EMBED_URL_PATTERN =
+  /^https:\/\/www\.google\.com\/maps\/embed(?:\?|$)/i;
+
 function failure(
   message: string,
   fieldErrors?: Record<string, string>,
@@ -54,6 +57,33 @@ function readCheckbox(formData: FormData, name: string): boolean {
 
 function normalizeNullable(value: string): string | null {
   return value.length > 0 ? value : null;
+}
+
+function normalizeGoogleMapsEmbedUrl(value: string): string | null {
+  if (!value) {
+    return null;
+  }
+
+  return value.trim();
+}
+
+function isValidGoogleMapsEmbedUrl(value: string): boolean {
+  if (!value) {
+    return true;
+  }
+
+  try {
+    const url = new URL(value);
+
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "www.google.com" &&
+      url.pathname === "/maps/embed" &&
+      GOOGLE_MAPS_EMBED_URL_PATTERN.test(value)
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function getRequestMetadata() {
@@ -209,6 +239,8 @@ export async function createOutletAction(
 
   const phone = readText(formData, "phone");
 
+  const googleMapsEmbedUrl = readText(formData, "googleMapsEmbedUrl");
+
   const isActive = readCheckbox(formData, "isActive");
 
   const fieldErrors: Record<string, string> = {};
@@ -228,6 +260,11 @@ export async function createOutletAction(
 
   if (phone && !PHONE_PATTERN.test(phone)) {
     fieldErrors.phone = "Format nomor telepon tidak valid.";
+  }
+
+  if (!isValidGoogleMapsEmbedUrl(googleMapsEmbedUrl)) {
+    fieldErrors.googleMapsEmbedUrl =
+      "Gunakan URL embed dari Google Maps: https://www.google.com/maps/embed?...";
   }
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -267,6 +304,7 @@ export async function createOutletAction(
           name,
           address: normalizeNullable(address),
           phone: normalizeNullable(phone),
+          googleMapsEmbedUrl: normalizeGoogleMapsEmbedUrl(googleMapsEmbedUrl),
           isActive,
         })
         .returning({
@@ -297,6 +335,7 @@ export async function createOutletAction(
           name,
           address: normalizeNullable(address),
           phone: normalizeNullable(phone),
+          googleMapsEmbedUrl: normalizeGoogleMapsEmbedUrl(googleMapsEmbedUrl),
           isActive,
         },
 
@@ -342,6 +381,7 @@ export async function updateOutletAction(
       name: outlets.name,
       address: outlets.address,
       phone: outlets.phone,
+      googleMapsEmbedUrl: outlets.googleMapsEmbedUrl,
       isActive: outlets.isActive,
     })
     .from(outlets)
@@ -365,6 +405,8 @@ export async function updateOutletAction(
 
   const phone = readText(formData, "phone");
 
+  const googleMapsEmbedUrl = readText(formData, "googleMapsEmbedUrl");
+
   const isActive = readCheckbox(formData, "isActive");
 
   const fieldErrors: Record<string, string> = {};
@@ -379,6 +421,11 @@ export async function updateOutletAction(
 
   if (phone && !PHONE_PATTERN.test(phone)) {
     fieldErrors.phone = "Format nomor telepon tidak valid.";
+  }
+
+  if (!isValidGoogleMapsEmbedUrl(googleMapsEmbedUrl)) {
+    fieldErrors.googleMapsEmbedUrl =
+      "Gunakan URL embed dari Google Maps: https://www.google.com/maps/embed?...";
   }
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -429,6 +476,7 @@ export async function updateOutletAction(
           name,
           address: normalizeNullable(address),
           phone: normalizeNullable(phone),
+          googleMapsEmbedUrl: normalizeGoogleMapsEmbedUrl(googleMapsEmbedUrl),
           isActive,
           updatedAt: new Date(),
         })
@@ -452,6 +500,7 @@ export async function updateOutletAction(
           name: existing.name,
           address: existing.address,
           phone: existing.phone,
+          googleMapsEmbedUrl: existing.googleMapsEmbedUrl,
           isActive: existing.isActive,
         },
 
@@ -460,6 +509,7 @@ export async function updateOutletAction(
           name,
           address: normalizeNullable(address),
           phone: normalizeNullable(phone),
+          googleMapsEmbedUrl: normalizeGoogleMapsEmbedUrl(googleMapsEmbedUrl),
           isActive,
         },
 
