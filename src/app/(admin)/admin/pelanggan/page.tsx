@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowRight,
   CalendarPlus,
   ChevronLeft,
@@ -155,7 +156,7 @@ function SummaryCard({
     <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+          <p className="text-xs font-semibold uppercase text-[var(--muted)]">
             {title}
           </p>
           <p className="mt-3 truncate text-2xl font-semibold text-neutral-950">
@@ -314,37 +315,65 @@ export default async function CustomerListPage({
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-[var(--accent)]">
-            Customer Relationship
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
-            Pelanggan
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-            Kelola profil pelanggan real dari POS, pantau histori belanja, dan
-            siapkan follow-up WhatsApp untuk transaksi jewelry berikutnya.
-          </p>
-        </div>
+      <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-end lg:p-7">
+          <div>
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-2 bg-white px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"
+            >
+              <ArrowLeft className="size-4" />
+              Kembali ke Dashboard
+            </Link>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={buildCustomersListUrl(data.page, data.filters)}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
-          >
-            <RefreshCw className="size-4" />
-            Refresh
-          </Link>
-          <Link
-            href="/admin/pelanggan/baru"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold !text-white transition hover:bg-[var(--accent-hover)] [&_svg]:!text-white"
-          >
-            <Plus className="size-4" />
-            Pelanggan Baru
-          </Link>
+            <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
+              Daftar Customer
+            </h1>
+
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+              Kelola profil pelanggan real dari POS, pantau histori belanja, dan
+              siapkan follow-up WhatsApp untuk transaksi jewelry berikutnya.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-700 ring-1 ring-[var(--border)]">
+                  <Users className="size-3.5 text-[var(--accent)]" />
+                  Pelanggan aktif
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-neutral-950">
+                  {formatInteger(data.summary.activeCustomers)} customer
+                </p>
+                <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                  {formatInteger(data.summary.totalCustomers)} total pelanggan ·{" "}
+                  {formatInteger(data.summary.customersWithTransactions)} sudah
+                  bertransaksi.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              <Link
+                href={buildCustomersListUrl(data.page, data.filters)}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-900 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"
+              >
+                <RefreshCw className="size-4" />
+                Refresh
+              </Link>
+
+              <Link
+                href="/admin/pelanggan/baru"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+              >
+                <Plus className="size-4" />
+                Customer
+              </Link>
+            </div>
+          </div>
         </div>
-      </header>
+      </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryCard
@@ -378,7 +407,9 @@ export default async function CustomerListPage({
         <SummaryCard
           title="Status View"
           value={customerStatusLabels[data.filters.status]}
-          helper={isFiltered ? "Filter sedang aktif" : "Menampilkan pelanggan aktif"}
+          helper={
+            isFiltered ? "Filter sedang aktif" : "Menampilkan pelanggan aktif"
+          }
           icon={<Sparkles className="size-5" />}
         />
       </section>
@@ -467,7 +498,7 @@ export default async function CustomerListPage({
       <section className="hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-white lg:block">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="border-b border-[var(--border)] bg-neutral-50/70 text-xs uppercase tracking-wide text-[var(--muted)]">
+            <thead className="border-b border-[var(--border)] bg-neutral-50/70 text-xs uppercase text-[var(--muted)]">
               <tr>
                 <th className="px-5 py-4 font-semibold">Pelanggan</th>
                 <th className="px-5 py-4 font-semibold">Kontak</th>
@@ -499,10 +530,13 @@ export default async function CustomerListPage({
                               >
                                 {customer.fullName}
                               </Link>
-                              <CustomerStatusBadge isActive={customer.isActive} />
+                              <CustomerStatusBadge
+                                isActive={customer.isActive}
+                              />
                             </div>
                             <p className="mt-1 text-xs text-[var(--muted)]">
-                              {customer.customerCode ?? "Tanpa kode customer"} · Bergabung {formatDate(customer.createdAt)}
+                              {customer.customerCode ?? "Tanpa kode customer"} ·
+                              Bergabung {formatDate(customer.createdAt)}
                             </p>
                             {customer.notes ? (
                               <p className="mt-2 line-clamp-2 max-w-sm text-xs leading-5 text-[var(--muted)]">
@@ -529,10 +563,14 @@ export default async function CustomerListPage({
                           {customer.address ? (
                             <p className="flex max-w-xs items-center gap-2 text-xs text-[var(--muted)]">
                               <MapPin className="size-3.5 shrink-0 text-neutral-400" />
-                              <span className="truncate">{customer.address}</span>
+                              <span className="truncate">
+                                {customer.address}
+                              </span>
                             </p>
                           ) : null}
-                          {!customer.phone && !customer.email && !customer.address ? (
+                          {!customer.phone &&
+                          !customer.email &&
+                          !customer.address ? (
                             <p className="text-xs text-[var(--muted)]">
                               Kontak belum dilengkapi
                             </p>
@@ -544,7 +582,8 @@ export default async function CustomerListPage({
                           {formatMoney(customer.totalSpent)}
                         </p>
                         <p className="mt-1 text-xs text-[var(--muted)]">
-                          {formatInteger(customer.totalTransactions)} transaksi · {formatInteger(customer.totalItems)} item
+                          {formatInteger(customer.totalTransactions)} transaksi
+                          · {formatInteger(customer.totalItems)} item
                         </p>
                       </td>
                       <td className="px-5 py-4 align-top">
@@ -557,10 +596,14 @@ export default async function CustomerListPage({
                               {customer.lastTransaction.invoiceNumber}
                             </Link>
                             <p className="mt-1 text-xs text-[var(--muted)]">
-                              {formatDateTime(customer.lastTransaction.completedAt ?? customer.lastTransaction.createdAt)}
+                              {formatDateTime(
+                                customer.lastTransaction.completedAt ??
+                                  customer.lastTransaction.createdAt,
+                              )}
                             </p>
                             <p className="mt-1 text-xs text-[var(--muted)]">
-                              {customer.lastTransaction.outletName} · {customer.lastTransaction.cashierName}
+                              {customer.lastTransaction.outletName} ·{" "}
+                              {customer.lastTransaction.cashierName}
                             </p>
                           </div>
                         ) : (
@@ -615,11 +658,15 @@ export default async function CustomerListPage({
       {data.pageCount > 1 ? (
         <nav className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[var(--muted)]">
-            Halaman {data.page} dari {data.pageCount} · {formatInteger(data.total)} pelanggan
+            Halaman {data.page} dari {data.pageCount} ·{" "}
+            {formatInteger(data.total)} pelanggan
           </p>
           <div className="flex items-center gap-2">
             <Link
-              href={buildCustomersListUrl(Math.max(1, data.page - 1), data.filters)}
+              href={buildCustomersListUrl(
+                Math.max(1, data.page - 1),
+                data.filters,
+              )}
               aria-disabled={data.page <= 1}
               className={cn(
                 "inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-sm font-medium transition",
@@ -632,7 +679,10 @@ export default async function CustomerListPage({
               Sebelumnya
             </Link>
             <Link
-              href={buildCustomersListUrl(Math.min(data.pageCount, data.page + 1), data.filters)}
+              href={buildCustomersListUrl(
+                Math.min(data.pageCount, data.page + 1),
+                data.filters,
+              )}
               aria-disabled={data.page >= data.pageCount}
               className={cn(
                 "inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-sm font-medium transition",

@@ -136,7 +136,7 @@ export default async function AdministrationPage() {
           <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-4">
             <p className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-700 ring-1 ring-[var(--border)]">
               <Sparkles className="size-3.5 text-[var(--accent)]" />
-              Status akses
+              Status role akses
             </p>
             <p className="mt-2 text-2xl font-semibold text-neutral-950">
               {overview.activeUsers} staff aktif
