@@ -77,7 +77,7 @@ function ApprovalMiniCard({ approval }: { approval: AdminApprovalRow }) {
   return (
     <article
       className={cn(
-        "rounded-3xl border bg-white p-4 shadow-sm",
+        "rounded-3xl border bg-white p-4",
         approval.status === "pending"
           ? "border-amber-200 ring-1 ring-amber-100"
           : "border-[var(--border)]",
