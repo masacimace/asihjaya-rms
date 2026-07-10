@@ -1,4 +1,14 @@
-import { ArrowRight, Building2, Cpu, MapPin, Phone, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  Cpu,
+  MapPin,
+  Phone,
+  Plus,
+  Sparkles,
+  Store,
+} from "lucide-react";
 import Link from "next/link";
 
 import { AdministrationTabs } from "@/components/administration/administration-tabs";
@@ -11,32 +21,73 @@ export default async function OutletPage() {
   const administrationAccess = getAdministrationAccess(auth);
 
   const outletList = await getOutletsWithRegisters(auth.organization.id);
+  const activeOutletCount = outletList.filter(
+    (outlet) => outlet.isActive,
+  ).length;
+  const totalRegisters = outletList.reduce(
+    (total, outlet) => total + outlet.registers.length,
+    0,
+  );
+  const activeRegisters = outletList.reduce(
+    (total, outlet) =>
+      total + outlet.registers.filter((register) => register.isActive).length,
+    0,
+  );
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-[var(--accent)]">
-            Administrasi
-          </p>
+      <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-end lg:p-7">
+          <div>
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-2 bg-white px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"
+            >
+              <ArrowLeft className="size-4" />
+              Kembali ke Dashboard
+            </Link>
 
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950">
-            Outlet
-          </h1>
+            <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
+              Daftar Outlet
+            </h1>
 
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Kelola lokasi operasional yang berada di bawah organisasi.
-          </p>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+              Kelola lokasi operasional, kontak toko, register, dan hardware hub
+              yang dipakai untuk transaksi POS di setiap outlet.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-700 ring-1 ring-[var(--border)]">
+                  <Sparkles className="size-3.5 text-[var(--accent)]" />
+                  Outlet online
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-neutral-950">
+                  {activeOutletCount} lokasi
+                </p>
+                <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                  {activeRegisters} dari {totalRegisters} register aktif dan
+                  siap dipakai di seluruh outlet.
+                </p>
+              </div>
+
+              <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)] ring-1 ring-amber-100">
+                <Store className="size-5" />
+              </div>
+            </div>
+
+            <Link
+              href="/admin/administrasi/outlet/tambah"
+              className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+            >
+              <Plus className="size-4" />
+              Tambah Outlet
+            </Link>
+          </div>
         </div>
-
-        <Link
-          href="/admin/administrasi/outlet/tambah"
-          className="flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
-        >
-          <Plus className="size-4" />
-          Tambah Outlet
-        </Link>
-      </header>
+      </section>
 
       <AdministrationTabs active="outlets" access={administrationAccess} />
 
@@ -49,10 +100,10 @@ export default async function OutletPage() {
           return (
             <article
               key={outlet.id}
-              className="flex flex-col rounded-2xl border border-[var(--border)] bg-white p-5"
+              className="flex flex-col rounded-3xl border border-[var(--border)] bg-white p-5 transition hover:border-[var(--accent)]/50 hover:bg-[var(--accent-soft)]/10"
             >
               <div className="flex items-start gap-4">
-                <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)] ring-1 ring-amber-100">
                   <Building2 className="size-5" />
                 </div>
 
@@ -65,8 +116,8 @@ export default async function OutletPage() {
                     <span
                       className={
                         outlet.isActive
-                          ? "rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700"
-                          : "rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-600"
+                          ? "rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100"
+                          : "rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 ring-1 ring-neutral-200"
                       }
                     >
                       {outlet.isActive ? "Aktif" : "Nonaktif"}
@@ -104,7 +155,7 @@ export default async function OutletPage() {
               </div>
 
               <div className="mt-5 grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-[var(--surface-muted)] p-4">
+                <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-4">
                   <p className="text-xs text-[var(--muted)]">Register</p>
 
                   <p className="mt-1 text-xl font-semibold text-neutral-950">
@@ -112,7 +163,7 @@ export default async function OutletPage() {
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-[var(--surface-muted)] p-4">
+                <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-4">
                   <p className="text-xs text-[var(--muted)]">Register aktif</p>
 
                   <p className="mt-1 text-xl font-semibold text-neutral-950">
@@ -126,7 +177,7 @@ export default async function OutletPage() {
 
               <Link
                 href={`/admin/administrasi/outlet/${outlet.id}`}
-                className="group mt-5 flex items-center justify-between border-t border-[var(--border)] pt-4 text-sm font-medium text-[var(--accent)]"
+                className="group mt-5 flex items-center justify-between border-t border-[var(--border)] pt-4 text-sm font-semibold text-[var(--accent)]"
               >
                 <span>Kelola outlet</span>
 

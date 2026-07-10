@@ -37,7 +37,7 @@ const navigationItems: NavigationItem[] = [
   },
   {
     id: "staff",
-    label: "Daftar Staff",
+    label: "Management User",
     description: "Akun pengguna",
     href: "/admin/administrasi/staff",
     icon: UsersRound,

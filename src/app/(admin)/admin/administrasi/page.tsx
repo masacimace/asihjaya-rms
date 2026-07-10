@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowRight,
   Building2,
   MonitorSmartphone,
@@ -113,11 +114,13 @@ export default async function AdministrationPage() {
       <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-end lg:p-7">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase text-[var(--accent)]">
-              <ShieldCheck className="size-3.5" />
-              Administrasi Sistem
-            </div>
-
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-2 bg-white px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"
+            >
+              <ArrowLeft className="size-4" />
+              Kembali ke Dashboard
+            </Link>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Staff dan Hak Akses
             </h1>
