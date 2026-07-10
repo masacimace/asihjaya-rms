@@ -108,6 +108,7 @@ export type AdminSaleListRow = {
   additionalFeeAmount: string;
   totalAmount: string;
   paidAmount: number;
+  refundedAmount: number;
   paymentStatus: "paid" | "partial" | "pending";
   completedAt: Date | null;
   createdAt: Date;

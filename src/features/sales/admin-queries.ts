@@ -584,10 +584,19 @@ export async function getAdminSalesListData(
           : paymentTotal,
       0,
     );
+    const refundedAmount = salePayments.reduce(
+      (paymentTotal, payment) =>
+        payment.status === "refunded"
+          ? paymentTotal + parseAmount(payment.amount)
+          : paymentTotal,
+      0,
+    );
     const paymentMethods = Array.from(
       new Set(
         salePayments
-          .filter((payment) => payment.status === "paid")
+          .filter((payment) =>
+            payment.status === "paid" || payment.status === "refunded",
+          )
           .map((payment) => payment.method),
       ),
     );
@@ -601,6 +610,7 @@ export async function getAdminSalesListData(
       additionalFeeAmount: sale.additionalFeeAmount,
       totalAmount: sale.totalAmount,
       paidAmount,
+      refundedAmount,
       paymentStatus: getPaymentStatusFromAmounts(totalAmount, paidAmount),
       completedAt: sale.completedAt,
       createdAt: sale.createdAt,

@@ -25,6 +25,7 @@ import {
   type AdminSaleStatus,
   type AdminSalesDateRange,
   type AdminSalesFilters,
+  type AdminSaleListRow,
 } from "@/features/sales/admin-contracts";
 import { getAdminSalesListData } from "@/features/sales/admin-queries";
 import { requirePermission } from "@/lib/auth/session";
@@ -119,6 +120,164 @@ function formatInteger(value: number) {
   }).format(value);
 }
 
+function getNumericAmount(value: number | string | null | undefined) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === "string") {
+    const amount = Number(value);
+
+    return Number.isFinite(amount) ? amount : 0;
+  }
+
+  return 0;
+}
+
+type PaymentDisplayTone = "success" | "warning" | "danger" | "neutral" | "refund";
+
+type PaymentDisplay = {
+  label: string;
+  description: string;
+  amountLabel: string;
+  amount: number;
+  tone: PaymentDisplayTone;
+};
+
+function getPaymentDisplay(
+  sale: Pick<
+    AdminSaleListRow,
+    "status" | "totalAmount" | "paidAmount" | "refundedAmount"
+  >,
+): PaymentDisplay {
+  const totalAmount = getNumericAmount(sale.totalAmount);
+  const paidAmount = getNumericAmount(sale.paidAmount);
+  const refundedAmount = getNumericAmount(sale.refundedAmount);
+  const reversalAmount = refundedAmount > 0 ? refundedAmount : totalAmount;
+
+  if (sale.status === "voided") {
+    return {
+      label: "Dibatalkan",
+      description:
+        reversalAmount > 0
+          ? `Reversal ${formatMoney(reversalAmount)}`
+          : "Pembayaran direversal",
+      amountLabel: "Reversal",
+      amount: reversalAmount,
+      tone: "danger",
+    };
+  }
+
+  if (sale.status === "refunded") {
+    return {
+      label: "Refund penuh",
+      description:
+        reversalAmount > 0
+          ? `Dikembalikan ${formatMoney(reversalAmount)}`
+          : "Dana dikembalikan",
+      amountLabel: "Refund",
+      amount: reversalAmount,
+      tone: "refund",
+    };
+  }
+
+  if (sale.status === "partially_refunded") {
+    return {
+      label: "Refund parsial",
+      description:
+        refundedAmount > 0
+          ? `Dikembalikan ${formatMoney(refundedAmount)}`
+          : "Sebagian dana dikembalikan",
+      amountLabel: "Refund",
+      amount: refundedAmount,
+      tone: "warning",
+    };
+  }
+
+  if (paidAmount >= totalAmount && totalAmount > 0) {
+    return {
+      label: "Lunas",
+      description: `Dibayar ${formatMoney(paidAmount)}`,
+      amountLabel: "Dibayar",
+      amount: paidAmount,
+      tone: "success",
+    };
+  }
+
+  if (paidAmount > 0) {
+    return {
+      label: "Parsial",
+      description: `Dibayar ${formatMoney(paidAmount)} dari ${formatMoney(totalAmount)}`,
+      amountLabel: "Dibayar",
+      amount: paidAmount,
+      tone: "warning",
+    };
+  }
+
+  return {
+    label: "Belum bayar",
+    description: "Dibayar Rp 0",
+    amountLabel: "Dibayar",
+    amount: 0,
+    tone: "neutral",
+  };
+}
+
+function getPaymentDisplayClass(tone: PaymentDisplayTone) {
+  if (tone === "success") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (tone === "danger") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (tone === "refund") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+
+  if (tone === "warning") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  return "border-neutral-200 bg-neutral-50 text-neutral-600";
+}
+
+function PaymentStatusSummary({ sale }: { sale: AdminSaleListRow }) {
+  const paymentDisplay = getPaymentDisplay(sale);
+
+  return (
+    <div className="min-w-0">
+      <span
+        className={cn(
+          "inline-flex rounded-full border px-2.5 py-1 text-xs font-medium",
+          getPaymentDisplayClass(paymentDisplay.tone),
+        )}
+      >
+        {paymentDisplay.label}
+      </span>
+      <p className="mt-2 text-xs text-neutral-500">
+        {paymentDisplay.description}
+      </p>
+    </div>
+  );
+}
+
+function PaymentAmountCard({ sale }: { sale: AdminSaleListRow }) {
+  const paymentDisplay = getPaymentDisplay(sale);
+
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
+      <p className="text-xs font-medium text-neutral-500">
+        {paymentDisplay.amountLabel}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-neutral-950">
+        {formatMoney(paymentDisplay.amount)}
+      </p>
+    </div>
+  );
+}
+
 function formatDateTime(value: Date | null) {
   if (!value) {
     return "-";
@@ -171,7 +330,9 @@ function buildAdminSalesCsvExportUrl(filters: AdminSalesFilters) {
   const params = buildAdminSalesQueryParams(filters);
   const query = params.toString();
 
-  return query ? `/admin/penjualan/export?${query}` : "/admin/penjualan/export";
+  return query
+    ? `/admin/penjualan/export?${query}`
+    : "/admin/penjualan/export";
 }
 
 function buildAdminSalesXlsxExportUrl(filters: AdminSalesFilters) {
@@ -181,18 +342,6 @@ function buildAdminSalesXlsxExportUrl(filters: AdminSalesFilters) {
   return query
     ? `/admin/penjualan/export/xlsx?${query}`
     : "/admin/penjualan/export/xlsx";
-}
-
-function getPaymentMethodLabel(methods: AdminPaymentMethod[]) {
-  if (methods.length === 0) {
-    return "Belum bayar";
-  }
-
-  if (methods.length === 1) {
-    return paymentMethodLabels[methods[0] ?? "other"];
-  }
-
-  return `Split: ${methods.map((method) => paymentMethodLabels[method]).join(" + ")}`;
 }
 
 function PaymentBadges({ methods }: { methods: AdminPaymentMethod[] }) {
@@ -233,20 +382,15 @@ export default async function PenjualanListPage({
   const data = await getAdminSalesListData(auth, filters);
   const isFiltered = Boolean(
     filters.search ||
-    filters.outletId ||
-    filters.status ||
-    filters.paymentMethod ||
-    filters.dateRange !== "today",
+      filters.outletId ||
+      filters.status ||
+      filters.paymentMethod ||
+      filters.dateRange !== "today",
   );
   const voidRefundRows = data.rows.filter(
-    (sale) =>
-      sale.status === "voided" ||
-      sale.status === "refunded" ||
-      sale.status === "partially_refunded",
+    (sale) => sale.status === "voided" || sale.status === "refunded" || sale.status === "partially_refunded",
   ).length;
-  const failedPrintRows = data.rows.filter(
-    (sale) => sale.printStatus === "failed",
-  ).length;
+  const failedPrintRows = data.rows.filter((sale) => sale.printStatus === "failed").length;
 
   return (
     <div className="space-y-6">
@@ -255,19 +399,22 @@ export default async function PenjualanListPage({
           <div className="min-w-0 space-y-4">
             <Link
               href="/admin"
-              className="inline-flex h-10 items-center justify-center gap-2 bg-white px-4 text-sm font-medium text-neutral-700"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
             </Link>
+
             <div>
+              <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                Sales Transaction Center
+              </span>
               <h1 className="mt-3 text-2xl font-semibold text-neutral-950 sm:text-3xl">
-                Daftar Penjualan
+                Penjualan
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-                Pantau transaksi POS, customer, kasir, metode pembayaran, status
-                nota, print receipt, serta tindak lanjut void dan refund dari
-                outlet yang bisa kamu akses.
+                Pantau transaksi POS, customer, kasir, metode pembayaran, status nota,
+                print receipt, serta tindak lanjut void dan refund dari outlet yang bisa kamu akses.
               </p>
             </div>
           </div>
@@ -275,17 +422,16 @@ export default async function PenjualanListPage({
           <div className="w-full rounded-2xl border border-neutral-200 bg-neutral-50/70 p-4 xl:max-w-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-700 ring-1 ring-[var(--border)]">
-                  <ReceiptText className="size-3.5 text-[var(--accent)]" />
-                  Periode aktif
-                </p>
+                <p className="text-xs font-medium text-neutral-500">Periode aktif</p>
                 <p className="mt-1 text-lg font-semibold text-neutral-950">
                   {data.period.label}
                 </p>
                 <p className="mt-1 text-xs leading-5 text-neutral-500">
-                  {formatInteger(data.total)} transaksi cocok dengan filter saat
-                  ini.
+                  {formatInteger(data.total)} transaksi cocok dengan filter saat ini.
                 </p>
+              </div>
+              <div className="grid size-11 shrink-0 place-items-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700">
+                <ReceiptText className="size-5" />
               </div>
             </div>
 
@@ -327,9 +473,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-[var(--muted)]">
-                Omzet transaksi
-              </p>
+              <p className="text-xs font-medium text-[var(--muted)]">Omzet transaksi</p>
               <p className="mt-2 text-lg font-semibold text-neutral-950 sm:text-2xl">
                 {formatMoney(data.summary.totalAmount)}
               </p>
@@ -346,9 +490,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-[var(--muted)]">
-                Transaksi
-              </p>
+              <p className="text-xs font-medium text-[var(--muted)]">Transaksi</p>
               <p className="mt-2 text-lg font-semibold text-neutral-950 sm:text-2xl">
                 {formatInteger(data.summary.totalTransactions)}
               </p>
@@ -375,17 +517,14 @@ export default async function PenjualanListPage({
             </div>
           </div>
           <p className="mt-3 text-xs leading-5 text-neutral-500">
-            Cash {formatMoney(data.summary.cashAmount)} · Non-cash{" "}
-            {formatMoney(data.summary.nonCashAmount)}
+            Cash {formatMoney(data.summary.cashAmount)} · Non-cash {formatMoney(data.summary.nonCashAmount)}
           </p>
         </article>
 
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-[var(--muted)]">
-                Perlu perhatian
-              </p>
+              <p className="text-xs font-medium text-[var(--muted)]">Perlu perhatian</p>
               <p className="mt-2 text-lg font-semibold text-neutral-950 sm:text-2xl">
                 {formatInteger(voidRefundRows + failedPrintRows)}
               </p>
@@ -403,12 +542,9 @@ export default async function PenjualanListPage({
       <section className="rounded-[1.75rem] border border-[var(--border)] bg-white p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-neutral-950">
-              Filter transaksi
-            </h2>
+            <h2 className="text-base font-semibold text-neutral-950">Filter transaksi</h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              Cari invoice, customer, SKU, barcode, kasir, outlet, atau
-              referensi pembayaran.
+              Cari invoice, customer, SKU, barcode, kasir, outlet, atau referensi pembayaran.
             </p>
           </div>
           {isFiltered ? (
@@ -498,30 +634,22 @@ export default async function PenjualanListPage({
             { label: "Semua", href: "/admin/penjualan", active: !isFiltered },
             {
               label: "Hari ini",
-              href: buildAdminSalesFilterUrl(data.filters, {
-                dateRange: "today",
-              }),
+              href: buildAdminSalesFilterUrl(data.filters, { dateRange: "today" }),
               active: filters.dateRange === "today" && !filters.status,
             },
             {
               label: "Selesai",
-              href: buildAdminSalesFilterUrl(data.filters, {
-                status: "completed",
-              }),
+              href: buildAdminSalesFilterUrl(data.filters, { status: "completed" }),
               active: filters.status === "completed",
             },
             {
               label: "Void",
-              href: buildAdminSalesFilterUrl(data.filters, {
-                status: "voided",
-              }),
+              href: buildAdminSalesFilterUrl(data.filters, { status: "voided" }),
               active: filters.status === "voided",
             },
             {
               label: "Refund",
-              href: buildAdminSalesFilterUrl(data.filters, {
-                status: "refunded",
-              }),
+              href: buildAdminSalesFilterUrl(data.filters, { status: "refunded" }),
               active: filters.status === "refunded",
             },
           ].map((chip) => (
@@ -548,8 +676,7 @@ export default async function PenjualanListPage({
               Daftar transaksi POS
             </h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              {formatInteger(data.total)} transaksi ditemukan ·{" "}
-              {formatInteger(data.summary.totalItems)} item terjual.
+              {formatInteger(data.total)} transaksi ditemukan · {formatInteger(data.summary.totalItems)} item terjual.
             </p>
           </div>
           <p className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-600">
@@ -600,9 +727,7 @@ export default async function PenjualanListPage({
                         {sale.customerName ?? "Walk-in Customer"}
                       </p>
                       <p className="mt-1 truncate text-xs text-neutral-500">
-                        {sale.customerCode ??
-                          sale.customerPhone ??
-                          "Tanpa data customer"}
+                        {sale.customerCode ?? sale.customerPhone ?? "Tanpa data customer"}
                       </p>
                     </div>
 
@@ -625,10 +750,12 @@ export default async function PenjualanListPage({
                     </div>
 
                     <div className="min-w-0">
-                      <PaymentBadges methods={sale.paymentMethods} />
-                      <p className="mt-2 text-xs text-neutral-500">
-                        Dibayar {formatMoney(sale.paidAmount)}
-                      </p>
+                      <PaymentStatusSummary sale={sale} />
+                      {sale.paymentMethods.length > 0 ? (
+                        <div className="mt-2">
+                          <PaymentBadges methods={sale.paymentMethods} />
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="min-w-0 text-right">
@@ -695,21 +822,12 @@ export default async function PenjualanListPage({
 
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
-                      <p className="text-xs font-medium text-neutral-500">
-                        Total
-                      </p>
+                      <p className="text-xs font-medium text-neutral-500">Total</p>
                       <p className="mt-1 text-sm font-semibold text-neutral-950">
                         {formatMoney(sale.totalAmount)}
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
-                      <p className="text-xs font-medium text-neutral-500">
-                        Dibayar
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-950">
-                        {formatMoney(sale.paidAmount)}
-                      </p>
-                    </div>
+                    <PaymentAmountCard sale={sale} />
                   </div>
 
                   <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4 text-xs text-neutral-600">
@@ -734,23 +852,29 @@ export default async function PenjualanListPage({
                     <div className="flex justify-between gap-3">
                       <span className="text-neutral-500">Item</span>
                       <span className="min-w-0 truncate text-right font-medium text-neutral-800">
-                        {sale.totalItems} item ·{" "}
-                        {sale.items[0]?.productName ?? "Item belum tercatat"}
+                        {sale.totalItems} item · {sale.items[0]?.productName ?? "Item belum tercatat"}
                       </span>
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <PaymentBadges methods={sale.paymentMethods} />
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
-                        getPrintStatusClass(sale.printStatus),
+                  <div className="mt-4 flex flex-col gap-3">
+                    <PaymentStatusSummary sale={sale} />
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      {sale.paymentMethods.length > 0 ? (
+                        <PaymentBadges methods={sale.paymentMethods} />
+                      ) : (
+                        <span className="text-xs text-neutral-500">Tanpa metode pembayaran</span>
                       )}
-                    >
-                      <Printer className="mr-1 size-3" />
-                      {printStatusLabels[sale.printStatus]}
-                    </span>
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
+                          getPrintStatusClass(sale.printStatus),
+                        )}
+                      >
+                        <Printer className="mr-1 size-3" />
+                        {printStatusLabels[sale.printStatus]}
+                      </span>
+                    </div>
                   </div>
                 </Link>
               ))}
@@ -762,9 +886,7 @@ export default async function PenjualanListPage({
               <ReceiptText className="size-7" />
             </div>
             <h3 className="mt-4 text-base font-semibold text-neutral-950">
-              {isFiltered
-                ? "Tidak ada transaksi yang cocok"
-                : "Belum ada transaksi"}
+              {isFiltered ? "Tidak ada transaksi yang cocok" : "Belum ada transaksi"}
             </h3>
             <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
               {isFiltered
@@ -778,16 +900,11 @@ export default async function PenjualanListPage({
       {data.pageCount > 1 ? (
         <nav className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
           <Link
-            href={buildAdminSalesListUrl(
-              Math.max(1, data.page - 1),
-              data.filters,
-            )}
+            href={buildAdminSalesListUrl(Math.max(1, data.page - 1), data.filters)}
             aria-disabled={data.page <= 1}
             className={cn(
               "flex h-10 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium transition",
-              data.page <= 1
-                ? "pointer-events-none opacity-40"
-                : "hover:bg-neutral-100",
+              data.page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-neutral-100",
             )}
           >
             Sebelumnya
@@ -798,16 +915,11 @@ export default async function PenjualanListPage({
           </p>
 
           <Link
-            href={buildAdminSalesListUrl(
-              Math.min(data.pageCount, data.page + 1),
-              data.filters,
-            )}
+            href={buildAdminSalesListUrl(Math.min(data.pageCount, data.page + 1), data.filters)}
             aria-disabled={data.page >= data.pageCount}
             className={cn(
               "flex h-10 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium transition",
-              data.page >= data.pageCount
-                ? "pointer-events-none opacity-40"
-                : "hover:bg-neutral-100",
+              data.page >= data.pageCount ? "pointer-events-none opacity-40" : "hover:bg-neutral-100",
             )}
           >
             Berikutnya
