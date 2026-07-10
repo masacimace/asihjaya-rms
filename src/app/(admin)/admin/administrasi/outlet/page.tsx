@@ -58,7 +58,7 @@ export default async function OutletPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
+      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-start lg:p-7">
           <div>
             <Link
@@ -121,7 +121,7 @@ export default async function OutletPage() {
           return (
             <article
               key={outlet.id}
-              className="flex flex-col rounded-3xl border border-[var(--border)] bg-white p-5 transition hover:border-[var(--accent)]/50 hover:bg-[var(--accent-soft)]/10"
+              className="flex flex-col rounded-2xl border border-[var(--border)] bg-white p-5 transition hover:border-[var(--accent)]/50 hover:bg-[var(--accent-soft)]/10"
             >
               <div className="flex items-start gap-4">
                 <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)] ring-1 ring-amber-100">

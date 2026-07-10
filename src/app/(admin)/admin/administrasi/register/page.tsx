@@ -36,7 +36,7 @@ export default async function RegisterPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
+      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-end lg:p-7">
           <div>
             <Link
@@ -115,7 +115,7 @@ export default async function RegisterPage() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
         <div className="flex flex-col gap-4 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">

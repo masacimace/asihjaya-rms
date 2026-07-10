@@ -134,7 +134,12 @@ function getNumericAmount(value: number | string | null | undefined) {
   return 0;
 }
 
-type PaymentDisplayTone = "success" | "warning" | "danger" | "neutral" | "refund";
+type PaymentDisplayTone =
+  | "success"
+  | "warning"
+  | "danger"
+  | "neutral"
+  | "refund";
 
 type PaymentDisplay = {
   label: string;
@@ -315,24 +320,11 @@ function buildAdminSalesListUrl(page: number, filters: AdminSalesFilters) {
   return query ? `/admin/penjualan?${query}` : "/admin/penjualan";
 }
 
-function buildAdminSalesFilterUrl(
-  filters: AdminSalesFilters,
-  updates: Partial<AdminSalesFilters>,
-) {
-  return buildAdminSalesListUrl(1, {
-    ...filters,
-    ...updates,
-    page: 1,
-  });
-}
-
 function buildAdminSalesCsvExportUrl(filters: AdminSalesFilters) {
   const params = buildAdminSalesQueryParams(filters);
   const query = params.toString();
 
-  return query
-    ? `/admin/penjualan/export?${query}`
-    : "/admin/penjualan/export";
+  return query ? `/admin/penjualan/export?${query}` : "/admin/penjualan/export";
 }
 
 function buildAdminSalesXlsxExportUrl(filters: AdminSalesFilters) {
@@ -382,39 +374,42 @@ export default async function PenjualanListPage({
   const data = await getAdminSalesListData(auth, filters);
   const isFiltered = Boolean(
     filters.search ||
-      filters.outletId ||
-      filters.status ||
-      filters.paymentMethod ||
-      filters.dateRange !== "today",
+    filters.outletId ||
+    filters.status ||
+    filters.paymentMethod ||
+    filters.dateRange !== "today",
   );
   const voidRefundRows = data.rows.filter(
-    (sale) => sale.status === "voided" || sale.status === "refunded" || sale.status === "partially_refunded",
+    (sale) =>
+      sale.status === "voided" ||
+      sale.status === "refunded" ||
+      sale.status === "partially_refunded",
   ).length;
-  const failedPrintRows = data.rows.filter((sale) => sale.printStatus === "failed").length;
+  const failedPrintRows = data.rows.filter(
+    (sale) => sale.printStatus === "failed",
+  ).length;
 
   return (
     <div className="space-y-6">
-      <header className="rounded-[2rem] border border-[var(--border)] bg-white p-5 sm:p-6">
+      <header className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 space-y-4">
             <Link
               href="/admin"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+              className="inline-flex h-10 items-center justify-center gap-2 bg-white px-4 text-sm font-medium text-neutral-700"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
             </Link>
 
             <div>
-              <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                Sales Transaction Center
-              </span>
               <h1 className="mt-3 text-2xl font-semibold text-neutral-950 sm:text-3xl">
-                Penjualan
+                Daftar Penjualan
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-                Pantau transaksi POS, customer, kasir, metode pembayaran, status nota,
-                print receipt, serta tindak lanjut void dan refund dari outlet yang bisa kamu akses.
+                Pantau transaksi POS, customer, kasir, metode pembayaran, status
+                nota, print receipt, serta tindak lanjut void dan refund dari
+                outlet yang bisa kamu akses.
               </p>
             </div>
           </div>
@@ -422,12 +417,15 @@ export default async function PenjualanListPage({
           <div className="w-full rounded-2xl border border-neutral-200 bg-neutral-50/70 p-4 xl:max-w-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-medium text-neutral-500">Periode aktif</p>
+                <p className="text-xs font-medium text-neutral-500">
+                  Periode aktif
+                </p>
                 <p className="mt-1 text-lg font-semibold text-neutral-950">
                   {data.period.label}
                 </p>
                 <p className="mt-1 text-xs leading-5 text-neutral-500">
-                  {formatInteger(data.total)} transaksi cocok dengan filter saat ini.
+                  {formatInteger(data.total)} transaksi cocok dengan filter saat
+                  ini.
                 </p>
               </div>
               <div className="grid size-11 shrink-0 place-items-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700">
@@ -473,7 +471,9 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-[var(--muted)]">Omzet transaksi</p>
+              <p className="text-xs font-medium text-[var(--muted)]">
+                Omzet transaksi
+              </p>
               <p className="mt-2 text-lg font-semibold text-neutral-950 sm:text-2xl">
                 {formatMoney(data.summary.totalAmount)}
               </p>
@@ -490,7 +490,9 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-[var(--muted)]">Transaksi</p>
+              <p className="text-xs font-medium text-[var(--muted)]">
+                Transaksi
+              </p>
               <p className="mt-2 text-lg font-semibold text-neutral-950 sm:text-2xl">
                 {formatInteger(data.summary.totalTransactions)}
               </p>
@@ -517,14 +519,17 @@ export default async function PenjualanListPage({
             </div>
           </div>
           <p className="mt-3 text-xs leading-5 text-neutral-500">
-            Cash {formatMoney(data.summary.cashAmount)} · Non-cash {formatMoney(data.summary.nonCashAmount)}
+            Cash {formatMoney(data.summary.cashAmount)} · Non-cash{" "}
+            {formatMoney(data.summary.nonCashAmount)}
           </p>
         </article>
 
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-[var(--muted)]">Perlu perhatian</p>
+              <p className="text-xs font-medium text-[var(--muted)]">
+                Perlu perhatian
+              </p>
               <p className="mt-2 text-lg font-semibold text-neutral-950 sm:text-2xl">
                 {formatInteger(voidRefundRows + failedPrintRows)}
               </p>
@@ -539,12 +544,15 @@ export default async function PenjualanListPage({
         </article>
       </section>
 
-      <section className="rounded-[1.75rem] border border-[var(--border)] bg-white p-4 sm:p-5">
+      <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-neutral-950">Filter transaksi</h2>
+            <h2 className="text-base font-semibold text-neutral-950">
+              Filter transaksi
+            </h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              Cari invoice, customer, SKU, barcode, kasir, outlet, atau referensi pembayaran.
+              Cari invoice, customer, SKU, barcode, kasir, outlet, atau
+              referensi pembayaran.
             </p>
           </div>
           {isFiltered ? (
@@ -628,55 +636,17 @@ export default async function PenjualanListPage({
             Terapkan
           </button>
         </form>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {[
-            { label: "Semua", href: "/admin/penjualan", active: !isFiltered },
-            {
-              label: "Hari ini",
-              href: buildAdminSalesFilterUrl(data.filters, { dateRange: "today" }),
-              active: filters.dateRange === "today" && !filters.status,
-            },
-            {
-              label: "Selesai",
-              href: buildAdminSalesFilterUrl(data.filters, { status: "completed" }),
-              active: filters.status === "completed",
-            },
-            {
-              label: "Void",
-              href: buildAdminSalesFilterUrl(data.filters, { status: "voided" }),
-              active: filters.status === "voided",
-            },
-            {
-              label: "Refund",
-              href: buildAdminSalesFilterUrl(data.filters, { status: "refunded" }),
-              active: filters.status === "refunded",
-            },
-          ].map((chip) => (
-            <Link
-              key={chip.label}
-              href={chip.href}
-              className={cn(
-                "inline-flex h-9 items-center rounded-full border px-3 text-xs font-medium transition",
-                chip.active
-                  ? "border-neutral-950 bg-neutral-950 !text-white"
-                  : "border-[var(--border)] bg-neutral-50 text-neutral-700 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]",
-              )}
-            >
-              {chip.label}
-            </Link>
-          ))}
-        </div>
       </section>
 
-      <section className="overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-white">
+      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
         <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-base font-semibold text-neutral-950">
               Daftar transaksi POS
             </h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              {formatInteger(data.total)} transaksi ditemukan · {formatInteger(data.summary.totalItems)} item terjual.
+              {formatInteger(data.total)} transaksi ditemukan ·{" "}
+              {formatInteger(data.summary.totalItems)} item terjual.
             </p>
           </div>
           <p className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-600">
@@ -688,21 +658,21 @@ export default async function PenjualanListPage({
         {data.rows.length > 0 ? (
           <>
             <div className="hidden lg:block">
-              <div className="grid grid-cols-[minmax(230px,1.1fr)_minmax(170px,0.85fr)_minmax(190px,0.95fr)_minmax(110px,0.55fr)_minmax(170px,0.85fr)_minmax(135px,0.7fr)_minmax(155px,0.75fr)_100px] gap-4 border-b border-[var(--border)] bg-neutral-50/70 px-5 py-3 text-xs font-medium text-neutral-500">
+              <div className="grid grid-cols-[minmax(230px,1.1fr)_minmax(170px,0.85fr)_minmax(190px,0.95fr)_minmax(110px,0.55fr)_minmax(180px,0.85fr)_minmax(150px,0.65fr)_minmax(130px,0.45fr)_104px] gap-5 border-b border-[var(--border)] bg-neutral-50/70 px-5 py-3 text-xs font-medium text-neutral-500">
                 <span>Invoice</span>
                 <span>Customer</span>
                 <span>Outlet & kasir</span>
                 <span>Item</span>
                 <span>Pembayaran</span>
-                <span className="text-right">Total</span>
-                <span>Status</span>
+                <span className="pr-2 text-right">Total</span>
+                <span className="text-center">Status</span>
                 <span className="text-right">Aksi</span>
               </div>
               <div className="max-h-[680px] overflow-y-auto">
                 {data.rows.map((sale) => (
                   <div
                     key={sale.id}
-                    className="grid grid-cols-[minmax(230px,1.1fr)_minmax(170px,0.85fr)_minmax(190px,0.95fr)_minmax(110px,0.55fr)_minmax(170px,0.85fr)_minmax(135px,0.7fr)_minmax(155px,0.75fr)_100px] gap-4 border-b border-[var(--border)] px-5 py-4 text-sm text-neutral-600 transition hover:bg-neutral-50/70 last:border-b-0"
+                    className="grid grid-cols-[minmax(230px,1.1fr)_minmax(170px,0.85fr)_minmax(190px,0.95fr)_minmax(110px,0.55fr)_minmax(180px,0.85fr)_minmax(150px,0.65fr)_minmax(130px,0.45fr)_104px] gap-5 border-b border-[var(--border)] px-5 py-4 text-sm text-neutral-600 transition hover:bg-neutral-50/70 last:border-b-0"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-mono text-sm font-semibold text-neutral-950">
@@ -727,7 +697,9 @@ export default async function PenjualanListPage({
                         {sale.customerName ?? "Walk-in Customer"}
                       </p>
                       <p className="mt-1 truncate text-xs text-neutral-500">
-                        {sale.customerCode ?? sale.customerPhone ?? "Tanpa data customer"}
+                        {sale.customerCode ??
+                          sale.customerPhone ??
+                          "Tanpa data customer"}
                       </p>
                     </div>
 
@@ -758,7 +730,7 @@ export default async function PenjualanListPage({
                       ) : null}
                     </div>
 
-                    <div className="min-w-0 text-right">
+                    <div className="min-w-0 pr-2 text-right">
                       <p className="font-semibold text-neutral-950">
                         {formatMoney(sale.totalAmount)}
                       </p>
@@ -769,10 +741,10 @@ export default async function PenjualanListPage({
                       ) : null}
                     </div>
 
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 items-start justify-center">
                       <span
                         className={cn(
-                          "inline-flex rounded-full border px-2.5 py-1 text-xs font-medium",
+                          "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium leading-none",
                           getSaleStatusClass(sale.status),
                         )}
                       >
@@ -822,7 +794,9 @@ export default async function PenjualanListPage({
 
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
-                      <p className="text-xs font-medium text-neutral-500">Total</p>
+                      <p className="text-xs font-medium text-neutral-500">
+                        Total
+                      </p>
                       <p className="mt-1 text-sm font-semibold text-neutral-950">
                         {formatMoney(sale.totalAmount)}
                       </p>
@@ -852,7 +826,8 @@ export default async function PenjualanListPage({
                     <div className="flex justify-between gap-3">
                       <span className="text-neutral-500">Item</span>
                       <span className="min-w-0 truncate text-right font-medium text-neutral-800">
-                        {sale.totalItems} item · {sale.items[0]?.productName ?? "Item belum tercatat"}
+                        {sale.totalItems} item ·{" "}
+                        {sale.items[0]?.productName ?? "Item belum tercatat"}
                       </span>
                     </div>
                   </div>
@@ -863,7 +838,9 @@ export default async function PenjualanListPage({
                       {sale.paymentMethods.length > 0 ? (
                         <PaymentBadges methods={sale.paymentMethods} />
                       ) : (
-                        <span className="text-xs text-neutral-500">Tanpa metode pembayaran</span>
+                        <span className="text-xs text-neutral-500">
+                          Tanpa metode pembayaran
+                        </span>
                       )}
                       <span
                         className={cn(
@@ -886,7 +863,9 @@ export default async function PenjualanListPage({
               <ReceiptText className="size-7" />
             </div>
             <h3 className="mt-4 text-base font-semibold text-neutral-950">
-              {isFiltered ? "Tidak ada transaksi yang cocok" : "Belum ada transaksi"}
+              {isFiltered
+                ? "Tidak ada transaksi yang cocok"
+                : "Belum ada transaksi"}
             </h3>
             <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
               {isFiltered
@@ -900,11 +879,16 @@ export default async function PenjualanListPage({
       {data.pageCount > 1 ? (
         <nav className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
           <Link
-            href={buildAdminSalesListUrl(Math.max(1, data.page - 1), data.filters)}
+            href={buildAdminSalesListUrl(
+              Math.max(1, data.page - 1),
+              data.filters,
+            )}
             aria-disabled={data.page <= 1}
             className={cn(
               "flex h-10 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium transition",
-              data.page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-neutral-100",
+              data.page <= 1
+                ? "pointer-events-none opacity-40"
+                : "hover:bg-neutral-100",
             )}
           >
             Sebelumnya
@@ -915,11 +899,16 @@ export default async function PenjualanListPage({
           </p>
 
           <Link
-            href={buildAdminSalesListUrl(Math.min(data.pageCount, data.page + 1), data.filters)}
+            href={buildAdminSalesListUrl(
+              Math.min(data.pageCount, data.page + 1),
+              data.filters,
+            )}
             aria-disabled={data.page >= data.pageCount}
             className={cn(
               "flex h-10 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium transition",
-              data.page >= data.pageCount ? "pointer-events-none opacity-40" : "hover:bg-neutral-100",
+              data.page >= data.pageCount
+                ? "pointer-events-none opacity-40"
+                : "hover:bg-neutral-100",
             )}
           >
             Berikutnya

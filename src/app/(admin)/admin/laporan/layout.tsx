@@ -49,7 +49,7 @@ export default function LaporanLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="space-y-6">
-      <header className="overflow-hidden rounded-[2rem] border border-neutral-200 bg-white">
+      <header className="overflow-hidden rounded-3xl border border-neutral-200 bg-white">
         <div className="grid gap-5 border-b border-neutral-100 bg-white p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="min-w-0">
             <Link

@@ -81,7 +81,7 @@ export function AdministrationTabs({
   );
 
   return (
-    <div className="rounded-[1.75rem] border border-[var(--border)] bg-white p-4">
+    <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
       <nav className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
         {visibleItems.map(({ id, label, description, href, icon: Icon }) => {
           const isActive = active === id;

@@ -334,7 +334,7 @@ export default async function InventoryPage({
         />
       </section>
 
-      <section className="rounded-[2rem] border border-[var(--border)] bg-white p-4 sm:p-5">
+      <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-semibold text-neutral-950">
@@ -453,7 +453,7 @@ export default async function InventoryPage({
         ) : null}
       </section>
 
-      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
         <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-semibold text-neutral-950">

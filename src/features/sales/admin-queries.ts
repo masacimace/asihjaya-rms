@@ -801,7 +801,17 @@ export async function getAdminSalesExportRows(
     const salePayments = paymentsBySaleId.get(sale.id) ?? [];
     const saleItemsRows = itemsBySaleId.get(sale.id) ?? [];
     const paidPayments = salePayments.filter((payment) => payment.status === "paid");
+    const refundedPayments = salePayments.filter(
+      (payment) => payment.status === "refunded",
+    );
+    const displayPayments = salePayments.filter(
+      (payment) => payment.status === "paid" || payment.status === "refunded",
+    );
     const paidAmount = paidPayments.reduce(
+      (paymentTotal, payment) => paymentTotal + parseAmount(payment.amount),
+      0,
+    );
+    const refundedAmount = refundedPayments.reduce(
       (paymentTotal, payment) => paymentTotal + parseAmount(payment.amount),
       0,
     );
@@ -816,7 +826,7 @@ export async function getAdminSalesExportRows(
       0,
     );
     const paymentMethods = Array.from(
-      new Set(paidPayments.map((payment) => payment.method)),
+      new Set(displayPayments.map((payment) => payment.method)),
     );
 
     return {
@@ -828,6 +838,7 @@ export async function getAdminSalesExportRows(
       additionalFeeAmount: sale.additionalFeeAmount,
       totalAmount: sale.totalAmount,
       paidAmount,
+      refundedAmount,
       receivedAmount,
       changeAmount,
       completedAt: sale.completedAt,

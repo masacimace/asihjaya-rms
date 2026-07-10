@@ -88,7 +88,7 @@ export default async function RolesPage({
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
+      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-end lg:p-7">
           <div>
             <Link
@@ -138,7 +138,7 @@ export default async function RolesPage({
         {summaryCards.map(({ label, value, helper, tone, icon: Icon }) => (
           <article
             key={label}
-            className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5"
+            className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5"
           >
             <div
               className={`grid size-10 place-items-center rounded-2xl ring-1 sm:size-11 ${summaryToneClassName[tone]}`}
@@ -160,7 +160,7 @@ export default async function RolesPage({
         ))}
       </section>
 
-      <section className="rounded-[2rem] border border-[var(--border)] bg-white p-5 sm:p-6">
+      <section className="rounded-2xl border border-[var(--border)] bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">

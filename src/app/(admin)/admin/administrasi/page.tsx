@@ -112,7 +112,7 @@ export default async function AdministrationPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
+      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-end lg:p-7">
           <div>
             <Link
@@ -155,7 +155,7 @@ export default async function AdministrationPage() {
         {summaryCards.map(({ key, label, tone, icon: Icon }) => (
           <article
             key={key}
-            className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5"
+            className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5"
           >
             <div className="flex items-start justify-between gap-4">
               <div
@@ -182,7 +182,7 @@ export default async function AdministrationPage() {
         ))}
       </section>
 
-      <section className="rounded-[2rem] border border-[var(--border)] bg-white p-5 sm:p-6">
+      <section className="rounded-2xl border border-[var(--border)] bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">

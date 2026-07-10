@@ -898,7 +898,7 @@ export default async function LaporanDashboardPage({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[2rem] border border-[var(--border)] bg-white p-5 sm:p-6">
+      <section className="rounded-2xl border border-[var(--border)] bg-white p-5 sm:p-6">
         <div className="grid gap-6 lg:grid-cols-[1fr_20rem] lg:items-end">
           <div>
             <div className="flex flex-wrap items-center gap-2">

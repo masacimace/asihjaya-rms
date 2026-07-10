@@ -119,12 +119,24 @@ function sanitizeWorksheetText(value: string | number | null | undefined) {
   return normalizedValue;
 }
 
-function getPaymentMethodLabel(methods: AdminPaymentMethod[]) {
-  if (methods.length === 0) {
-    return "Belum bayar";
+function getPaymentMethodLabel(row: Awaited<ReturnType<typeof getAdminSalesExportRows>>[number]) {
+  if (row.paymentMethods.length > 0) {
+    return row.paymentMethods.map((method) => paymentMethodLabels[method]).join(" + ");
   }
 
-  return methods.map((method) => paymentMethodLabels[method]).join(" + ");
+  if (row.status === "voided") {
+    return "Pembayaran dibatalkan";
+  }
+
+  if (row.status === "refunded") {
+    return "Refund penuh";
+  }
+
+  if (row.status === "partially_refunded") {
+    return "Refund parsial";
+  }
+
+  return "Belum bayar";
 }
 
 function buildTransactionRows(rows: Awaited<ReturnType<typeof getAdminSalesExportRows>>) {
@@ -141,7 +153,7 @@ function buildTransactionRows(rows: Awaited<ReturnType<typeof getAdminSalesExpor
     sanitizeWorksheetText(row.customerName ?? "Walk-in Customer"),
     sanitizeWorksheetText(row.customerPhone ?? ""),
     row.totalItems,
-    getPaymentMethodLabel(row.paymentMethods),
+    getPaymentMethodLabel(row),
     toDisplayAmount(row.subtotalAmount),
     toDisplayAmount(row.discountAmount),
     toDisplayAmount(row.additionalFeeAmount),

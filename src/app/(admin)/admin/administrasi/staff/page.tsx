@@ -79,7 +79,7 @@ export default async function StaffPage() {
 
   return (
     <div className="space-y-6">
-      <header className="rounded-[2rem] border border-[var(--border)] bg-white p-6 sm:p-7">
+      <header className="rounded-3xl border border-[var(--border)] bg-white p-6 sm:p-7">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <Link
@@ -155,7 +155,7 @@ export default async function StaffPage() {
           return (
             <div
               key={metric.label}
-              className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5"
+              className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5"
             >
               <div
                 className={cn(
@@ -181,7 +181,7 @@ export default async function StaffPage() {
         })}
       </section>
 
-      <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
+      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
         <div className="flex flex-col gap-4 border-b border-[var(--border)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">

@@ -120,6 +120,26 @@ function escapeCsvCell(value: string | number | null | undefined) {
   return stringValue;
 }
 
+function getPaymentMethodLabel(row: Awaited<ReturnType<typeof getAdminSalesExportRows>>[number]) {
+  if (row.paymentMethods.length > 0) {
+    return row.paymentMethods.map((method) => paymentMethodLabels[method]).join(" + ");
+  }
+
+  if (row.status === "voided") {
+    return "Pembayaran dibatalkan";
+  }
+
+  if (row.status === "refunded") {
+    return "Refund penuh";
+  }
+
+  if (row.status === "partially_refunded") {
+    return "Refund parsial";
+  }
+
+  return "Belum bayar";
+}
+
 function buildCsv(rows: Awaited<ReturnType<typeof getAdminSalesExportRows>>) {
   const csvRows = [csvHeaders];
 
@@ -143,9 +163,7 @@ function buildCsv(rows: Awaited<ReturnType<typeof getAdminSalesExportRows>>) {
             `${index + 1}. ${item.productName} (${item.sku}/${item.barcode}) - ${toCsvAmount(item.finalPriceAmount)}`,
         )
         .join("; "),
-      row.paymentMethods.length > 0
-        ? row.paymentMethods.map((method) => paymentMethodLabels[method]).join(" + ")
-        : "Belum bayar",
+      getPaymentMethodLabel(row),
       toCsvAmount(row.subtotalAmount),
       toCsvAmount(row.discountAmount),
       toCsvAmount(row.additionalFeeAmount),

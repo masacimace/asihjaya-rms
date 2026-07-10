@@ -145,6 +145,7 @@ export type AdminSalesExportRow = {
   additionalFeeAmount: string;
   totalAmount: string;
   paidAmount: number;
+  refundedAmount: number;
   receivedAmount: number;
   changeAmount: number;
   completedAt: Date | null;
