@@ -60,6 +60,12 @@ type RegisterData = {
   outletName: string;
 };
 
+type RegisterOperationalSummary = {
+  shiftCount: number;
+  saleCount: number;
+  activeShiftCount: number;
+};
+
 type OutletOption = {
   id: string;
   code: string;
@@ -1608,6 +1614,527 @@ export function CreateRegisterForm({
             >
               <MonitorSmartphone className="size-4" />
               Buat Register
+            </FormSubmitButton>
+          </section>
+        </aside>
+      </div>
+    </form>
+  );
+}
+
+export function EditRegisterForm({
+  register,
+  outlets,
+  operationalSummary,
+}: {
+  register: RegisterData;
+  outlets: OutletOption[];
+  operationalSummary: RegisterOperationalSummary;
+}) {
+  const router = useRouter();
+  const [state, formAction] = useActionState(
+    updateRegisterAction.bind(null, register.id),
+    initialOperationsActionState,
+  );
+  const [name, setName] = useState(register.name);
+  const [isActive, setIsActive] = useState(register.isActive);
+  const [isHardwareHub, setIsHardwareHub] = useState(
+    register.isHardwareHub,
+  );
+  const [savedSnapshot, setSavedSnapshot] = useState(() => ({
+    name: register.name,
+    isActive: register.isActive,
+    isHardwareHub: register.isHardwareHub,
+  }));
+  const handledSuccessStateRef = useRef<OperationsActionState | null>(null);
+
+  useEffect(() => {
+    if (
+      state.status !== "success" ||
+      handledSuccessStateRef.current === state
+    ) {
+      return;
+    }
+
+    handledSuccessStateRef.current = state;
+
+    const normalizedName = name.trim();
+
+    setName(normalizedName);
+    setSavedSnapshot({
+      name: normalizedName,
+      isActive,
+      isHardwareHub,
+    });
+    router.refresh();
+  }, [isActive, isHardwareHub, name, router, state]);
+
+  const selectedOutlet = outlets.find(
+    (outlet) => outlet.id === register.outletId,
+  );
+  const replacingHub =
+    isHardwareHub &&
+    selectedOutlet?.hardwareHub &&
+    selectedOutlet.hardwareHub.id !== register.id
+      ? selectedOutlet.hardwareHub
+      : null;
+  const normalizedName = name.trim();
+  const changedFields = [
+    normalizedName !== savedSnapshot.name,
+    isActive !== savedSnapshot.isActive,
+    isHardwareHub !== savedSnapshot.isHardwareHub,
+  ].filter(Boolean).length;
+  const hasUnsavedChanges = changedFields > 0;
+  const isDeactivationRequested = savedSnapshot.isActive && !isActive;
+  const isRemovingHub = savedSnapshot.isHardwareHub && !isHardwareHub;
+  const isBecomingHub = !savedSnapshot.isHardwareHub && isHardwareHub;
+
+  function updateActive(checked: boolean) {
+    setIsActive(checked);
+
+    if (!checked) {
+      setIsHardwareHub(false);
+    }
+  }
+
+  return (
+    <form action={formAction} className="space-y-5">
+      <ActionMessage state={state} />
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+        <div className="min-w-0 space-y-5">
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                <MonitorSmartphone className="size-5" />
+              </div>
+
+              <div className="min-w-0">
+                <span className="inline-flex w-fit rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                  Identitas terminal
+                </span>
+                <h2 className="mt-3 font-semibold text-neutral-950">
+                  Identitas Register
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Nama dapat diperbarui untuk menyesuaikan posisi terminal. Kode
+                  register dan outlet penempatan tetap menjadi identitas permanen.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <Store className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-[var(--muted)]">
+                      Outlet penempatan
+                    </p>
+                    <p className="mt-1 break-words text-sm font-semibold text-neutral-900">
+                      {register.outletName}
+                    </p>
+                    <p className="mt-1 font-mono text-xs text-[var(--muted)]">
+                      {register.outletCode}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <MonitorSmartphone className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-[var(--muted)]">
+                      Kode terminal
+                    </p>
+                    <p className="mt-1 break-words font-mono text-sm font-semibold text-neutral-900">
+                      {register.code}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      Identitas permanen register
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <label className="block text-sm sm:col-span-2">
+                <span className="mb-2 block font-medium text-neutral-800">
+                  Nama register
+                </span>
+
+                <input
+                  name="name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  autoComplete="off"
+                  className={inputClassName}
+                  placeholder="Kasir Utama"
+                />
+
+                <div className="mt-1.5 flex items-start justify-between gap-3 text-xs leading-5 text-[var(--muted)]">
+                  <span>
+                    Gunakan nama yang mudah dikenali staff saat memilih terminal.
+                  </span>
+                  <span className="shrink-0">{name.length}/120</span>
+                </div>
+
+                <FieldError message={state.fieldErrors?.name} />
+              </label>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--surface-muted)] text-neutral-600">
+                <CheckCircle2 className="size-5" />
+              </div>
+
+              <div className="min-w-0">
+                <h2 className="font-semibold text-neutral-950">
+                  Dampak Operasional
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Tinjau aktivitas register sebelum mengubah status atau peran
+                  perangkat untuk menghindari gangguan pada operasional outlet.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-3">
+                <p className="text-xs text-[var(--muted)]">Total shift</p>
+                <p className="mt-1 text-lg font-semibold text-neutral-950">
+                  {operationalSummary.shiftCount}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-3">
+                <p className="text-xs text-[var(--muted)]">Shift aktif</p>
+                <p
+                  className={`mt-1 text-lg font-semibold ${
+                    operationalSummary.activeShiftCount > 0
+                      ? "text-amber-700"
+                      : "text-neutral-950"
+                  }`}
+                >
+                  {operationalSummary.activeShiftCount}
+                </p>
+              </div>
+              <div className="col-span-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-3 sm:col-span-1">
+                <p className="text-xs text-[var(--muted)]">Transaksi</p>
+                <p className="mt-1 text-lg font-semibold text-neutral-950">
+                  {operationalSummary.saleCount}
+                </p>
+              </div>
+            </div>
+
+            {operationalSummary.activeShiftCount > 0 ? (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <p className="text-xs leading-5">
+                  Register ini masih memiliki {operationalSummary.activeShiftCount}{" "}
+                  shift aktif. Selesaikan shift sebelum menonaktifkan register atau
+                  memindahkan fungsi perangkatnya.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
+                <p className="text-xs leading-5">
+                  Tidak ada shift aktif. Konfigurasi terminal dapat diperbarui tanpa
+                  menunggu penutupan shift.
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
+
+        <aside className="min-w-0 space-y-5 xl:sticky xl:top-5">
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div
+                className={`grid size-11 shrink-0 place-items-center rounded-xl ${
+                  isActive
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-neutral-100 text-neutral-600"
+                }`}
+              >
+                {isActive ? (
+                  <CheckCircle2 className="size-5" />
+                ) : (
+                  <CircleOff className="size-5" />
+                )}
+              </div>
+
+              <div className="min-w-0">
+                <h2 className="font-semibold text-neutral-950">
+                  Status Operasional
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Tentukan apakah terminal dapat membuka shift dan menerima
+                  transaksi baru.
+                </p>
+              </div>
+            </div>
+
+            <label
+              className={`mt-5 flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${
+                isActive
+                  ? "border-emerald-300 bg-emerald-50/70"
+                  : "border-[var(--border)] bg-[var(--surface-muted)]"
+              }`}
+            >
+              <input
+                type="checkbox"
+                name="isActive"
+                checked={isActive}
+                onChange={(event) => updateActive(event.target.checked)}
+                className="mt-0.5 size-4 accent-[var(--accent)]"
+              />
+
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-neutral-900">
+                    Register {isActive ? "aktif" : "nonaktif"}
+                  </span>
+                  <span
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                      isActive
+                        ? "border-emerald-200 bg-white text-emerald-700"
+                        : "border-neutral-200 bg-white text-neutral-600"
+                    }`}
+                  >
+                    {isActive ? "Operasional" : "Dihentikan"}
+                  </span>
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
+                  {isActive
+                    ? "Dapat membuka shift, menjalankan POS, dan memproses transaksi baru."
+                    : "Tetap tersimpan untuk histori, tetapi tidak dapat digunakan untuk operasional baru."}
+                </span>
+              </span>
+            </label>
+
+            <FieldError message={state.fieldErrors?.isActive} />
+
+            {isDeactivationRequested &&
+            operationalSummary.activeShiftCount > 0 ? (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <p className="text-xs leading-5">
+                  Penonaktifan berisiko ditolak karena masih ada shift aktif pada
+                  register ini.
+                </p>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                <Cpu className="size-5" />
+              </div>
+
+              <div className="min-w-0">
+                <h2 className="font-semibold text-neutral-950">
+                  Peran Perangkat
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Pilih peran terminal ini pada jaringan perangkat lokal outlet.
+                </p>
+              </div>
+            </div>
+
+            <input
+              type="checkbox"
+              name="isHardwareHub"
+              checked={isHardwareHub}
+              disabled={!isActive}
+              onChange={(event) => setIsHardwareHub(event.target.checked)}
+              className="sr-only"
+              tabIndex={-1}
+            />
+
+            <div className="mt-5 space-y-3">
+              <button
+                type="button"
+                aria-pressed={!isHardwareHub}
+                onClick={() => setIsHardwareHub(false)}
+                className={`w-full rounded-xl border p-4 text-left transition ${
+                  !isHardwareHub
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                    : "border-[var(--border)] bg-white hover:bg-[var(--surface-muted)]"
+                }`}
+              >
+                <span className="flex items-start gap-3">
+                  <MonitorSmartphone
+                    className={`mt-0.5 size-4 shrink-0 ${
+                      !isHardwareHub
+                        ? "text-[var(--accent)]"
+                        : "text-neutral-500"
+                    }`}
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-neutral-900">
+                      Terminal POS
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
+                      Dipakai untuk kasir dan transaksi tanpa mengendalikan perangkat
+                      lokal outlet.
+                    </span>
+                  </span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                aria-pressed={isHardwareHub}
+                disabled={!isActive}
+                onClick={() => setIsHardwareHub(true)}
+                className={`w-full rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isHardwareHub
+                    ? "border-blue-300 bg-blue-50"
+                    : "border-[var(--border)] bg-white hover:bg-[var(--surface-muted)]"
+                }`}
+              >
+                <span className="flex items-start gap-3">
+                  <Cpu
+                    className={`mt-0.5 size-4 shrink-0 ${
+                      isHardwareHub ? "text-blue-700" : "text-neutral-500"
+                    }`}
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-neutral-900">
+                      Hardware Hub
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
+                      Mengelola printer, cash drawer, dan antrean perangkat lokal
+                      untuk outlet ini.
+                    </span>
+                  </span>
+                </span>
+              </button>
+            </div>
+
+            <FieldError message={state.fieldErrors?.isHardwareHub} />
+
+            {!isActive ? (
+              <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-xs leading-5 text-[var(--muted)]">
+                Hardware hub hanya dapat diaktifkan pada register yang berstatus
+                aktif.
+              </div>
+            ) : replacingHub ? (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <p className="text-xs leading-5">
+                  <strong>{replacingHub.name}</strong> ({replacingHub.code}) saat
+                  ini menjadi hardware hub. Menyimpan perubahan akan memindahkan
+                  peran hub ke register ini.
+                </p>
+              </div>
+            ) : isBecomingHub ? (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-700">
+                <Cpu className="mt-0.5 size-4 shrink-0" />
+                <p className="text-xs leading-5">
+                  Register ini akan menjadi pengendali perangkat lokal outlet setelah
+                  perubahan disimpan.
+                </p>
+              </div>
+            ) : isRemovingHub ? (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <p className="text-xs leading-5">
+                  Melepas peran hardware hub dapat membuat printer dan cash drawer
+                  kehilangan pengendali sampai hub pengganti ditentukan.
+                </p>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-semibold text-neutral-950">
+                Ringkasan Perubahan
+              </h2>
+              <span
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                  hasUnsavedChanges
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {hasUnsavedChanges ? "Belum disimpan" : "Tersimpan"}
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-xs text-[var(--muted)]">Nama</span>
+                <span className="max-w-[65%] break-words text-right text-xs font-semibold text-neutral-900">
+                  {normalizedName || "Belum diisi"}
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-xs text-[var(--muted)]">Outlet</span>
+                <span className="max-w-[65%] break-words text-right text-xs font-semibold text-neutral-900">
+                  {register.outletName}
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-xs text-[var(--muted)]">Status</span>
+                <span
+                  className={`text-right text-xs font-semibold ${
+                    isActive ? "text-emerald-700" : "text-neutral-700"
+                  }`}
+                >
+                  {isActive ? "Aktif" : "Nonaktif"}
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-xs text-[var(--muted)]">Peran</span>
+                <span className="text-right text-xs font-semibold text-neutral-900">
+                  {isHardwareHub ? "Hardware Hub" : "Terminal POS"}
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-xs text-[var(--muted)]">Shift aktif</span>
+                <span
+                  className={`text-right text-xs font-semibold ${
+                    operationalSummary.activeShiftCount > 0
+                      ? "text-amber-700"
+                      : "text-neutral-900"
+                  }`}
+                >
+                  {operationalSummary.activeShiftCount}
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-3 border-t border-[var(--border)] pt-3">
+                <span className="text-xs text-[var(--muted)]">Perubahan</span>
+                <span className="text-right text-xs font-semibold text-neutral-900">
+                  {changedFields} field
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+            <p className="text-sm font-semibold text-neutral-950">
+              Simpan konfigurasi register
+            </p>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+              Perubahan status atau hardware hub dapat memengaruhi akses POS dan
+              perangkat lokal. Kode register serta outlet tidak akan berubah.
+            </p>
+
+            <FormSubmitButton
+              pendingText="Menyimpan register..."
+              className="mt-4 w-full"
+            >
+              <Save className="size-4" />
+              Simpan Perubahan
             </FormSubmitButton>
           </section>
         </aside>
