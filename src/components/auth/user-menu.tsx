@@ -11,7 +11,6 @@ import { useState } from "react";
 
 import { logoutAction } from "@/app/actions/auth";
 
-
 type UserMenuProps = {
   fullName: string;
   roleLabel: string;
@@ -21,10 +20,7 @@ type UserMenuProps = {
 };
 
 function getUserInitials(fullName: string) {
-  const nameParts = fullName
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
 
   const firstPart = nameParts.at(0);
 
@@ -59,12 +55,12 @@ export function UserMenu({
         onClick={() => setIsOpen((current) => !current)}
         className="flex items-center gap-2 rounded-2xl border border-transparent px-1.5 py-1.5 text-left transition hover:border-[var(--border)] hover:bg-neutral-50 sm:px-2"
       >
-        <span className="grid size-10 shrink-0 place-items-center rounded-2xl border border-amber-100 bg-amber-50 text-sm font-bold text-amber-700">
+        <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-amber-100 bg-amber-50 text-sm font-bold text-amber-700">
           {initials}
         </span>
 
         <div className="hidden min-w-0 sm:block">
-          <p className="max-w-36 truncate text-xs font-semibold text-neutral-950">
+          <p className="max-w-48 truncate text-sm font-semibold text-neutral-950">
             {fullName}
           </p>
 
