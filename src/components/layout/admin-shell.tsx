@@ -497,7 +497,7 @@ export function AdminShell({
             </span>
           </Link>
 
-          <div className="relative z-[60] ml-auto flex min-w-0 shrink-0 items-center gap-1 sm:gap-2">
+          <div className="relative z-[60] ml-auto flex min-w-0 shrink-0 items-center sm:gap-1">
             <button
               type="button"
               aria-label="Persetujuan"

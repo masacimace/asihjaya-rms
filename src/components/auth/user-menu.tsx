@@ -76,7 +76,7 @@ export function UserMenu({
         <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 overflow-hidden rounded-3xl border border-[var(--border)] bg-white p-2">
           <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
             <div className="flex items-center gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-amber-100 bg-amber-50 text-sm font-bold text-amber-700">
+              <span className="grid size-8 shrink-0 place-items-center rounded-2xl border border-amber-100 bg-amber-50 text-sm font-bold text-amber-700">
                 {initials}
               </span>
 

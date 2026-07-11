@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
+  LayoutDashboard,
   PackageCheck,
   ReceiptText,
   ScanBarcode,
@@ -329,17 +330,17 @@ function SalesChart({
   ];
 
   return (
-    <div className="mt-5 min-w-0 overflow-hidden">
-      <div className="relative h-[250px] w-full sm:h-[280px]">
+    <div className="scrollbar-clean mt-5 min-w-0 overflow-x-auto overflow-y-hidden overscroll-x-contain">
+      <div className="relative h-[220px] min-w-[640px] sm:h-[250px] lg:min-w-0">
         {hasRevenue ? (
           <div
-            className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs shadow-lg"
+            className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs"
             style={{
               left: `${(highlightedPoint.x / width) * 100}%`,
               top: `${Math.max(highlightedPoint.y - 58, 0)}px`,
             }}
           >
-            <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--accent)]">
+            <p className="text-[10px] font-medium uppercase text-[var(--accent)]">
               {bestLabel}
             </p>
             <p className="mt-1 text-[var(--muted)]">{highlightedPoint.label}</p>
@@ -351,7 +352,7 @@ function SalesChart({
 
         {averageRevenue > 0 ? (
           <div
-            className="pointer-events-none absolute right-0 z-10 -translate-y-1/2 rounded-full border border-[var(--border)] bg-white/90 px-2.5 py-1 text-[10px] font-medium text-[var(--muted)] shadow-sm"
+            className="pointer-events-none absolute right-0 z-10 -translate-y-1/2 rounded-full border border-[var(--border)] bg-white/90 px-2.5 py-1 text-[10px] font-medium text-[var(--muted)]"
             style={{ top: `${(averageY / 260) * 100}%` }}
           >
             Rata-rata {formatCompactMoney(averageRevenue)}
@@ -359,7 +360,7 @@ function SalesChart({
         ) : null}
 
         {!hasRevenue ? (
-          <div className="pointer-events-none absolute inset-x-10 top-1/2 z-10 -translate-y-1/2 rounded-2xl border border-dashed border-[var(--border)] bg-white/85 px-4 py-5 text-center shadow-sm">
+          <div className="pointer-events-none absolute inset-x-10 top-1/2 z-10 -translate-y-1/2 rounded-2xl border border-dashed border-[var(--border)] bg-white/85 px-4 py-5 text-center">
             <p className="text-sm font-medium text-neutral-900">
               Belum ada penjualan pada periode ini.
             </p>
@@ -449,35 +450,11 @@ function SalesChart({
           })}
         </svg>
 
-        <div className="pointer-events-none absolute inset-y-0 left-0 flex w-10 flex-col justify-between pb-5 pt-7 text-[10px] text-[var(--muted)] sm:text-xs">
+        <div className="pointer-events-none absolute inset-y-0 left-0 flex w-10 flex-col justify-between pb-5 pt-7 text-[10px] text-[var(--muted)]">
           {gridValues.map((value) => (
             <span key={value}>{formatCompactMoney(value)}</span>
           ))}
         </div>
-      </div>
-
-      <div
-        className="ml-10 grid min-w-0 overflow-hidden text-center text-[10px] text-[var(--muted)] sm:text-xs"
-        style={{
-          gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))`,
-        }}
-      >
-        {points.map((point, index) => {
-          const labelStep = Math.max(1, Math.ceil(points.length / 7));
-          const shouldShowLabel =
-            index === 0 ||
-            index === points.length - 1 ||
-            index % labelStep === 0;
-
-          return (
-            <span
-              key={point.dateKey}
-              className={shouldShowLabel ? "truncate" : "sr-only"}
-            >
-              {point.label}
-            </span>
-          );
-        })}
       </div>
     </div>
   );
@@ -550,7 +527,7 @@ export default async function AdminDashboardPage({
       iconClassName: "bg-blue-50 text-blue-700",
     },
     {
-      label: "Rata-rata Transaksi",
+      label: "Kisaran Transaksi",
       value: formatMoney(dashboard.summary.averageTransaction.current),
       metric: dashboard.summary.averageTransaction,
       icon: WalletCards,
@@ -566,7 +543,7 @@ export default async function AdminDashboardPage({
       iconClassName: "bg-blue-50 text-blue-700",
     },
     {
-      label: "Transaksi Tertahan",
+      label: "Transaksi Hold",
       value: formatInteger(dashboard.summary.activeHeldCarts),
       description: "Hold cart aktif",
       icon: ClipboardCheck,
@@ -613,49 +590,63 @@ export default async function AdminDashboardPage({
 
   return (
     <div className="min-w-0 max-w-full overflow-x-hidden space-y-5 lg:space-y-6">
-      <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:text-[28px]">
-            Selamat datang kembali, {firstName} 👋
-          </h1>
-          <p className="mt-1.5 text-sm text-[var(--muted)]">
-            {dashboard.period.description}
-          </p>
-        </div>
-
-        <details className="group relative z-30 w-fit max-w-full shrink-0">
-          <summary className="flex h-11 max-w-full cursor-pointer list-none items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 marker:content-none [&::-webkit-details-marker]:hidden">
-            <CalendarDays className="size-4" />
-            <span className="truncate">{dashboard.period.label}</span>
-            <ChevronDown className="size-4 text-neutral-400 transition-transform group-open:rotate-180" />
-          </summary>
-
-          <div className="absolute left-0 z-50 mt-2 w-56 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-1.5 shadow-xl sm:left-auto sm:right-0">
-            {ADMIN_DASHBOARD_PERIOD_OPTIONS.map((option) => {
-              const isActive = option.value === dashboard.period.range;
-
-              return (
-                <Link
-                  key={option.value}
-                  href={buildDashboardPeriodUrl(option.value)}
-                  className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition ${
-                    isActive
-                      ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
-                      : "text-neutral-700 hover:bg-neutral-50"
-                  }`}
-                >
-                  <span>{option.label}</span>
-                  {isActive ? <CheckCircle2 className="size-4" /> : null}
-                </Link>
-              );
-            })}
+      <section className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5 lg:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+              <LayoutDashboard className="size-3.5" />
+              Ringkasan Manajemen
+            </div>
+            <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-[28px]">
+              Selamat datang kembali, {firstName} 👋
+            </h1>
+            <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+              Ringkasan operasional toko berdasarkan transaksi, stok, shift,
+              kas, dan hardware terbaru. {dashboard.period.description}
+            </p>
           </div>
-        </details>
+
+          <div className="flex w-full flex-col gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/70 p-3 sm:w-auto sm:min-w-72">
+            <p className="text-xs font-medium text-[var(--muted)]">
+              Periode dashboard
+            </p>
+            <details className="group relative z-30 w-full max-w-full shrink-0">
+              <summary className="flex h-11 max-w-full cursor-pointer list-none items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-800 transition hover:border-neutral-300 hover:bg-neutral-50 marker:content-none [&::-webkit-details-marker]:hidden">
+                <CalendarDays className="size-4 text-[var(--accent)]" />
+                <span className="min-w-0 flex-1 truncate">
+                  {dashboard.period.label}
+                </span>
+                <ChevronDown className="size-4 text-neutral-400 transition-transform group-open:rotate-180" />
+              </summary>
+
+              <div className="absolute right-0 z-50 mt-2 w-full min-w-56 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-1.5">
+                {ADMIN_DASHBOARD_PERIOD_OPTIONS.map((option) => {
+                  const isActive = option.value === dashboard.period.range;
+
+                  return (
+                    <Link
+                      key={option.value}
+                      href={buildDashboardPeriodUrl(option.value)}
+                      className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition ${
+                        isActive
+                          ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
+                          : "text-neutral-700 hover:bg-neutral-50"
+                      }`}
+                    >
+                      <span>{option.label}</span>
+                      {isActive ? <CheckCircle2 className="size-4" /> : null}
+                    </Link>
+                  );
+                })}
+              </div>
+            </details>
+          </div>
+        </div>
       </section>
 
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_300px] 2xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">
-          <section className="grid min-w-0 gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+          <section className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4 2xl:grid-cols-4">
             {statisticCards.map(
               ({ label, value, metric, icon: Icon, iconClassName }) => {
                 const comparison = getComparison(
@@ -678,7 +669,7 @@ export default async function AdminDashboardPage({
                 return (
                   <article
                     key={label}
-                    className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)] sm:p-5"
+                    className="rounded-2xl border border-[var(--border)] bg-white p-3 sm:p-5"
                   >
                     <div className="flex items-start gap-3">
                       <div
@@ -691,7 +682,7 @@ export default async function AdminDashboardPage({
                         <p className="text-xs text-[var(--muted)] sm:text-sm">
                           {label}
                         </p>
-                        <p className="mt-1 truncate text-xl font-semibold tracking-tight text-neutral-950">
+                        <p className="mt-1 truncate text-sm font-semibold text-neutral-950 sm:text-xl">
                           {value}
                         </p>
                       </div>
@@ -712,12 +703,12 @@ export default async function AdminDashboardPage({
             )}
           </section>
 
-          <section className="grid min-w-0 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+          <section className="grid min-w-0 grid-cols-2 gap-3 2xl:grid-cols-4">
             {operationalStatusCards.map(
               ({ label, value, description, icon: Icon, iconClassName }) => (
                 <article
                   key={label}
-                  className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+                  className="flex min-w-0 items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-3 sm:p-4"
                 >
                   <div
                     className={`grid size-10 shrink-0 place-items-center rounded-xl ${iconClassName}`}
@@ -739,7 +730,7 @@ export default async function AdminDashboardPage({
             )}
           </section>
 
-          <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)] sm:p-5">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="font-semibold text-neutral-950">
@@ -792,7 +783,7 @@ export default async function AdminDashboardPage({
           </section>
 
           <section className="grid min-w-0 gap-5 2xl:grid-cols-[0.9fr_1.25fr]">
-            <article className="min-w-0 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)] sm:p-5">
+            <article className="min-w-0 rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <h2 className="font-semibold text-neutral-950">
@@ -911,7 +902,7 @@ export default async function AdminDashboardPage({
               )}
             </article>
 
-            <article className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            <article className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
               <div className="flex items-center justify-between gap-4 p-4 sm:p-5">
                 <div>
                   <h2 className="font-semibold text-neutral-950">
@@ -930,7 +921,7 @@ export default async function AdminDashboardPage({
                 </Link>
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="scrollbar-clean overflow-x-auto">
                 <table className="w-full min-w-[620px] text-left">
                   <thead>
                     <tr className="border-y border-[var(--border)] bg-[var(--surface-muted)] text-xs text-[var(--muted)]">
@@ -999,7 +990,7 @@ export default async function AdminDashboardPage({
         </div>
 
         <aside className="min-w-0 space-y-5">
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
             <h2 className="font-semibold text-neutral-950">Aksi Cepat</h2>
 
             <div className="mt-4 grid grid-cols-2 gap-2.5">
@@ -1023,7 +1014,7 @@ export default async function AdminDashboardPage({
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-semibold text-neutral-950">
                 Perlu Perhatian
@@ -1074,7 +1065,7 @@ export default async function AdminDashboardPage({
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-semibold text-neutral-950">
                 Aktivitas Terbaru
@@ -1082,7 +1073,7 @@ export default async function AdminDashboardPage({
             </div>
 
             {dashboard.recentActivities.length > 0 ? (
-              <div className="mt-4 space-y-4">
+              <div className="scrollbar-clean mt-4 max-h-[360px] space-y-4 overflow-y-auto overscroll-contain pr-1">
                 {dashboard.recentActivities.map((activity) => {
                   const Icon = getActivityIcon(activity.kind);
 
