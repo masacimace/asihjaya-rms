@@ -434,7 +434,7 @@ export function SaleSensitiveActionsCard({
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <p>
-            Void dan refund penuh yang sudah disetujui bisa dieksekusi dari halaman ini. Partial refund belum diaktifkan agar ledger stok/kas tetap aman.
+            Aksi void dan refund penuh hanya dapat dijalankan setelah approval disetujui. Gunakan fitur ini untuk nota bermasalah, transaksi batal penuh, atau pengembalian penuh customer.
           </p>
         </div>
       </div>
