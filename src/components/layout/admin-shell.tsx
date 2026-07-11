@@ -19,9 +19,16 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { UserMenu } from "@/components/auth/user-menu";
 import { AdminSoundEffects } from "@/components/layout/admin-sound-effects";
@@ -101,6 +108,83 @@ const navigation: NavigationItem[] = [
   },
 ] as const;
 
+function AdminBrandLink({
+  onNavigate,
+  variant = "desktop",
+}: {
+  onNavigate?: () => void;
+  variant?: "desktop" | "mobile";
+}) {
+  const isMobile = variant === "mobile";
+
+  return (
+    <Link
+      href="/admin"
+      onClick={onNavigate}
+      className={cn(
+        "flex min-w-0 items-center gap-2 rounded-2xl transition hover:bg-neutral-50",
+        isMobile ? "px-1 py-1" : "mb-6 px-2 py-1.5",
+      )}
+    >
+      <span className="grid shrink-0 place-items-center">
+        <Image
+          src="/logo/asihjaya-brand-icon.png"
+          alt="Asihjaya"
+          width={isMobile ? 80 : 128}
+          height={isMobile ? 80 : 128}
+          className={cn("w-auto object-contain", isMobile ? "h-10" : "h-12")}
+          priority
+        />
+      </span>
+
+      <span className="min-w-0">
+        <Image
+          src="/logo/asihjaya-brand-text.png"
+          alt="Asihjaya"
+          width={140}
+          height={28}
+          className="h-7 w-auto object-contain"
+          priority
+        />
+        <span
+          className={cn(
+            "block truncate font-medium text-[var(--muted)]",
+            isMobile ? "text-[12px]" : "mt-0.5 text-xs",
+          )}
+        >
+          Management Dashboard
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+function PosAccessCard({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <Link
+      href="/pos"
+      onClick={onNavigate}
+      className="group flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-3 transition-all hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
+    >
+      <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] transition-transform group-hover:scale-105">
+        <ShoppingBag className="size-5" />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold text-neutral-950">
+          Buka Sistem POS
+        </p>
+
+        <p className="truncate text-xs text-[var(--muted)]">
+          kasir & transaksi
+        </p>
+      </div>
+
+      <ChevronRight className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
+    </Link>
+  );
+}
+
 type SidebarContentProps = {
   pathname: string;
   canAccessPos: boolean;
@@ -108,6 +192,8 @@ type SidebarContentProps = {
   canAccessProducts: boolean;
   canAccessInventory: boolean;
   onNavigate?: () => void;
+  showBrand?: boolean;
+  showPosCta?: boolean;
 };
 
 function isNavigationActive(pathname: string, href: string) {
@@ -123,6 +209,8 @@ function SidebarContent({
   canAccessProducts,
   canAccessInventory,
   onNavigate,
+  showBrand = true,
+  showPosCta = true,
 }: SidebarContentProps) {
   const visibleNavigation = navigation.filter((item) => {
     if (item.access === "administration") {
@@ -141,25 +229,7 @@ function SidebarContent({
   });
   return (
     <>
-      <Link
-        href="/admin"
-        onClick={onNavigate}
-        className="mb-8 flex items-center gap-3 px-2"
-      >
-        <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
-          <Store className="size-5" />
-        </div>
-
-        <div className="min-w-0 max-w-full overflow-x-hidden">
-          <p className="font-semibold tracking-wide text-neutral-950">
-            ASIHJAYA
-          </p>
-
-          <p className="truncate text-xs text-[var(--muted)]">
-            Retail Management
-          </p>
-        </div>
-      </Link>
+      {showBrand ? <AdminBrandLink onNavigate={onNavigate} /> : null}
 
       <nav className="space-y-1">
         {visibleNavigation.map(({ label, href, icon: Icon, children }) => {
@@ -241,29 +311,9 @@ function SidebarContent({
         })}
       </nav>
 
-      {canAccessPos ? (
+      {canAccessPos && showPosCta ? (
         <div className="mt-auto pt-6">
-          <Link
-            href="/pos"
-            onClick={onNavigate}
-            className="group flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-3 transition-all hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
-          >
-            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] transition-transform group-hover:scale-105">
-              <ShoppingBag className="size-5" />
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-neutral-950">
-                Buka System POS
-              </p>
-
-              <p className="truncate text-xs text-[var(--muted)]">
-                kasir & transaksi
-              </p>
-            </div>
-
-            <ChevronRight className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
-          </Link>
+          <PosAccessCard onNavigate={onNavigate} />
         </div>
       ) : null}
     </>
@@ -307,6 +357,23 @@ export function AdminShell({
     }, 100);
   }, [router]);
 
+  useEffect(() => {
+    if (!isMobileMenuOpen) {
+      return;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [isMobileMenuOpen]);
+
   return (
     <div className="grid h-dvh w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[260px_minmax(0,1fr)]">
       {/* Sidebar desktop */}
@@ -322,41 +389,56 @@ export function AdminShell({
 
       {/* Sidebar mobile */}
       {isMobileMenuOpen ? (
-        <div className="fixed inset-0 z-50 max-w-[100vw] overflow-hidden lg:hidden">
+        <div className="fixed inset-0 z-[100] max-w-[100vw] overflow-hidden overscroll-none lg:hidden">
           <button
             type="button"
             aria-label="Tutup navigasi"
-            className="absolute inset-0 bg-black/30 backdrop-blur-[1px]"
+            className="absolute inset-0 touch-none bg-black/30 backdrop-blur-[1px]"
             onClick={() => setIsMobileMenuOpen(false)}
           />
 
-          <aside className="relative z-10 flex h-full w-[min(86vw,300px)] max-w-full flex-col overflow-y-auto border-r border-[var(--border)] bg-white p-5 shadow-2xl">
-            <div className="mb-4 flex justify-end">
+          <aside className="relative z-[101] flex h-dvh w-[min(88vw,340px)] max-w-full touch-pan-y flex-col overflow-hidden border-r border-[var(--border)] bg-white">
+            <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-4 py-4">
+              <AdminBrandLink
+                variant="mobile"
+                onNavigate={() => setIsMobileMenuOpen(false)}
+              />
+
               <button
                 type="button"
                 aria-label="Tutup menu"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
+                className="ml-auto grid size-10 shrink-0 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
               >
                 <X className="size-5" />
               </button>
             </div>
 
-            <SidebarContent
-              pathname={pathname}
-              canAccessPos={user.canAccessPos}
-              canAccessAdministration={user.canAccessAdministration}
-              canAccessProducts={user.canAccessProducts}
-              canAccessInventory={user.canAccessInventory}
-              onNavigate={() => setIsMobileMenuOpen(false)}
-            />
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+              <SidebarContent
+                pathname={pathname}
+                canAccessPos={user.canAccessPos}
+                canAccessAdministration={user.canAccessAdministration}
+                canAccessProducts={user.canAccessProducts}
+                canAccessInventory={user.canAccessInventory}
+                onNavigate={() => setIsMobileMenuOpen(false)}
+                showBrand={false}
+                showPosCta={false}
+              />
+            </div>
+
+            {user.canAccessPos ? (
+              <div className="shrink-0 border-t border-[var(--border)] bg-white p-4">
+                <PosAccessCard onNavigate={() => setIsMobileMenuOpen(false)} />
+              </div>
+            ) : null}
           </aside>
         </div>
       ) : null}
 
       <div className="flex h-dvh min-h-0 min-w-0 max-w-full flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="sticky top-0 z-50 flex h-20 w-full max-w-full min-w-0 shrink-0 items-center gap-3 overflow-visible border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-50 flex h-20 w-full max-w-full min-w-0 shrink-0 items-center overflow-visible border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8">
           <button
             type="button"
             aria-label="Buka navigasi"
@@ -385,20 +467,42 @@ export function AdminShell({
             </button>
           </label>
 
-          <div className="min-w-0 md:hidden">
-            <p className="truncate text-sm font-semibold">ASIHJAYA</p>
+          <Link
+            href="/admin"
+            className="flex min-w-0 items-center gap-2 rounded-2xl px-1.5 py-1 transition hover:bg-neutral-50 md:hidden"
+          >
+            <span className="grid shrink-0 place-items-center">
+              <Image
+                src="/logo/asihjaya-brand-icon.png"
+                alt="Asihjaya"
+                width={64}
+                height={64}
+                className="h-10 w-auto object-contain"
+                priority
+              />
+            </span>
 
-            <p className="truncate text-xs text-[var(--muted)]">
-              Retail Management
-            </p>
-          </div>
+            <span className="min-w-0">
+              <Image
+                src="/logo/asihjaya-brand-text.png"
+                alt="Asihjaya"
+                width={112}
+                height={24}
+                className="h-6 w-auto object-contain"
+                priority
+              />
+              <span className="block truncate text-[12px] font-medium text-[var(--muted)]">
+                Retail Management
+              </span>
+            </span>
+          </Link>
 
           <div className="relative z-[60] ml-auto flex min-w-0 shrink-0 items-center gap-1 sm:gap-2">
             <button
               type="button"
               aria-label="Persetujuan"
               onClick={() => setIsApprovalOpen(true)}
-              className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+              className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
             >
               <ClipboardCheck className="size-5" />
               {approvalPendingCount > 0 ? (
@@ -432,7 +536,7 @@ export function AdminShell({
           </div>
         </header>
 
-        <main className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8">
+        <main className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-6 lg:p-8">
           {children}
         </main>
       </div>

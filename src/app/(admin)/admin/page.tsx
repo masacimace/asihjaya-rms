@@ -213,8 +213,12 @@ function getSalesChartInsights({
   points: AdminDashboardTrendPoint[];
   period: AdminDashboardPeriod;
 }) {
-  const totalRevenue = points.reduce((total, point) => total + point.revenue, 0);
-  const averageRevenue = points.length > 0 ? Math.round(totalRevenue / points.length) : 0;
+  const totalRevenue = points.reduce(
+    (total, point) => total + point.revenue,
+    0,
+  );
+  const averageRevenue =
+    points.length > 0 ? Math.round(totalRevenue / points.length) : 0;
   const emptyBuckets = points.filter((point) => point.revenue <= 0).length;
   const bucketLabel = period.chartGranularity === "hour" ? "jam" : "hari";
   const bestPoint = points.reduce(
@@ -235,9 +239,12 @@ function getSalesChartInsights({
       description: period.label,
     },
     {
-      label: period.chartGranularity === "hour" ? "Jam terbaik" : "Hari terbaik",
-      value: bestPoint.revenue > 0 ? formatMoney(bestPoint.revenue) : "Belum ada",
-      description: bestPoint.revenue > 0 ? bestPoint.label : "Belum ada transaksi",
+      label:
+        period.chartGranularity === "hour" ? "Jam terbaik" : "Hari terbaik",
+      value:
+        bestPoint.revenue > 0 ? formatMoney(bestPoint.revenue) : "Belum ada",
+      description:
+        bestPoint.revenue > 0 ? bestPoint.label : "Belum ada transaksi",
     },
     {
       label: `Rata-rata per ${bucketLabel}`,
@@ -256,7 +263,8 @@ function getSalesChartInsights({
     averageRevenue,
     hasRevenue: totalRevenue > 0,
     bestPoint,
-    bestLabel: period.chartGranularity === "hour" ? "Jam terbaik" : "Hari terbaik",
+    bestLabel:
+      period.chartGranularity === "hour" ? "Jam terbaik" : "Hari terbaik",
     insights,
   };
 }
@@ -406,7 +414,9 @@ function SalesChart({
             />
           ) : null}
 
-          {areaPath ? <path d={areaPath} fill="url(#salesAreaGradient)" /> : null}
+          {areaPath ? (
+            <path d={areaPath} fill="url(#salesAreaGradient)" />
+          ) : null}
 
           {linePath ? (
             <path
@@ -448,12 +458,16 @@ function SalesChart({
 
       <div
         className="ml-10 grid min-w-0 overflow-hidden text-center text-[10px] text-[var(--muted)] sm:text-xs"
-        style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}
+        style={{
+          gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))`,
+        }}
       >
         {points.map((point, index) => {
           const labelStep = Math.max(1, Math.ceil(points.length / 7));
           const shouldShowLabel =
-            index === 0 || index === points.length - 1 || index % labelStep === 0;
+            index === 0 ||
+            index === points.length - 1 ||
+            index % labelStep === 0;
 
           return (
             <span
@@ -493,7 +507,8 @@ function getActivityIcon(kind: AdminDashboardActivityKind) {
 function getActivityIconClass(kind: AdminDashboardActivityKind) {
   if (kind === "sale") return "bg-emerald-50 text-emerald-700";
   if (kind === "customer") return "bg-blue-50 text-blue-700";
-  if (kind === "inventory" || kind === "product") return "bg-amber-50 text-amber-700";
+  if (kind === "inventory" || kind === "product")
+    return "bg-amber-50 text-amber-700";
   if (kind === "shift") return "bg-neutral-100 text-neutral-600";
   if (kind === "approval") return "bg-violet-50 text-violet-700";
 
@@ -507,7 +522,9 @@ export default async function AdminDashboardPage({
 }) {
   const auth = await requirePermission("admin.access");
   const resolvedSearchParams = await searchParams;
-  const selectedRange = parseAdminDashboardPeriodRange(resolvedSearchParams.range);
+  const selectedRange = parseAdminDashboardPeriodRange(
+    resolvedSearchParams.range,
+  );
   const dashboard = await getAdminDashboardData(auth, selectedRange);
   const firstName = auth.user.fullName.split(" ")[0] ?? auth.user.fullName;
   const statisticCards = [
@@ -607,7 +624,7 @@ export default async function AdminDashboardPage({
         </div>
 
         <details className="group relative z-30 w-fit max-w-full shrink-0">
-          <summary className="flex h-11 max-w-full cursor-pointer list-none items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50 marker:content-none [&::-webkit-details-marker]:hidden">
+          <summary className="flex h-11 max-w-full cursor-pointer list-none items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 marker:content-none [&::-webkit-details-marker]:hidden">
             <CalendarDays className="size-4" />
             <span className="truncate">{dashboard.period.label}</span>
             <ChevronDown className="size-4 text-neutral-400 transition-transform group-open:rotate-180" />
@@ -943,7 +960,8 @@ export default async function AdminDashboardPage({
                               </Link>
                               <p className="mt-1 text-[10px] font-normal text-[var(--muted)]">
                                 {formatDateTime(
-                                  transaction.completedAt ?? transaction.createdAt,
+                                  transaction.completedAt ??
+                                    transaction.createdAt,
                                 )}
                               </p>
                             </td>
