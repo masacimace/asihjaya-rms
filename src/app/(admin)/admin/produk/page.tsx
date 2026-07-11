@@ -101,16 +101,6 @@ function buildProductListUrl(page: number, filters: ProductListFilters) {
   return query ? `/admin/produk?${query}` : "/admin/produk";
 }
 
-function buildProductStatusUrl(
-  status: ProductStatus | null,
-  filters: ProductListFilters,
-) {
-  return buildProductListUrl(1, {
-    ...filters,
-    status,
-  });
-}
-
 function SummaryCard({
   title,
   value,
@@ -425,31 +415,6 @@ export default async function ProductCatalogPage({
             </Link>
           </div>
         </form>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {[
-            { label: "Semua", status: null },
-            { label: "Aktif", status: "active" as const },
-            { label: "Draft", status: "draft" as const },
-            { label: "Nonaktif", status: "inactive" as const },
-          ].map((chip) => {
-            const isActive = filters.status === chip.status;
-
-            return (
-              <Link
-                key={chip.label}
-                href={buildProductStatusUrl(chip.status, filters)}
-                className={`inline-flex h-9 items-center rounded-full border px-3 text-xs font-semibold transition ${
-                  isActive
-                    ? "border-neutral-950 bg-neutral-950 !text-white"
-                    : "border-[var(--border)] bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40 hover:text-[var(--accent)]"
-                }`}
-              >
-                {chip.label}
-              </Link>
-            );
-          })}
-        </div>
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
