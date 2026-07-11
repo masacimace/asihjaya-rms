@@ -48,7 +48,7 @@ export async function markNotificationReadAction(formData: FormData) {
   revalidatePath("/admin");
 }
 
-export async function markAllNotificationsReadAction(_formData?: FormData) {
+export async function markAllNotificationsReadAction() {
   const auth = await requirePermission("admin.access");
   const outletIds = auth.outlets.map((outlet) => outlet.id);
   const now = new Date();
