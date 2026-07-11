@@ -1147,6 +1147,57 @@ export const hardwareJobs = pgTable(
   ],
 );
 
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "sales",
+  "hardware",
+  "shift",
+  "cash",
+  "inventory",
+  "system",
+]);
+
+export const notificationSeverityEnum = pgEnum("notification_severity", [
+  "info",
+  "success",
+  "warning",
+  "critical",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id").references(() => outlets.id),
+    userId: uuid("user_id").references(() => users.id),
+    type: notificationTypeEnum("type").notNull(),
+    severity: notificationSeverityEnum("severity").default("info").notNull(),
+    title: varchar("title", { length: 160 }).notNull(),
+    message: text("message").notNull(),
+    entityType: varchar("entity_type", { length: 80 }),
+    entityId: varchar("entity_id", { length: 160 }),
+    actionUrl: varchar("action_url", { length: 300 }),
+    isRead: boolean("is_read").default(false).notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    index("notifications_org_unread_idx").on(
+      table.organizationId,
+      table.isRead,
+      table.createdAt,
+    ),
+    index("notifications_org_type_idx").on(table.organizationId, table.type),
+    index("notifications_outlet_idx").on(table.outletId, table.createdAt),
+    index("notifications_user_idx").on(table.userId, table.isRead),
+    index("notifications_entity_idx").on(table.entityType, table.entityId),
+  ],
+);
+
 export const approvalStatusEnum = pgEnum("approval_status", [
   "pending",
   "approved",

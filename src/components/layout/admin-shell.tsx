@@ -26,7 +26,9 @@ import { useState, type ReactNode } from "react";
 import { UserMenu } from "@/components/auth/user-menu";
 import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
 import { ApprovalDrawer } from "@/components/layout/approval-drawer";
+import { NotificationDrawer } from "@/components/layout/notification-drawer";
 import type { AdminApprovalDrawerData } from "@/features/approvals/contracts";
+import type { AdminNotificationDrawerData } from "@/features/notifications/contracts";
 import { cn } from "@/lib/utils";
 
 type AdminShellUser = {
@@ -271,16 +273,19 @@ export function AdminShell({
   children,
   user,
   approvalDrawerData,
+  notificationDrawerData,
 }: {
   children: ReactNode;
   user: AdminShellUser;
   approvalDrawerData: AdminApprovalDrawerData;
+  notificationDrawerData: AdminNotificationDrawerData;
 }) {
   const pathname = usePathname();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isApprovalOpen, setIsApprovalOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
   return (
     <div className="grid h-dvh w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -378,9 +383,7 @@ export function AdminShell({
               <ClipboardCheck className="size-5" />
               {approvalDrawerData.pendingCount > 0 ? (
                 <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-red-600 text-[10px] font-bold text-white">
-                  {approvalDrawerData.pendingCount > 9
-                    ? "9+"
-                    : approvalDrawerData.pendingCount}
+                  {approvalDrawerData.pendingCount > 9 ? "9+" : approvalDrawerData.pendingCount}
                 </span>
               ) : null}
             </button>
@@ -388,11 +391,18 @@ export function AdminShell({
             <button
               type="button"
               aria-label="Notifikasi"
+              onClick={() => setIsNotificationOpen(true)}
               className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
             >
               <Bell className="size-5" />
 
-              <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-white bg-[var(--accent)]" />
+              {notificationDrawerData.unreadCount > 0 ? (
+                <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-red-600 text-[10px] font-bold text-white">
+                  {notificationDrawerData.unreadCount > 9
+                    ? "9+"
+                    : notificationDrawerData.unreadCount}
+                </span>
+              ) : null}
             </button>
 
             <UserMenu
@@ -422,6 +432,12 @@ export function AdminShell({
         isOpen={isApprovalOpen}
         onClose={() => setIsApprovalOpen(false)}
         data={approvalDrawerData}
+      />
+
+      <NotificationDrawer
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        data={notificationDrawerData}
       />
     </div>
   );

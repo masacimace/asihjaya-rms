@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { AdminShell } from "@/components/layout/admin-shell";
 import { getAdministrationAccess } from "@/features/administration/access";
 import { getAdminApprovalDrawerData } from "@/features/approvals/queries";
+import { getAdminNotificationDrawerData } from "@/features/notifications/queries";
 import { getProductInventoryAccess } from "@/features/products/access";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 
@@ -15,7 +16,10 @@ export default async function AdminLayout({
 
   const administrationAccess = getAdministrationAccess(auth);
   const productInventoryAccess = getProductInventoryAccess(auth);
-  const approvalDrawerData = await getAdminApprovalDrawerData(auth);
+  const [approvalDrawerData, notificationDrawerData] = await Promise.all([
+    getAdminApprovalDrawerData(auth),
+    getAdminNotificationDrawerData(auth),
+  ]);
 
   return (
     <AdminShell
@@ -28,6 +32,7 @@ export default async function AdminLayout({
         canAccessInventory: productInventoryAccess.canAccessInventory,
       }}
       approvalDrawerData={approvalDrawerData}
+      notificationDrawerData={notificationDrawerData}
     >
       {children}
     </AdminShell>

@@ -64,6 +64,13 @@
       "when": 1783559000000,
       "tag": "0008_add_outlet_google_maps_embed_url",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783565000000,
+      "tag": "0009_create_notifications",
+      "breakpoints": true
     }
   ]
 }

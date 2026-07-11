@@ -16,6 +16,7 @@ import {
   hardwareAgents,
   hardwareJobs,
   inventoryMovements,
+  notifications,
   outlets,
   payments,
   posHeldCartItems,
@@ -77,6 +78,14 @@ const manualPaymentMethodLabels: Record<PosManualPaymentMethod, string> = {
 const manualPaymentMethods = Object.keys(
   manualPaymentMethodLabels,
 ) as PosManualPaymentMethod[];
+
+function formatNotificationAmount(value: number) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
 type NormalizedCheckoutPayment = {
   method: PosManualPaymentMethod;
@@ -2955,6 +2964,39 @@ export async function completePosCheckoutAction(
         createdAt: now,
       });
 
+      await transaction.insert(notifications).values({
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet.id,
+        userId: null,
+        type: "sales",
+        severity: "success",
+        title: "Transaksi POS berhasil",
+        message: `${invoiceNumber} · ${formatNotificationAmount(totalAmount)} · ${primaryOutlet.name}`,
+        entityType: "sale",
+        entityId: sale.id,
+        actionUrl: `/admin/penjualan/${sale.id}`,
+        metadata: {
+          source: "pos.checkout",
+          saleId: sale.id,
+          invoiceNumber,
+          outletId: primaryOutlet.id,
+          outletCode: primaryOutlet.code,
+          registerId: register.id,
+          registerCode: register.code,
+          shiftId: activeShift.id,
+          cashierId: auth.user.id,
+          cashierName: auth.user.fullName,
+          customerId: selectedCustomer?.id ?? null,
+          customerCode: selectedCustomer?.customerCode ?? null,
+          customerName: selectedCustomer?.fullName ?? null,
+          itemCount: itemIds.length,
+          totalAmount: String(totalAmount),
+          discountAmount: String(approvedDiscountAmount),
+        },
+        createdAt: now,
+        updatedAt: now,
+      });
+
       const [receiptCertificateJob] = await transaction
         .insert(hardwareJobs)
         .values({
@@ -3003,6 +3045,7 @@ export async function completePosCheckoutAction(
     revalidatePath("/admin/operasional/shift");
     revalidatePath("/admin/operasional/kas");
     revalidatePath("/admin/operasional/hardware");
+    revalidatePath("/admin");
 
     return checkoutSuccess({
       message: `Transaksi ${createdSale.invoiceNumber} berhasil diselesaikan.`,
@@ -3158,6 +3201,7 @@ export async function reprintPosReceiptCertificateAction(formData: FormData) {
 
     revalidatePath(POS_TRANSACTIONS_PATH);
     revalidatePath("/admin/operasional/hardware");
+    revalidatePath("/admin");
 
     feedbackType = queueState === "online" ? "success" : "info";
     feedbackMessage = getReprintQueuedMessage({
