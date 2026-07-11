@@ -20,10 +20,11 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { UserMenu } from "@/components/auth/user-menu";
+import { AdminSoundEffects } from "@/components/layout/admin-sound-effects";
 import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
 import { ApprovalDrawer } from "@/components/layout/approval-drawer";
 import { NotificationDrawer } from "@/components/layout/notification-drawer";
@@ -281,11 +282,30 @@ export function AdminShell({
   notificationDrawerData: AdminNotificationDrawerData;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const refreshTimerRef = useRef<number | null>(null);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isApprovalOpen, setIsApprovalOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [approvalPendingCount, setApprovalPendingCount] = useState(
+    approvalDrawerData.pendingCount,
+  );
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(
+    notificationDrawerData.unreadCount,
+  );
+
+  const refreshDrawerData = useCallback(() => {
+    if (refreshTimerRef.current) {
+      window.clearTimeout(refreshTimerRef.current);
+    }
+
+    refreshTimerRef.current = window.setTimeout(() => {
+      router.refresh();
+      refreshTimerRef.current = null;
+    }, 100);
+  }, [router]);
 
   return (
     <div className="grid h-dvh w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -378,14 +398,12 @@ export function AdminShell({
               type="button"
               aria-label="Persetujuan"
               onClick={() => setIsApprovalOpen(true)}
-              className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
+              className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
             >
               <ClipboardCheck className="size-5" />
-              {approvalDrawerData.pendingCount > 0 ? (
+              {approvalPendingCount > 0 ? (
                 <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-red-600 text-[10px] font-bold text-white">
-                  {approvalDrawerData.pendingCount > 9
-                    ? "9+"
-                    : approvalDrawerData.pendingCount}
+                  {approvalPendingCount > 9 ? "9+" : approvalPendingCount}
                 </span>
               ) : null}
             </button>
@@ -398,11 +416,9 @@ export function AdminShell({
             >
               <Bell className="size-5" />
 
-              {notificationDrawerData.unreadCount > 0 ? (
+              {notificationUnreadCount > 0 ? (
                 <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-red-600 text-[10px] font-bold text-white">
-                  {notificationDrawerData.unreadCount > 9
-                    ? "9+"
-                    : notificationDrawerData.unreadCount}
+                  {notificationUnreadCount > 9 ? "9+" : notificationUnreadCount}
                 </span>
               ) : null}
             </button>
@@ -420,6 +436,19 @@ export function AdminShell({
           {children}
         </main>
       </div>
+
+      <AdminSoundEffects
+        initialApprovalPendingCount={approvalDrawerData.pendingCount}
+        initialNotificationUnreadCount={notificationDrawerData.unreadCount}
+        onCountsChange={({
+          approvalPendingCount: nextApprovalCount,
+          notificationUnreadCount: nextNotificationCount,
+        }) => {
+          setApprovalPendingCount(nextApprovalCount);
+          setNotificationUnreadCount(nextNotificationCount);
+          refreshDrawerData();
+        }}
+      />
 
       <CameraScannerModal
         isOpen={isScannerOpen}

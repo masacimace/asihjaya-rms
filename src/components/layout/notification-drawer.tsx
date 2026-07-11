@@ -102,7 +102,11 @@ function getSeverityClassName(severity: AdminNotificationRow["severity"]) {
   return "border-[var(--border)] bg-white";
 }
 
-function NotificationCard({ notification }: { notification: AdminNotificationRow }) {
+function NotificationCard({
+  notification,
+}: {
+  notification: AdminNotificationRow;
+}) {
   const meta = getNotificationTypeMeta(notification.type);
   const Icon = meta.icon;
 
@@ -132,7 +136,10 @@ function NotificationCard({ notification }: { notification: AdminNotificationRow
                   {notification.title}
                 </h3>
                 {!notification.isRead ? (
-                  <span className="size-2 rounded-full bg-red-600" aria-label="Belum dibaca" />
+                  <span
+                    className="size-2 rounded-full bg-red-600"
+                    aria-label="Belum dibaca"
+                  />
                 ) : null}
               </div>
               <p className="mt-1 text-xs leading-5 text-neutral-600">
@@ -168,10 +175,14 @@ function NotificationCard({ notification }: { notification: AdminNotificationRow
 
             {!notification.isRead ? (
               <form action={markNotificationReadAction}>
-                <input type="hidden" name="notificationId" value={notification.id} />
+                <input
+                  type="hidden"
+                  name="notificationId"
+                  value={notification.id}
+                />
                 <button
                   type="submit"
-                  className="inline-flex h-9 items-center gap-2 rounded-xl bg-neutral-900 px-3 text-xs font-bold text-white transition hover:bg-neutral-800"
+                  className="inline-flex h-9 items-center gap-2 rounded-xl bg-neutral-900 px-3 !text-xs font-bold text-white transition hover:bg-neutral-800"
                 >
                   <CheckCircle2 className="size-3.5" />
                   Tandai dibaca
@@ -182,6 +193,33 @@ function NotificationCard({ notification }: { notification: AdminNotificationRow
         </div>
       </div>
     </article>
+  );
+}
+
+function NotificationFooterAction({ unreadCount }: { unreadCount: number }) {
+  if (unreadCount <= 0) {
+    return (
+      <button
+        type="button"
+        disabled
+        className="flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-neutral-100 px-4 text-sm font-bold text-neutral-400"
+      >
+        <CheckCircle2 className="size-4" />
+        Semua notifikasi sudah dibaca
+      </button>
+    );
+  }
+
+  return (
+    <form action={markAllNotificationsReadAction}>
+      <button
+        type="submit"
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-bold text-white transition hover:bg-neutral-800"
+      >
+        <CheckCircle2 className="size-4" />
+        Tandai semua dibaca
+      </button>
+    </form>
   );
 }
 
@@ -227,21 +265,9 @@ export function NotificationDrawer({
               <X className="size-5" />
             </button>
           </div>
-
-          {data.unreadCount > 0 ? (
-            <form action={markAllNotificationsReadAction} className="mt-4">
-              <button
-                type="submit"
-                className="inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-bold text-neutral-900 transition hover:border-neutral-300 hover:bg-neutral-50"
-              >
-                <CheckCircle2 className="size-3.5" />
-                Tandai semua dibaca
-              </button>
-            </form>
-          ) : null}
         </header>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-5 pb-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h3 className="text-xs font-bold uppercase text-neutral-500">
               Aktivitas terbaru
@@ -274,6 +300,10 @@ export function NotificationDrawer({
             </div>
           )}
         </div>
+
+        <footer className="border-t border-[var(--border)] bg-white p-4">
+          <NotificationFooterAction unreadCount={data.unreadCount} />
+        </footer>
       </aside>
     </>
   );

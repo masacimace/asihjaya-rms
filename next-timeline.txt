@@ -1,7 +1,0 @@
-1. NOTIF-R2 — Hardware Notifications
-2. NOTIF-R3 — Shift & Cash Notifications
-3. NOTIF-R4 — Void/Refund/Inventory Notifications
-4. Final UI polish detail pages:
-   - /admin/penjualan/[transactionId]
-   - /admin/inventaris/item/[itemId]
-   - /admin/produk/[productId]
