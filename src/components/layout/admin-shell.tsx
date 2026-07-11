@@ -378,12 +378,14 @@ export function AdminShell({
               type="button"
               aria-label="Persetujuan"
               onClick={() => setIsApprovalOpen(true)}
-              className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+              className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
             >
               <ClipboardCheck className="size-5" />
               {approvalDrawerData.pendingCount > 0 ? (
                 <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-red-600 text-[10px] font-bold text-white">
-                  {approvalDrawerData.pendingCount > 9 ? "9+" : approvalDrawerData.pendingCount}
+                  {approvalDrawerData.pendingCount > 9
+                    ? "9+"
+                    : approvalDrawerData.pendingCount}
                 </span>
               ) : null}
             </button>

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/db";
 import { hardwareAgents, hardwareJobs } from "@/db/schema";
+import { createHardwareJobFailedNotification } from "@/features/notifications/hardware";
 import {
   authenticateHardwareAgent,
   getClientIp,
@@ -126,6 +127,20 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       { error: "Hardware job not found or not claimed by this agent" },
       { status: 404 },
     );
+  }
+
+  if (status === "failed") {
+    await createHardwareJobFailedNotification({
+      organizationId: updated.organizationId,
+      outletId: updated.outletId,
+      registerId: updated.registerId,
+      agentId: updated.agentId,
+      jobId: updated.id,
+      jobType: updated.jobType,
+      deviceType: updated.deviceType,
+      error: errorMessage,
+      source: "agent_update",
+    });
   }
 
   await db

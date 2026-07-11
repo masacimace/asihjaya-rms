@@ -7,6 +7,7 @@ import {
   type AdminNotificationDrawerData,
   type AdminNotificationRow,
 } from "@/features/notifications/contracts";
+import { syncHardwareAgentHealthNotifications } from "@/features/notifications/hardware";
 import type { AuthContext } from "@/lib/auth/session";
 
 function getAccessibleNotificationCondition(auth: AuthContext): SQL<unknown> {
@@ -55,6 +56,8 @@ function mapNotificationRow(row: {
 export async function getAdminNotificationDrawerData(
   auth: AuthContext,
 ): Promise<AdminNotificationDrawerData> {
+  await syncHardwareAgentHealthNotifications(auth);
+
   const baseCondition = getAccessibleNotificationCondition(auth);
 
   const [unreadRows, latestRows] = await Promise.all([

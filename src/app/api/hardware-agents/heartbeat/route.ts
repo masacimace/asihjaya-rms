@@ -4,6 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { hardwareAgents, hardwareJobs } from "@/db/schema";
 import {
+  createHardwareAgentOfflineNotification,
+  markHardwareAgentOnlineNotificationResolved,
+} from "@/features/notifications/hardware";
+import {
   authenticateHardwareAgent,
   getClientIp,
 } from "@/lib/hardware/agent-auth";
@@ -38,6 +42,16 @@ export async function POST(req: NextRequest) {
 
   const now = new Date();
 
+  const [currentAgent] = await db
+    .select({
+      status: hardwareAgents.status,
+      lastSeenAt: hardwareAgents.lastSeenAt,
+      name: hardwareAgents.name,
+    })
+    .from(hardwareAgents)
+    .where(eq(hardwareAgents.id, auth.agent.id))
+    .limit(1);
+
   const [pendingCountRow] = await db
     .select({ count: count() })
     .from(hardwareJobs)
@@ -62,6 +76,26 @@ export async function POST(req: NextRequest) {
       updatedAt: now,
     })
     .where(eq(hardwareAgents.id, auth.agent.id));
+
+  if (status === "offline") {
+    await createHardwareAgentOfflineNotification({
+      organizationId: auth.agent.organizationId,
+      outletId: auth.agent.outletId,
+      agentId: auth.agent.id,
+      agentName: currentAgent?.name ?? auth.agent.name,
+      outletName: auth.outlet.name,
+      lastSeenAt: currentAgent?.lastSeenAt ?? null,
+      reason: "reported_offline",
+    });
+  } else if (currentAgent?.status === "offline") {
+    await markHardwareAgentOnlineNotificationResolved({
+      organizationId: auth.agent.organizationId,
+      outletId: auth.agent.outletId,
+      agentId: auth.agent.id,
+      agentName: currentAgent.name,
+      outletName: auth.outlet.name,
+    });
+  }
 
   return NextResponse.json({
     success: true,

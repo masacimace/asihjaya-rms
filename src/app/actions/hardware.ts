@@ -6,6 +6,11 @@ import { redirect } from "next/navigation";
 
 import { db } from "@/db";
 import { hardwareAgents, hardwareJobs, outlets, registers } from "@/db/schema";
+import { getHardwareJobLabel } from "@/features/notifications/hardware";
+import {
+  createAdminNotification,
+  markUnreadNotificationsReadByEntity,
+} from "@/features/notifications/mutations";
 import { requirePermission } from "@/lib/auth/session";
 import { cleanupHardwareJobs } from "@/lib/hardware/job-cleanup";
 import { recoverStaleHardwareJobs } from "@/lib/hardware/job-recovery";
@@ -243,7 +248,31 @@ export async function retryHardwareJobAction(formData: FormData) {
     })
     .where(eq(hardwareJobs.id, job.id));
 
+  await markUnreadNotificationsReadByEntity({
+    organizationId: auth.organization.id,
+    type: "hardware",
+    entityType: "hardware_job",
+    entityId: job.id,
+  });
+
+  await createAdminNotification({
+    organizationId: auth.organization.id,
+    outletId: job.outletId,
+    type: "hardware",
+    severity: "success",
+    title: "Hardware job dijalankan ulang",
+    message: `${getHardwareJobLabel(job.jobType)} sudah dimasukkan ulang ke antrean.`,
+    entityType: "hardware_job_retry",
+    entityId: job.id,
+    actionUrl: HARDWARE_DASHBOARD_PATH,
+    metadata: {
+      jobType: job.jobType,
+      retriedByUserId: auth.user.id,
+    },
+  });
+
   revalidatePath(HARDWARE_DASHBOARD_PATH);
+  revalidatePath("/admin");
   redirectWithMessage("success", "Hardware job sudah dimasukkan ulang ke antrean.");
 }
 
@@ -303,6 +332,7 @@ export async function recoverStaleHardwareJobsAction() {
   });
 
   revalidatePath(HARDWARE_DASHBOARD_PATH);
+  revalidatePath("/admin");
 
   if (result.requeued === 0 && result.failed === 0) {
     redirectWithMessage(

@@ -2,6 +2,7 @@ import { and, eq, inArray, lt, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { hardwareJobs } from "@/db/schema";
+import { notifyRecoveredHardwareJobs } from "@/features/notifications/hardware";
 
 const DEFAULT_STALE_JOB_MINUTES = 10;
 const MIN_STALE_JOB_MINUTES = 1;
@@ -30,6 +31,8 @@ export type RecoverStaleHardwareJobsResult = {
   staleMinutes: number;
   requeued: number;
   failed: number;
+  requeuedJobIds: string[];
+  failedJobIds: string[];
 };
 
 function getConfiguredStaleJobMinutes() {
@@ -136,10 +139,23 @@ export async function recoverStaleHardwareJobs({
     .where(and(baseWhere, sql`${hardwareJobs.attempts} >= ${hardwareJobs.maxAttempts}`))
     .returning({ id: hardwareJobs.id });
 
+  const requeuedJobIds = requeuedRows.map((row) => row.id);
+  const failedJobIds = failedRows.map((row) => row.id);
+
+  await notifyRecoveredHardwareJobs({
+    organizationId,
+    requeuedJobIds,
+    failedJobIds,
+    staleMinutes,
+    reason,
+  });
+
   return {
     cutoff,
     staleMinutes,
     requeued: requeuedRows.length,
     failed: failedRows.length,
+    requeuedJobIds,
+    failedJobIds,
   };
 }
