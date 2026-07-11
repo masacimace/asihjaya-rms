@@ -132,7 +132,7 @@ function AdminBrandLink({
           alt="Asihjaya"
           width={isMobile ? 80 : 128}
           height={isMobile ? 80 : 128}
-          className={cn("w-auto object-contain", isMobile ? "h-10" : "h-12")}
+          className={cn("w-auto object-contain", isMobile ? "h-12" : "h-12")}
           priority
         />
       </span>
@@ -358,24 +358,25 @@ export function AdminShell({
   }, [router]);
 
   useEffect(() => {
-    if (!isMobileMenuOpen) {
-      return;
-    }
+    const html = document.documentElement;
+    const body = document.body;
+    const previousHtmlOverflow = html.style.overflow;
+    const previousBodyOverflow = body.style.overflow;
 
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
+    // AdminShell owns the vertical scroll through <main>. Keeping the document
+    // locked prevents html/body from becoming a second scroll container on
+    // long form pages.
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
+      html.style.overflow = previousHtmlOverflow;
+      body.style.overflow = previousBodyOverflow;
     };
-  }, [isMobileMenuOpen]);
+  }, []);
 
   return (
-    <div className="grid h-dvh w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[260px_minmax(0,1fr)]">
+    <div className="grid h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[260px_minmax(0,1fr)]">
       {/* Sidebar desktop */}
       <aside className="hidden h-dvh min-h-0 flex-col overflow-y-auto border-r border-[var(--border)] bg-white p-5 lg:flex">
         <SidebarContent

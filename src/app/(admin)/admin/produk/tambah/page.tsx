@@ -18,7 +18,7 @@ export default async function CreateProductMasterPage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 overflow-x-hidden pb-6">
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-5 overflow-x-clip pb-6">
       <section className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5">
         <Link
           href="/admin/produk"

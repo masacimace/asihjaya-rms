@@ -6,6 +6,7 @@ import {
   CircleDollarSign,
   Gem,
   ImageIcon,
+  Info,
   MapPin,
   PackageCheck,
   Save,
@@ -122,18 +123,7 @@ function SubmitButtons({ canMakeAvailable }: { canMakeAvailable: boolean }) {
   const { pending } = useFormStatus();
 
   return (
-    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-      <button
-        type="submit"
-        name="submitIntent"
-        value="draft"
-        disabled={pending}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-wait disabled:opacity-60"
-      >
-        <Save className="size-4" />
-        {pending ? "Menyimpan..." : "Simpan sebagai Draft"}
-      </button>
-
+    <div className="grid gap-3">
       {canMakeAvailable ? (
         <button
           type="submit"
@@ -146,7 +136,33 @@ function SubmitButtons({ canMakeAvailable }: { canMakeAvailable: boolean }) {
           {pending ? "Menyimpan..." : "Simpan dan Jadikan Tersedia"}
         </button>
       ) : null}
+
+      <button
+        type="submit"
+        name="submitIntent"
+        value="draft"
+        disabled={pending}
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-wait disabled:opacity-60"
+      >
+        <Save className="size-4" />
+        {pending ? "Menyimpan..." : "Simpan sebagai Draft"}
+      </button>
     </div>
+  );
+}
+
+function FormSection({
+  children,
+}: {
+  icon: typeof Gem;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+      <div className="mt-5">{children}</div>
+    </section>
   );
 }
 
@@ -187,340 +203,382 @@ export function ProductItemForm({
     return Math.round(weight * rate);
   }, [pricePerGram, weightGram]);
 
-  return (
-    <form action={formAction} className="space-y-6">
-      <ActionMessage state={state} />
+  const canMakeAvailable =
+    canManagePricing && product.status === "active" && outlets.length > 0;
 
-      <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
-        <div className="flex items-start gap-3">
-          <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-            <Gem className="size-5" />
-          </div>
-          <div>
-            <h2 className="font-semibold text-neutral-950">Master Product</h2>
-            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+  return (
+    <form
+      action={formAction}
+      className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start"
+    >
+      <div className="min-w-0 space-y-5">
+        <ActionMessage state={state} />
+
+        <FormSection
+          icon={Gem}
+          title="Master Produk"
+          description="Item fisik akan terhubung ke master produk ini. SKU dan barcode dibuat otomatis setelah item disimpan."
+        >
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+            <p className="text-xs text-[var(--muted)]">Produk master</p>
+            <p className="mt-1 text-sm font-semibold text-neutral-950">
               {product.code} · {product.name}
             </p>
           </div>
-        </div>
-      </section>
+        </FormSection>
 
-      <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
-        <div className="flex items-start gap-3">
-          <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--surface-muted)] text-neutral-600">
-            <Tag className="size-5" />
-          </div>
-          <div>
-            <h2 className="font-semibold text-neutral-950">
-              Identitas & Detail Fisik
-            </h2>
-            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              SKU dan barcode dibuat otomatis setelah item disimpan.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="block text-sm sm:col-span-2">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Nama item di POS
-            </span>
-            <input
-              name="displayName"
-              maxLength={220}
-              className={inputClassName}
-              placeholder={`Opsional, contoh: ${product.name} 2.75g Size 17`}
-            />
-            <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
-              Jika dikosongkan, POS tetap memakai nama Master Product.
-            </p>
-            <FieldError message={state.fieldErrors?.displayName} />
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Berat aktual (gram)
-            </span>
-            <div className="relative">
-              <Scale className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+        <FormSection
+          icon={Tag}
+          title="Identitas & Detail Fisik"
+          description="Catat nama tampilan, berat, kadar, ukuran, warna, batu, dan kondisi awal item."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm sm:col-span-2">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Nama item di POS
+              </span>
               <input
-                name="weightGram"
-                inputMode="decimal"
-                value={weightGram}
-                onChange={(event) => setWeightGram(event.target.value)}
-                className={`${inputClassName} pl-10`}
-                placeholder="2,750"
+                name="displayName"
+                maxLength={220}
+                className={inputClassName}
+                placeholder={`Opsional, contoh: ${product.name} 2.75g Size 17`}
               />
-            </div>
-            <FieldError message={state.fieldErrors?.weightGram} />
-          </label>
+              <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
+                Jika dikosongkan, POS tetap memakai nama master produk.
+              </p>
+              <FieldError message={state.fieldErrors?.displayName} />
+            </label>
 
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Kadar (%)
-            </span>
-            <input
-              name="purityPercent"
-              inputMode="decimal"
-              className={inputClassName}
-              placeholder="Contoh: 75.5"
-            />
-            <FieldError message={state.fieldErrors?.purityPercent} />
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Ukuran
-            </span>
-            <input
-              name="size"
-              maxLength={64}
-              className={inputClassName}
-              placeholder="Contoh: 17"
-            />
-            <FieldError message={state.fieldErrors?.size} />
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Warna
-            </span>
-            <input
-              name="color"
-              maxLength={64}
-              className={inputClassName}
-              placeholder="Kuning, putih, rose gold"
-            />
-            <FieldError message={state.fieldErrors?.color} />
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Batu
-            </span>
-            <input
-              name="gemstone"
-              maxLength={160}
-              className={inputClassName}
-              placeholder="Zircon, berlian, ruby, atau tanpa batu"
-            />
-            <FieldError message={state.fieldErrors?.gemstone} />
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Kadar tukar (%)
-            </span>
-            <input
-              name="exchangePurityPercent"
-              inputMode="decimal"
-              className={inputClassName}
-              placeholder="Opsional"
-            />
-            <FieldError message={state.fieldErrors?.exchangePurityPercent} />
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Kondisi awal
-            </span>
-            <select
-              name="condition"
-              defaultValue="good"
-              className={inputClassName}
-            >
-              <option value="good">Baru</option>
-              <option value="damaged">Bekas</option>
-            </select>
-            <FieldError message={state.fieldErrors?.condition} />
-          </label>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
-        <SingleImageInput
-          label="Foto Item Fisik"
-          description="Gunakan satu foto aktual dari angle yang paling jelas. Foto wajib sebelum item dijadikan Tersedia."
-        />
-        <FieldError message={state.fieldErrors?.image} />
-      </section>
-
-      <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
-        <div className="flex items-start gap-3">
-          <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--surface-muted)] text-neutral-600">
-            <Calculator className="size-5" />
-          </div>
-          <div>
-            <h2 className="font-semibold text-neutral-950">Harga Aktual</h2>
-            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Setiap item memiliki harga sendiri. Harga label wajib diisi
-              sebelum item dijadikan Tersedia.
-            </p>
-          </div>
-        </div>
-
-        {canManagePricing ? (
-          <div className="mt-5 space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <MoneyInput
-                name="pricePerGram"
-                label="Harga logam per gram"
-                value={pricePerGram}
-                onChange={setPricePerGram}
-                placeholder="1.250.000"
-                error={state.fieldErrors?.pricePerGram}
-              />
-              <MoneyInput
-                name="deductionPerGram"
-                label="Potongan per gram"
-                value={deductionPerGram}
-                onChange={setDeductionPerGram}
-                placeholder="0"
-                error={state.fieldErrors?.deductionPerGram}
-              />
-              <MoneyInput
-                name="costAmount"
-                label="Harga modal"
-                value={costAmount}
-                onChange={setCostAmount}
-                placeholder="3.500.000"
-                error={state.fieldErrors?.costAmount}
-              />
-              <MoneyInput
-                name="sellingAmount"
-                label="Harga label final"
-                value={sellingAmount}
-                onChange={setSellingAmount}
-                placeholder="5.050.000"
-                error={state.fieldErrors?.sellingAmount}
-              />
-            </div>
-
-            {recommendedPrice !== null ? (
-              <div className="rounded-xl border border-[var(--border)] bg-neutral-50 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-xs text-[var(--muted)]">
-                      Estimasi (berat × harga per gram)
-                    </p>
-                    <p className="mt-1 text-xl font-semibold text-neutral-950">
-                      {formatMoney(recommendedPrice)}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setSellingAmount(String(recommendedPrice))}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                  >
-                    <CircleDollarSign className="size-4" />
-                    Gunakan sebagai harga label
-                  </button>
-                </div>
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Berat aktual (gram)
+              </span>
+              <div className="relative">
+                <Scale className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+                <input
+                  name="weightGram"
+                  inputMode="decimal"
+                  value={weightGram}
+                  onChange={(event) => setWeightGram(event.target.value)}
+                  className={`${inputClassName} pl-10`}
+                  placeholder="2,750"
+                />
               </div>
-            ) : null}
+              <FieldError message={state.fieldErrors?.weightGram} />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Kadar (%)
+              </span>
+              <input
+                name="purityPercent"
+                inputMode="decimal"
+                className={inputClassName}
+                placeholder="Contoh: 75.5"
+              />
+              <FieldError message={state.fieldErrors?.purityPercent} />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Ukuran
+              </span>
+              <input
+                name="size"
+                maxLength={64}
+                className={inputClassName}
+                placeholder="Contoh: 17"
+              />
+              <FieldError message={state.fieldErrors?.size} />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Warna
+              </span>
+              <input
+                name="color"
+                maxLength={64}
+                className={inputClassName}
+                placeholder="Kuning, putih, rose gold"
+              />
+              <FieldError message={state.fieldErrors?.color} />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Batu
+              </span>
+              <input
+                name="gemstone"
+                maxLength={160}
+                className={inputClassName}
+                placeholder="Zircon, berlian, ruby, atau tanpa batu"
+              />
+              <FieldError message={state.fieldErrors?.gemstone} />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Kadar tukar (%)
+              </span>
+              <input
+                name="exchangePurityPercent"
+                inputMode="decimal"
+                className={inputClassName}
+                placeholder="Opsional"
+              />
+              <FieldError message={state.fieldErrors?.exchangePurityPercent} />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Kondisi awal
+              </span>
+              <select
+                name="condition"
+                defaultValue="good"
+                className={inputClassName}
+              >
+                <option value="good">Baru</option>
+                <option value="damaged">Bekas</option>
+              </select>
+              <FieldError message={state.fieldErrors?.condition} />
+            </label>
           </div>
-        ) : (
-          <div className="mt-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+        </FormSection>
+
+        <FormSection
+          icon={ImageIcon}
+          title="Foto Item Fisik"
+          description="Gunakan satu foto aktual dari angle yang paling jelas. Foto wajib sebelum item dijadikan tersedia."
+        >
+          <SingleImageInput
+            label="Foto Item Fisik"
+            description="Foto item membantu sales membedakan barang fisik yang mirip di POS dan inventaris."
+          />
+          <FieldError message={state.fieldErrors?.image} />
+        </FormSection>
+
+        <FormSection
+          icon={Calculator}
+          title="Harga Aktual"
+          description="Setiap item memiliki harga sendiri. Harga label wajib diisi sebelum item dijadikan tersedia."
+        >
+          {canManagePricing ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <MoneyInput
+                  name="pricePerGram"
+                  label="Harga logam per gram"
+                  value={pricePerGram}
+                  onChange={setPricePerGram}
+                  placeholder="1.250.000"
+                  error={state.fieldErrors?.pricePerGram}
+                />
+                <MoneyInput
+                  name="deductionPerGram"
+                  label="Potongan per gram"
+                  value={deductionPerGram}
+                  onChange={setDeductionPerGram}
+                  placeholder="0"
+                  error={state.fieldErrors?.deductionPerGram}
+                />
+                <MoneyInput
+                  name="costAmount"
+                  label="Harga modal"
+                  value={costAmount}
+                  onChange={setCostAmount}
+                  placeholder="3.500.000"
+                  error={state.fieldErrors?.costAmount}
+                />
+                <MoneyInput
+                  name="sellingAmount"
+                  label="Harga label final"
+                  value={sellingAmount}
+                  onChange={setSellingAmount}
+                  placeholder="5.050.000"
+                  error={state.fieldErrors?.sellingAmount}
+                />
+              </div>
+
+              {recommendedPrice !== null ? (
+                <div className="rounded-xl border border-[var(--border)] bg-neutral-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs text-[var(--muted)]">
+                        Estimasi berat × harga per gram
+                      </p>
+                      <p className="mt-1 text-xl font-semibold text-neutral-950">
+                        {formatMoney(recommendedPrice)}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSellingAmount(String(recommendedPrice))}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                    >
+                      <CircleDollarSign className="size-4" />
+                      Gunakan sebagai harga label
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <p className="text-xs leading-5">
+                Akun ini tidak memiliki permission pricing.manage. Item tetap
+                dapat disimpan sebagai draft, lalu harga dilengkapi oleh admin
+                pricing.
+              </p>
+            </div>
+          )}
+        </FormSection>
+
+        <FormSection
+          icon={MapPin}
+          title="Penempatan Stok"
+          description="Outlet wajib ketika item langsung dijadikan tersedia. Lokasi rak membantu staff menemukan barang fisik."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Outlet awal
+              </span>
+              <select
+                name="currentOutletId"
+                defaultValue=""
+                className={inputClassName}
+              >
+                <option value="">Belum ditempatkan</option>
+                {outlets.map((outlet) => (
+                  <option key={outlet.id} value={outlet.id}>
+                    {outlet.name} · {outlet.code}
+                  </option>
+                ))}
+              </select>
+              <FieldError message={state.fieldErrors?.currentOutletId} />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Kode lokasi etalase / rak
+              </span>
+              <input
+                name="locationCode"
+                maxLength={80}
+                className={inputClassName}
+                placeholder="Contoh: ETALASE-A-03"
+              />
+              <FieldError message={state.fieldErrors?.locationCode} />
+            </label>
+
+            <label className="block text-sm sm:col-span-2">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Catatan internal
+              </span>
+              <textarea
+                name="internalNotes"
+                rows={4}
+                maxLength={4000}
+                className="w-full resize-y rounded-xl border border-[var(--border)] bg-white px-3 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                placeholder="Catatan penerimaan, kondisi khusus, atau informasi internal lainnya"
+              />
+              <FieldError message={state.fieldErrors?.internalNotes} />
+            </label>
+          </div>
+        </FormSection>
+
+        {product.status !== "active" ? (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <p className="text-xs leading-5">
-              Akun ini tidak memiliki permission pricing.manage. Item tetap
-              dapat disimpan sebagai Draft, lalu harga dilengkapi oleh admin
-              pricing pada tahap pengelolaan berikutnya.
+              Produk masih draft. Item dapat disimpan sebagai draft, tetapi
+              belum dapat dijadikan tersedia sampai produk berstatus aktif.
             </p>
           </div>
-        )}
-      </section>
+        ) : null}
 
-      <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
-        <div className="flex items-start gap-3">
-          <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--surface-muted)] text-neutral-600">
-            <MapPin className="size-5" />
-          </div>
-          <div>
-            <h2 className="font-semibold text-neutral-950">Penempatan Stok</h2>
-            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Outlet wajib ketika item langsung dijadikan Tersedia.
+        {outlets.length === 0 ? (
+          <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+            <ImageIcon className="mt-0.5 size-4 shrink-0" />
+            <p className="text-xs leading-5">
+              Akun ini belum memiliki outlet aktif. Item hanya dapat disimpan
+              sebagai draft sampai penugasan outlet tersedia.
             </p>
           </div>
-        </div>
+        ) : null}
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Outlet awal
-            </span>
-            <select
-              name="currentOutletId"
-              defaultValue=""
-              className={inputClassName}
-            >
-              <option value="">Belum ditempatkan</option>
-              {outlets.map((outlet) => (
-                <option key={outlet.id} value={outlet.id}>
-                  {outlet.name} · {outlet.code}
-                </option>
-              ))}
-            </select>
-            <FieldError message={state.fieldErrors?.currentOutletId} />
-          </label>
+        <FieldError message={state.fieldErrors?.submitIntent} />
+      </div>
 
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Kode lokasi Etalase / Rak (opsional)
-            </span>
-            <input
-              name="locationCode"
-              maxLength={80}
-              className={inputClassName}
-              placeholder="Contoh: ETALASE-A-03"
-            />
-            <FieldError message={state.fieldErrors?.locationCode} />
-          </label>
+      <aside className="min-w-0 space-y-5 xl:sticky xl:top-5">
+        <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+              <PackageCheck className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-semibold text-neutral-950">Simpan Item</h2>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                Pilih draft jika data belum lengkap, atau jadikan tersedia untuk
+                langsung masuk stok outlet.
+              </p>
+            </div>
+          </div>
 
-          <label className="block text-sm sm:col-span-2">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Catatan internal
-            </span>
-            <textarea
-              name="internalNotes"
-              rows={4}
-              maxLength={4000}
-              className="w-full resize-y rounded-xl border border-[var(--border)] bg-white px-3 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-              placeholder="Catatan penerimaan, kondisi khusus, atau informasi internal lainnya"
-            />
-            <FieldError message={state.fieldErrors?.internalNotes} />
-          </label>
-        </div>
-      </section>
+          <div className="mt-5 space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-xs leading-5 text-[var(--muted)]">
+            <div className="flex items-start gap-2">
+              <Info className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
+              <p>
+                Item tersedia membutuhkan produk aktif, outlet aktif, foto, dan
+                harga label.
+              </p>
+            </div>
+            <div className="flex items-start gap-2">
+              <Info className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
+              <p>
+                Draft tetap menyimpan identitas item tanpa muncul sebagai stok
+                siap jual.
+              </p>
+            </div>
+          </div>
 
-      {product.status !== "active" ? (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          <p className="text-xs leading-5">
-            Produk masih Draft. Item dapat disimpan sebagai Draft, tetapi belum
-            dapat dijadikan Tersedia sampai Produk berstatus Aktif.
-          </p>
-        </div>
-      ) : null}
+          <div className="mt-5">
+            <SubmitButtons canMakeAvailable={canMakeAvailable} />
+          </div>
+        </section>
 
-      {outlets.length === 0 ? (
-        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
-          <ImageIcon className="mt-0.5 size-4 shrink-0" />
-          <p className="text-xs leading-5">
-            Akun ini belum memiliki outlet aktif. Item hanya dapat disimpan
-            sebagai Draft sampai penugasan outlet tersedia.
-          </p>
-        </div>
-      ) : null}
-
-      <FieldError message={state.fieldErrors?.submitIntent} />
-
-      <SubmitButtons
-        canMakeAvailable={
-          canManagePricing && product.status === "active" && outlets.length > 0
-        }
-      />
+        <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+          <h2 className="font-semibold text-neutral-950">Ringkasan Kesiapan</h2>
+          <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-3">
+              <dt className="text-[var(--muted)]">Produk</dt>
+              <dd className="font-semibold text-neutral-950">
+                {product.status === "active" ? "Aktif" : "Draft"}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-3">
+              <dt className="text-[var(--muted)]">Pricing</dt>
+              <dd className="font-semibold text-neutral-950">
+                {canManagePricing ? "Bisa diatur" : "Butuh admin"}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <dt className="text-[var(--muted)]">Outlet</dt>
+              <dd className="font-semibold text-neutral-950">
+                {outlets.length > 0
+                  ? `${outlets.length} tersedia`
+                  : "Belum ada"}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      </aside>
     </form>
   );
 }

@@ -421,7 +421,6 @@ export default async function ApprovalPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       <header className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white">
         <div className="relative p-6 sm:p-8">
-          <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-full bg-[var(--accent-soft)]" />
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-col items-start gap-3">

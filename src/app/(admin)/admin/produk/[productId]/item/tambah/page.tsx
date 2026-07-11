@@ -1,17 +1,37 @@
-import { AlertTriangle, ArrowLeft, Boxes } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Boxes,
+  Gem,
+  PackageCheck,
+  Store,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ProductItemForm } from "@/components/inventory/product-item-form";
 import { ProductImage } from "@/components/media/product-image";
 import { getProductItemCreateContext } from "@/features/inventory/product-item-queries";
-import {
-  hasPermission,
-  requireAnyPermission,
-} from "@/lib/auth/session";
+import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 import { getImageUrl } from "@/lib/storage/image-storage";
+import { cn } from "@/lib/utils";
 
 export const runtime = "nodejs";
+
+const productStatusMeta = {
+  draft: {
+    label: "Draft",
+    className: "border-amber-200 bg-amber-50 text-amber-700",
+  },
+  active: {
+    label: "Aktif",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  },
+  inactive: {
+    label: "Nonaktif",
+    className: "border-neutral-200 bg-neutral-100 text-neutral-600",
+  },
+} as const;
 
 export default async function CreatePhysicalItemPage({
   params,
@@ -34,45 +54,98 @@ export default async function CreatePhysicalItemPage({
   }
 
   const canManagePricing = hasPermission(auth, "pricing.manage");
+  const productStatus = productStatusMeta[context.product.status];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <header>
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-5 overflow-x-clip pb-6">
+      <section className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5">
         <Link
           href={`/admin/produk/${context.product.id}`}
-          className="inline-flex items-center gap-2 text-sm font-medium text-[var(--muted)] transition hover:text-neutral-950"
+          className="inline-flex h-10 w-fit items-center gap-2 bg-white px-3 text-sm font-medium text-neutral-700"
         >
           <ArrowLeft className="size-4" />
-          Kembali ke produk
+          Kembali ke detail produk
         </Link>
 
-        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-4">
+        <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
+          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
             <ProductImage
               src={getImageUrl(context.product.imageKey)}
               alt={context.product.name}
-              className="size-20 shrink-0 rounded-2xl border border-[var(--border)]"
+              className="size-76 shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] sm:size-72"
             />
 
-            <div>
-              <p className="text-sm font-medium text-[var(--accent)]">
-                {context.product.code}
-              </p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                  <Boxes className="size-3.5" />
+                  Item fisik baru
+                </span>
+
+                <span
+                  className={cn(
+                    "inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold",
+                    productStatus.className,
+                  )}
+                >
+                  Produk {productStatus.label}
+                </span>
+              </div>
+
+              <h1 className="mt-3 text-2xl font-semibold text-neutral-950 sm:text-3xl">
                 Tambah Item Fisik
               </h1>
+
               <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                {context.product.name} · SKU dan barcode dibuat otomatis
+                Daftarkan unit perhiasan serialized untuk {context.product.name}
+                . SKU dan barcode akan dibuat otomatis setelah item disimpan.
               </p>
+
+              <div className="mt-4 flex flex-wrap gap-2 text-xs text-neutral-700">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5">
+                  <Gem className="size-3.5 text-[var(--accent)]" />
+                  {context.product.code}
+                </span>
+
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5">
+                  <Store className="size-3.5 text-[var(--accent)]" />
+                  {context.outlets.length > 0
+                    ? `${context.outlets.length} outlet tersedia`
+                    : "Belum ada outlet aktif"}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="inline-flex w-fit items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-medium text-[var(--accent)]">
-            <Boxes className="size-4" />
-            1 item = 1 barang fisik
-          </div>
+          <aside className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+            <div className="flex items-start gap-3">
+              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-[var(--accent)]">
+                <PackageCheck className="size-5" />
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-neutral-950">
+                  Alur penerimaan item
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Satu item fisik mewakili satu barang nyata yang memiliki
+                  berat, harga, outlet, foto, barcode, dan status stok sendiri.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-2 text-xs text-neutral-700">
+              <div className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5">
+                Lengkapi detail fisik dan harga label sebelum menjadikan item
+                tersedia.
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5">
+                Simpan sebagai draft jika foto, harga, atau outlet belum siap.
+              </div>
+            </div>
+          </aside>
         </div>
-      </header>
+      </section>
 
       {context.product.status === "inactive" ? (
         <section className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-800">
