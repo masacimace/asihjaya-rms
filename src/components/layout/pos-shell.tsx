@@ -246,7 +246,7 @@ function SidebarContent({
             alt="Asihjaya"
             width={128}
             height={128}
-            className="h-15 w-auto object-contain"
+            className="h-12 w-auto object-contain"
             priority
           />
         </span>
@@ -257,7 +257,7 @@ function SidebarContent({
             alt="Asihjaya"
             width={140}
             height={28}
-            className="h-8 w-auto object-contain"
+            className="h-7 w-auto object-contain"
             priority
           />
           <span className="mt-0.5 block truncate text-xs font-medium text-[var(--muted)]">
@@ -716,7 +716,9 @@ export function PosShell({
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-[112px] lg:pb-0">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-[112px] lg:pb-0">
+          {children}
+        </main>
 
         {/* Status bar desktop */}
         <footer className="hidden h-12 shrink-0 items-center justify-between border-t border-[var(--border)] bg-white px-5 text-xs text-[var(--muted)] lg:flex lg:px-6">

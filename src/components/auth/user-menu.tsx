@@ -2,7 +2,6 @@
 
 import {
   ChevronDown,
-  CircleUserRound,
   LayoutDashboard,
   LogOut,
   ShoppingBag,
@@ -12,6 +11,7 @@ import { useState } from "react";
 
 import { logoutAction } from "@/app/actions/auth";
 
+
 type UserMenuProps = {
   fullName: string;
   roleLabel: string;
@@ -19,6 +19,27 @@ type UserMenuProps = {
   canAccessAdmin?: boolean;
   canAccessPos?: boolean;
 };
+
+function getUserInitials(fullName: string) {
+  const nameParts = fullName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const firstPart = nameParts.at(0);
+
+  if (!firstPart) {
+    return "?";
+  }
+
+  if (nameParts.length === 1) {
+    return firstPart.slice(0, 2).toUpperCase();
+  }
+
+  const lastPart = nameParts.at(-1) ?? firstPart;
+
+  return `${firstPart.charAt(0)}${lastPart.charAt(0)}`.toUpperCase();
+}
 
 export function UserMenu({
   fullName,
@@ -28,6 +49,7 @@ export function UserMenu({
   canAccessPos = false,
 }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const initials = getUserInitials(fullName);
 
   return (
     <div className="relative">
@@ -35,12 +57,14 @@ export function UserMenu({
         type="button"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((current) => !current)}
-        className="flex items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition hover:bg-neutral-100 sm:px-2"
+        className="flex items-center gap-2 rounded-2xl border border-transparent px-1.5 py-1.5 text-left transition hover:border-[var(--border)] hover:bg-neutral-50 sm:px-2"
       >
-        <CircleUserRound className="size-7 shrink-0 text-neutral-500" />
+        <span className="grid size-10 shrink-0 place-items-center rounded-2xl border border-amber-100 bg-amber-50 text-sm font-bold text-amber-700">
+          {initials}
+        </span>
 
         <div className="hidden min-w-0 sm:block">
-          <p className="max-w-36 truncate text-xs font-medium text-neutral-950">
+          <p className="max-w-36 truncate text-xs font-semibold text-neutral-950">
             {fullName}
           </p>
 
@@ -53,15 +77,23 @@ export function UserMenu({
       </button>
 
       {isOpen ? (
-        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-64 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-2 shadow-[0_18px_50px_rgba(0,0,0,0.14)]">
-          <div className="border-b border-[var(--border)] px-3 py-3">
-            <p className="truncate text-sm font-semibold text-neutral-950">
-              {fullName}
-            </p>
+        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 overflow-hidden rounded-3xl border border-[var(--border)] bg-white p-2">
+          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
+            <div className="flex items-center gap-3">
+              <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-amber-100 bg-amber-50 text-sm font-bold text-amber-700">
+                {initials}
+              </span>
 
-            <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
-              {roleLabel}
-            </p>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-neutral-950">
+                  {fullName}
+                </p>
+
+                <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
+                  {roleLabel}
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="py-2">

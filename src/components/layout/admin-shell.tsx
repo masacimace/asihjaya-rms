@@ -378,7 +378,9 @@ export function AdminShell({
               <ClipboardCheck className="size-5" />
               {approvalDrawerData.pendingCount > 0 ? (
                 <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-red-600 text-[10px] font-bold text-white">
-                  {approvalDrawerData.pendingCount > 9 ? "9+" : approvalDrawerData.pendingCount}
+                  {approvalDrawerData.pendingCount > 9
+                    ? "9+"
+                    : approvalDrawerData.pendingCount}
                 </span>
               ) : null}
             </button>
