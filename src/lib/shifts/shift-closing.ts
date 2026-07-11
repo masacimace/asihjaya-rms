@@ -8,6 +8,7 @@ import {
   registers,
   shifts,
 } from "@/db/schema";
+import { notifyShiftClosedWithVariance } from "@/features/notifications/shift";
 import type { AuthContext } from "@/lib/auth/session";
 import {
   parseCashAmountInput,
@@ -43,6 +44,9 @@ export type CloseShiftResult = {
   expectedCash: number;
   actualCash: number;
   variance: number;
+  outletName: string;
+  registerName: string;
+  varianceReason: string | null;
 };
 
 export function parseShiftClosingActualCash(value: string | null | undefined) {
@@ -95,7 +99,7 @@ export async function closeShiftWithReconciliation({
     varianceReason,
   });
 
-  return db.transaction(async (transaction) => {
+  const result = await db.transaction(async (transaction) => {
     const [shift] = await transaction
       .select({
         id: shifts.id,
@@ -225,6 +229,25 @@ export async function closeShiftWithReconciliation({
       expectedCash,
       actualCash,
       variance,
+      outletName: shift.outletName,
+      registerName: shift.registerName,
+      varianceReason: normalizedInput.varianceReason,
     };
   });
+
+  await notifyShiftClosedWithVariance({
+    organizationId: auth.organization.id,
+    outletId: result.outletId,
+    shiftId: result.id,
+    outletName: result.outletName,
+    registerName: result.registerName,
+    expectedCash: result.expectedCash,
+    actualCash: result.actualCash,
+    variance: result.variance,
+    varianceReason: result.varianceReason,
+    closedByName: auth.user.fullName,
+    source,
+  });
+
+  return result;
 }

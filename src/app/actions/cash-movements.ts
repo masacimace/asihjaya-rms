@@ -12,6 +12,7 @@ import {
   type AdminCashMovementActionState,
   type ManualCashMovementType,
 } from "@/features/cash-movements/contracts";
+import { notifyManualCashMovementCreated } from "@/features/notifications/cash";
 import {
   hasAnyPermission,
   requirePermission,
@@ -236,6 +237,21 @@ export async function createAdminCashMovementAction(
     return failure(
       "Pergerakan kas belum bisa dicatat karena terjadi kendala sistem. Coba ulang atau hubungi admin.",
     );
+  }
+
+  if (createdMovementId) {
+    await notifyManualCashMovementCreated({
+      organizationId: auth.organization.id,
+      outletId: shift.outletId,
+      shiftId: shift.id,
+      movementId: createdMovementId,
+      type,
+      amount,
+      reason,
+      outletName: shift.outletName,
+      registerName: shift.registerName,
+      createdByName: auth.user.fullName,
+    });
   }
 
   revalidateCashPages();
