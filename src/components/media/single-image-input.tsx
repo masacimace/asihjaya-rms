@@ -5,22 +5,29 @@ import { useRef, useState } from "react";
 
 const acceptedTypes = "image/jpeg,image/png,image/webp";
 
+export type SingleImageInputState = {
+  hasImage: boolean;
+  changed: boolean;
+};
+
 export function SingleImageInput({
   name = "image",
   initialImageUrl = null,
   label = "Foto",
   description,
   required = false,
+  disabled = false,
+  onStateChange,
 }: {
   name?: string;
   initialImageUrl?: string | null;
   label?: string;
   description?: string;
   required?: boolean;
+  disabled?: boolean;
+  onStateChange?: (state: SingleImageInputState) => void;
 }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(
-    initialImageUrl,
-  );
+  const [previewUrl, setPreviewUrl] = useState<string | null>(initialImageUrl);
   const [removeExisting, setRemoveExisting] = useState(false);
   const generatedPreviewRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,7 +45,12 @@ export function SingleImageInput({
     revokeGeneratedPreview();
 
     if (!file) {
-      setPreviewUrl(removeExisting ? null : initialImageUrl);
+      const hasImage = removeExisting ? false : Boolean(initialImageUrl);
+      setPreviewUrl(hasImage ? initialImageUrl : null);
+      onStateChange?.({
+        hasImage,
+        changed: removeExisting,
+      });
       return;
     }
 
@@ -46,12 +58,23 @@ export function SingleImageInput({
     generatedPreviewRef.current = objectUrl;
     setPreviewUrl(objectUrl);
     setRemoveExisting(false);
+    onStateChange?.({ hasImage: true, changed: true });
   }
 
   function removeImage() {
+    if (disabled) {
+      return;
+    }
+
     revokeGeneratedPreview();
     setPreviewUrl(null);
-    setRemoveExisting(Boolean(initialImageUrl));
+
+    const shouldRemoveExisting = Boolean(initialImageUrl);
+    setRemoveExisting(shouldRemoveExisting);
+    onStateChange?.({
+      hasImage: false,
+      changed: shouldRemoveExisting,
+    });
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -101,7 +124,13 @@ export function SingleImageInput({
         </div>
 
         <div className="space-y-3">
-          <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]">
+          <label
+            className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition ${
+              disabled
+                ? "cursor-not-allowed opacity-50"
+                : "cursor-pointer hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+            }`}
+          >
             <ImagePlus className="size-4" />
             {previewUrl ? "Ganti Foto" : "Pilih Foto"}
             <input
@@ -111,6 +140,7 @@ export function SingleImageInput({
               accept={acceptedTypes}
               capture="environment"
               required={required && !initialImageUrl}
+              disabled={disabled}
               onChange={handleFileChange}
               className="sr-only"
             />
@@ -120,7 +150,8 @@ export function SingleImageInput({
             <button
               type="button"
               onClick={removeImage}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-medium text-red-700 transition hover:bg-red-50"
+              disabled={disabled}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="size-4" />
               Hapus Foto

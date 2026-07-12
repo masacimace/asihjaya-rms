@@ -72,7 +72,7 @@ export default async function CreatePhysicalItemPage({
             <ProductImage
               src={getImageUrl(context.product.imageKey)}
               alt={context.product.name}
-              className="size-76 shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] sm:size-72"
+              className="size-64 shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] sm:size-64"
             />
 
             <div className="min-w-0 flex-1">
