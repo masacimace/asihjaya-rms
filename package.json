@@ -18,7 +18,10 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "hardware:agent:create": "tsx scripts/create-hardware-agent.ts",
-    "db:preflight:p0a": "tsx scripts/preflight-p0a.ts"
+    "db:preflight:p0a": "tsx scripts/preflight-p0a.ts",
+    "check:p1a": "tsx scripts/check-p1a-manual-payment-verification.ts",
+    "db:preflight:p1a": "tsx scripts/preflight-p1a.ts",
+    "payment:evidence:cleanup": "tsx scripts/cleanup-payment-evidence.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

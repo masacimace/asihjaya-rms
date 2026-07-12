@@ -154,6 +154,7 @@ function getApprovalTypeTitle(type: ApprovalType) {
   if (type === "discount") return "Permintaan Diskon Khusus";
   if (type === "void_receipt") return "Pembatalan Nota (Void)";
   if (type === "refund_transaction") return "Refund Transaksi";
+  if (type === "manual_payment_verification") return "Verifikasi Pembayaran Manual";
   if (type === "stock_adjustment") return "Penyesuaian Stok";
 
   return "Approval Operasional";
@@ -312,6 +313,53 @@ export function summarizeApprovalRequest(
         : "Requester meminta refund transaksi.",
       reason: reason ? stringifyValue(reason) : null,
       impactLabel: impactAmount ? "Estimasi refund" : null,
+      impactValue: impactAmount,
+      lines,
+    };
+  }
+
+  if (type === "manual_payment_verification") {
+    const impactAmount = getNumberValue(requestData, [
+      "reviewAmount",
+      "totalNonCashAmount",
+      "amount",
+    ]);
+    const methods = getRecordValue(requestData, [
+      "paymentMethodsLabel",
+      "paymentMethods",
+    ]);
+    const duplicateCount = getNumberValue(requestData, ["duplicateCount"]);
+    const triggerReason = getRecordValue(requestData, [
+      "triggerReason",
+      "reason",
+    ]);
+    const lines = [
+      methods ? { label: "Metode", value: stringifyValue(methods) } : null,
+      impactAmount
+        ? {
+            label: "Nilai diverifikasi",
+            value: formatMoney(impactAmount),
+            tone: "warning" as const,
+          }
+        : null,
+      duplicateCount
+        ? {
+            label: "Referensi duplikat",
+            value: `${duplicateCount} temuan`,
+            tone: "danger" as const,
+          }
+        : null,
+      triggerReason
+        ? { label: "Pemicu", value: stringifyValue(triggerReason) }
+        : null,
+    ].filter(Boolean) as AdminApprovalRequestSummary["lines"];
+
+    return {
+      title: "Verifikasi Pembayaran Manual",
+      description:
+        "Pembayaran non-tunai membutuhkan pemeriksaan manager/finance sebelum transaksi diselesaikan.",
+      reason: triggerReason ? stringifyValue(triggerReason) : null,
+      impactLabel: impactAmount ? "Nilai pembayaran" : null,
       impactValue: impactAmount,
       lines,
     };

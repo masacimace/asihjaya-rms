@@ -107,9 +107,7 @@ function hasPositiveMoney(value: string) {
   return /[1-9]/.test(value);
 }
 
-function getConditionLabel(
-  value: EditableItem["condition"],
-) {
+function getConditionLabel(value: EditableItem["condition"]) {
   const labels: Record<EditableItem["condition"], string> = {
     good: "Baru",
     damaged: "Bekas",
@@ -183,7 +181,7 @@ function SubmitButtons({
         name="submitIntent"
         value="save"
         disabled={pending || !isDirty || !isItemActive}
-        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-black px-4 text-sm font-semibold text-white transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <Save className="size-4" />
         {pending ? "Menyimpan..." : "Simpan Perubahan"}
@@ -310,9 +308,7 @@ export function ProductItemEditForm({
     item.currentOutletId ?? "",
   );
   const [locationCode, setLocationCode] = useState(item.locationCode ?? "");
-  const [internalNotes, setInternalNotes] = useState(
-    item.internalNotes ?? "",
-  );
+  const [internalNotes, setInternalNotes] = useState(item.internalNotes ?? "");
   const [costAmount, setCostAmount] = useState(item.costAmount ?? "");
   const [sellingAmount, setSellingAmount] = useState(item.sellingAmount ?? "");
   const [pricePerGram, setPricePerGram] = useState(item.pricePerGram ?? "");
@@ -336,8 +332,8 @@ export function ProductItemEditForm({
     (outlet) => outlet.id === currentOutletId,
   );
   const resolvedOutletName = isDraft
-    ? selectedOutlet?.name ?? "Belum ditempatkan"
-    : item.outletName ?? "Belum ditempatkan";
+    ? (selectedOutlet?.name ?? "Belum ditempatkan")
+    : (item.outletName ?? "Belum ditempatkan");
 
   const changedFields = [
     normalized(displayName) !== normalized(item.displayName ?? ""),
@@ -393,7 +389,9 @@ export function ProductItemEditForm({
       detail: "Hanya item berkondisi Baik yang dapat langsung tersedia.",
     },
   ];
-  const readinessCount = readinessItems.filter((entry) => entry.complete).length;
+  const readinessCount = readinessItems.filter(
+    (entry) => entry.complete,
+  ).length;
   const activationReady =
     isDraft && readinessCount === readinessItems.length && item.isActive;
   const readinessPercent = Math.round(
@@ -453,7 +451,8 @@ export function ProductItemEditForm({
                   placeholder={`Opsional, contoh: ${item.productName} ${item.weightGram ?? ""}g`}
                 />
                 <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
-                  Jika dikosongkan, POS memakai nama master product: {item.productName}.
+                  Jika dikosongkan, POS memakai nama master product:{" "}
+                  {item.productName}.
                 </p>
                 <FieldError message={state.fieldErrors?.displayName} />
               </label>
@@ -465,7 +464,9 @@ export function ProductItemEditForm({
                   <Box className="size-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-[var(--muted)]">Preview nama operasional</p>
+                  <p className="text-xs text-[var(--muted)]">
+                    Preview nama operasional
+                  </p>
                   <p className="mt-1 break-words text-sm font-semibold text-neutral-950">
                     {normalized(displayName) || item.productName}
                   </p>
@@ -514,7 +515,8 @@ export function ProductItemEditForm({
                   Spesifikasi Fisik
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                  Cocokkan setiap nilai dengan barang fisik yang sedang diperiksa.
+                  Cocokkan setiap nilai dengan barang fisik yang sedang
+                  diperiksa.
                 </p>
               </div>
             </div>
@@ -564,7 +566,9 @@ export function ProductItemEditForm({
                     %
                   </span>
                 </div>
-                <FieldError message={state.fieldErrors?.exchangePurityPercent} />
+                <FieldError
+                  message={state.fieldErrors?.exchangePurityPercent}
+                />
               </label>
 
               <label className="block text-sm">
@@ -626,7 +630,9 @@ export function ProductItemEditForm({
             </div>
 
             <div className="mt-5">
-              <p className="mb-2 text-sm font-medium text-neutral-800">Kondisi</p>
+              <p className="mb-2 text-sm font-medium text-neutral-800">
+                Kondisi
+              </p>
 
               {item.availability === "available" ? (
                 <>
@@ -638,8 +644,9 @@ export function ProductItemEditForm({
                         {getConditionLabel(condition)}
                       </p>
                       <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                        Kondisi item Tersedia dikunci. Gunakan workflow adjustment
-                        inventaris agar perubahan tercatat di histori.
+                        Kondisi item Tersedia dikunci. Gunakan workflow
+                        adjustment inventaris agar perubahan tercatat di
+                        histori.
                       </p>
                     </div>
                   </div>
@@ -734,19 +741,25 @@ export function ProductItemEditForm({
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-[var(--border)] bg-neutral-50 px-4 py-3">
-                <p className="text-xs font-semibold text-neutral-900">Angle jelas</p>
+                <p className="text-xs font-semibold text-neutral-900">
+                  Angle jelas
+                </p>
                 <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
                   Pastikan bentuk utama item terlihat utuh.
                 </p>
               </div>
               <div className="rounded-xl border border-[var(--border)] bg-neutral-50 px-4 py-3">
-                <p className="text-xs font-semibold text-neutral-900">Pencahayaan netral</p>
+                <p className="text-xs font-semibold text-neutral-900">
+                  Pencahayaan netral
+                </p>
                 <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
                   Hindari pantulan berlebih dan bayangan gelap.
                 </p>
               </div>
               <div className="rounded-xl border border-[var(--border)] bg-neutral-50 px-4 py-3">
-                <p className="text-xs font-semibold text-neutral-900">Latar sederhana</p>
+                <p className="text-xs font-semibold text-neutral-900">
+                  Latar sederhana
+                </p>
                 <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
                   Gunakan latar yang tidak mengganggu detail produk.
                 </p>
@@ -813,8 +826,9 @@ export function ProductItemEditForm({
                 <div>
                   <p className="text-sm font-semibold">Akses harga terbatas</p>
                   <p className="mt-1 text-xs leading-5">
-                    Nilai harga existing dipertahankan. Perubahan harga memerlukan
-                    permission <span className="font-mono">pricing.manage</span>.
+                    Nilai harga existing dipertahankan. Perubahan harga
+                    memerlukan permission{" "}
+                    <span className="font-mono">pricing.manage</span>.
                   </p>
                 </div>
               </div>
@@ -830,7 +844,9 @@ export function ProductItemEditForm({
               <div className="rounded-xl border border-[var(--border)] bg-neutral-50 p-4">
                 <p className="text-xs text-[var(--muted)]">Harga modal</p>
                 <p className="mt-2 text-sm font-semibold text-neutral-950">
-                  {canManagePricing ? displayMoney(costAmount) : "Akses terbatas"}
+                  {canManagePricing
+                    ? displayMoney(costAmount)
+                    : "Akses terbatas"}
                 </p>
               </div>
               <div className="rounded-xl border border-[var(--border)] bg-neutral-50 p-4">
@@ -1090,7 +1106,10 @@ export function ProductItemEditForm({
                 label="Kondisi"
                 value={getConditionLabel(condition)}
               />
-              <SummaryRow label="Harga label" value={displayMoney(sellingAmount)} />
+              <SummaryRow
+                label="Harga label"
+                value={displayMoney(sellingAmount)}
+              />
               <SummaryRow label="Outlet" value={resolvedOutletName} />
               <SummaryRow
                 label="Lokasi"
@@ -1119,7 +1138,8 @@ export function ProductItemEditForm({
               Simpan Konfigurasi
             </h2>
             <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-              SKU, barcode, master product, dan histori inventaris tidak berubah.
+              SKU, barcode, master product, dan histori inventaris tidak
+              berubah.
             </p>
 
             <FieldError message={state.fieldErrors?.submitIntent} />

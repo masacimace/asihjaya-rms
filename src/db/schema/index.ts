@@ -124,6 +124,16 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "refunded",
 ]);
 
+export const manualPaymentVerificationStatusEnum = pgEnum(
+  "manual_payment_verification_status",
+  ["self_verified", "co_verification_required", "co_verified", "rejected"],
+);
+
+export const paymentSettlementStatusEnum = pgEnum(
+  "payment_settlement_status",
+  ["not_applicable", "unreconciled", "matched", "mismatch", "settled"],
+);
+
 export const posCheckoutAttemptStatusEnum = pgEnum("pos_checkout_attempt_status", [
   "processing",
   "completed",
@@ -1148,7 +1158,24 @@ export const payments = pgTable(
     amount: numeric("amount", { precision: 18, scale: 0 }).notNull(),
     status: paymentStatusEnum("status").default("pending").notNull(),
     providerReference: varchar("provider_reference", { length: 160 }),
+    normalizedReference: varchar("normalized_reference", { length: 160 }),
     externalOrderId: varchar("external_order_id", { length: 160 }),
+    verificationStatus: manualPaymentVerificationStatusEnum(
+      "verification_status",
+    )
+      .default("self_verified")
+      .notNull(),
+    verificationSource: varchar("verification_source", { length: 40 }),
+    providerPaidAt: timestamp("provider_paid_at", { withTimezone: true }),
+    verificationApprovalId: uuid("verification_approval_id").references(
+      () => approvals.id,
+    ),
+    coVerifiedBy: uuid("co_verified_by").references(() => users.id),
+    coVerifiedAt: timestamp("co_verified_at", { withTimezone: true }),
+    evidenceKey: text("evidence_key"),
+    settlementStatus: paymentSettlementStatusEnum("settlement_status")
+      .default("not_applicable")
+      .notNull(),
     verifiedBy: uuid("verified_by").references(() => users.id),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
     paidAt: timestamp("paid_at", { withTimezone: true }),
@@ -1161,6 +1188,19 @@ export const payments = pgTable(
       table.provider,
       table.providerReference,
     ),
+    index("payments_normalized_reference_idx").on(
+      table.method,
+      table.provider,
+      table.normalizedReference,
+    ),
+    index("payments_verification_status_idx").on(
+      table.verificationStatus,
+      table.createdAt,
+    ),
+    index("payments_settlement_status_idx").on(
+      table.settlementStatus,
+      table.createdAt,
+    ),
     check("payments_amount_positive_ck", sql`${table.amount} > 0`),
     check(
       "payments_paid_state_complete_ck",
@@ -1169,6 +1209,134 @@ export const payments = pgTable(
         and ${table.verifiedAt} is not null
         and ${table.paidAt} is not null
       )`,
+    ),
+    check(
+      "payments_manual_noncash_verification_ck",
+      sql`${table.method} not in ('qris_manual', 'debit_card', 'credit_card', 'bank_transfer') or (
+        btrim(${table.provider}) <> ''
+        and lower(btrim(${table.provider})) <> 'manual'
+        and ${table.providerReference} is not null
+        and btrim(${table.providerReference}) <> ''
+        and ${table.normalizedReference} is not null
+        and length(${table.normalizedReference}) >= 4
+        and ${table.verificationSource} in ('merchant_app', 'edc_terminal', 'bank_app', 'bank_statement')
+        and ${table.providerPaidAt} is not null
+        and ${table.settlementStatus} <> 'not_applicable'
+      )`,
+    ),
+    check(
+      "payments_co_verified_state_ck",
+      sql`${table.verificationStatus} <> 'co_verified' or (
+        ${table.verificationApprovalId} is not null
+        and ${table.coVerifiedBy} is not null
+        and ${table.coVerifiedAt} is not null
+      )`,
+    ),
+    check(
+      "payments_cash_settlement_ck",
+      sql`${table.method} <> 'cash' or (
+        ${table.settlementStatus} = 'not_applicable'
+        and ${table.verificationSource} is null
+        and ${table.providerPaidAt} is null
+        and ${table.verificationApprovalId} is null
+        and ${table.coVerifiedBy} is null
+        and ${table.coVerifiedAt} is null
+        and ${table.evidenceKey} is null
+      )`,
+    ),
+  ],
+);
+
+export const manualPaymentPolicies = pgTable(
+  "manual_payment_policies",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    method: paymentMethodEnum("method").notNull(),
+    coVerificationThreshold: numeric("co_verification_threshold", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    evidenceThreshold: numeric("evidence_threshold", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    duplicateLookbackDays: integer("duplicate_lookback_days")
+      .default(30)
+      .notNull(),
+    isEnabled: boolean("is_enabled").default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("manual_payment_policies_org_method_uq").on(
+      table.organizationId,
+      table.method,
+    ),
+    check(
+      "manual_payment_policies_method_ck",
+      sql`${table.method} in ('qris_manual', 'debit_card', 'credit_card', 'bank_transfer')`,
+    ),
+    check(
+      "manual_payment_policies_thresholds_ck",
+      sql`${table.coVerificationThreshold} >= 0 and ${table.evidenceThreshold} >= 0`,
+    ),
+    check(
+      "manual_payment_policies_lookback_ck",
+      sql`${table.duplicateLookbackDays} between 1 and 3650`,
+    ),
+  ],
+);
+
+export const paymentEvidenceUploads = pgTable(
+  "payment_evidence_uploads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    uploadedBy: uuid("uploaded_by")
+      .notNull()
+      .references(() => users.id),
+    storageKey: text("storage_key").notNull(),
+    originalFilename: varchar("original_filename", { length: 255 }),
+    sizeBytes: integer("size_bytes").notNull(),
+    saleId: uuid("sale_id").references(() => sales.id),
+    attachedAt: timestamp("attached_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).default(
+      sql`now() + interval '7 days'`,
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("payment_evidence_uploads_storage_key_uq").on(table.storageKey),
+    index("payment_evidence_uploads_org_outlet_idx").on(
+      table.organizationId,
+      table.outletId,
+      table.createdAt,
+    ),
+    index("payment_evidence_uploads_expiry_idx").on(
+      table.saleId,
+      table.expiresAt,
+    ),
+    index("payment_evidence_uploads_uploader_idx").on(
+      table.uploadedBy,
+      table.createdAt,
+    ),
+    check("payment_evidence_uploads_size_ck", sql`${table.sizeBytes} > 0`),
+    check(
+      "payment_evidence_uploads_attachment_ck",
+      sql`(${table.saleId} is null and ${table.attachedAt} is null) or (${table.saleId} is not null and ${table.attachedAt} is not null and ${table.expiresAt} is null)`,
     ),
   ],
 );
@@ -1388,6 +1556,7 @@ export const approvalTypeEnum = pgEnum("approval_type", [
   "discount",
   "void_receipt",
   "refund_transaction",
+  "manual_payment_verification",
   "stock_adjustment",
   "other",
 ]);
@@ -1432,6 +1601,14 @@ export const approvals = pgTable(
     uniqueIndex("approvals_execution_idempotency_uq")
       .on(table.organizationId, table.executionIdempotencyKey)
       .where(sql`${table.executionIdempotencyKey} is not null`),
+    uniqueIndex("approvals_manual_payment_fingerprint_uq")
+      .on(
+        table.organizationId,
+        table.outletId,
+        table.requestedBy,
+        sql`(${table.requestData}->>'verificationFingerprint')`,
+      )
+      .where(sql`${table.type} = 'manual_payment_verification'`),
     index("approvals_org_status_idx").on(table.organizationId, table.status),
     index("approvals_ref_idx").on(table.referenceType, table.referenceId),
     index("approvals_execution_status_idx").on(

@@ -91,6 +91,23 @@ export type PosManualPaymentMethod =
   | "credit_card"
   | "bank_transfer";
 
+export type PosManualPaymentVerificationSource =
+  | "merchant_app"
+  | "edc_terminal"
+  | "bank_app"
+  | "bank_statement";
+
+export type PosManualPaymentVerificationDetails = {
+  terminalId?: string | null;
+  merchantId?: string | null;
+  batchNumber?: string | null;
+  traceNumber?: string | null;
+  cardNetwork?: string | null;
+  cardLast4?: string | null;
+  senderName?: string | null;
+  destinationAccount?: string | null;
+};
+
 export type PosCheckoutPaymentInput = {
   method: PosManualPaymentMethod;
   amount: number;
@@ -99,6 +116,10 @@ export type PosCheckoutPaymentInput = {
   provider?: string | null;
   reference?: string | null;
   note?: string | null;
+  verificationSource?: PosManualPaymentVerificationSource | null;
+  providerPaidAtIso?: string | null;
+  evidenceKey?: string | null;
+  verificationDetails?: PosManualPaymentVerificationDetails | null;
 };
 
 export type PosCheckoutPayload = {
@@ -110,8 +131,34 @@ export type PosCheckoutPayload = {
   discountApprovalId?: string | null;
   discountAmount?: number | null;
   discountReason?: string | null;
+  manualPaymentApprovalId?: string | null;
 };
 
+
+
+export type PosManualPaymentApproval = {
+  id: string;
+  status: "pending" | "approved" | "rejected";
+  reason: string;
+  responseNotes: string | null;
+  createdAtIso: string;
+  resolvedAtIso: string | null;
+};
+
+export type PosManualPaymentApprovalStatusResult =
+  | {
+      status: "found";
+      message: string;
+      approval: PosManualPaymentApproval;
+    }
+  | {
+      status: "not_found" | "error";
+      message: string;
+    };
+
+export type PosPaymentEvidenceUploadResult =
+  | { status: "success"; message: string; evidenceKey: string }
+  | { status: "error"; message: string };
 
 export type PosDiscountApprovalPayload = {
   itemIds: string[];
@@ -241,6 +288,11 @@ export type PosCheckoutActionResult =
       recovery: "created" | "replayed";
     }
   | {
+      status: "approval_required";
+      message: string;
+      approval: PosManualPaymentApproval;
+    }
+  | {
       status: "processing";
       message: string;
       idempotencyKey: string;
@@ -262,6 +314,11 @@ export type PosCheckoutRecoveryStatusResult =
       status: "completed";
       message: string;
       sale: PosCheckoutSaleResult;
+    }
+  | {
+      status: "approval_required";
+      message: string;
+      approval: PosManualPaymentApproval;
     }
   | {
       status: "processing";

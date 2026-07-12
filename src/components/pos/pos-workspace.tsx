@@ -32,10 +32,12 @@ import {
   closePosShiftAction,
   completePosCheckoutAction,
   getPosDiscountApprovalStatusAction,
+  getPosManualPaymentApprovalStatusAction,
   holdPosCartAction,
   lookupPosScanValueAction,
   openPosShiftAction,
   requestPosDiscountApprovalAction,
+  uploadPosPaymentEvidenceAction,
 } from "@/app/actions/pos";
 import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
 import {
@@ -52,7 +54,9 @@ import {
   type PosHeldCartActionResult,
   type PosHeldCartItem,
   type PosHeldCartSummary,
+  type PosManualPaymentApproval,
   type PosManualPaymentMethod,
+  type PosManualPaymentVerificationSource,
   type PosOperationalContext,
   type PosShiftActionState,
 } from "@/features/pos/contracts";
@@ -114,6 +118,33 @@ type PosPaymentDraft = {
   provider: string | null;
   reference: string | null;
   note: string | null;
+  verificationSource: PosManualPaymentVerificationSource | null;
+  providerPaidAtIso: string | null;
+  evidenceKey: string | null;
+  evidenceFileName: string | null;
+  verificationDetails: {
+    terminalId?: string | null;
+    merchantId?: string | null;
+    batchNumber?: string | null;
+    traceNumber?: string | null;
+    cardNetwork?: string | null;
+    cardLast4?: string | null;
+    senderName?: string | null;
+    destinationAccount?: string | null;
+  };
+};
+
+type PaymentVerificationFormState = {
+  verificationSource: PosManualPaymentVerificationSource;
+  providerPaidAtLocal: string;
+  merchantId: string;
+  terminalId: string;
+  batchNumber: string;
+  traceNumber: string;
+  cardNetwork: string;
+  cardLast4: string;
+  senderName: string;
+  destinationAccount: string;
 };
 
 type PaymentMethodConfig = {
@@ -141,15 +172,26 @@ type PaymentContentProps = {
   providerInput: string;
   referenceInput: string;
   noteInput: string;
+  verificationForm: PaymentVerificationFormState;
+  evidenceFileName: string | null;
+  manualPaymentApproval: PosManualPaymentApproval | null;
   paymentFeedback: string | null;
   canFinalizePayment: boolean;
   isCheckoutPending: boolean;
+  isAddingPayment: boolean;
+  isApprovalChecking: boolean;
   onBackToCart: () => void;
   onMethodChange: (method: PosManualPaymentMethod) => void;
   onAmountInputChange: (value: string) => void;
   onProviderInputChange: (value: string) => void;
   onReferenceInputChange: (value: string) => void;
   onNoteInputChange: (value: string) => void;
+  onVerificationFormChange: (
+    field: keyof PaymentVerificationFormState,
+    value: string,
+  ) => void;
+  onEvidenceFileChange: (file: File | null) => void;
+  onCheckManualPaymentApproval: () => void;
   onAddPayment: () => void;
   onRemovePayment: (paymentId: string) => void;
   onResetPayments: () => void;
@@ -182,6 +224,7 @@ type StoredCheckoutAttemptState = {
   payload: PosCheckoutPayload;
   payments: PosPaymentDraft[];
   discountApproval: ActiveDiscountApproval | null;
+  manualPaymentApproval: PosManualPaymentApproval | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -412,7 +455,13 @@ function isStoredCheckoutPayment(value: unknown): value is PosPaymentDraft {
     typeof value.amount === "number" &&
     (typeof value.receivedAmount === "number" ||
       value.receivedAmount === null) &&
-    typeof value.changeAmount === "number"
+    typeof value.changeAmount === "number" &&
+    (typeof value.verificationSource === "string" ||
+      value.verificationSource === null) &&
+    (typeof value.providerPaidAtIso === "string" ||
+      value.providerPaidAtIso === null) &&
+    (typeof value.evidenceKey === "string" || value.evidenceKey === null) &&
+    isRecord(value.verificationDetails)
   );
 }
 
@@ -479,6 +528,9 @@ function getStoredCheckoutAttemptState(): StoredCheckoutAttemptState | null {
       payments: storedPayments,
       discountApproval: isRecord(parsedValue.discountApproval)
         ? (parsedValue.discountApproval as ActiveDiscountApproval)
+        : null,
+      manualPaymentApproval: isRecord(parsedValue.manualPaymentApproval)
+        ? (parsedValue.manualPaymentApproval as PosManualPaymentApproval)
         : null,
       createdAt:
         typeof parsedValue.createdAt === "string"
@@ -575,6 +627,38 @@ function getDiscountApprovalErrorMessage(
   }
 
   return `${result.message} ${fieldErrorMessages.join(" ")}`;
+}
+
+function formatLocalDateTimeInput(date = new Date()) {
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function getDefaultVerificationSource(
+  method: PosManualPaymentMethod,
+): PosManualPaymentVerificationSource {
+  if (method === "qris_manual") return "merchant_app";
+  if (method === "debit_card" || method === "credit_card") {
+    return "edc_terminal";
+  }
+  return "bank_app";
+}
+
+function createPaymentVerificationForm(
+  method: PosManualPaymentMethod,
+): PaymentVerificationFormState {
+  return {
+    verificationSource: getDefaultVerificationSource(method),
+    providerPaidAtLocal: formatLocalDateTimeInput(),
+    merchantId: "",
+    terminalId: "",
+    batchNumber: "",
+    traceNumber: "",
+    cardNetwork: "",
+    cardLast4: "",
+    senderName: "",
+    destinationAccount: "",
+  };
 }
 
 const paymentMethodConfigs: PaymentMethodConfig[] = [
@@ -747,8 +831,41 @@ function getPaymentDraftValidationMessage({
       return "Kembalian hanya boleh tercatat untuk pembayaran cash.";
     }
 
+    if (!payment.provider?.trim()) {
+      return `Provider/bank wajib diisi untuk ${config.label}.`;
+    }
+
     if (config.requiresReference && !payment.reference?.trim()) {
       return `${config.referenceLabel ?? "Reference"} wajib diisi untuk ${config.label}.`;
+    }
+
+    if (!payment.verificationSource || !payment.providerPaidAtIso) {
+      return `Sumber dan waktu verifikasi wajib diisi untuk ${config.label}.`;
+    }
+
+    if (
+      payment.method === "qris_manual" &&
+      !payment.verificationDetails.merchantId
+    ) {
+      return "Merchant ID/akun QRIS wajib diisi.";
+    }
+
+    if (
+      (payment.method === "debit_card" || payment.method === "credit_card") &&
+      (!payment.verificationDetails.terminalId ||
+        !payment.verificationDetails.traceNumber ||
+        !payment.verificationDetails.batchNumber ||
+        !payment.verificationDetails.cardNetwork)
+    ) {
+      return "Terminal ID, trace/STAN, batch, dan jaringan kartu EDC wajib diisi.";
+    }
+
+    if (
+      payment.method === "bank_transfer" &&
+      (!payment.verificationDetails.destinationAccount ||
+        !payment.verificationDetails.senderName)
+    ) {
+      return "Rekening tujuan toko dan nama pengirim wajib diisi.";
     }
   }
 
@@ -1988,15 +2105,23 @@ function PaymentContent({
   providerInput,
   referenceInput,
   noteInput,
+  verificationForm,
+  evidenceFileName,
+  manualPaymentApproval,
   paymentFeedback,
   canFinalizePayment,
   isCheckoutPending,
+  isAddingPayment,
+  isApprovalChecking,
   onBackToCart,
   onMethodChange,
   onAmountInputChange,
   onProviderInputChange,
   onReferenceInputChange,
   onNoteInputChange,
+  onVerificationFormChange,
+  onEvidenceFileChange,
+  onCheckManualPaymentApproval,
   onAddPayment,
   onRemovePayment,
   onResetPayments,
@@ -2024,7 +2149,7 @@ function PaymentContent({
         <button
           type="button"
           onClick={onBackToCart}
-          disabled={isCheckoutPending}
+          disabled={isCheckoutPending || isAddingPayment}
           className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-black px-3 py-1.5 !text-xs font-semibold text-white transition hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           ← Keranjang
@@ -2102,6 +2227,39 @@ function PaymentContent({
         </div>
       ) : null}
 
+      {manualPaymentApproval ? (
+        <div className={cn(
+          "mt-4 rounded-2xl border p-3 text-xs leading-5",
+          manualPaymentApproval.status === "approved"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : manualPaymentApproval.status === "rejected"
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-amber-200 bg-amber-50 text-amber-800",
+        )}>
+          <p className="font-semibold">
+            Co-verification: {manualPaymentApproval.status === "approved"
+              ? "Disetujui"
+              : manualPaymentApproval.status === "rejected"
+                ? "Ditolak"
+                : "Menunggu"}
+          </p>
+          <p className="mt-1">{manualPaymentApproval.reason}</p>
+          {manualPaymentApproval.responseNotes ? (
+            <p className="mt-1">Catatan: {manualPaymentApproval.responseNotes}</p>
+          ) : null}
+          {manualPaymentApproval.status === "pending" ? (
+            <button
+              type="button"
+              onClick={onCheckManualPaymentApproval}
+              disabled={isApprovalChecking || isCheckoutPending}
+              className="mt-2 inline-flex h-9 items-center justify-center rounded-xl bg-neutral-950 px-3 font-semibold text-white disabled:opacity-50"
+            >
+              {isApprovalChecking ? "Mengecek..." : "Cek status verifikasi"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {remainingAmount > 0 ? (
         <>
           <div className="border-b border-[var(--border)] py-4">
@@ -2120,7 +2278,7 @@ function PaymentContent({
                   key={config.method}
                   type="button"
                   onClick={() => onMethodChange(config.method)}
-                  disabled={isCheckoutPending}
+                  disabled={isCheckoutPending || isAddingPayment}
                   className={cn(
                     "h-7 rounded-lg border px-3 !text-xs !font-semibold transition",
                     selectedMethod === config.method
@@ -2155,7 +2313,7 @@ function PaymentContent({
                 </span>
                 <input
                   value={amountInput}
-                  disabled={isCheckoutPending}
+                  disabled={isCheckoutPending || isAddingPayment}
                   onChange={(event) =>
                     onAmountInputChange(formatRupiahInput(event.target.value))
                   }
@@ -2206,13 +2364,13 @@ function PaymentContent({
                 <label className="block text-sm">
                   <span className="mb-2 block font-medium text-neutral-800">
                     {selectedConfig.providerLabel}
-                    <span className="ml-1 text-xs font-normal text-[var(--muted)]">
-                      (opsional)
+                    <span className="ml-1 text-xs font-semibold text-[var(--accent)]">
+                      Wajib
                     </span>
                   </span>
                   <input
                     value={providerInput}
-                  disabled={isCheckoutPending}
+                    disabled={isCheckoutPending || isAddingPayment}
                     onChange={(event) =>
                       onProviderInputChange(event.target.value)
                     }
@@ -2237,7 +2395,7 @@ function PaymentContent({
                   </span>
                   <input
                     value={referenceInput}
-                  disabled={isCheckoutPending}
+                    disabled={isCheckoutPending || isAddingPayment}
                     onChange={(event) =>
                       onReferenceInputChange(event.target.value)
                     }
@@ -2251,13 +2409,153 @@ function PaymentContent({
                 </label>
               ) : null}
 
+              {selectedMethod !== "cash" ? (
+                <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-3">
+                  <div>
+                    <p className="text-sm font-semibold text-neutral-950">
+                      Verifikasi pembayaran
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-amber-800">
+                      Isi berdasarkan aplikasi merchant, terminal EDC, atau mutasi bank toko.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block text-sm">
+                      <span className="mb-2 block font-medium text-neutral-800">
+                        Sumber verifikasi
+                      </span>
+                      <select
+                        value={verificationForm.verificationSource}
+                        disabled={isCheckoutPending || isAddingPayment}
+                        onChange={(event) =>
+                          onVerificationFormChange(
+                            "verificationSource",
+                            event.target.value,
+                          )
+                        }
+                        className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                      >
+                        {selectedMethod === "qris_manual" ? (
+                          <>
+                            <option value="merchant_app">Aplikasi merchant</option>
+                            <option value="bank_app">Aplikasi bank</option>
+                          </>
+                        ) : selectedMethod === "bank_transfer" ? (
+                          <>
+                            <option value="bank_app">Aplikasi bank</option>
+                            <option value="bank_statement">Mutasi bank</option>
+                          </>
+                        ) : (
+                          <option value="edc_terminal">Terminal EDC</option>
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="block text-sm">
+                      <span className="mb-2 block font-medium text-neutral-800">
+                        Waktu berhasil di provider
+                      </span>
+                      <input
+                        type="datetime-local"
+                        value={verificationForm.providerPaidAtLocal}
+                        disabled={isCheckoutPending || isAddingPayment}
+                        onChange={(event) =>
+                          onVerificationFormChange(
+                            "providerPaidAtLocal",
+                            event.target.value,
+                          )
+                        }
+                        className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                      />
+                    </label>
+                  </div>
+
+                  {selectedMethod === "qris_manual" ? (
+                    <label className="block text-sm">
+                      <span className="mb-2 block font-medium text-neutral-800">
+                        Merchant ID / akun QRIS
+                      </span>
+                      <input
+                        value={verificationForm.merchantId}
+                        disabled={isCheckoutPending || isAddingPayment}
+                        onChange={(event) =>
+                          onVerificationFormChange("merchantId", event.target.value)
+                        }
+                        maxLength={80}
+                        placeholder="Contoh: MID outlet / nama akun merchant"
+                        className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm text-neutral-950 outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                      />
+                    </label>
+                  ) : null}
+
+                  {selectedMethod === "debit_card" ||
+                  selectedMethod === "credit_card" ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block text-sm">
+                        <span className="mb-2 block font-medium text-neutral-800">Terminal ID</span>
+                        <input value={verificationForm.terminalId} disabled={isCheckoutPending || isAddingPayment} onChange={(event) => onVerificationFormChange("terminalId", event.target.value)} maxLength={80} className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]" />
+                      </label>
+                      <label className="block text-sm">
+                        <span className="mb-2 block font-medium text-neutral-800">Trace / STAN</span>
+                        <input value={verificationForm.traceNumber} disabled={isCheckoutPending || isAddingPayment} onChange={(event) => onVerificationFormChange("traceNumber", event.target.value)} maxLength={40} className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]" />
+                      </label>
+                      <label className="block text-sm">
+                        <span className="mb-2 block font-medium text-neutral-800">Batch number</span>
+                        <input value={verificationForm.batchNumber} disabled={isCheckoutPending || isAddingPayment} onChange={(event) => onVerificationFormChange("batchNumber", event.target.value)} maxLength={40} className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]" />
+                      </label>
+                      <label className="block text-sm">
+                        <span className="mb-2 block font-medium text-neutral-800">Network & last 4</span>
+                        <div className="grid grid-cols-[1fr_90px] gap-2">
+                          <input value={verificationForm.cardNetwork} disabled={isCheckoutPending || isAddingPayment} onChange={(event) => onVerificationFormChange("cardNetwork", event.target.value)} maxLength={40} placeholder="Visa/GPN" className="h-11 rounded-2xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]" />
+                          <input value={verificationForm.cardLast4} disabled={isCheckoutPending || isAddingPayment} onChange={(event) => onVerificationFormChange("cardLast4", event.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" maxLength={4} placeholder="1234" className="h-11 rounded-2xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]" />
+                        </div>
+                      </label>
+                    </div>
+                  ) : null}
+
+                  {selectedMethod === "bank_transfer" ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block text-sm">
+                        <span className="mb-2 block font-medium text-neutral-800">Rekening tujuan toko</span>
+                        <input value={verificationForm.destinationAccount} disabled={isCheckoutPending || isAddingPayment} onChange={(event) => onVerificationFormChange("destinationAccount", event.target.value)} maxLength={120} placeholder="BCA •••• 1234" className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]" />
+                      </label>
+                      <label className="block text-sm">
+                        <span className="mb-2 block font-medium text-neutral-800">Nama pengirim</span>
+                        <input value={verificationForm.senderName} disabled={isCheckoutPending || isAddingPayment} onChange={(event) => onVerificationFormChange("senderName", event.target.value)} maxLength={120} className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]" />
+                      </label>
+                    </div>
+                  ) : null}
+
+                  <label className="block text-sm">
+                    <span className="mb-2 block font-medium text-neutral-800">
+                      Foto bukti pembayaran
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      disabled={isCheckoutPending || isAddingPayment}
+                      onChange={(event) =>
+                        onEvidenceFileChange(event.target.files?.[0] ?? null)
+                      }
+                      className="block w-full rounded-2xl border border-dashed border-amber-300 bg-white px-3 py-2 text-xs text-neutral-700 file:mr-3 file:rounded-xl file:border-0 file:bg-neutral-950 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+                    />
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {evidenceFileName
+                        ? `Dipilih: ${evidenceFileName}`
+                        : "Wajib untuk nominal yang melewati threshold kebijakan."}
+                    </p>
+                  </label>
+                </div>
+              ) : null}
+
               <label className="block text-sm">
                 <span className="mb-2 block font-medium text-neutral-800">
                   Catatan / referensi tambahan
                 </span>
                 <input
                   value={noteInput}
-                  disabled={isCheckoutPending}
+                  disabled={isCheckoutPending || isAddingPayment}
                   onChange={(event) => onNoteInputChange(event.target.value)}
                   maxLength={160}
                   placeholder="Opsional"
@@ -2268,7 +2566,7 @@ function PaymentContent({
               <button
                 type="button"
                 onClick={onAddPayment}
-                disabled={isCheckoutPending}
+                disabled={isCheckoutPending || isAddingPayment}
                 className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <WalletCards className="size-4" />
@@ -2307,7 +2605,7 @@ function PaymentContent({
             <button
               type="button"
               onClick={onResetPayments}
-              disabled={isCheckoutPending}
+              disabled={isCheckoutPending || isAddingPayment}
               className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Reset
@@ -2351,7 +2649,7 @@ function PaymentContent({
                       type="button"
                       aria-label={`Hapus pembayaran ${payment.methodLabel}`}
                       onClick={() => onRemovePayment(payment.id)}
-                      disabled={isCheckoutPending}
+                      disabled={isCheckoutPending || isAddingPayment}
                       className="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <X className="size-4" />
@@ -2372,11 +2670,11 @@ function PaymentContent({
       <div className="mt-auto border-t border-[var(--border)] pt-4">
         <button
           type="button"
-          disabled={!canFinalizePayment || isCheckoutPending}
+          disabled={!canFinalizePayment || isCheckoutPending || isAddingPayment}
           onClick={onFinalizePayment}
           className={cn(
             "flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 font-semibold transition",
-            canFinalizePayment && !isCheckoutPending
+            canFinalizePayment && !isCheckoutPending && !isAddingPayment
               ? "bg-[var(--accent)] text-white hover:bg-[var(--accent)]/90"
               : "cursor-not-allowed bg-neutral-200 text-neutral-500",
           )}
@@ -2769,6 +3067,18 @@ export function PosWorkspace({
   const [paymentProviderInput, setPaymentProviderInput] = useState("");
   const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
   const [paymentNoteInput, setPaymentNoteInput] = useState("");
+  const [paymentVerificationForm, setPaymentVerificationForm] =
+    useState<PaymentVerificationFormState>(() =>
+      createPaymentVerificationForm("cash"),
+    );
+  const [paymentEvidenceFile, setPaymentEvidenceFile] = useState<File | null>(
+    null,
+  );
+  const [manualPaymentApproval, setManualPaymentApproval] =
+    useState<PosManualPaymentApproval | null>(null);
+  const [isAddingPayment, startAddingPaymentTransition] = useTransition();
+  const [isManualApprovalChecking, startManualApprovalTransition] =
+    useTransition();
   const [paymentFeedback, setPaymentFeedback] = useState<string | null>(null);
   const [discountApproval, setDiscountApproval] =
     useState<ActiveDiscountApproval | null>(null);
@@ -2873,10 +3183,18 @@ export function PosWorkspace({
       setCheckoutAttempt(storedAttempt);
       setPayments(storedAttempt.payments);
       setDiscountApproval(storedAttempt.discountApproval);
+      setManualPaymentApproval(storedAttempt.manualPaymentApproval);
       setSelectedMethod(storedAttempt.payments[0]?.method ?? "cash");
       setPanelMode("payment");
       setIsMobileCartOpen(true);
-      void checkoutRecoveryHandlerRef.current(storedAttempt);
+
+      if (storedAttempt.manualPaymentApproval) {
+        setPaymentFeedback(
+          "Checkout menunggu verifikasi pembayaran manual. Cek status approval sebelum memproses ulang.",
+        );
+      } else {
+        void checkoutRecoveryHandlerRef.current(storedAttempt);
+      }
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
@@ -3025,6 +3343,8 @@ export function PosWorkspace({
     setPaymentProviderInput("");
     setPaymentReferenceInput("");
     setPaymentNoteInput("");
+    setPaymentVerificationForm(createPaymentVerificationForm(nextMethod));
+    setPaymentEvidenceFile(null);
   }
 
   function invalidateCheckoutAttempt() {
@@ -3037,6 +3357,7 @@ export function PosWorkspace({
   function resetPayments() {
     invalidateCheckoutAttempt();
     setPayments([]);
+    setManualPaymentApproval(null);
     setPaymentFeedback(null);
     setCheckoutResult(null);
     resetPaymentForm();
@@ -3059,6 +3380,7 @@ export function PosWorkspace({
     setCustomerQuery("");
     setIsCustomerSelectorOpen(false);
     setPayments([]);
+    setManualPaymentApproval(null);
     setDiscountApproval(null);
     setDiscountFeedback(null);
     resetPaymentForm();
@@ -3537,6 +3859,11 @@ export function PosWorkspace({
       return;
     }
 
+    if (selectedMethod !== "cash" && !provider) {
+      setPaymentFeedback("Provider/bank wajib diisi untuk pembayaran non-tunai.");
+      return;
+    }
+
     if (config.requiresReference && !reference) {
       setPaymentFeedback(
         `${config.referenceLabel ?? "Reference"} wajib diisi.`,
@@ -3559,52 +3886,199 @@ export function PosWorkspace({
       return;
     }
 
-    const recognizedAmount =
-      selectedMethod === "cash"
-        ? Math.min(inputAmount, remainingAmount)
-        : inputAmount;
-    const changeAmount =
-      selectedMethod === "cash"
-        ? Math.max(inputAmount - remainingAmount, 0)
-        : 0;
+    if (selectedMethod !== "cash") {
+      if (!paymentVerificationForm.providerPaidAtLocal) {
+        setPaymentFeedback("Waktu pembayaran dari provider wajib diisi.");
+        return;
+      }
 
-    const nextRemainingAmount = Math.max(remainingAmount - recognizedAmount, 0);
+      if (
+        selectedMethod === "qris_manual" &&
+        !paymentVerificationForm.merchantId.trim()
+      ) {
+        setPaymentFeedback("Merchant ID/akun QRIS wajib diisi.");
+        return;
+      }
 
-    invalidateCheckoutAttempt();
-    setPayments((currentPayments) => [
-      ...currentPayments,
-      {
-        id: createPaymentDraftId(),
-        method: selectedMethod,
-        methodLabel: config.label,
-        amount: recognizedAmount,
-        receivedAmount: selectedMethod === "cash" ? inputAmount : null,
-        changeAmount,
-        provider: provider || null,
-        reference: reference || null,
-        note: note || null,
-      },
-    ]);
+      if (
+        (selectedMethod === "debit_card" ||
+          selectedMethod === "credit_card") &&
+        (!paymentVerificationForm.terminalId.trim() ||
+          !paymentVerificationForm.traceNumber.trim() ||
+          !paymentVerificationForm.batchNumber.trim() ||
+          !paymentVerificationForm.cardNetwork.trim())
+      ) {
+        setPaymentFeedback(
+          "Terminal ID, trace/STAN, batch, dan jaringan kartu EDC wajib diisi.",
+        );
+        return;
+      }
 
-    resetPaymentForm(selectedMethod);
+      if (
+        paymentVerificationForm.cardLast4 &&
+        !/^\d{4}$/.test(paymentVerificationForm.cardLast4)
+      ) {
+        setPaymentFeedback("Last 4 kartu harus terdiri dari empat angka.");
+        return;
+      }
 
-    if (nextRemainingAmount > 0) {
-      setPaymentAmountInput(formatRupiahInput(nextRemainingAmount));
+      if (
+        selectedMethod === "bank_transfer" &&
+        (!paymentVerificationForm.destinationAccount.trim() ||
+          !paymentVerificationForm.senderName.trim())
+      ) {
+        setPaymentFeedback(
+          "Rekening tujuan toko dan nama pengirim wajib diisi.",
+        );
+        return;
+      }
     }
 
-    setPaymentFeedback(
-      changeAmount > 0
-        ? `${config.label} ditambahkan. Kembalian ${formatCurrency(changeAmount)}.`
-        : `${config.label} ${formatCurrency(recognizedAmount)} ditambahkan.`,
-    );
+    startAddingPaymentTransition(async () => {
+      let evidenceKey: string | null = null;
+
+      if (selectedMethod !== "cash" && paymentEvidenceFile) {
+        setPaymentFeedback("Mengunggah bukti pembayaran...");
+        const formData = new FormData();
+        formData.set("file", paymentEvidenceFile);
+        const uploadResult = await uploadPosPaymentEvidenceAction(formData);
+
+        if (uploadResult.status === "error") {
+          setPaymentFeedback(uploadResult.message);
+          return;
+        }
+
+        evidenceKey = uploadResult.evidenceKey;
+      }
+
+      const recognizedAmount =
+        selectedMethod === "cash"
+          ? Math.min(inputAmount, remainingAmount)
+          : inputAmount;
+      const changeAmount =
+        selectedMethod === "cash"
+          ? Math.max(inputAmount - remainingAmount, 0)
+          : 0;
+      const nextRemainingAmount = Math.max(
+        remainingAmount - recognizedAmount,
+        0,
+      );
+      const providerPaidAtIso =
+        selectedMethod === "cash"
+          ? null
+          : new Date(
+              paymentVerificationForm.providerPaidAtLocal,
+            ).toISOString();
+
+      invalidateCheckoutAttempt();
+      setManualPaymentApproval(null);
+      setPayments((currentPayments) => [
+        ...currentPayments,
+        {
+          id: createPaymentDraftId(),
+          method: selectedMethod,
+          methodLabel: config.label,
+          amount: recognizedAmount,
+          receivedAmount: selectedMethod === "cash" ? inputAmount : null,
+          changeAmount,
+          provider: provider || null,
+          reference: reference || null,
+          note: note || null,
+          verificationSource:
+            selectedMethod === "cash"
+              ? null
+              : paymentVerificationForm.verificationSource,
+          providerPaidAtIso,
+          evidenceKey,
+          evidenceFileName: paymentEvidenceFile?.name ?? null,
+          verificationDetails:
+            selectedMethod === "cash"
+              ? {}
+              : {
+                  merchantId:
+                    paymentVerificationForm.merchantId.trim() || null,
+                  terminalId:
+                    paymentVerificationForm.terminalId.trim() || null,
+                  batchNumber:
+                    paymentVerificationForm.batchNumber.trim() || null,
+                  traceNumber:
+                    paymentVerificationForm.traceNumber.trim() || null,
+                  cardNetwork:
+                    paymentVerificationForm.cardNetwork.trim() || null,
+                  cardLast4:
+                    paymentVerificationForm.cardLast4.trim() || null,
+                  senderName:
+                    paymentVerificationForm.senderName.trim() || null,
+                  destinationAccount:
+                    paymentVerificationForm.destinationAccount.trim() || null,
+                },
+        },
+      ]);
+
+      resetPaymentForm(selectedMethod);
+
+      if (nextRemainingAmount > 0) {
+        setPaymentAmountInput(formatRupiahInput(nextRemainingAmount));
+      }
+
+      setPaymentFeedback(
+        changeAmount > 0
+          ? `${config.label} ditambahkan. Kembalian ${formatCurrency(changeAmount)}.`
+          : `${config.label} ${formatCurrency(recognizedAmount)} ditambahkan.`,
+      );
+    });
   }
 
   function removePayment(paymentId: string) {
     invalidateCheckoutAttempt();
+    setManualPaymentApproval(null);
     setPayments((currentPayments) =>
       currentPayments.filter((payment) => payment.id !== paymentId),
     );
     setPaymentFeedback("Payment dihapus. Periksa kembali sisa bayar.");
+  }
+
+  function checkManualPaymentApproval() {
+    if (!manualPaymentApproval) {
+      setPaymentFeedback("Request verifikasi pembayaran belum tersedia.");
+      return;
+    }
+
+    startManualApprovalTransition(async () => {
+      const result = await getPosManualPaymentApprovalStatusAction(
+        manualPaymentApproval.id,
+      );
+
+      if (result.status !== "found") {
+        setPaymentFeedback(result.message);
+        return;
+      }
+
+      const updatedPayload: PosCheckoutPayload | null = checkoutAttempt
+        ? {
+            ...checkoutAttempt.payload,
+            manualPaymentApprovalId: result.approval.id,
+          }
+        : null;
+      const updatedAttempt: StoredCheckoutAttemptState | null =
+        checkoutAttempt && updatedPayload
+          ? {
+              ...checkoutAttempt,
+              payload: updatedPayload,
+              manualPaymentApproval: result.approval,
+              updatedAt: new Date().toISOString(),
+            }
+          : null;
+
+      setManualPaymentApproval(result.approval);
+
+      if (updatedAttempt) {
+        setCheckoutAttempt(updatedAttempt);
+        saveStoredCheckoutAttemptState(updatedAttempt);
+      }
+
+      setPaymentFeedback(result.message);
+    });
   }
 
   function finalizePayment() {
@@ -3634,8 +4108,13 @@ export function PosWorkspace({
         provider: payment.provider,
         reference: payment.reference,
         note: payment.note,
+        verificationSource: payment.verificationSource,
+        providerPaidAtIso: payment.providerPaidAtIso,
+        evidenceKey: payment.evidenceKey,
+        verificationDetails: payment.verificationDetails,
       })),
       idempotencyKey,
+      manualPaymentApprovalId: manualPaymentApproval?.id ?? null,
       customerId: selectedCustomer?.id ?? null,
       note: null,
       discountApprovalId:
@@ -3653,6 +4132,7 @@ export function PosWorkspace({
       payload: checkoutPayload,
       payments,
       discountApproval,
+      manualPaymentApproval,
       createdAt: checkoutAttempt?.createdAt ?? nowIso,
       updatedAt: nowIso,
     };
@@ -3677,6 +4157,25 @@ export function PosWorkspace({
           }
 
           setPaymentFeedback(getCheckoutErrorMessage(result));
+          return;
+        }
+
+        if (result.status === "approval_required") {
+          const approvalPayload: PosCheckoutPayload = {
+            ...checkoutPayload,
+            manualPaymentApprovalId: result.approval.id,
+          };
+          const approvalAttempt: StoredCheckoutAttemptState = {
+            ...nextAttempt,
+            payload: approvalPayload,
+            manualPaymentApproval: result.approval,
+            updatedAt: new Date().toISOString(),
+          };
+
+          setManualPaymentApproval(result.approval);
+          setCheckoutAttempt(approvalAttempt);
+          saveStoredCheckoutAttemptState(approvalAttempt);
+          setPaymentFeedback(result.message);
           return;
         }
 
@@ -3749,15 +4248,31 @@ export function PosWorkspace({
       providerInput={paymentProviderInput}
       referenceInput={paymentReferenceInput}
       noteInput={paymentNoteInput}
+      verificationForm={paymentVerificationForm}
+      evidenceFileName={paymentEvidenceFile?.name ?? null}
+      manualPaymentApproval={manualPaymentApproval}
       paymentFeedback={paymentFeedback}
       canFinalizePayment={canFinalizePayment}
       isCheckoutPending={isCheckoutPending || isCheckoutRecovering}
+      isAddingPayment={isAddingPayment}
+      isApprovalChecking={isManualApprovalChecking}
       onBackToCart={() => setPanelMode("cart")}
       onMethodChange={changePaymentMethod}
       onAmountInputChange={setPaymentAmountInput}
       onProviderInputChange={setPaymentProviderInput}
       onReferenceInputChange={setPaymentReferenceInput}
       onNoteInputChange={setPaymentNoteInput}
+      onVerificationFormChange={(field, value) => {
+        setPaymentVerificationForm((current) => ({
+          ...current,
+          [field]:
+            field === "verificationSource"
+              ? (value as PosManualPaymentVerificationSource)
+              : value,
+        }));
+      }}
+      onEvidenceFileChange={setPaymentEvidenceFile}
+      onCheckManualPaymentApproval={checkManualPaymentApproval}
       onAddPayment={addPayment}
       onRemovePayment={removePayment}
       onResetPayments={resetPayments}

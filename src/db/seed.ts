@@ -106,6 +106,11 @@ const permissionSeeds = [
     module: "payments",
   },
   {
+    code: "payments.verify.manual",
+    name: "Memverifikasi pembayaran manual berisiko tinggi",
+    module: "payments",
+  },
+  {
     code: "sales.void.request",
     name: "Mengajukan void transaksi",
     module: "sales",
@@ -280,6 +285,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "sales.view",
     "sales.create",
     "payments.manage",
+    "payments.verify.manual",
     "sales.void.request",
     "sales.void.approve",
     "sales.void.execute",
@@ -322,6 +328,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "pricing.view_cost",
     "sales.view",
     "payments.manage",
+    "payments.verify.manual",
     "payments.refund.approve",
     "payments.refund.execute",
     "reports.view",

@@ -92,6 +92,13 @@
       "when": 1783882626944,
       "tag": "0012_p0d_checkout_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1783887475303,
+      "tag": "0013_p1a_manual_payment_verification",
+      "breakpoints": true
     }
   ]
 }

@@ -27,6 +27,10 @@ function canonicalizeCheckoutPayload(payload: PosCheckoutPayload) {
       provider: normalizeFingerprintText(payment.provider),
       reference: normalizeFingerprintText(payment.reference),
       note: normalizeFingerprintText(payment.note),
+      verificationSource: normalizeFingerprintText(payment.verificationSource),
+      providerPaidAtIso: normalizeFingerprintText(payment.providerPaidAtIso),
+      evidenceKey: normalizeFingerprintText(payment.evidenceKey),
+      verificationDetails: payment.verificationDetails ?? null,
     }))
     .sort((left, right) =>
       JSON.stringify(left).localeCompare(JSON.stringify(right)),

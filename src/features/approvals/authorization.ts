@@ -11,6 +11,7 @@ export const SALE_VOID_EXECUTE_PERMISSION = "sales.void.execute";
 export const PAYMENT_REFUND_REQUEST_PERMISSION = "payments.refund.request";
 export const PAYMENT_REFUND_APPROVE_PERMISSION = "payments.refund.approve";
 export const PAYMENT_REFUND_EXECUTE_PERMISSION = "payments.refund.execute";
+export const MANUAL_PAYMENT_VERIFY_PERMISSION = "payments.verify.manual";
 
 export type SaleSensitiveAction = "void" | "refund";
 export type SaleSensitiveOperation = "request" | "approve" | "execute";
@@ -35,6 +36,7 @@ const approvalResolutionPermissionMap: Record<
   discount: ["payments.manage"],
   void_receipt: [SALE_VOID_APPROVE_PERMISSION],
   refund_transaction: [PAYMENT_REFUND_APPROVE_PERMISSION],
+  manual_payment_verification: [MANUAL_PAYMENT_VERIFY_PERMISSION],
   stock_adjustment: ["inventory.adjust"],
   other: ["settings.manage", "shifts.manage", "audit.view"],
 };
@@ -54,6 +56,10 @@ const approvalVisibilityPermissionMap: Record<
     PAYMENT_REFUND_APPROVE_PERMISSION,
     PAYMENT_REFUND_EXECUTE_PERMISSION,
   ],
+  manual_payment_verification: [
+    "payments.manage",
+    MANUAL_PAYMENT_VERIFY_PERMISSION,
+  ],
   stock_adjustment: ["inventory.adjust"],
   other: ["settings.manage", "shifts.manage", "audit.view"],
 };
@@ -62,6 +68,7 @@ const approvalTypes: readonly ApprovalType[] = [
   "discount",
   "void_receipt",
   "refund_transaction",
+  "manual_payment_verification",
   "stock_adjustment",
   "other",
 ];

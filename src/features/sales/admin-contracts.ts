@@ -184,6 +184,23 @@ export type AdminSaleDetailPayment = AdminSaleListPayment & {
   receivedAmount: number | null;
   changeAmount: number | null;
   note: string | null;
+  verificationStatus:
+    | "self_verified"
+    | "co_verification_required"
+    | "co_verified"
+    | "rejected";
+  verificationSource: string | null;
+  providerPaidAt: Date | null;
+  coVerifiedAt: Date | null;
+  coVerifiedByName: string | null;
+  evidenceKey: string | null;
+  settlementStatus:
+    | "not_applicable"
+    | "unreconciled"
+    | "matched"
+    | "mismatch"
+    | "settled";
+  verificationDetails: Record<string, string | null>;
 };
 
 export type AdminSaleDetailItem = AdminSaleListItemPreview & {

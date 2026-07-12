@@ -469,7 +469,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-[var(--muted)]">
+              <p className="text-sm font-medium text-[var(--muted)]">
                 Omzet transaksi
               </p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
@@ -488,7 +488,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-[var(--muted)]">
+              <p className="text-sm font-medium text-[var(--muted)]">
                 Transaksi
               </p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
@@ -507,7 +507,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-[var(--muted)]">Dibayar</p>
+              <p className="text-sm font-medium text-[var(--muted)]">Dibayar</p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
                 {formatMoney(data.summary.paidAmount)}
               </p>
@@ -525,7 +525,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-[var(--muted)]">
+              <p className="text-sm font-medium text-[var(--muted)]">
                 Perlu perhatian
               </p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">

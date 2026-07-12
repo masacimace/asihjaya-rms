@@ -48,6 +48,7 @@ import type { AuthContext } from "@/lib/auth/session";
 const approvalRequestedByUsers = alias(users, "sales_detail_approval_requested_by_users");
 const approvalApprovedByUsers = alias(users, "sales_detail_approval_approved_by_users");
 const approvalExecutedByUsers = alias(users, "sales_detail_approval_executed_by_users");
+const paymentCoVerifiedByUsers = alias(users, "sales_detail_payment_co_verified_by_users");
 
 const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
 
@@ -224,6 +225,25 @@ function getSensitiveApprovalExecutionStatus({
   }
 
   return "awaiting_r3c_2" as const;
+}
+
+function getPaymentMetadataStringRecord(
+  metadata: PaymentMetadata,
+  key: string,
+): Record<string, string | null> {
+  if (!metadata) return {};
+
+  const value = metadata[key];
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).flatMap(([entryKey, entryValue]) =>
+      entryValue === null || typeof entryValue === "string"
+        ? [[entryKey, entryValue]]
+        : [],
+    ),
+  );
 }
 
 function getPaymentMetadataString(metadata: PaymentMetadata, key: string) {
@@ -952,9 +972,20 @@ export async function getAdminSaleDetailData({
         providerReference: payments.providerReference,
         paidAt: payments.paidAt,
         verifiedAt: payments.verifiedAt,
+        verificationStatus: payments.verificationStatus,
+        verificationSource: payments.verificationSource,
+        providerPaidAt: payments.providerPaidAt,
+        coVerifiedAt: payments.coVerifiedAt,
+        coVerifiedByName: paymentCoVerifiedByUsers.fullName,
+        evidenceKey: payments.evidenceKey,
+        settlementStatus: payments.settlementStatus,
         metadata: payments.metadata,
       })
       .from(payments)
+      .leftJoin(
+        paymentCoVerifiedByUsers,
+        eq(payments.coVerifiedBy, paymentCoVerifiedByUsers.id),
+      )
       .where(eq(payments.saleId, sale.id))
       .orderBy(asc(payments.createdAt)),
 
@@ -1227,6 +1258,17 @@ export async function getAdminSaleDetailData({
       receivedAmount: getPaymentMetadataNumber(payment.metadata, "receivedAmount"),
       changeAmount: getPaymentMetadataNumber(payment.metadata, "changeAmount"),
       note: getPaymentMetadataString(payment.metadata, "note"),
+      verificationStatus: payment.verificationStatus,
+      verificationSource: payment.verificationSource,
+      providerPaidAt: payment.providerPaidAt,
+      coVerifiedAt: payment.coVerifiedAt,
+      coVerifiedByName: payment.coVerifiedByName,
+      evidenceKey: payment.evidenceKey,
+      settlementStatus: payment.settlementStatus,
+      verificationDetails: getPaymentMetadataStringRecord(
+        payment.metadata,
+        "verificationDetails",
+      ),
     })),
     hardwareJobs: hardwareJobRows.map((job) => ({
       id: job.id,

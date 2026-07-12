@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   Clock3,
+  ExternalLink,
   Filter,
   Inbox,
   Search,
@@ -30,6 +31,7 @@ import {
 } from "@/features/approvals/contracts";
 import { getAdminApprovalListData } from "@/features/approvals/queries";
 import { requirePermission } from "@/lib/auth/session";
+import { getPaymentEvidenceUrl } from "@/lib/storage/payment-evidence-storage";
 import { cn } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -51,6 +53,7 @@ const approvalTypeLabels: Record<AdminApprovalType, string> = {
   discount: "Diskon Khusus",
   void_receipt: "Void Nota",
   refund_transaction: "Refund Transaksi",
+  manual_payment_verification: "Verifikasi Payment Manual",
   stock_adjustment: "Penyesuaian Stok",
   other: "Lainnya",
 };
@@ -64,6 +67,14 @@ const rangeLabels = {
 
 function formatInteger(value: number) {
   return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
     maximumFractionDigits: 0,
   }).format(value);
 }
@@ -260,6 +271,161 @@ function ApprovalLines({ approval }: { approval: AdminApprovalRow }) {
   );
 }
 
+type ManualPaymentApprovalPayment = {
+  methodLabel: string;
+  amount: number;
+  provider: string;
+  reference: string;
+  verificationSource: string;
+  providerPaidAtIso: string | null;
+  evidenceKey: string | null;
+  verificationDetails: Record<string, unknown>;
+};
+
+function getText(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getManualPaymentApprovalPayments(
+  requestData: Record<string, unknown>,
+): ManualPaymentApprovalPayment[] {
+  if (!Array.isArray(requestData.payments)) return [];
+
+  return requestData.payments.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+
+    const row = value as Record<string, unknown>;
+    const amount = Number(row.amount);
+    const methodLabel = getText(row.methodLabel) ?? getText(row.method);
+    const provider = getText(row.provider);
+    const reference = getText(row.reference);
+    const verificationSource = getText(row.verificationSource);
+    const details =
+      row.verificationDetails &&
+      typeof row.verificationDetails === "object" &&
+      !Array.isArray(row.verificationDetails)
+        ? (row.verificationDetails as Record<string, unknown>)
+        : {};
+
+    if (
+      !methodLabel ||
+      !provider ||
+      !reference ||
+      !verificationSource ||
+      !Number.isFinite(amount)
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        methodLabel,
+        amount,
+        provider,
+        reference,
+        verificationSource,
+        providerPaidAtIso: getText(row.providerPaidAtIso),
+        evidenceKey: getText(row.evidenceKey),
+        verificationDetails: details,
+      },
+    ];
+  });
+}
+
+function formatVerificationSource(value: string) {
+  const labels: Record<string, string> = {
+    merchant_app: "Aplikasi merchant",
+    edc_terminal: "Terminal EDC",
+    bank_app: "Aplikasi bank",
+    bank_statement: "Mutasi bank",
+  };
+
+  return labels[value] ?? value;
+}
+
+function ManualPaymentApprovalDetails({
+  approval,
+}: {
+  approval: AdminApprovalRow;
+}) {
+  if (approval.type !== "manual_payment_verification") return null;
+
+  const payments = getManualPaymentApprovalPayments(approval.requestData);
+
+  if (payments.length === 0) return null;
+
+  return (
+    <div className="mt-4 grid gap-3">
+      {payments.map((payment, index) => {
+        const evidenceUrl = getPaymentEvidenceUrl(payment.evidenceKey);
+        const detailEntries = Object.entries(payment.verificationDetails).filter(
+          ([, value]) => typeof value === "string" && value.trim(),
+        );
+
+        return (
+          <div
+            key={`${approval.id}-manual-payment-${index}`}
+            className="rounded-2xl border border-[var(--border)] bg-white p-4"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-neutral-950">
+                  {payment.methodLabel}
+                </p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {payment.provider} · {formatVerificationSource(payment.verificationSource)}
+                </p>
+              </div>
+              <p className="text-base font-bold text-neutral-950">
+                {formatMoney(payment.amount)}
+              </p>
+            </div>
+
+            <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+              <div>
+                <dt className="text-[var(--muted)]">Reference</dt>
+                <dd className="mt-1 break-all font-mono font-semibold text-neutral-900">
+                  {payment.reference}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--muted)]">Waktu provider</dt>
+                <dd className="mt-1 font-semibold text-neutral-900">
+                  {formatDateTime(payment.providerPaidAtIso)}
+                </dd>
+              </div>
+              {detailEntries.map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-[var(--muted)]">{label}</dt>
+                  <dd className="mt-1 break-all font-semibold text-neutral-900">
+                    {String(value)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+
+            {evidenceUrl ? (
+              <a
+                href={evidenceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-bold text-neutral-700 transition hover:bg-neutral-50"
+              >
+                <ExternalLink className="size-3.5" />
+                Buka bukti pembayaran
+              </a>
+            ) : (
+              <p className="mt-3 text-xs font-medium text-amber-700">
+                Bukti gambar tidak dilampirkan untuk payment ini.
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ApprovalCard({ approval }: { approval: AdminApprovalRow }) {
   const statusMeta = getStatusMeta(approval.status);
   const StatusIcon = statusMeta.icon;
@@ -337,6 +503,8 @@ function ApprovalCard({ approval }: { approval: AdminApprovalRow }) {
           <div className="mt-5">
             <ApprovalLines approval={approval} />
           </div>
+
+          <ManualPaymentApprovalDetails approval={approval} />
 
           {approval.notes || approval.responseNotes ? (
             <div className="mt-4 grid gap-3 md:grid-cols-2">

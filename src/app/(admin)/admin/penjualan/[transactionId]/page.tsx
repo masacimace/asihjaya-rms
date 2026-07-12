@@ -30,6 +30,7 @@ import {
 import { reprintAdminReceiptCertificateAction } from "@/features/sales/admin-actions";
 import { getAdminSaleDetailData } from "@/features/sales/admin-queries";
 import { requirePermission } from "@/lib/auth/session";
+import { getPaymentEvidenceUrl } from "@/lib/storage/payment-evidence-storage";
 import { cn } from "@/lib/utils";
 
 import { SaleSensitiveActionsCard } from "@/components/sales/sale-sensitive-actions-card";
@@ -80,6 +81,39 @@ const paymentMethodLabels: Record<AdminPaymentMethod, string> = {
   qris_manual: "QRIS Manual",
   qris_gateway: "QRIS Gateway",
   other: "Lainnya",
+};
+
+const paymentVerificationStatusLabels = {
+  self_verified: "Diverifikasi kasir",
+  co_verification_required: "Perlu co-verification",
+  co_verified: "Co-verified",
+  rejected: "Ditolak",
+} as const;
+
+const paymentSettlementStatusLabels = {
+  not_applicable: "Tidak berlaku",
+  unreconciled: "Belum direkonsiliasi",
+  matched: "Cocok",
+  mismatch: "Selisih",
+  settled: "Settled",
+} as const;
+
+const verificationSourceLabels: Record<string, string> = {
+  merchant_app: "Aplikasi merchant",
+  edc_terminal: "Terminal EDC",
+  bank_app: "Aplikasi bank",
+  bank_statement: "Mutasi bank",
+};
+
+const verificationDetailLabels: Record<string, string> = {
+  merchantId: "Merchant ID",
+  terminalId: "Terminal ID",
+  batchNumber: "Batch",
+  traceNumber: "Trace/STAN",
+  cardNetwork: "Jaringan kartu",
+  cardLast4: "Last 4 kartu",
+  senderName: "Nama pengirim",
+  destinationAccount: "Rekening tujuan",
 };
 
 const printStatusLabels: Record<AdminSalePrintStatus, string> = {
@@ -418,6 +452,9 @@ export default async function SaleDetailPage({
     (capability) =>
       capability.canRequest || capability.canApprove || capability.canExecute,
   );
+  const canViewPaymentEvidence = auth.permissionCodes.some((permission) =>
+    ["payments.manage", "payments.verify.manual"].includes(permission),
+  );
 
   return (
     <div className="mx-auto w-full max-w-[1400px] min-w-0 space-y-5 overflow-x-hidden sm:space-y-6">
@@ -626,6 +663,71 @@ export default async function SaleDetailPage({
                           <span className="min-w-0 break-all text-right font-mono font-medium text-neutral-900">
                             {payment.providerReference}
                           </span>
+                        </div>
+                      ) : null}
+                      {payment.verificationSource ? (
+                        <div className="flex justify-between gap-4">
+                          <span>Sumber verifikasi</span>
+                          <span className="text-right font-medium text-neutral-900">
+                            {verificationSourceLabels[payment.verificationSource] ??
+                              payment.verificationSource}
+                          </span>
+                        </div>
+                      ) : null}
+                      {payment.providerPaidAt ? (
+                        <div className="flex justify-between gap-4">
+                          <span>Waktu provider</span>
+                          <span className="text-right font-medium text-neutral-900">
+                            {formatDateTime(payment.providerPaidAt)}
+                          </span>
+                        </div>
+                      ) : null}
+                      <div className="flex justify-between gap-4">
+                        <span>Status verifikasi</span>
+                        <span className="text-right font-medium text-neutral-900">
+                          {paymentVerificationStatusLabels[payment.verificationStatus]}
+                        </span>
+                      </div>
+                      {payment.coVerifiedByName ? (
+                        <div className="flex justify-between gap-4">
+                          <span>Co-verifier</span>
+                          <span className="text-right font-medium text-neutral-900">
+                            {payment.coVerifiedByName}
+                            {payment.coVerifiedAt
+                              ? ` · ${formatDateTime(payment.coVerifiedAt)}`
+                              : ""}
+                          </span>
+                        </div>
+                      ) : null}
+                      <div className="flex justify-between gap-4">
+                        <span>Settlement</span>
+                        <span className="text-right font-medium text-neutral-900">
+                          {paymentSettlementStatusLabels[payment.settlementStatus]}
+                        </span>
+                      </div>
+                      {Object.entries(payment.verificationDetails).map(
+                        ([key, value]) =>
+                          value ? (
+                            <div key={key} className="flex justify-between gap-4">
+                              <span>{verificationDetailLabels[key] ?? key}</span>
+                              <span className="min-w-0 break-all text-right font-medium text-neutral-900">
+                                {key === "cardLast4" ? `•••• ${value}` : value}
+                              </span>
+                            </div>
+                          ) : null,
+                      )}
+                      {canViewPaymentEvidence &&
+                      getPaymentEvidenceUrl(payment.evidenceKey) ? (
+                        <div className="pt-1">
+                          <a
+                            href={getPaymentEvidenceUrl(payment.evidenceKey) ?? "#"}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border)] px-3 font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                          >
+                            <ExternalLink className="size-3.5" />
+                            Lihat bukti pembayaran
+                          </a>
                         </div>
                       ) : null}
                     </div>
