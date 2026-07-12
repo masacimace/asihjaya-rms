@@ -1,7 +1,21 @@
 "use client";
 
-import { FolderTree, Save, Shapes } from "lucide-react";
-import { useActionState } from "react";
+import {
+  AlertTriangle,
+  AlignLeft,
+  Check,
+  CheckCircle2,
+  CircleOff,
+  Folder,
+  FolderTree,
+  Info,
+  Layers3,
+  LoaderCircle,
+  Save,
+  Shapes,
+} from "lucide-react";
+import { useActionState, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import {
   createProductCategoryAction,
@@ -61,6 +75,62 @@ function FieldError({ message }: { message?: string }) {
   return <p className="mt-1.5 text-xs text-red-600">{message}</p>;
 }
 
+
+function SummaryRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] pb-3 last:border-b-0 last:pb-0">
+      <dt className="text-[var(--muted)]">{label}</dt>
+      <dd
+        className={`max-w-[58%] text-right font-medium text-neutral-900 ${
+          mono ? "font-mono text-xs" : ""
+        }`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function CreateCategorySubmitButton({
+  disabled,
+  className,
+}: {
+  disabled: boolean;
+  className?: string;
+}) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending || disabled}
+      className={`flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-55 ${
+        className ?? ""
+      }`}
+    >
+      {pending ? (
+        <>
+          <LoaderCircle className="size-4 animate-spin" />
+          Membuat kategori...
+        </>
+      ) : (
+        <>
+          <Shapes className="size-4" />
+          Buat Kategori
+        </>
+      )}
+    </button>
+  );
+}
+
 type CategoryFormProps =
   | {
       mode: "create";
@@ -72,6 +142,615 @@ type CategoryFormProps =
       category: CategoryData;
       parentOptions: ParentCategoryOption[];
     };
+
+export function CreateCategoryForm({
+  parentOptions,
+  defaultParentId,
+}: {
+  parentOptions: ParentCategoryOption[];
+  defaultParentId?: string;
+}) {
+  const [state, formAction] = useActionState(
+    createProductCategoryAction,
+    initialCategoryActionState,
+  );
+
+  const initialParentId = defaultParentId ?? "";
+  const [structure, setStructure] = useState<"root" | "child">(
+    initialParentId ? "child" : "root",
+  );
+  const [parentCategoryId, setParentCategoryId] = useState(initialParentId);
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [displayOrder, setDisplayOrder] = useState("0");
+  const [isActive, setIsActive] = useState(true);
+
+  const selectedParent = parentOptions.find(
+    (option) => option.id === parentCategoryId,
+  );
+  const hasParentOptions = parentOptions.length > 0;
+  const codeIsComplete = /^[A-Z0-9][A-Z0-9_-]{1,31}$/.test(code);
+  const nameIsComplete = name.trim().length >= 2;
+  const displayOrderValue = Number.parseInt(displayOrder, 10);
+  const orderIsComplete =
+    /^\d+$/.test(displayOrder) &&
+    displayOrderValue >= 0 &&
+    displayOrderValue <= 9999;
+  const structureIsComplete =
+    structure === "root" || Boolean(selectedParent);
+  const completedSteps = [
+    structureIsComplete,
+    codeIsComplete,
+    nameIsComplete,
+    orderIsComplete,
+  ].filter(Boolean).length;
+  const setupIsComplete = completedSteps === 4;
+  const progress = Math.round((completedSteps / 4) * 100);
+  const previewName = name.trim() || "Nama kategori belum diisi";
+  const previewCode = code || "KODE-KATEGORI";
+
+  function selectStructure(nextStructure: "root" | "child") {
+    setStructure(nextStructure);
+
+    if (nextStructure === "root") {
+      setParentCategoryId("");
+      return;
+    }
+
+    if (!parentCategoryId && parentOptions[0]) {
+      setParentCategoryId(parentOptions[0].id);
+    }
+  }
+
+  return (
+    <form action={formAction} className="space-y-5">
+      <ActionMessage state={state} />
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+        <div className="min-w-0 space-y-5">
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                <FolderTree className="size-5" />
+              </div>
+
+              <div className="min-w-0">
+                <span className="inline-flex w-fit rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                  Langkah 1
+                </span>
+                <h2 className="mt-3 font-semibold text-neutral-950">
+                  Struktur Kategori
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Kategori utama berada di tingkat pertama. Subkategori hanya
+                  dapat berada di bawah satu kategori utama aktif.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                aria-pressed={structure === "root"}
+                onClick={() => selectStructure("root")}
+                className={`rounded-2xl border p-4 text-left transition ${
+                  structure === "root"
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                    : "border-[var(--border)] bg-white hover:border-neutral-300"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border ${
+                      structure === "root"
+                        ? "border-[var(--accent)] bg-[var(--accent)]"
+                        : "border-neutral-300 bg-white"
+                    }`}
+                  >
+                    {structure === "root" ? (
+                      <Check className="size-3 text-white" />
+                    ) : null}
+                  </span>
+
+                  <span>
+                    <span className="flex items-center gap-2 text-sm font-semibold text-neutral-950">
+                      <Folder className="size-4 text-[var(--accent)]" />
+                      Kategori Utama
+                    </span>
+                    <span className="mt-1.5 block text-xs leading-5 text-[var(--muted)]">
+                      Kelompok katalog tingkat pertama yang dapat memiliki
+                      beberapa subkategori.
+                    </span>
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                aria-pressed={structure === "child"}
+                disabled={!hasParentOptions}
+                onClick={() => selectStructure("child")}
+                className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
+                  structure === "child"
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                    : "border-[var(--border)] bg-white hover:border-neutral-300"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border ${
+                      structure === "child"
+                        ? "border-[var(--accent)] bg-[var(--accent)]"
+                        : "border-neutral-300 bg-white"
+                    }`}
+                  >
+                    {structure === "child" ? (
+                      <Check className="size-3 text-white" />
+                    ) : null}
+                  </span>
+
+                  <span>
+                    <span className="flex items-center gap-2 text-sm font-semibold text-neutral-950">
+                      <Layers3 className="size-4 text-[var(--accent)]" />
+                      Subkategori
+                    </span>
+                    <span className="mt-1.5 block text-xs leading-5 text-[var(--muted)]">
+                      Struktur tingkat kedua yang berada di bawah satu kategori
+                      utama aktif.
+                    </span>
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            {!hasParentOptions ? (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <p className="text-xs leading-5">
+                  Kategori utama aktif belum tersedia. Buat kategori utama
+                  terlebih dahulu sebelum membuat subkategori.
+                </p>
+              </div>
+            ) : null}
+
+            {structure === "child" ? (
+              <div className="mt-5">
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium text-neutral-800">
+                    Kategori induk
+                  </span>
+                  <select
+                    name="parentCategoryId"
+                    required
+                    value={parentCategoryId}
+                    onChange={(event) =>
+                      setParentCategoryId(event.target.value)
+                    }
+                    className={inputClassName}
+                  >
+                    <option value="">Pilih kategori utama</option>
+                    {parentOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name} · {option.code}
+                      </option>
+                    ))}
+                  </select>
+                  <FieldError
+                    message={state.fieldErrors?.parentCategoryId}
+                  />
+                </label>
+
+                {selectedParent ? (
+                  <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-[var(--accent)]">
+                        <FolderTree className="size-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-[var(--muted)]">
+                          Kategori induk terpilih
+                        </p>
+                        <p className="mt-1 truncate text-sm font-semibold text-neutral-950">
+                          {selectedParent.name}
+                        </p>
+                        <p className="mt-1 font-mono text-xs text-neutral-600">
+                          {selectedParent.code}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
+                      Kategori baru akan tampil sebagai subkategori di bawah
+                      struktur ini.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <input type="hidden" name="parentCategoryId" value="" />
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                <Shapes className="size-5" />
+              </div>
+
+              <div className="min-w-0">
+                <span className="inline-flex w-fit rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                  Langkah 2
+                </span>
+                <h2 className="mt-3 font-semibold text-neutral-950">
+                  Identitas Kategori
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Kode menjadi identitas internal permanen. Nama dapat digunakan
+                  oleh admin untuk mengenali kelompok produk di katalog.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-2 block font-medium text-neutral-800">
+                  Kode kategori
+                </span>
+                <input
+                  name="code"
+                  required
+                  minLength={2}
+                  maxLength={32}
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  value={code}
+                  onChange={(event) =>
+                    setCode(
+                      event.target.value
+                        .toUpperCase()
+                        .replace(/\s+/g, "-")
+                        .replace(/[^A-Z0-9_-]/g, "")
+                        .slice(0, 32),
+                    )
+                  }
+                  className={`${inputClassName} font-mono`}
+                  placeholder="RING-WOMEN"
+                />
+                <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
+                  Gunakan 2–32 karakter: huruf kapital, angka, garis bawah, atau
+                  tanda hubung.
+                </p>
+                <FieldError message={state.fieldErrors?.code} />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-2 flex items-center justify-between gap-3 font-medium text-neutral-800">
+                  <span>Nama kategori</span>
+                  <span className="text-xs font-normal text-[var(--muted)]">
+                    {name.length}/120
+                  </span>
+                </span>
+                <input
+                  name="name"
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  className={inputClassName}
+                  placeholder="Cincin Wanita"
+                />
+                <FieldError message={state.fieldErrors?.name} />
+              </label>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+              <div className="flex items-start gap-3">
+                <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-white text-[var(--accent)]">
+                  {structure === "child" ? (
+                    <Layers3 className="size-5" />
+                  ) : (
+                    <Folder className="size-5" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-neutral-950">
+                    {previewName}
+                  </p>
+                  <p className="mt-1 font-mono text-xs text-neutral-600">
+                    {previewCode}
+                  </p>
+                  <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
+                    {structure === "child"
+                      ? selectedParent
+                        ? `Subkategori dari ${selectedParent.name}`
+                        : "Pilih kategori induk untuk melengkapi struktur."
+                      : "Kategori utama tingkat pertama."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--surface-muted)] text-neutral-700">
+                <AlignLeft className="size-5" />
+              </div>
+
+              <div className="min-w-0">
+                <span className="inline-flex w-fit rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-neutral-700">
+                  Langkah 3
+                </span>
+                <h2 className="mt-3 font-semibold text-neutral-950">
+                  Deskripsi & Urutan
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Deskripsi membantu tim memahami cakupan kategori. Urutan
+                  menentukan posisi kategori dalam tingkat yang sama.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+              <label className="block text-sm">
+                <span className="mb-2 flex items-center justify-between gap-3 font-medium text-neutral-800">
+                  <span>Deskripsi</span>
+                  <span className="text-xs font-normal text-[var(--muted)]">
+                    {description.length}/2.000
+                  </span>
+                </span>
+                <textarea
+                  name="description"
+                  rows={6}
+                  maxLength={2000}
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  className="w-full resize-y rounded-xl border border-[var(--border)] bg-white px-3 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                  placeholder="Jelaskan jenis produk yang termasuk dalam kategori ini"
+                />
+                <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
+                  Deskripsi bersifat internal dan membantu konsistensi pengelolaan
+                  katalog.
+                </p>
+                <FieldError message={state.fieldErrors?.description} />
+              </label>
+
+              <div className="min-w-0">
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium text-neutral-800">
+                    Urutan tampilan
+                  </span>
+                  <input
+                    type="number"
+                    name="displayOrder"
+                    required
+                    min={0}
+                    max={9999}
+                    step={1}
+                    value={displayOrder}
+                    onChange={(event) => setDisplayOrder(event.target.value)}
+                    className={inputClassName}
+                  />
+                  <FieldError message={state.fieldErrors?.displayOrder} />
+                </label>
+
+                <div className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-sm font-semibold text-[var(--accent)]">
+                      {orderIsComplete ? displayOrderValue : "–"}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-950">
+                        Urutan kategori
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                        Angka lebih kecil tampil lebih dahulu.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside className="min-w-0 space-y-5 xl:sticky xl:top-5">
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--surface-muted)] text-neutral-700">
+                {isActive ? (
+                  <CheckCircle2 className="size-5" />
+                ) : (
+                  <CircleOff className="size-5" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-semibold text-neutral-950">
+                  Status Kategori
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Tentukan apakah kategori langsung tersedia untuk produk master
+                  baru.
+                </p>
+              </div>
+            </div>
+
+            <input
+              type="checkbox"
+              name="isActive"
+              checked={isActive}
+              readOnly
+              className="sr-only"
+            />
+
+            <div className="mt-5 space-y-3">
+              <button
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => setIsActive(true)}
+                className={`w-full rounded-2xl border p-4 text-left transition ${
+                  isActive
+                    ? "border-emerald-300 bg-emerald-50"
+                    : "border-[var(--border)] bg-white hover:border-neutral-300"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border ${
+                      isActive
+                        ? "border-emerald-600 bg-emerald-600"
+                        : "border-neutral-300 bg-white"
+                    }`}
+                  >
+                    {isActive ? <Check className="size-3 text-white" /> : null}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-neutral-950">
+                      Kategori aktif
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
+                      Langsung tersedia untuk produk master baru setelah disimpan.
+                    </span>
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                aria-pressed={!isActive}
+                onClick={() => setIsActive(false)}
+                className={`w-full rounded-2xl border p-4 text-left transition ${
+                  !isActive
+                    ? "border-neutral-400 bg-neutral-100"
+                    : "border-[var(--border)] bg-white hover:border-neutral-300"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border ${
+                      !isActive
+                        ? "border-neutral-700 bg-neutral-700"
+                        : "border-neutral-300 bg-white"
+                    }`}
+                  >
+                    {!isActive ? <Check className="size-3 text-white" /> : null}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-neutral-950">
+                      Kategori nonaktif
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
+                      Disimpan sebagai struktur persiapan dan belum tersedia untuk
+                      produk baru.
+                    </span>
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            {structure === "child" && isActive ? (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900">
+                <Info className="mt-0.5 size-4 shrink-0" />
+                <p className="text-xs leading-5">
+                  Subkategori aktif hanya dapat digunakan selama kategori induknya
+                  tetap berstatus aktif.
+                </p>
+              </div>
+            ) : null}
+
+            <FieldError message={state.fieldErrors?.isActive} />
+          </section>
+
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-neutral-950">
+                  Ringkasan Setup
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Periksa struktur dan identitas sebelum menyimpan.
+                </p>
+              </div>
+              <span
+                className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                  setupIsComplete
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-amber-200 bg-amber-50 text-amber-800"
+                }`}
+              >
+                {completedSteps}/4
+              </span>
+            </div>
+
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-neutral-100">
+              <div
+                className="h-full rounded-full bg-[var(--accent)] transition-[width]"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+
+            <dl className="mt-5 space-y-3 text-sm">
+              <SummaryRow
+                label="Struktur"
+                value={
+                  structure === "root" ? "Kategori utama" : "Subkategori"
+                }
+              />
+              <SummaryRow
+                label="Induk"
+                value={
+                  structure === "root"
+                    ? "Tidak ada"
+                    : (selectedParent?.name ?? "Belum dipilih")
+                }
+              />
+              <SummaryRow
+                label="Identitas"
+                value={code || "Belum lengkap"}
+                mono={Boolean(code)}
+              />
+              <SummaryRow
+                label="Urutan"
+                value={orderIsComplete ? String(displayOrderValue) : "Belum valid"}
+              />
+              <SummaryRow
+                label="Deskripsi"
+                value={description.trim() ? "Tersedia" : "Belum diisi"}
+              />
+              <SummaryRow
+                label="Status"
+                value={isActive ? "Aktif" : "Nonaktif"}
+              />
+            </dl>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+            <p className="text-sm font-semibold text-neutral-950">
+              Buat kategori baru
+            </p>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+              Setelah tersimpan, kode menjadi permanen dan kategori aktif dapat
+              langsung dipilih pada produk master.
+            </p>
+
+            <CreateCategorySubmitButton
+              disabled={!setupIsComplete}
+              className="mt-4 w-full"
+            />
+
+            {!setupIsComplete ? (
+              <p className="mt-2 text-center text-xs leading-5 text-[var(--muted)]">
+                Lengkapi struktur, kode, nama, dan urutan terlebih dahulu.
+              </p>
+            ) : null}
+          </section>
+        </aside>
+      </div>
+    </form>
+  );
+}
+
 
 export function CategoryForm(props: CategoryFormProps) {
   const action =
