@@ -99,6 +99,13 @@
       "when": 1783887475303,
       "tag": "0013_p1a_manual_payment_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783892311954,
+      "tag": "0014_p1a1_fast_manual_payment_ux",
+      "breakpoints": true
     }
   ]
 }

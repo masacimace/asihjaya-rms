@@ -17,9 +17,10 @@ function expectError(run: () => unknown, pattern: RegExp) {
 
 const validQris: PosCheckoutPaymentInput = {
   method: "qris_manual",
-  amount: 5_000_000,
+  amount: 8_000_000,
   receivedAmount: null,
   changeAmount: 0,
+  verificationConfirmed: true,
   provider: "BCA QRIS",
   reference: "QR-20260713-001",
   note: null,
@@ -65,6 +66,7 @@ const validEdc: PosCheckoutPaymentInput = {
   amount: 2_000_000,
   receivedAmount: null,
   changeAmount: 0,
+  verificationConfirmed: true,
   provider: "BCA EDC",
   reference: "APPROVAL-9911",
   note: null,
@@ -93,14 +95,14 @@ expectError(
         ...validEdc,
         verificationDetails: {
           ...validEdc.verificationDetails,
-          batchNumber: null,
+          terminalId: null,
         },
       },
       organizationId,
       policy: DEFAULT_MANUAL_PAYMENT_POLICIES.debit_card,
       now,
     }),
-  /batch.*jaringan kartu/i,
+  /Terminal EDC belum dipilih/i,
 );
 
 expectError(

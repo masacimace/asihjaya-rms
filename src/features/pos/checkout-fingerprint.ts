@@ -22,6 +22,10 @@ function canonicalizeCheckoutPayload(payload: PosCheckoutPayload) {
     .map((payment) => ({
       method: payment.method,
       amount: payment.amount,
+      manualPaymentProfileId: normalizeFingerprintText(
+        payment.manualPaymentProfileId,
+      ),
+      verificationConfirmed: payment.verificationConfirmed === true,
       receivedAmount: payment.receivedAmount ?? null,
       changeAmount: payment.changeAmount ?? 0,
       provider: normalizeFingerprintText(payment.provider),

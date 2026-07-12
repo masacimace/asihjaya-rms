@@ -28,6 +28,7 @@ import {
   hardwareJobs,
   inventoryMovements,
   manualPaymentPolicies,
+  manualPaymentProfiles,
   notifications,
   paymentEvidenceUploads,
   outlets,
@@ -82,6 +83,7 @@ import { lookupPosItemByScanValue } from "@/features/pos/queries";
 import {
   createManualPaymentVerificationFingerprint,
   DEFAULT_MANUAL_PAYMENT_POLICIES,
+  getManualPaymentProfileType,
   isNonCashManualPaymentMethod,
   normalizeAndValidateManualPaymentVerification,
   type ManualPaymentPolicy,
@@ -139,6 +141,10 @@ type NormalizedCheckoutPayment = {
   providerPaidAt: Date | null;
   providerPaidAtIso: string | null;
   evidenceKey: string | null;
+  manualPaymentProfileId: string | null;
+  manualPaymentProfileName: string | null;
+  manualPaymentProfileCode: string | null;
+  manualPaymentProfileRegisterId: string | null;
   verificationDetails: Record<string, string | null>;
   normalizedProvider: string | null;
   normalizedReference: string | null;
@@ -2866,6 +2872,40 @@ export async function completePosCheckoutAction(
   const manualPaymentPolicyMap = await getManualPaymentPolicyMap(
     auth.organization.id,
   );
+  const submittedProfileIds = Array.from(
+    new Set(
+      submittedPayments
+        .filter((payment) => payment.method !== "cash")
+        .map((payment) => String(payment.manualPaymentProfileId ?? "").trim())
+        .filter((profileId) => UUID_PATTERN.test(profileId)),
+    ),
+  );
+  const profileRows = submittedProfileIds.length
+    ? await db
+        .select({
+          id: manualPaymentProfiles.id,
+          profileType: manualPaymentProfiles.profileType,
+          code: manualPaymentProfiles.code,
+          name: manualPaymentProfiles.name,
+          provider: manualPaymentProfiles.provider,
+          verificationSource: manualPaymentProfiles.verificationSource,
+          merchantId: manualPaymentProfiles.merchantId,
+          terminalId: manualPaymentProfiles.terminalId,
+          destinationAccount: manualPaymentProfiles.destinationAccount,
+          registerId: manualPaymentProfiles.registerId,
+        })
+        .from(manualPaymentProfiles)
+        .where(
+          and(
+            eq(manualPaymentProfiles.organizationId, auth.organization.id),
+            eq(manualPaymentProfiles.outletId, primaryOutlet.id),
+            eq(manualPaymentProfiles.isActive, true),
+            inArray(manualPaymentProfiles.id, submittedProfileIds),
+          ),
+        )
+    : [];
+  const paymentProfilesById = new Map(profileRows.map((profile) => [profile.id, profile]));
+  const verificationNowIso = new Date().toISOString();
 
   try {
     normalizedPayments = submittedPayments.map((payment, index) => {
@@ -2884,7 +2924,6 @@ export async function completePosCheckoutAction(
           ? null
           : Number(payment.receivedAmount);
       const changeAmount = Number(payment.changeAmount ?? 0);
-      const provider = normalizeNullableText(payment.provider, 80);
       const reference = normalizeNullableText(payment.reference, 160);
       const note = normalizeNullableText(payment.note, 160);
 
@@ -2931,6 +2970,10 @@ export async function completePosCheckoutAction(
           providerPaidAt: null,
           providerPaidAtIso: null,
           evidenceKey: null,
+          manualPaymentProfileId: null,
+          manualPaymentProfileName: null,
+          manualPaymentProfileCode: null,
+          manualPaymentProfileRegisterId: null,
           verificationDetails: {},
           normalizedProvider: null,
           normalizedReference: null,
@@ -2944,13 +2987,49 @@ export async function completePosCheckoutAction(
       }
 
       try {
+        const profileId = String(payment.manualPaymentProfileId ?? "").trim();
+
+        if (!UUID_PATTERN.test(profileId)) {
+          throw new Error("Pilih akun/terminal pembayaran yang sudah dikonfigurasi.");
+        }
+
+        const profile = paymentProfilesById.get(profileId);
+
+        if (!profile) {
+          throw new Error(
+            "Akun/terminal pembayaran tidak aktif atau bukan milik outlet ini.",
+          );
+        }
+
+        if (profile.profileType !== getManualPaymentProfileType(method)) {
+          throw new Error("Akun/terminal tidak mendukung metode pembayaran ini.");
+        }
+
+        const profileVerificationSource =
+          profile.verificationSource === "merchant_app" ||
+          profile.verificationSource === "edc_terminal" ||
+          profile.verificationSource === "bank_app" ||
+          profile.verificationSource === "bank_statement"
+            ? profile.verificationSource
+            : null;
+
         const verification = normalizeAndValidateManualPaymentVerification({
           payment: {
             ...payment,
             method,
             amount,
-            provider,
+            manualPaymentProfileId: profile.id,
+            verificationConfirmed: payment.verificationConfirmed === true,
+            provider: profile.provider,
             reference,
+            verificationSource: profileVerificationSource,
+            providerPaidAtIso: payment.providerPaidAtIso ?? verificationNowIso,
+            verificationDetails: {
+              ...payment.verificationDetails,
+              merchantId: profile.merchantId,
+              terminalId: profile.terminalId,
+              destinationAccount: profile.destinationAccount,
+            },
           },
           organizationId: auth.organization.id,
           policy: manualPaymentPolicyMap[method],
@@ -2961,13 +3040,17 @@ export async function completePosCheckoutAction(
           amount,
           receivedAmount: null,
           changeAmount: 0,
-          provider,
+          provider: profile.provider,
           reference,
           note,
           verificationSource: verification.verificationSource,
           providerPaidAt: verification.providerPaidAt,
           providerPaidAtIso: verification.providerPaidAt.toISOString(),
           evidenceKey: verification.evidenceKey,
+          manualPaymentProfileId: profile.id,
+          manualPaymentProfileName: profile.name,
+          manualPaymentProfileCode: profile.code,
+          manualPaymentProfileRegisterId: profile.registerId,
           verificationDetails: verification.details as Record<
             string,
             string | null
@@ -3053,6 +3136,8 @@ export async function completePosCheckoutAction(
     payments: normalizedPayments.map((payment) => ({
       method: payment.method,
       amount: payment.amount,
+      manualPaymentProfileId: payment.manualPaymentProfileId,
+      verificationConfirmed: payment.method === "cash" ? null : true,
       receivedAmount: payment.receivedAmount,
       changeAmount: payment.changeAmount,
       provider: payment.provider,
@@ -3260,6 +3345,18 @@ export async function completePosCheckoutAction(
       checkoutShiftId = activeShift.id;
     }
 
+    const incompatibleProfile = normalizedPayments.find(
+      (payment) =>
+        payment.manualPaymentProfileRegisterId &&
+        payment.manualPaymentProfileRegisterId !== checkoutRegisterId,
+    );
+
+    if (incompatibleProfile) {
+      throw new CheckoutValidationError(
+        `${incompatibleProfile.manualPaymentProfileName ?? "Terminal pembayaran"} hanya boleh dipakai pada register yang sudah dipetakan.`,
+      );
+    }
+
     const claimResult = await claimPosCheckoutAttempt({
       context: {
         organizationId: auth.organization.id,
@@ -3394,6 +3491,38 @@ export async function completePosCheckoutAction(
         throw new CheckoutValidationError(
           "Shift checkout sudah tidak aktif. Periksa status transaksi sebelum membuat transaksi baru.",
         );
+      }
+
+      const activeManualProfileIds = Array.from(
+        new Set(
+          normalizedPayments
+            .map((payment) => payment.manualPaymentProfileId)
+            .filter((profileId): profileId is string => Boolean(profileId)),
+        ),
+      );
+
+      if (activeManualProfileIds.length > 0) {
+        const activeProfileRows = await transaction
+          .select({ id: manualPaymentProfiles.id })
+          .from(manualPaymentProfiles)
+          .where(
+            and(
+              eq(manualPaymentProfiles.organizationId, auth.organization.id),
+              eq(manualPaymentProfiles.outletId, primaryOutlet.id),
+              eq(manualPaymentProfiles.isActive, true),
+              inArray(manualPaymentProfiles.id, activeManualProfileIds),
+              or(
+                isNull(manualPaymentProfiles.registerId),
+                eq(manualPaymentProfiles.registerId, register.id),
+              ),
+            ),
+          );
+
+        if (activeProfileRows.length !== activeManualProfileIds.length) {
+          throw new CheckoutValidationError(
+            "Salah satu akun/terminal pembayaran sudah dinonaktifkan atau tidak sesuai register. Pilih ulang preset payment.",
+          );
+        }
       }
 
       const selectedCustomer = customerId
@@ -3914,6 +4043,7 @@ export async function completePosCheckoutAction(
             coVerifiedBy: isCoVerified ? manualPaymentCoVerifierId : null,
             coVerifiedAt: isCoVerified ? manualPaymentCoVerifiedAt : null,
             evidenceKey: payment.evidenceKey,
+            manualPaymentProfileId: payment.manualPaymentProfileId,
             settlementStatus: isNonCash
               ? ("unreconciled" as const)
               : ("not_applicable" as const),
@@ -3927,6 +4057,13 @@ export async function completePosCheckoutAction(
               changeAmount: payment.changeAmount,
               note: payment.note,
               verificationFingerprint: manualPaymentVerificationFingerprint,
+              manualPaymentProfile: payment.manualPaymentProfileId
+                ? {
+                    id: payment.manualPaymentProfileId,
+                    code: payment.manualPaymentProfileCode,
+                    name: payment.manualPaymentProfileName,
+                  }
+                : null,
               verificationDetails: payment.verificationDetails,
               duplicatePaymentIds: manualPaymentDuplicatePaymentIds,
               makerCheckerEnforced: isCoVerified,

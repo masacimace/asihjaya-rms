@@ -31,29 +31,29 @@ export const DEFAULT_MANUAL_PAYMENT_POLICIES: Record<
 > = {
   qris_manual: {
     method: "qris_manual",
-    coVerificationThreshold: 5_000_000,
-    evidenceThreshold: 5_000_000,
+    coVerificationThreshold: 9_000_000,
+    evidenceThreshold: 7_500_000,
     duplicateLookbackDays: 90,
     isEnabled: true,
   },
   debit_card: {
     method: "debit_card",
-    coVerificationThreshold: 10_000_000,
-    evidenceThreshold: 10_000_000,
+    coVerificationThreshold: 30_000_000,
+    evidenceThreshold: 20_000_000,
     duplicateLookbackDays: 7,
     isEnabled: true,
   },
   credit_card: {
     method: "credit_card",
-    coVerificationThreshold: 10_000_000,
-    evidenceThreshold: 10_000_000,
+    coVerificationThreshold: 30_000_000,
+    evidenceThreshold: 20_000_000,
     duplicateLookbackDays: 7,
     isEnabled: true,
   },
   bank_transfer: {
     method: "bank_transfer",
-    coVerificationThreshold: 10_000_000,
-    evidenceThreshold: 10_000_000,
+    coVerificationThreshold: 40_000_000,
+    evidenceThreshold: 25_000_000,
     duplicateLookbackDays: 180,
     isEnabled: true,
   },
@@ -75,11 +75,7 @@ export function normalizeManualPaymentReference(value: string) {
 }
 
 export function normalizeManualPaymentProvider(value: string) {
-  return value
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, " ")
-    .slice(0, 80);
+  return value.trim().toUpperCase().replace(/\s+/g, " ").slice(0, 80);
 }
 
 export function isNonCashManualPaymentMethod(
@@ -90,6 +86,15 @@ export function isNonCashManualPaymentMethod(
   );
 }
 
+export function getManualPaymentProfileType(
+  method: NonCashManualPaymentMethod,
+): "qris" | "edc" | "bank_account" {
+  if (method === "qris_manual") return "qris";
+  if (method === "bank_transfer") return "bank_account";
+  return "edc";
+}
+
+
 export function isValidPaymentEvidenceKey(
   evidenceKey: string | null | undefined,
   organizationId?: string,
@@ -99,7 +104,9 @@ export function isValidPaymentEvidenceKey(
   }
 
   return organizationId
-    ? evidenceKey.startsWith(`organizations/${organizationId}/payment-evidence/`)
+    ? evidenceKey.startsWith(
+        `organizations/${organizationId}/payment-evidence/`,
+      )
     : true;
 }
 
@@ -157,7 +164,9 @@ export function normalizeAndValidateManualPaymentVerification({
   const details = normalizeDetails(payment.verificationDetails);
 
   if (rawCardLast4 && !/^\d{4}$/.test(rawCardLast4)) {
-    throw new Error("Empat digit terakhir kartu harus terdiri dari tepat 4 angka.");
+    throw new Error(
+      "Empat digit terakhir kartu harus terdiri dari tepat 4 angka.",
+    );
   }
 
   if (!provider) {
@@ -168,27 +177,36 @@ export function normalizeAndValidateManualPaymentVerification({
     throw new Error("Reference/approval code pembayaran manual wajib diisi.");
   }
 
+  if (!payment.verificationConfirmed) {
+    throw new Error(
+      "Konfirmasi bahwa pembayaran sudah terlihat berhasil di perangkat atau rekening toko.",
+    );
+  }
+
   if (!verificationSource) {
-    throw new Error("Sumber verifikasi pembayaran manual wajib dipilih.");
+    throw new Error("Sumber verifikasi pembayaran manual wajib tersedia.");
   }
 
   if (!providerPaidAt || Number.isNaN(providerPaidAt.getTime())) {
-    throw new Error("Waktu pembayaran dari provider wajib diisi.");
+    throw new Error("Waktu pembayaran dari provider wajib tersedia.");
   }
 
   if (providerPaidAt.getTime() > now.getTime() + 5 * 60 * 1000) {
-    throw new Error("Waktu pembayaran provider tidak boleh berada di masa depan.");
+    throw new Error(
+      "Waktu pembayaran provider tidak boleh berada di masa depan.",
+    );
   }
 
   if (providerPaidAt.getTime() < now.getTime() - 7 * 24 * 60 * 60 * 1000) {
-    throw new Error("Waktu pembayaran provider terlalu lama untuk checkout POS ini.");
+    throw new Error(
+      "Waktu pembayaran provider terlalu lama untuk checkout POS ini.",
+    );
   }
 
-  if (
-    evidenceKey &&
-    !isValidPaymentEvidenceKey(evidenceKey, organizationId)
-  ) {
-    throw new Error("Bukti pembayaran tidak valid atau bukan milik organisasi ini.");
+  if (evidenceKey && !isValidPaymentEvidenceKey(evidenceKey, organizationId)) {
+    throw new Error(
+      "Bukti pembayaran tidak valid atau bukan milik organisasi ini.",
+    );
   }
 
   if (payment.amount >= policy.evidenceThreshold && !evidenceKey) {
@@ -198,8 +216,13 @@ export function normalizeAndValidateManualPaymentVerification({
   }
 
   if (payment.method === "qris_manual") {
-    if (verificationSource !== "merchant_app" && verificationSource !== "bank_app") {
-      throw new Error("QRIS manual harus diverifikasi dari aplikasi merchant atau bank.");
+    if (
+      verificationSource !== "merchant_app" &&
+      verificationSource !== "bank_app"
+    ) {
+      throw new Error(
+        "QRIS manual harus diverifikasi dari aplikasi merchant atau bank.",
+      );
     }
 
     if (!details.merchantId) {
@@ -209,17 +232,14 @@ export function normalizeAndValidateManualPaymentVerification({
 
   if (payment.method === "debit_card" || payment.method === "credit_card") {
     if (verificationSource !== "edc_terminal") {
-      throw new Error("Pembayaran kartu manual harus diverifikasi dari terminal EDC.");
+      throw new Error(
+        "Pembayaran kartu manual harus diverifikasi dari terminal EDC.",
+      );
     }
 
-    if (
-      !details.terminalId ||
-      !details.traceNumber ||
-      !details.batchNumber ||
-      !details.cardNetwork
-    ) {
+    if (!details.terminalId) {
       throw new Error(
-        "Terminal ID, trace/STAN, batch, dan jaringan kartu EDC wajib diisi.",
+        "Terminal EDC belum dipilih atau Terminal ID tidak tersedia.",
       );
     }
 
@@ -233,11 +253,22 @@ export function normalizeAndValidateManualPaymentVerification({
       verificationSource !== "bank_app" &&
       verificationSource !== "bank_statement"
     ) {
-      throw new Error("Transfer harus diverifikasi dari aplikasi atau mutasi bank toko.");
+      throw new Error(
+        "Transfer harus diverifikasi dari aplikasi atau mutasi bank toko.",
+      );
     }
 
-    if (!details.destinationAccount || !details.senderName) {
-      throw new Error("Rekening tujuan toko dan nama pengirim wajib diisi.");
+    if (!details.destinationAccount) {
+      throw new Error("Rekening tujuan toko belum dipilih.");
+    }
+
+    if (
+      payment.amount >= policy.coVerificationThreshold &&
+      !details.senderName
+    ) {
+      throw new Error(
+        "Nama pengirim wajib diisi untuk transfer yang memerlukan co-verification.",
+      );
     }
   }
 
@@ -280,6 +311,8 @@ export function createManualPaymentVerificationFingerprint({
     .map((payment) => ({
       method: payment.method,
       amount: payment.amount,
+      manualPaymentProfileId: payment.manualPaymentProfileId ?? null,
+      verificationConfirmed: payment.verificationConfirmed === true,
       provider: normalizeManualPaymentProvider(payment.provider ?? ""),
       reference: normalizeManualPaymentReference(payment.reference ?? ""),
       verificationSource: payment.verificationSource ?? null,
@@ -287,7 +320,9 @@ export function createManualPaymentVerificationFingerprint({
       evidenceKey: payment.evidenceKey ?? null,
       details: normalizeDetails(payment.verificationDetails),
     }))
-    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    .sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    );
 
   return createHash("sha256")
     .update(

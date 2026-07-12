@@ -32,6 +32,7 @@ export default async function AdminLayout({
         canAccessProducts: productInventoryAccess.canAccessProducts,
         canAccessInventory: productInventoryAccess.canAccessInventory,
         canAccessApprovals: canAccessApprovalInbox(auth),
+        canAccessSettings: hasPermission(auth, "settings.manage"),
       }}
       approvalDrawerData={approvalDrawerData}
       notificationDrawerData={notificationDrawerData}

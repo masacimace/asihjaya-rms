@@ -1146,6 +1146,81 @@ export const saleItems = pgTable(
   ],
 );
 
+export const manualPaymentProfiles = pgTable(
+  "manual_payment_profiles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    registerId: uuid("register_id").references(() => registers.id, {
+      onDelete: "set null",
+    }),
+    profileType: varchar("profile_type", { length: 24 }).notNull(),
+    code: varchar("code", { length: 40 }).notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    provider: varchar("provider", { length: 80 }).notNull(),
+    verificationSource: varchar("verification_source", { length: 40 }).notNull(),
+    merchantId: varchar("merchant_id", { length: 80 }),
+    terminalId: varchar("terminal_id", { length: 80 }),
+    destinationAccount: varchar("destination_account", { length: 120 }),
+    displayOrder: integer("display_order").default(0).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("manual_payment_profiles_org_outlet_code_uq").on(
+      table.organizationId,
+      table.outletId,
+      table.code,
+    ),
+    index("manual_payment_profiles_outlet_type_idx").on(
+      table.outletId,
+      table.profileType,
+      table.isActive,
+      table.displayOrder,
+    ),
+    index("manual_payment_profiles_register_idx").on(
+      table.registerId,
+      table.isActive,
+    ),
+    check(
+      "manual_payment_profiles_type_ck",
+      sql`${table.profileType} in ('qris', 'edc', 'bank_account')`,
+    ),
+    check(
+      "manual_payment_profiles_source_ck",
+      sql`${table.verificationSource} in ('merchant_app', 'edc_terminal', 'bank_app', 'bank_statement')`,
+    ),
+    check(
+      "manual_payment_profiles_fields_ck",
+      sql`(
+        (${table.profileType} = 'qris'
+          and ${table.verificationSource} in ('merchant_app', 'bank_app')
+          and ${table.merchantId} is not null
+          and btrim(${table.merchantId}) <> '')
+        or
+        (${table.profileType} = 'edc'
+          and ${table.verificationSource} = 'edc_terminal'
+          and ${table.terminalId} is not null
+          and btrim(${table.terminalId}) <> '')
+        or
+        (${table.profileType} = 'bank_account'
+          and ${table.verificationSource} in ('bank_app', 'bank_statement')
+          and ${table.destinationAccount} is not null
+          and btrim(${table.destinationAccount}) <> '')
+      )`,
+    ),
+    check(
+      "manual_payment_profiles_display_order_ck",
+      sql`${table.displayOrder} between 0 and 9999`,
+    ),
+  ],
+);
+
 export const payments = pgTable(
   "payments",
   {
@@ -1173,6 +1248,10 @@ export const payments = pgTable(
     coVerifiedBy: uuid("co_verified_by").references(() => users.id),
     coVerifiedAt: timestamp("co_verified_at", { withTimezone: true }),
     evidenceKey: text("evidence_key"),
+    manualPaymentProfileId: uuid("manual_payment_profile_id").references(
+      () => manualPaymentProfiles.id,
+      { onDelete: "set null" },
+    ),
     settlementStatus: paymentSettlementStatusEnum("settlement_status")
       .default("not_applicable")
       .notNull(),
@@ -1199,6 +1278,10 @@ export const payments = pgTable(
     ),
     index("payments_settlement_status_idx").on(
       table.settlementStatus,
+      table.createdAt,
+    ),
+    index("payments_manual_profile_idx").on(
+      table.manualPaymentProfileId,
       table.createdAt,
     ),
     check("payments_amount_positive_ck", sql`${table.amount} > 0`),

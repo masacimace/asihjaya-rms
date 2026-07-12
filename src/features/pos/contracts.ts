@@ -66,11 +66,37 @@ export type PosCustomerOption = {
   email: string | null;
 };
 
+export type PosManualPaymentProfileType = "qris" | "edc" | "bank_account";
+
+export type PosManualPaymentProfile = {
+  id: string;
+  profileType: PosManualPaymentProfileType;
+  code: string;
+  name: string;
+  provider: string;
+  verificationSource: PosManualPaymentVerificationSource;
+  merchantId: string | null;
+  terminalId: string | null;
+  destinationAccount: string | null;
+  registerId: string | null;
+  registerName: string | null;
+};
+
+export type PosManualPaymentPolicy = {
+  method: Exclude<PosManualPaymentMethod, "cash">;
+  coVerificationThreshold: number;
+  evidenceThreshold: number;
+  duplicateLookbackDays: number;
+  isEnabled: boolean;
+};
+
 export type PosInitialData = {
   context: PosOperationalContext;
   categories: PosCategoryOption[];
   items: PosAvailableItem[];
   customers: PosCustomerOption[];
+  paymentProfiles: PosManualPaymentProfile[];
+  paymentPolicies: PosManualPaymentPolicy[];
 };
 
 export type PosScanLookupResult =
@@ -85,17 +111,10 @@ export type PosScanLookupResult =
     };
 
 export type PosManualPaymentMethod =
-  | "cash"
-  | "qris_manual"
-  | "debit_card"
-  | "credit_card"
-  | "bank_transfer";
+  "cash" | "qris_manual" | "debit_card" | "credit_card" | "bank_transfer";
 
 export type PosManualPaymentVerificationSource =
-  | "merchant_app"
-  | "edc_terminal"
-  | "bank_app"
-  | "bank_statement";
+  "merchant_app" | "edc_terminal" | "bank_app" | "bank_statement";
 
 export type PosManualPaymentVerificationDetails = {
   terminalId?: string | null;
@@ -111,6 +130,8 @@ export type PosManualPaymentVerificationDetails = {
 export type PosCheckoutPaymentInput = {
   method: PosManualPaymentMethod;
   amount: number;
+  manualPaymentProfileId?: string | null;
+  verificationConfirmed?: boolean | null;
   receivedAmount?: number | null;
   changeAmount?: number | null;
   provider?: string | null;
@@ -133,8 +154,6 @@ export type PosCheckoutPayload = {
   discountReason?: string | null;
   manualPaymentApprovalId?: string | null;
 };
-
-
 
 export type PosManualPaymentApproval = {
   id: string;
@@ -408,8 +427,6 @@ export type PosTransactionListData = {
   };
 };
 
-
-
 export type PosTransactionDetailPayment = PosTransactionPayment & {
   id: string;
   paidAt: Date | null;
@@ -591,4 +608,3 @@ export type PosShiftOverviewData = {
   } | null;
   recentTransactions: PosShiftOverviewRecentTransaction[];
 };
-

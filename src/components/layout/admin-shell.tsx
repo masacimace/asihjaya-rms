@@ -47,13 +47,14 @@ type AdminShellUser = {
   canAccessProducts: boolean;
   canAccessInventory: boolean;
   canAccessApprovals: boolean;
+  canAccessSettings: boolean;
 };
 
 type NavigationItem = {
   label: string;
   href?: string;
   icon: typeof Store;
-  access?: "administration" | "products" | "inventory";
+  access?: "administration" | "products" | "inventory" | "settings";
   children?: { label: string; href: string }[];
 };
 
@@ -106,6 +107,7 @@ const navigation: NavigationItem[] = [
     label: "Pengaturan",
     href: "/admin/pengaturan",
     icon: Settings,
+    access: "settings",
   },
 ] as const;
 
@@ -193,6 +195,7 @@ type SidebarContentProps = {
   canAccessProducts: boolean;
   canAccessInventory: boolean;
   canAccessApprovals: boolean;
+  canAccessSettings: boolean;
   onNavigate?: () => void;
   showBrand?: boolean;
   showPosCta?: boolean;
@@ -211,6 +214,7 @@ function SidebarContent({
   canAccessProducts,
   canAccessInventory,
   canAccessApprovals,
+  canAccessSettings,
   onNavigate,
   showBrand = true,
   showPosCta = true,
@@ -226,6 +230,10 @@ function SidebarContent({
 
     if (item.access === "inventory") {
       return canAccessInventory;
+    }
+
+    if (item.access === "settings") {
+      return canAccessSettings;
     }
 
     return true;
@@ -394,6 +402,7 @@ export function AdminShell({
           canAccessProducts={user.canAccessProducts}
           canAccessInventory={user.canAccessInventory}
           canAccessApprovals={user.canAccessApprovals}
+          canAccessSettings={user.canAccessSettings}
         />
       </aside>
 
@@ -432,6 +441,7 @@ export function AdminShell({
                 canAccessProducts={user.canAccessProducts}
                 canAccessInventory={user.canAccessInventory}
                 canAccessApprovals={user.canAccessApprovals}
+          canAccessSettings={user.canAccessSettings}
                 onNavigate={() => setIsMobileMenuOpen(false)}
                 showBrand={false}
                 showPosCta={false}
