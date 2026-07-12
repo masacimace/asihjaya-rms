@@ -46,6 +46,18 @@ import {
   type PosShiftActionState,
 } from "@/features/pos/contracts";
 import {
+  claimPosCheckoutAttempt,
+  getPosCheckoutAttemptByKey,
+  markPosCheckoutAttemptCompleted,
+  markPosCheckoutAttemptFailed,
+} from "@/features/pos/checkout-attempt-service";
+import {
+  getPosCheckoutRecoveryStatus,
+  getPosCheckoutSaleResult,
+  POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS,
+} from "@/features/pos/checkout-recovery";
+import { isValidPosCheckoutIdempotencyKey } from "@/features/pos/checkout-fingerprint";
+import {
   DEFAULT_POS_REGISTER_MISSING_MESSAGE,
   DEFAULT_POS_REGISTER_SHIFT_MESSAGE,
   getDefaultPosRegisterCondition,
@@ -125,10 +137,13 @@ function success(message: string): PosShiftActionState {
 function checkoutFailure(
   message: string,
   fieldErrors?: Record<string, string>,
+  code: Extract<PosCheckoutActionResult, { status: "error" }>["code"] =
+    "validation_error",
 ): PosCheckoutActionResult {
   return {
     status: "error",
     message,
+    code,
     fieldErrors,
   };
 }
@@ -323,14 +338,32 @@ function getSystemErrorMessage(error: unknown) {
 function checkoutSuccess({
   message,
   sale,
+  recovery,
 }: {
   message: string;
   sale: Extract<PosCheckoutActionResult, { status: "success" }>["sale"];
+  recovery: Extract<
+    PosCheckoutActionResult,
+    { status: "success" }
+  >["recovery"];
 }): PosCheckoutActionResult {
   return {
     status: "success",
     message,
     sale,
+    recovery,
+  };
+}
+
+function checkoutProcessing(
+  idempotencyKey: string,
+  message = "Transaksi masih diproses. Jangan membuat transaksi baru.",
+): PosCheckoutActionResult {
+  return {
+    status: "processing",
+    message,
+    idempotencyKey,
+    retryAfterMs: POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS,
   };
 }
 
@@ -2266,7 +2299,7 @@ export async function completePosCheckoutAction(
     fieldErrors.items = "Ada item transaksi yang tidak valid.";
   }
 
-  if (!idempotencyKey || idempotencyKey.length > 120) {
+  if (!isValidPosCheckoutIdempotencyKey(idempotencyKey)) {
     fieldErrors.idempotencyKey = "Kode transaksi POS tidak valid.";
   }
 
@@ -2388,64 +2421,89 @@ export async function completePosCheckoutAction(
     throw error;
   }
 
-  const duplicateSaleRows = await db
-    .select({
-      id: sales.id,
-      invoiceNumber: sales.invoiceNumber,
-      totalAmount: sales.totalAmount,
-    })
-    .from(sales)
-    .where(
-      and(
-        eq(sales.organizationId, auth.organization.id),
-        eq(sales.idempotencyKey, idempotencyKey),
-      ),
-    )
-    .limit(1);
-
-  const duplicateSale = duplicateSaleRows[0];
-
-  if (duplicateSale) {
-    return checkoutSuccess({
-      message: `Transaksi ${duplicateSale.invoiceNumber} sudah pernah diproses.`,
-      sale: {
-        id: duplicateSale.id,
-        invoiceNumber: duplicateSale.invoiceNumber,
-        totalAmount: duplicateSale.totalAmount,
-        receiptCertificateJobId: null,
-      },
-    });
-  }
+  const normalizedCheckoutPayload: PosCheckoutPayload = {
+    itemIds,
+    payments: normalizedPayments.map((payment) => ({
+      method: payment.method,
+      amount: payment.amount,
+      receivedAmount: payment.receivedAmount,
+      changeAmount: payment.changeAmount,
+      provider: payment.provider,
+      reference: payment.reference,
+      note: payment.note,
+    })),
+    idempotencyKey,
+    customerId,
+    note: saleNote,
+    discountApprovalId,
+    discountAmount: submittedDiscountAmount || null,
+    discountReason: submittedDiscountReason,
+  };
 
   const requestMetadata = await getRequestMetadata();
+  let claimedAttemptId: string | null = null;
+  let claimedAttemptCount: number | null = null;
 
   try {
-    const createdSale = await db.transaction(async (transaction) => {
-      const now = new Date();
+    const existingAttempt = await getPosCheckoutAttemptByKey(idempotencyKey);
 
-      const registerRows = await transaction
+    if (!existingAttempt) {
+      const legacySale = await getPosCheckoutSaleResult({
+        organizationId: auth.organization.id,
+        cashierId: auth.user.id,
+        outletIds: [primaryOutlet.id],
+        idempotencyKey,
+      });
+
+      if (legacySale) {
+        await db.insert(auditLogs).values({
+          organizationId: auth.organization.id,
+          outletId: primaryOutlet.id,
+          actorUserId: auth.user.id,
+          action: "pos.checkout.replayed",
+          entityType: "sale",
+          entityId: legacySale.id,
+          beforeData: null,
+          afterData: {
+            invoiceNumber: legacySale.invoiceNumber,
+            recoveryMode: "legacy_sale_without_attempt",
+          },
+          ipAddress: requestMetadata.ipAddress,
+          userAgent: requestMetadata.userAgent,
+          metadata: {
+            source: "pos.checkout",
+            idempotencyKey,
+          },
+          createdAt: new Date(),
+        });
+
+        return checkoutSuccess({
+          message: `Transaksi ${legacySale.invoiceNumber} sudah pernah diproses dan berhasil dipulihkan.`,
+          sale: legacySale,
+          recovery: "replayed",
+        });
+      }
+    }
+
+    let checkoutRegisterId = existingAttempt?.registerId ?? null;
+    let checkoutShiftId = existingAttempt?.shiftId ?? null;
+
+    if (!checkoutRegisterId || !checkoutShiftId) {
+      const [register] = await db
         .select({
           id: registers.id,
-          code: registers.code,
-          name: registers.name,
-          outletId: registers.outletId,
         })
         .from(registers)
         .where(getDefaultPosRegisterCondition(primaryOutlet.id))
         .orderBy(registers.name)
         .limit(1);
 
-      const register = registerRows[0];
-
       if (!register) {
         throw new CheckoutValidationError(DEFAULT_POS_REGISTER_MISSING_MESSAGE);
       }
 
-      const activeShiftRows = await transaction
-        .select({
-          id: shifts.id,
-          status: shifts.status,
-        })
+      const [activeShift] = await db
+        .select({ id: shifts.id })
         .from(shifts)
         .where(
           and(
@@ -2457,11 +2515,149 @@ export async function completePosCheckoutAction(
         .orderBy(sql`${shifts.openedAt} desc`)
         .limit(1);
 
-      const activeShift = activeShiftRows[0];
-
       if (!activeShift) {
         throw new CheckoutValidationError(
           "Shift aktif belum dibuka. Buka shift terlebih dahulu sebelum checkout.",
+        );
+      }
+
+      checkoutRegisterId = register.id;
+      checkoutShiftId = activeShift.id;
+    }
+
+    const claimResult = await claimPosCheckoutAttempt({
+      context: {
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet.id,
+        registerId: checkoutRegisterId,
+        shiftId: checkoutShiftId,
+        cashierId: auth.user.id,
+      },
+      payload: normalizedCheckoutPayload,
+    });
+
+    if (claimResult.status === "conflict") {
+      await db.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet.id,
+        actorUserId: auth.user.id,
+        action: "pos.checkout.idempotency_conflict",
+        entityType: "pos_checkout_attempt",
+        entityId: claimResult.attempt.id,
+        beforeData: {
+          requestFingerprint: claimResult.attempt.requestFingerprint,
+          attemptStatus: claimResult.attempt.status,
+        },
+        afterData: {
+          requestFingerprint: claimResult.fingerprint,
+        },
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+        metadata: {
+          source: "pos.checkout",
+          idempotencyKey,
+        },
+        createdAt: new Date(),
+      });
+
+      return checkoutFailure(
+        "Kode checkout yang sama digunakan untuk isi transaksi yang berbeda. Reset payment lalu proses sebagai transaksi baru.",
+        {
+          idempotencyKey: "Checkout attempt bertabrakan dengan payload lain.",
+        },
+        "idempotency_conflict",
+      );
+    }
+
+    if (
+      claimResult.status === "completed" ||
+      claimResult.status === "processing"
+    ) {
+      const recoveryStatus = await getPosCheckoutRecoveryStatus({
+        auth,
+        idempotencyKey,
+        recordRepairAudit: true,
+      });
+
+      if (recoveryStatus.status === "completed") {
+        await db.insert(auditLogs).values({
+          organizationId: auth.organization.id,
+          outletId: primaryOutlet.id,
+          actorUserId: auth.user.id,
+          action: "pos.checkout.replayed",
+          entityType: "sale",
+          entityId: recoveryStatus.sale.id,
+          beforeData: null,
+          afterData: {
+            invoiceNumber: recoveryStatus.sale.invoiceNumber,
+            attemptId: claimResult.attempt.id,
+          },
+          ipAddress: requestMetadata.ipAddress,
+          userAgent: requestMetadata.userAgent,
+          metadata: {
+            source: "pos.checkout",
+            idempotencyKey,
+          },
+          createdAt: new Date(),
+        });
+
+        return checkoutSuccess({
+          message: `Transaksi ${recoveryStatus.sale.invoiceNumber} sudah berhasil diproses dan dipulihkan.`,
+          sale: recoveryStatus.sale,
+          recovery: "replayed",
+        });
+      }
+
+      return checkoutProcessing(idempotencyKey, recoveryStatus.message);
+    }
+
+    claimedAttemptId = claimResult.attempt.id;
+    claimedAttemptCount = claimResult.attempt.attemptCount;
+    const checkoutFingerprint = claimResult.fingerprint;
+
+    const createdSale = await db.transaction(async (transaction) => {
+      const now = new Date();
+
+      const [register] = await transaction
+        .select({
+          id: registers.id,
+          code: registers.code,
+          name: registers.name,
+          outletId: registers.outletId,
+        })
+        .from(registers)
+        .where(
+          and(
+            eq(registers.id, checkoutRegisterId),
+            eq(registers.outletId, primaryOutlet.id),
+            eq(registers.isActive, true),
+          ),
+        )
+        .limit(1);
+
+      if (!register) {
+        throw new CheckoutValidationError(DEFAULT_POS_REGISTER_MISSING_MESSAGE);
+      }
+
+      const [activeShift] = await transaction
+        .select({
+          id: shifts.id,
+          status: shifts.status,
+        })
+        .from(shifts)
+        .where(
+          and(
+            eq(shifts.id, checkoutShiftId),
+            eq(shifts.outletId, primaryOutlet.id),
+            eq(shifts.registerId, register.id),
+            eq(shifts.status, "open"),
+          ),
+        )
+        .limit(1);
+
+      if (!activeShift) {
+        throw new CheckoutValidationError(
+          "Shift checkout sudah tidak aktif. Periksa status transaksi sebelum membuat transaksi baru.",
         );
       }
 
@@ -2743,6 +2939,7 @@ export async function completePosCheckoutAction(
           cashierId: auth.user.id,
           invoiceNumber,
           idempotencyKey,
+          checkoutFingerprint,
           status: "completed",
           subtotalAmount: String(subtotalAmount),
           discountAmount: String(approvedDiscountAmount),
@@ -3035,6 +3232,20 @@ export async function completePosCheckoutAction(
       };
     });
 
+    try {
+      await markPosCheckoutAttemptCompleted({
+        attemptId: claimResult.attempt.id,
+        attemptCount: claimResult.attempt.attemptCount,
+        saleId: createdSale.id,
+      });
+    } catch (attemptUpdateError) {
+      console.error("Failed to finalize POS checkout attempt", {
+        attemptId: claimResult.attempt.id,
+        saleId: createdSale.id,
+        error: attemptUpdateError,
+      });
+    }
+
     revalidatePath("/pos");
     revalidatePath("/pos/pelanggan");
     revalidatePath("/pos/transaksi");
@@ -3048,20 +3259,57 @@ export async function completePosCheckoutAction(
     revalidatePath("/admin");
 
     return checkoutSuccess({
-      message: `Transaksi ${createdSale.invoiceNumber} berhasil diselesaikan.`,
+      message: claimResult.replay
+        ? `Transaksi ${createdSale.invoiceNumber} berhasil diproses ulang secara aman.`
+        : `Transaksi ${createdSale.invoiceNumber} berhasil diselesaikan.`,
       sale: {
         id: createdSale.id,
         invoiceNumber: createdSale.invoiceNumber,
         totalAmount: createdSale.totalAmount,
         receiptCertificateJobId: createdSale.receiptCertificateJobId,
       },
+      recovery: claimResult.replay ? "replayed" : "created",
     });
   } catch (error) {
+    if (claimedAttemptId) {
+      const recoveryStatus = await getPosCheckoutRecoveryStatus({
+        auth,
+        idempotencyKey,
+        recordRepairAudit: true,
+      }).catch(() => null);
+
+      if (recoveryStatus?.status === "completed") {
+        return checkoutSuccess({
+          message: `Transaksi ${recoveryStatus.sale.invoiceNumber} sebenarnya sudah berhasil dan berhasil dipulihkan.`,
+          sale: recoveryStatus.sale,
+          recovery: "replayed",
+        });
+      }
+    }
+
     if (error instanceof CheckoutValidationError) {
-      return checkoutFailure(error.message);
+      if (claimedAttemptId && claimedAttemptCount !== null) {
+        await markPosCheckoutAttemptFailed({
+          attemptId: claimedAttemptId,
+          attemptCount: claimedAttemptCount,
+          errorCode: "validation_error",
+          errorMessage: error.message,
+        }).catch(() => undefined);
+      }
+
+      return checkoutFailure(error.message, undefined, "validation_error");
     }
 
     const systemErrorMessage = getSystemErrorMessage(error);
+
+    if (claimedAttemptId && claimedAttemptCount !== null) {
+      await markPosCheckoutAttemptFailed({
+        attemptId: claimedAttemptId,
+        attemptCount: claimedAttemptCount,
+        errorCode: "system_error",
+        errorMessage: systemErrorMessage,
+      }).catch(() => undefined);
+    }
 
     console.error("Failed to complete POS checkout", {
       message: systemErrorMessage,
@@ -3071,11 +3319,15 @@ export async function completePosCheckoutAction(
     if (process.env.NODE_ENV !== "production") {
       return checkoutFailure(
         `Transaksi belum bisa diselesaikan karena terjadi kendala sistem: ${systemErrorMessage}`,
+        undefined,
+        "system_error",
       );
     }
 
     return checkoutFailure(
-      "Transaksi belum bisa diselesaikan karena terjadi kendala sistem. Coba ulang atau hubungi admin.",
+      "Transaksi belum bisa diselesaikan karena terjadi kendala sistem. Periksa status transaksi sebelum mencoba kembali.",
+      undefined,
+      "system_error",
     );
   }
 }

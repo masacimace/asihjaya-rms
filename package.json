@@ -1,6 +1,6 @@
 {
   "name": "asihjaya-rms",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "engines": {
     "node": ">=22 <25"
@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "routes:check": "tsx scripts/check-routes.ts",
+    "check:p0d": "tsx scripts/check-p0d-checkout-recovery.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",

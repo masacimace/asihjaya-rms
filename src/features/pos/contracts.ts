@@ -226,21 +226,57 @@ export type PosHeldCartActionResult =
       fieldErrors?: Record<string, string>;
     };
 
+export type PosCheckoutSaleResult = {
+  id: string;
+  invoiceNumber: string;
+  totalAmount: string;
+  receiptCertificateJobId?: string | null;
+};
+
 export type PosCheckoutActionResult =
   | {
       status: "success";
       message: string;
-      sale: {
-        id: string;
-        invoiceNumber: string;
-        totalAmount: string;
-        receiptCertificateJobId?: string | null;
-      };
+      sale: PosCheckoutSaleResult;
+      recovery: "created" | "replayed";
+    }
+  | {
+      status: "processing";
+      message: string;
+      idempotencyKey: string;
+      retryAfterMs: number;
     }
   | {
       status: "error";
       message: string;
+      code?:
+        | "validation_error"
+        | "idempotency_conflict"
+        | "attempt_failed"
+        | "system_error";
       fieldErrors?: Record<string, string>;
+    };
+
+export type PosCheckoutRecoveryStatusResult =
+  | {
+      status: "completed";
+      message: string;
+      sale: PosCheckoutSaleResult;
+    }
+  | {
+      status: "processing";
+      message: string;
+      retryAfterMs: number;
+    }
+  | {
+      status: "failed";
+      message: string;
+      errorCode: string | null;
+      retryable: boolean;
+    }
+  | {
+      status: "not_found";
+      message: string;
     };
 
 export type PosShiftActionState = {

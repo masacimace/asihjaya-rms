@@ -124,6 +124,12 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "refunded",
 ]);
 
+export const posCheckoutAttemptStatusEnum = pgEnum("pos_checkout_attempt_status", [
+  "processing",
+  "completed",
+  "failed",
+]);
+
 export const paymentRefundStatusEnum = pgEnum("payment_refund_status", [
   "requested",
   "approved",
@@ -959,6 +965,7 @@ export const sales = pgTable(
       .references(() => users.id),
     invoiceNumber: varchar("invoice_number", { length: 80 }).notNull(),
     idempotencyKey: varchar("idempotency_key", { length: 120 }).notNull(),
+    checkoutFingerprint: varchar("checkout_fingerprint", { length: 64 }),
     status: saleStatusEnum("status").default("draft").notNull(),
     subtotalAmount: numeric("subtotal_amount", { precision: 18, scale: 0 })
       .default("0")
@@ -1011,6 +1018,68 @@ export const sales = pgTable(
     check(
       "sales_cancelled_timestamp_ck",
       sql`${table.status} not in ('cancelled', 'voided', 'refunded') or ${table.cancelledAt} is not null`,
+    ),
+  ],
+);
+
+export const posCheckoutAttempts = pgTable(
+  "pos_checkout_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    registerId: uuid("register_id")
+      .notNull()
+      .references(() => registers.id),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => shifts.id),
+    cashierId: uuid("cashier_id")
+      .notNull()
+      .references(() => users.id),
+    idempotencyKey: varchar("idempotency_key", { length: 120 }).notNull(),
+    requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
+    status: posCheckoutAttemptStatusEnum("status")
+      .default("processing")
+      .notNull(),
+    saleId: uuid("sale_id").references(() => sales.id, {
+      onDelete: "set null",
+    }),
+    attemptCount: integer("attempt_count").default(1).notNull(),
+    lastErrorCode: varchar("last_error_code", { length: 80 }),
+    lastErrorMessage: text("last_error_message"),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    failedAt: timestamp("failed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("pos_checkout_attempts_idempotency_uq").on(
+      table.idempotencyKey,
+    ),
+    index("pos_checkout_attempts_org_cashier_idx").on(
+      table.organizationId,
+      table.cashierId,
+      table.createdAt,
+    ),
+    index("pos_checkout_attempts_sale_idx").on(table.saleId),
+    check(
+      "pos_checkout_attempts_attempt_count_positive_ck",
+      sql`${table.attemptCount} > 0`,
+    ),
+    check(
+      "pos_checkout_attempts_completed_state_ck",
+      sql`${table.status} <> 'completed' or (${table.saleId} is not null and ${table.completedAt} is not null)`,
+    ),
+    check(
+      "pos_checkout_attempts_failed_state_ck",
+      sql`${table.status} <> 'failed' or ${table.failedAt} is not null`,
     ),
   ],
 );

@@ -85,6 +85,13 @@
       "when": 1783865406450,
       "tag": "0011_p0c_authorization",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783882626944,
+      "tag": "0012_p0d_checkout_recovery",
+      "breakpoints": true
     }
   ]
 }
