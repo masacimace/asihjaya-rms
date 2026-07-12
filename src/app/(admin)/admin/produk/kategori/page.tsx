@@ -118,7 +118,7 @@ export default async function ProductCategoryPage({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <Link
             href="/admin/produk"
-            className="inline-flex h-10 w-fit items-center gap-2 rounded-xl border border-transparent px-3 text-sm font-medium text-neutral-700 transition hover:border-[var(--border)] hover:bg-[var(--surface-muted)] hover:text-neutral-950"
+            className="inline-flex h-10 w-fit items-center gap-2 px-3 text-sm font-medium text-neutral-70"
           >
             <ArrowLeft className="size-4" />
             Kembali ke katalog produk

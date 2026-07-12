@@ -37,7 +37,7 @@ export default async function CreateProductCategoryPage({
       <section className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5">
         <Link
           href="/admin/produk/kategori"
-          className="inline-flex h-10 w-fit items-center gap-2 rounded-xl px-3 text-sm font-medium text-neutral-700 transition hover:bg-[var(--surface-muted)] hover:text-neutral-950"
+          className="inline-flex h-10 w-fit items-center gap-2 px-3 text-sm font-medium text-neutral-700"
         >
           <ArrowLeft className="size-4" />
           Kembali ke daftar kategori
@@ -68,8 +68,9 @@ export default async function CreateProductCategoryPage({
                 </h1>
 
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-                  Susun struktur katalog melalui kategori utama atau subkategori.
-                  Kode kategori menjadi identitas permanen setelah data tersimpan.
+                  Susun struktur katalog melalui kategori utama atau
+                  subkategori. Kode kategori menjadi identitas permanen setelah
+                  data tersimpan.
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2 text-xs text-neutral-700">
@@ -92,8 +93,8 @@ export default async function CreateProductCategoryPage({
               Alur konfigurasi
             </p>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Tentukan posisi kategori dalam katalog sebelum melengkapi identitas
-              dan status operasionalnya.
+              Tentukan posisi kategori dalam katalog sebelum melengkapi
+              identitas dan status operasionalnya.
             </p>
 
             <div className="mt-4 space-y-3">
