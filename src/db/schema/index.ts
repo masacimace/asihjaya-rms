@@ -124,6 +124,23 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "refunded",
 ]);
 
+export const paymentRefundStatusEnum = pgEnum("payment_refund_status", [
+  "requested",
+  "approved",
+  "processing",
+  "confirmed",
+  "failed",
+  "cancelled",
+]);
+
+export const approvalExecutionStatusEnum = pgEnum("approval_execution_status", [
+  "not_started",
+  "executing",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
 export const paymentMethodEnum = pgEnum("payment_method", [
   "cash",
   "debit_card",
@@ -656,6 +673,16 @@ export const inventoryMovements = pgTable(
       table.referenceType,
       table.referenceId,
     ),
+    uniqueIndex("inventory_movements_reference_guard_uq")
+      .on(
+        table.itemId,
+        table.movementType,
+        table.referenceType,
+        table.referenceId,
+      )
+      .where(
+        sql`${table.referenceType} is not null and ${table.referenceId} is not null`,
+      ),
   ],
 );
 
@@ -688,8 +715,26 @@ export const shifts = pgTable(
     ...timestamps,
   },
   (table) => [
+    uniqueIndex("shifts_one_active_per_register_uq")
+      .on(table.registerId)
+      .where(sql`${table.status} in ('open', 'closing')`),
     index("shifts_register_status_idx").on(table.registerId, table.status),
     index("shifts_outlet_opened_idx").on(table.outletId, table.openedAt),
+    check("shifts_opening_cash_nonnegative_ck", sql`${table.openingCash} >= 0`),
+    check(
+      "shifts_actual_cash_nonnegative_ck",
+      sql`${table.actualCash} is null or ${table.actualCash} >= 0`,
+    ),
+    check(
+      "shifts_closed_state_complete_ck",
+      sql`${table.status} <> 'closed' or (
+        ${table.closedBy} is not null
+        and ${table.expectedCash} is not null
+        and ${table.actualCash} is not null
+        and ${table.cashVariance} is not null
+        and ${table.closedAt} is not null
+      )`,
+    ),
   ],
 );
 
@@ -713,7 +758,25 @@ export const cashMovements = pgTable(
       .notNull(),
   },
   (table) => [
+    uniqueIndex("cash_movements_reference_guard_uq")
+      .on(table.type, table.referenceType, table.referenceId)
+      .where(
+        sql`${table.referenceType} is not null and ${table.referenceId} is not null`,
+      ),
     index("cash_movements_shift_time_idx").on(table.shiftId, table.createdAt),
+    check(
+      "cash_movements_amount_ck",
+      sql`(
+        ${table.type} = 'opening_balance' and ${table.amount} >= 0
+      ) or (
+        ${table.type} <> 'opening_balance' and ${table.amount} > 0
+      )`,
+    ),
+    check(
+      "cash_movements_system_reference_ck",
+      sql`${table.type} not in ('opening_balance', 'cash_sale', 'cash_refund')
+        or (${table.referenceType} is not null and ${table.referenceId} is not null)`,
+    ),
   ],
 );
 
@@ -926,6 +989,29 @@ export const sales = pgTable(
     uniqueIndex("sales_idempotency_uq").on(table.idempotencyKey),
     index("sales_outlet_created_idx").on(table.outletId, table.createdAt),
     index("sales_shift_idx").on(table.shiftId),
+    check("sales_subtotal_nonnegative_ck", sql`${table.subtotalAmount} >= 0`),
+    check("sales_discount_nonnegative_ck", sql`${table.discountAmount} >= 0`),
+    check(
+      "sales_additional_fee_nonnegative_ck",
+      sql`${table.additionalFeeAmount} >= 0`,
+    ),
+    check("sales_total_nonnegative_ck", sql`${table.totalAmount} >= 0`),
+    check(
+      "sales_discount_not_above_subtotal_ck",
+      sql`${table.discountAmount} <= ${table.subtotalAmount}`,
+    ),
+    check(
+      "sales_total_formula_ck",
+      sql`${table.totalAmount} = ${table.subtotalAmount} - ${table.discountAmount} + ${table.additionalFeeAmount}`,
+    ),
+    check(
+      "sales_completed_timestamp_ck",
+      sql`${table.status} <> 'completed' or ${table.completedAt} is not null`,
+    ),
+    check(
+      "sales_cancelled_timestamp_ck",
+      sql`${table.status} not in ('cancelled', 'voided', 'refunded') or ${table.cancelledAt} is not null`,
+    ),
   ],
 );
 
@@ -962,6 +1048,22 @@ export const saleItems = pgTable(
       table.productItemId,
     ),
     uniqueIndex("sale_items_sale_line_uq").on(table.saleId, table.lineNumber),
+    check(
+      "sale_items_list_price_positive_ck",
+      sql`${table.listPriceAmount} > 0`,
+    ),
+    check(
+      "sale_items_discount_nonnegative_ck",
+      sql`${table.discountAmount} >= 0`,
+    ),
+    check(
+      "sale_items_discount_not_above_list_ck",
+      sql`${table.discountAmount} <= ${table.listPriceAmount}`,
+    ),
+    check(
+      "sale_items_final_price_formula_ck",
+      sql`${table.finalPriceAmount} = ${table.listPriceAmount} - ${table.discountAmount}`,
+    ),
   ],
 );
 
@@ -989,6 +1091,15 @@ export const payments = pgTable(
     index("payments_provider_reference_idx").on(
       table.provider,
       table.providerReference,
+    ),
+    check("payments_amount_positive_ck", sql`${table.amount} > 0`),
+    check(
+      "payments_paid_state_complete_ck",
+      sql`${table.status} <> 'paid' or (
+        ${table.verifiedBy} is not null
+        and ${table.verifiedAt} is not null
+        and ${table.paidAt} is not null
+      )`,
     ),
   ],
 );
@@ -1231,13 +1342,120 @@ export const approvals = pgTable(
     requestData: jsonb("request_data").$type<Record<string, unknown>>().notNull(),
     notes: text("notes"),
     responseNotes: text("response_notes"),
+    executionStatus: approvalExecutionStatusEnum("execution_status")
+      .default("not_started")
+      .notNull(),
+    executionIdempotencyKey: varchar("execution_idempotency_key", {
+      length: 160,
+    }),
+    executionStartedAt: timestamp("execution_started_at", {
+      withTimezone: true,
+    }),
+    executedAt: timestamp("executed_at", { withTimezone: true }),
+    executedBy: uuid("executed_by").references(() => users.id),
+    executionError: text("execution_error"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
   (table) => [
+    uniqueIndex("approvals_execution_idempotency_uq")
+      .on(table.organizationId, table.executionIdempotencyKey)
+      .where(sql`${table.executionIdempotencyKey} is not null`),
     index("approvals_org_status_idx").on(table.organizationId, table.status),
     index("approvals_ref_idx").on(table.referenceType, table.referenceId),
+    index("approvals_execution_status_idx").on(
+      table.organizationId,
+      table.executionStatus,
+    ),
+    check(
+      "approvals_executing_state_ck",
+      sql`${table.executionStatus} <> 'executing' or ${table.executionStartedAt} is not null`,
+    ),
+    check(
+      "approvals_completed_state_ck",
+      sql`${table.executionStatus} <> 'completed' or (
+        ${table.executedAt} is not null and ${table.executedBy} is not null
+      )`,
+    ),
+  ],
+);
+
+export const paymentRefunds = pgTable(
+  "payment_refunds",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    saleId: uuid("sale_id")
+      .notNull()
+      .references(() => sales.id),
+    paymentId: uuid("payment_id")
+      .notNull()
+      .references(() => payments.id),
+    approvalId: uuid("approval_id").references(() => approvals.id),
+    originalShiftId: uuid("original_shift_id")
+      .notNull()
+      .references(() => shifts.id),
+    refundShiftId: uuid("refund_shift_id").references(() => shifts.id),
+    amount: numeric("amount", { precision: 18, scale: 0 }).notNull(),
+    method: paymentMethodEnum("method").notNull(),
+    provider: varchar("provider", { length: 80 }).default("manual").notNull(),
+    providerReference: varchar("provider_reference", { length: 160 }),
+    destinationMasked: varchar("destination_masked", { length: 160 }),
+    evidenceKey: text("evidence_key"),
+    reason: text("reason").notNull(),
+    status: paymentRefundStatusEnum("status").default("requested").notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 160 }).notNull(),
+    requestedBy: uuid("requested_by")
+      .notNull()
+      .references(() => users.id),
+    approvedBy: uuid("approved_by").references(() => users.id),
+    executedBy: uuid("executed_by").references(() => users.id),
+    confirmedBy: uuid("confirmed_by").references(() => users.id),
+    requestedAt: timestamp("requested_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    executedAt: timestamp("executed_at", { withTimezone: true }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    failureCode: varchar("failure_code", { length: 120 }),
+    failureMessage: text("failure_message"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("payment_refunds_org_idempotency_uq").on(
+      table.organizationId,
+      table.idempotencyKey,
+    ),
+    uniqueIndex("payment_refunds_approval_payment_uq")
+      .on(table.approvalId, table.paymentId)
+      .where(sql`${table.approvalId} is not null`),
+    index("payment_refunds_sale_status_idx").on(table.saleId, table.status),
+    index("payment_refunds_payment_status_idx").on(
+      table.paymentId,
+      table.status,
+    ),
+    index("payment_refunds_refund_shift_idx").on(table.refundShiftId),
+    index("payment_refunds_provider_reference_idx").on(
+      table.provider,
+      table.providerReference,
+    ),
+    check("payment_refunds_amount_positive_ck", sql`${table.amount} > 0`),
+    check(
+      "payment_refunds_confirmed_state_ck",
+      sql`${table.status} <> 'confirmed' or ${table.confirmedAt} is not null`,
+    ),
+    check(
+      "payment_refunds_cash_shift_ck",
+      sql`not (${table.method} = 'cash' and ${table.status} = 'confirmed')
+        or ${table.refundShiftId} is not null`,
+    ),
   ],
 );

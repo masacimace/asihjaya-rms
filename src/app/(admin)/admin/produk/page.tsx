@@ -483,7 +483,7 @@ export default async function ProductCatalogPage({
                         <ProductImage
                           src={getImageUrl(product.imageKey)}
                           alt={product.name}
-                          className="size-14 shrink-0 rounded-2xl border border-[var(--border)] bg-neutral-50"
+                          className="size-16 shrink-0 rounded-2xl border border-[var(--border)] bg-neutral-50"
                         />
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-neutral-950">

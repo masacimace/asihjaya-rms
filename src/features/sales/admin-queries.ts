@@ -47,6 +47,7 @@ import type { AuthContext } from "@/lib/auth/session";
 
 const approvalRequestedByUsers = alias(users, "sales_detail_approval_requested_by_users");
 const approvalApprovedByUsers = alias(users, "sales_detail_approval_approved_by_users");
+const approvalExecutedByUsers = alias(users, "sales_detail_approval_executed_by_users");
 
 const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
 
@@ -190,31 +191,39 @@ function getApprovalRequestDataString(
     : null;
 }
 
-function getSensitiveApprovalExecutionStatus(requestData: Record<string, unknown>) {
-  const value = getApprovalRequestDataString(requestData, "executionStatus");
+function getSensitiveApprovalExecutionStatus({
+  approvalType,
+  columnStatus,
+  requestData,
+}: {
+  approvalType: "void_receipt" | "refund_transaction";
+  columnStatus: "not_started" | "executing" | "completed" | "failed" | "cancelled";
+  requestData: Record<string, unknown>;
+}) {
+  if (columnStatus === "executing") return "executing" as const;
+  if (columnStatus === "failed") return "failed" as const;
+  if (columnStatus === "cancelled") return "cancelled" as const;
+
+  if (columnStatus === "completed") {
+    return approvalType === "void_receipt"
+      ? ("void_executed" as const)
+      : ("refund_executed" as const);
+  }
+
+  const legacyValue = getApprovalRequestDataString(
+    requestData,
+    "executionStatus",
+  );
 
   if (
-    value === "awaiting_r3c_2" ||
-    value === "void_executed" ||
-    value === "refund_executed" ||
-    value === "cancelled"
+    legacyValue === "void_executed" ||
+    legacyValue === "refund_executed" ||
+    legacyValue === "cancelled"
   ) {
-    return value;
+    return legacyValue;
   }
 
-  return null;
-}
-
-function getSensitiveApprovalExecutedAt(requestData: Record<string, unknown>) {
-  const value = getApprovalRequestDataString(requestData, "executedAt");
-
-  if (!value) {
-    return null;
-  }
-
-  const date = new Date(value);
-
-  return Number.isNaN(date.getTime()) ? null : date;
+  return "awaiting_r3c_2" as const;
 }
 
 function getPaymentMetadataString(metadata: PaymentMetadata, key: string) {
@@ -1015,6 +1024,10 @@ export async function getAdminSaleDetailData({
         createdAt: approvals.createdAt,
         resolvedAt: approvals.resolvedAt,
         requestData: approvals.requestData,
+        executionStatus: approvals.executionStatus,
+        executionError: approvals.executionError,
+        executedAt: approvals.executedAt,
+        executedByName: approvalExecutedByUsers.fullName,
       })
       .from(approvals)
       .innerJoin(
@@ -1024,6 +1037,10 @@ export async function getAdminSaleDetailData({
       .leftJoin(
         approvalApprovedByUsers,
         eq(approvals.approvedBy, approvalApprovedByUsers.id),
+      )
+      .leftJoin(
+        approvalExecutedByUsers,
+        eq(approvals.executedBy, approvalExecutedByUsers.id),
       )
       .where(
         and(
@@ -1237,12 +1254,16 @@ export async function getAdminSaleDetailData({
       createdAt: approval.createdAt,
       resolvedAt: approval.resolvedAt,
       requestData: approval.requestData,
-      executionStatus: getSensitiveApprovalExecutionStatus(approval.requestData),
-      executedAt: getSensitiveApprovalExecutedAt(approval.requestData),
-      executedByName: getApprovalRequestDataString(
-        approval.requestData,
-        "executedByName",
-      ),
+      executionStatus: getSensitiveApprovalExecutionStatus({
+        approvalType: approval.type as "void_receipt" | "refund_transaction",
+        columnStatus: approval.executionStatus,
+        requestData: approval.requestData,
+      }),
+      executionError: approval.executionError,
+      executedAt: approval.executedAt,
+      executedByName:
+        approval.executedByName ??
+        getApprovalRequestDataString(approval.requestData, "executedByName"),
     })),
     timeline,
     receiptCertificate: {

@@ -55,7 +55,7 @@ export function UserMenu({
         onClick={() => setIsOpen((current) => !current)}
         className="flex items-center gap-2 rounded-2xl border border-transparent px-1.5 py-1.5 text-left transition hover:border-[var(--border)] hover:bg-neutral-50 sm:px-2"
       >
-        <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-amber-100 bg-amber-50 text-sm font-bold text-amber-700">
+        <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-amber-100 bg-amber-50 text-sm font-bold text-[var(--accent)]">
           {initials}
         </span>
 

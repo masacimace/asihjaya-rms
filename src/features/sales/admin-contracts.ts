@@ -220,6 +220,8 @@ export type AdminSaleSensitiveApprovalExecutionStatus =
   | "awaiting_r3c_2"
   | "void_executed"
   | "refund_executed"
+  | "executing"
+  | "failed"
   | "cancelled"
   | null;
 
@@ -235,6 +237,7 @@ export type AdminSaleSensitiveApproval = {
   resolvedAt: Date | null;
   requestData: Record<string, unknown>;
   executionStatus: AdminSaleSensitiveApprovalExecutionStatus;
+  executionError: string | null;
   executedAt: Date | null;
   executedByName: string | null;
 };

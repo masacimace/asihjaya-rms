@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -11,21 +11,21 @@ import { db } from "@/db";
 import {
   approvals,
   auditLogs,
-  cashMovements,
   customers,
   hardwareAgents,
-  inventoryMovements,
   outlets,
   payments,
-  productItems,
   registers,
   saleItems,
   sales,
-  shifts,
   users,
 } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/session";
 import { createHardwareJobWithDuplicateGuard } from "@/lib/hardware/job-queue";
+import {
+  executeApprovedSaleReversal,
+  SaleReversalTransactionError,
+} from "@/features/sales/transaction-service";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -464,788 +464,112 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
 }
 
 
-type VoidExecutionRequestData = Record<string, unknown> & {
-  executionStatus?: string;
-};
+async function executeApprovedSaleReversalAction({
+  formData,
+  kind,
+}: {
+  formData: FormData;
+  kind: "void" | "refund";
+}) {
+  const auth = await requirePermission("sales.view");
+  const saleId = readText(formData, "saleId");
+  const approvalId = readText(formData, "approvalId");
+  const returnTo = readText(formData, "returnTo");
+  const executionNote = readText(formData, "executionNote").slice(0, 1000);
 
-function getRequestDataExecutionStatus(requestData: Record<string, unknown>) {
-  const value = requestData.executionStatus;
+  if (!UUID_PATTERN.test(saleId) || !UUID_PATTERN.test(approvalId)) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo: "/admin/penjualan",
+      type: "error",
+      message: `Transaksi atau approval ${kind === "void" ? "void" : "refund"} tidak valid untuk dieksekusi.`,
+    });
+  }
 
-  return typeof value === "string" ? value : null;
-}
+  const accessibleOutletIds = auth.outlets.map((outlet) => outlet.id);
 
-function getCashPaidAmount(
-  paymentRows: Array<{ method: string; status: string; amount: string }>,
-) {
-  return paymentRows.reduce((total, payment) => {
-    if (payment.method !== "cash" || payment.status !== "paid") {
-      return total;
-    }
+  if (accessibleOutletIds.length === 0) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo,
+      type: "error",
+      message:
+        "Outlet yang bisa diakses tidak ditemukan. Hubungi owner/admin untuk mengatur akses outlet.",
+    });
+  }
 
-    return total + parseNumber(payment.amount);
-  }, 0);
-}
+  const requestMetadata = await getAdminRequestMetadata();
 
-function getPaidAmount(
-  paymentRows: Array<{ status: string; amount: string }>,
-) {
-  return paymentRows.reduce((total, payment) => {
-    if (payment.status !== "paid") {
-      return total;
-    }
+  let result: Awaited<ReturnType<typeof executeApprovedSaleReversal>>;
 
-    return total + parseNumber(payment.amount);
-  }, 0);
+  try {
+    result = await executeApprovedSaleReversal({
+      kind,
+      saleId,
+      approvalId,
+      organizationId: auth.organization.id,
+      accessibleOutletIds,
+      actor: {
+        id: auth.user.id,
+        fullName: auth.user.fullName,
+      },
+      executionNote,
+      requestMetadata,
+    });
+  } catch (error) {
+    const message =
+      error instanceof SaleReversalTransactionError
+        ? error.message
+        : `Eksekusi ${kind === "void" ? "void" : "refund"} gagal karena kendala sistem. Tidak ada perubahan finansial yang disimpan.`;
+
+    console.error(`Failed to execute approved sale ${kind}`, {
+      saleId,
+      approvalId,
+      error,
+    });
+
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo,
+      type: "error",
+      message,
+    });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/penjualan");
+  revalidatePath(`/admin/penjualan/${saleId}`);
+  revalidatePath("/admin/inventaris");
+  revalidatePath("/admin/operasional/kas");
+  revalidatePath("/admin/operasional/shift");
+  revalidatePath("/admin/operasional/approval");
+  revalidatePath("/pos");
+
+  const replayMessage = result.idempotentReplay
+    ? " Request sebelumnya sudah berhasil dan hasil yang sama dikembalikan tanpa membuat reversal kedua."
+    : "";
+  const shiftMessage =
+    result.cashRefundAmount > 0 && result.refundShiftId
+      ? " Refund cash dicatat pada shift register yang sedang open, bukan shift transaksi lama."
+      : "";
+
+  redirectAdminSaleDetailWithFeedback({
+    saleId,
+    returnTo,
+    type: "success",
+    message:
+      kind === "void"
+        ? `Void ${result.invoiceNumber} berhasil dieksekusi secara atomik.${shiftMessage}${replayMessage}`
+        : `Refund penuh ${result.invoiceNumber} berhasil dieksekusi secara atomik.${shiftMessage}${replayMessage}`,
+  });
 }
 
 export async function executeApprovedSaleVoidAction(formData: FormData) {
-  const auth = await requirePermission("sales.view");
-  const saleId = readText(formData, "saleId");
-  const approvalId = readText(formData, "approvalId");
-  const returnTo = readText(formData, "returnTo");
-  const executionNote = readText(formData, "executionNote").slice(0, 1000);
-
-  if (!UUID_PATTERN.test(saleId) || !UUID_PATTERN.test(approvalId)) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo: "/admin/penjualan",
-      type: "error",
-      message: "Transaksi atau approval void tidak valid untuk dieksekusi.",
-    });
-  }
-
-  const accessibleOutletIds = auth.outlets.map((outlet) => outlet.id);
-
-  if (accessibleOutletIds.length === 0) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo,
-      type: "error",
-      message:
-        "Outlet yang bisa diakses tidak ditemukan. Hubungi owner/admin untuk mengatur akses outlet.",
-    });
-  }
-
-  const requestMetadata = await getAdminRequestMetadata();
-  const now = new Date();
-  let invoiceNumber = "transaksi";
-
-  const result = await db.transaction(async (tx) => {
-    const [sale] = await tx
-      .select({
-        id: sales.id,
-        organizationId: sales.organizationId,
-        outletId: sales.outletId,
-        registerId: sales.registerId,
-        shiftId: sales.shiftId,
-        cashierId: sales.cashierId,
-        invoiceNumber: sales.invoiceNumber,
-        status: sales.status,
-        subtotalAmount: sales.subtotalAmount,
-        discountAmount: sales.discountAmount,
-        additionalFeeAmount: sales.additionalFeeAmount,
-        totalAmount: sales.totalAmount,
-        completedAt: sales.completedAt,
-        cancelledAt: sales.cancelledAt,
-        notes: sales.notes,
-      })
-      .from(sales)
-      .where(
-        and(
-          eq(sales.id, saleId),
-          eq(sales.organizationId, auth.organization.id),
-          inArray(sales.outletId, accessibleOutletIds),
-        ),
-      )
-      .limit(1);
-
-    if (!sale) {
-      return {
-        ok: false as const,
-        message:
-          "Transaksi tidak ditemukan atau bukan bagian dari outlet yang bisa kamu akses.",
-      };
-    }
-
-    invoiceNumber = sale.invoiceNumber;
-
-    if (sale.status !== "completed") {
-      return {
-        ok: false as const,
-        message: "Void hanya bisa dieksekusi untuk transaksi yang masih completed.",
-      };
-    }
-
-    const [approval] = await tx
-      .select({
-        id: approvals.id,
-        type: approvals.type,
-        status: approvals.status,
-        requestedBy: approvals.requestedBy,
-        approvedBy: approvals.approvedBy,
-        referenceType: approvals.referenceType,
-        referenceId: approvals.referenceId,
-        requestData: approvals.requestData,
-        notes: approvals.notes,
-        responseNotes: approvals.responseNotes,
-        resolvedAt: approvals.resolvedAt,
-      })
-      .from(approvals)
-      .where(
-        and(
-          eq(approvals.id, approvalId),
-          eq(approvals.organizationId, auth.organization.id),
-          eq(approvals.outletId, sale.outletId),
-          eq(approvals.type, "void_receipt"),
-          eq(approvals.referenceType, "sale"),
-          eq(approvals.referenceId, sale.id),
-        ),
-      )
-      .limit(1);
-
-    if (!approval) {
-      return {
-        ok: false as const,
-        message:
-          "Approval void tidak ditemukan untuk transaksi ini. Ajukan approval void terlebih dahulu.",
-      };
-    }
-
-    if (approval.status !== "approved") {
-      return {
-        ok: false as const,
-        message:
-          "Approval void belum disetujui. Tunggu manager/owner approve sebelum eksekusi void.",
-      };
-    }
-
-    const approvalRequestData = approval.requestData as VoidExecutionRequestData;
-    const executionStatus = getRequestDataExecutionStatus(approvalRequestData);
-
-    if (executionStatus === "void_executed") {
-      return {
-        ok: false as const,
-        message: "Void untuk transaksi ini sudah pernah dieksekusi.",
-      };
-    }
-
-    const [paymentRows, itemRows] = await Promise.all([
-      tx
-        .select({
-          id: payments.id,
-          method: payments.method,
-          amount: payments.amount,
-          status: payments.status,
-          metadata: payments.metadata,
-        })
-        .from(payments)
-        .where(eq(payments.saleId, sale.id)),
-      tx
-        .select({
-          id: saleItems.id,
-          productItemId: saleItems.productItemId,
-          lineNumber: saleItems.lineNumber,
-          finalPriceAmount: saleItems.finalPriceAmount,
-          sku: productItems.sku,
-          barcode: productItems.barcode,
-          currentOutletId: productItems.currentOutletId,
-          availability: productItems.availability,
-          locationState: productItems.locationState,
-        })
-        .from(saleItems)
-        .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
-        .where(eq(saleItems.saleId, sale.id)),
-    ]);
-
-    if (itemRows.length === 0) {
-      return {
-        ok: false as const,
-        message: "Transaksi ini tidak memiliki item, sehingga void belum bisa dieksekusi.",
-      };
-    }
-
-    const productItemIds = itemRows.map((item) => item.productItemId);
-    const cashPaidAmount = getCashPaidAmount(paymentRows);
-    const paidAmount = getPaidAmount(paymentRows);
-    const reason =
-      executionNote ||
-      approval.notes ||
-      approval.responseNotes ||
-      "Void transaksi setelah approval manager/owner.";
-
-    await tx
-      .update(sales)
-      .set({
-        status: "voided",
-        cancelledAt: now,
-        updatedAt: now,
-        notes: sale.notes
-          ? `${sale.notes}\n\n[VOID ${now.toISOString()}] ${reason}`
-          : `[VOID ${now.toISOString()}] ${reason}`,
-      })
-      .where(eq(sales.id, sale.id));
-
-    await tx
-      .update(productItems)
-      .set({
-        availability: "available",
-        locationState: "outlet",
-        currentOutletId: sale.outletId,
-        updatedAt: now,
-      })
-      .where(inArray(productItems.id, productItemIds));
-
-    await tx.insert(inventoryMovements).values(
-      itemRows.map((item) => ({
-        organizationId: auth.organization.id,
-        itemId: item.productItemId,
-        movementType: "reversal" as const,
-        fromOutletId: null,
-        toOutletId: sale.outletId,
-        referenceType: "sale_void",
-        referenceId: sale.id,
-        reason,
-        metadata: {
-          source: "admin.sales.void_execution",
-          saleId: sale.id,
-          invoiceNumber: sale.invoiceNumber,
-          saleItemId: item.id,
-          lineNumber: item.lineNumber,
-          finalPriceAmount: parseNumber(item.finalPriceAmount),
-          previousAvailability: item.availability,
-          previousLocationState: item.locationState,
-          previousOutletId: item.currentOutletId,
-          approvalId: approval.id,
-        },
-        performedBy: auth.user.id,
-        approvedBy: approval.approvedBy,
-        occurredAt: now,
-        createdAt: now,
-      })),
-    );
-
-    if (paymentRows.length > 0) {
-      await tx
-        .update(payments)
-        .set({
-          status: "refunded",
-          updatedAt: now,
-          metadata: sql`coalesce(${payments.metadata}, '{}'::jsonb) || ${JSON.stringify({
-            voidedAt: now.toISOString(),
-            voidedBy: auth.user.id,
-            voidApprovalId: approval.id,
-            previousSaleStatus: sale.status,
-            voidReason: reason,
-          })}::jsonb`,
-        })
-        .where(
-          and(
-            eq(payments.saleId, sale.id),
-            inArray(payments.status, ["paid", "pending"]),
-          ),
-        );
-    }
-
-    if (cashPaidAmount > 0) {
-      await tx.insert(cashMovements).values({
-        shiftId: sale.shiftId,
-        type: "cash_refund",
-        amount: String(cashPaidAmount),
-        referenceType: "sale_void",
-        referenceId: sale.id,
-        reason: `Void ${sale.invoiceNumber}: ${reason}`.slice(0, 2000),
-        createdBy: auth.user.id,
-        createdAt: now,
-      });
-
-      await tx
-        .update(shifts)
-        .set({
-          expectedCash: sql`coalesce(${shifts.expectedCash}, 0) - ${String(cashPaidAmount)}`,
-          updatedAt: now,
-        })
-        .where(eq(shifts.id, sale.shiftId));
-    }
-
-    await tx
-      .update(approvals)
-      .set({
-        requestData: {
-          ...approvalRequestData,
-          executionStatus: "void_executed",
-          executedAt: now.toISOString(),
-          executedBy: auth.user.id,
-          executedByName: auth.user.fullName,
-          executionNote: reason,
-          saleStatusBefore: sale.status,
-          saleStatusAfter: "voided",
-          cashRefundAmount: cashPaidAmount,
-          paidAmount,
-          returnedItemCount: itemRows.length,
-        },
-        responseNotes: approval.responseNotes
-          ? `${approval.responseNotes}\n\nEksekusi void: ${reason}`
-          : `Eksekusi void: ${reason}`,
-      })
-      .where(eq(approvals.id, approval.id));
-
-    await tx.insert(auditLogs).values({
-      organizationId: auth.organization.id,
-      outletId: sale.outletId,
-      actorUserId: auth.user.id,
-      action: "sale.void_executed",
-      entityType: "sale",
-      entityId: sale.id,
-      beforeData: {
-        status: sale.status,
-        totalAmount: sale.totalAmount,
-        paidAmount,
-        cashPaidAmount,
-        paymentStatuses: paymentRows.map((payment) => ({
-          id: payment.id,
-          method: payment.method,
-          status: payment.status,
-          amount: payment.amount,
-        })),
-        itemStates: itemRows.map((item) => ({
-          productItemId: item.productItemId,
-          availability: item.availability,
-          locationState: item.locationState,
-          currentOutletId: item.currentOutletId,
-        })),
-      },
-      afterData: {
-        status: "voided",
-        approvalId: approval.id,
-        returnedItemCount: itemRows.length,
-        cashRefundAmount: cashPaidAmount,
-        paymentStatus: "refunded",
-      },
-      reason,
-      ipAddress: requestMetadata.ipAddress,
-      userAgent: requestMetadata.userAgent,
-      metadata: {
-        source: "admin.sales.detail",
-        approvalId: approval.id,
-        invoiceNumber: sale.invoiceNumber,
-        executionStatus: "void_executed",
-      },
-      createdAt: now,
-    });
-
-    return {
-      ok: true as const,
-      invoiceNumber: sale.invoiceNumber,
-      returnedItemCount: itemRows.length,
-      cashRefundAmount: cashPaidAmount,
-    };
-  });
-
-  if (!result.ok) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo,
-      type: "error",
-      message: result.message,
-    });
-  }
-
-  revalidatePath("/admin");
-  revalidatePath("/admin/penjualan");
-  revalidatePath(`/admin/penjualan/${saleId}`);
-  revalidatePath("/admin/inventaris");
-  revalidatePath("/admin/operasional/kas");
-  revalidatePath("/admin/operasional/shift");
-  revalidatePath("/admin/operasional/approval");
-  revalidatePath("/pos");
-
-  redirectAdminSaleDetailWithFeedback({
-    saleId,
-    returnTo,
-    type: "success",
-    message: `Void ${invoiceNumber} berhasil dieksekusi. Item kembali tersedia dan reversal kas cash sudah dicatat jika ada pembayaran cash.`,
-  });
+  return executeApprovedSaleReversalAction({ formData, kind: "void" });
 }
 
-
 export async function executeApprovedSaleRefundAction(formData: FormData) {
-  const auth = await requirePermission("sales.view");
-  const saleId = readText(formData, "saleId");
-  const approvalId = readText(formData, "approvalId");
-  const returnTo = readText(formData, "returnTo");
-  const executionNote = readText(formData, "executionNote").slice(0, 1000);
-
-  if (!UUID_PATTERN.test(saleId) || !UUID_PATTERN.test(approvalId)) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo: "/admin/penjualan",
-      type: "error",
-      message: "Transaksi atau approval refund tidak valid untuk dieksekusi.",
-    });
-  }
-
-  const accessibleOutletIds = auth.outlets.map((outlet) => outlet.id);
-
-  if (accessibleOutletIds.length === 0) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo,
-      type: "error",
-      message:
-        "Outlet yang bisa diakses tidak ditemukan. Hubungi owner/admin untuk mengatur akses outlet.",
-    });
-  }
-
-  const requestMetadata = await getAdminRequestMetadata();
-  const now = new Date();
-  let invoiceNumber = "transaksi";
-
-  const result = await db.transaction(async (tx) => {
-    const [sale] = await tx
-      .select({
-        id: sales.id,
-        organizationId: sales.organizationId,
-        outletId: sales.outletId,
-        registerId: sales.registerId,
-        shiftId: sales.shiftId,
-        cashierId: sales.cashierId,
-        invoiceNumber: sales.invoiceNumber,
-        status: sales.status,
-        subtotalAmount: sales.subtotalAmount,
-        discountAmount: sales.discountAmount,
-        additionalFeeAmount: sales.additionalFeeAmount,
-        totalAmount: sales.totalAmount,
-        completedAt: sales.completedAt,
-        cancelledAt: sales.cancelledAt,
-        notes: sales.notes,
-      })
-      .from(sales)
-      .where(
-        and(
-          eq(sales.id, saleId),
-          eq(sales.organizationId, auth.organization.id),
-          inArray(sales.outletId, accessibleOutletIds),
-        ),
-      )
-      .limit(1);
-
-    if (!sale) {
-      return {
-        ok: false as const,
-        message:
-          "Transaksi tidak ditemukan atau bukan bagian dari outlet yang bisa kamu akses.",
-      };
-    }
-
-    invoiceNumber = sale.invoiceNumber;
-
-    if (sale.status !== "completed") {
-      return {
-        ok: false as const,
-        message: "Refund penuh hanya bisa dieksekusi untuk transaksi yang masih completed.",
-      };
-    }
-
-    const [approval] = await tx
-      .select({
-        id: approvals.id,
-        type: approvals.type,
-        status: approvals.status,
-        requestedBy: approvals.requestedBy,
-        approvedBy: approvals.approvedBy,
-        referenceType: approvals.referenceType,
-        referenceId: approvals.referenceId,
-        requestData: approvals.requestData,
-        notes: approvals.notes,
-        responseNotes: approvals.responseNotes,
-        resolvedAt: approvals.resolvedAt,
-      })
-      .from(approvals)
-      .where(
-        and(
-          eq(approvals.id, approvalId),
-          eq(approvals.organizationId, auth.organization.id),
-          eq(approvals.outletId, sale.outletId),
-          eq(approvals.type, "refund_transaction"),
-          eq(approvals.referenceType, "sale"),
-          eq(approvals.referenceId, sale.id),
-        ),
-      )
-      .limit(1);
-
-    if (!approval) {
-      return {
-        ok: false as const,
-        message:
-          "Approval refund tidak ditemukan untuk transaksi ini. Ajukan approval refund terlebih dahulu.",
-      };
-    }
-
-    if (approval.status !== "approved") {
-      return {
-        ok: false as const,
-        message:
-          "Approval refund belum disetujui. Tunggu manager/owner approve sebelum eksekusi refund.",
-      };
-    }
-
-    const approvalRequestData = approval.requestData as VoidExecutionRequestData;
-    const executionStatus = getRequestDataExecutionStatus(approvalRequestData);
-
-    if (executionStatus === "refund_executed") {
-      return {
-        ok: false as const,
-        message: "Refund untuk transaksi ini sudah pernah dieksekusi.",
-      };
-    }
-
-    const [paymentRows, itemRows] = await Promise.all([
-      tx
-        .select({
-          id: payments.id,
-          method: payments.method,
-          amount: payments.amount,
-          status: payments.status,
-          metadata: payments.metadata,
-        })
-        .from(payments)
-        .where(eq(payments.saleId, sale.id)),
-      tx
-        .select({
-          id: saleItems.id,
-          productItemId: saleItems.productItemId,
-          lineNumber: saleItems.lineNumber,
-          finalPriceAmount: saleItems.finalPriceAmount,
-          sku: productItems.sku,
-          barcode: productItems.barcode,
-          currentOutletId: productItems.currentOutletId,
-          availability: productItems.availability,
-          locationState: productItems.locationState,
-        })
-        .from(saleItems)
-        .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
-        .where(eq(saleItems.saleId, sale.id)),
-    ]);
-
-    if (itemRows.length === 0) {
-      return {
-        ok: false as const,
-        message: "Transaksi ini tidak memiliki item, sehingga refund belum bisa dieksekusi.",
-      };
-    }
-
-    const productItemIds = itemRows.map((item) => item.productItemId);
-    const cashPaidAmount = getCashPaidAmount(paymentRows);
-    const paidAmount = getPaidAmount(paymentRows);
-
-    if (paidAmount <= 0) {
-      return {
-        ok: false as const,
-        message: "Transaksi ini belum memiliki pembayaran paid, sehingga refund penuh belum bisa dieksekusi.",
-      };
-    }
-
-    const reason =
-      executionNote ||
-      approval.notes ||
-      approval.responseNotes ||
-      "Refund penuh setelah approval manager/owner.";
-
-    await tx
-      .update(sales)
-      .set({
-        status: "refunded",
-        cancelledAt: now,
-        updatedAt: now,
-        notes: sale.notes
-          ? `${sale.notes}\n\n[REFUND ${now.toISOString()}] ${reason}`
-          : `[REFUND ${now.toISOString()}] ${reason}`,
-      })
-      .where(eq(sales.id, sale.id));
-
-    await tx
-      .update(productItems)
-      .set({
-        availability: "available",
-        locationState: "outlet",
-        currentOutletId: sale.outletId,
-        updatedAt: now,
-      })
-      .where(inArray(productItems.id, productItemIds));
-
-    await tx.insert(inventoryMovements).values(
-      itemRows.map((item) => ({
-        organizationId: auth.organization.id,
-        itemId: item.productItemId,
-        movementType: "sale_return" as const,
-        fromOutletId: null,
-        toOutletId: sale.outletId,
-        referenceType: "sale_refund",
-        referenceId: sale.id,
-        reason,
-        metadata: {
-          source: "admin.sales.refund_execution",
-          saleId: sale.id,
-          invoiceNumber: sale.invoiceNumber,
-          saleItemId: item.id,
-          lineNumber: item.lineNumber,
-          finalPriceAmount: parseNumber(item.finalPriceAmount),
-          previousAvailability: item.availability,
-          previousLocationState: item.locationState,
-          previousOutletId: item.currentOutletId,
-          approvalId: approval.id,
-        },
-        performedBy: auth.user.id,
-        approvedBy: approval.approvedBy,
-        occurredAt: now,
-        createdAt: now,
-      })),
-    );
-
-    await tx
-      .update(payments)
-      .set({
-        status: "refunded",
-        updatedAt: now,
-        metadata: sql`coalesce(${payments.metadata}, '{}'::jsonb) || ${JSON.stringify({
-          refundedAt: now.toISOString(),
-          refundedBy: auth.user.id,
-          refundApprovalId: approval.id,
-          previousSaleStatus: sale.status,
-          refundReason: reason,
-          refundMode: "full",
-        })}::jsonb`,
-      })
-      .where(
-        and(
-          eq(payments.saleId, sale.id),
-          inArray(payments.status, ["paid", "pending"]),
-        ),
-      );
-
-    if (cashPaidAmount > 0) {
-      await tx.insert(cashMovements).values({
-        shiftId: sale.shiftId,
-        type: "cash_refund",
-        amount: String(cashPaidAmount),
-        referenceType: "sale_refund",
-        referenceId: sale.id,
-        reason: `Refund penuh ${sale.invoiceNumber}: ${reason}`.slice(0, 2000),
-        createdBy: auth.user.id,
-        createdAt: now,
-      });
-
-      await tx
-        .update(shifts)
-        .set({
-          expectedCash: sql`coalesce(${shifts.expectedCash}, 0) - ${String(cashPaidAmount)}`,
-          updatedAt: now,
-        })
-        .where(eq(shifts.id, sale.shiftId));
-    }
-
-    await tx
-      .update(approvals)
-      .set({
-        requestData: {
-          ...approvalRequestData,
-          executionStatus: "refund_executed",
-          executedAt: now.toISOString(),
-          executedBy: auth.user.id,
-          executedByName: auth.user.fullName,
-          executionNote: reason,
-          saleStatusBefore: sale.status,
-          saleStatusAfter: "refunded",
-          cashRefundAmount: cashPaidAmount,
-          paidAmount,
-          refundMode: "full",
-          returnedItemCount: itemRows.length,
-        },
-        responseNotes: approval.responseNotes
-          ? `${approval.responseNotes}\n\nEksekusi refund penuh: ${reason}`
-          : `Eksekusi refund penuh: ${reason}`,
-      })
-      .where(eq(approvals.id, approval.id));
-
-    await tx.insert(auditLogs).values({
-      organizationId: auth.organization.id,
-      outletId: sale.outletId,
-      actorUserId: auth.user.id,
-      action: "sale.refund_executed",
-      entityType: "sale",
-      entityId: sale.id,
-      beforeData: {
-        status: sale.status,
-        totalAmount: sale.totalAmount,
-        paidAmount,
-        cashPaidAmount,
-        paymentStatuses: paymentRows.map((payment) => ({
-          id: payment.id,
-          method: payment.method,
-          status: payment.status,
-          amount: payment.amount,
-        })),
-        itemStates: itemRows.map((item) => ({
-          productItemId: item.productItemId,
-          availability: item.availability,
-          locationState: item.locationState,
-          currentOutletId: item.currentOutletId,
-        })),
-      },
-      afterData: {
-        status: "refunded",
-        approvalId: approval.id,
-        refundMode: "full",
-        returnedItemCount: itemRows.length,
-        cashRefundAmount: cashPaidAmount,
-        paymentStatus: "refunded",
-      },
-      reason,
-      ipAddress: requestMetadata.ipAddress,
-      userAgent: requestMetadata.userAgent,
-      metadata: {
-        source: "admin.sales.detail",
-        approvalId: approval.id,
-        invoiceNumber: sale.invoiceNumber,
-        executionStatus: "refund_executed",
-        refundMode: "full",
-      },
-      createdAt: now,
-    });
-
-    return {
-      ok: true as const,
-      invoiceNumber: sale.invoiceNumber,
-      returnedItemCount: itemRows.length,
-      cashRefundAmount: cashPaidAmount,
-      paidAmount,
-    };
-  });
-
-  if (!result.ok) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo,
-      type: "error",
-      message: result.message,
-    });
-  }
-
-  revalidatePath("/admin");
-  revalidatePath("/admin/penjualan");
-  revalidatePath(`/admin/penjualan/${saleId}`);
-  revalidatePath("/admin/inventaris");
-  revalidatePath("/admin/operasional/kas");
-  revalidatePath("/admin/operasional/shift");
-  revalidatePath("/admin/operasional/approval");
-  revalidatePath("/pos");
-
-  redirectAdminSaleDetailWithFeedback({
-    saleId,
-    returnTo,
-    type: "success",
-    message: `Refund penuh ${invoiceNumber} berhasil dieksekusi. Item kembali tersedia dan refund kas cash sudah dicatat jika ada pembayaran cash.`,
-  });
+  return executeApprovedSaleReversalAction({ formData, kind: "refund" });
 }
 
 export async function reprintAdminReceiptCertificateAction(
