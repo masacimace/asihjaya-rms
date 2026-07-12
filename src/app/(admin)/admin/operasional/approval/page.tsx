@@ -16,9 +16,11 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { ApprovalResolutionForm } from "@/components/approvals/approval-resolution-form";
+import { canAccessApprovalInbox } from "@/features/approvals/authorization";
 import {
   parseAdminApprovalFilters,
   type AdminApprovalFilters,
@@ -405,6 +407,11 @@ function EmptyState() {
 
 export default async function ApprovalPage({ searchParams }: PageProps) {
   const auth = await requirePermission("admin.access");
+
+  if (!canAccessApprovalInbox(auth)) {
+    redirect("/akses-ditolak");
+  }
+
   const query = await searchParams;
   const filters = parseAdminApprovalFilters(query);
   const data = await getAdminApprovalListData(auth, filters);

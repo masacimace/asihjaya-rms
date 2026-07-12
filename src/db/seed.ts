@@ -106,6 +106,36 @@ const permissionSeeds = [
     module: "payments",
   },
   {
+    code: "sales.void.request",
+    name: "Mengajukan void transaksi",
+    module: "sales",
+  },
+  {
+    code: "sales.void.approve",
+    name: "Menyetujui atau menolak void transaksi",
+    module: "sales",
+  },
+  {
+    code: "sales.void.execute",
+    name: "Mengeksekusi void transaksi yang disetujui",
+    module: "sales",
+  },
+  {
+    code: "payments.refund.request",
+    name: "Mengajukan refund pembayaran",
+    module: "payments",
+  },
+  {
+    code: "payments.refund.approve",
+    name: "Menyetujui atau menolak refund pembayaran",
+    module: "payments",
+  },
+  {
+    code: "payments.refund.execute",
+    name: "Mengeksekusi refund pembayaran yang disetujui",
+    module: "payments",
+  },
+  {
     code: "shifts.manage",
     name: "Mengelola shift dan kas",
     module: "operations",
@@ -250,6 +280,12 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "sales.view",
     "sales.create",
     "payments.manage",
+    "sales.void.request",
+    "sales.void.approve",
+    "sales.void.execute",
+    "payments.refund.request",
+    "payments.refund.approve",
+    "payments.refund.execute",
     "shifts.manage",
     "reports.view",
     "audit.view",
@@ -262,6 +298,8 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "sales.view",
     "sales.create",
     "payments.manage",
+    "sales.void.request",
+    "payments.refund.request",
     "shifts.manage",
   ],
 
@@ -284,6 +322,8 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "pricing.view_cost",
     "sales.view",
     "payments.manage",
+    "payments.refund.approve",
+    "payments.refund.execute",
     "reports.view",
   ],
 };

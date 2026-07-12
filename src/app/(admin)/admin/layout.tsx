@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { AdminShell } from "@/components/layout/admin-shell";
 import { getAdministrationAccess } from "@/features/administration/access";
+import { canAccessApprovalInbox } from "@/features/approvals/authorization";
 import { getAdminApprovalDrawerData } from "@/features/approvals/queries";
 import { getAdminNotificationDrawerData } from "@/features/notifications/queries";
 import { getProductInventoryAccess } from "@/features/products/access";
@@ -30,6 +31,7 @@ export default async function AdminLayout({
         canAccessAdministration: administrationAccess.canAccessAdministration,
         canAccessProducts: productInventoryAccess.canAccessProducts,
         canAccessInventory: productInventoryAccess.canAccessInventory,
+        canAccessApprovals: canAccessApprovalInbox(auth),
       }}
       approvalDrawerData={approvalDrawerData}
       notificationDrawerData={notificationDrawerData}

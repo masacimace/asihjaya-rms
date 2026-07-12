@@ -297,6 +297,13 @@ export async function executeApprovedSaleReversal(
       );
     }
 
+    if (approval.requestedBy === approval.approvedBy) {
+      throw new SaleReversalTransactionError(
+        "APPROVAL_NOT_READY",
+        "Approval tidak memenuhi aturan maker-checker karena requester dan approver adalah user yang sama. Buat request baru dan minta user lain yang berwenang untuk memprosesnya.",
+      );
+    }
+
     if (approval.executionStatus === "completed") {
       const completedOperation = getRequestDataString(
         approval.requestData,

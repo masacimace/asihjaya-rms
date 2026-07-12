@@ -17,6 +17,10 @@ import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { approvals, outlets, sales, users } from "@/db/schema";
 import {
+  getApprovalResolutionAuthorization,
+  getVisibleApprovalTypes,
+} from "@/features/approvals/authorization";
+import {
   ADMIN_APPROVALS_PAGE_SIZE,
   type AdminApprovalDrawerData,
   type AdminApprovalFilters,
@@ -384,6 +388,13 @@ function createApprovalConditions({
   outletIds: string[];
 }) {
   const conditions: SQL[] = [eq(approvals.organizationId, auth.organization.id)];
+  const visibleTypes = getVisibleApprovalTypes(auth);
+
+  if (visibleTypes.length === 0) {
+    conditions.push(sql`false`);
+  } else {
+    conditions.push(inArray(approvals.type, visibleTypes));
+  }
 
   if (filters.outletId) {
     if (outletIds.length === 0) {
@@ -436,7 +447,7 @@ function createApprovalConditions({
   };
 }
 
-function mapApprovalRow(row: {
+function mapApprovalRow(auth: AuthContext, row: {
   id: string;
   type: ApprovalType;
   status: "pending" | "approved" | "rejected";
@@ -456,6 +467,12 @@ function mapApprovalRow(row: {
   resolvedAt: Date | null;
   requestData: Record<string, unknown>;
 }): AdminApprovalRow {
+  const resolutionAuthorization = getApprovalResolutionAuthorization({
+    auth,
+    type: row.type,
+    requestedById: row.requestedById,
+  });
+
   return {
     id: row.id,
     type: row.type,
@@ -476,10 +493,19 @@ function mapApprovalRow(row: {
     resolvedAtIso: row.resolvedAt?.toISOString() ?? null,
     requestData: row.requestData,
     summary: summarizeApprovalRequest(row.type, row.requestData),
+    canResolve: resolutionAuthorization.allowed,
+    resolutionBlockedReason: resolutionAuthorization.allowed
+      ? null
+      : resolutionAuthorization.reason,
   };
 }
 
-async function selectApprovalRows(whereClause: SQL, limit: number, offset = 0) {
+async function selectApprovalRows(
+  auth: AuthContext,
+  whereClause: SQL,
+  limit: number,
+  offset = 0,
+) {
   const rows = await db
     .select({
       id: approvals.id,
@@ -511,7 +537,7 @@ async function selectApprovalRows(whereClause: SQL, limit: number, offset = 0) {
     .limit(limit)
     .offset(offset);
 
-  return rows.map(mapApprovalRow);
+  return rows.map((row) => mapApprovalRow(auth, row));
 }
 
 function createEmptyData(
@@ -562,7 +588,7 @@ export async function getAdminApprovalListData(
       .from(approvals)
       .where(whereClause)
       .groupBy(approvals.status),
-    selectApprovalRows(whereClause, ADMIN_APPROVALS_PAGE_SIZE, offset),
+    selectApprovalRows(auth, whereClause, ADMIN_APPROVALS_PAGE_SIZE, offset),
   ]);
 
   const total = totalRows[0]?.value ?? 0;
@@ -604,6 +630,13 @@ export async function getAdminApprovalListData(
 function createDrawerWhereClause(auth: AuthContext, status?: "pending") {
   const outletIds = auth.outlets.map((outlet) => outlet.id);
   const conditions: SQL[] = [eq(approvals.organizationId, auth.organization.id)];
+  const visibleTypes = getVisibleApprovalTypes(auth);
+
+  if (visibleTypes.length === 0) {
+    conditions.push(sql`false`);
+  } else {
+    conditions.push(inArray(approvals.type, visibleTypes));
+  }
 
   if (outletIds.length > 0) {
     conditions.push(
@@ -627,8 +660,9 @@ export async function getAdminApprovalDrawerData(
 
   const [pendingCountRows, pending, recentResolved] = await Promise.all([
     db.select({ value: count() }).from(approvals).where(pendingWhereClause),
-    selectApprovalRows(pendingWhereClause, 5),
+    selectApprovalRows(auth, pendingWhereClause, 5),
     selectApprovalRows(
+      auth,
       and(allWhereClause, sql`${approvals.status} <> 'pending'`) ?? sql`false`,
       5,
     ),

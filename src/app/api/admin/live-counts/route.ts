@@ -1,8 +1,9 @@
-import { and, count, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/db";
 import { approvals, notifications } from "@/db/schema";
+import { getVisibleApprovalTypes } from "@/features/approvals/authorization";
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
@@ -26,6 +27,11 @@ export async function GET() {
   const approvalOutletCondition = outletIds.length > 0
     ? or(isNull(approvals.outletId), inArray(approvals.outletId, outletIds))!
     : isNull(approvals.outletId);
+  const visibleApprovalTypes = getVisibleApprovalTypes(auth);
+  const approvalTypeCondition =
+    visibleApprovalTypes.length > 0
+      ? inArray(approvals.type, visibleApprovalTypes)
+      : sql`false`;
 
   const [notificationRows, approvalRows] = await Promise.all([
     db
@@ -46,6 +52,7 @@ export async function GET() {
         and(
           eq(approvals.organizationId, auth.organization.id),
           approvalOutletCondition,
+          approvalTypeCondition,
           eq(approvals.status, "pending"),
         ),
       ),

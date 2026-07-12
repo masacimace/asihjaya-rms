@@ -69,6 +69,8 @@ export type AdminApprovalRow = {
   resolvedAtIso: string | null;
   requestData: Record<string, unknown>;
   summary: AdminApprovalRequestSummary;
+  canResolve: boolean;
+  resolutionBlockedReason: string | null;
 };
 
 export type AdminApprovalListData = {

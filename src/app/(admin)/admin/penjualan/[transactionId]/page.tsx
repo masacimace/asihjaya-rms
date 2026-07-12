@@ -20,6 +20,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { getSaleSensitiveCapabilities } from "@/features/approvals/authorization";
 import {
   type AdminPaymentMethod,
   type AdminSalePrintStatus,
@@ -412,6 +413,11 @@ export default async function SaleDetailPage({
   const printStatus = latestPrintJob?.status ?? "not_queued";
   const currentDetailHref = buildSaleDetailHref(sale.id);
   const canReprintReceiptCertificate = sale.receiptCertificate.isReady;
+  const sensitiveCapabilities = getSaleSensitiveCapabilities(auth);
+  const canViewSensitiveActions = Object.values(sensitiveCapabilities).some(
+    (capability) =>
+      capability.canRequest || capability.canApprove || capability.canExecute,
+  );
 
   return (
     <div className="mx-auto w-full max-w-[1400px] min-w-0 space-y-5 overflow-x-hidden sm:space-y-6">
@@ -930,13 +936,16 @@ export default async function SaleDetailPage({
             )}
           </section>
 
-          <SaleSensitiveActionsCard
-            saleId={sale.id}
-            invoiceNumber={sale.invoiceNumber}
-            saleStatus={sale.status}
-            returnTo={currentDetailHref}
-            approvals={sale.sensitiveApprovals}
-          />
+          {canViewSensitiveActions ? (
+            <SaleSensitiveActionsCard
+              saleId={sale.id}
+              invoiceNumber={sale.invoiceNumber}
+              saleStatus={sale.status}
+              returnTo={currentDetailHref}
+              approvals={sale.sensitiveApprovals}
+              capabilities={sensitiveCapabilities}
+            />
+          ) : null}
         </aside>
       </div>
     </div>

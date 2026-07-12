@@ -46,6 +46,7 @@ type AdminShellUser = {
   canAccessAdministration: boolean;
   canAccessProducts: boolean;
   canAccessInventory: boolean;
+  canAccessApprovals: boolean;
 };
 
 type NavigationItem = {
@@ -191,6 +192,7 @@ type SidebarContentProps = {
   canAccessAdministration: boolean;
   canAccessProducts: boolean;
   canAccessInventory: boolean;
+  canAccessApprovals: boolean;
   onNavigate?: () => void;
   showBrand?: boolean;
   showPosCta?: boolean;
@@ -208,6 +210,7 @@ function SidebarContent({
   canAccessAdministration,
   canAccessProducts,
   canAccessInventory,
+  canAccessApprovals,
   onNavigate,
   showBrand = true,
   showPosCta = true,
@@ -234,7 +237,12 @@ function SidebarContent({
       <nav className="space-y-1">
         {visibleNavigation.map(({ label, href, icon: Icon, children }) => {
           if (children) {
-            const isChildActive = children.some((child) =>
+            const visibleChildren = children.filter(
+              (child) =>
+                child.href !== "/admin/operasional/approval" ||
+                canAccessApprovals,
+            );
+            const isChildActive = visibleChildren.some((child) =>
               isNavigationActive(pathname, child.href),
             );
             return (
@@ -257,7 +265,7 @@ function SidebarContent({
                   <ChevronDown className="size-4 shrink-0 text-neutral-400 transition-transform group-open:rotate-180" />
                 </summary>
                 <div className="mt-1 flex flex-col gap-1 pl-10 pr-3">
-                  {children.map((child) => {
+                  {visibleChildren.map((child) => {
                     const isSubActive = isNavigationActive(
                       pathname,
                       child.href,
@@ -385,6 +393,7 @@ export function AdminShell({
           canAccessAdministration={user.canAccessAdministration}
           canAccessProducts={user.canAccessProducts}
           canAccessInventory={user.canAccessInventory}
+          canAccessApprovals={user.canAccessApprovals}
         />
       </aside>
 
@@ -422,6 +431,7 @@ export function AdminShell({
                 canAccessAdministration={user.canAccessAdministration}
                 canAccessProducts={user.canAccessProducts}
                 canAccessInventory={user.canAccessInventory}
+                canAccessApprovals={user.canAccessApprovals}
                 onNavigate={() => setIsMobileMenuOpen(false)}
                 showBrand={false}
                 showPosCta={false}
@@ -499,19 +509,21 @@ export function AdminShell({
           </Link>
 
           <div className="relative z-[60] ml-auto flex min-w-0 shrink-0 items-center sm:gap-1">
-            <button
-              type="button"
-              aria-label="Persetujuan"
-              onClick={() => setIsApprovalOpen(true)}
-              className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
-            >
-              <ClipboardCheck className="size-5" />
-              {approvalPendingCount > 0 ? (
-                <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-red-600 text-[10px] font-bold text-white">
-                  {approvalPendingCount > 9 ? "9+" : approvalPendingCount}
-                </span>
-              ) : null}
-            </button>
+            {user.canAccessApprovals ? (
+              <button
+                type="button"
+                aria-label="Persetujuan"
+                onClick={() => setIsApprovalOpen(true)}
+                className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
+              >
+                <ClipboardCheck className="size-5" />
+                {approvalPendingCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-red-600 text-[10px] font-bold text-white">
+                    {approvalPendingCount > 9 ? "9+" : approvalPendingCount}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
 
             <button
               type="button"
@@ -564,11 +576,13 @@ export function AdminShell({
         }}
       />
 
-      <ApprovalDrawer
-        isOpen={isApprovalOpen}
-        onClose={() => setIsApprovalOpen(false)}
-        data={approvalDrawerData}
-      />
+      {user.canAccessApprovals ? (
+        <ApprovalDrawer
+          isOpen={isApprovalOpen}
+          onClose={() => setIsApprovalOpen(false)}
+          data={approvalDrawerData}
+        />
+      ) : null}
 
       <NotificationDrawer
         isOpen={isNotificationOpen}

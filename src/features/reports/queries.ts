@@ -29,6 +29,7 @@ import {
   shifts,
   users,
 } from "@/db/schema";
+import { getVisibleApprovalTypes } from "@/features/approvals/authorization";
 import type { AuthContext } from "@/lib/auth/session";
 import type {
   ReportCashSnapshot,
@@ -309,6 +310,11 @@ export async function getReportSummaryData(
   );
 
   const trendBucketSql = sql<string>`to_char(${sales.completedAt} at time zone 'Asia/Jakarta', 'YYYY-MM-DD')`;
+  const visibleApprovalTypes = getVisibleApprovalTypes(auth);
+  const approvalTypeCondition =
+    visibleApprovalTypes.length > 0
+      ? inArray(approvals.type, visibleApprovalTypes)
+      : sql`false`;
 
   const [
     currentSalesRows,
@@ -516,6 +522,7 @@ export async function getReportSummaryData(
         and(
           eq(approvals.organizationId, auth.organization.id),
           or(isNull(approvals.outletId), inArray(approvals.outletId, outletIds)),
+          approvalTypeCondition,
           eq(approvals.status, "pending"),
         ),
       ),

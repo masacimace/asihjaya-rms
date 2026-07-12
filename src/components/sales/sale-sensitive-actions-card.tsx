@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 import {
   AlertTriangle,
@@ -24,6 +25,17 @@ import { cn } from "@/lib/utils";
 
 type SensitiveRequestType = "void" | "refund";
 
+type SensitiveActionCapability = {
+  canRequest: boolean;
+  canApprove: boolean;
+  canExecute: boolean;
+};
+
+type SaleSensitiveCapabilities = Record<
+  SensitiveRequestType,
+  SensitiveActionCapability
+>;
+
 type ActionMeta = {
   type: SensitiveRequestType;
   approvalType: AdminSaleSensitiveApproval["type"];
@@ -40,8 +52,7 @@ const actionMetas: ActionMeta[] = [
     type: "void",
     approvalType: "void_receipt",
     title: "Ajukan Void",
-    description:
-      "Batalkan nota penuh setelah manager/owner menyetujui request.",
+    description: "Batalkan nota penuh setelah manager/owner menyetujui request.",
     helper:
       "Gunakan untuk transaksi salah input, batal penuh, atau nota bermasalah yang perlu dibatalkan.",
     buttonLabel: "Ajukan approval void",
@@ -61,10 +72,7 @@ const actionMetas: ActionMeta[] = [
   },
 ];
 
-const approvalStatusLabels: Record<
-  AdminSaleSensitiveApproval["status"],
-  string
-> = {
+const approvalStatusLabels: Record<AdminSaleSensitiveApproval["status"], string> = {
   pending: "Menunggu approval",
   approved: "Disetujui",
   rejected: "Ditolak",
@@ -144,17 +152,13 @@ function ApprovalStatusPanel({
       <div className="flex items-start gap-2">
         <StatusIcon className="mt-0.5 size-4 shrink-0" />
         <div className="min-w-0">
-          <p className="font-semibold">
-            {approvalStatusLabels[approval.status]}
-          </p>
+          <p className="font-semibold">{approvalStatusLabels[approval.status]}</p>
           <p className="mt-1 leading-5 opacity-90">
-            Request oleh {approval.requestedByName} pada{" "}
-            {formatDateTime(approval.createdAt)}.
+            Request oleh {approval.requestedByName} pada {formatDateTime(approval.createdAt)}.
           </p>
           {approval.approvedByName ? (
             <p className="mt-1 leading-5 opacity-90">
-              Diproses oleh {approval.approvedByName} pada{" "}
-              {formatDateTime(approval.resolvedAt)}.
+              Diproses oleh {approval.approvedByName} pada {formatDateTime(approval.resolvedAt)}.
             </p>
           ) : null}
           {approval.executionStatus ? (
@@ -164,8 +168,7 @@ function ApprovalStatusPanel({
               </p>
               {approval.executedAt ? (
                 <p className="mt-1 text-xs">
-                  Dieksekusi oleh {approval.executedByName ?? "staff"} pada{" "}
-                  {formatDateTime(approval.executedAt)}.
+                  Dieksekusi oleh {approval.executedByName ?? "staff"} pada {formatDateTime(approval.executedAt)}.
                 </p>
               ) : null}
               {approval.executionError ? (
@@ -218,9 +221,7 @@ function ExecuteVoidForm({
             Eksekusi Void Disetujui
           </h4>
           <p className="mt-1 text-xs leading-5 text-emerald-800">
-            Approval void sudah disetujui. Eksekusi bersifat atomik. Jika ada
-            pembayaran cash, register transaksi harus memiliki shift open dan
-            refund akan dicatat pada shift aktif tersebut.
+            Approval void sudah disetujui. Eksekusi bersifat atomik. Jika ada pembayaran cash, register transaksi harus memiliki shift open dan refund akan dicatat pada shift aktif tersebut.
           </p>
         </div>
       </div>
@@ -233,7 +234,7 @@ function ExecuteVoidForm({
         maxLength={1000}
         disabled={disabled || alreadyExecuted || executionInProgress}
         placeholder="Contoh: void dieksekusi setelah approval owner karena customer batal penuh."
-        className="mt-2 min-h-20 w-full resize-y rounded-2xl border border-emerald-200 bg-white px-4 py-3 !text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-emerald-50 disabled:text-emerald-500"
+        className="mt-2 min-h-20 w-full resize-y rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-emerald-50 disabled:text-emerald-500"
       />
       <button
         type="submit"
@@ -283,9 +284,7 @@ function ExecuteRefundForm({
             Eksekusi Refund Penuh Disetujui
           </h4>
           <p className="mt-1 text-xs leading-5 text-orange-800">
-            Approval refund sudah disetujui. Eksekusi bersifat atomik. Jika ada
-            pembayaran cash, register transaksi harus memiliki shift open dan
-            refund akan dicatat pada shift aktif tersebut.
+            Approval refund sudah disetujui. Eksekusi bersifat atomik. Jika ada pembayaran cash, register transaksi harus memiliki shift open dan refund akan dicatat pada shift aktif tersebut.
           </p>
         </div>
       </div>
@@ -322,22 +321,26 @@ function SensitiveActionForm({
   returnTo,
   meta,
   latestApproval,
+  capability,
 }: {
   saleId: string;
   saleStatus: AdminSaleStatus;
   returnTo: string;
   meta: ActionMeta;
   latestApproval: AdminSaleSensitiveApproval | null;
+  capability: SensitiveActionCapability;
 }) {
   const isCompleted = saleStatus === "completed";
   const blockingApproval = getBlockingApproval(latestApproval);
   const hasExecutableVoidApproval =
+    capability.canExecute &&
     meta.type === "void" &&
     latestApproval?.status === "approved" &&
     latestApproval.executionStatus !== "void_executed" &&
     latestApproval.executionStatus !== "executing" &&
     isCompleted;
   const hasExecutableRefundApproval =
+    capability.canExecute &&
     meta.type === "refund" &&
     latestApproval?.status === "approved" &&
     latestApproval.executionStatus !== "refund_executed" &&
@@ -350,18 +353,11 @@ function SensitiveActionForm({
   return (
     <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
       <div className="flex items-start gap-3">
-        <div
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-2xl ring-1",
-            meta.toneClass,
-          )}
-        >
+        <div className={cn("grid size-10 shrink-0 place-items-center rounded-2xl ring-1", meta.toneClass)}>
           {meta.icon}
         </div>
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-neutral-950">
-            {meta.title}
-          </h3>
+          <h3 className="text-sm font-semibold text-neutral-950">{meta.title}</h3>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
             {meta.description}
           </p>
@@ -383,41 +379,66 @@ function SensitiveActionForm({
             ? latestApproval?.executionStatus === "refund_executed"
               ? "Refund penuh sudah dieksekusi. Transaksi, stok, kas cash, dan audit sudah diperbarui."
               : "Approval refund sudah disetujui. Gunakan tombol eksekusi di bawah untuk memproses refund penuh."
-            : blockingApproval?.status === "pending"
-              ? "Masih ada request yang menunggu approval. Tunggu keputusan manager/owner sebelum membuat request baru."
-              : !isCompleted
-                ? "Hanya transaksi completed yang bisa diajukan void/refund."
-                : meta.helper}
+          : blockingApproval?.status === "pending"
+            ? "Masih ada request yang menunggu approval. Tunggu keputusan manager/owner sebelum membuat request baru."
+            : !isCompleted
+              ? "Hanya transaksi completed yang bisa diajukan void/refund."
+              : meta.helper}
       </p>
 
-      <form
-        action={requestSaleVoidRefundApprovalAction}
-        className="mt-4 space-y-3"
-      >
-        <input type="hidden" name="saleId" value={saleId} />
-        <input type="hidden" name="returnTo" value={returnTo} />
-        <input type="hidden" name="requestType" value={meta.type} />
-        <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          Alasan request
-        </label>
-        <textarea
-          name="reason"
-          minLength={8}
-          maxLength={1000}
-          required
-          disabled={requestFormDisabled}
-          placeholder="Contoh: customer batal membeli karena salah item / perlu refund karena kesalahan nominal."
-          className="min-h-24 w-full resize-y rounded-2xl border border-[var(--border)] bg-white px-4 py-3 !text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400"
-        />
-        <button
-          type="submit"
-          disabled={requestFormDisabled}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
+      {capability.canRequest ? (
+        <form action={requestSaleVoidRefundApprovalAction} className="mt-4 space-y-3">
+          <input type="hidden" name="saleId" value={saleId} />
+          <input type="hidden" name="returnTo" value={returnTo} />
+          <input type="hidden" name="requestType" value={meta.type} />
+          <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            Alasan request
+          </label>
+          <textarea
+            name="reason"
+            minLength={8}
+            maxLength={1000}
+            required
+            disabled={requestFormDisabled}
+            placeholder="Contoh: customer batal membeli karena salah item / perlu refund karena kesalahan nominal."
+            className="min-h-24 w-full resize-y rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400"
+          />
+          <button
+            type="submit"
+            disabled={requestFormDisabled}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
+          >
+            {meta.icon}
+            {meta.buttonLabel}
+          </button>
+        </form>
+      ) : null}
+
+      {capability.canApprove && latestApproval?.status === "pending" ? (
+        <Link
+          href="/admin/operasional/approval"
+          className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 px-4 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
         >
-          {meta.icon}
-          {meta.buttonLabel}
-        </button>
-      </form>
+          Tinjau request di dashboard approval
+        </Link>
+      ) : null}
+
+      {!capability.canRequest &&
+      !capability.canApprove &&
+      !capability.canExecute ? (
+        <p className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs leading-5 text-neutral-600">
+          Akun ini hanya dapat melihat transaksi dan tidak memiliki permission untuk request, approval, atau eksekusi aksi ini.
+        </p>
+      ) : null}
+
+      {latestApproval?.status === "approved" &&
+      !capability.canExecute &&
+      (latestApproval.executionStatus === "awaiting_r3c_2" ||
+        latestApproval.executionStatus === "failed") ? (
+        <p className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">
+          Approval sudah disetujui, tetapi akun ini tidak memiliki permission eksekusi. Minta user dengan hak eksekusi untuk melanjutkan.
+        </p>
+      ) : null}
 
       {hasExecutableVoidApproval && latestApproval ? (
         <ExecuteVoidForm
@@ -446,18 +467,17 @@ export function SaleSensitiveActionsCard({
   saleStatus,
   returnTo,
   approvals,
+  capabilities,
 }: {
   saleId: string;
   invoiceNumber: string;
   saleStatus: AdminSaleStatus;
   returnTo: string;
   approvals: AdminSaleSensitiveApproval[];
+  capabilities: SaleSensitiveCapabilities;
 }) {
   const latestVoidApproval = getLatestApproval(approvals, "void_receipt");
-  const latestRefundApproval = getLatestApproval(
-    approvals,
-    "refund_transaction",
-  );
+  const latestRefundApproval = getLatestApproval(approvals, "refund_transaction");
 
   return (
     <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
@@ -470,8 +490,7 @@ export function SaleSensitiveActionsCard({
             Aksi Sensitif
           </h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Request dan eksekusi void/refund untuk {invoiceNumber}. Eksekusi
-            hanya tersedia setelah approval manager/owner disetujui.
+            Request dan eksekusi void/refund untuk {invoiceNumber}. Eksekusi hanya tersedia setelah approval manager/owner disetujui.
           </p>
         </div>
       </div>
@@ -480,26 +499,35 @@ export function SaleSensitiveActionsCard({
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <p>
-            Aksi void dan refund penuh hanya dapat dijalankan setelah approval
-            disetujui. Gunakan fitur ini untuk nota bermasalah, transaksi batal
-            penuh, atau pengembalian penuh customer.
+            Aksi void dan refund penuh hanya dapat dijalankan setelah approval disetujui. Gunakan fitur ini untuk nota bermasalah, transaksi batal penuh, atau pengembalian penuh customer.
           </p>
         </div>
       </div>
 
       <div className="mt-4 space-y-3">
-        {actionMetas.map((meta) => (
-          <SensitiveActionForm
-            key={meta.type}
-            saleId={saleId}
-            saleStatus={saleStatus}
-            returnTo={returnTo}
-            meta={meta}
-            latestApproval={
-              meta.type === "void" ? latestVoidApproval : latestRefundApproval
-            }
-          />
-        ))}
+        {actionMetas
+          .filter((meta) => {
+            const capability = capabilities[meta.type];
+
+            return (
+              capability.canRequest ||
+              capability.canApprove ||
+              capability.canExecute
+            );
+          })
+          .map((meta) => (
+            <SensitiveActionForm
+              key={meta.type}
+              saleId={saleId}
+              saleStatus={saleStatus}
+              returnTo={returnTo}
+              meta={meta}
+              capability={capabilities[meta.type]}
+              latestApproval={
+                meta.type === "void" ? latestVoidApproval : latestRefundApproval
+              }
+            />
+          ))}
       </div>
     </section>
   );

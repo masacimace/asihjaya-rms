@@ -20,6 +20,7 @@ import {
   sales,
   users,
 } from "@/db/schema";
+import { getSaleSensitivePermission } from "@/features/approvals/authorization";
 import { requirePermission } from "@/lib/auth/session";
 import { createHardwareJobWithDuplicateGuard } from "@/lib/hardware/job-queue";
 import {
@@ -202,7 +203,6 @@ function formatPaymentMethodLabel(method: string) {
 }
 
 export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
-  const auth = await requirePermission("sales.view");
   const saleId = readText(formData, "saleId");
   const returnTo = readText(formData, "returnTo");
   const requestTypeRaw = readText(formData, "requestType");
@@ -225,6 +225,10 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
       message: "Jenis request void/refund tidak valid.",
     });
   }
+
+  const auth = await requirePermission(
+    getSaleSensitivePermission(requestTypeRaw, "request"),
+  );
 
   if (reason.length < 8) {
     redirectAdminSaleDetailWithFeedback({
@@ -471,7 +475,9 @@ async function executeApprovedSaleReversalAction({
   formData: FormData;
   kind: "void" | "refund";
 }) {
-  const auth = await requirePermission("sales.view");
+  const auth = await requirePermission(
+    getSaleSensitivePermission(kind, "execute"),
+  );
   const saleId = readText(formData, "saleId");
   const approvalId = readText(formData, "approvalId");
   const returnTo = readText(formData, "returnTo");

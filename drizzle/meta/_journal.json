@@ -78,6 +78,13 @@
       "when": 1783861280108,
       "tag": "0010_ancient_alice",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1783865406450,
+      "tag": "0011_p0c_authorization",
+      "breakpoints": true
     }
   ]
 }

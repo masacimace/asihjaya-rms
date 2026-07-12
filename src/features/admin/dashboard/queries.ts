@@ -29,6 +29,7 @@ import {
   shifts,
   users,
 } from "@/db/schema";
+import { getVisibleApprovalTypes } from "@/features/approvals/authorization";
 import type { AuthContext } from "@/lib/auth/session";
 import type {
   AdminDashboardActivityKind,
@@ -493,6 +494,11 @@ export async function getAdminDashboardData(
   const previousEnd = period.previousEnd;
   const trendStart = period.trendStart;
   const trendEnd = period.trendEnd;
+  const visibleApprovalTypes = getVisibleApprovalTypes(auth);
+  const approvalTypeCondition =
+    visibleApprovalTypes.length > 0
+      ? inArray(approvals.type, visibleApprovalTypes)
+      : sql`false`;
   const staleAgentCutoff = new Date(now.getTime() - 5 * 60 * 1000);
   const trendBucketSql =
     period.chartGranularity === "hour"
@@ -637,6 +643,7 @@ export async function getAdminDashboardData(
         and(
           eq(approvals.organizationId, auth.organization.id),
           or(isNull(approvals.outletId), inArray(approvals.outletId, outletIds)),
+          approvalTypeCondition,
           eq(approvals.status, "pending"),
         ),
       ),

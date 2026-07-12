@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -8,15 +8,14 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { approvals, auditLogs } from "@/db/schema";
 import {
+  getApprovalResolutionAuthorization,
+} from "@/features/approvals/authorization";
+import {
   isUuid,
   type AdminApprovalActionState,
   type ApprovalStatus,
 } from "@/features/approvals/contracts";
-import {
-  hasAnyPermission,
-  requirePermission,
-  type AuthContext,
-} from "@/lib/auth/session";
+import { requirePermission, type AuthContext } from "@/lib/auth/session";
 
 const APPROVAL_DASHBOARD_PATH = "/admin/operasional/approval";
 
@@ -39,16 +38,6 @@ function redirectWithMessage(type: "success" | "error", message: string): never 
 
 function readText(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
-}
-
-function ensureApprovalAccess(auth: AuthContext) {
-  return hasAnyPermission(auth, [
-    "shifts.manage",
-    "payments.manage",
-    "inventory.adjust",
-    "settings.manage",
-    "audit.view",
-  ]);
 }
 
 function revalidateApprovalPages() {
@@ -95,7 +84,7 @@ async function resolveApproval({
 }) {
   const outletAccessCondition = getOutletAccessCondition(auth);
 
-  const rows = await db
+  const [approval] = await db
     .select({
       id: approvals.id,
       organizationId: approvals.organizationId,
@@ -122,13 +111,22 @@ async function resolveApproval({
     )
     .limit(1);
 
-  const approval = rows[0];
-
   if (!approval) {
     return {
       ok: false,
-      message: "Approval tidak ditemukan atau bukan bagian dari outlet yang bisa kamu akses.",
+      message:
+        "Approval tidak ditemukan atau bukan bagian dari outlet yang bisa kamu akses.",
     } as const;
+  }
+
+  const authorization = getApprovalResolutionAuthorization({
+    auth,
+    type: approval.type,
+    requestedById: approval.requestedBy,
+  });
+
+  if (!authorization.allowed) {
+    return { ok: false, message: authorization.reason } as const;
   }
 
   if (approval.status !== "pending") {
@@ -141,8 +139,8 @@ async function resolveApproval({
   const requestMetadata = await getRequestMetadata();
   const now = new Date();
 
-  await db.transaction(async (transaction) => {
-    await transaction
+  const result = await db.transaction(async (transaction) => {
+    const [resolvedApproval] = await transaction
       .update(approvals)
       .set({
         status: nextStatus,
@@ -150,7 +148,18 @@ async function resolveApproval({
         responseNotes: responseNotes || null,
         resolvedAt: now,
       })
-      .where(eq(approvals.id, approval.id));
+      .where(
+        and(
+          eq(approvals.id, approval.id),
+          eq(approvals.status, "pending"),
+          ne(approvals.requestedBy, auth.user.id),
+        ),
+      )
+      .returning({ id: approvals.id });
+
+    if (!resolvedApproval) {
+      return { ok: false } as const;
+    }
 
     await transaction.insert(auditLogs).values({
       organizationId: auth.organization.id,
@@ -181,9 +190,20 @@ async function resolveApproval({
         approvalType: approval.type,
         requestedBy: approval.requestedBy,
         requestData: approval.requestData,
+        makerCheckerEnforced: true,
       },
     });
+
+    return { ok: true } as const;
   });
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      message:
+        "Approval sudah diproses oleh user lain atau tidak lagi memenuhi aturan maker-checker. Muat ulang halaman.",
+    } as const;
+  }
 
   return {
     ok: true,
@@ -196,11 +216,6 @@ async function resolveApprovalAction(
   nextStatus: Exclude<ApprovalStatus, "pending">,
 ): Promise<AdminApprovalActionState> {
   const auth = await requirePermission("admin.access");
-
-  if (!ensureApprovalAccess(auth)) {
-    return failure("Akun ini belum memiliki akses untuk memproses approval.");
-  }
-
   const approvalId = readText(formData, "approvalId");
   const responseNotes = readText(formData, "responseNotes").slice(0, 500);
 

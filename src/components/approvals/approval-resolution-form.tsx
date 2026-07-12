@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, Loader2, ShieldAlert, X } from "lucide-react";
 
 import {
   approveApprovalAction,
@@ -15,7 +15,10 @@ import {
 import { cn } from "@/lib/utils";
 
 type ApprovalResolutionFormProps = {
-  approval: Pick<AdminApprovalRow, "id" | "status">;
+  approval: Pick<
+    AdminApprovalRow,
+    "id" | "status" | "canResolve" | "resolutionBlockedReason"
+  >;
   mode: "compact" | "full";
 };
 
@@ -54,7 +57,10 @@ function CompactApprovalResolutionForm({
   rejectState,
   rejectFormAction,
 }: {
-  approval: Pick<AdminApprovalRow, "id" | "status">;
+  approval: Pick<
+    AdminApprovalRow,
+    "id" | "status" | "canResolve" | "resolutionBlockedReason"
+  >;
   approveState: typeof initialAdminApprovalActionState;
   approveFormAction: (payload: FormData) => void;
   rejectState: typeof initialAdminApprovalActionState;
@@ -112,6 +118,18 @@ export function ApprovalResolutionForm({
 
   if (approval.status !== "pending") {
     return null;
+  }
+
+  if (!approval.canResolve) {
+    return (
+      <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
+        <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+        <p>
+          {approval.resolutionBlockedReason ??
+            "Akun ini tidak memiliki akses untuk memproses approval tersebut."}
+        </p>
+      </div>
+    );
   }
 
   if (mode === "compact") {
