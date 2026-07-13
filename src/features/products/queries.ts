@@ -79,7 +79,7 @@ export async function getProductOverview(organizationId: string) {
     Number(productStatusRows.find((row) => row.status === status)?.total ?? 0);
 
   const itemCount = (
-    availability: "draft" | "available" | "reserved" | "sold",
+    availability: "draft" | "available" | "reserved" | "inspection" | "sold",
   ) =>
     Number(
       itemStatusRows.find((row) => row.availability === availability)?.total ??
@@ -87,7 +87,7 @@ export async function getProductOverview(organizationId: string) {
     );
 
   const itemWeight = (
-    availability: "draft" | "available" | "reserved" | "sold",
+    availability: "draft" | "available" | "reserved" | "inspection" | "sold",
   ) =>
     Number(
       itemStatusRows.find((row) => row.availability === availability)
@@ -95,7 +95,7 @@ export async function getProductOverview(organizationId: string) {
     );
 
   const itemCost = (
-    availability: "draft" | "available" | "reserved" | "sold",
+    availability: "draft" | "available" | "reserved" | "inspection" | "sold",
   ) =>
     Number(
       itemStatusRows.find((row) => row.availability === availability)
@@ -311,7 +311,7 @@ export async function getProductDetail(
     .groupBy(productItems.availability);
 
   const availabilityCount = (
-    availability: "draft" | "available" | "reserved" | "sold",
+    availability: "draft" | "available" | "reserved" | "inspection" | "sold",
   ) =>
     Number(
       itemStatusRows.find((row) => row.availability === availability)?.total ??

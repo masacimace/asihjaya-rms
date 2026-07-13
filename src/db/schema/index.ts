@@ -55,6 +55,7 @@ export const itemAvailabilityEnum = pgEnum("item_availability", [
   "draft",
   "available",
   "reserved",
+  "inspection",
   "sold",
 ]);
 
@@ -148,6 +149,29 @@ export const paymentRefundStatusEnum = pgEnum("payment_refund_status", [
   "failed",
   "cancelled",
 ]);
+
+export const saleReturnCaseStatusEnum = pgEnum("sale_return_case_status", [
+  "awaiting_receipt",
+  "pending_inspection",
+  "partially_inspected",
+  "completed",
+  "rejected",
+  "cancelled",
+]);
+
+export const saleReturnItemStatusEnum = pgEnum("sale_return_item_status", [
+  "awaiting_receipt",
+  "pending_inspection",
+  "restocked",
+  "repair",
+  "damaged",
+  "rejected",
+]);
+
+export const returnInspectionDecisionEnum = pgEnum(
+  "return_inspection_decision",
+  ["restock", "repair", "damaged", "reject"],
+);
 
 export const approvalExecutionStatusEnum = pgEnum("approval_execution_status", [
   "not_started",
@@ -1788,3 +1812,149 @@ export const paymentRefunds = pgTable(
     ),
   ],
 );
+
+export const saleReturnCases = pgTable(
+  "sale_return_cases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    saleId: uuid("sale_id")
+      .notNull()
+      .references(() => sales.id),
+    approvalId: uuid("approval_id").references(() => approvals.id),
+    status: saleReturnCaseStatusEnum("status")
+      .default("awaiting_receipt")
+      .notNull(),
+    expectedItemCount: integer("expected_item_count").notNull(),
+    receivedItemCount: integer("received_item_count").default(0).notNull(),
+    inspectedItemCount: integer("inspected_item_count").default(0).notNull(),
+    notes: text("notes"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("sale_return_cases_sale_uq").on(table.saleId),
+    uniqueIndex("sale_return_cases_approval_uq")
+      .on(table.approvalId)
+      .where(sql`${table.approvalId} is not null`),
+    index("sale_return_cases_outlet_status_idx").on(
+      table.outletId,
+      table.status,
+    ),
+    check(
+      "sale_return_cases_counts_ck",
+      sql`${table.expectedItemCount} > 0
+        and ${table.receivedItemCount} >= 0
+        and ${table.inspectedItemCount} >= 0
+        and ${table.receivedItemCount} <= ${table.expectedItemCount}
+        and ${table.inspectedItemCount} <= ${table.receivedItemCount}`,
+    ),
+    check(
+      "sale_return_cases_completed_state_ck",
+      sql`${table.status} not in ('completed', 'rejected') or ${table.completedAt} is not null`,
+    ),
+    check(
+      "sale_return_cases_cancelled_state_ck",
+      sql`${table.status} <> 'cancelled' or ${table.cancelledAt} is not null`,
+    ),
+  ],
+);
+
+export const saleReturnItems = pgTable(
+  "sale_return_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    returnCaseId: uuid("return_case_id")
+      .notNull()
+      .references(() => saleReturnCases.id),
+    saleItemId: uuid("sale_item_id")
+      .notNull()
+      .references(() => saleItems.id),
+    productItemId: uuid("product_item_id")
+      .notNull()
+      .references(() => productItems.id),
+    status: saleReturnItemStatusEnum("status")
+      .default("awaiting_receipt")
+      .notNull(),
+    expectedSku: varchar("expected_sku", { length: 80 }).notNull(),
+    expectedBarcode: varchar("expected_barcode", { length: 120 }).notNull(),
+    expectedSerialNumber: varchar("expected_serial_number", { length: 120 }),
+    expectedWeightGram: numeric("expected_weight_gram", {
+      precision: 12,
+      scale: 3,
+    }),
+    receivedCode: varchar("received_code", { length: 160 }),
+    actualWeightGram: numeric("actual_weight_gram", {
+      precision: 12,
+      scale: 3,
+    }),
+    identityConfirmed: boolean("identity_confirmed"),
+    certificateComplete: boolean("certificate_complete"),
+    packagingComplete: boolean("packaging_complete"),
+    conditionGood: boolean("condition_good"),
+    decision: returnInspectionDecisionEnum("decision"),
+    inspectionNotes: text("inspection_notes"),
+    photoKey: text("photo_key"),
+    receivedBy: uuid("received_by").references(() => users.id),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    inspectedBy: uuid("inspected_by").references(() => users.id),
+    inspectedAt: timestamp("inspected_at", { withTimezone: true }),
+    decidedBy: uuid("decided_by").references(() => users.id),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("sale_return_items_case_sale_item_uq").on(
+      table.returnCaseId,
+      table.saleItemId,
+    ),
+    uniqueIndex("sale_return_items_case_product_item_uq").on(
+      table.returnCaseId,
+      table.productItemId,
+    ),
+    index("sale_return_items_case_status_idx").on(
+      table.returnCaseId,
+      table.status,
+    ),
+    index("sale_return_items_product_status_idx").on(
+      table.productItemId,
+      table.status,
+    ),
+    check(
+      "sale_return_items_weight_positive_ck",
+      sql`${table.actualWeightGram} is null or ${table.actualWeightGram} > 0`,
+    ),
+    check(
+      "sale_return_items_received_state_ck",
+      sql`${table.status} = 'awaiting_receipt' or (${table.receivedBy} is not null and ${table.receivedAt} is not null)`,
+    ),
+    check(
+      "sale_return_items_inspected_state_ck",
+      sql`${table.status} in ('awaiting_receipt', 'pending_inspection') or (
+        ${table.inspectedBy} is not null
+        and ${table.inspectedAt} is not null
+        and ${table.decidedBy} is not null
+        and ${table.decidedAt} is not null
+        and ${table.decision} is not null
+      )`,
+    ),
+  ],
+);
+

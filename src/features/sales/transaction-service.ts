@@ -19,6 +19,8 @@ import {
   productItems,
   registers,
   saleItems,
+  saleReturnCases,
+  saleReturnItems,
   sales,
   shifts,
 } from "@/db/schema";
@@ -52,6 +54,8 @@ export type ExecuteApprovedSaleReversalResult = {
   paidAmount: number;
   paymentRefundCount: number;
   refundShiftId: string | null;
+  returnCaseId: string | null;
+  pendingReturnItemCount: number;
   idempotentReplay: boolean;
 };
 
@@ -196,6 +200,11 @@ function buildReplayResult({
       "paymentRefundCount",
     ),
     refundShiftId: getRequestDataString(requestData, "refundShiftId"),
+    returnCaseId: getRequestDataString(requestData, "returnCaseId"),
+    pendingReturnItemCount: getRequestDataNumber(
+      requestData,
+      "pendingReturnItemCount",
+    ),
     idempotentReplay: true,
   };
 }
@@ -372,6 +381,8 @@ export async function executeApprovedSaleReversal(
           finalPriceAmount: saleItems.finalPriceAmount,
           sku: productItems.sku,
           barcode: productItems.barcode,
+          serialNumber: productItems.serialNumber,
+          weightGram: productItems.weightGram,
           currentOutletId: productItems.currentOutletId,
           availability: productItems.availability,
           locationState: productItems.locationState,
@@ -508,61 +519,164 @@ export async function executeApprovedSaleReversal(
     }
 
     const productItemIds = itemRows.map((item) => item.productItemId);
-    const returnedItems = await tx
-      .update(productItems)
-      .set({
-        availability: "available",
-        locationState: "outlet",
-        currentOutletId: sale.outletId,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(productItems.organizationId, input.organizationId),
-          inArray(productItems.id, productItemIds),
-          eq(productItems.currentOutletId, sale.outletId),
-          eq(productItems.availability, "sold"),
-          eq(productItems.locationState, "customer"),
-        ),
-      )
-      .returning({ id: productItems.id });
+    let returnedItemCount = 0;
+    let returnCaseId: string | null = null;
+    let pendingReturnItemCount = 0;
 
-    if (returnedItems.length !== productItemIds.length) {
-      throw new SaleReversalTransactionError(
-        "INVENTORY_STATE_CONFLICT",
-        "Sebagian item tidak lagi berada pada status sold/customer. Seluruh eksekusi dibatalkan untuk mencegah perubahan stok yang salah.",
+    if (input.kind === "void") {
+      const returnedItems = await tx
+        .update(productItems)
+        .set({
+          availability: "available",
+          condition: "good",
+          locationState: "outlet",
+          currentOutletId: sale.outletId,
+          locationCode: null,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(productItems.organizationId, input.organizationId),
+            inArray(productItems.id, productItemIds),
+            eq(productItems.currentOutletId, sale.outletId),
+            eq(productItems.availability, "sold"),
+            eq(productItems.locationState, "customer"),
+          ),
+        )
+        .returning({ id: productItems.id });
+
+      if (returnedItems.length !== productItemIds.length) {
+        throw new SaleReversalTransactionError(
+          "INVENTORY_STATE_CONFLICT",
+          "Sebagian item tidak lagi berada pada status sold/customer. Seluruh eksekusi dibatalkan untuk mencegah perubahan stok yang salah.",
+        );
+      }
+
+      returnedItemCount = returnedItems.length;
+
+      await tx.insert(inventoryMovements).values(
+        itemRows.map((item) => ({
+          organizationId: input.organizationId,
+          itemId: item.productItemId,
+          movementType: config.inventoryMovementType,
+          fromOutletId: null,
+          toOutletId: sale.outletId,
+          referenceType: config.inventoryReferenceType,
+          referenceId: sale.id,
+          reason,
+          metadata: {
+            source: config.source,
+            saleId: sale.id,
+            invoiceNumber: sale.invoiceNumber,
+            saleItemId: item.id,
+            lineNumber: item.lineNumber,
+            finalPriceAmount: parseMoney(item.finalPriceAmount),
+            previousAvailability: item.availability,
+            previousLocationState: item.locationState,
+            previousOutletId: item.currentOutletId,
+            approvalId: approval.id,
+            executionIdempotencyKey,
+          },
+          performedBy: input.actor.id,
+          approvedBy: approval.approvedBy,
+          occurredAt: now,
+          createdAt: now,
+        })),
       );
-    }
+    } else {
+      const validatedRefundItems = await tx
+        .update(productItems)
+        .set({
+          updatedAt: sql`${productItems.updatedAt}`,
+        })
+        .where(
+          and(
+            eq(productItems.organizationId, input.organizationId),
+            inArray(productItems.id, productItemIds),
+            eq(productItems.currentOutletId, sale.outletId),
+            eq(productItems.availability, "sold"),
+            eq(productItems.locationState, "customer"),
+          ),
+        )
+        .returning({ id: productItems.id });
 
-    await tx.insert(inventoryMovements).values(
-      itemRows.map((item) => ({
-        organizationId: input.organizationId,
-        itemId: item.productItemId,
-        movementType: config.inventoryMovementType,
-        fromOutletId: null,
-        toOutletId: sale.outletId,
-        referenceType: config.inventoryReferenceType,
-        referenceId: sale.id,
-        reason,
-        metadata: {
-          source: config.source,
+      if (validatedRefundItems.length !== productItemIds.length) {
+        throw new SaleReversalTransactionError(
+          "INVENTORY_STATE_CONFLICT",
+          "Sebagian item tidak lagi berada pada status sold/customer. Refund dibatalkan sebelum return case dibentuk.",
+        );
+      }
+
+      const [returnCase] = await tx
+        .insert(saleReturnCases)
+        .values({
+          organizationId: input.organizationId,
+          outletId: sale.outletId,
           saleId: sale.id,
-          invoiceNumber: sale.invoiceNumber,
-          saleItemId: item.id,
-          lineNumber: item.lineNumber,
-          finalPriceAmount: parseMoney(item.finalPriceAmount),
-          previousAvailability: item.availability,
-          previousLocationState: item.locationState,
-          previousOutletId: item.currentOutletId,
           approvalId: approval.id,
-          executionIdempotencyKey,
-        },
-        performedBy: input.actor.id,
-        approvedBy: approval.approvedBy,
-        occurredAt: now,
-        createdAt: now,
-      })),
-    );
+          status: "awaiting_receipt",
+          expectedItemCount: itemRows.length,
+          receivedItemCount: 0,
+          inspectedItemCount: 0,
+          notes: reason,
+          createdBy: input.actor.id,
+          metadata: {
+            source: config.source,
+            invoiceNumber: sale.invoiceNumber,
+            executionIdempotencyKey,
+            financialRefundCompletedAt: now.toISOString(),
+          },
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning({ id: saleReturnCases.id });
+
+      if (!returnCase) {
+        throw new SaleReversalTransactionError(
+          "CONCURRENT_STATE_CHANGE",
+          "Kasus retur gagal dibentuk. Seluruh eksekusi dibatalkan.",
+        );
+      }
+
+      const insertedReturnItems = await tx
+        .insert(saleReturnItems)
+        .values(
+          itemRows.map((item) => ({
+            organizationId: input.organizationId,
+            outletId: sale.outletId,
+            returnCaseId: returnCase.id,
+            saleItemId: item.id,
+            productItemId: item.productItemId,
+            status: "awaiting_receipt" as const,
+            expectedSku: item.sku,
+            expectedBarcode: item.barcode,
+            expectedSerialNumber: item.serialNumber,
+            expectedWeightGram: item.weightGram,
+            metadata: {
+              source: config.source,
+              saleId: sale.id,
+              invoiceNumber: sale.invoiceNumber,
+              lineNumber: item.lineNumber,
+              finalPriceAmount: parseMoney(item.finalPriceAmount),
+              approvalId: approval.id,
+              executionIdempotencyKey,
+            },
+            createdAt: now,
+            updatedAt: now,
+          })),
+        )
+        .returning({ id: saleReturnItems.id });
+
+      if (insertedReturnItems.length !== itemRows.length) {
+        throw new SaleReversalTransactionError(
+          "CONCURRENT_STATE_CHANGE",
+          "Daftar item retur tidak terbentuk lengkap. Seluruh eksekusi dibatalkan.",
+        );
+      }
+
+      returnCaseId = returnCase.id;
+      pendingReturnItemCount = insertedReturnItems.length;
+    }
 
     const insertedRefunds = await tx
       .insert(paymentRefunds)
@@ -701,7 +815,9 @@ export async function executeApprovedSaleReversal(
       cashRefundAmount: cashPaidAmount,
       paidAmount,
       refundMode: "full",
-      returnedItemCount: itemRows.length,
+      returnedItemCount,
+      pendingReturnItemCount,
+      returnCaseId,
       paymentRefundCount: insertedRefunds.length,
       originalShiftId: sale.originalShiftId,
       refundShiftId: refundShift?.id ?? null,
@@ -768,7 +884,9 @@ export async function executeApprovedSaleReversal(
         status: config.finalSaleStatus,
         approvalId: approval.id,
         refundMode: "full",
-        returnedItemCount: itemRows.length,
+        returnedItemCount,
+        pendingReturnItemCount,
+        returnCaseId,
         cashRefundAmount: cashPaidAmount,
         refundShiftId: refundShift?.id ?? null,
         paymentStatus: "refunded",
@@ -792,11 +910,13 @@ export async function executeApprovedSaleReversal(
 
     return {
       invoiceNumber: sale.invoiceNumber,
-      returnedItemCount: itemRows.length,
+      returnedItemCount,
       cashRefundAmount: cashPaidAmount,
       paidAmount,
       paymentRefundCount: insertedRefunds.length,
       refundShiftId: refundShift?.id ?? null,
+      returnCaseId,
+      pendingReturnItemCount,
       idempotentReplay: false,
     };
   });

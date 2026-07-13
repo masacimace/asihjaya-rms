@@ -1,6 +1,6 @@
 export const PRODUCT_ITEM_PAGE_SIZE = 20;
 
-export type ItemAvailability = "draft" | "available" | "reserved" | "sold";
+export type ItemAvailability = "draft" | "available" | "reserved" | "inspection" | "sold";
 export type ItemCondition = "good" | "damaged" | "lost" | "returned";
 export type ItemLocationState =
   | "outlet"
@@ -32,6 +32,7 @@ const AVAILABILITIES: readonly ItemAvailability[] = [
   "draft",
   "available",
   "reserved",
+  "inspection",
   "sold",
 ];
 

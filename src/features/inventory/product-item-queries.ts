@@ -130,7 +130,7 @@ export async function getProductItemOverview(organizationId: string) {
     .groupBy(productItems.availability, productItems.condition);
 
   const totalFor = (
-    availability: "draft" | "available" | "reserved" | "sold",
+    availability: "draft" | "available" | "reserved" | "inspection" | "sold",
   ) =>
     rows
       .filter((row) => row.availability === availability)

@@ -141,6 +141,21 @@ const permissionSeeds = [
     module: "payments",
   },
   {
+    code: "returns.view",
+    name: "Melihat workflow retur dan pemeriksaan barang",
+    module: "inventory",
+  },
+  {
+    code: "returns.receive",
+    name: "Menerima barang retur dari customer",
+    module: "inventory",
+  },
+  {
+    code: "returns.inspect",
+    name: "Memeriksa dan menentukan status barang retur",
+    module: "inventory",
+  },
+  {
     code: "shifts.manage",
     name: "Mengelola shift dan kas",
     module: "operations",
@@ -292,6 +307,9 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "payments.refund.request",
     "payments.refund.approve",
     "payments.refund.execute",
+    "returns.view",
+    "returns.receive",
+    "returns.inspect",
     "shifts.manage",
     "reports.view",
     "audit.view",
@@ -306,6 +324,8 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "payments.manage",
     "sales.void.request",
     "payments.refund.request",
+    "returns.view",
+    "returns.receive",
     "shifts.manage",
   ],
 
@@ -320,6 +340,9 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "pricing.view_cost",
     "pricing.manage",
     "sales.view",
+    "returns.view",
+    "returns.receive",
+    "returns.inspect",
   ],
 
   finance: [
@@ -331,6 +354,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "payments.verify.manual",
     "payments.refund.approve",
     "payments.refund.execute",
+    "returns.view",
     "reports.view",
   ],
 };

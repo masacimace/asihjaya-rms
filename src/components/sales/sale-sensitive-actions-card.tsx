@@ -65,7 +65,7 @@ const actionMetas: ActionMeta[] = [
     title: "Ajukan Refund",
     description: "Refund penuh setelah manager/owner menyetujui request.",
     helper:
-      "Gunakan untuk pengembalian penuh. Semua item transaksi akan kembali tersedia dan kas cash direversal jika ada.",
+      "Setelah refund dieksekusi, barang menunggu penerimaan fisik dan pemeriksaan sebelum dapat kembali dijual.",
     buttonLabel: "Ajukan approval refund",
     icon: <Undo2 className="size-4" />,
     toneClass: "bg-orange-50 text-orange-700 ring-orange-100",
@@ -377,8 +377,8 @@ function SensitiveActionForm({
             : "Approval void sudah disetujui. Gunakan tombol eksekusi di bawah untuk membatalkan transaksi penuh."
           : blockingApproval?.status === "approved" && meta.type === "refund"
             ? latestApproval?.executionStatus === "refund_executed"
-              ? "Refund penuh sudah dieksekusi. Transaksi, stok, kas cash, dan audit sudah diperbarui."
-              : "Approval refund sudah disetujui. Gunakan tombol eksekusi di bawah untuk memproses refund penuh."
+              ? "Refund penuh sudah dieksekusi. Dana dan audit sudah diperbarui; barang masuk workflow penerimaan dan pemeriksaan retur."
+              : "Approval refund sudah disetujui. Eksekusi akan memproses pengembalian dana dan membuat workflow penerimaan barang retur."
           : blockingApproval?.status === "pending"
             ? "Masih ada request yang menunggu approval. Tunggu keputusan manager/owner sebelum membuat request baru."
             : !isCompleted

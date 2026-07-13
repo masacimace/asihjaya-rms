@@ -32,6 +32,7 @@ const availabilityLabels = {
   draft: "Draft",
   available: "Tersedia",
   reserved: "Reserved",
+  inspection: "Pemeriksaan Retur",
   sold: "Terjual",
 } as const;
 

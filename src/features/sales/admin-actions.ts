@@ -559,6 +559,11 @@ async function executeApprovedSaleReversalAction({
       ? " Refund cash dicatat pada shift register yang sedang open, bukan shift transaksi lama."
       : "";
 
+  const returnWorkflowMessage =
+    kind === "refund" && result.returnCaseId
+      ? ` ${result.pendingReturnItemCount} item menunggu penerimaan fisik dan pemeriksaan sebelum dapat kembali ke stok.`
+      : "";
+
   redirectAdminSaleDetailWithFeedback({
     saleId,
     returnTo,
@@ -566,7 +571,7 @@ async function executeApprovedSaleReversalAction({
     message:
       kind === "void"
         ? `Void ${result.invoiceNumber} berhasil dieksekusi secara atomik.${shiftMessage}${replayMessage}`
-        : `Refund penuh ${result.invoiceNumber} berhasil dieksekusi secara atomik.${shiftMessage}${replayMessage}`,
+        : `Refund penuh ${result.invoiceNumber} berhasil dieksekusi secara atomik.${shiftMessage}${returnWorkflowMessage}${replayMessage}`,
   });
 }
 

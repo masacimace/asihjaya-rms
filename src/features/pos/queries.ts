@@ -61,7 +61,7 @@ import {
 
 type ScannedPosItemRow = PosAvailableItem & {
   isActive: boolean;
-  availability: "draft" | "available" | "reserved" | "sold";
+  availability: "draft" | "available" | "reserved" | "inspection" | "sold";
   condition: "good" | "damaged" | "lost" | "returned";
   locationState: "outlet" | "warehouse" | "in_transit" | "customer" | "repair";
   productStatus: "draft" | "active" | "inactive";
@@ -75,6 +75,7 @@ const itemAvailabilityLabels: Record<
   draft: "masih draft",
   available: "tersedia",
   reserved: "sedang di-reserve",
+  inspection: "sedang diperiksa sebagai retur",
   sold: "sudah terjual",
 };
 

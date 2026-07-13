@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   CheckCircle2,
+  ClipboardCheck,
   Download,
   ExternalLink,
   Eye,
@@ -21,6 +22,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getSaleSensitiveCapabilities } from "@/features/approvals/authorization";
+import { RETURN_VIEW_PERMISSION } from "@/features/returns/authorization";
+import { getSaleReturnCaseSummary } from "@/features/returns/queries";
 import {
   type AdminPaymentMethod,
   type AdminSalePrintStatus,
@@ -443,6 +446,10 @@ export default async function SaleDetailPage({
     notFound();
   }
 
+  const canViewReturnWorkflow = auth.permissionCodes.includes(RETURN_VIEW_PERMISSION);
+  const returnCaseSummary = canViewReturnWorkflow
+    ? await getSaleReturnCaseSummary({ auth, saleId: sale.id })
+    : null;
   const latestPrintJob = sale.hardwareJobs[0] ?? null;
   const printStatus = latestPrintJob?.status ?? "not_queued";
   const currentDetailHref = buildSaleDetailHref(sale.id);
@@ -1037,6 +1044,30 @@ export default async function SaleDetailPage({
               </p>
             )}
           </section>
+
+          {returnCaseSummary ? (
+            <Link
+              href={`/admin/penjualan/${sale.id}/retur`}
+              className="block rounded-2xl border border-amber-200 bg-amber-50 p-4 transition hover:border-amber-300 hover:bg-amber-100"
+            >
+              <div className="flex items-start gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-white text-amber-700 ring-1 ring-amber-200">
+                  <ClipboardCheck className="size-5" />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-amber-950">
+                    Pemeriksaan Retur
+                  </h2>
+                  <p className="mt-1 text-xs leading-5 text-amber-800">
+                    Status {returnCaseSummary.status.replaceAll("_", " ")} · diterima {returnCaseSummary.receivedItemCount}/{returnCaseSummary.expectedItemCount} · diperiksa {returnCaseSummary.inspectedItemCount}/{returnCaseSummary.expectedItemCount}.
+                  </p>
+                  <span className="mt-3 inline-flex text-xs font-semibold text-amber-900 underline">
+                    Buka workflow retur
+                  </span>
+                </div>
+              </div>
+            </Link>
+          ) : null}
 
           {canViewSensitiveActions ? (
             <SaleSensitiveActionsCard

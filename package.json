@@ -23,7 +23,10 @@
     "db:preflight:p1a": "tsx scripts/preflight-p1a.ts",
     "payment:evidence:cleanup": "tsx scripts/cleanup-payment-evidence.ts",
     "check:p1a1": "tsx scripts/check-p1a1-fast-manual-payment-ux.ts",
-    "db:preflight:p1a1": "tsx scripts/preflight-p1a1.ts"
+    "db:preflight:p1a1": "tsx scripts/preflight-p1a1.ts",
+    "check:p1b": "tsx scripts/check-p1b-return-workflow.ts",
+    "db:preflight:p1b": "tsx scripts/preflight-p1b.ts",
+    "db:repair:p1b-legacy-refund": "tsx scripts/repair-p1b-legacy-refund-ledger.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

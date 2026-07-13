@@ -1160,7 +1160,7 @@ export async function getAdminSaleDetailData({
           {
             id: "refunded",
             label: "Refund penuh dieksekusi",
-            description: "Transaksi sudah direfund penuh setelah approval refund disetujui.",
+            description: "Pengembalian dana selesai; item diproses melalui workflow penerimaan dan pemeriksaan retur.",
             createdAt: sale.cancelledAt,
             tone: "warning" as const,
           },
