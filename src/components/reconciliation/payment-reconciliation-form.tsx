@@ -20,7 +20,10 @@ const inputClassName =
 const labelClassName = "mb-1.5 block text-xs font-semibold text-neutral-700";
 
 function digitsOnly(value: string) {
-  return value.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 15);
+  return value
+    .replace(/\D/g, "")
+    .replace(/^0+(?=\d)/, "")
+    .slice(0, 15);
 }
 
 function formatDigits(value: string) {
@@ -149,7 +152,9 @@ export function PaymentReconciliationForm({
 }) {
   const [status, setStatus] = useState<ReconciliationStatus>(initialStatus);
   const [gross, setGross] = useState(
-    initialGrossAmount == null ? formatDigits(String(expectedAmount)) : formatDigits(String(initialGrossAmount)),
+    initialGrossAmount == null
+      ? formatDigits(String(expectedAmount))
+      : formatDigits(String(initialGrossAmount)),
   );
   const [fee, setFee] = useState(formatDigits(String(initialFeeAmount)));
   const [tax, setTax] = useState(formatDigits(String(initialTaxAmount)));
@@ -165,10 +170,12 @@ export function PaymentReconciliationForm({
   const meta = getStatusMeta(status);
   const MetaIcon = meta.icon;
 
-  const options = useMemo<Array<{
-    value: ReconciliationStatus;
-    label: string;
-  }>>(() => {
+  const options = useMemo<
+    Array<{
+      value: ReconciliationStatus;
+      label: string;
+    }>
+  >(() => {
     const exceptionIsLocked =
       !canResolve &&
       (initialStatus === "mismatch" ||
@@ -201,10 +208,7 @@ export function PaymentReconciliationForm({
   }, [canResolve, initialStatus]);
 
   return (
-    <form
-      action={savePaymentReconciliationAction}
-      className="space-y-5"
-    >
+    <form action={savePaymentReconciliationAction} className="space-y-5">
       <input type="hidden" name="paymentId" value={paymentId} />
 
       <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
@@ -326,18 +330,14 @@ export function PaymentReconciliationForm({
             <div
               className={cn(
                 "rounded-2xl p-4",
-                differenceAmount === 0
-                  ? "bg-emerald-50"
-                  : "bg-red-50",
+                differenceAmount === 0 ? "bg-emerald-50" : "bg-red-50",
               )}
             >
               <p className="text-xs font-medium text-neutral-500">Selisih</p>
               <p
                 className={cn(
                   "mt-1 text-sm font-semibold",
-                  differenceAmount === 0
-                    ? "text-emerald-700"
-                    : "text-red-700",
+                  differenceAmount === 0 ? "text-emerald-700" : "text-red-700",
                 )}
               >
                 {formatMoney(differenceAmount)}
@@ -409,7 +409,7 @@ export function PaymentReconciliationForm({
         </div>
       </section>
 
-      <div className="sticky bottom-4 z-10 rounded-2xl border border-neutral-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+      <div className="sticky bottom-2 z-10 rounded-2xl border border-neutral-200 bg-white/95 p-3 shadow-lg backdrop-blur">
         <button
           type="submit"
           className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-neutral-950 px-5 text-sm font-semibold text-white transition hover:bg-neutral-800"

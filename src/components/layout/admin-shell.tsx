@@ -72,26 +72,38 @@ const navigation: NavigationItem[] = [
     icon: LayoutDashboard,
   },
   {
-    label: "Penjualan",
-    href: "/admin/penjualan",
-    icon: ReceiptText,
-  },
-  {
-    label: "Produk",
+    label: "Produk Master",
     href: "/admin/produk",
     icon: Gem,
     access: "products",
   },
   {
-    label: "Inventaris",
+    label: "Produk Inventaris",
     href: "/admin/inventaris",
     icon: Boxes,
     access: "inventory",
   },
   {
-    label: "Pelanggan",
+    label: "Riwayat Penjualan",
+    href: "/admin/penjualan",
+    icon: ReceiptText,
+  },
+  {
+    label: "Daftar Pelanggan",
     href: "/admin/pelanggan",
     icon: UsersRound,
+  },
+  {
+    label: "Finansial Outlet",
+    icon: Landmark,
+    access: "reconciliation",
+    children: [
+      {
+        label: "Rekonsiliasi Pembayaran",
+        href: "/admin/keuangan/rekonsiliasi",
+      },
+      { label: "Pergerakan Kas", href: "/admin/operasional/kas" },
+    ],
   },
   {
     label: "Operasional",
@@ -100,19 +112,7 @@ const navigation: NavigationItem[] = [
       { label: "Shift Kasir", href: "/admin/operasional/shift" },
       { label: "Laporan Outlet", href: "/admin/laporan" },
       { label: "Riwayat Approval", href: "/admin/operasional/approval" },
-      { label: "Pergerakan Kas", href: "/admin/operasional/kas" },
       { label: "Hardware Hub", href: "/admin/operasional/hardware" },
-    ],
-  },
-  {
-    label: "Keuangan",
-    icon: Landmark,
-    access: "reconciliation",
-    children: [
-      {
-        label: "Rekonsiliasi Pembayaran",
-        href: "/admin/keuangan/rekonsiliasi",
-      },
     ],
   },
   {
@@ -279,7 +279,7 @@ function SidebarContent({
             );
             return (
               <details key={label} open={isChildActive} className="group">
-                <summary className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-950 marker:content-none [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm font-medium text-black transition-colors hover:bg-neutral-100 hover:text-neutral-950 marker:content-none [&::-webkit-details-marker]:hidden">
                   <Icon
                     className={cn(
                       "size-[18px] shrink-0",
@@ -416,7 +416,7 @@ export function AdminShell({
   }, []);
 
   return (
-    <div className="grid h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[260px_minmax(0,1fr)]">
+    <div className="grid h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[270px_minmax(0,1fr)]">
       {/* Sidebar desktop */}
       <aside className="hidden h-dvh min-h-0 flex-col overflow-y-auto border-r border-[var(--border)] bg-white p-5 lg:flex">
         <SidebarContent
@@ -437,7 +437,7 @@ export function AdminShell({
           <button
             type="button"
             aria-label="Tutup navigasi"
-            className="absolute inset-0 touch-none bg-black/30 backdrop-blur-[1px]"
+            className="absolute inset-0 touch-non backdrop-blur-[1px]"
             onClick={() => setIsMobileMenuOpen(false)}
           />
 
