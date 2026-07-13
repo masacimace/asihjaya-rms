@@ -100,12 +100,12 @@ export function CameraScannerModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <button
         type="button"
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 backdrop-blur-xs"
         onClick={closeScanner}
         aria-label="Tutup scanner"
       />
 
-      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+      <div className="relative z-10 w-full max-w-xs overflow-hidden rounded-3xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <div className="flex items-center gap-3 text-neutral-950">
             <ScanBarcode className="size-5 text-[var(--accent)]" />
@@ -152,7 +152,7 @@ export function CameraScannerModal({
                 onChange={(event) => setManualScanValue(event.target.value)}
                 placeholder="Input barcode/SKU manual"
                 disabled={isProcessing}
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400 disabled:cursor-not-allowed"
+                className="min-w-0 flex-1 bg-transparent !text-xs outline-none placeholder:text-neutral-400 disabled:cursor-not-allowed"
               />
             </label>
 

@@ -32,6 +32,7 @@ import {
 } from "@/features/sales/admin-contracts";
 import { reprintAdminReceiptCertificateAction } from "@/features/sales/admin-actions";
 import { getAdminSaleDetailData } from "@/features/sales/admin-queries";
+import { getSaleCorrectionEligibility } from "@/features/sales/correction-eligibility";
 import { requirePermission } from "@/lib/auth/session";
 import { getPaymentEvidenceUrl } from "@/lib/storage/payment-evidence-storage";
 import { cn } from "@/lib/utils";
@@ -447,9 +448,13 @@ export default async function SaleDetailPage({
   }
 
   const canViewReturnWorkflow = auth.permissionCodes.includes(RETURN_VIEW_PERMISSION);
-  const returnCaseSummary = canViewReturnWorkflow
-    ? await getSaleReturnCaseSummary({ auth, saleId: sale.id })
-    : null;
+  const returnCaseSummary = await getSaleReturnCaseSummary({ auth, saleId: sale.id });
+  const correctionEligibility = getSaleCorrectionEligibility({
+    saleStatus: sale.status,
+    shiftStatus: sale.shift.status,
+    completedAt: sale.completedAt,
+    hasReturnCase: Boolean(returnCaseSummary),
+  });
   const latestPrintJob = sale.hardwareJobs[0] ?? null;
   const printStatus = latestPrintJob?.status ?? "not_queued";
   const currentDetailHref = buildSaleDetailHref(sale.id);
@@ -1045,7 +1050,7 @@ export default async function SaleDetailPage({
             )}
           </section>
 
-          {returnCaseSummary ? (
+          {canViewReturnWorkflow && returnCaseSummary ? (
             <Link
               href={`/admin/penjualan/${sale.id}/retur`}
               className="block rounded-2xl border border-amber-200 bg-amber-50 p-4 transition hover:border-amber-300 hover:bg-amber-100"
@@ -1077,6 +1082,8 @@ export default async function SaleDetailPage({
               returnTo={currentDetailHref}
               approvals={sale.sensitiveApprovals}
               capabilities={sensitiveCapabilities}
+              eligibility={correctionEligibility}
+              returnWorkflowHref={`/admin/penjualan/${sale.id}/retur`}
             />
           ) : null}
         </aside>

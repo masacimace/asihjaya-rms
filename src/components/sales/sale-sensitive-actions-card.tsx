@@ -1,9 +1,13 @@
-import type { ReactNode } from "react";
-import Link from "next/link";
+"use client";
 
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
+  ChevronRight,
+  ClipboardCheck,
   Clock3,
   PlayCircle,
   RotateCcw,
@@ -21,9 +25,16 @@ import type {
   AdminSaleSensitiveApproval,
   AdminSaleStatus,
 } from "@/features/sales/admin-contracts";
+import {
+  classifySaleCorrection,
+  correctionReasonOptions,
+  type CustomerPresenceAnswer,
+  type DeliveryAnswer,
+  type PaymentAnswer,
+  type SaleCorrectionEligibility,
+  type SaleCorrectionType,
+} from "@/features/sales/correction-eligibility";
 import { cn } from "@/lib/utils";
-
-type SensitiveRequestType = "void" | "refund";
 
 type SensitiveActionCapability = {
   canRequest: boolean;
@@ -32,48 +43,12 @@ type SensitiveActionCapability = {
 };
 
 type SaleSensitiveCapabilities = Record<
-  SensitiveRequestType,
+  SaleCorrectionType,
   SensitiveActionCapability
 >;
 
-type ActionMeta = {
-  type: SensitiveRequestType;
-  approvalType: AdminSaleSensitiveApproval["type"];
-  title: string;
-  description: string;
-  helper: string;
-  buttonLabel: string;
-  icon: ReactNode;
-  toneClass: string;
-};
-
-const actionMetas: ActionMeta[] = [
-  {
-    type: "void",
-    approvalType: "void_receipt",
-    title: "Ajukan Void",
-    description: "Batalkan nota penuh setelah manager/owner menyetujui request.",
-    helper:
-      "Gunakan untuk transaksi salah input, batal penuh, atau nota bermasalah yang perlu dibatalkan.",
-    buttonLabel: "Ajukan approval void",
-    icon: <RotateCcw className="size-4" />,
-    toneClass: "bg-red-50 text-red-700 ring-red-100",
-  },
-  {
-    type: "refund",
-    approvalType: "refund_transaction",
-    title: "Ajukan Refund",
-    description: "Refund penuh setelah manager/owner menyetujui request.",
-    helper:
-      "Setelah refund dieksekusi, barang menunggu penerimaan fisik dan pemeriksaan sebelum dapat kembali dijual.",
-    buttonLabel: "Ajukan approval refund",
-    icon: <Undo2 className="size-4" />,
-    toneClass: "bg-orange-50 text-orange-700 ring-orange-100",
-  },
-];
-
 const approvalStatusLabels: Record<AdminSaleSensitiveApproval["status"], string> = {
-  pending: "Menunggu approval",
+  pending: "Menunggu persetujuan",
   approved: "Disetujui",
   rejected: "Ditolak",
 };
@@ -82,17 +57,16 @@ const executionStatusLabels: Record<
   NonNullable<AdminSaleSensitiveApproval["executionStatus"]>,
   string
 > = {
-  awaiting_r3c_2: "Menunggu eksekusi",
-  void_executed: "Void sudah dieksekusi",
-  refund_executed: "Refund sudah dieksekusi",
-  executing: "Sedang dieksekusi",
-  failed: "Eksekusi gagal — dapat dicoba ulang",
-  cancelled: "Eksekusi dibatalkan",
+  awaiting_r3c_2: "Menunggu diproses",
+  void_executed: "Pembatalan transaksi selesai",
+  refund_executed: "Pengembalian dana selesai",
+  executing: "Sedang diproses",
+  failed: "Proses gagal — dapat dicoba ulang",
+  cancelled: "Proses dibatalkan",
 };
 
 function formatDateTime(value: Date | null) {
   if (!value) return "-";
-
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
@@ -103,83 +77,54 @@ function formatDateTime(value: Date | null) {
   }).format(value);
 }
 
-function getStatusMeta(status: AdminSaleSensitiveApproval["status"]) {
-  if (status === "approved") {
-    return {
-      icon: CheckCircle2,
-      className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    };
-  }
-
-  if (status === "rejected") {
-    return {
-      icon: XCircle,
-      className: "border-red-200 bg-red-50 text-red-700",
-    };
-  }
-
-  return {
-    icon: Clock3,
-    className: "border-amber-200 bg-amber-50 text-amber-700",
-  };
+function getLatestActiveApproval(approvals: AdminSaleSensitiveApproval[]) {
+  return (
+    approvals.find(
+      (approval) => approval.status === "pending" || approval.status === "approved",
+    ) ?? approvals[0] ?? null
+  );
 }
 
-function getLatestApproval(
-  approvals: AdminSaleSensitiveApproval[],
-  type: AdminSaleSensitiveApproval["type"],
-) {
-  return approvals.find((approval) => approval.type === type) ?? null;
+function getApprovalType(approval: AdminSaleSensitiveApproval): SaleCorrectionType {
+  return approval.type === "void_receipt" ? "void" : "refund";
 }
 
-function getBlockingApproval(approval: AdminSaleSensitiveApproval | null) {
-  if (!approval) return null;
-
-  return approval.status === "pending" || approval.status === "approved"
-    ? approval
-    : null;
-}
-
-function ApprovalStatusPanel({
-  approval,
-}: {
-  approval: AdminSaleSensitiveApproval;
-}) {
-  const statusMeta = getStatusMeta(approval.status);
-  const StatusIcon = statusMeta.icon;
+function ApprovalStatusPanel({ approval }: { approval: AdminSaleSensitiveApproval }) {
+  const approved = approval.status === "approved";
+  const rejected = approval.status === "rejected";
+  const Icon = approved ? CheckCircle2 : rejected ? XCircle : Clock3;
+  const className = approved
+    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+    : rejected
+      ? "border-red-200 bg-red-50 text-red-800"
+      : "border-amber-200 bg-amber-50 text-amber-800";
+  const type = getApprovalType(approval);
 
   return (
-    <div className={cn("rounded-2xl border p-3 text-sm", statusMeta.className)}>
-      <div className="flex items-start gap-2">
-        <StatusIcon className="mt-0.5 size-4 shrink-0" />
+    <div className={cn("rounded-2xl border p-4 text-sm", className)}>
+      <div className="flex items-start gap-3">
+        <Icon className="mt-0.5 size-5 shrink-0" />
         <div className="min-w-0">
           <p className="font-semibold">{approvalStatusLabels[approval.status]}</p>
-          <p className="mt-1 leading-5 opacity-90">
-            Request oleh {approval.requestedByName} pada {formatDateTime(approval.createdAt)}.
+          <p className="mt-1 leading-5">
+            {type === "void" ? "Pembatalan transaksi" : "Retur dan pengembalian dana"}
+          </p>
+          <p className="mt-2 text-xs leading-5 opacity-90">
+            Diajukan oleh {approval.requestedByName} pada {formatDateTime(approval.createdAt)}.
           </p>
           {approval.approvedByName ? (
-            <p className="mt-1 leading-5 opacity-90">
+            <p className="text-xs leading-5 opacity-90">
               Diproses oleh {approval.approvedByName} pada {formatDateTime(approval.resolvedAt)}.
             </p>
           ) : null}
           {approval.executionStatus ? (
-            <div className="mt-2 rounded-xl border border-white/80 bg-white/70 px-3 py-2 leading-5 text-neutral-700">
-              <p className="font-semibold">
-                {executionStatusLabels[approval.executionStatus]}
-              </p>
-              {approval.executedAt ? (
-                <p className="mt-1 text-xs">
-                  Dieksekusi oleh {approval.executedByName ?? "staff"} pada {formatDateTime(approval.executedAt)}.
-                </p>
-              ) : null}
-              {approval.executionError ? (
-                <p className="mt-1 text-xs">
-                  Kendala terakhir: {approval.executionError}
-                </p>
-              ) : null}
+            <div className="mt-3 rounded-xl border border-white/80 bg-white/70 px-3 py-2 text-xs leading-5 text-neutral-700">
+              <p className="font-semibold">{executionStatusLabels[approval.executionStatus]}</p>
+              {approval.executionError ? <p>Kendala: {approval.executionError}</p> : null}
             </div>
           ) : null}
           {approval.responseNotes ? (
-            <p className="mt-2 rounded-xl bg-white/70 px-3 py-2 leading-5 text-neutral-700">
+            <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs leading-5 text-neutral-700">
               {approval.responseNotes}
             </p>
           ) : null}
@@ -189,275 +134,326 @@ function ApprovalStatusPanel({
   );
 }
 
-function ExecuteVoidForm({
+function ExecuteApprovedForm({
+  type,
   saleId,
   returnTo,
   approval,
-  disabled,
+  canExecute,
 }: {
+  type: SaleCorrectionType;
   saleId: string;
   returnTo: string;
   approval: AdminSaleSensitiveApproval;
-  disabled: boolean;
+  canExecute: boolean;
 }) {
-  const alreadyExecuted = approval.executionStatus === "void_executed";
-  const executionInProgress = approval.executionStatus === "executing";
+  const executed =
+    approval.executionStatus === (type === "void" ? "void_executed" : "refund_executed");
+  const processing = approval.executionStatus === "executing";
+  const action = type === "void" ? executeApprovedSaleVoidAction : executeApprovedSaleRefundAction;
 
   return (
-    <form
-      action={executeApprovedSaleVoidAction}
-      className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
-    >
+    <form action={action} className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
       <input type="hidden" name="saleId" value={saleId} />
       <input type="hidden" name="approvalId" value={approval.id} />
       <input type="hidden" name="returnTo" value={returnTo} />
-
       <div className="flex items-start gap-3">
-        <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-white text-emerald-700 ring-1 ring-emerald-100">
+        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-white text-emerald-700 ring-1 ring-emerald-100">
           <PlayCircle className="size-5" />
-        </div>
-        <div className="min-w-0">
-          <h4 className="text-sm font-semibold text-emerald-950">
-            Eksekusi Void Disetujui
-          </h4>
+        </span>
+        <div>
+          <h3 className="text-sm font-semibold text-emerald-950">
+            {type === "void" ? "Selesaikan pembatalan transaksi" : "Proses pengembalian dana"}
+          </h3>
           <p className="mt-1 text-xs leading-5 text-emerald-800">
-            Approval void sudah disetujui. Eksekusi bersifat atomik. Jika ada pembayaran cash, register transaksi harus memiliki shift open dan refund akan dicatat pada shift aktif tersebut.
+            {type === "void"
+              ? "Persetujuan sudah diberikan. Sistem akan membatalkan transaksi dan mencatat reversal secara atomik."
+              : "Persetujuan sudah diberikan. Setelah dana dikembalikan, barang akan masuk workflow penerimaan dan pemeriksaan retur."}
           </p>
         </div>
       </div>
-
-      <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-emerald-800">
-        Catatan eksekusi opsional
-      </label>
       <textarea
         name="executionNote"
         maxLength={1000}
-        disabled={disabled || alreadyExecuted || executionInProgress}
-        placeholder="Contoh: void dieksekusi setelah approval owner karena customer batal penuh."
-        className="mt-2 min-h-20 w-full resize-y rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-emerald-50 disabled:text-emerald-500"
+        disabled={!canExecute || executed || processing}
+        placeholder="Catatan tambahan (opsional)"
+        className="mt-4 min-h-20 w-full resize-y rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-emerald-50"
       />
       <button
         type="submit"
-        disabled={disabled || alreadyExecuted || executionInProgress}
+        disabled={!canExecute || executed || processing}
         className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-emerald-700"
       >
         <PlayCircle className="size-4" />
-        {alreadyExecuted
-          ? "Void sudah dieksekusi"
-          : executionInProgress
-            ? "Void sedang diproses"
-            : "Eksekusi void sekarang"}
+        {executed
+          ? "Proses sudah selesai"
+          : processing
+            ? "Sedang diproses"
+            : type === "void"
+              ? "Batalkan transaksi sekarang"
+              : "Proses pengembalian dana"}
       </button>
+      {!canExecute ? (
+        <p className="mt-2 text-center text-xs text-emerald-800">
+          Akun ini tidak memiliki izin untuk menyelesaikan proses tersebut.
+        </p>
+      ) : null}
     </form>
   );
 }
 
-function ExecuteRefundForm({
-  saleId,
-  returnTo,
-  approval,
-  disabled,
+function ChoiceGroup<T extends string>({
+  label,
+  name,
+  value,
+  onChange,
+  options,
 }: {
-  saleId: string;
-  returnTo: string;
-  approval: AdminSaleSensitiveApproval;
-  disabled: boolean;
+  label: string;
+  name: string;
+  value: T;
+  onChange: (value: T) => void;
+  options: Array<{ value: T; label: string }>;
 }) {
-  const alreadyExecuted = approval.executionStatus === "refund_executed";
-  const executionInProgress = approval.executionStatus === "executing";
-
   return (
-    <form
-      action={executeApprovedSaleRefundAction}
-      className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4"
-    >
-      <input type="hidden" name="saleId" value={saleId} />
-      <input type="hidden" name="approvalId" value={approval.id} />
-      <input type="hidden" name="returnTo" value={returnTo} />
-
-      <div className="flex items-start gap-3">
-        <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-white text-orange-700 ring-1 ring-orange-100">
-          <PlayCircle className="size-5" />
-        </div>
-        <div className="min-w-0">
-          <h4 className="text-sm font-semibold text-orange-950">
-            Eksekusi Refund Penuh Disetujui
-          </h4>
-          <p className="mt-1 text-xs leading-5 text-orange-800">
-            Approval refund sudah disetujui. Eksekusi bersifat atomik. Jika ada pembayaran cash, register transaksi harus memiliki shift open dan refund akan dicatat pada shift aktif tersebut.
-          </p>
-        </div>
+    <fieldset>
+      <legend className="text-sm font-semibold text-neutral-950">{label}</legend>
+      <div className="mt-3 grid gap-2">
+        {options.map((option) => (
+          <label
+            key={option.value}
+            className={cn(
+              "flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition",
+              value === option.value
+                ? "border-[var(--accent)] bg-[var(--accent-soft)] text-neutral-950"
+                : "border-[var(--border)] bg-white hover:bg-neutral-50",
+            )}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={option.value}
+              checked={value === option.value}
+              onChange={() => onChange(option.value)}
+              className="size-4 accent-[var(--accent)]"
+            />
+            {option.label}
+          </label>
+        ))}
       </div>
-
-      <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-orange-800">
-        Catatan eksekusi opsional
-      </label>
-      <textarea
-        name="executionNote"
-        maxLength={1000}
-        disabled={disabled || alreadyExecuted || executionInProgress}
-        placeholder="Contoh: refund penuh dieksekusi setelah barang diterima kembali dari customer."
-        className="mt-2 min-h-20 w-full resize-y rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-orange-50 disabled:text-orange-500"
-      />
-      <button
-        type="submit"
-        disabled={disabled || alreadyExecuted || executionInProgress}
-        className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-orange-600 px-4 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:bg-orange-200 disabled:text-orange-700"
-      >
-        <PlayCircle className="size-4" />
-        {alreadyExecuted
-          ? "Refund sudah dieksekusi"
-          : executionInProgress
-            ? "Refund sedang diproses"
-            : "Eksekusi refund penuh sekarang"}
-      </button>
-    </form>
+    </fieldset>
   );
 }
 
-function SensitiveActionForm({
+function CorrectionWizard({
   saleId,
-  saleStatus,
+  invoiceNumber,
   returnTo,
-  meta,
-  latestApproval,
-  capability,
+  eligibility,
+  capabilities,
 }: {
   saleId: string;
-  saleStatus: AdminSaleStatus;
+  invoiceNumber: string;
   returnTo: string;
-  meta: ActionMeta;
-  latestApproval: AdminSaleSensitiveApproval | null;
-  capability: SensitiveActionCapability;
+  eligibility: SaleCorrectionEligibility;
+  capabilities: SaleSensitiveCapabilities;
 }) {
-  const isCompleted = saleStatus === "completed";
-  const blockingApproval = getBlockingApproval(latestApproval);
-  const hasExecutableVoidApproval =
-    capability.canExecute &&
-    meta.type === "void" &&
-    latestApproval?.status === "approved" &&
-    latestApproval.executionStatus !== "void_executed" &&
-    latestApproval.executionStatus !== "executing" &&
-    isCompleted;
-  const hasExecutableRefundApproval =
-    capability.canExecute &&
-    meta.type === "refund" &&
-    latestApproval?.status === "approved" &&
-    latestApproval.executionStatus !== "refund_executed" &&
-    latestApproval.executionStatus !== "executing" &&
-    isCompleted;
-  const disabled = !isCompleted || Boolean(blockingApproval);
-  const requestFormDisabled =
-    disabled || hasExecutableVoidApproval || hasExecutableRefundApproval;
+  const [step, setStep] = useState(1);
+  const [delivery, setDelivery] = useState<DeliveryAnswer>("unsure");
+  const [payment, setPayment] = useState<PaymentAnswer>("received");
+  const [customerPresence, setCustomerPresence] = useState<CustomerPresenceAnswer>("present");
+  const type = classifySaleCorrection({ eligibility, deliveryAnswer: delivery });
+  const [reasonByType, setReasonByType] = useState<Record<SaleCorrectionType, string>>({
+    void: "",
+    refund: "",
+  });
+  const reasonCode = reasonByType[type];
+  const canRequest = capabilities[type].canRequest;
+  const reasons = correctionReasonOptions[type];
+
+  const impact = useMemo(
+    () =>
+      type === "void"
+        ? [
+            "Memerlukan persetujuan manager/owner.",
+            "Transaksi dan pembayaran akan direversal secara tercatat.",
+            "Barang tidak masuk proses pemeriksaan retur.",
+          ]
+        : [
+            "Memerlukan persetujuan manager/owner.",
+            "Dana dikembalikan sesuai metode pembayaran.",
+            "Barang harus diterima dan diperiksa sebelum kembali dijual.",
+          ],
+    [type],
+  );
 
   return (
-    <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-      <div className="flex items-start gap-3">
-        <div className={cn("grid size-10 shrink-0 place-items-center rounded-2xl ring-1", meta.toneClass)}>
-          {meta.icon}
-        </div>
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-neutral-950">{meta.title}</h3>
-          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            {meta.description}
+    <div className="mt-4 rounded-2xl border border-[var(--border)] bg-neutral-50/60 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Langkah {step} dari 3
           </p>
+          <h3 className="mt-1 text-sm font-semibold text-neutral-950">
+            {step === 1 ? "Kondisi transaksi" : step === 2 ? "Pilih alasan" : "Tinjau pengajuan"}
+          </h3>
+        </div>
+        <div className="flex gap-1">
+          {[1, 2, 3].map((value) => (
+            <span
+              key={value}
+              className={cn(
+                "h-1.5 w-8 rounded-full",
+                value <= step ? "bg-[var(--accent)]" : "bg-neutral-200",
+              )}
+            />
+          ))}
         </div>
       </div>
 
-      {latestApproval ? (
-        <div className="mt-4">
-          <ApprovalStatusPanel approval={latestApproval} />
+      {step === 1 ? (
+        <div className="mt-5 space-y-5">
+          <ChoiceGroup
+            label="Apakah barang sudah diserahkan kepada customer?"
+            name="deliveryAnswerUi"
+            value={delivery}
+            onChange={setDelivery}
+            options={[
+              { value: "not_delivered", label: "Belum diserahkan" },
+              { value: "delivered", label: "Sudah diserahkan" },
+              { value: "unsure", label: "Tidak yakin" },
+            ]}
+          />
+          <ChoiceGroup
+            label="Apakah pembayaran sudah diterima toko?"
+            name="paymentAnswerUi"
+            value={payment}
+            onChange={setPayment}
+            options={[
+              { value: "received", label: "Sudah diterima" },
+              { value: "not_received", label: "Belum diterima" },
+              { value: "unsure", label: "Tidak yakin" },
+            ]}
+          />
+          <ChoiceGroup
+            label="Apakah customer masih berada di toko?"
+            name="customerPresenceUi"
+            value={customerPresence}
+            onChange={setCustomerPresence}
+            options={[
+              { value: "present", label: "Ya" },
+              { value: "left", label: "Tidak" },
+              { value: "unsure", label: "Tidak yakin" },
+            ]}
+          />
+          <div className={cn(
+            "rounded-2xl border p-4",
+            type === "void" ? "border-red-200 bg-red-50" : "border-orange-200 bg-orange-50",
+          )}>
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-600">Saran sistem</p>
+            <p className="mt-1 font-semibold text-neutral-950">
+              {type === "void" ? "Batalkan transaksi" : "Retur dan kembalikan dana"}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-neutral-700">
+              {type === "void"
+                ? "Barang belum diserahkan dan transaksi masih memenuhi syarat pembatalan."
+                : delivery === "delivered"
+                  ? "Barang sudah diserahkan sehingga harus melalui proses retur dan pemeriksaan."
+                  : "Untuk keamanan, kondisi yang tidak pasti atau tidak memenuhi syarat void diarahkan ke proses retur."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setStep(2)}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800"
+          >
+            Lanjut pilih alasan <ChevronRight className="size-4" />
+          </button>
         </div>
       ) : null}
 
-      <p className="mt-4 rounded-2xl bg-neutral-50 px-4 py-3 text-xs leading-5 text-[var(--muted)]">
-        {blockingApproval?.status === "approved" && meta.type === "void"
-          ? latestApproval?.executionStatus === "void_executed"
-            ? "Void sudah dieksekusi. Transaksi, stok, kas cash, dan audit sudah diperbarui."
-            : "Approval void sudah disetujui. Gunakan tombol eksekusi di bawah untuk membatalkan transaksi penuh."
-          : blockingApproval?.status === "approved" && meta.type === "refund"
-            ? latestApproval?.executionStatus === "refund_executed"
-              ? "Refund penuh sudah dieksekusi. Dana dan audit sudah diperbarui; barang masuk workflow penerimaan dan pemeriksaan retur."
-              : "Approval refund sudah disetujui. Eksekusi akan memproses pengembalian dana dan membuat workflow penerimaan barang retur."
-          : blockingApproval?.status === "pending"
-            ? "Masih ada request yang menunggu approval. Tunggu keputusan manager/owner sebelum membuat request baru."
-            : !isCompleted
-              ? "Hanya transaksi completed yang bisa diajukan void/refund."
-              : meta.helper}
-      </p>
+      {step === 2 ? (
+        <div className="mt-5">
+          <ChoiceGroup
+            label={type === "void" ? "Alasan pembatalan" : "Alasan retur"}
+            name="reasonCodeUi"
+            value={reasonCode}
+            onChange={(value) => setReasonByType((current) => ({ ...current, [type]: value }))}
+            options={reasons.map((reason) => ({ ...reason }))}
+          />
+          <div className="mt-5 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-white px-4 text-sm font-semibold"
+            >
+              <ArrowLeft className="size-4" /> Kembali
+            </button>
+            <button
+              type="button"
+              disabled={!reasonCode}
+              onClick={() => setStep(3)}
+              className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-semibold text-white disabled:bg-neutral-200 disabled:text-neutral-500"
+            >
+              Tinjau <ChevronRight className="size-4" />
+            </button>
+          </div>
+        </div>
+      ) : null}
 
-      {capability.canRequest ? (
-        <form action={requestSaleVoidRefundApprovalAction} className="mt-4 space-y-3">
+      {step === 3 ? (
+        <form action={requestSaleVoidRefundApprovalAction} className="mt-5 space-y-4">
           <input type="hidden" name="saleId" value={saleId} />
           <input type="hidden" name="returnTo" value={returnTo} />
-          <input type="hidden" name="requestType" value={meta.type} />
+          <input type="hidden" name="deliveryAnswer" value={delivery} />
+          <input type="hidden" name="paymentAnswer" value={payment} />
+          <input type="hidden" name="customerPresence" value={customerPresence} />
+          <input type="hidden" name="reasonCode" value={reasonCode} />
+          <div className="rounded-2xl border border-[var(--border)] bg-white p-4 text-sm">
+            <dl className="space-y-3">
+              <div><dt className="text-xs text-[var(--muted)]">Invoice</dt><dd className="mt-1 font-mono font-semibold">{invoiceNumber}</dd></div>
+              <div><dt className="text-xs text-[var(--muted)]">Tindakan</dt><dd className="mt-1 font-semibold">{type === "void" ? "Batalkan transaksi" : "Retur dan kembalikan dana"}</dd></div>
+              <div><dt className="text-xs text-[var(--muted)]">Alasan</dt><dd className="mt-1">{reasons.find((reason) => reason.value === reasonCode)?.label}</dd></div>
+            </dl>
+            <ul className="mt-4 space-y-2 border-t border-[var(--border)] pt-4 text-xs leading-5 text-[var(--muted)]">
+              {impact.map((item) => <li key={item}>• {item}</li>)}
+            </ul>
+          </div>
           <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-            Alasan request
+            Catatan tambahan {reasonCode === "other" ? "(wajib)" : "(opsional)"}
           </label>
           <textarea
-            name="reason"
-            minLength={8}
+            name="reasonDetails"
+            minLength={reasonCode === "other" ? 8 : undefined}
+            required={reasonCode === "other"}
             maxLength={1000}
-            required
-            disabled={requestFormDisabled}
-            placeholder="Contoh: customer batal membeli karena salah item / perlu refund karena kesalahan nominal."
-            className="min-h-24 w-full resize-y rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400"
+            placeholder="Tambahkan informasi penting untuk manager yang meninjau."
+            className="min-h-24 w-full resize-y rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)]"
           />
-          <button
-            type="submit"
-            disabled={requestFormDisabled}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
-          >
-            {meta.icon}
-            {meta.buttonLabel}
-          </button>
+          {!canRequest ? (
+            <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs leading-5 text-red-800">
+              Akun ini tidak memiliki izin untuk mengajukan jenis koreksi yang direkomendasikan sistem.
+            </p>
+          ) : null}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-white px-4 text-sm font-semibold"
+            >
+              <ArrowLeft className="size-4" /> Kembali
+            </button>
+            <button
+              type="submit"
+              disabled={!canRequest}
+              className="inline-flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-500"
+            >
+              <ShieldAlert className="size-4" /> Ajukan persetujuan
+            </button>
+          </div>
         </form>
       ) : null}
-
-      {capability.canApprove && latestApproval?.status === "pending" ? (
-        <Link
-          href="/admin/operasional/approval"
-          className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 px-4 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
-        >
-          Tinjau request di dashboard approval
-        </Link>
-      ) : null}
-
-      {!capability.canRequest &&
-      !capability.canApprove &&
-      !capability.canExecute ? (
-        <p className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs leading-5 text-neutral-600">
-          Akun ini hanya dapat melihat transaksi dan tidak memiliki permission untuk request, approval, atau eksekusi aksi ini.
-        </p>
-      ) : null}
-
-      {latestApproval?.status === "approved" &&
-      !capability.canExecute &&
-      (latestApproval.executionStatus === "awaiting_r3c_2" ||
-        latestApproval.executionStatus === "failed") ? (
-        <p className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">
-          Approval sudah disetujui, tetapi akun ini tidak memiliki permission eksekusi. Minta user dengan hak eksekusi untuk melanjutkan.
-        </p>
-      ) : null}
-
-      {hasExecutableVoidApproval && latestApproval ? (
-        <ExecuteVoidForm
-          saleId={saleId}
-          returnTo={returnTo}
-          approval={latestApproval}
-          disabled={!isCompleted}
-        />
-      ) : null}
-
-      {hasExecutableRefundApproval && latestApproval ? (
-        <ExecuteRefundForm
-          saleId={saleId}
-          returnTo={returnTo}
-          approval={latestApproval}
-          disabled={!isCompleted}
-        />
-      ) : null}
-    </article>
+    </div>
   );
 }
 
@@ -468,6 +464,8 @@ export function SaleSensitiveActionsCard({
   returnTo,
   approvals,
   capabilities,
+  eligibility,
+  returnWorkflowHref,
 }: {
   saleId: string;
   invoiceNumber: string;
@@ -475,60 +473,88 @@ export function SaleSensitiveActionsCard({
   returnTo: string;
   approvals: AdminSaleSensitiveApproval[];
   capabilities: SaleSensitiveCapabilities;
+  eligibility: SaleCorrectionEligibility;
+  returnWorkflowHref: string;
 }) {
-  const latestVoidApproval = getLatestApproval(approvals, "void_receipt");
-  const latestRefundApproval = getLatestApproval(approvals, "refund_transaction");
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const approval = getLatestActiveApproval(approvals);
+  const approvalType = approval ? getApprovalType(approval) : null;
+  const executable = approval?.status === "approved" && saleStatus === "completed";
 
   return (
     <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
       <div className="flex items-start gap-3">
-        <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-amber-50 text-amber-700 ring-1 ring-amber-100">
+        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-amber-50 text-amber-700 ring-1 ring-amber-100">
           <ShieldAlert className="size-5" />
-        </div>
+        </span>
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-neutral-950">
-            Aksi Sensitif
-          </h2>
+          <h2 className="text-sm font-semibold text-neutral-950">Koreksi Transaksi</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Request dan eksekusi void/refund untuk {invoiceNumber}. Eksekusi hanya tersedia setelah approval manager/owner disetujui.
+            Gunakan untuk salah input, pembatalan customer, atau pengembalian barang. Sistem akan menentukan alur yang paling aman.
           </p>
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
-        <div className="flex items-start gap-2">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          <p>
-            Aksi void dan refund penuh hanya dapat dijalankan setelah approval disetujui. Gunakan fitur ini untuk nota bermasalah, transaksi batal penuh, atau pengembalian penuh customer.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4 space-y-3">
-        {actionMetas
-          .filter((meta) => {
-            const capability = capabilities[meta.type];
-
-            return (
-              capability.canRequest ||
-              capability.canApprove ||
-              capability.canExecute
-            );
-          })
-          .map((meta) => (
-            <SensitiveActionForm
-              key={meta.type}
+      {approval ? (
+        <div className="mt-4">
+          <ApprovalStatusPanel approval={approval} />
+          {executable && approvalType ? (
+            <ExecuteApprovedForm
+              type={approvalType}
               saleId={saleId}
-              saleStatus={saleStatus}
               returnTo={returnTo}
-              meta={meta}
-              capability={capabilities[meta.type]}
-              latestApproval={
-                meta.type === "void" ? latestVoidApproval : latestRefundApproval
-              }
+              approval={approval}
+              canExecute={capabilities[approvalType].canExecute}
             />
-          ))}
-      </div>
+          ) : null}
+          {approval.executionStatus === "refund_executed" ? (
+            <Link
+              href={returnWorkflowHref}
+              className="mt-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 transition hover:bg-amber-100"
+            >
+              <ClipboardCheck className="size-5 shrink-0" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">Lanjutkan penerimaan barang</span>
+                <span className="mt-1 block text-xs leading-5">Dana sudah diproses. Barang harus diterima dan diperiksa sebelum kembali dijual.</span>
+              </span>
+              <ChevronRight className="ml-auto size-4 shrink-0" />
+            </Link>
+          ) : null}
+        </div>
+      ) : eligibility.canRequestCorrection ? (
+        <>
+          <div className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs leading-5 text-neutral-700">
+            <div className="flex items-start gap-2">
+              {eligibility.voidEligibleBySystem ? <RotateCcw className="mt-0.5 size-4 shrink-0" /> : <Undo2 className="mt-0.5 size-4 shrink-0" />}
+              <div><p className="font-semibold text-neutral-950">{eligibility.title}</p><p className="mt-1">{eligibility.explanation}</p></div>
+            </div>
+          </div>
+          {!wizardOpen ? (
+            <button
+              type="button"
+              onClick={() => setWizardOpen(true)}
+              className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800"
+            >
+              <ShieldAlert className="size-4" /> Ajukan koreksi transaksi
+            </button>
+          ) : (
+            <CorrectionWizard
+              saleId={saleId}
+              invoiceNumber={invoiceNumber}
+              returnTo={returnTo}
+              eligibility={eligibility}
+              capabilities={capabilities}
+            />
+          )}
+        </>
+      ) : (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <div><p className="font-semibold">Koreksi baru tidak tersedia</p><p className="mt-1">{eligibility.blockers[0] ?? "Status transaksi ini tidak dapat dikoreksi."}</p></div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

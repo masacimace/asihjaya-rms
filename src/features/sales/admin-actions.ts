@@ -17,12 +17,26 @@ import {
   payments,
   registers,
   saleItems,
+  saleReturnCases,
   sales,
+  shifts,
   users,
 } from "@/db/schema";
-import { getSaleSensitivePermission } from "@/features/approvals/authorization";
-import { requirePermission } from "@/lib/auth/session";
+import {
+  getSaleSensitivePermission,
+  PAYMENT_REFUND_REQUEST_PERMISSION,
+  SALE_VOID_REQUEST_PERMISSION,
+} from "@/features/approvals/authorization";
+import { requireAnyPermission, requirePermission } from "@/lib/auth/session";
 import { createHardwareJobWithDuplicateGuard } from "@/lib/hardware/job-queue";
+import {
+  classifySaleCorrection,
+  getCorrectionReasonLabel,
+  getSaleCorrectionEligibility,
+  type CustomerPresenceAnswer,
+  type DeliveryAnswer,
+  type PaymentAnswer,
+} from "@/features/sales/correction-eligibility";
 import {
   executeApprovedSaleReversal,
   SaleReversalTransactionError,
@@ -160,10 +174,16 @@ async function getAdminRequestMetadata() {
 
 type SaleSensitiveApprovalRequestType = "void" | "refund";
 
-function isSaleSensitiveApprovalRequestType(
-  value: string,
-): value is SaleSensitiveApprovalRequestType {
-  return value === "void" || value === "refund";
+function isDeliveryAnswer(value: string): value is DeliveryAnswer {
+  return ["not_delivered", "delivered", "unsure"].includes(value);
+}
+
+function isPaymentAnswer(value: string): value is PaymentAnswer {
+  return ["received", "not_received", "unsure"].includes(value);
+}
+
+function isCustomerPresenceAnswer(value: string): value is CustomerPresenceAnswer {
+  return ["present", "left", "unsure"].includes(value);
 }
 
 function getSaleSensitiveApprovalConfig(
@@ -173,20 +193,20 @@ function getSaleSensitiveApprovalConfig(
     return {
       approvalType: "void_receipt" as const,
       action: "sale.void_approval_requested",
-      label: "void transaksi",
-      successMessage: "Request void transaksi berhasil dibuat dan menunggu approval manager/owner.",
+      label: "pembatalan transaksi",
+      successMessage: "Pengajuan pembatalan transaksi berhasil dibuat dan menunggu persetujuan manager/owner.",
       duplicateMessage:
-        "Transaksi ini sudah memiliki request void yang masih menunggu atau sudah disetujui.",
+        "Transaksi ini sudah memiliki pengajuan koreksi yang masih menunggu atau sudah disetujui.",
     };
   }
 
   return {
     approvalType: "refund_transaction" as const,
     action: "sale.refund_approval_requested",
-    label: "refund transaksi",
-    successMessage: "Request refund transaksi berhasil dibuat dan menunggu approval manager/owner.",
+    label: "retur dan pengembalian dana",
+    successMessage: "Pengajuan retur dan pengembalian dana berhasil dibuat dan menunggu persetujuan manager/owner.",
     duplicateMessage:
-      "Transaksi ini sudah memiliki request refund yang masih menunggu atau sudah disetujui.",
+      "Transaksi ini sudah memiliki pengajuan koreksi yang masih menunggu atau sudah disetujui.",
   };
 }
 
@@ -205,8 +225,11 @@ function formatPaymentMethodLabel(method: string) {
 export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
   const saleId = readText(formData, "saleId");
   const returnTo = readText(formData, "returnTo");
-  const requestTypeRaw = readText(formData, "requestType");
-  const reason = readText(formData, "reason").slice(0, 1000);
+  const deliveryAnswerRaw = readText(formData, "deliveryAnswer");
+  const paymentAnswerRaw = readText(formData, "paymentAnswer");
+  const customerPresenceRaw = readText(formData, "customerPresence");
+  const reasonCode = readText(formData, "reasonCode");
+  const reasonDetails = readText(formData, "reasonDetails").slice(0, 1000);
 
   if (!UUID_PATTERN.test(saleId)) {
     redirectAdminSaleDetailWithFeedback({
@@ -217,29 +240,23 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
     });
   }
 
-  if (!isSaleSensitiveApprovalRequestType(requestTypeRaw)) {
+  if (
+    !isDeliveryAnswer(deliveryAnswerRaw) ||
+    !isPaymentAnswer(paymentAnswerRaw) ||
+    !isCustomerPresenceAnswer(customerPresenceRaw)
+  ) {
     redirectAdminSaleDetailWithFeedback({
       saleId,
       returnTo,
       type: "error",
-      message: "Jenis request void/refund tidak valid.",
+      message: "Jawaban kondisi transaksi belum lengkap atau tidak valid.",
     });
   }
 
-  const auth = await requirePermission(
-    getSaleSensitivePermission(requestTypeRaw, "request"),
-  );
-
-  if (reason.length < 8) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo,
-      type: "error",
-      message: "Alasan request minimal 8 karakter agar approval bisa ditinjau dengan jelas.",
-    });
-  }
-
-  const config = getSaleSensitiveApprovalConfig(requestTypeRaw);
+  const auth = await requireAnyPermission([
+    SALE_VOID_REQUEST_PERMISSION,
+    PAYMENT_REFUND_REQUEST_PERMISSION,
+  ]);
   const accessibleOutletIds = auth.outlets.map((outlet) => outlet.id);
 
   if (accessibleOutletIds.length === 0) {
@@ -267,6 +284,7 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
       totalAmount: sales.totalAmount,
       completedAt: sales.completedAt,
       createdAt: sales.createdAt,
+      shiftStatus: shifts.status,
       outletCode: outlets.code,
       outletName: outlets.name,
       registerCode: registers.code,
@@ -280,6 +298,7 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
     .innerJoin(outlets, eq(sales.outletId, outlets.id))
     .innerJoin(registers, eq(sales.registerId, registers.id))
     .innerJoin(users, eq(sales.cashierId, users.id))
+    .leftJoin(shifts, eq(sales.shiftId, shifts.id))
     .leftJoin(customers, eq(sales.customerId, customers.id))
     .where(
       and(
@@ -305,10 +324,68 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
       saleId: sale.id,
       returnTo,
       type: "error",
-      message:
-        "Request void/refund hanya bisa dibuat untuk transaksi yang sudah completed.",
+      message: "Koreksi hanya bisa diajukan untuk transaksi yang sudah selesai.",
     });
   }
+
+  const [existingReturnCase] = await db
+    .select({ id: saleReturnCases.id })
+    .from(saleReturnCases)
+    .where(eq(saleReturnCases.saleId, sale.id))
+    .limit(1);
+
+  const eligibility = getSaleCorrectionEligibility({
+    saleStatus: sale.status,
+    shiftStatus: sale.shiftStatus,
+    completedAt: sale.completedAt,
+    hasReturnCase: Boolean(existingReturnCase),
+  });
+
+  if (!eligibility.canRequestCorrection) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId: sale.id,
+      returnTo,
+      type: "error",
+      message: eligibility.blockers[0] ?? "Transaksi ini tidak dapat dikoreksi.",
+    });
+  }
+
+  const requestTypeRaw = classifySaleCorrection({
+    eligibility,
+    deliveryAnswer: deliveryAnswerRaw,
+  });
+  const requiredPermission = getSaleSensitivePermission(requestTypeRaw, "request");
+
+  if (!auth.permissionCodes.includes(requiredPermission)) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId: sale.id,
+      returnTo,
+      type: "error",
+      message: "Akun ini tidak memiliki izin untuk mengajukan jenis koreksi yang ditentukan sistem.",
+    });
+  }
+
+  const reasonLabel = getCorrectionReasonLabel(requestTypeRaw, reasonCode);
+  if (!reasonLabel) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId: sale.id,
+      returnTo,
+      type: "error",
+      message: "Alasan koreksi tidak valid.",
+    });
+  }
+
+  if (reasonCode === "other" && reasonDetails.length < 8) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId: sale.id,
+      returnTo,
+      type: "error",
+      message: "Jelaskan alasan lainnya minimal 8 karakter.",
+    });
+  }
+
+  const reason = reasonDetails ? `${reasonLabel}: ${reasonDetails}` : reasonLabel;
+  const config = getSaleSensitiveApprovalConfig(requestTypeRaw);
 
   const existingApprovalRows = await db
     .select({
@@ -320,7 +397,7 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
     .where(
       and(
         eq(approvals.organizationId, auth.organization.id),
-        eq(approvals.type, config.approvalType),
+        inArray(approvals.type, ["void_receipt", "refund_transaction"]),
         eq(approvals.referenceType, "sale"),
         eq(approvals.referenceId, sale.id),
         inArray(approvals.status, ["pending", "approved"]),
@@ -378,6 +455,17 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
       referenceId: sale.id,
       requestData: {
         requestType: requestTypeRaw,
+        correctionUxVersion: "p1-b.1",
+        deliveryAnswer: deliveryAnswerRaw,
+        paymentAnswer: paymentAnswerRaw,
+        customerPresence: customerPresenceRaw,
+        reasonCode,
+        reasonLabel,
+        reasonDetails: reasonDetails || null,
+        eligibility: {
+          voidEligibleBySystem: eligibility.voidEligibleBySystem,
+          blockers: eligibility.blockers,
+        },
         saleId: sale.id,
         invoiceNumber: sale.invoiceNumber,
         saleStatus: sale.status,

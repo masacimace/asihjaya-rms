@@ -1298,7 +1298,7 @@ function CartContent({
                     className="size-14 rounded-xl"
                     iconClassName="size-7"
                   />
-                  <span className="absolute -left-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-neutral-950 text-[10px] font-semibold text-white">
+                  <span className="absolute -left-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-[var(--accent)] text-[10px] font-semibold text-white">
                     {index + 1}
                   </span>
                 </div>
@@ -1358,7 +1358,7 @@ function CartContent({
       <div className="mt-auto border-t border-[var(--border)] pt-4">
         <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-3">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
               Customer
             </p>
             <a
@@ -1597,7 +1597,7 @@ function CartContent({
               Total
             </span>
 
-            <span className="text-xl font-semibold tracking-tight text-neutral-950">
+            <span className="text-xl font-semibold text-neutral-950">
               {formatCurrency(totalAmount)}
             </span>
           </div>
@@ -1696,10 +1696,10 @@ function DiscountApprovalDialog({
         <div className="border-b border-[var(--border)] p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+              <p className="text-xs font-semibold uppercase text-[var(--accent)]">
                 Approval Diskon POS
               </p>
-              <h2 className="mt-1 text-lg font-semibold tracking-tight text-neutral-950">
+              <h2 className="mt-1 text-lg font-semibold text-neutral-950">
                 Minta diskon manager/owner
               </h2>
               <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
@@ -1787,7 +1787,7 @@ function DiscountApprovalDialog({
           </div>
 
           <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
               Item dalam request
             </p>
             <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
@@ -1880,15 +1880,15 @@ function HoldCartDialog({
   onSubmit,
 }: HoldCartDialogProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-3 backdrop-blur-sm sm:items-center sm:p-6">
-      <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-60 flex items-end justify-center p-3 backdrop-blur-xs sm:items-center sm:p-6">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="border-b border-[var(--border)] p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
+              <p className="text-xs font-semibold uppercase text-amber-700">
                 Hold Cart
               </p>
-              <h2 className="mt-1 text-lg font-semibold tracking-tight text-neutral-950">
+              <h2 className="mt-1 text-lg font-semibold text-neutral-950">
                 Tahan transaksi ini?
               </h2>
               <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
@@ -1964,7 +1964,7 @@ function HoldCartDialog({
           </div>
 
           <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
               Item yang dikunci
             </p>
             <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
@@ -2040,10 +2040,10 @@ function CheckoutSuccessContent({
           <CheckCircle2 className="size-8" />
         </div>
 
-        <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+        <p className="mt-5 text-xs font-semibold uppercase text-emerald-700">
           Transaksi Berhasil
         </p>
-        <h2 className="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
+        <h2 className="mt-2 text-xl font-semibold text-neutral-950">
           {sale.invoiceNumber}
         </h2>
         <p className="mt-2 text-sm leading-6 text-emerald-800">
@@ -2055,7 +2055,7 @@ function CheckoutSuccessContent({
       <div className="mt-4 rounded-3xl border border-[var(--border)] bg-white p-4">
         <div className="flex items-center justify-between gap-4 text-sm">
           <span className="text-[var(--muted)]">Total transaksi</span>
-          <span className="text-lg font-semibold tracking-tight text-neutral-950">
+          <span className="text-lg font-semibold text-neutral-950">
             {formatCurrency(sale.totalAmount)}
           </span>
         </div>
@@ -2220,10 +2220,10 @@ function PaymentContent({
 
         <div className="mt-4 flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
               Pembayaran
             </p>
-            <h2 className="mt-1 text-lg font-semibold tracking-tight text-neutral-950">
+            <h2 className="mt-1 text-lg font-semibold text-neutral-950">
               {remainingAmount > 0
                 ? "Selesaikan pembayaran"
                 : "Pembayaran lunas"}
@@ -2260,7 +2260,7 @@ function PaymentContent({
             </div>
             <div className="flex items-center justify-between gap-3 text-[var(--accent)]">
               <span className="font-semibold">Sisa bayar</span>
-              <span className="text-lg font-bold tracking-tight">
+              <span className="text-lg font-bold">
                 {formatCurrency(remainingAmount)}
               </span>
             </div>
@@ -2277,7 +2277,7 @@ function PaymentContent({
         {totalChangeAmount > 0 ? (
           <div className="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-emerald-700">
             <span className="text-sm font-semibold">Total kembalian</span>
-            <span className="text-base font-bold tracking-tight">
+            <span className="text-base font-bold">
               {formatCurrency(totalChangeAmount)}
             </span>
           </div>
@@ -4670,7 +4670,7 @@ export function PosWorkspace({
 
           <div className="mt-5 flex items-end justify-between gap-4">
             <div>
-              <h1 className="text-xl font-semibold tracking-tight text-neutral-950">
+              <h1 className="text-xl font-semibold text-neutral-950">
                 Pilih Item Produk
               </h1>
 
@@ -4754,7 +4754,7 @@ export function PosWorkspace({
                       </div>
 
                       <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)] sm:text-[10px]">
+                        <p className="text-[9px] font-semibold uppercase text-[var(--muted)] sm:text-[10px]">
                           Spesifikasi
                         </p>
                         <div className="mt-1.5 flex flex-wrap gap-0.5 sm:mt-2 sm:gap-1">
@@ -4779,7 +4779,7 @@ export function PosWorkspace({
 
                       <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--accent-soft)] bg-[var(--accent-soft)]/70 p-2.5 sm:items-end sm:gap-3 sm:rounded-2xl sm:p-3">
                         <div className="min-w-0">
-                          <p className="hidden text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)] sm:block">
+                          <p className="hidden text-[10px] font-semibold uppercase text-[var(--muted)] sm:block">
                             Harga jual
                           </p>
                           <p className="truncate text-xs font-semibold text-neutral-950 sm:mt-1 sm:text-[15px]">
@@ -4868,7 +4868,7 @@ export function PosWorkspace({
 
       {/* Cart fullscreen mobile/tablet */}
       {isMobileCartOpen ? (
-        <div className="fixed inset-0 z-[60] overflow-y-auto bg-white lg:hidden">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-white lg:hidden">
           <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur">
             <div>
               <p className="font-semibold text-neutral-950">

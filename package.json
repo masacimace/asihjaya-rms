@@ -26,7 +26,8 @@
     "db:preflight:p1a1": "tsx scripts/preflight-p1a1.ts",
     "check:p1b": "tsx scripts/check-p1b-return-workflow.ts",
     "db:preflight:p1b": "tsx scripts/preflight-p1b.ts",
-    "db:repair:p1b-legacy-refund": "tsx scripts/repair-p1b-legacy-refund-ledger.ts"
+    "db:repair:p1b-legacy-refund": "tsx scripts/repair-p1b-legacy-refund-ledger.ts",
+    "check:p1b1": "tsx scripts/check-p1b1-transaction-correction.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",
