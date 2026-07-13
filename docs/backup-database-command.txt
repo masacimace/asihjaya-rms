@@ -1,0 +1,20 @@
+Pastikan container aktif:
+docker compose ps
+
+Periksa bahwa pg_dump tersedia:
+docker compose exec -T db pg_dump --version
+
+Buat folder backup lokal:
+New-Item -ItemType Directory -Force -Path ".local-backups"
+
+Buat backup di dalam container:
+docker compose cp db:/tmp/backup-before-p1c-reconclusion.dump ./.local-backups/backup-before-p1c-reconclusion.dump
+
+Pastikan file terbentuk di container:
+docker compose exec -T db ls -lh /tmp/backup-before-p1c-reconclusion.dump
+
+Salin backup dari container ke Windows:
+docker compose cp db:/tmp/backup-before-p1c-reconclusion.dump ./.local-backups/backup-before-p1c-reconclusion.dump
+
+Hapus file sementara dari container:
+docker compose exec -T db rm -f /tmp/backup-before-p1b-repair.dump

@@ -30,7 +30,7 @@ import {
   users,
 } from "@/db/schema";
 import { getVisibleApprovalTypes } from "@/features/approvals/authorization";
-import type { AuthContext } from "@/lib/auth/session";
+import { hasPermission, type AuthContext } from "@/lib/auth/session";
 import type {
   AdminDashboardActivityKind,
   AdminDashboardData,
@@ -495,6 +495,10 @@ export async function getAdminDashboardData(
   const trendStart = period.trendStart;
   const trendEnd = period.trendEnd;
   const visibleApprovalTypes = getVisibleApprovalTypes(auth);
+  const canViewReconciliation = hasPermission(
+    auth,
+    "payments.reconciliation.view",
+  );
   const approvalTypeCondition =
     visibleApprovalTypes.length > 0
       ? inArray(approvals.type, visibleApprovalTypes)
@@ -516,6 +520,7 @@ export async function getAdminDashboardData(
     failedHardwareJobRows,
     pendingApprovalRows,
     pendingPaymentRows,
+    reconciliationAlertRows,
     offlineAgentRows,
     itemsWithoutPriceRows,
     trendRows,
@@ -659,6 +664,35 @@ export async function getAdminDashboardData(
           eq(payments.status, "pending"),
         ),
       ),
+
+    canViewReconciliation
+      ? db
+          .select({
+            unreconciledCount: sql<number>`count(*) filter (where ${payments.settlementStatus} = 'unreconciled')::int`,
+            mismatchCount: sql<number>`count(*) filter (where ${payments.settlementStatus} in ('mismatch', 'not_found'))::int`,
+            unreconciledAmount: sql<number>`coalesce(sum(${payments.amount}) filter (where ${payments.settlementStatus} = 'unreconciled'), 0)`.mapWith(Number),
+          })
+          .from(payments)
+          .innerJoin(sales, eq(payments.saleId, sales.id))
+          .where(
+            and(
+              eq(sales.organizationId, auth.organization.id),
+              inArray(sales.outletId, outletIds),
+              inArray(payments.status, [
+                "paid",
+                "partially_refunded",
+                "refunded",
+              ]),
+              sql`${payments.settlementStatus} <> 'not_applicable'`,
+            ),
+          )
+      : Promise.resolve([
+          {
+            unreconciledCount: 0,
+            mismatchCount: 0,
+            unreconciledAmount: 0,
+          },
+        ]),
 
     db
       .select({ offlineAgents: count() })
@@ -891,10 +925,44 @@ export async function getAdminDashboardData(
   );
   const pendingApprovals = Number(pendingApprovalRows[0]?.pendingApprovals ?? 0);
   const pendingPayments = Number(pendingPaymentRows[0]?.pendingPayments ?? 0);
+  const unreconciledPayments = Number(
+    reconciliationAlertRows[0]?.unreconciledCount ?? 0,
+  );
+  const reconciliationMismatches = Number(
+    reconciliationAlertRows[0]?.mismatchCount ?? 0,
+  );
+  const unreconciledAmount = Number(
+    reconciliationAlertRows[0]?.unreconciledAmount ?? 0,
+  );
   const offlineAgents = Number(offlineAgentRows[0]?.offlineAgents ?? 0);
   const itemsWithoutPrice = Number(itemsWithoutPriceRows[0]?.itemsWithoutPrice ?? 0);
   const activeShifts = activeShiftRows.length;
   const activeHeldCarts = Number(heldCartRows[0]?.activeHeldCarts ?? 0);
+
+  if (canViewReconciliation && reconciliationMismatches > 0) {
+    operationalAlerts.push({
+      id: "payment-reconciliation-mismatch",
+      title: `${reconciliationMismatches} payment perlu penyelesaian finance`,
+      description:
+        "Ada mismatch atau payment yang belum ditemukan pada settlement.",
+      href: "/admin/keuangan/rekonsiliasi?status=mismatch",
+      tone: "danger",
+    });
+  }
+
+  if (canViewReconciliation && unreconciledPayments > 0) {
+    operationalAlerts.push({
+      id: "unreconciled-payments",
+      title: `${unreconciledPayments} payment belum direkonsiliasi`,
+      description: `${new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+        maximumFractionDigits: 0,
+      }).format(unreconciledAmount)} masih menunggu pencocokan finance.`,
+      href: "/admin/keuangan/rekonsiliasi",
+      tone: "warning",
+    });
+  }
 
   if (pendingPayments > 0) {
     operationalAlerts.push({

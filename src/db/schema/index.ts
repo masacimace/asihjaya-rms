@@ -132,7 +132,15 @@ export const manualPaymentVerificationStatusEnum = pgEnum(
 
 export const paymentSettlementStatusEnum = pgEnum(
   "payment_settlement_status",
-  ["not_applicable", "unreconciled", "matched", "mismatch", "settled"],
+  [
+    "not_applicable",
+    "unreconciled",
+    "pending_settlement",
+    "reconciled",
+    "mismatch",
+    "not_found",
+    "waived",
+  ],
 );
 
 export const posCheckoutAttemptStatusEnum = pgEnum("pos_checkout_attempt_status", [
@@ -1349,6 +1357,130 @@ export const payments = pgTable(
         and ${table.coVerifiedBy} is null
         and ${table.coVerifiedAt} is null
         and ${table.evidenceKey} is null
+      )`,
+    ),
+  ],
+);
+
+
+export const paymentReconciliations = pgTable(
+  "payment_reconciliations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    paymentId: uuid("payment_id")
+      .notNull()
+      .references(() => payments.id, { onDelete: "cascade" }),
+    status: paymentSettlementStatusEnum("status").notNull(),
+    expectedAmount: numeric("expected_amount", { precision: 18, scale: 0 })
+      .notNull(),
+    settlementGrossAmount: numeric("settlement_gross_amount", {
+      precision: 18,
+      scale: 0,
+    }),
+    feeAmount: numeric("fee_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    taxAmount: numeric("tax_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    netSettlementAmount: numeric("net_settlement_amount", {
+      precision: 18,
+      scale: 0,
+    }),
+    differenceAmount: numeric("difference_amount", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    settlementDate: timestamp("settlement_date", { withTimezone: true }),
+    settlementReference: varchar("settlement_reference", { length: 160 }),
+    evidenceKey: text("evidence_key"),
+    notes: text("notes"),
+    reconciledBy: uuid("reconciled_by")
+      .notNull()
+      .references(() => users.id),
+    reconciledAt: timestamp("reconciled_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    resolvedBy: uuid("resolved_by").references(() => users.id),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("payment_reconciliations_payment_uq").on(table.paymentId),
+    index("payment_reconciliations_org_status_idx").on(
+      table.organizationId,
+      table.status,
+      table.updatedAt,
+    ),
+    index("payment_reconciliations_outlet_status_idx").on(
+      table.outletId,
+      table.status,
+      table.updatedAt,
+    ),
+    index("payment_reconciliations_settlement_date_idx").on(
+      table.settlementDate,
+    ),
+    check(
+      "payment_reconciliations_actionable_status_ck",
+      sql`${table.status} not in ('not_applicable', 'unreconciled')`,
+    ),
+    check(
+      "payment_reconciliations_expected_positive_ck",
+      sql`${table.expectedAmount} > 0`,
+    ),
+    check(
+      "payment_reconciliations_amounts_nonnegative_ck",
+      sql`${table.feeAmount} >= 0 and ${table.taxAmount} >= 0 and (${table.settlementGrossAmount} is null or ${table.settlementGrossAmount} >= 0) and (${table.netSettlementAmount} is null or ${table.netSettlementAmount} >= 0)`,
+    ),
+    check(
+      "payment_reconciliations_net_formula_ck",
+      sql`${table.settlementGrossAmount} is null or ${table.netSettlementAmount} is null or ${table.netSettlementAmount} = ${table.settlementGrossAmount} - ${table.feeAmount} - ${table.taxAmount}`,
+    ),
+    check(
+      "payment_reconciliations_difference_formula_ck",
+      sql`${table.settlementGrossAmount} is null or ${table.differenceAmount} = ${table.settlementGrossAmount} - ${table.expectedAmount}`,
+    ),
+    check(
+      "payment_reconciliations_reconciled_complete_ck",
+      sql`${table.status} <> 'reconciled' or (
+        ${table.settlementGrossAmount} = ${table.expectedAmount}
+        and ${table.differenceAmount} = 0
+        and ${table.netSettlementAmount} is not null
+        and ${table.settlementDate} is not null
+        and ${table.settlementReference} is not null
+        and btrim(${table.settlementReference}) <> ''
+      )`,
+    ),
+    check(
+      "payment_reconciliations_mismatch_complete_ck",
+      sql`${table.status} <> 'mismatch' or (
+        ${table.settlementGrossAmount} is not null
+        and ${table.differenceAmount} <> 0
+      )`,
+    ),
+    check(
+      "payment_reconciliations_not_found_notes_ck",
+      sql`${table.status} <> 'not_found' or (${table.notes} is not null and length(btrim(${table.notes})) >= 8)`,
+    ),
+    check(
+      "payment_reconciliations_waived_resolution_ck",
+      sql`${table.status} <> 'waived' or (
+        ${table.notes} is not null
+        and length(btrim(${table.notes})) >= 8
+        and ${table.resolvedBy} is not null
+        and ${table.resolvedAt} is not null
       )`,
     ),
   ],

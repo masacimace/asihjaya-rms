@@ -33,6 +33,10 @@ export default async function AdminLayout({
         canAccessInventory: productInventoryAccess.canAccessInventory,
         canAccessApprovals: canAccessApprovalInbox(auth),
         canAccessSettings: hasPermission(auth, "settings.manage"),
+        canAccessReconciliation: hasPermission(
+          auth,
+          "payments.reconciliation.view",
+        ),
       }}
       approvalDrawerData={approvalDrawerData}
       notificationDrawerData={notificationDrawerData}

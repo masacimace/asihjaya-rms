@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   Gem,
   LayoutDashboard,
+  Landmark,
   Menu,
   ReceiptText,
   ScanBarcode,
@@ -48,13 +49,19 @@ type AdminShellUser = {
   canAccessInventory: boolean;
   canAccessApprovals: boolean;
   canAccessSettings: boolean;
+  canAccessReconciliation: boolean;
 };
 
 type NavigationItem = {
   label: string;
   href?: string;
   icon: typeof Store;
-  access?: "administration" | "products" | "inventory" | "settings";
+  access?:
+    | "administration"
+    | "products"
+    | "inventory"
+    | "settings"
+    | "reconciliation";
   children?: { label: string; href: string }[];
 };
 
@@ -95,6 +102,17 @@ const navigation: NavigationItem[] = [
       { label: "Riwayat Approval", href: "/admin/operasional/approval" },
       { label: "Pergerakan Kas", href: "/admin/operasional/kas" },
       { label: "Hardware Hub", href: "/admin/operasional/hardware" },
+    ],
+  },
+  {
+    label: "Keuangan",
+    icon: Landmark,
+    access: "reconciliation",
+    children: [
+      {
+        label: "Rekonsiliasi Pembayaran",
+        href: "/admin/keuangan/rekonsiliasi",
+      },
     ],
   },
   {
@@ -196,6 +214,7 @@ type SidebarContentProps = {
   canAccessInventory: boolean;
   canAccessApprovals: boolean;
   canAccessSettings: boolean;
+  canAccessReconciliation: boolean;
   onNavigate?: () => void;
   showBrand?: boolean;
   showPosCta?: boolean;
@@ -215,6 +234,7 @@ function SidebarContent({
   canAccessInventory,
   canAccessApprovals,
   canAccessSettings,
+  canAccessReconciliation,
   onNavigate,
   showBrand = true,
   showPosCta = true,
@@ -234,6 +254,10 @@ function SidebarContent({
 
     if (item.access === "settings") {
       return canAccessSettings;
+    }
+
+    if (item.access === "reconciliation") {
+      return canAccessReconciliation;
     }
 
     return true;
@@ -403,6 +427,7 @@ export function AdminShell({
           canAccessInventory={user.canAccessInventory}
           canAccessApprovals={user.canAccessApprovals}
           canAccessSettings={user.canAccessSettings}
+          canAccessReconciliation={user.canAccessReconciliation}
         />
       </aside>
 
@@ -441,7 +466,8 @@ export function AdminShell({
                 canAccessProducts={user.canAccessProducts}
                 canAccessInventory={user.canAccessInventory}
                 canAccessApprovals={user.canAccessApprovals}
-          canAccessSettings={user.canAccessSettings}
+                canAccessSettings={user.canAccessSettings}
+                canAccessReconciliation={user.canAccessReconciliation}
                 onNavigate={() => setIsMobileMenuOpen(false)}
                 showBrand={false}
                 showPosCta={false}

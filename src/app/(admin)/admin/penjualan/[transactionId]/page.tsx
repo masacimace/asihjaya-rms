@@ -33,7 +33,7 @@ import {
 import { reprintAdminReceiptCertificateAction } from "@/features/sales/admin-actions";
 import { getAdminSaleDetailData } from "@/features/sales/admin-queries";
 import { getSaleCorrectionEligibility } from "@/features/sales/correction-eligibility";
-import { requirePermission } from "@/lib/auth/session";
+import { hasPermission, requirePermission } from "@/lib/auth/session";
 import { getPaymentEvidenceUrl } from "@/lib/storage/payment-evidence-storage";
 import { cn } from "@/lib/utils";
 
@@ -97,9 +97,11 @@ const paymentVerificationStatusLabels = {
 const paymentSettlementStatusLabels = {
   not_applicable: "Tidak berlaku",
   unreconciled: "Belum direkonsiliasi",
-  matched: "Cocok",
-  mismatch: "Selisih",
-  settled: "Settled",
+  pending_settlement: "Menunggu settlement",
+  reconciled: "Direkonsiliasi",
+  mismatch: "Mismatch",
+  not_found: "Tidak ditemukan",
+  waived: "Dikecualikan",
 } as const;
 
 const verificationSourceLabels: Record<string, string> = {
@@ -464,6 +466,10 @@ export default async function SaleDetailPage({
     (capability) =>
       capability.canRequest || capability.canApprove || capability.canExecute,
   );
+  const canViewReconciliation = hasPermission(
+    auth,
+    "payments.reconciliation.view",
+  );
   const canViewPaymentEvidence = auth.permissionCodes.some((permission) =>
     ["payments.manage", "payments.verify.manual"].includes(permission),
   );
@@ -717,6 +723,18 @@ export default async function SaleDetailPage({
                           {paymentSettlementStatusLabels[payment.settlementStatus]}
                         </span>
                       </div>
+                      {canViewReconciliation &&
+                      payment.settlementStatus !== "not_applicable" ? (
+                        <div className="pt-1">
+                          <Link
+                            href={`/admin/keuangan/rekonsiliasi/${payment.id}`}
+                            className="inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border)] px-3 font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                          >
+                            <WalletCards className="size-3.5" />
+                            Buka rekonsiliasi
+                          </Link>
+                        </div>
+                      ) : null}
                       {Object.entries(payment.verificationDetails).map(
                         ([key, value]) =>
                           value ? (

@@ -113,6 +113,34 @@
       "when": 1783897343464,
       "tag": "0015_p1b_refund_return_inspection",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1783951250752,
+      "tag": "0016_p1c1_manual_payment_reconciliation",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783958173680,
+      "tag": "0017_p1c1_reconciliation_permissions_hotfix",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783965000000,
+      "tag": "0018_p1c1_reconciliation_schema_hotfix",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783971000000,
+      "tag": "0019_p1c1_reconciliation_constraint_repair",
+      "breakpoints": true
     }
   ]
 }

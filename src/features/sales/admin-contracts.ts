@@ -197,9 +197,11 @@ export type AdminSaleDetailPayment = AdminSaleListPayment & {
   settlementStatus:
     | "not_applicable"
     | "unreconciled"
-    | "matched"
+    | "pending_settlement"
+    | "reconciled"
     | "mismatch"
-    | "settled";
+    | "not_found"
+    | "waived";
   verificationDetails: Record<string, string | null>;
 };
 
