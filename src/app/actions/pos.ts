@@ -79,7 +79,11 @@ import {
   getDefaultPosRegisterCondition,
 } from "@/features/pos/context";
 import { lookupPosItemByScanValue } from "@/features/pos/queries";
-import { publishNotificationEventInTransaction } from "@/features/notifications/event-service";
+import {
+  publishSaleCompletedNotificationInTransaction,
+  publishSaleRecoveryNotification,
+  publishSaleRecoveryNotificationInTransaction,
+} from "@/features/notifications/sales";
 import {
   createManualPaymentVerificationFingerprint,
   DEFAULT_MANUAL_PAYMENT_POLICIES,
@@ -120,14 +124,6 @@ const manualPaymentMethodLabels: Record<PosManualPaymentMethod, string> = {
 const manualPaymentMethods = Object.keys(
   manualPaymentMethodLabels,
 ) as PosManualPaymentMethod[];
-
-function formatNotificationAmount(value: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
 
 type NormalizedCheckoutPayment = {
   method: PosManualPaymentMethod;
@@ -3297,6 +3293,23 @@ export async function completePosCheckoutAction(
           createdAt: new Date(),
         });
 
+        await publishSaleRecoveryNotification({
+          organizationId: auth.organization.id,
+          outletId: primaryOutlet.id,
+          cashierId: auth.user.id,
+          saleId: legacySale.id,
+          invoiceNumber: legacySale.invoiceNumber,
+          totalAmount: legacySale.totalAmount,
+          idempotencyKey,
+          recoveryReason: "legacy_sale_without_attempt",
+          source: "pos.checkout.legacy_recovery",
+        }).catch((notificationError) => {
+          console.error("Failed to publish legacy sale recovery notification", {
+            saleId: legacySale.id,
+            error: notificationError,
+          });
+        });
+
         return checkoutSuccess({
           message: `Transaksi ${legacySale.invoiceNumber} sudah pernah diproses dan berhasil dipulihkan.`,
           sale: legacySale,
@@ -4144,41 +4157,51 @@ export async function completePosCheckoutAction(
         createdAt: now,
       });
 
-      await publishNotificationEventInTransaction(transaction, {
+      const totalWeightGram = orderedItems.reduce((total, item) => {
+        const weight = Number(item?.weightGram ?? 0);
+        return Number.isFinite(weight) ? total + weight : total;
+      }, 0);
+
+      await publishSaleCompletedNotificationInTransaction(transaction, {
         organizationId: auth.organization.id,
         outletId: primaryOutlet.id,
-        category: "sales",
-        eventType: "sale.completed",
-        severity: "success",
-        title: "Transaksi POS berhasil",
-        summary: `${invoiceNumber} · ${formatNotificationAmount(totalAmount)} · ${primaryOutlet.name}`,
-        entityType: "sale",
-        entityId: sale.id,
-        actionUrl: `/admin/penjualan/${sale.id}`,
-        deduplicationKey: `sale.completed:${sale.id}`,
-        payload: {
-          source: "pos.checkout",
+        outletCode: primaryOutlet.code,
+        outletName: primaryOutlet.name,
+        registerId: register.id,
+        registerCode: register.code,
+        shiftId: activeShift.id,
+        cashierId: auth.user.id,
+        cashierName: auth.user.fullName,
+        saleId: sale.id,
+        invoiceNumber,
+        subtotalAmount,
+        discountAmount: approvedDiscountAmount,
+        totalAmount,
+        itemCount: itemIds.length,
+        totalWeightGram,
+        payments: normalizedPayments.map((payment) => ({
+          method: payment.method,
+          methodLabel: manualPaymentMethodLabels[payment.method],
+          amount: payment.amount,
+          provider: payment.provider,
+        })),
+        occurredAt: now,
+      });
+
+      if (claimResult.replay) {
+        await publishSaleRecoveryNotificationInTransaction(transaction, {
+          organizationId: auth.organization.id,
+          outletId: primaryOutlet.id,
+          cashierId: auth.user.id,
           saleId: sale.id,
           invoiceNumber,
-          outletId: primaryOutlet.id,
-          outletCode: primaryOutlet.code,
-          registerId: register.id,
-          registerCode: register.code,
-          shiftId: activeShift.id,
-          cashierId: auth.user.id,
-          cashierName: auth.user.fullName,
-          customerId: selectedCustomer?.id ?? null,
-          customerCode: selectedCustomer?.customerCode ?? null,
-          customerName: selectedCustomer?.fullName ?? null,
-          itemCount: itemIds.length,
-          totalAmount: String(totalAmount),
-          discountAmount: String(approvedDiscountAmount),
-        },
-        occurredAt: now,
-        recipients: {
-          requiredAnyPermissionCodes: ["admin.access"],
-        },
-      });
+          totalAmount,
+          idempotencyKey,
+          recoveryReason: "checkout_retry",
+          occurredAt: now,
+          source: "pos.checkout.reclaimed_attempt",
+        });
+      }
 
       const [receiptCertificateJob] = await transaction
         .insert(hardwareJobs)

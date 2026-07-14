@@ -7,6 +7,7 @@ import {
   posCheckoutAttempts,
   sales,
 } from "@/db/schema";
+import { publishSaleRecoveryNotification } from "@/features/notifications/sales";
 import {
   type PosCheckoutRecoveryStatusResult,
   type PosCheckoutSaleResult,
@@ -15,6 +16,11 @@ import { isValidPosCheckoutIdempotencyKey } from "@/features/pos/checkout-finger
 import { type AuthContext } from "@/lib/auth/session";
 
 export const POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS = 1_500;
+
+type PosCheckoutSaleRecord = PosCheckoutSaleResult & {
+  outletId: string;
+  cashierId: string;
+};
 
 async function getReceiptCertificateJobId(saleId: string) {
   const [job] = await db
@@ -33,7 +39,7 @@ async function getReceiptCertificateJobId(saleId: string) {
   return job?.id ?? null;
 }
 
-export async function getPosCheckoutSaleResult({
+async function getPosCheckoutSaleRecord({
   organizationId,
   cashierId,
   outletIds,
@@ -43,7 +49,7 @@ export async function getPosCheckoutSaleResult({
   cashierId: string;
   outletIds: string[];
   idempotencyKey: string;
-}): Promise<PosCheckoutSaleResult | null> {
+}): Promise<PosCheckoutSaleRecord | null> {
   if (outletIds.length === 0) {
     return null;
   }
@@ -51,6 +57,8 @@ export async function getPosCheckoutSaleResult({
   const [sale] = await db
     .select({
       id: sales.id,
+      outletId: sales.outletId,
+      cashierId: sales.cashierId,
       invoiceNumber: sales.invoiceNumber,
       totalAmount: sales.totalAmount,
     })
@@ -73,6 +81,67 @@ export async function getPosCheckoutSaleResult({
     ...sale,
     receiptCertificateJobId: await getReceiptCertificateJobId(sale.id),
   };
+}
+
+export async function getPosCheckoutSaleResult({
+  organizationId,
+  cashierId,
+  outletIds,
+  idempotencyKey,
+}: {
+  organizationId: string;
+  cashierId: string;
+  outletIds: string[];
+  idempotencyKey: string;
+}): Promise<PosCheckoutSaleResult | null> {
+  const sale = await getPosCheckoutSaleRecord({
+    organizationId,
+    cashierId,
+    outletIds,
+    idempotencyKey,
+  });
+
+  if (!sale) return null;
+
+  return {
+    id: sale.id,
+    invoiceNumber: sale.invoiceNumber,
+    totalAmount: sale.totalAmount,
+    receiptCertificateJobId: sale.receiptCertificateJobId,
+  };
+}
+
+async function publishRecoveryNotificationSafely({
+  auth,
+  sale,
+  idempotencyKey,
+  recoveryReason,
+}: {
+  auth: AuthContext;
+  sale: PosCheckoutSaleRecord;
+  idempotencyKey: string;
+  recoveryReason:
+    | "legacy_sale_without_attempt"
+    | "completed_attempt_replayed"
+    | "attempt_repaired";
+}) {
+  await publishSaleRecoveryNotification({
+    organizationId: auth.organization.id,
+    outletId: sale.outletId,
+    cashierId: sale.cashierId,
+    saleId: sale.id,
+    invoiceNumber: sale.invoiceNumber,
+    totalAmount: sale.totalAmount,
+    idempotencyKey,
+    recoveryReason,
+    source: "pos.checkout.recovery_status",
+  }).catch((error) => {
+    console.error("Failed to publish POS checkout recovery notification", {
+      saleId: sale.id,
+      recoveryReason,
+      error,
+    });
+  });
 }
 
 export async function getPosCheckoutRecoveryStatus({
@@ -120,21 +189,23 @@ export async function getPosCheckoutRecoveryStatus({
     };
   }
 
-  const sale = await getPosCheckoutSaleResult({
+  const saleRecord = await getPosCheckoutSaleRecord({
     organizationId: auth.organization.id,
     cashierId: auth.user.id,
     outletIds,
     idempotencyKey,
   });
 
-  if (sale) {
+  if (saleRecord) {
+    let attemptRepaired = false;
+
     if (attempt && (attempt.status !== "completed" || !attempt.saleId)) {
       const now = new Date();
       const [repaired] = await db
         .update(posCheckoutAttempts)
         .set({
           status: "completed",
-          saleId: sale.id,
+          saleId: saleRecord.id,
           completedAt: now,
           failedAt: null,
           lastErrorCode: null,
@@ -144,6 +215,8 @@ export async function getPosCheckoutRecoveryStatus({
         .where(eq(posCheckoutAttempts.id, attempt.id))
         .returning({ id: posCheckoutAttempts.id });
 
+      attemptRepaired = Boolean(repaired);
+
       if (repaired && recordRepairAudit) {
         await db.insert(auditLogs).values({
           organizationId: auth.organization.id,
@@ -151,15 +224,15 @@ export async function getPosCheckoutRecoveryStatus({
           actorUserId: auth.user.id,
           action: "pos.checkout.recovery_repaired",
           entityType: "sale",
-          entityId: sale.id,
+          entityId: saleRecord.id,
           beforeData: {
             attemptStatus: attempt.status,
             attemptSaleId: attempt.saleId,
           },
           afterData: {
             attemptStatus: "completed",
-            saleId: sale.id,
-            invoiceNumber: sale.invoiceNumber,
+            saleId: saleRecord.id,
+            invoiceNumber: saleRecord.invoiceNumber,
           },
           metadata: {
             source: "pos.checkout.recovery_status",
@@ -169,6 +242,26 @@ export async function getPosCheckoutRecoveryStatus({
         });
       }
     }
+
+    if (recordRepairAudit) {
+      await publishRecoveryNotificationSafely({
+        auth,
+        sale: saleRecord,
+        idempotencyKey,
+        recoveryReason: attemptRepaired
+          ? "attempt_repaired"
+          : attempt
+            ? "completed_attempt_replayed"
+            : "legacy_sale_without_attempt",
+      });
+    }
+
+    const sale: PosCheckoutSaleResult = {
+      id: saleRecord.id,
+      invoiceNumber: saleRecord.invoiceNumber,
+      totalAmount: saleRecord.totalAmount,
+      receiptCertificateJobId: saleRecord.receiptCertificateJobId,
+    };
 
     return {
       status: "completed",

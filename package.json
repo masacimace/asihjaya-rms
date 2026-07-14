@@ -33,6 +33,7 @@
     "check:p1c2": "tsx scripts/check-p1c2-settlement-import.ts",
     "db:preflight:p1c2": "tsx scripts/preflight-p1c2.ts",
     "check:notifications:v1a": "tsx scripts/check-notification-center-v1a.ts",
+    "check:notifications:v1b": "tsx scripts/check-notification-center-v1b.ts",
     "db:preflight:notifications:v1a": "tsx scripts/preflight-notification-center-v1a.ts",
     "db:repair:p1c2-history": "tsx scripts/repair-p1c2-migration-history.ts"
   },

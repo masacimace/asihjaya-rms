@@ -5,12 +5,7 @@ export const ADMIN_NOTIFICATION_DRAWER_LIMIT = 12;
  * will render the richer category/eventType fields directly.
  */
 export type NotificationType =
-  | "sales"
-  | "hardware"
-  | "shift"
-  | "cash"
-  | "inventory"
-  | "system";
+  "sales" | "hardware" | "shift" | "cash" | "inventory" | "system";
 
 export type NotificationCategory =
   | "sales"
@@ -25,17 +20,17 @@ export type NotificationCategory =
 export type NotificationSeverity = "info" | "success" | "warning" | "critical";
 
 export type NotificationRecipientStatus =
-  | "unread"
-  | "read"
-  | "acknowledged"
-  | "resolved"
-  | "archived";
+  "unread" | "read" | "acknowledged" | "resolved" | "archived";
 
 export type NotificationRecipientTarget = {
   /** Explicit recipients, still restricted to the same organization/outlet. */
   userIds?: string[];
   /** A user is selected when they have at least one of these permissions. */
   requiredAnyPermissionCodes?: string[];
+  /** Built-in/custom roles selected across the whole organization. */
+  organizationRoleCodes?: string[];
+  /** Roles selected only when the user is assigned to the event outlet. */
+  outletRoleCodes?: string[];
   /** Actor or other users that must not receive the event. */
   excludeUserIds?: string[];
 };
@@ -109,7 +104,11 @@ export function mapCategoryToLegacyNotificationType({
     return eventType.includes("shift") ? "shift" : "cash";
   }
   if (category === "inventory_return") return "inventory";
-  if (category === "sales" || category === "hardware" || category === "system") {
+  if (
+    category === "sales" ||
+    category === "hardware" ||
+    category === "system"
+  ) {
     return category;
   }
   return "system";

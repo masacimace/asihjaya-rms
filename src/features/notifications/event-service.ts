@@ -1,11 +1,4 @@
-import {
-  and,
-  eq,
-  inArray,
-  isNull,
-  notInArray,
-  sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -46,13 +39,18 @@ function uniquePermissionCodes(values: string[] | undefined) {
   );
 }
 
+function uniqueRoleCodes(values: string[] | undefined) {
+  return [...new Set((values ?? []).map((value) => value.trim()))].filter(
+    Boolean,
+  );
+}
+
 function normalizeInput(input: PublishNotificationEventInput) {
   const title = input.title.trim().slice(0, 160);
   const summary = input.summary.trim();
   const eventType = input.eventType.trim().toLowerCase().slice(0, 120);
   const actionUrl = input.actionUrl?.trim().slice(0, 300) || null;
-  const deduplicationKey =
-    input.deduplicationKey?.trim().slice(0, 220) || null;
+  const deduplicationKey = input.deduplicationKey?.trim().slice(0, 220) || null;
 
   if (!title || !summary) {
     throw new Error("Judul dan ringkasan notification event wajib diisi.");
@@ -97,6 +95,10 @@ async function resolveRecipientUserIds(
   const permissionCodes = uniquePermissionCodes(
     recipients?.requiredAnyPermissionCodes,
   );
+  const organizationRoleCodes = uniqueRoleCodes(
+    recipients?.organizationRoleCodes,
+  );
+  const outletRoleCodes = uniqueRoleCodes(recipients?.outletRoleCodes);
   const excludedUserIds = uniqueValidUuids(recipients?.excludeUserIds);
   const selectedUserIds = new Set<string>();
 
@@ -104,11 +106,21 @@ async function resolveRecipientUserIds(
   // the caller did not provide an explicit selector at all.
   const hasExplicitSelector =
     recipients?.userIds !== undefined ||
-    recipients?.requiredAnyPermissionCodes !== undefined;
+    recipients?.requiredAnyPermissionCodes !== undefined ||
+    recipients?.organizationRoleCodes !== undefined ||
+    recipients?.outletRoleCodes !== undefined;
   const effectivePermissionCodes =
-    !hasExplicitSelector && explicitUserIds.length === 0 && permissionCodes.length === 0
+    !hasExplicitSelector &&
+    explicitUserIds.length === 0 &&
+    permissionCodes.length === 0 &&
+    organizationRoleCodes.length === 0 &&
+    outletRoleCodes.length === 0
       ? ["admin.access"]
       : permissionCodes;
+  const exclusionCondition =
+    excludedUserIds.length > 0
+      ? notInArray(users.id, excludedUserIds)
+      : undefined;
 
   if (explicitUserIds.length > 0) {
     const directRows = await transaction
@@ -121,9 +133,7 @@ async function resolveRecipientUserIds(
           eq(users.status, "active"),
           inArray(users.id, explicitUserIds),
           outletId ? eq(userOutlets.outletId, outletId) : undefined,
-          excludedUserIds.length > 0
-            ? notInArray(users.id, excludedUserIds)
-            : undefined,
+          exclusionCondition,
         ),
       );
 
@@ -147,13 +157,53 @@ async function resolveRecipientUserIds(
           eq(roles.isActive, true),
           inArray(permissions.code, effectivePermissionCodes),
           outletId ? eq(userOutlets.outletId, outletId) : undefined,
-          excludedUserIds.length > 0
-            ? notInArray(users.id, excludedUserIds)
-            : undefined,
+          exclusionCondition,
         ),
       );
 
     permissionRows.forEach((row) => selectedUserIds.add(row.id));
+  }
+
+  if (organizationRoleCodes.length > 0) {
+    const organizationRoleRows = await transaction
+      .selectDistinct({ id: users.id })
+      .from(users)
+      .innerJoin(userRoles, eq(userRoles.userId, users.id))
+      .innerJoin(roles, eq(roles.id, userRoles.roleId))
+      .where(
+        and(
+          eq(users.organizationId, organizationId),
+          eq(users.status, "active"),
+          eq(roles.organizationId, organizationId),
+          eq(roles.isActive, true),
+          inArray(roles.code, organizationRoleCodes),
+          exclusionCondition,
+        ),
+      );
+
+    organizationRoleRows.forEach((row) => selectedUserIds.add(row.id));
+  }
+
+  if (outletRoleCodes.length > 0) {
+    const outletRoleRows = await transaction
+      .selectDistinct({ id: users.id })
+      .from(users)
+      .innerJoin(userRoles, eq(userRoles.userId, users.id))
+      .innerJoin(roles, eq(roles.id, userRoles.roleId))
+      .leftJoin(userOutlets, eq(userOutlets.userId, users.id))
+      .where(
+        and(
+          eq(users.organizationId, organizationId),
+          eq(users.status, "active"),
+          eq(roles.organizationId, organizationId),
+          eq(roles.isActive, true),
+          inArray(roles.code, outletRoleCodes),
+          outletId ? eq(userOutlets.outletId, outletId) : undefined,
+          exclusionCondition,
+        ),
+      );
+
+    outletRoleRows.forEach((row) => selectedUserIds.add(row.id));
   }
 
   const result = [...selectedUserIds];
@@ -189,7 +239,10 @@ export async function publishNotificationEventInTransaction(
       .limit(1);
 
     if (existing) {
-      const recipientUserIds = await resolveRecipientUserIds(transaction, input);
+      const recipientUserIds = await resolveRecipientUserIds(
+        transaction,
+        input,
+      );
       if (recipientUserIds.length > 0) {
         await transaction
           .insert(notificationRecipients)

@@ -31,6 +31,7 @@ async function main() {
     actions,
     liveCounts,
     posAction,
+    salesNotifications,
     migration,
     adminShell,
   ] = await Promise.all([
@@ -40,10 +41,8 @@ async function main() {
     readFile("src/app/actions/notifications.ts", "utf8"),
     readFile("src/app/api/admin/live-counts/route.ts", "utf8"),
     readFile("src/app/actions/pos.ts", "utf8"),
-    readFile(
-      "drizzle/0023_notification_center_v1a_foundation.sql",
-      "utf8",
-    ),
+    readFile("src/features/notifications/sales.ts", "utf8"),
+    readFile("drizzle/0023_notification_center_v1a_foundation.sql", "utf8"),
     readFile("src/components/layout/admin-shell.tsx", "utf8"),
   ]);
 
@@ -57,7 +56,8 @@ async function main() {
   assert.match(queries, /notificationRecipients\.userId/);
   assert.match(actions, /notificationRecipients\.status, "unread"/);
   assert.match(liveCounts, /notificationRecipients/);
-  assert.match(posAction, /eventType: "sale\.completed"/);
+  assert.match(posAction, /publishSaleCompletedNotificationInTransaction/);
+  assert.match(salesNotifications, /eventType: "sale\.completed"/);
   assert.doesNotMatch(posAction, /transaction\.insert\(notifications\)/);
   assert.match(migration, /Preserve the existing drawer history/);
   assert.match(migration, /legacy\."is_read"/);
