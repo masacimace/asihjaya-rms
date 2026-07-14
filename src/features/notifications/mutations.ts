@@ -1,17 +1,21 @@
-import { and, eq, isNull } from "drizzle-orm";
-
-import { db } from "@/db";
-import { notifications } from "@/db/schema";
 import type {
   NotificationSeverity,
   NotificationType,
 } from "@/features/notifications/contracts";
+import {
+  mapLegacyNotificationTypeToCategory,
+} from "@/features/notifications/contracts";
+import {
+  publishNotificationEvent,
+  resolveNotificationEventsByEntity,
+} from "@/features/notifications/event-service";
 
 type CreateAdminNotificationInput = {
   organizationId: string;
   outletId?: string | null;
   userId?: string | null;
   type: NotificationType;
+  eventType?: string;
   severity?: NotificationSeverity;
   title: string;
   message: string;
@@ -20,13 +24,43 @@ type CreateAdminNotificationInput = {
   actionUrl?: string | null;
   metadata?: Record<string, unknown>;
   dedupeUnread?: boolean;
+  deduplicationKey?: string | null;
+  requiresAction?: boolean;
+  recipientPermissionCodes?: string[];
+  excludeUserIds?: string[];
 };
 
+function createLegacyDedupeKey({
+  type,
+  eventType,
+  entityType,
+  entityId,
+  title,
+}: Pick<
+  CreateAdminNotificationInput,
+  "type" | "eventType" | "entityType" | "entityId" | "title"
+>) {
+  return [
+    "legacy",
+    eventType ?? type,
+    entityType ?? "none",
+    entityId ?? title.trim().toLowerCase().replace(/\s+/g, "-").slice(0, 80),
+  ]
+    .join(":")
+    .slice(0, 220);
+}
+
+/**
+ * Compatibility facade for existing notification producers. New modules should
+ * call publishNotificationEvent directly and provide an explicit eventType and
+ * recipient selector.
+ */
 export async function createAdminNotification({
   organizationId,
   outletId = null,
   userId = null,
   type,
+  eventType,
   severity = "info",
   title,
   message,
@@ -35,60 +69,52 @@ export async function createAdminNotification({
   actionUrl = null,
   metadata = {},
   dedupeUnread = false,
+  deduplicationKey = null,
+  requiresAction = false,
+  recipientPermissionCodes,
+  excludeUserIds,
 }: CreateAdminNotificationInput) {
-  const trimmedTitle = title.trim().slice(0, 160);
-  const trimmedMessage = message.trim();
+  const resolvedEventType = (
+    eventType ?? `${type}.${entityType ?? "general"}`
+  )
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "_");
 
-  if (!trimmedTitle || !trimmedMessage) {
-    return null;
-  }
-
-  if (dedupeUnread) {
-    const [existing] = await db
-      .select({ id: notifications.id })
-      .from(notifications)
-      .where(
-        and(
-          eq(notifications.organizationId, organizationId),
-          outletId ? eq(notifications.outletId, outletId) : isNull(notifications.outletId),
-          userId ? eq(notifications.userId, userId) : isNull(notifications.userId),
-          eq(notifications.type, type),
-          eq(notifications.title, trimmedTitle),
-          entityType
-            ? eq(notifications.entityType, entityType)
-            : isNull(notifications.entityType),
-          entityId
-            ? eq(notifications.entityId, entityId)
-            : isNull(notifications.entityId),
-          eq(notifications.isRead, false),
-        ),
-      )
-      .limit(1);
-
-    if (existing) {
-      return existing;
-    }
-  }
-
-  const [created] = await db
-    .insert(notifications)
-    .values({
-      organizationId,
-      outletId,
-      userId,
-      type,
-      severity,
-      title: trimmedTitle,
-      message: trimmedMessage,
-      entityType,
-      entityId,
-      actionUrl,
-      metadata,
-      isRead: false,
-    })
-    .returning({ id: notifications.id });
-
-  return created ?? null;
+  return publishNotificationEvent({
+    organizationId,
+    outletId,
+    category: mapLegacyNotificationTypeToCategory(type),
+    eventType: resolvedEventType,
+    severity,
+    title,
+    summary: message,
+    entityType,
+    entityId,
+    actionUrl,
+    requiresAction,
+    payload: metadata,
+    deduplicationKey:
+      deduplicationKey ??
+      (dedupeUnread
+        ? createLegacyDedupeKey({
+            type,
+            eventType: resolvedEventType,
+            entityType,
+            entityId,
+            title,
+          })
+        : null),
+    recipients: userId
+      ? {
+          userIds: [userId],
+          excludeUserIds,
+        }
+      : {
+          requiredAnyPermissionCodes:
+            recipientPermissionCodes ?? ["admin.access"],
+          excludeUserIds,
+        },
+  });
 }
 
 export async function markUnreadNotificationsReadByEntity({
@@ -102,22 +128,10 @@ export async function markUnreadNotificationsReadByEntity({
   entityType: string;
   entityId: string;
 }) {
-  const now = new Date();
-
-  await db
-    .update(notifications)
-    .set({
-      isRead: true,
-      readAt: now,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(notifications.organizationId, organizationId),
-        type ? eq(notifications.type, type) : undefined,
-        eq(notifications.entityType, entityType),
-        eq(notifications.entityId, entityId),
-        eq(notifications.isRead, false),
-      ),
-    );
+  return resolveNotificationEventsByEntity({
+    organizationId,
+    category: type ? mapLegacyNotificationTypeToCategory(type) : undefined,
+    entityType,
+    entityId,
+  });
 }

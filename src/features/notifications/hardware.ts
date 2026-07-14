@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
 
 import { db } from "@/db";
-import { hardwareAgents, hardwareJobs, notifications, outlets } from "@/db/schema";
+import { hardwareAgents, hardwareJobs, outlets } from "@/db/schema";
 import { createAdminNotification, markUnreadNotificationsReadByEntity } from "@/features/notifications/mutations";
 import type { AuthContext } from "@/lib/auth/session";
 
@@ -153,30 +153,16 @@ export async function markHardwareAgentOnlineNotificationResolved({
   agentName: string;
   outletName?: string | null;
 }) {
-  const [existingUnread] = await db
-    .select({ id: notifications.id })
-    .from(notifications)
-    .where(
-      and(
-        eq(notifications.organizationId, organizationId),
-        eq(notifications.type, "hardware"),
-        eq(notifications.entityType, "hardware_agent"),
-        eq(notifications.entityId, agentId),
-        eq(notifications.isRead, false),
-      ),
-    )
-    .limit(1);
-
-  if (!existingUnread) {
-    return;
-  }
-
-  await markUnreadNotificationsReadByEntity({
+  const resolvedCount = await markUnreadNotificationsReadByEntity({
     organizationId,
     type: "hardware",
     entityType: "hardware_agent",
     entityId: agentId,
   });
+
+  if (resolvedCount === 0) {
+    return;
+  }
 
   const location = outletName ? ` di ${outletName}` : "";
 

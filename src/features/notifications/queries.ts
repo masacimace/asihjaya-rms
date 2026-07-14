@@ -1,9 +1,24 @@
-import { and, count, desc, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  or,
+  type SQL,
+} from "drizzle-orm";
 
 import { db } from "@/db";
-import { notifications, outlets } from "@/db/schema";
+import {
+  notificationEvents,
+  notificationRecipients,
+  outlets,
+} from "@/db/schema";
 import {
   ADMIN_NOTIFICATION_DRAWER_LIMIT,
+  mapCategoryToLegacyNotificationType,
   type AdminNotificationDrawerData,
   type AdminNotificationRow,
 } from "@/features/notifications/contracts";
@@ -12,44 +27,60 @@ import type { AuthContext } from "@/lib/auth/session";
 
 function getAccessibleNotificationCondition(auth: AuthContext): SQL<unknown> {
   const outletIds = auth.outlets.map((outlet) => outlet.id);
-  const outletCondition = outletIds.length > 0
-    ? or(isNull(notifications.outletId), inArray(notifications.outletId, outletIds))!
-    : isNull(notifications.outletId);
+  const outletCondition =
+    outletIds.length > 0
+      ? or(
+          isNull(notificationEvents.outletId),
+          inArray(notificationEvents.outletId, outletIds),
+        )!
+      : isNull(notificationEvents.outletId);
 
   return and(
-    eq(notifications.organizationId, auth.organization.id),
+    eq(notificationEvents.organizationId, auth.organization.id),
+    eq(notificationRecipients.userId, auth.user.id),
     outletCondition,
-    or(isNull(notifications.userId), eq(notifications.userId, auth.user.id))!,
+    ne(notificationRecipients.status, "archived"),
   )!;
 }
 
 function mapNotificationRow(row: {
-  id: string;
-  type: AdminNotificationRow["type"];
+  recipientId: string;
+  eventId: string;
+  category: AdminNotificationRow["category"];
+  eventType: string;
   severity: AdminNotificationRow["severity"];
   title: string;
-  message: string;
+  summary: string;
   actionUrl: string | null;
   entityType: string | null;
   entityId: string | null;
   outletCode: string | null;
   outletName: string | null;
-  isRead: boolean;
-  createdAt: Date;
+  status: AdminNotificationRow["status"];
+  requiresAction: boolean;
+  occurredAt: Date;
 }): AdminNotificationRow {
   return {
-    id: row.id,
-    type: row.type,
+    id: row.recipientId,
+    eventId: row.eventId,
+    type: mapCategoryToLegacyNotificationType({
+      category: row.category,
+      eventType: row.eventType,
+    }),
+    category: row.category,
+    eventType: row.eventType,
     severity: row.severity,
     title: row.title,
-    message: row.message,
+    message: row.summary,
     actionUrl: row.actionUrl,
     entityType: row.entityType,
     entityId: row.entityId,
     outletCode: row.outletCode,
     outletName: row.outletName,
-    isRead: row.isRead,
-    createdAtIso: row.createdAt.toISOString(),
+    status: row.status,
+    isRead: row.status !== "unread",
+    requiresAction: row.requiresAction,
+    createdAtIso: row.occurredAt.toISOString(),
   };
 }
 
@@ -63,28 +94,39 @@ export async function getAdminNotificationDrawerData(
   const [unreadRows, latestRows] = await Promise.all([
     db
       .select({ value: count() })
-      .from(notifications)
-      .where(and(baseCondition, eq(notifications.isRead, false))),
+      .from(notificationRecipients)
+      .innerJoin(
+        notificationEvents,
+        eq(notificationRecipients.eventId, notificationEvents.id),
+      )
+      .where(and(baseCondition, eq(notificationRecipients.status, "unread"))),
 
     db
       .select({
-        id: notifications.id,
-        type: notifications.type,
-        severity: notifications.severity,
-        title: notifications.title,
-        message: notifications.message,
-        actionUrl: notifications.actionUrl,
-        entityType: notifications.entityType,
-        entityId: notifications.entityId,
+        recipientId: notificationRecipients.id,
+        eventId: notificationEvents.id,
+        category: notificationEvents.category,
+        eventType: notificationEvents.eventType,
+        severity: notificationEvents.severity,
+        title: notificationEvents.title,
+        summary: notificationEvents.summary,
+        actionUrl: notificationEvents.actionUrl,
+        entityType: notificationEvents.entityType,
+        entityId: notificationEvents.entityId,
         outletCode: outlets.code,
         outletName: outlets.name,
-        isRead: notifications.isRead,
-        createdAt: notifications.createdAt,
+        status: notificationRecipients.status,
+        requiresAction: notificationEvents.requiresAction,
+        occurredAt: notificationEvents.occurredAt,
       })
-      .from(notifications)
-      .leftJoin(outlets, eq(notifications.outletId, outlets.id))
+      .from(notificationRecipients)
+      .innerJoin(
+        notificationEvents,
+        eq(notificationRecipients.eventId, notificationEvents.id),
+      )
+      .leftJoin(outlets, eq(notificationEvents.outletId, outlets.id))
       .where(baseCondition)
-      .orderBy(desc(notifications.createdAt))
+      .orderBy(desc(notificationEvents.occurredAt))
       .limit(ADMIN_NOTIFICATION_DRAWER_LIMIT),
   ]);
 

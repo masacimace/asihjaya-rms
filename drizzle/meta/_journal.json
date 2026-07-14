@@ -162,6 +162,13 @@
       "when": 1783995000000,
       "tag": "0022_p1c2_import_permission_schema_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784037454538,
+      "tag": "0023_notification_center_v1a_foundation",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@ import { and, count, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/db";
-import { approvals, notifications } from "@/db/schema";
+import { approvals, notificationEvents, notificationRecipients } from "@/db/schema";
 import { getVisibleApprovalTypes } from "@/features/approvals/authorization";
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
 
@@ -22,8 +22,11 @@ export async function GET() {
 
   const outletIds = auth.outlets.map((outlet) => outlet.id);
   const notificationOutletCondition = outletIds.length > 0
-    ? or(isNull(notifications.outletId), inArray(notifications.outletId, outletIds))!
-    : isNull(notifications.outletId);
+    ? or(
+        isNull(notificationEvents.outletId),
+        inArray(notificationEvents.outletId, outletIds),
+      )!
+    : isNull(notificationEvents.outletId);
   const approvalOutletCondition = outletIds.length > 0
     ? or(isNull(approvals.outletId), inArray(approvals.outletId, outletIds))!
     : isNull(approvals.outletId);
@@ -36,13 +39,17 @@ export async function GET() {
   const [notificationRows, approvalRows] = await Promise.all([
     db
       .select({ value: count() })
-      .from(notifications)
+      .from(notificationRecipients)
+      .innerJoin(
+        notificationEvents,
+        eq(notificationRecipients.eventId, notificationEvents.id),
+      )
       .where(
         and(
-          eq(notifications.organizationId, auth.organization.id),
+          eq(notificationEvents.organizationId, auth.organization.id),
           notificationOutletCondition,
-          or(isNull(notifications.userId), eq(notifications.userId, auth.user.id))!,
-          eq(notifications.isRead, false),
+          eq(notificationRecipients.userId, auth.user.id),
+          eq(notificationRecipients.status, "unread"),
         ),
       ),
     db

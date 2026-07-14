@@ -31,7 +31,10 @@
     "check:p1c1": "tsx scripts/check-p1c1-payment-reconciliation.ts",
     "db:preflight:p1c1": "tsx scripts/preflight-p1c1.ts",
     "check:p1c2": "tsx scripts/check-p1c2-settlement-import.ts",
-    "db:preflight:p1c2": "tsx scripts/preflight-p1c2.ts"
+    "db:preflight:p1c2": "tsx scripts/preflight-p1c2.ts",
+    "check:notifications:v1a": "tsx scripts/check-notification-center-v1a.ts",
+    "db:preflight:notifications:v1a": "tsx scripts/preflight-notification-center-v1a.ts",
+    "db:repair:p1c2-history": "tsx scripts/repair-p1c2-migration-history.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

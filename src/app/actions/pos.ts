@@ -29,7 +29,6 @@ import {
   inventoryMovements,
   manualPaymentPolicies,
   manualPaymentProfiles,
-  notifications,
   paymentEvidenceUploads,
   outlets,
   payments,
@@ -80,6 +79,7 @@ import {
   getDefaultPosRegisterCondition,
 } from "@/features/pos/context";
 import { lookupPosItemByScanValue } from "@/features/pos/queries";
+import { publishNotificationEventInTransaction } from "@/features/notifications/event-service";
 import {
   createManualPaymentVerificationFingerprint,
   DEFAULT_MANUAL_PAYMENT_POLICIES,
@@ -4144,18 +4144,19 @@ export async function completePosCheckoutAction(
         createdAt: now,
       });
 
-      await transaction.insert(notifications).values({
+      await publishNotificationEventInTransaction(transaction, {
         organizationId: auth.organization.id,
         outletId: primaryOutlet.id,
-        userId: null,
-        type: "sales",
+        category: "sales",
+        eventType: "sale.completed",
         severity: "success",
         title: "Transaksi POS berhasil",
-        message: `${invoiceNumber} · ${formatNotificationAmount(totalAmount)} · ${primaryOutlet.name}`,
+        summary: `${invoiceNumber} · ${formatNotificationAmount(totalAmount)} · ${primaryOutlet.name}`,
         entityType: "sale",
         entityId: sale.id,
         actionUrl: `/admin/penjualan/${sale.id}`,
-        metadata: {
+        deduplicationKey: `sale.completed:${sale.id}`,
+        payload: {
           source: "pos.checkout",
           saleId: sale.id,
           invoiceNumber,
@@ -4173,8 +4174,10 @@ export async function completePosCheckoutAction(
           totalAmount: String(totalAmount),
           discountAmount: String(approvedDiscountAmount),
         },
-        createdAt: now,
-        updatedAt: now,
+        occurredAt: now,
+        recipients: {
+          requiredAnyPermissionCodes: ["admin.access"],
+        },
       });
 
       const [receiptCertificateJob] = await transaction

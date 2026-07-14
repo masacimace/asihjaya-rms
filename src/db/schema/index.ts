@@ -1945,6 +1945,22 @@ export const hardwareJobs = pgTable(
 );
 
 
+export const notificationCategoryEnum = pgEnum("notification_category", [
+  "sales",
+  "payment",
+  "cash_shift",
+  "inventory_return",
+  "hardware",
+  "security",
+  "system",
+  "approval_result",
+]);
+
+export const notificationRecipientStatusEnum = pgEnum(
+  "notification_recipient_status",
+  ["unread", "read", "acknowledged", "resolved", "archived"],
+);
+
 export const notificationTypeEnum = pgEnum("notification_type", [
   "sales",
   "hardware",
@@ -1960,6 +1976,124 @@ export const notificationSeverityEnum = pgEnum("notification_severity", [
   "warning",
   "critical",
 ]);
+
+export const notificationEvents = pgTable(
+  "notification_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id").references(() => outlets.id),
+    category: notificationCategoryEnum("category").notNull(),
+    eventType: varchar("event_type", { length: 120 }).notNull(),
+    severity: notificationSeverityEnum("severity").default("info").notNull(),
+    title: varchar("title", { length: 160 }).notNull(),
+    summary: text("summary").notNull(),
+    entityType: varchar("entity_type", { length: 80 }),
+    entityId: varchar("entity_id", { length: 160 }),
+    actionUrl: varchar("action_url", { length: 300 }),
+    requiresAction: boolean("requires_action").default(false).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().default({}).notNull(),
+    deduplicationKey: varchar("deduplication_key", { length: 220 }),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("notification_events_active_dedupe_uq")
+      .on(table.organizationId, table.deduplicationKey)
+      .where(
+        sql`${table.deduplicationKey} is not null and ${table.resolvedAt} is null`,
+      ),
+    index("notification_events_org_occurred_idx").on(
+      table.organizationId,
+      table.occurredAt,
+    ),
+    index("notification_events_org_category_idx").on(
+      table.organizationId,
+      table.category,
+      table.occurredAt,
+    ),
+    index("notification_events_outlet_idx").on(
+      table.outletId,
+      table.occurredAt,
+    ),
+    index("notification_events_entity_idx").on(
+      table.entityType,
+      table.entityId,
+    ),
+    index("notification_events_active_action_idx")
+      .on(table.organizationId, table.requiresAction, table.severity)
+      .where(sql`${table.resolvedAt} is null`),
+    check(
+      "notification_events_title_summary_ck",
+      sql`length(btrim(${table.title})) > 0 and length(btrim(${table.summary})) > 0`,
+    ),
+    check(
+      "notification_events_action_url_ck",
+      sql`${table.actionUrl} is null or left(${table.actionUrl}, 1) = '/'`,
+    ),
+    check(
+      "notification_events_resolved_time_ck",
+      sql`${table.resolvedAt} is null or ${table.resolvedAt} >= ${table.occurredAt}`,
+    ),
+  ],
+);
+
+export const notificationRecipients = pgTable(
+  "notification_recipients",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => notificationEvents.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: notificationRecipientStatusEnum("status")
+      .default("unread")
+      .notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("notification_recipients_event_user_uq").on(
+      table.eventId,
+      table.userId,
+    ),
+    index("notification_recipients_user_status_idx").on(
+      table.userId,
+      table.status,
+      table.createdAt,
+    ),
+    index("notification_recipients_event_status_idx").on(
+      table.eventId,
+      table.status,
+    ),
+    check(
+      "notification_recipients_read_time_ck",
+      sql`${table.status} <> 'read' or ${table.readAt} is not null`,
+    ),
+    check(
+      "notification_recipients_ack_time_ck",
+      sql`${table.status} <> 'acknowledged' or ${table.acknowledgedAt} is not null`,
+    ),
+    check(
+      "notification_recipients_resolved_time_ck",
+      sql`${table.status} <> 'resolved' or ${table.resolvedAt} is not null`,
+    ),
+    check(
+      "notification_recipients_archived_time_ck",
+      sql`${table.status} <> 'archived' or ${table.archivedAt} is not null`,
+    ),
+  ],
+);
 
 export const notifications = pgTable(
   "notifications",
