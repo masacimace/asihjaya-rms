@@ -143,6 +143,31 @@ export const paymentSettlementStatusEnum = pgEnum(
   ],
 );
 
+export const settlementImportStatusEnum = pgEnum("settlement_import_status", [
+  "uploaded",
+  "ready",
+  "processing",
+  "completed",
+  "completed_with_issues",
+  "failed",
+  "cancelled",
+]);
+
+export const settlementImportRowStatusEnum = pgEnum(
+  "settlement_import_row_status",
+  [
+    "pending",
+    "matched",
+    "ambiguous",
+    "mismatch",
+    "not_found",
+    "duplicate",
+    "ignored",
+    "applied",
+    "failed",
+  ],
+);
+
 export const posCheckoutAttemptStatusEnum = pgEnum("pos_checkout_attempt_status", [
   "processing",
   "completed",
@@ -1481,6 +1506,191 @@ export const paymentReconciliations = pgTable(
         and length(btrim(${table.notes})) >= 8
         and ${table.resolvedBy} is not null
         and ${table.resolvedAt} is not null
+      )`,
+    ),
+  ],
+);
+
+export const settlementImportMappings = pgTable(
+  "settlement_import_mappings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    profileId: uuid("profile_id")
+      .notNull()
+      .references(() => manualPaymentProfiles.id, { onDelete: "cascade" }),
+    delimiter: varchar("delimiter", { length: 8 }).default(",").notNull(),
+    columnMapping: jsonb("column_mapping")
+      .$type<Record<string, string | null>>()
+      .default({})
+      .notNull(),
+    updatedBy: uuid("updated_by")
+      .notNull()
+      .references(() => users.id),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("settlement_import_mappings_profile_uq").on(table.profileId),
+    index("settlement_import_mappings_org_outlet_idx").on(
+      table.organizationId,
+      table.outletId,
+    ),
+    check(
+      "settlement_import_mappings_delimiter_ck",
+      sql`length(${table.delimiter}) between 1 and 8`,
+    ),
+  ],
+);
+
+export const settlementImportBatches = pgTable(
+  "settlement_import_batches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    profileId: uuid("profile_id")
+      .notNull()
+      .references(() => manualPaymentProfiles.id),
+    uploadedBy: uuid("uploaded_by")
+      .notNull()
+      .references(() => users.id),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    fileKey: text("file_key").notNull(),
+    fileHash: varchar("file_hash", { length: 64 }).notNull(),
+    fileSizeBytes: integer("file_size_bytes").notNull(),
+    status: settlementImportStatusEnum("status").default("uploaded").notNull(),
+    delimiter: varchar("delimiter", { length: 8 }).default(",").notNull(),
+    headers: jsonb("headers").$type<string[]>().default([]).notNull(),
+    columnMapping: jsonb("column_mapping")
+      .$type<Record<string, string | null>>()
+      .default({})
+      .notNull(),
+    rowCount: integer("row_count").default(0).notNull(),
+    validRowCount: integer("valid_row_count").default(0).notNull(),
+    matchedCount: integer("matched_count").default(0).notNull(),
+    appliedCount: integer("applied_count").default(0).notNull(),
+    ambiguousCount: integer("ambiguous_count").default(0).notNull(),
+    mismatchCount: integer("mismatch_count").default(0).notNull(),
+    notFoundCount: integer("not_found_count").default(0).notNull(),
+    duplicateCount: integer("duplicate_count").default(0).notNull(),
+    ignoredCount: integer("ignored_count").default(0).notNull(),
+    failedCount: integer("failed_count").default(0).notNull(),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("settlement_import_batches_org_hash_uq").on(
+      table.organizationId,
+      table.fileHash,
+    ),
+    index("settlement_import_batches_org_status_idx").on(
+      table.organizationId,
+      table.status,
+      table.createdAt,
+    ),
+    index("settlement_import_batches_outlet_profile_idx").on(
+      table.outletId,
+      table.profileId,
+      table.createdAt,
+    ),
+    check(
+      "settlement_import_batches_file_size_ck",
+      sql`${table.fileSizeBytes} between 1 and 5242880`,
+    ),
+    check(
+      "settlement_import_batches_counts_ck",
+      sql`${table.rowCount} >= 0
+        and ${table.validRowCount} >= 0
+        and ${table.matchedCount} >= 0
+        and ${table.appliedCount} >= 0
+        and ${table.ambiguousCount} >= 0
+        and ${table.mismatchCount} >= 0
+        and ${table.notFoundCount} >= 0
+        and ${table.duplicateCount} >= 0
+        and ${table.ignoredCount} >= 0
+        and ${table.failedCount} >= 0`,
+    ),
+  ],
+);
+
+export const settlementImportRows = pgTable(
+  "settlement_import_rows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => settlementImportBatches.id, { onDelete: "cascade" }),
+    rowNumber: integer("row_number").notNull(),
+    rawData: jsonb("raw_data")
+      .$type<Record<string, string>>()
+      .default({})
+      .notNull(),
+    transactionDate: timestamp("transaction_date", { withTimezone: true }),
+    paymentReference: varchar("payment_reference", { length: 160 }),
+    normalizedReference: varchar("normalized_reference", { length: 160 }),
+    grossAmount: numeric("gross_amount", { precision: 18, scale: 0 }),
+    feeAmount: numeric("fee_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    taxAmount: numeric("tax_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    netAmount: numeric("net_amount", { precision: 18, scale: 0 }),
+    settlementReference: varchar("settlement_reference", { length: 160 }),
+    providerStatus: varchar("provider_status", { length: 80 }),
+    status: settlementImportRowStatusEnum("status").default("pending").notNull(),
+    matchedPaymentId: uuid("matched_payment_id").references(() => payments.id),
+    candidatePaymentIds: jsonb("candidate_payment_ids")
+      .$type<string[]>()
+      .default([])
+      .notNull(),
+    matchReason: text("match_reason"),
+    errorMessage: text("error_message"),
+    reviewNotes: text("review_notes"),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("settlement_import_rows_batch_row_uq").on(
+      table.batchId,
+      table.rowNumber,
+    ),
+    index("settlement_import_rows_batch_status_idx").on(
+      table.batchId,
+      table.status,
+      table.rowNumber,
+    ),
+    index("settlement_import_rows_reference_idx").on(
+      table.normalizedReference,
+    ),
+    index("settlement_import_rows_payment_idx").on(table.matchedPaymentId),
+    check(
+      "settlement_import_rows_row_number_ck",
+      sql`${table.rowNumber} > 1`,
+    ),
+    check(
+      "settlement_import_rows_amounts_ck",
+      sql`(${table.grossAmount} is null or ${table.grossAmount} >= 0)
+        and ${table.feeAmount} >= 0
+        and ${table.taxAmount} >= 0
+        and (${table.netAmount} is null or ${table.netAmount} >= 0)`,
+    ),
+    check(
+      "settlement_import_rows_applied_ck",
+      sql`${table.status} <> 'applied' or (
+        ${table.matchedPaymentId} is not null
+        and ${table.appliedAt} is not null
       )`,
     ),
   ],

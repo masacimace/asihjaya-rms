@@ -141,6 +141,27 @@
       "when": 1783971000000,
       "tag": "0019_p1c1_reconciliation_constraint_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783981771842,
+      "tag": "0020_p1c2_settlement_import_auto_matching",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1783989000000,
+      "tag": "0021_p1c2_import_permission_hotfix",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783995000000,
+      "tag": "0022_p1c2_import_permission_schema_repair",
+      "breakpoints": true
     }
   ]
 }

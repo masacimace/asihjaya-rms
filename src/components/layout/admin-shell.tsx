@@ -50,6 +50,7 @@ type AdminShellUser = {
   canAccessApprovals: boolean;
   canAccessSettings: boolean;
   canAccessReconciliation: boolean;
+  canImportReconciliation: boolean;
 };
 
 type NavigationItem = {
@@ -89,20 +90,23 @@ const navigation: NavigationItem[] = [
     icon: ReceiptText,
   },
   {
-    label: "Daftar Pelanggan",
+    label: "Daftar Customer",
     href: "/admin/pelanggan",
     icon: UsersRound,
   },
   {
-    label: "Finansial Outlet",
+    label: "Outlet Financial",
     icon: Landmark,
     access: "reconciliation",
     children: [
       {
-        label: "Rekonsiliasi Pembayaran",
+        label: "Status Pembayaran",
         href: "/admin/keuangan/rekonsiliasi",
       },
-      { label: "Pergerakan Kas", href: "/admin/operasional/kas" },
+      {
+        label: "Import Settlement",
+        href: "/admin/keuangan/rekonsiliasi/import",
+      },
     ],
   },
   {
@@ -112,6 +116,7 @@ const navigation: NavigationItem[] = [
       { label: "Shift Kasir", href: "/admin/operasional/shift" },
       { label: "Laporan Outlet", href: "/admin/laporan" },
       { label: "Riwayat Approval", href: "/admin/operasional/approval" },
+      { label: "Pergerakan Kas", href: "/admin/operasional/kas" },
       { label: "Hardware Hub", href: "/admin/operasional/hardware" },
     ],
   },
@@ -215,6 +220,7 @@ type SidebarContentProps = {
   canAccessApprovals: boolean;
   canAccessSettings: boolean;
   canAccessReconciliation: boolean;
+  canImportReconciliation: boolean;
   onNavigate?: () => void;
   showBrand?: boolean;
   showPosCta?: boolean;
@@ -235,6 +241,7 @@ function SidebarContent({
   canAccessApprovals,
   canAccessSettings,
   canAccessReconciliation,
+  canImportReconciliation,
   onNavigate,
   showBrand = true,
   showPosCta = true,
@@ -269,11 +276,21 @@ function SidebarContent({
       <nav className="space-y-1">
         {visibleNavigation.map(({ label, href, icon: Icon, children }) => {
           if (children) {
-            const visibleChildren = children.filter(
-              (child) =>
-                child.href !== "/admin/operasional/approval" ||
-                canAccessApprovals,
-            );
+            const visibleChildren = children.filter((child) => {
+              if (
+                child.href === "/admin/operasional/approval" &&
+                !canAccessApprovals
+              ) {
+                return false;
+              }
+              if (
+                child.href === "/admin/keuangan/rekonsiliasi/import" &&
+                !canImportReconciliation
+              ) {
+                return false;
+              }
+              return true;
+            });
             const isChildActive = visibleChildren.some((child) =>
               isNavigationActive(pathname, child.href),
             );
@@ -416,7 +433,7 @@ export function AdminShell({
   }, []);
 
   return (
-    <div className="grid h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[270px_minmax(0,1fr)]">
+    <div className="grid h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[260px_minmax(0,1fr)]">
       {/* Sidebar desktop */}
       <aside className="hidden h-dvh min-h-0 flex-col overflow-y-auto border-r border-[var(--border)] bg-white p-5 lg:flex">
         <SidebarContent
@@ -428,6 +445,7 @@ export function AdminShell({
           canAccessApprovals={user.canAccessApprovals}
           canAccessSettings={user.canAccessSettings}
           canAccessReconciliation={user.canAccessReconciliation}
+          canImportReconciliation={user.canImportReconciliation}
         />
       </aside>
 
@@ -437,7 +455,7 @@ export function AdminShell({
           <button
             type="button"
             aria-label="Tutup navigasi"
-            className="absolute inset-0 touch-non backdrop-blur-[1px]"
+            className="absolute inset-0 touch-none bg-black/30 backdrop-blur-[1px]"
             onClick={() => setIsMobileMenuOpen(false)}
           />
 
@@ -468,6 +486,7 @@ export function AdminShell({
                 canAccessApprovals={user.canAccessApprovals}
                 canAccessSettings={user.canAccessSettings}
                 canAccessReconciliation={user.canAccessReconciliation}
+                canImportReconciliation={user.canImportReconciliation}
                 onNavigate={() => setIsMobileMenuOpen(false)}
                 showBrand={false}
                 showPosCta={false}

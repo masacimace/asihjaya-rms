@@ -126,6 +126,11 @@ const permissionSeeds = [
     module: "payments",
   },
   {
+    code: "payments.reconciliation.import",
+    name: "Mengimpor settlement dan menjalankan auto-matching",
+    module: "payments",
+  },
+  {
     code: "sales.void.request",
     name: "Mengajukan void transaksi",
     module: "sales",
@@ -319,6 +324,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "payments.reconciliation.view",
     "payments.reconciliation.manage",
     "payments.reconciliation.resolve",
+    "payments.reconciliation.import",
     "sales.void.request",
     "sales.void.approve",
     "sales.void.execute",
@@ -373,6 +379,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "payments.reconciliation.view",
     "payments.reconciliation.manage",
     "payments.reconciliation.resolve",
+    "payments.reconciliation.import",
     "payments.refund.approve",
     "payments.refund.execute",
     "returns.view",

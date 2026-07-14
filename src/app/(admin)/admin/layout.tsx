@@ -37,6 +37,10 @@ export default async function AdminLayout({
           auth,
           "payments.reconciliation.view",
         ),
+        canImportReconciliation: hasPermission(
+          auth,
+          "payments.reconciliation.import",
+        ),
       }}
       approvalDrawerData={approvalDrawerData}
       notificationDrawerData={notificationDrawerData}
