@@ -115,7 +115,7 @@ const navigation: NavigationItem[] = [
     children: [
       { label: "Shift Kasir", href: "/admin/operasional/shift" },
       { label: "Laporan Outlet", href: "/admin/laporan" },
-      { label: "Riwayat Approval", href: "/admin/operasional/approval" },
+      //{ label: "Riwayat Approval", href: "/admin/operasional/approval" },
       { label: "Pergerakan Kas", href: "/admin/operasional/kas" },
       { label: "Hardware Hub", href: "/admin/operasional/hardware" },
     ],
@@ -403,6 +403,14 @@ export function AdminShell({
     notificationDrawerData.unreadCount,
   );
 
+  const notificationDrawerVersion = [
+    notificationDrawerData.unreadCount,
+    notificationDrawerData.actionableCount,
+    ...notificationDrawerData.latest.map(
+      (notification) => `${notification.id}:${notification.status}`,
+    ),
+  ].join("|");
+
   const refreshDrawerData = useCallback(() => {
     if (refreshTimerRef.current) {
       window.clearTimeout(refreshTimerRef.current);
@@ -640,8 +648,10 @@ export function AdminShell({
       ) : null}
 
       <NotificationDrawer
+        key={notificationDrawerVersion}
         isOpen={isNotificationOpen}
         onClose={() => setIsNotificationOpen(false)}
+        onUnreadCountChange={setNotificationUnreadCount}
         data={notificationDrawerData}
       />
     </div>

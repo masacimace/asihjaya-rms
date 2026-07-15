@@ -1,308 +1,350 @@
 "use client";
 
-import {
-  Bell,
-  CheckCircle2,
-  CircleDollarSign,
-  Clock3,
-  ExternalLink,
-  HardDrive,
-  Inbox,
-  PackageCheck,
-  ReceiptText,
-  ShieldAlert,
-  Store,
-  X,
-} from "lucide-react";
+import { ArrowRight, Bell, CheckCheck, Inbox, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 import {
+  archiveNotificationAction,
   markAllNotificationsReadAction,
   markNotificationReadAction,
+  markNotificationUnreadAction,
+  type NotificationMutationResult,
 } from "@/app/actions/notifications";
+import { NotificationCard } from "@/components/notifications/notification-card";
 import type {
   AdminNotificationDrawerData,
   AdminNotificationRow,
+  NotificationDrawerFilter,
 } from "@/features/notifications/contracts";
 import { cn } from "@/lib/utils";
 
-function formatDateTime(isoString: string) {
-  const date = new Date(isoString);
-
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Jakarta",
-  }).format(date);
-}
-
-function getNotificationTypeMeta(type: AdminNotificationRow["type"]) {
-  if (type === "sales") {
-    return {
-      label: "Transaksi",
-      icon: ReceiptText,
-      className: "bg-emerald-50 text-emerald-700",
-    };
-  }
-
-  if (type === "hardware") {
-    return {
-      label: "Hardware",
-      icon: HardDrive,
-      className: "bg-blue-50 text-blue-700",
-    };
-  }
-
-  if (type === "shift") {
-    return {
-      label: "Shift",
-      icon: Clock3,
-      className: "bg-amber-50 text-amber-700",
-    };
-  }
-
-  if (type === "cash") {
-    return {
-      label: "Kas",
-      icon: CircleDollarSign,
-      className: "bg-teal-50 text-teal-700",
-    };
-  }
-
-  if (type === "inventory") {
-    return {
-      label: "Stok",
-      icon: PackageCheck,
-      className: "bg-violet-50 text-violet-700",
-    };
-  }
-
-  return {
-    label: "Sistem",
-    icon: ShieldAlert,
-    className: "bg-neutral-100 text-neutral-700",
-  };
-}
-
-function getSeverityClassName(severity: AdminNotificationRow["severity"]) {
-  if (severity === "critical") {
-    return "border-red-200 bg-red-50/40";
-  }
-
-  if (severity === "warning") {
-    return "border-amber-200 bg-amber-50/40";
-  }
-
-  if (severity === "success") {
-    return "border-emerald-200 bg-emerald-50/30";
-  }
-
-  return "border-[var(--border)] bg-white";
-}
-
-function NotificationCard({
-  notification,
-}: {
-  notification: AdminNotificationRow;
-}) {
-  const meta = getNotificationTypeMeta(notification.type);
-  const Icon = meta.icon;
+function EmptyState({ filter }: { filter: NotificationDrawerFilter }) {
+  const content =
+    filter === "actionable"
+      ? {
+          title: "Tidak ada tindakan tertunda",
+          description:
+            "Semua alert operasional yang membutuhkan tindak lanjut sudah selesai.",
+        }
+      : filter === "unread"
+        ? {
+            title: "Semua sudah dibaca",
+            description: "Notifikasi baru akan muncul kembali di tab ini.",
+          }
+        : {
+            title: "Belum ada notifikasi",
+            description:
+              "Transaksi POS dan alert operasional akan muncul di sini.",
+          };
 
   return (
-    <article
-      className={cn(
-        "rounded-3xl border p-4 transition",
-        getSeverityClassName(notification.severity),
-        notification.isRead ? "opacity-75" : "ring-1 ring-[var(--accent-soft)]",
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-2xl",
-            meta.className,
-          )}
-        >
-          <Icon className="size-5" />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="min-w-0 text-sm font-bold text-neutral-950">
-                  {notification.title}
-                </h3>
-                {!notification.isRead ? (
-                  <span
-                    className="size-2 rounded-full bg-red-600"
-                    aria-label="Belum dibaca"
-                  />
-                ) : null}
-              </div>
-              <p className="mt-1 text-xs leading-5 text-neutral-600">
-                {notification.message}
-              </p>
-            </div>
-
-            <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-neutral-600 ring-1 ring-[var(--border)]">
-              {meta.label}
-            </span>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-            <span>{formatDateTime(notification.createdAtIso)}</span>
-            {notification.outletCode ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 font-semibold text-neutral-700 ring-1 ring-[var(--border)]">
-                <Store className="size-3" />
-                {notification.outletCode}
-              </span>
-            ) : null}
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            {notification.actionUrl ? (
-              <Link
-                href={notification.actionUrl}
-                className="inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-bold text-neutral-900 transition hover:border-neutral-300 hover:bg-neutral-50"
-              >
-                Lihat detail
-                <ExternalLink className="size-3.5" />
-              </Link>
-            ) : null}
-
-            {!notification.isRead ? (
-              <form action={markNotificationReadAction}>
-                <input
-                  type="hidden"
-                  name="notificationId"
-                  value={notification.id}
-                />
-                <button
-                  type="submit"
-                  className="inline-flex h-9 items-center gap-2 rounded-xl bg-neutral-900 px-3 !text-xs font-bold text-white transition hover:bg-neutral-800"
-                >
-                  <CheckCircle2 className="size-3.5" />
-                  Tandai dibaca
-                </button>
-              </form>
-            ) : null}
-          </div>
-        </div>
+    <div className="rounded-3xl border border-dashed border-[var(--border)] bg-neutral-50 p-7 text-center">
+      <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-white text-neutral-500 ring-1 ring-[var(--border)]">
+        <Inbox className="size-6" />
       </div>
-    </article>
-  );
-}
-
-function NotificationFooterAction({ unreadCount }: { unreadCount: number }) {
-  if (unreadCount <= 0) {
-    return (
-      <button
-        type="button"
-        disabled
-        className="flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-neutral-100 px-4 text-sm font-bold text-neutral-400"
-      >
-        <CheckCircle2 className="size-4" />
-        Semua notifikasi sudah dibaca
-      </button>
-    );
-  }
-
-  return (
-    <form action={markAllNotificationsReadAction}>
-      <button
-        type="submit"
-        className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-bold text-white transition hover:bg-neutral-800"
-      >
-        <CheckCircle2 className="size-4" />
-        Tandai semua dibaca
-      </button>
-    </form>
+      <h3 className="mt-4 font-bold text-neutral-950">{content.title}</h3>
+      <p className="mt-2 text-sm leading-6 text-neutral-600">
+        {content.description}
+      </p>
+    </div>
   );
 }
 
 export function NotificationDrawer({
   isOpen,
   onClose,
+  onUnreadCountChange,
   data,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  onUnreadCountChange?: (count: number) => void;
   data: AdminNotificationDrawerData;
 }) {
+  const router = useRouter();
+  const [filter, setFilter] = useState<NotificationDrawerFilter>("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [rows, setRows] = useState(data.latest);
+  const [unreadCount, setUnreadCount] = useState(data.unreadCount);
+  const [actionableCount, setActionableCount] = useState(data.actionableCount);
+  const [isMutating, setIsMutating] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isOpen, onClose]);
+
+  const visibleRows = useMemo(() => {
+    if (filter === "unread") {
+      return rows.filter((row) => row.status === "unread");
+    }
+    if (filter === "actionable") {
+      return rows.filter((row) => row.isActionable);
+    }
+    return rows;
+  }, [filter, rows]);
+
+  function setNextUnreadCount(nextCount: number) {
+    const normalized = Math.max(0, nextCount);
+    setUnreadCount(normalized);
+    onUnreadCountChange?.(normalized);
+  }
+
+  async function executeMutation({
+    optimisticUpdate,
+    action,
+  }: {
+    optimisticUpdate: () => void;
+    action: () => Promise<NotificationMutationResult>;
+  }) {
+    if (isMutating) return;
+
+    const previousRows = rows;
+    const previousUnreadCount = unreadCount;
+    const previousActionableCount = actionableCount;
+    setIsMutating(true);
+    optimisticUpdate();
+
+    try {
+      const result = await action();
+      if (!result.ok) throw new Error("Notification mutation rejected");
+      router.refresh();
+    } catch {
+      setRows(previousRows);
+      setUnreadCount(previousUnreadCount);
+      setActionableCount(previousActionableCount);
+      onUnreadCountChange?.(previousUnreadCount);
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
+  function recipientFormData(recipientId: string) {
+    const formData = new FormData();
+    formData.set("notificationId", recipientId);
+    return formData;
+  }
+
+  function markRead(notification: AdminNotificationRow) {
+    void executeMutation({
+      optimisticUpdate: () => {
+        setRows((current) =>
+          current.map((row) =>
+            row.id === notification.id
+              ? { ...row, status: "read", isRead: true }
+              : row,
+          ),
+        );
+        setNextUnreadCount(unreadCount - 1);
+      },
+      action: () =>
+        markNotificationReadAction(recipientFormData(notification.id)),
+    });
+  }
+
+  function markUnread(notification: AdminNotificationRow) {
+    void executeMutation({
+      optimisticUpdate: () => {
+        setRows((current) =>
+          current.map((row) =>
+            row.id === notification.id
+              ? { ...row, status: "unread", isRead: false }
+              : row,
+          ),
+        );
+        setNextUnreadCount(unreadCount + 1);
+      },
+      action: () =>
+        markNotificationUnreadAction(recipientFormData(notification.id)),
+    });
+  }
+
+  function archive(notification: AdminNotificationRow) {
+    void executeMutation({
+      optimisticUpdate: () => {
+        setRows((current) =>
+          current.filter((row) => row.id !== notification.id),
+        );
+        if (notification.status === "unread") {
+          setNextUnreadCount(unreadCount - 1);
+        }
+        if (notification.isActionable) {
+          setActionableCount((current) => Math.max(0, current - 1));
+        }
+        if (expandedId === notification.id) setExpandedId(null);
+      },
+      action: () =>
+        archiveNotificationAction(recipientFormData(notification.id)),
+    });
+  }
+
+  function markAllRead() {
+    if (unreadCount <= 0) return;
+
+    void executeMutation({
+      optimisticUpdate: () => {
+        setRows((current) =>
+          current.map((row) =>
+            row.status === "unread"
+              ? { ...row, status: "read", isRead: true }
+              : row,
+          ),
+        );
+        setNextUnreadCount(0);
+      },
+      action: markAllNotificationsReadAction,
+    });
+  }
+
   if (!isOpen) return null;
+
+  const tabs: Array<{
+    id: NotificationDrawerFilter;
+    label: string;
+    count?: number;
+  }> = [
+    { id: "all", label: "Semua", count: rows.length },
+    { id: "actionable", label: "Perlu tindakan", count: actionableCount },
+    { id: "unread", label: "Belum dibaca", count: unreadCount },
+  ];
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-50 bg-neutral-950/10 backdrop-blur-xs transition-opacity"
+      <button
+        type="button"
+        aria-label="Tutup Notification Center"
+        className="fixed inset-0 z-[70] bg-neutral-950/15 backdrop-blur-[1px]"
         onClick={onClose}
       />
 
-      <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-[var(--border)] bg-white transition-transform">
-        <header className="border-b border-[var(--border)] px-5 py-4">
+      <aside
+        aria-label="Notification Center"
+        className="fixed inset-y-0 right-0 z-[71] flex w-full max-w-lg flex-col border-l border-[var(--border)] bg-white shadow-2xl shadow-black/10"
+      >
+        <header className="shrink-0 border-b border-[var(--border)] bg-white px-5 pb-4 pt-5">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="grid size-11 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
                 <Bell className="size-5" />
               </div>
-              <div>
-                <h2 className="font-bold text-neutral-950">Notifikasi Admin</h2>
-                <p className="text-xs text-[var(--muted)]">
-                  {data.unreadCount > 0
-                    ? `${data.unreadCount} notifikasi belum dibaca`
-                    : "Semua notifikasi sudah dibaca"}
+              <div className="min-w-0">
+                <h2 className="font-bold text-neutral-950">
+                  Notification Center
+                </h2>
+                <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
+                  {unreadCount > 0
+                    ? `${unreadCount} belum dibaca · ${actionableCount} perlu tindakan`
+                    : actionableCount > 0
+                      ? `${actionableCount} notifikasi perlu tindakan`
+                      : "Semua notifikasi sudah ditinjau"}
                 </p>
               </div>
             </div>
+
             <button
               type="button"
+              aria-label="Tutup notifikasi"
               onClick={onClose}
-              className="grid size-9 place-items-center rounded-xl text-neutral-500 transition hover:bg-neutral-100"
+              className="grid size-9 shrink-0 place-items-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-950"
             >
               <X className="size-5" />
             </button>
           </div>
+
+          <div className="mt-4 flex gap-1 overflow-x-auto rounded-2xl bg-neutral-100 p-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFilter(tab.id)}
+                className={cn(
+                  "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold transition",
+                  filter === tab.id
+                    ? "bg-white text-neutral-950 shadow-sm"
+                    : "text-neutral-500 hover:text-neutral-900",
+                )}
+              >
+                {tab.label}
+                {typeof tab.count === "number" ? (
+                  <span
+                    className={cn(
+                      "min-w-5 rounded-full px-1.5 py-0.5 text-[10px]",
+                      filter === tab.id
+                        ? "bg-neutral-100 text-neutral-700"
+                        : "bg-white/70 text-neutral-500",
+                    )}
+                  >
+                    {tab.count > 99 ? "99+" : tab.count}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-5 pb-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="text-xs font-bold uppercase text-neutral-500">
-              Aktivitas terbaru
-            </h3>
-            <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-bold text-neutral-700">
-              {data.latest.length}
-            </span>
-          </div>
-
-          {data.latest.length > 0 ? (
+        <div className="min-h-0 flex-1 overflow-y-auto bg-neutral-50/60 p-4 sm:p-5">
+          {visibleRows.length > 0 ? (
             <div className="space-y-3">
-              {data.latest.map((notification) => (
+              {visibleRows.map((notification) => (
                 <NotificationCard
                   key={notification.id}
                   notification={notification}
+                  isExpanded={expandedId === notification.id}
+                  isMutating={isMutating}
+                  onToggle={() =>
+                    setExpandedId((current) =>
+                      current === notification.id ? null : notification.id,
+                    )
+                  }
+                  onClose={onClose}
+                  onMarkRead={() => markRead(notification)}
+                  onMarkUnread={() => markUnread(notification)}
+                  onArchive={() => archive(notification)}
                 />
               ))}
             </div>
           ) : (
-            <div className="rounded-3xl border border-dashed border-[var(--border)] bg-neutral-50 p-6 text-center">
-              <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-white text-neutral-500 ring-1 ring-[var(--border)]">
-                <Inbox className="size-6" />
-              </div>
-              <h3 className="mt-4 font-bold text-neutral-950">
-                Belum ada notifikasi
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-neutral-600">
-                Transaksi POS dan alert operasional akan muncul di sini.
-              </p>
-            </div>
+            <EmptyState filter={filter} />
           )}
         </div>
 
-        <footer className="border-t border-[var(--border)] bg-white p-4">
-          <NotificationFooterAction unreadCount={data.unreadCount} />
+        <footer className="shrink-0 border-t border-[var(--border)] bg-white p-4">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Link
+              href="/admin/notifikasi"
+              onClick={onClose}
+              className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-bold !text-white transition hover:bg-neutral-800"
+            >
+              Lihat semua notifikasi
+              <ArrowRight className="size-4" />
+            </Link>
+
+            <button
+              type="button"
+              disabled={unreadCount <= 0 || isMutating}
+              onClick={markAllRead}
+              className={cn(
+                "flex h-11 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition",
+                unreadCount > 0
+                  ? "border border-[var(--border)] bg-white text-neutral-800 hover:bg-neutral-50"
+                  : "cursor-not-allowed border border-[var(--border)] bg-neutral-100 text-neutral-400",
+              )}
+            >
+              <CheckCheck className="size-4" />
+              {unreadCount > 0 ? "Tandai semua dibaca" : "Semua sudah dibaca"}
+            </button>
+          </div>
+          <p className="mt-2 text-center text-[10px] leading-4 text-neutral-400">
+            Arsip hanya menyembunyikan notifikasi. Audit event tetap tersimpan.
+          </p>
         </footer>
       </aside>
     </>

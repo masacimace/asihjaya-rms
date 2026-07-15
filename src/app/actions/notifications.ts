@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
@@ -10,17 +10,26 @@ import { requirePermission } from "@/lib/auth/session";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export async function markNotificationReadAction(formData: FormData) {
-  const auth = await requirePermission("admin.access");
+export type NotificationMutationResult = {
+  ok: boolean;
+  affectedCount: number;
+};
+
+function getRecipientId(formData: FormData) {
   const recipientId = String(formData.get("notificationId") ?? "").trim();
+  return UUID_PATTERN.test(recipientId) ? recipientId : null;
+}
 
-  if (!UUID_PATTERN.test(recipientId)) return;
-
+async function getAccessibleRecipient(recipientId: string) {
+  const auth = await requirePermission("admin.access");
   const outletIds = auth.outlets.map((outlet) => outlet.id);
-  const now = new Date();
 
-  const [accessible] = await db
-    .select({ id: notificationRecipients.id })
+  const [row] = await db
+    .select({
+      id: notificationRecipients.id,
+      status: notificationRecipients.status,
+      eventResolvedAt: notificationEvents.resolvedAt,
+    })
     .from(notificationRecipients)
     .innerJoin(
       notificationEvents,
@@ -41,9 +50,29 @@ export async function markNotificationReadAction(formData: FormData) {
     )
     .limit(1);
 
-  if (!accessible) return;
+  return { auth, row };
+}
 
-  await db
+function revalidateNotificationSurfaces() {
+  revalidatePath("/admin", "layout");
+  revalidatePath("/admin/notifikasi");
+}
+
+export async function markNotificationReadAction(
+  formData: FormData,
+): Promise<NotificationMutationResult> {
+  const recipientId = getRecipientId(formData);
+  if (!recipientId) return { ok: false, affectedCount: 0 };
+
+  const { auth, row } = await getAccessibleRecipient(recipientId);
+  if (!row) return { ok: false, affectedCount: 0 };
+
+  if (row.status !== "unread") {
+    return { ok: true, affectedCount: 0 };
+  }
+
+  const now = new Date();
+  const updated = await db
     .update(notificationRecipients)
     .set({
       status: "read",
@@ -56,12 +85,87 @@ export async function markNotificationReadAction(formData: FormData) {
         eq(notificationRecipients.userId, auth.user.id),
         eq(notificationRecipients.status, "unread"),
       ),
-    );
+    )
+    .returning({ id: notificationRecipients.id });
 
-  revalidatePath("/admin");
+  revalidateNotificationSurfaces();
+  return { ok: true, affectedCount: updated.length };
 }
 
-export async function markAllNotificationsReadAction() {
+export async function markNotificationUnreadAction(
+  formData: FormData,
+): Promise<NotificationMutationResult> {
+  const recipientId = getRecipientId(formData);
+  if (!recipientId) return { ok: false, affectedCount: 0 };
+
+  const { auth, row } = await getAccessibleRecipient(recipientId);
+  if (!row) return { ok: false, affectedCount: 0 };
+
+  if (row.eventResolvedAt || row.status === "resolved" || row.status === "archived") {
+    return { ok: false, affectedCount: 0 };
+  }
+
+  if (row.status === "unread") {
+    return { ok: true, affectedCount: 0 };
+  }
+
+  const now = new Date();
+  const updated = await db
+    .update(notificationRecipients)
+    .set({
+      status: "unread",
+      readAt: null,
+      acknowledgedAt: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(notificationRecipients.id, recipientId),
+        eq(notificationRecipients.userId, auth.user.id),
+        inArray(notificationRecipients.status, ["read", "acknowledged"]),
+      ),
+    )
+    .returning({ id: notificationRecipients.id });
+
+  revalidateNotificationSurfaces();
+  return { ok: true, affectedCount: updated.length };
+}
+
+export async function archiveNotificationAction(
+  formData: FormData,
+): Promise<NotificationMutationResult> {
+  const recipientId = getRecipientId(formData);
+  if (!recipientId) return { ok: false, affectedCount: 0 };
+
+  const { auth, row } = await getAccessibleRecipient(recipientId);
+  if (!row) return { ok: false, affectedCount: 0 };
+
+  if (row.status === "archived") {
+    return { ok: true, affectedCount: 0 };
+  }
+
+  const now = new Date();
+  const updated = await db
+    .update(notificationRecipients)
+    .set({
+      status: "archived",
+      archivedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(notificationRecipients.id, recipientId),
+        eq(notificationRecipients.userId, auth.user.id),
+        ne(notificationRecipients.status, "archived"),
+      ),
+    )
+    .returning({ id: notificationRecipients.id });
+
+  revalidateNotificationSurfaces();
+  return { ok: true, affectedCount: updated.length };
+}
+
+export async function markAllNotificationsReadAction(): Promise<NotificationMutationResult> {
   const auth = await requirePermission("admin.access");
   const outletIds = auth.outlets.map((outlet) => outlet.id);
   const now = new Date();
@@ -88,12 +192,160 @@ export async function markAllNotificationsReadAction() {
     );
 
   const recipientIds = accessibleRows.map((row) => row.id);
-  if (recipientIds.length > 0) {
-    await db
-      .update(notificationRecipients)
-      .set({ status: "read", readAt: now, updatedAt: now })
-      .where(inArray(notificationRecipients.id, recipientIds));
+  if (recipientIds.length === 0) {
+    return { ok: true, affectedCount: 0 };
   }
 
-  revalidatePath("/admin");
+  const updated = await db
+    .update(notificationRecipients)
+    .set({ status: "read", readAt: now, updatedAt: now })
+    .where(inArray(notificationRecipients.id, recipientIds))
+    .returning({ id: notificationRecipients.id });
+
+  revalidateNotificationSurfaces();
+  return { ok: true, affectedCount: updated.length };
 }
+
+function getRecipientIds(formData: FormData) {
+  return Array.from(
+    new Set(
+      formData
+        .getAll("notificationIds")
+        .map((value) => String(value).trim())
+        .filter((value) => UUID_PATTERN.test(value)),
+    ),
+  ).slice(0, 100);
+}
+
+async function getAccessibleRecipients(recipientIds: string[]) {
+  const auth = await requirePermission("admin.access");
+  if (recipientIds.length === 0) return { auth, rows: [] };
+
+  const outletIds = auth.outlets.map((outlet) => outlet.id);
+  const rows = await db
+    .select({
+      id: notificationRecipients.id,
+      status: notificationRecipients.status,
+      eventResolvedAt: notificationEvents.resolvedAt,
+    })
+    .from(notificationRecipients)
+    .innerJoin(
+      notificationEvents,
+      eq(notificationRecipients.eventId, notificationEvents.id),
+    )
+    .where(
+      and(
+        inArray(notificationRecipients.id, recipientIds),
+        eq(notificationRecipients.userId, auth.user.id),
+        eq(notificationEvents.organizationId, auth.organization.id),
+        outletIds.length > 0
+          ? or(
+              isNull(notificationEvents.outletId),
+              inArray(notificationEvents.outletId, outletIds),
+            )
+          : isNull(notificationEvents.outletId),
+      ),
+    );
+
+  return { auth, rows };
+}
+
+export async function markNotificationsReadAction(
+  formData: FormData,
+): Promise<NotificationMutationResult> {
+  const recipientIds = getRecipientIds(formData);
+  const { auth, rows } = await getAccessibleRecipients(recipientIds);
+  const eligibleIds = rows
+    .filter((row) => row.status === "unread")
+    .map((row) => row.id);
+
+  if (eligibleIds.length === 0) {
+    return { ok: true, affectedCount: 0 };
+  }
+
+  const now = new Date();
+  const updated = await db
+    .update(notificationRecipients)
+    .set({ status: "read", readAt: now, updatedAt: now })
+    .where(
+      and(
+        inArray(notificationRecipients.id, eligibleIds),
+        eq(notificationRecipients.userId, auth.user.id),
+        eq(notificationRecipients.status, "unread"),
+      ),
+    )
+    .returning({ id: notificationRecipients.id });
+
+  revalidateNotificationSurfaces();
+  return { ok: true, affectedCount: updated.length };
+}
+
+export async function markNotificationsUnreadAction(
+  formData: FormData,
+): Promise<NotificationMutationResult> {
+  const recipientIds = getRecipientIds(formData);
+  const { auth, rows } = await getAccessibleRecipients(recipientIds);
+  const eligibleIds = rows
+    .filter(
+      (row) =>
+        row.eventResolvedAt == null &&
+        (row.status === "read" || row.status === "acknowledged"),
+    )
+    .map((row) => row.id);
+
+  if (eligibleIds.length === 0) {
+    return { ok: true, affectedCount: 0 };
+  }
+
+  const now = new Date();
+  const updated = await db
+    .update(notificationRecipients)
+    .set({
+      status: "unread",
+      readAt: null,
+      acknowledgedAt: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        inArray(notificationRecipients.id, eligibleIds),
+        eq(notificationRecipients.userId, auth.user.id),
+        inArray(notificationRecipients.status, ["read", "acknowledged"]),
+      ),
+    )
+    .returning({ id: notificationRecipients.id });
+
+  revalidateNotificationSurfaces();
+  return { ok: true, affectedCount: updated.length };
+}
+
+export async function archiveNotificationsAction(
+  formData: FormData,
+): Promise<NotificationMutationResult> {
+  const recipientIds = getRecipientIds(formData);
+  const { auth, rows } = await getAccessibleRecipients(recipientIds);
+  const eligibleIds = rows
+    .filter((row) => row.status !== "archived")
+    .map((row) => row.id);
+
+  if (eligibleIds.length === 0) {
+    return { ok: true, affectedCount: 0 };
+  }
+
+  const now = new Date();
+  const updated = await db
+    .update(notificationRecipients)
+    .set({ status: "archived", archivedAt: now, updatedAt: now })
+    .where(
+      and(
+        inArray(notificationRecipients.id, eligibleIds),
+        eq(notificationRecipients.userId, auth.user.id),
+        ne(notificationRecipients.status, "archived"),
+      ),
+    )
+    .returning({ id: notificationRecipients.id });
+
+  revalidateNotificationSurfaces();
+  return { ok: true, affectedCount: updated.length };
+}
+

@@ -35,6 +35,8 @@
     "check:notifications:v1a": "tsx scripts/check-notification-center-v1a.ts",
     "check:notifications:v1b": "tsx scripts/check-notification-center-v1b.ts",
     "check:notifications:v1c": "tsx scripts/check-notification-center-v1c.ts",
+    "check:notifications:v1d": "tsx scripts/check-notification-center-v1d.ts",
+    "check:notifications:v1e": "tsx scripts/check-notification-center-v1e.ts",
     "db:preflight:notifications:v1a": "tsx scripts/preflight-notification-center-v1a.ts",
     "db:repair:p1c2-history": "tsx scripts/repair-p1c2-migration-history.ts"
   },
