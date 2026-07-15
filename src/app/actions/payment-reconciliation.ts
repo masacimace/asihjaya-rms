@@ -12,6 +12,7 @@ import {
   payments,
   sales,
 } from "@/db/schema";
+import { syncPaymentReconciliationNotificationInTransaction } from "@/features/notifications/reconciliation";
 import type { ReconciliationStatus } from "@/features/reconciliation/contracts";
 import {
   hasPermission,
@@ -527,6 +528,22 @@ export async function savePaymentReconciliationAction(formData: FormData) {
           paymentId,
         },
         createdAt: now,
+      });
+
+
+      await syncPaymentReconciliationNotificationInTransaction(transaction, {
+        organizationId: current.organizationId,
+        outletId: current.outletId,
+        paymentId,
+        saleId: current.saleId,
+        status,
+        expectedAmount,
+        settlementGrossAmount,
+        differenceAmount,
+        settlementReference,
+        notes,
+        actorUserId: auth.user.id,
+        occurredAt: now,
       });
     });
   } catch (error) {

@@ -24,6 +24,8 @@ import {
   sales,
   shifts,
 } from "@/db/schema";
+import { publishSaleReversalCompletedNotificationInTransaction } from "@/features/notifications/approvals";
+import { publishReturnAwaitingReceiptNotificationInTransaction } from "@/features/notifications/returns";
 
 export type SaleReversalKind = "void" | "refund";
 
@@ -907,6 +909,37 @@ export async function executeApprovedSaleReversal(
       },
       createdAt: now,
     });
+
+    await publishSaleReversalCompletedNotificationInTransaction(tx, {
+      organizationId: input.organizationId,
+      outletId: sale.outletId,
+      approvalId: approval.id,
+      kind: input.kind,
+      requestedById: approval.requestedBy,
+      approvedById: approval.approvedBy,
+      executedById: input.actor.id,
+      saleId: sale.id,
+      invoiceNumber: sale.invoiceNumber,
+      totalAmount: saleTotalAmount,
+      cashRefundAmount: cashPaidAmount,
+      paymentRefundCount: insertedRefunds.length,
+      returnCaseId,
+      pendingReturnItemCount,
+      occurredAt: now,
+    });
+
+    if (input.kind === "refund" && returnCaseId) {
+      await publishReturnAwaitingReceiptNotificationInTransaction(tx, {
+        organizationId: input.organizationId,
+        outletId: sale.outletId,
+        returnCaseId,
+        saleId: sale.id,
+        invoiceNumber: sale.invoiceNumber,
+        itemCount: pendingReturnItemCount,
+        createdById: input.actor.id,
+        occurredAt: now,
+      });
+    }
 
     return {
       invoiceNumber: sale.invoiceNumber,

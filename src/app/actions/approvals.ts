@@ -15,6 +15,7 @@ import {
   type AdminApprovalActionState,
   type ApprovalStatus,
 } from "@/features/approvals/contracts";
+import { publishApprovalResolutionNotificationInTransaction } from "@/features/notifications/approvals";
 import { requirePermission, type AuthContext } from "@/lib/auth/session";
 
 const APPROVAL_DASHBOARD_PATH = "/admin/operasional/approval";
@@ -192,6 +193,21 @@ async function resolveApproval({
         requestData: approval.requestData,
         makerCheckerEnforced: true,
       },
+    });
+
+    await publishApprovalResolutionNotificationInTransaction(transaction, {
+      organizationId: approval.organizationId,
+      outletId: approval.outletId,
+      approvalId: approval.id,
+      approvalType: approval.type,
+      status: nextStatus,
+      requestedById: approval.requestedBy,
+      resolvedById: auth.user.id,
+      responseNotes: responseNotes || null,
+      referenceType: approval.referenceType,
+      referenceId: approval.referenceId,
+      requestData: approval.requestData,
+      occurredAt: now,
     });
 
     return { ok: true } as const;

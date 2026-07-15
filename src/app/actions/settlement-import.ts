@@ -32,6 +32,7 @@ import {
   suggestSettlementImportMapping,
   validateSettlementImportMapping,
 } from "@/features/reconciliation/csv-parser";
+import { syncSettlementImportCompletedNotificationInTransaction } from "@/features/notifications/reconciliation";
 import {
   createEmptySettlementImportMapping,
   settlementImportColumnKeys,
@@ -154,6 +155,41 @@ async function refreshBatchCounts(
       updatedAt: new Date(),
     })
     .where(eq(settlementImportBatches.id, batchId));
+
+  if (completedAt) {
+    const [batch] = await transaction
+      .select({
+        organizationId: settlementImportBatches.organizationId,
+        outletId: settlementImportBatches.outletId,
+        uploadedById: settlementImportBatches.uploadedBy,
+        fileName: settlementImportBatches.fileName,
+        rowCount: settlementImportBatches.rowCount,
+      })
+      .from(settlementImportBatches)
+      .where(eq(settlementImportBatches.id, batchId))
+      .limit(1);
+
+    if (!batch) {
+      throw new Error("Batch import tidak ditemukan saat membuat notifikasi.");
+    }
+
+    await syncSettlementImportCompletedNotificationInTransaction(transaction, {
+      organizationId: batch.organizationId,
+      outletId: batch.outletId,
+      batchId,
+      uploadedById: batch.uploadedById,
+      fileName: batch.fileName,
+      rowCount: batch.rowCount,
+      appliedCount: counts.appliedCount,
+      ambiguousCount: counts.ambiguousCount,
+      mismatchCount: counts.mismatchCount,
+      notFoundCount: counts.notFoundCount,
+      duplicateCount: counts.duplicateCount,
+      failedCount: counts.failedCount,
+      unresolvedCount: unresolved,
+      occurredAt: completedAt,
+    });
+  }
 
   return { ...counts, unresolved };
 }

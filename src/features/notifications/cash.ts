@@ -61,6 +61,7 @@ export async function notifyManualCashMovementCreated({
       organizationId,
       outletId,
       type: "cash",
+      eventType: "cash.manual_movement",
       severity: isLargeCashOut ? "warning" : isCashOut ? "info" : "success",
       title: isLargeCashOut
         ? "Kas keluar besar dicatat"
@@ -73,6 +74,9 @@ export async function notifyManualCashMovementCreated({
       entityType: "cash_movement",
       entityId: movementId,
       actionUrl: CASH_DASHBOARD_PATH,
+      requiresAction: isLargeCashOut,
+      deduplicationKey: `cash.manual_movement:${movementId}`,
+      recipientPermissionCodes: ["shifts.manage"],
       metadata: {
         shiftId,
         type,

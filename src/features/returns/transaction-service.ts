@@ -9,6 +9,10 @@ import {
   saleReturnItems,
   sales,
 } from "@/db/schema";
+import {
+  publishReturnCompletedNotificationInTransaction,
+  publishReturnPendingInspectionNotificationInTransaction,
+} from "@/features/notifications/returns";
 import type { ReturnInspectionDecision } from "@/features/returns/contracts";
 
 const WEIGHT_TOLERANCE_GRAM = 0.01;
@@ -313,6 +317,19 @@ export async function receiveSaleReturnItem(input: {
       },
       createdAt: now,
     });
+
+    if (nextReceivedCount >= caseRow.expectedItemCount) {
+      await publishReturnPendingInspectionNotificationInTransaction(tx, {
+        organizationId: input.organizationId,
+        outletId: row.outletId,
+        returnCaseId: row.returnCaseId,
+        saleId: row.saleId,
+        invoiceNumber: row.invoiceNumber,
+        itemCount: caseRow.expectedItemCount,
+        receivedById: input.actor.id,
+        occurredAt: now,
+      });
+    }
 
     return {
       invoiceNumber: row.invoiceNumber,
@@ -649,6 +666,9 @@ export async function inspectSaleReturnItem(input: {
     const rejectedItemCount = itemStatuses.filter(
       (item) => item.status === "rejected",
     ).length;
+    const attentionItemCount = itemStatuses.filter((item) =>
+      ["repair", "damaged", "rejected"].includes(item.status),
+    ).length;
     const allInspected = inspectedItemCount === itemStatuses.length;
     const nextCaseStatus = allInspected
       ? rejectedItemCount === itemStatuses.length
@@ -709,6 +729,20 @@ export async function inspectSaleReturnItem(input: {
       },
       createdAt: now,
     });
+
+    if (allInspected) {
+      await publishReturnCompletedNotificationInTransaction(tx, {
+        organizationId: input.organizationId,
+        outletId: row.outletId,
+        returnCaseId: row.returnCaseId,
+        saleId: row.saleId,
+        invoiceNumber: row.invoiceNumber,
+        itemCount: itemStatuses.length,
+        attentionItemCount,
+        completedById: input.actor.id,
+        occurredAt: now,
+      });
+    }
 
     return {
       invoiceNumber: row.invoiceNumber,

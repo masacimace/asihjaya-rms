@@ -321,62 +321,74 @@ export async function publishNotificationEvent(
   );
 }
 
-export async function resolveNotificationEventsByEntity({
-  organizationId,
-  category,
-  eventType,
-  entityType,
-  entityId,
-}: {
+export type ResolveNotificationEventsByEntityInput = {
   organizationId: string;
   category?: NotificationCategory;
   eventType?: string;
   entityType: string;
   entityId: string;
-}) {
-  return db.transaction(async (transaction) => {
-    const now = new Date();
-    const eventRows = await transaction
-      .select({ id: notificationEvents.id })
-      .from(notificationEvents)
-      .where(
-        and(
-          eq(notificationEvents.organizationId, organizationId),
-          category ? eq(notificationEvents.category, category) : undefined,
-          eventType ? eq(notificationEvents.eventType, eventType) : undefined,
-          eq(notificationEvents.entityType, entityType),
-          eq(notificationEvents.entityId, entityId),
-          isNull(notificationEvents.resolvedAt),
-        ),
-      );
+  resolvedAt?: Date;
+};
 
-    const eventIds = eventRows.map((row) => row.id);
-    if (eventIds.length === 0) return 0;
+export async function resolveNotificationEventsByEntityInTransaction(
+  transaction: NotificationTransaction,
+  {
+    organizationId,
+    category,
+    eventType,
+    entityType,
+    entityId,
+    resolvedAt = new Date(),
+  }: ResolveNotificationEventsByEntityInput,
+) {
+  const eventRows = await transaction
+    .select({ id: notificationEvents.id })
+    .from(notificationEvents)
+    .where(
+      and(
+        eq(notificationEvents.organizationId, organizationId),
+        category ? eq(notificationEvents.category, category) : undefined,
+        eventType ? eq(notificationEvents.eventType, eventType) : undefined,
+        eq(notificationEvents.entityType, entityType),
+        eq(notificationEvents.entityId, entityId),
+        isNull(notificationEvents.resolvedAt),
+      ),
+    );
 
-    await transaction
-      .update(notificationEvents)
-      .set({ resolvedAt: now, updatedAt: now })
-      .where(inArray(notificationEvents.id, eventIds));
+  const eventIds = eventRows.map((row) => row.id);
+  if (eventIds.length === 0) return 0;
 
-    await transaction
-      .update(notificationRecipients)
-      .set({
-        status: "resolved",
-        readAt: sql`coalesce(${notificationRecipients.readAt}, ${now})`,
-        resolvedAt: now,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          inArray(notificationRecipients.eventId, eventIds),
-          inArray(notificationRecipients.status, [
-            "unread",
-            "read",
-            "acknowledged",
-          ]),
-        ),
-      );
+  await transaction
+    .update(notificationEvents)
+    .set({ resolvedAt, updatedAt: resolvedAt })
+    .where(inArray(notificationEvents.id, eventIds));
 
-    return eventIds.length;
-  });
+  await transaction
+    .update(notificationRecipients)
+    .set({
+      status: "resolved",
+      readAt: sql`coalesce(${notificationRecipients.readAt}, ${resolvedAt})`,
+      resolvedAt,
+      updatedAt: resolvedAt,
+    })
+    .where(
+      and(
+        inArray(notificationRecipients.eventId, eventIds),
+        inArray(notificationRecipients.status, [
+          "unread",
+          "read",
+          "acknowledged",
+        ]),
+      ),
+    );
+
+  return eventIds.length;
+}
+
+export async function resolveNotificationEventsByEntity(
+  input: ResolveNotificationEventsByEntityInput,
+) {
+  return db.transaction((transaction) =>
+    resolveNotificationEventsByEntityInTransaction(transaction, input),
+  );
 }

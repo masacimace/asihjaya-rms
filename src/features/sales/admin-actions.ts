@@ -37,6 +37,7 @@ import {
   type DeliveryAnswer,
   type PaymentAnswer,
 } from "@/features/sales/correction-eligibility";
+import { publishApprovalExecutionFailedNotification } from "@/features/notifications/approvals";
 import {
   executeApprovedSaleReversal,
   SaleReversalTransactionError,
@@ -621,6 +622,49 @@ async function executeApprovedSaleReversalAction({
       approvalId,
       error,
     });
+
+    try {
+      const [failureContext] = await db
+        .select({
+          outletId: sales.outletId,
+          invoiceNumber: sales.invoiceNumber,
+          requestedById: approvals.requestedBy,
+          approvedById: approvals.approvedBy,
+        })
+        .from(approvals)
+        .innerJoin(sales, eq(approvals.referenceId, sales.id))
+        .where(
+          and(
+            eq(approvals.id, approvalId),
+            eq(approvals.organizationId, auth.organization.id),
+            eq(approvals.referenceType, "sale"),
+            eq(sales.id, saleId),
+            eq(sales.organizationId, auth.organization.id),
+          ),
+        )
+        .limit(1);
+
+      if (failureContext) {
+        await publishApprovalExecutionFailedNotification({
+          organizationId: auth.organization.id,
+          outletId: failureContext.outletId,
+          approvalId,
+          kind,
+          requestedById: failureContext.requestedById,
+          approvedById: failureContext.approvedById,
+          executedById: auth.user.id,
+          saleId,
+          invoiceNumber: failureContext.invoiceNumber,
+          errorMessage: message,
+        });
+      }
+    } catch (notificationError) {
+      console.error("Failed to create reversal execution failure notification", {
+        saleId,
+        approvalId,
+        notificationError,
+      });
+    }
 
     redirectAdminSaleDetailWithFeedback({
       saleId,
