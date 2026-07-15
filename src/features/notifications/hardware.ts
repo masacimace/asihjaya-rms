@@ -2,13 +2,20 @@ import { and, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import { hardwareAgents, hardwareJobs, outlets } from "@/db/schema";
-import { createAdminNotification, markUnreadNotificationsReadByEntity } from "@/features/notifications/mutations";
+import {
+  createAdminNotification,
+  markUnreadNotificationsReadByEntity,
+} from "@/features/notifications/mutations";
+import { resolveNotificationEventsByEntity } from "@/features/notifications/event-service";
 import type { AuthContext } from "@/lib/auth/session";
 
 const HARDWARE_DASHBOARD_PATH = "/admin/operasional/hardware";
 const DEFAULT_AGENT_STALE_MINUTES = 5;
 const MIN_AGENT_STALE_MINUTES = 1;
 const MAX_AGENT_STALE_MINUTES = 120;
+const DEFAULT_ANTI_SPAM_WINDOW_MINUTES = 15;
+const MIN_ANTI_SPAM_WINDOW_MINUTES = 1;
+const MAX_ANTI_SPAM_WINDOW_MINUTES = 120;
 
 type HardwareJobNotificationInput = {
   organizationId: string;
@@ -32,6 +39,23 @@ type HardwareAgentOfflineInput = {
   reason?: "reported_offline" | "stale_heartbeat";
 };
 
+function getAntiSpamWindowMinutes() {
+  const value = Number(process.env.NOTIFICATION_ANTI_SPAM_WINDOW_MINUTES);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return DEFAULT_ANTI_SPAM_WINDOW_MINUTES;
+  }
+
+  return Math.min(
+    MAX_ANTI_SPAM_WINDOW_MINUTES,
+    Math.max(MIN_ANTI_SPAM_WINDOW_MINUTES, Math.floor(value)),
+  );
+}
+
+function getTimeBucket(date: Date, windowMinutes: number) {
+  return Math.floor(date.getTime() / (windowMinutes * 60_000));
+}
+
 function getConfiguredAgentStaleMinutes() {
   const value = Number(process.env.HARDWARE_AGENT_STALE_MINUTES);
 
@@ -43,6 +67,21 @@ function getConfiguredAgentStaleMinutes() {
     MAX_AGENT_STALE_MINUTES,
     Math.max(MIN_AGENT_STALE_MINUTES, Math.floor(value)),
   );
+}
+
+
+function getHardwareFailureGroupId({
+  outletId,
+  registerId,
+  agentId,
+  deviceType,
+}: {
+  outletId: string;
+  registerId?: string | null;
+  agentId?: string | null;
+  deviceType: string;
+}) {
+  return `${agentId ?? registerId ?? outletId}:${deviceType}`.slice(0, 160);
 }
 
 function formatRelativeLastSeen(lastSeenAt?: Date | null) {
@@ -83,6 +122,12 @@ export async function createHardwareJobFailedNotification({
 }: HardwareJobNotificationInput) {
   const label = getHardwareJobLabel(jobType);
   const safeError = error?.trim() ? error.trim().slice(0, 180) : null;
+  const failureGroupId = getHardwareFailureGroupId({
+    outletId,
+    registerId,
+    agentId,
+    deviceType,
+  });
 
   await createAdminNotification({
     organizationId,
@@ -94,13 +139,14 @@ export async function createHardwareJobFailedNotification({
     message: safeError
       ? `${label} gagal. ${safeError}`
       : `${label} gagal diproses. Cek status agent dan printer di Hardware Hub.`,
-    entityType: "hardware_job",
-    entityId: jobId,
+    entityType: "hardware_failure_group",
+    entityId: failureGroupId,
     actionUrl: HARDWARE_DASHBOARD_PATH,
     requiresAction: true,
-    deduplicationKey: `hardware.job_failed:${jobId}`,
+    deduplicationKey: `hardware.job_failed:${failureGroupId}`,
     recipientPermissionCodes: ["admin.access"],
     metadata: {
+      latestJobId: jobId,
       jobType,
       deviceType,
       registerId,
@@ -108,8 +154,59 @@ export async function createHardwareJobFailedNotification({
       source,
       error: safeError,
     },
+    antiSpam: {
+      mode: "aggregate",
+      occurrenceId: jobId,
+      reNotifyRecipients: true,
+    },
     dedupeUnread: true,
   });
+}
+
+export async function markHardwareJobFailureResolved({
+  organizationId,
+  outletId,
+  registerId = null,
+  agentId = null,
+  jobId,
+  deviceType,
+  resolvedAt = new Date(),
+}: {
+  organizationId: string;
+  outletId: string;
+  registerId?: string | null;
+  agentId?: string | null;
+  jobId: string;
+  deviceType: string;
+  resolvedAt?: Date;
+}) {
+  const failureGroupId = getHardwareFailureGroupId({
+    outletId,
+    registerId,
+    agentId,
+    deviceType,
+  });
+
+  const [groupCount, legacyCount] = await Promise.all([
+    resolveNotificationEventsByEntity({
+      organizationId,
+      category: "hardware",
+      eventType: "hardware.job_failed",
+      entityType: "hardware_failure_group",
+      entityId: failureGroupId,
+      resolvedAt,
+    }),
+    resolveNotificationEventsByEntity({
+      organizationId,
+      category: "hardware",
+      eventType: "hardware.job_failed",
+      entityType: "hardware_job",
+      entityId: jobId,
+      resolvedAt,
+    }),
+  ]);
+
+  return groupCount + legacyCount;
 }
 
 export async function createHardwareAgentOfflineNotification({
@@ -295,6 +392,14 @@ export async function notifyRecoveredHardwareJobs({
     return;
   }
 
+  const occurredAt = new Date();
+  const antiSpamWindowMinutes = getAntiSpamWindowMinutes();
+  const recoveryBucket = getTimeBucket(occurredAt, antiSpamWindowMinutes);
+  const occurrenceId = [...requeuedJobIds, ...failedJobIds]
+    .sort()
+    .join(":")
+    .slice(0, 180);
+
   await createAdminNotification({
     organizationId,
     type: "hardware",
@@ -303,15 +408,22 @@ export async function notifyRecoveredHardwareJobs({
     title: "Hardware job macet dipulihkan",
     message: `${requeuedJobIds.length} job masuk ulang antrean dan ${failedJobIds.length} job ditandai gagal setelah macet lebih dari ${staleMinutes} menit.`,
     entityType: "hardware_recovery",
-    entityId: `${reason}-${Date.now()}`,
+    entityId: `${reason}:${recoveryBucket}`,
     actionUrl: HARDWARE_DASHBOARD_PATH,
-    requiresAction: failedJobIds.length > 0,
+    requiresAction: false,
+    deduplicationKey: `hardware.jobs_recovered:${reason}:${recoveryBucket}`,
     recipientPermissionCodes: ["admin.access"],
+    antiSpam: {
+      mode: "aggregate",
+      occurrenceId: occurrenceId || `${reason}:${occurredAt.toISOString()}`,
+      reNotifyRecipients: false,
+    },
     metadata: {
       reason,
       requeuedJobIds,
       failedJobIds,
       staleMinutes,
+      antiSpamWindowMinutes,
     },
   });
 

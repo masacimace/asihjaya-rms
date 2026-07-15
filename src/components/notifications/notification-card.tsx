@@ -73,6 +73,9 @@ const DETAIL_LABELS: Record<string, string> = {
   fileName: "File",
   invoiceNumber: "Invoice",
   itemCount: "Jumlah item",
+  occurrenceCount: "Jumlah kejadian",
+  firstOccurredAt: "Pertama terjadi",
+  lastOccurredAt: "Terakhir terjadi",
   jobType: "Jenis job",
   mismatchCount: "Mismatch",
   notFoundCount: "Tidak ditemukan",
@@ -122,6 +125,9 @@ const DETAIL_PRIORITY = [
   "discountAmount",
   "cashRefundAmount",
   "itemCount",
+  "occurrenceCount",
+  "firstOccurredAt",
+  "lastOccurredAt",
   "attentionItemCount",
   "pendingReturnItemCount",
   "totalWeightGram",
@@ -202,6 +208,12 @@ function formatDetailValue(key: string, value: unknown) {
   if (value == null || value === "") return null;
 
   if (MONEY_KEYS.has(key)) return formatIdr(value);
+
+  if (key === "firstOccurredAt" || key === "lastOccurredAt") {
+    if (typeof value !== "string") return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : formatDateTime(value);
+  }
 
   if (key === "totalWeightGram") {
     const weight = Number(value);
@@ -405,6 +417,9 @@ export function NotificationCard({
   const Icon = meta.icon;
   const details = getNotificationDetails(notification);
   const payments = getPaymentDetails(notification);
+  const occurrenceCount = Number(notification.payload.occurrenceCount);
+  const hasAggregatedOccurrences =
+    Number.isFinite(occurrenceCount) && occurrenceCount > 1;
   const isResolved =
     notification.status === "resolved" || notification.resolvedAtIso != null;
 
@@ -471,6 +486,11 @@ export function NotificationCard({
             {notification.isActionable ? (
               <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800">
                 Perlu tindakan
+              </span>
+            ) : null}
+            {hasAggregatedOccurrences ? (
+              <span className="rounded-full bg-blue-100 px-2 py-1 text-[10px] font-bold text-blue-800">
+                {occurrenceCount} kejadian
               </span>
             ) : null}
             {isResolved ? (

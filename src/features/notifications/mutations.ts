@@ -1,4 +1,5 @@
 import type {
+  NotificationAntiSpamOptions,
   NotificationSeverity,
   NotificationType,
 } from "@/features/notifications/contracts";
@@ -28,6 +29,7 @@ type CreateAdminNotificationInput = {
   requiresAction?: boolean;
   recipientPermissionCodes?: string[];
   excludeUserIds?: string[];
+  antiSpam?: NotificationAntiSpamOptions;
 };
 
 function createLegacyDedupeKey({
@@ -73,6 +75,7 @@ export async function createAdminNotification({
   requiresAction = false,
   recipientPermissionCodes,
   excludeUserIds,
+  antiSpam,
 }: CreateAdminNotificationInput) {
   const resolvedEventType = (
     eventType ?? `${type}.${entityType ?? "general"}`
@@ -104,6 +107,7 @@ export async function createAdminNotification({
             title,
           })
         : null),
+    antiSpam,
     recipients: userId
       ? {
           userIds: [userId],

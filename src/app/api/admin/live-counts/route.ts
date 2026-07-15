@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { approvals, notificationEvents, notificationRecipients } from "@/db/schema";
 import { getVisibleApprovalTypes } from "@/features/approvals/authorization";
+import { runNotificationMaintenanceForOrganization } from "@/features/notifications/maintenance";
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
@@ -19,6 +20,8 @@ export async function GET() {
   if (!hasPermission(auth, "admin.access")) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
+
+  await runNotificationMaintenanceForOrganization(auth.organization.id);
 
   const outletIds = auth.outlets.map((outlet) => outlet.id);
   const notificationOutletCondition = outletIds.length > 0

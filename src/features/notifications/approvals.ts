@@ -271,6 +271,7 @@ export function publishApprovalExecutionFailedNotification(
   input: ApprovalExecutionFailedNotificationInput,
 ) {
   const isRefund = input.kind === "refund";
+  const occurredAt = input.occurredAt ?? new Date();
   const recipientIds = [
     input.requestedById,
     input.approvedById,
@@ -290,7 +291,12 @@ export function publishApprovalExecutionFailedNotification(
     actionUrl: `/admin/penjualan/${input.saleId}`,
     requiresAction: true,
     deduplicationKey: `approval.execution_failed:${input.approvalId}`,
-    occurredAt: input.occurredAt ?? new Date(),
+    occurredAt,
+    antiSpam: {
+      mode: "aggregate",
+      occurrenceId: `${input.executedById ?? "system"}:${occurredAt.toISOString()}`,
+      reNotifyRecipients: true,
+    },
     recipients: {
       userIds: recipientIds,
       requiredAnyPermissionCodes: [

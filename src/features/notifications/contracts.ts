@@ -21,6 +21,15 @@ export type NotificationRecipientStatus =
 
 export type NotificationDrawerFilter = "all" | "actionable" | "unread";
 
+export type NotificationAntiSpamOptions = {
+  /** Keep the existing active event and ignore an idempotent duplicate. */
+  mode?: "dedupe" | "aggregate";
+  /** Stable occurrence identifier used to avoid counting the same retry twice. */
+  occurrenceId?: string | null;
+  /** Re-open recipient rows when a genuinely new occurrence is aggregated. */
+  reNotifyRecipients?: boolean;
+};
+
 export type NotificationRecipientTarget = {
   /** Explicit recipients, still restricted to the same organization/outlet. */
   userIds?: string[];
@@ -50,6 +59,7 @@ export type PublishNotificationEventInput = {
   deduplicationKey?: string | null;
   occurredAt?: Date;
   recipients?: NotificationRecipientTarget;
+  antiSpam?: NotificationAntiSpamOptions;
 };
 
 export type PublishedNotificationEvent = {

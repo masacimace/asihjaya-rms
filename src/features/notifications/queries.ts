@@ -31,6 +31,7 @@ import {
   type AdminNotificationRow,
 } from "@/features/notifications/contracts";
 import { syncHardwareAgentHealthNotifications } from "@/features/notifications/hardware";
+import { runNotificationMaintenanceForOrganization } from "@/features/notifications/maintenance";
 import type { AuthContext } from "@/lib/auth/session";
 
 const ACTIONABLE_RECIPIENT_STATUSES = [
@@ -117,6 +118,7 @@ export async function getAdminNotificationDrawerData(
   auth: AuthContext,
 ): Promise<AdminNotificationDrawerData> {
   await syncHardwareAgentHealthNotifications(auth);
+  await runNotificationMaintenanceForOrganization(auth.organization.id);
 
   const baseCondition = getAccessibleNotificationCondition(auth);
 
@@ -402,6 +404,7 @@ export async function getAdminNotificationPageData(
   filters: AdminNotificationFilters,
 ): Promise<AdminNotificationPageData> {
   await syncHardwareAgentHealthNotifications(auth);
+  await runNotificationMaintenanceForOrganization(auth.organization.id);
 
   const { conditions, periodLabel } = createNotificationPageBaseConditions({
     auth,

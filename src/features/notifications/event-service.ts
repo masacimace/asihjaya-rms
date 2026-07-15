@@ -26,6 +26,79 @@ const EVENT_TYPE_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_RECIPIENTS_PER_EVENT = 500;
+const MAX_TRACKED_OCCURRENCE_IDS = 50;
+
+const severityRank = {
+  info: 0,
+  success: 1,
+  warning: 2,
+  critical: 3,
+} as const;
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getHigherSeverity<
+  T extends keyof typeof severityRank,
+>(current: T, incoming: T): T {
+  return severityRank[incoming] > severityRank[current] ? incoming : current;
+}
+
+function buildAggregatedPayload({
+  existingPayload,
+  incomingPayload,
+  existingOccurredAt,
+  incomingOccurredAt,
+  occurrenceId,
+}: {
+  existingPayload: Record<string, unknown>;
+  incomingPayload: Record<string, unknown>;
+  existingOccurredAt: Date;
+  incomingOccurredAt: Date;
+  occurrenceId: string | null;
+}) {
+  const trackedOccurrenceIds = Array.isArray(existingPayload.occurrenceIds)
+    ? existingPayload.occurrenceIds.filter(
+        (value): value is string => typeof value === "string" && value.length > 0,
+      )
+    : [];
+  const isDuplicateOccurrence = Boolean(
+    occurrenceId && trackedOccurrenceIds.includes(occurrenceId),
+  );
+
+  if (isDuplicateOccurrence) {
+    return { payload: existingPayload, isNewOccurrence: false };
+  }
+
+  const currentCount = Number(existingPayload.occurrenceCount);
+  const nextCount =
+    Number.isFinite(currentCount) && currentCount > 0 ? currentCount + 1 : 2;
+  const nextOccurrenceIds = occurrenceId
+    ? [...trackedOccurrenceIds, occurrenceId].slice(-MAX_TRACKED_OCCURRENCE_IDS)
+    : trackedOccurrenceIds;
+
+  return {
+    payload: {
+      ...existingPayload,
+      ...incomingPayload,
+      aggregated: true,
+      occurrenceCount: nextCount,
+      firstOccurredAt:
+        typeof existingPayload.firstOccurredAt === "string"
+          ? existingPayload.firstOccurredAt
+          : existingOccurredAt.toISOString(),
+      lastOccurredAt: incomingOccurredAt.toISOString(),
+      ...(nextOccurrenceIds.length > 0
+        ? { occurrenceIds: nextOccurrenceIds }
+        : {}),
+      ...(occurrenceId ? { latestOccurrenceId: occurrenceId } : {}),
+    },
+    isNewOccurrence: true,
+  };
+}
 
 function uniqueValidUuids(values: string[] | undefined) {
   return [...new Set((values ?? []).map((value) => value.trim()))].filter(
@@ -76,6 +149,12 @@ function normalizeInput(input: PublishNotificationEventInput) {
     payload: input.payload ?? {},
     deduplicationKey,
     occurredAt: input.occurredAt ?? new Date(),
+    antiSpam: {
+      mode: input.antiSpam?.mode ?? "dedupe",
+      occurrenceId:
+        input.antiSpam?.occurrenceId?.trim().slice(0, 180) || null,
+      reNotifyRecipients: input.antiSpam?.reNotifyRecipients ?? false,
+    },
   };
 }
 
@@ -227,7 +306,13 @@ export async function publishNotificationEventInTransaction(
     );
 
     const [existing] = await transaction
-      .select({ id: notificationEvents.id })
+      .select({
+        id: notificationEvents.id,
+        payload: notificationEvents.payload,
+        occurredAt: notificationEvents.occurredAt,
+        severity: notificationEvents.severity,
+        requiresAction: notificationEvents.requiresAction,
+      })
       .from(notificationEvents)
       .where(
         and(
@@ -243,6 +328,36 @@ export async function publishNotificationEventInTransaction(
         transaction,
         input,
       );
+      const now = new Date();
+      let isNewOccurrence = false;
+
+      if (input.antiSpam.mode === "aggregate") {
+        const aggregated = buildAggregatedPayload({
+          existingPayload: asRecord(existing.payload),
+          incomingPayload: asRecord(input.payload),
+          existingOccurredAt: existing.occurredAt,
+          incomingOccurredAt: input.occurredAt,
+          occurrenceId: input.antiSpam.occurrenceId,
+        });
+        isNewOccurrence = aggregated.isNewOccurrence;
+
+        if (isNewOccurrence) {
+          await transaction
+            .update(notificationEvents)
+            .set({
+              severity: getHigherSeverity(existing.severity, input.severity),
+              title: input.title,
+              summary: input.summary,
+              actionUrl: input.actionUrl,
+              requiresAction: existing.requiresAction || input.requiresAction,
+              payload: aggregated.payload,
+              occurredAt: input.occurredAt,
+              updatedAt: now,
+            })
+            .where(eq(notificationEvents.id, existing.id));
+        }
+      }
+
       if (recipientUserIds.length > 0) {
         await transaction
           .insert(notificationRecipients)
@@ -251,9 +366,39 @@ export async function publishNotificationEventInTransaction(
               eventId: existing.id,
               userId,
               status: "unread" as const,
+              createdAt: now,
+              updatedAt: now,
             })),
           )
           .onConflictDoNothing();
+
+        if (
+          isNewOccurrence &&
+          input.antiSpam.reNotifyRecipients
+        ) {
+          await transaction
+            .update(notificationRecipients)
+            .set({
+              status: "unread",
+              readAt: null,
+              acknowledgedAt: null,
+              resolvedAt: null,
+              archivedAt: null,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(notificationRecipients.eventId, existing.id),
+                inArray(notificationRecipients.userId, recipientUserIds),
+                inArray(notificationRecipients.status, [
+                  "read",
+                  "acknowledged",
+                  "resolved",
+                  "archived",
+                ]),
+              ),
+            );
+        }
       }
 
       return {
@@ -284,7 +429,22 @@ export async function publishNotificationEventInTransaction(
       entityId: input.entityId,
       actionUrl: input.actionUrl,
       requiresAction: input.requiresAction,
-      payload: input.payload,
+      payload:
+        input.antiSpam.mode === "aggregate"
+          ? {
+              ...asRecord(input.payload),
+              aggregated: true,
+              occurrenceCount: 1,
+              firstOccurredAt: input.occurredAt.toISOString(),
+              lastOccurredAt: input.occurredAt.toISOString(),
+              ...(input.antiSpam.occurrenceId
+                ? {
+                    occurrenceIds: [input.antiSpam.occurrenceId],
+                    latestOccurrenceId: input.antiSpam.occurrenceId,
+                  }
+                : {}),
+            }
+          : input.payload,
       deduplicationKey: input.deduplicationKey,
       occurredAt: input.occurredAt,
       createdAt: now,
