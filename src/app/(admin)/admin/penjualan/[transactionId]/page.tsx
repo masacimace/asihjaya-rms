@@ -41,6 +41,10 @@ import { SaleSensitiveActionsCard } from "@/components/sales/sale-sensitive-acti
 
 import { ReprintSubmitButton } from "./reprint-button";
 
+export const metadata = {
+  title: "Detail Transaksi",
+};
+
 export const runtime = "nodejs";
 
 const UUID_PATTERN =

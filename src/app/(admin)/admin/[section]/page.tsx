@@ -1,5 +1,9 @@
 import { notFound } from "next/navigation";
 
+export const metadata = {
+  title: "Admin",
+};
+
 const sectionNames: Record<string, string> = {
   penjualan: "Penjualan",
   inventaris: "Inventaris",

@@ -26,6 +26,10 @@ import {
 } from "@/features/products/category-queries";
 import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Kategori Produk",
+};
+
 function buildCategoryListUrl(
   page: number,
   filters: {

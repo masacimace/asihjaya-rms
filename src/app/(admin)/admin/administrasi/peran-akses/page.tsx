@@ -14,6 +14,10 @@ import { getAdministrationAccess } from "@/features/administration/access";
 import { getRolesWithPermissions } from "@/features/administration/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Peran & Akses",
+};
+
 const summaryToneClassName = {
   amber: "bg-[var(--accent-soft)] text-[var(--accent)] ring-amber-100",
   emerald: "bg-emerald-50 text-emerald-700 ring-emerald-100",

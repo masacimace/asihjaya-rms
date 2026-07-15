@@ -12,6 +12,10 @@ import { getAdministrationAccess } from "@/features/administration/access";
 import { getOutletsWithRegisters } from "@/features/administration/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Register",
+};
+
 export default async function RegisterPage() {
   const auth = await requirePermission("outlets.manage");
   const administrationAccess = getAdministrationAccess(auth);

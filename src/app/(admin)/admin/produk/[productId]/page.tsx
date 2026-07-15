@@ -22,6 +22,10 @@ import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 import { getImageUrl } from "@/lib/storage/image-storage";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Detail Produk",
+};
+
 const statusLabels = {
   draft: "Draft",
   active: "Aktif",

@@ -12,6 +12,10 @@ import { CreateRoleForm } from "@/components/administration/role-form";
 import { getPermissionCatalog } from "@/features/administration/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Tambah Peran",
+};
+
 export default async function CreateRolePage() {
   await requirePermission("roles.manage");
 

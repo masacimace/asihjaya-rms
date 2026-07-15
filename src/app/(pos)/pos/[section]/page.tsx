@@ -1,3 +1,7 @@
+export const metadata = {
+  title: "POS",
+};
+
 const sectionNames: Record<string, string> = {
   transaksi: "Transaksi",
   pelanggan: "Pelanggan",

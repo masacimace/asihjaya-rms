@@ -17,6 +17,10 @@ import { getSettlementImportSetupData } from "@/features/reconciliation/import-q
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Import Settlement",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

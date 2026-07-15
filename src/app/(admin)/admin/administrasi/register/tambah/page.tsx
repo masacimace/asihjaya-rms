@@ -10,6 +10,10 @@ import { CreateRegisterForm } from "@/components/administration/outlet-register-
 import { getRegisterOutletOptions } from "@/features/administration/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Tambah Register",
+};
+
 export default async function CreateRegisterPage({
   searchParams,
 }: {

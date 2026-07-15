@@ -2,6 +2,10 @@ import { HeldCartsClient } from "@/components/pos/held-carts-client";
 import { getPosHeldCartListData } from "@/features/pos/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Transaksi Ditahan",
+};
+
 export const runtime = "nodejs";
 
 type PageProps = {

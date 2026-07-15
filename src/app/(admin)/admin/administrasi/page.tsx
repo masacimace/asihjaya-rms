@@ -16,6 +16,10 @@ import { getAdministrationAccess } from "@/features/administration/access";
 import { getAdministrationOverview } from "@/features/administration/queries";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Administrasi",
+};
+
 const summaryCards = [
   {
     key: "activeStaff",

@@ -3,6 +3,10 @@ import { LogOut, ShieldX } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import { getCurrentAuth } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Akses Ditolak",
+};
+
 export default async function AccessDeniedPage() {
   const auth = await getCurrentAuth();
 

@@ -11,6 +11,10 @@ import { ProductMasterForm } from "@/components/products/product-master-form";
 import { getProductMasterCategoryOptions } from "@/features/products/product-master-queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Tambah Produk",
+};
+
 export default async function CreateProductMasterPage() {
   const auth = await requirePermission("products.manage");
   const categories = await getProductMasterCategoryOptions(

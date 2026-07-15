@@ -3,6 +3,10 @@ import Link from "next/link";
 
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Preview Nota",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

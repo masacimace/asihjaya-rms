@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: {
     default: "Asihjaya RMS",
-    template: "%s | Asihjaya RMS",
+    template: "Asihjaya - %s",
   },
   description: "Sistem retail jewelry Asihjaya.",
 };

@@ -5,6 +5,10 @@ import { ReceiptCertificateHtmlDocument } from "@/features/sales/documents/recei
 import { receiptCertificateSampleData } from "@/features/sales/documents/receipt-certificate-sample-data";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Preview Nota HTML",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

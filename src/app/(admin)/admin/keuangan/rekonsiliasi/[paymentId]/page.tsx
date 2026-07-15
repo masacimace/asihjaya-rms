@@ -27,6 +27,10 @@ import { getPaymentEvidenceUrl } from "@/lib/storage/payment-evidence-storage";
 import { getReconciliationEvidenceUrl } from "@/lib/storage/reconciliation-evidence-storage";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Detail Rekonsiliasi",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

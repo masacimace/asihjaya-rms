@@ -16,6 +16,10 @@ import { getAdministrationAccess } from "@/features/administration/access";
 import { getOutletsWithRegisters } from "@/features/administration/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Outlet",
+};
+
 function getSafeGoogleMapsEmbedUrl(value: string | null) {
   if (!value) {
     return null;

@@ -20,6 +20,10 @@ import { EditOutletForm } from "@/components/administration/outlet-register-form
 import { getOutletDetail } from "@/features/administration/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Detail Outlet",
+};
+
 export default async function OutletDetailPage({
   params,
   searchParams,

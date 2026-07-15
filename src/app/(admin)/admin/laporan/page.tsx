@@ -34,6 +34,10 @@ import { getReportSummaryData } from "@/features/reports/queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Laporan Outlet",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

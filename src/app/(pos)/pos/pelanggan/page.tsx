@@ -25,6 +25,10 @@ import { getPosCustomerListData } from "@/features/pos/queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Pelanggan POS",
+};
+
 export const runtime = "nodejs";
 
 type PageProps = {

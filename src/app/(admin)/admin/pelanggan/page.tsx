@@ -30,6 +30,10 @@ import { getAdminCustomerListData } from "@/features/customers/queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Pelanggan",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

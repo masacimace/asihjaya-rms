@@ -36,6 +36,10 @@ import {
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Pergerakan Kas",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -223,13 +227,15 @@ function SummaryCard({
         <div className="min-w-0">
           <p
             className={cn(
-              "text-xs font-semibold uppercase",
+              "text-xs font-semibold uppercase tracking-wide",
               tone === "dark" ? "text-white/55" : "text-[var(--muted)]",
             )}
           >
             {title}
           </p>
-          <p className="mt-3 truncate text-2xl font-semibold">{value}</p>
+          <p className="mt-3 truncate text-2xl font-semibold tracking-tight">
+            {value}
+          </p>
           <p
             className={cn(
               "mt-2 text-xs leading-5",
@@ -375,7 +381,7 @@ export default async function KasPage({ searchParams }: PageProps) {
               Kembali ke Dashboard
             </Link>
 
-            <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
+            <h1 className="mt-4 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
               Pergerakan Kas
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-neutral-600">
@@ -389,7 +395,7 @@ export default async function KasPage({ searchParams }: PageProps) {
               <p className="text-xs font-semibold uppercase">Periode aktif</p>
               <CalendarDays className="size-4" />
             </div>
-            <p className="mt-2 text-xl font-semibold text-neutral-950">
+            <p className="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
               {data.periodLabel}
             </p>
             <p className="mt-1 text-xs leading-5 text-neutral-500">

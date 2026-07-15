@@ -18,6 +18,10 @@ import { getPosShiftOverviewData } from "@/features/pos/queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Shift POS",
+};
+
 export const runtime = "nodejs";
 
 const paymentMethodLabels: Record<string, string> = {

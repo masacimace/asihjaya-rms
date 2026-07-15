@@ -28,6 +28,10 @@ import { getReconciliationListData } from "@/features/reconciliation/queries";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Rekonsiliasi Pembayaran",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -245,11 +249,9 @@ function MobileRow({ row }: { row: ReconciliationListRow }) {
 
       <Link
         href={`/admin/keuangan/rekonsiliasi/${row.paymentId}`}
-        className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800"
+        className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
       >
-        {row.settlementStatus === "unreconciled"
-          ? "Periksa payment"
-          : "Buka detail"}
+        {row.settlementStatus === "unreconciled" ? "Periksa payment" : "Buka detail"}
         <ArrowRight className="size-4" />
       </Link>
     </article>
@@ -272,7 +274,7 @@ export default async function PaymentReconciliationPage({
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
-        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-start lg:p-7">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-end lg:p-7">
           <div>
             <Link
               href="/admin"
@@ -311,7 +313,7 @@ export default async function PaymentReconciliationPage({
             {canImportSettlement ? (
               <Link
                 href="/admin/keuangan/rekonsiliasi/import"
-                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800"
+                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
               >
                 <FileUp className="size-4" />
                 Import settlement CSV
@@ -492,10 +494,7 @@ export default async function PaymentReconciliationPage({
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
                   {data.rows.map((row) => (
-                    <tr
-                      key={row.paymentId}
-                      className="align-top hover:bg-neutral-50/70"
-                    >
+                    <tr key={row.paymentId} className="align-top hover:bg-neutral-50/70">
                       <td className="px-5 py-4">
                         <Link
                           href={`/admin/penjualan/${row.saleId}`}

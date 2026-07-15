@@ -27,6 +27,10 @@ import {
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Transaksi POS",
+};
+
 export const runtime = "nodejs";
 
 type PageProps = {

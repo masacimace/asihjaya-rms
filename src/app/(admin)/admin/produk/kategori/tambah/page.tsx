@@ -13,6 +13,10 @@ import { isUuid } from "@/features/products/category-contracts";
 import { getCategoryParentOptions } from "@/features/products/category-queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Tambah Kategori",
+};
+
 export default async function CreateProductCategoryPage({
   searchParams,
 }: {

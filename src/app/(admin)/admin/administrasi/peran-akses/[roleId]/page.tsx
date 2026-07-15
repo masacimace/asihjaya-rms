@@ -20,6 +20,10 @@ import {
 } from "@/features/administration/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Detail Peran",
+};
+
 export default async function RoleDetailPage({
   params,
   searchParams,

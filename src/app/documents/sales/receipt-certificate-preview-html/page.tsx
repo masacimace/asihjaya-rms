@@ -5,6 +5,10 @@ import { receiptCertificateSampleData } from "@/features/sales/documents/receipt
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
 
+export const metadata = {
+  title: "Preview Nota & Sertifikat",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

@@ -17,6 +17,10 @@ import { getStaffList } from "@/features/administration/queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Staff",
+};
+
 const statusLabels = {
   active: "Aktif",
   inactive: "Nonaktif",

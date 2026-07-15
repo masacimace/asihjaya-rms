@@ -14,6 +14,10 @@ import { getShiftDashboard } from "@/features/shifts/queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Shift Kasir",
+};
+
 export const runtime = "nodejs";
 
 type PageProps = {
@@ -123,7 +127,7 @@ function SummaryCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-sm font-medium text-[var(--muted)]">{title}</p>
-          <p className="mt-2 text-2xl font-semibold text-neutral-950">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-neutral-950">
             {value}
           </p>
           <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{helper}</p>

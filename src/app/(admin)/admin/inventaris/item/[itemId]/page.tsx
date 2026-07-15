@@ -35,6 +35,10 @@ import { cn } from "@/lib/utils";
 
 import { PrintLabelButton } from "./print-button";
 
+export const metadata = {
+  title: "Detail Item Inventaris",
+};
+
 const availabilityLabels = {
   draft: "Draft",
   available: "Tersedia",

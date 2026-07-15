@@ -24,6 +24,10 @@ import {
 } from "@/features/products/category-queries";
 import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Detail Kategori",
+};
+
 function formatDateTime(value: Date) {
   return new Intl.DateTimeFormat("id-ID", {
     dateStyle: "medium",

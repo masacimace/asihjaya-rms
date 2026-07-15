@@ -31,6 +31,10 @@ import { getAdminSalesListData } from "@/features/sales/admin-queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Riwayat Penjualan",
+};
+
 export const runtime = "nodejs";
 
 const saleStatusLabels: Record<AdminSaleStatus, string> = {
@@ -396,14 +400,14 @@ export default async function PenjualanListPage({
           <div className="min-w-0 space-y-4">
             <Link
               href="/admin"
-              className="inline-flex h-10 items-center justify-center gap-2 bg-white px-4 text-sm font-semibold text-neutral-700"
+              className="inline-flex h-10 items-center justify-center gap-2 bg-white px-4 text-sm font-medium text-neutral-700"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
             </Link>
 
             <div>
-              <h1 className="text-2xl font-semibold text-neutral-950 sm:text-3xl">
+              <h1 className="mt-3 text-2xl font-semibold text-neutral-950 sm:text-3xl">
                 Daftar Penjualan
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
@@ -469,7 +473,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-[var(--muted)]">
+              <p className="text-xs font-medium text-[var(--muted)]">
                 Omzet transaksi
               </p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
@@ -488,7 +492,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-[var(--muted)]">
+              <p className="text-xs font-medium text-[var(--muted)]">
                 Transaksi
               </p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
@@ -507,7 +511,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-[var(--muted)]">Dibayar</p>
+              <p className="text-xs font-medium text-[var(--muted)]">Dibayar</p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
                 {formatMoney(data.summary.paidAmount)}
               </p>
@@ -525,7 +529,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-[var(--muted)]">
+              <p className="text-xs font-medium text-[var(--muted)]">
                 Perlu perhatian
               </p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">

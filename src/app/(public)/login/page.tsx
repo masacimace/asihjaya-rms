@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 import { getCurrentAuth, getDefaultRoute } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Login",
+};
+
 export default async function LoginPage() {
   const auth = await getCurrentAuth();
 

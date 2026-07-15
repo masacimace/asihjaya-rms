@@ -13,6 +13,10 @@ import { CreateStaffForm } from "@/components/administration/staff-forms";
 import { getStaffManagementOptions } from "@/features/administration/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Tambah Staff",
+};
+
 export default async function CreateStaffPage() {
   const auth = await requirePermission("staff.manage");
 

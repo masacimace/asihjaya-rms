@@ -16,6 +16,10 @@ import { isUuid } from "@/features/customers/contracts";
 import { getAdminCustomerFormData } from "@/features/customers/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Edit Pelanggan",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

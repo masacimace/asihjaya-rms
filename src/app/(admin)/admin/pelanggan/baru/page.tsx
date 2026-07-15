@@ -11,6 +11,10 @@ import Link from "next/link";
 import { CreateCustomerForm } from "@/components/customers/customer-form";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Tambah Pelanggan",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

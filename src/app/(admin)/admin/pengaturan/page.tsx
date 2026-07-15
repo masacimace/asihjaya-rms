@@ -23,6 +23,10 @@ import { getManualPaymentSettingsData } from "@/features/settings/manual-payment
 import type { NonCashManualPaymentMethod } from "@/features/pos/manual-payment-verification";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Pengaturan",
+};
+
 const inputClassName =
   "h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]";
 const labelClassName = "mb-1.5 block text-xs font-semibold text-neutral-700";
@@ -291,7 +295,7 @@ export default async function SettingsPage({
               Pengaturan pembayaran
             </div>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
-              Profile Pembayaran
+              Fast Manual Payment UX
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
               Simpan akun QRIS, terminal EDC, dan rekening toko sebagai preset.
@@ -430,7 +434,7 @@ export default async function SettingsPage({
         </div>
 
         <div className="mt-5 grid gap-4 xl:grid-cols-3">
-          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white">
+          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white open:shadow-sm">
             <summary className="flex w-full cursor-pointer list-none items-center gap-2 font-semibold text-neutral-950 select-none marker:content-none [&::-webkit-details-marker]:hidden">
               <QrCode className="size-4 text-[var(--accent)]" />
               <span>Tambah akun QRIS</span>
@@ -443,7 +447,7 @@ export default async function SettingsPage({
             </form>
           </details>
 
-          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white">
+          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white open:shadow-sm">
             <summary className="flex w-full cursor-pointer list-none items-center gap-2 font-semibold text-neutral-950 select-none marker:content-none [&::-webkit-details-marker]:hidden">
               <CreditCard className="size-4 text-blue-700" />
               <span>Tambah terminal EDC</span>
@@ -456,7 +460,7 @@ export default async function SettingsPage({
             </form>
           </details>
 
-          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white">
+          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white open:shadow-sm">
             <summary className="flex w-full cursor-pointer list-none items-center gap-2 font-semibold text-neutral-950 select-none marker:content-none [&::-webkit-details-marker]:hidden">
               <Landmark className="size-4 text-emerald-700" />
               <span>Tambah rekening bank</span>

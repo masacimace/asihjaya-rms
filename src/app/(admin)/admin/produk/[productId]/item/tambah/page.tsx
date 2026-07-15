@@ -16,6 +16,10 @@ import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 import { getImageUrl } from "@/lib/storage/image-storage";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Tambah Item Inventaris",
+};
+
 export const runtime = "nodejs";
 
 const productStatusMeta = {

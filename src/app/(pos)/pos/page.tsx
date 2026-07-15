@@ -2,6 +2,10 @@ import { PosWorkspace } from "@/components/pos/pos-workspace";
 import { getPosInitialData } from "@/features/pos/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "POS",
+};
+
 export default async function PosPage() {
   const auth = await requirePermission("pos.access");
 

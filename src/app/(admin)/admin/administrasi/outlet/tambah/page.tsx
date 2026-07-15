@@ -12,6 +12,10 @@ import Link from "next/link";
 import { CreateOutletForm } from "@/components/administration/outlet-register-forms";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Tambah Outlet",
+};
+
 export default async function CreateOutletPage() {
   await requirePermission("outlets.manage");
 

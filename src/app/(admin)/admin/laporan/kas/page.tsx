@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
 
+export const metadata = {
+  title: "Laporan Kas",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

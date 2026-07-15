@@ -6,6 +6,10 @@ import { ReceiptCertificateHtmlDocument } from "@/features/sales/documents/recei
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
 
+export const metadata = {
+  title: "Nota & Sertifikat Penjualan",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

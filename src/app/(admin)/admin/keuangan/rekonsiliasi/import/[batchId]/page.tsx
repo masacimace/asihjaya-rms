@@ -32,6 +32,10 @@ import { requirePermission } from "@/lib/auth/session";
 import { getSettlementImportFileUrl } from "@/lib/storage/settlement-import-storage";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Detail Import Settlement",
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

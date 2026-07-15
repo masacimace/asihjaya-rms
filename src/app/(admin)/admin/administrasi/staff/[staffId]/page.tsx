@@ -21,6 +21,10 @@ import {
 } from "@/features/administration/queries";
 import { requirePermission } from "@/lib/auth/session";
 
+export const metadata = {
+  title: "Detail Staff",
+};
+
 const statusLabels = {
   active: "Aktif",
   inactive: "Nonaktif",

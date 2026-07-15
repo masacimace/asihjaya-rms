@@ -18,6 +18,10 @@ import { getProductItemEditContext } from "@/features/inventory/product-item-que
 import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 import { getImageUrl } from "@/lib/storage/image-storage";
 
+export const metadata = {
+  title: "Edit Item Inventaris",
+};
+
 export const runtime = "nodejs";
 
 const availabilityLabels = {

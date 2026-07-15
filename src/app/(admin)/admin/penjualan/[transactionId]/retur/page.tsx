@@ -31,6 +31,10 @@ import { requirePermission } from "@/lib/auth/session";
 import { getReturnInspectionPhotoUrl } from "@/lib/storage/return-inspection-storage";
 import { cn } from "@/lib/utils";
 
+export const metadata = {
+  title: "Retur Transaksi",
+};
+
 export const runtime = "nodejs";
 
 const UUID_PATTERN =
