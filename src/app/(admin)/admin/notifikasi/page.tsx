@@ -4,9 +4,11 @@ import {
   ArrowRight,
   Bell,
   CalendarDays,
+  CalendarRange,
   CheckCircle2,
   Filter,
   Inbox,
+  RotateCcw,
   Search,
   SlidersHorizontal,
   TriangleAlert,
@@ -87,7 +89,8 @@ function createPageHref({
   if (filters.status !== "all") params.set("status", filters.status);
   if (filters.outletId) params.set("outletId", filters.outletId);
   if (filters.range !== "30d") params.set("range", filters.range);
-  if (filters.range === "custom" && filters.from) params.set("from", filters.from);
+  if (filters.range === "custom" && filters.from)
+    params.set("from", filters.from);
   if (filters.range === "custom" && filters.to) params.set("to", filters.to);
   if (page > 1) params.set("page", String(page));
 
@@ -105,13 +108,13 @@ export default async function NotificationCenterPageRoute({
   const data = await getAdminNotificationPageData(auth, filters);
   const isFiltered = Boolean(
     filters.search ||
-      filters.category !== "all" ||
-      filters.severity !== "all" ||
-      filters.status !== "all" ||
-      filters.outletId ||
-      filters.range !== "30d" ||
-      filters.from ||
-      filters.to,
+    filters.category !== "all" ||
+    filters.severity !== "all" ||
+    filters.status !== "all" ||
+    filters.outletId ||
+    filters.range !== "30d" ||
+    filters.from ||
+    filters.to,
   );
 
   const summaryCards = [
@@ -159,7 +162,7 @@ export default async function NotificationCenterPageRoute({
           <div className="min-w-0">
             <Link
               href="/admin"
-              className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+              className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-neutral-700"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
@@ -189,166 +192,255 @@ export default async function NotificationCenterPageRoute({
       </header>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {summaryCards.map(({ label, value, description, icon: Icon, className }) => (
-          <div
-            key={label}
-            className="rounded-2xl border border-[var(--border)] bg-white p-4"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold text-neutral-500">{label}</p>
-                <p className="mt-2 text-2xl font-bold text-neutral-950">
-                  {formatInteger(value)}
-                </p>
+        {summaryCards.map(
+          ({ label, value, description, icon: Icon, className }) => (
+            <div
+              key={label}
+              className="rounded-2xl border border-[var(--border)] bg-white p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-neutral-500">
+                    {label}
+                  </p>
+                  <p className="mt-2 text-2xl font-bold text-neutral-950">
+                    {formatInteger(value)}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "grid size-10 shrink-0 place-items-center rounded-xl",
+                    className,
+                  )}
+                >
+                  <Icon className="size-5" />
+                </span>
               </div>
-              <span
-                className={cn(
-                  "grid size-10 shrink-0 place-items-center rounded-xl",
-                  className,
-                )}
-              >
-                <Icon className="size-5" />
-              </span>
+              <p className="mt-2 text-xs leading-5 text-neutral-500">
+                {description}
+              </p>
             </div>
-            <p className="mt-2 text-xs leading-5 text-neutral-500">
-              {description}
-            </p>
-          </div>
-        ))}
+          ),
+        )}
       </section>
 
-      <section className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <SlidersHorizontal className="size-5 text-neutral-500" />
-          <div>
-            <h2 className="font-semibold text-neutral-950">Filter notifikasi</h2>
-            <p className="mt-0.5 text-xs text-neutral-500">
-              Pencarian berjalan pada judul, ringkasan, tipe event, entity, dan outlet.
-            </p>
+      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+        <div className="border-b border-[var(--border)] bg-neutral-50/70 px-4 py-4 sm:px-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-white text-neutral-600 shadow-sm">
+                <SlidersHorizontal className="size-5" />
+              </span>
+              <div>
+                <h2 className="font-semibold text-neutral-950">
+                  Filter notifikasi
+                </h2>
+                <p className="mt-1 max-w-3xl text-xs leading-5 text-neutral-500">
+                  Cari berdasarkan judul, ringkasan, tipe event, entity, atau
+                  outlet.
+                </p>
+              </div>
+            </div>
+
+            {isFiltered ? (
+              <span className="inline-flex w-fit items-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)]">
+                Filter aktif
+              </span>
+            ) : null}
           </div>
         </div>
 
-        <form method="get" className="grid gap-3 lg:grid-cols-12">
-          <label className="relative lg:col-span-4">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
-            <input
-              type="search"
-              name="q"
-              defaultValue={filters.search}
-              placeholder="Cari invoice, event, outlet..."
-              className="h-11 w-full rounded-xl border border-[var(--border)] bg-white pl-10 pr-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)]"
-            />
-          </label>
+        <form method="get" className="space-y-5 p-4 sm:p-5">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-12">
+            <label className="min-w-0 md:col-span-2 xl:col-span-4">
+              <span className="mb-2 block text-xs font-semibold text-neutral-600">
+                Pencarian
+              </span>
+              <span className="relative block">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="search"
+                  name="q"
+                  defaultValue={filters.search}
+                  placeholder="Cari invoice, event, atau outlet..."
+                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white pl-10 pr-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 hover:border-neutral-300 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                />
+              </span>
+            </label>
 
-          <select
-            name="status"
-            defaultValue={filters.status}
-            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)] lg:col-span-2"
-          >
-            {adminNotificationPageStatuses.map((status) => (
-              <option key={status} value={status}>
-                {statusLabels[status]}
-              </option>
-            ))}
-          </select>
-
-          <select
-            name="category"
-            defaultValue={filters.category}
-            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)] lg:col-span-2"
-          >
-            <option value="all">Semua kategori</option>
-            {adminNotificationCategories.map((category) => (
-              <option key={category} value={category}>
-                {categoryLabels[category]}
-              </option>
-            ))}
-          </select>
-
-          <select
-            name="severity"
-            defaultValue={filters.severity}
-            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)] lg:col-span-2"
-          >
-            <option value="all">Semua severity</option>
-            {adminNotificationSeverities.map((severity) => (
-              <option key={severity} value={severity}>
-                {severityLabels[severity]}
-              </option>
-            ))}
-          </select>
-
-          <select
-            name="outletId"
-            defaultValue={filters.outletId ?? ""}
-            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)] lg:col-span-2"
-          >
-            <option value="">Semua outlet</option>
-            {data.outlets.map((outlet) => (
-              <option key={outlet.id} value={outlet.id}>
-                {outlet.code} · {outlet.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            name="range"
-            defaultValue={filters.range}
-            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)] lg:col-span-2"
-          >
-            {adminNotificationDateRanges.map((range) => (
-              <option key={range} value={range}>
-                {rangeLabels[range]}
-              </option>
-            ))}
-          </select>
-
-          <input
-            type="date"
-            name="from"
-            defaultValue={filters.from ?? ""}
-            aria-label="Tanggal mulai"
-            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)] lg:col-span-2"
-          />
-
-          <input
-            type="date"
-            name="to"
-            defaultValue={filters.to ?? ""}
-            aria-label="Tanggal akhir"
-            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)] lg:col-span-2"
-          />
-
-          <div className="flex gap-2 lg:col-span-8 lg:justify-end">
-            {isFiltered ? (
-              <Link
-                href="/admin/notifikasi"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-600 transition hover:bg-neutral-50"
+            <label className="min-w-0 xl:col-span-2">
+              <span className="mb-2 block text-xs font-semibold text-neutral-600">
+                Status
+              </span>
+              <select
+                name="status"
+                defaultValue={filters.status}
+                className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition hover:border-neutral-300 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
               >
-                Reset
-              </Link>
-            ) : null}
-            <button
-              type="submit"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-5 text-sm font-semibold text-white transition hover:bg-neutral-800"
-            >
-              <Filter className="size-4" />
-              Terapkan filter
-            </button>
+                {adminNotificationPageStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {statusLabels[status]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="min-w-0 xl:col-span-2">
+              <span className="mb-2 block text-xs font-semibold text-neutral-600">
+                Kategori
+              </span>
+              <select
+                name="category"
+                defaultValue={filters.category}
+                className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition hover:border-neutral-300 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+              >
+                <option value="all">Semua kategori</option>
+                {adminNotificationCategories.map((category) => (
+                  <option key={category} value={category}>
+                    {categoryLabels[category]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="min-w-0 xl:col-span-2">
+              <span className="mb-2 block text-xs font-semibold text-neutral-600">
+                Severity
+              </span>
+              <select
+                name="severity"
+                defaultValue={filters.severity}
+                className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition hover:border-neutral-300 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+              >
+                <option value="all">Semua severity</option>
+                {adminNotificationSeverities.map((severity) => (
+                  <option key={severity} value={severity}>
+                    {severityLabels[severity]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="min-w-0 xl:col-span-2">
+              <span className="mb-2 block text-xs font-semibold text-neutral-600">
+                Outlet
+              </span>
+              <select
+                name="outletId"
+                defaultValue={filters.outletId ?? ""}
+                className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition hover:border-neutral-300 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+              >
+                <option value="">Semua outlet</option>
+                {data.outlets.map((outlet) => (
+                  <option key={outlet.id} value={outlet.id}>
+                    {outlet.code} · {outlet.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-4">
+            <div className="mb-4 flex items-start gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white text-neutral-500 shadow-sm ring-1 ring-[var(--border)]">
+                <CalendarRange className="size-4" />
+              </span>
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-900">
+                  Periode notifikasi
+                </h3>
+                <p className="mt-0.5 text-xs leading-5 text-neutral-500">
+                  Pilih periode cepat atau gunakan tanggal khusus untuk rentang
+                  yang lebih spesifik.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <label className="min-w-0">
+                <span className="mb-2 block text-xs font-semibold text-neutral-600">
+                  Rentang waktu
+                </span>
+                <select
+                  name="range"
+                  defaultValue={filters.range}
+                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition hover:border-neutral-300 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                >
+                  {adminNotificationDateRanges.map((range) => (
+                    <option key={range} value={range}>
+                      {rangeLabels[range]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="min-w-0">
+                <span className="mb-2 block text-xs font-semibold text-neutral-600">
+                  Tanggal mulai
+                </span>
+                <input
+                  type="date"
+                  name="from"
+                  defaultValue={filters.from ?? ""}
+                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition hover:border-neutral-300 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                />
+              </label>
+
+              <label className="min-w-0">
+                <span className="mb-2 block text-xs font-semibold text-neutral-600">
+                  Tanggal akhir
+                </span>
+                <input
+                  type="date"
+                  name="to"
+                  defaultValue={filters.to ?? ""}
+                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition hover:border-neutral-300 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-5 text-neutral-500">
+              Tanggal mulai dan akhir digunakan saat periode
+              <span className="font-semibold text-neutral-700">
+                {" "}
+                Tanggal khusus{" "}
+              </span>
+              dipilih.
+            </p>
+
+            <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+              {isFiltered ? (
+                <Link
+                  href="/admin/notifikasi"
+                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 sm:flex-none"
+                >
+                  <RotateCcw className="size-4" />
+                  Reset
+                </Link>
+              ) : null}
+              <button
+                type="submit"
+                className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800 focus:outline-none focus:ring-4 focus:ring-neutral-200 sm:flex-none"
+              >
+                <Filter className="size-4" />
+                Terapkan filter
+              </button>
+            </div>
           </div>
         </form>
-
-        <p className="mt-3 text-xs leading-5 text-neutral-500">
-          Kolom tanggal mulai dan akhir digunakan ketika periode “Tanggal khusus” dipilih.
-        </p>
       </section>
 
-      <section className="rounded-3xl border border-[var(--border)] bg-neutral-50/60 p-4 sm:p-5">
+      <section className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-semibold text-neutral-950">Daftar notifikasi</h2>
+            <h2 className="font-semibold text-neutral-950">
+              Daftar notifikasi
+            </h2>
             <p className="mt-1 text-sm text-neutral-500">
-              {formatInteger(data.totalCount)} notifikasi ditemukan · halaman {data.page} dari {data.pageCount}.
+              {formatInteger(data.totalCount)} notifikasi ditemukan · halaman{" "}
+              {data.page} dari {data.pageCount}.
             </p>
           </div>
           <span className="inline-flex w-fit rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600">
@@ -372,7 +464,10 @@ export default async function NotificationCenterPageRoute({
           </p>
           <div className="flex items-center gap-2">
             <Link
-              href={createPageHref({ filters: data.filters, page: data.page - 1 })}
+              href={createPageHref({
+                filters: data.filters,
+                page: data.page - 1,
+              })}
               aria-disabled={data.page <= 1}
               className={cn(
                 "inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition",
@@ -385,7 +480,10 @@ export default async function NotificationCenterPageRoute({
               Sebelumnya
             </Link>
             <Link
-              href={createPageHref({ filters: data.filters, page: data.page + 1 })}
+              href={createPageHref({
+                filters: data.filters,
+                page: data.page + 1,
+              })}
               aria-disabled={data.page >= data.pageCount}
               className={cn(
                 "inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition",

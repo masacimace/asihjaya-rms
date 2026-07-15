@@ -430,7 +430,7 @@ export default async function SettingsPage({
         </div>
 
         <div className="mt-5 grid gap-4 xl:grid-cols-3">
-          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white open:shadow-sm">
+          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white">
             <summary className="flex w-full cursor-pointer list-none items-center gap-2 font-semibold text-neutral-950 select-none marker:content-none [&::-webkit-details-marker]:hidden">
               <QrCode className="size-4 text-[var(--accent)]" />
               <span>Tambah akun QRIS</span>
@@ -443,7 +443,7 @@ export default async function SettingsPage({
             </form>
           </details>
 
-          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white open:shadow-sm">
+          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white">
             <summary className="flex w-full cursor-pointer list-none items-center gap-2 font-semibold text-neutral-950 select-none marker:content-none [&::-webkit-details-marker]:hidden">
               <CreditCard className="size-4 text-blue-700" />
               <span>Tambah terminal EDC</span>
@@ -456,7 +456,7 @@ export default async function SettingsPage({
             </form>
           </details>
 
-          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white open:shadow-sm">
+          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white">
             <summary className="flex w-full cursor-pointer list-none items-center gap-2 font-semibold text-neutral-950 select-none marker:content-none [&::-webkit-details-marker]:hidden">
               <Landmark className="size-4 text-emerald-700" />
               <span>Tambah rekening bank</span>
