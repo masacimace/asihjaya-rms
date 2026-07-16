@@ -35,9 +35,13 @@ const printStatusLabels: Record<AdminSalePrintStatus, string> = {
   not_queued: "Belum dicetak",
   pending: "Print pending",
   claimed: "Diklaim agent",
+  processing: "Sedang diproses",
   printing: "Sedang print",
+  submitted: "Dikirim ke spooler",
   completed: "Print selesai",
   failed: "Print gagal",
+  unknown_outcome: "Hasil print belum pasti",
+  expired: "Print kedaluwarsa",
   cancelled: "Print batal",
 };
 

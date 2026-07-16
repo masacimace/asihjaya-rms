@@ -1111,3 +1111,52 @@ POST  /api/hardware/v2/jobs/{jobId}/attempts/{attemptId}/lease
 ```
 
 PR ini belum mengubah Windows agent. Endpoint v1 tetap aktif sampai agent v2 dengan SQLite journal tersedia.
+
+---
+
+## 28. Implementation status — PR 4 Secure Job Producers
+
+Producer production sekarang wajib menggunakan `createHardwareJobV2` atau
+`createHardwareJobV2InTransaction`. Producer tersebut secara otomatis mengisi:
+
+- `protocolVersion = 2`
+- capability dan device type berdasarkan job type
+- canonical `payloadHash`
+- expiry berdasarkan creation mode
+- unique business idempotency key
+- audit event `hardware.job_created`
+
+Label printing menerima hanya `itemId`, `copies`, dan request UUID dari browser.
+SKU, barcode, nama, berat, kadar, atribut, serta harga dibaca ulang dari database
+berdasarkan organization dan outlet yang dapat diakses user.
+
+Permission baru:
+
+```text
+inventory.print_label
+```
+
+Receipt checkout menggunakan idempotency key:
+
+```text
+receipt:{saleId}:initial
+```
+
+Manual receipt reprint menggunakan request UUID yang dibuat saat form dirender
+dan dipertahankan untuk retry request yang sama:
+
+```text
+receipt:{saleId}:reprint:{requestId}
+```
+
+Document payload masih memakai `receipt_a5_v1`. Migrasi ke `receipt_a4_v1`
+tidak membutuhkan perubahan protocol atau producer lifecycle.
+
+Agent hanya menerima document download pada same-origin path berikut:
+
+```text
+/api/sales/{saleId}/receipt-certificate
+/api/sales/receipt-certificate-preview
+```
+
+Cloud API URL non-loopback wajib HTTPS.

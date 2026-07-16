@@ -321,6 +321,11 @@ export default async function ProductItemDetailPage({
     ["inventory.receive", "inventory.adjust", "inventory.manage"].some(
       (permission) => hasPermission(auth, permission),
     );
+  const canPrintLabel =
+    hasPermission(auth, "inventory.print_label") &&
+    ["draft", "available", "reserved"].includes(item.availability) &&
+    item.isActive &&
+    Boolean(item.outletId);
   const imageUrl = getImageUrl(item.imageKey ?? item.productImageKey);
   const usesCatalogPhoto = !item.imageKey && Boolean(item.productImageKey);
   const hasPhoto = Boolean(item.imageKey ?? item.productImageKey);
@@ -361,7 +366,7 @@ export default async function ProductItemDetailPage({
               </Link>
             ) : null}
 
-            <PrintLabelButton item={{ ...item, productName: itemDisplayName }} />
+            {canPrintLabel ? <PrintLabelButton itemId={item.id} /> : null}
 
             <Link
               href={`/admin/produk/${item.productId}`}

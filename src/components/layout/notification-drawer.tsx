@@ -259,7 +259,7 @@ export function NotificationDrawer({
             </button>
           </div>
 
-          <div className="mt-4 flex gap-6 overflow-x-auto rounded-2xl bg-neutral-100 p-1">
+          <div className="mt-4 flex gap-4 overflow-x-auto rounded-2xl bg-neutral-100 p-1">
             {tabs.map((tab) => (
               <button
                 key={tab.id}

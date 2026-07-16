@@ -64,6 +64,9 @@ function buildStaleHardwareJobWhere({
 }: StaleHardwareJobScope & { cutoff: Date }) {
   const conditions = [
     eq(hardwareJobs.organizationId, organizationId),
+    // Protocol v2 lease recovery is handled by the claim API and attempt state machine.
+    // This legacy recovery path must never detach or requeue a v2 attempt.
+    eq(hardwareJobs.protocolVersion, 1),
     inArray(hardwareJobs.status, staleRecoverableStatuses),
     lt(hardwareJobs.updatedAt, cutoff),
   ];
@@ -120,7 +123,12 @@ export async function recoverStaleHardwareJobs({
       cancelledAt: null,
       updatedAt: now,
     })
-    .where(and(baseWhere, sql`${hardwareJobs.attempts} < ${hardwareJobs.maxAttempts}`))
+    .where(
+      and(
+        baseWhere,
+        sql`${hardwareJobs.attempts} < ${hardwareJobs.maxAttempts}`,
+      ),
+    )
     .returning({ id: hardwareJobs.id });
 
   const failedRows = await db
@@ -136,7 +144,12 @@ export async function recoverStaleHardwareJobs({
       failedAt: now,
       updatedAt: now,
     })
-    .where(and(baseWhere, sql`${hardwareJobs.attempts} >= ${hardwareJobs.maxAttempts}`))
+    .where(
+      and(
+        baseWhere,
+        sql`${hardwareJobs.attempts} >= ${hardwareJobs.maxAttempts}`,
+      ),
+    )
     .returning({ id: hardwareJobs.id });
 
   const requeuedJobIds = requeuedRows.map((row) => row.id);

@@ -61,6 +61,11 @@ const permissionSeeds = [
     module: "inventory",
   },
   {
+    code: "inventory.print_label",
+    name: "Mencetak label barcode inventaris",
+    module: "inventory",
+  },
+  {
     code: "inventory.receive",
     name: "Menerima barang ke inventaris",
     module: "inventory",
@@ -312,6 +317,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "products.view",
     "products.manage",
     "inventory.view",
+    "inventory.print_label",
     "inventory.receive",
     "inventory.adjust",
     "inventory.transfer",
@@ -358,6 +364,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "products.view",
     "products.manage",
     "inventory.view",
+    "inventory.print_label",
     "inventory.receive",
     "inventory.adjust",
     "inventory.transfer",
@@ -708,6 +715,7 @@ async function seed() {
       "products.manage": ["products.view"],
       "inventory.manage": [
         "inventory.view",
+        "inventory.print_label",
         "inventory.receive",
         "inventory.adjust",
         "inventory.transfer",

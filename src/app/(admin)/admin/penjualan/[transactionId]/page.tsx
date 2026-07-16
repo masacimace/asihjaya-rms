@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { ReactNode } from "react";
 import {
   ArrowLeft,
@@ -130,9 +132,13 @@ const printStatusLabels: Record<AdminSalePrintStatus, string> = {
   not_queued: "Belum dicetak",
   pending: "Print pending",
   claimed: "Diklaim agent",
+  processing: "Sedang diproses",
   printing: "Sedang print",
+  submitted: "Dikirim ke spooler",
   completed: "Print selesai",
   failed: "Print gagal",
+  unknown_outcome: "Hasil print belum pasti",
+  expired: "Print kedaluwarsa",
   cancelled: "Print batal",
 };
 
@@ -157,11 +163,17 @@ function getPrintStatusClass(status: AdminSalePrintStatus) {
     return "bg-emerald-50 text-emerald-700";
   }
 
-  if (status === "failed") {
+  if (status === "failed" || status === "unknown_outcome") {
     return "bg-red-50 text-red-700";
   }
 
-  if (status === "pending" || status === "claimed" || status === "printing") {
+  if (
+    status === "pending" ||
+    status === "claimed" ||
+    status === "processing" ||
+    status === "printing" ||
+    status === "submitted"
+  ) {
     return "bg-amber-50 text-amber-700";
   }
 
@@ -357,6 +369,7 @@ function ReprintDocumentAction({
   return (
     <form action={reprintAction} className="min-w-0">
       <input type="hidden" name="saleId" value={saleId} />
+      <input type="hidden" name="requestId" value={randomUUID()} />
       <input type="hidden" name="returnTo" value={returnTo} />
       <div className="flex min-h-16 min-w-0 items-center gap-3 rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-left">
         <span

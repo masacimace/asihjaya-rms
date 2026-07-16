@@ -17,7 +17,7 @@ const { HardwareProtocolV2Client } = require("./lib/protocol-v2-client");
 const { HardwareProtocolV2Runner } = require("./lib/protocol-v2-runner");
 const { createSecretProtector } = require("./lib/secret-protector");
 
-const AGENT_VERSION = "2.0.0-pr3-crash-safe";
+const AGENT_VERSION = "2.0.0-pr4-secure-producers";
 const PROTOCOL_MODES = new Set(["v2-preferred", "v2-only", "v1-only"]);
 process.title = "asihjaya-hardware-hub";
 
@@ -51,6 +51,19 @@ function resolveLocalPath(envName, fallback) {
 }
 
 const ASIHJAYA_API_URL = requiredEnv("ASIHJAYA_API_URL").replace(/\/$/, "");
+let ASIHJAYA_API_ORIGIN;
+try {
+  const parsedApiUrl = new URL(ASIHJAYA_API_URL);
+  const isLoopback = ["localhost", "127.0.0.1", "::1"].includes(parsedApiUrl.hostname);
+  if (parsedApiUrl.protocol !== "https:" && !isLoopback) {
+    console.error("[-] ASIHJAYA_API_URL production wajib menggunakan HTTPS.");
+    process.exit(1);
+  }
+  ASIHJAYA_API_ORIGIN = parsedApiUrl.origin;
+} catch {
+  console.error("[-] ASIHJAYA_API_URL bukan URL yang valid.");
+  process.exit(1);
+}
 const HARDWARE_AGENT_ID = requiredEnv("HARDWARE_AGENT_ID");
 const HARDWARE_AGENT_SECRET = requiredEnv("HARDWARE_AGENT_SECRET");
 const HARDWARE_PROTOCOL_MODE = process.env.HARDWARE_PROTOCOL_MODE?.trim() || "v2-preferred";
@@ -144,7 +157,7 @@ function requestJson(
 ) {
   return new Promise((resolve, reject) => {
     const url = new URL(pathname, ASIHJAYA_API_URL);
-    if (url.origin !== new URL(ASIHJAYA_API_URL).origin) {
+    if (url.origin !== ASIHJAYA_API_ORIGIN) {
       reject(
         new HardwareHttpError("Request API lintas origin ditolak.", {
           code: "API_ORIGIN_NOT_ALLOWED",

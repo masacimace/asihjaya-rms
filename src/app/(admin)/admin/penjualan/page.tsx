@@ -70,9 +70,13 @@ const printStatusLabels: Record<AdminSalePrintStatus, string> = {
   not_queued: "Belum dicetak",
   pending: "Print pending",
   claimed: "Diklaim agent",
+  processing: "Sedang diproses",
   printing: "Sedang print",
+  submitted: "Dikirim ke spooler",
   completed: "Print selesai",
   failed: "Print gagal",
+  unknown_outcome: "Hasil print belum pasti",
+  expired: "Print kedaluwarsa",
   cancelled: "Print batal",
 };
 
@@ -97,11 +101,17 @@ function getPrintStatusClass(status: AdminSalePrintStatus) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
-  if (status === "failed") {
+  if (status === "failed" || status === "unknown_outcome") {
     return "border-red-200 bg-red-50 text-red-700";
   }
 
-  if (status === "pending" || status === "claimed" || status === "printing") {
+  if (
+    status === "pending" ||
+    status === "claimed" ||
+    status === "processing" ||
+    status === "printing" ||
+    status === "submitted"
+  ) {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
 
@@ -473,7 +483,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+              <p className="text-xs font-medium text-[var(--muted)]">
                 Omzet transaksi
               </p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
@@ -492,7 +502,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+              <p className="text-xs font-medium text-[var(--muted)]">
                 Transaksi
               </p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
@@ -511,9 +521,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-                Dibayar
-              </p>
+              <p className="text-xs font-medium text-[var(--muted)]">Dibayar</p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">
                 {formatMoney(data.summary.paidAmount)}
               </p>
@@ -531,7 +539,7 @@ export default async function PenjualanListPage({
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+              <p className="text-xs font-medium text-[var(--muted)]">
                 Perlu perhatian
               </p>
               <p className="mt-2 text-sm font-semibold text-neutral-950 sm:text-2xl">

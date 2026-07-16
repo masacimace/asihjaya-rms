@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import Link from "next/link";
 import {
   Clock3,
@@ -59,13 +61,23 @@ const paymentMethodLabels: Record<string, string> = {
 const hardwareJobStatusLabels: Record<string, string> = {
   pending: "Menunggu",
   claimed: "Diambil agent",
+  processing: "Diproses",
   printing: "Printing",
+  submitted: "Dikirim ke spooler",
   completed: "Selesai",
   failed: "Gagal",
+  unknown_outcome: "Hasil belum pasti",
+  expired: "Kedaluwarsa",
   cancelled: "Dibatalkan",
 };
 
-const activeHardwareJobStatuses = new Set(["pending", "claimed", "printing"]);
+const activeHardwareJobStatuses = new Set([
+  "pending",
+  "claimed",
+  "processing",
+  "printing",
+  "submitted",
+]);
 
 function getSearchParam(
   searchParams: Record<string, string | string[] | undefined>,
@@ -680,6 +692,7 @@ function TransactionDetailPanel({
 
               <form action={reprintPosReceiptCertificateAction}>
                 <input type="hidden" name="saleId" value={detail.id} />
+                <input type="hidden" name="requestId" value={randomUUID()} />
                 <input
                   type="hidden"
                   name="returnTo"

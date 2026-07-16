@@ -1,54 +1,48 @@
 "use client";
 
 import { Barcode } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-export function PrintLabelButton({
-  item,
-}: {
-  item: {
-    sku: string;
-    productName: string;
-    barcode: string;
-    weightGram: string | null;
-    purityPercent: string | null;
-    exchangePurityPercent: string | null;
-    size: string | null;
-    color: string | null;
-    gemstone: string | null;
-    sellingAmount: string | null;
-  };
-}) {
+export function PrintLabelButton({ itemId }: { itemId: string }) {
   const [isPrinting, setIsPrinting] = useState(false);
+  const requestIdRef = useRef<string | null>(null);
 
   async function handlePrint() {
     setIsPrinting(true);
+    const requestId = requestIdRef.current ?? crypto.randomUUID();
+    requestIdRef.current = requestId;
     try {
       const response = await fetch("/api/print-jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sku: item.sku,
-          productName: item.productName,
-          barcode: item.barcode,
-          weightGram: item.weightGram,
-          purityPercent: item.purityPercent,
-          exchangePurityPercent: item.exchangePurityPercent,
-          size: item.size,
-          color: item.color,
-          gemstone: item.gemstone,
-          sellingAmount: item.sellingAmount,
+          itemId,
+          copies: 1,
+          requestId,
         }),
       });
+      const body = (await response.json()) as {
+        error?: string;
+        duplicate?: boolean;
+      };
 
       if (!response.ok) {
-        throw new Error("Failed to queue print job");
+        throw new Error(body.error || "Failed to queue print job");
       }
 
-      alert("Tugas cetak berhasil dikirim ke antrean toko!");
+      requestIdRef.current = null;
+      alert(
+        body.duplicate
+          ? "Permintaan cetak ini sudah ada di antrean."
+          : "Tugas cetak label berhasil dikirim ke antrean toko!",
+      );
     } catch (error) {
       console.error(error);
-      alert("Gagal mengirim tugas cetak.");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Gagal mengirim tugas cetak label.",
+      );
     } finally {
       setIsPrinting(false);
     }

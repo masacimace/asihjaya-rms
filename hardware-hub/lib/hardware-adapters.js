@@ -6,6 +6,16 @@ const https = require("https");
 const path = require("path");
 const { spawn } = require("child_process");
 
+
+const DOCUMENT_DOWNLOAD_PATH_PATTERNS = [
+  /^\/api\/sales\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/receipt-certificate$/i,
+  /^\/api\/sales\/receipt-certificate-preview$/,
+];
+
+function isAllowedDocumentDownloadPath(pathname) {
+  return DOCUMENT_DOWNLOAD_PATH_PATTERNS.some((pattern) => pattern.test(pathname));
+}
+
 class HardwareAdapterError extends Error {
   constructor(message, { code = "HARDWARE_ADAPTER_ERROR", retrySafe = false, category = "adapter" } = {}) {
     super(message);
@@ -316,6 +326,16 @@ function downloadFile(config, urlString, destination, options = {}) {
       reject(
         new HardwareAdapterError("Download document lintas origin ditolak.", {
           code: "DOCUMENT_ORIGIN_NOT_ALLOWED",
+          retrySafe: false,
+          category: "security",
+        }),
+      );
+      return;
+    }
+    if (!isAllowedDocumentDownloadPath(url.pathname)) {
+      reject(
+        new HardwareAdapterError("Path download document tidak termasuk allowlist.", {
+          code: "DOCUMENT_PATH_NOT_ALLOWED",
           retrySafe: false,
           category: "security",
         }),

@@ -94,9 +94,13 @@ export type AdminSalePrintStatus =
   | "not_queued"
   | "pending"
   | "claimed"
+  | "processing"
   | "printing"
+  | "submitted"
   | "completed"
   | "failed"
+  | "unknown_outcome"
+  | "expired"
   | "cancelled";
 
 export type AdminSaleListRow = {

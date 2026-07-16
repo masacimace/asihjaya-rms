@@ -42,7 +42,8 @@
     "check:notifications:v1f": "tsx scripts/check-notification-center-v1f.ts",
     "db:preflight:notifications:v1a": "tsx scripts/preflight-notification-center-v1a.ts",
     "db:repair:p1c2-history": "tsx scripts/repair-p1c2-migration-history.ts",
-    "check:hardware:v2-agent": "tsx scripts/check-hardware-protocol-v2-agent.ts"
+    "check:hardware:v2-agent": "tsx scripts/check-hardware-protocol-v2-agent.ts",
+    "check:hardware:v2-producers": "tsx scripts/check-hardware-protocol-v2-producers.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

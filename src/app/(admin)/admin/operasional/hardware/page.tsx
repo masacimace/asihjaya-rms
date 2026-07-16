@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import {
   Activity,
   AlertTriangle,
@@ -208,6 +210,7 @@ function TestJobButton({
     <form action={createHardwareTestJobAction}>
       <input type="hidden" name="agentId" value={agentId} />
       <input type="hidden" name="jobType" value={jobType} />
+      <input type="hidden" name="requestId" value={randomUUID()} />
       <button
         type="submit"
         disabled={disabled}
@@ -547,7 +550,8 @@ function RecentJobMobileCard({ job }: { job: HardwareJobSummary }) {
           </form>
         ) : null}
 
-        {job.status === "failed" || job.status === "cancelled" ? (
+        {job.status === "failed" ||
+        (job.protocolVersion === 1 && job.status === "cancelled") ? (
           <HardwareJobActionButton
             action={retryHardwareJobAction}
             jobId={job.id}
@@ -699,7 +703,7 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
           icon={Activity}
           label="Job Aktif"
           value={dashboard.totals.pendingJobs}
-          helper="Job pending/claimed/printing."
+          helper="Job pending/claimed/processing/submitted."
           tone="warning"
         />
         <SummaryCard
@@ -920,7 +924,8 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                         ) : null}
 
                         {job.status === "failed" ||
-                        job.status === "cancelled" ? (
+                        (job.protocolVersion === 1 &&
+                          job.status === "cancelled") ? (
                           <HardwareJobActionButton
                             action={retryHardwareJobAction}
                             jobId={job.id}

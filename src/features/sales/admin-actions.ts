@@ -1,7 +1,5 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
-
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
@@ -28,7 +26,8 @@ import {
   SALE_VOID_REQUEST_PERMISSION,
 } from "@/features/approvals/authorization";
 import { requireAnyPermission, requirePermission } from "@/lib/auth/session";
-import { createHardwareJobWithDuplicateGuard } from "@/lib/hardware/job-queue";
+import { buildReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
+import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
 import {
   classifySaleCorrection,
   getCorrectionReasonLabel,
@@ -727,6 +726,9 @@ export async function reprintAdminReceiptCertificateAction(
     : readText(saleIdOrFormData, "saleId");
   const boundReturnTo = (returnToArg ?? "").trim();
   const submittedReturnTo = formData ? readText(formData, "returnTo") : "";
+  const requestId = isBoundAction && formData
+    ? readText(formData, "requestId")
+    : readText(saleIdOrFormData as FormData, "requestId");
   const returnTo = isBoundAction
     ? boundReturnTo || submittedReturnTo || `/admin/penjualan/${saleId}`
     : readText(saleIdOrFormData, "returnTo");
@@ -737,6 +739,15 @@ export async function reprintAdminReceiptCertificateAction(
       returnTo: "/admin/penjualan",
       type: "error",
       message: "Transaksi tidak valid untuk cetak ulang nota.",
+    });
+  }
+
+  if (!UUID_PATTERN.test(requestId)) {
+    redirectAdminSaleDetailWithFeedback({
+      saleId,
+      returnTo,
+      type: "error",
+      message: "Request cetak ulang nota tidak valid.",
     });
   }
 
@@ -816,35 +827,32 @@ export async function reprintAdminReceiptCertificateAction(
   let feedbackMessage: string;
 
   try {
-    const result = await createHardwareJobWithDuplicateGuard({
+    const requestMetadata = await getAdminRequestMetadata();
+    const result = await createHardwareJobV2({
       organizationId: auth.organization.id,
       outletId: sale.outletId,
       registerId: sale.registerId,
-      agentId: null,
       createdByUserId: auth.user.id,
       jobType: "print_receipt_certificate",
-      deviceType: "document_printer",
-      targetDevice: "document_printer",
-      status: "pending",
-      priority: 25,
-      maxAttempts: 2,
-      payload: {
-        pdfUrl: `/api/sales/${sale.id}/receipt-certificate`,
-        title: `Cetak Ulang Nota ${sale.invoiceNumber}`,
+      mode: "manual",
+      payload: buildReceiptDocumentPayloadV2({
         saleId: sale.id,
         invoiceNumber: sale.invoiceNumber,
-        totalAmount: sale.totalAmount,
         requestSource: "admin.sales.detail",
         reprint: true,
-        documentMode: "one_page_per_item",
-        requestedAt: now.toISOString(),
-      },
-      idempotencyKey: `receipt_certificate_admin_reprint:${sale.id}:${randomUUID()}`,
+        requestedAt: now,
+      }),
+      idempotencyKey: `receipt:${sale.id}:reprint:${requestId}`,
       sourceType: "sale",
       sourceId: sale.id,
-      availableAt: now,
-      createdAt: now,
-      updatedAt: now,
+      now,
+      audit: {
+        source: "admin.sales.detail",
+        requestId,
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+        reason: `Cetak ulang nota ${sale.invoiceNumber}.`,
+      },
     });
 
     await db.insert(auditLogs).values({

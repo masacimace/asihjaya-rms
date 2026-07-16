@@ -25,7 +25,6 @@ import {
   cashMovements,
   customers,
   hardwareAgents,
-  hardwareJobs,
   inventoryMovements,
   manualPaymentPolicies,
   manualPaymentProfiles,
@@ -94,7 +93,11 @@ import {
   type NonCashManualPaymentMethod,
 } from "@/features/pos/manual-payment-verification";
 import { requirePermission } from "@/lib/auth/session";
-import { createHardwareJobWithDuplicateGuard } from "@/lib/hardware/job-queue";
+import { buildReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
+import {
+  createHardwareJobV2,
+  createHardwareJobV2InTransaction,
+} from "@/lib/hardware/job-producer-v2";
 import {
   deletePaymentEvidenceFile,
   storePaymentEvidenceFile,
@@ -4203,41 +4206,38 @@ export async function completePosCheckoutAction(
         });
       }
 
-      const [receiptCertificateJob] = await transaction
-        .insert(hardwareJobs)
-        .values({
+      const receiptCertificateJob = await createHardwareJobV2InTransaction(
+        transaction,
+        {
           organizationId: auth.organization.id,
           outletId: primaryOutlet.id,
           registerId: register.id,
-          agentId: null,
           createdByUserId: auth.user.id,
           jobType: "print_receipt_certificate",
-          deviceType: "document_printer",
-          targetDevice: "document_printer",
-          status: "pending",
-          priority: 30,
-          maxAttempts: 2,
-          payload: {
-            pdfUrl: `/api/sales/${sale.id}/receipt-certificate`,
-            title: `Nota & Certificate ${invoiceNumber}`,
+          mode: "automatic",
+          payload: buildReceiptDocumentPayloadV2({
             saleId: sale.id,
             invoiceNumber,
-            totalAmount: String(totalAmount),
-            itemCount: itemIds.length,
-            generatedAt: now.toISOString(),
-          },
-          idempotencyKey: `receipt_certificate:${sale.id}`,
+            requestSource: "pos.checkout",
+            reprint: false,
+            requestedAt: now,
+          }),
+          idempotencyKey: `receipt:${sale.id}:initial`,
           sourceType: "sale",
           sourceId: sale.id,
-          availableAt: now,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning({ id: hardwareJobs.id });
+          now,
+          audit: {
+            source: "pos.checkout",
+            requestId: idempotencyKey,
+            ipAddress: requestMetadata.ipAddress,
+            userAgent: requestMetadata.userAgent,
+          },
+        },
+      );
 
       return {
         ...sale,
-        receiptCertificateJobId: receiptCertificateJob?.id ?? null,
+        receiptCertificateJobId: receiptCertificateJob.job.id,
       };
     });
 
@@ -4346,6 +4346,7 @@ export async function completePosCheckoutAction(
 export async function reprintPosReceiptCertificateAction(formData: FormData) {
   const auth = await requirePermission("pos.access");
   const saleId = readText(formData, "saleId");
+  const requestId = readText(formData, "requestId");
   const returnTo = readText(formData, "returnTo");
 
   if (!UUID_PATTERN.test(saleId)) {
@@ -4353,6 +4354,14 @@ export async function reprintPosReceiptCertificateAction(formData: FormData) {
       returnTo,
       type: "error",
       message: "Transaksi tidak valid untuk cetak ulang invoice.",
+    });
+  }
+
+  if (!UUID_PATTERN.test(requestId)) {
+    redirectPosTransactionsWithFeedback({
+      returnTo,
+      type: "error",
+      message: "Request cetak ulang invoice tidak valid.",
     });
   }
 
@@ -4430,34 +4439,29 @@ export async function reprintPosReceiptCertificateAction(formData: FormData) {
   let feedbackMessage: string;
 
   try {
-    const result = await createHardwareJobWithDuplicateGuard({
+    const result = await createHardwareJobV2({
       organizationId: auth.organization.id,
       outletId: sale.outletId,
       registerId: sale.registerId,
-      agentId: null,
       createdByUserId: auth.user.id,
       jobType: "print_receipt_certificate",
-      deviceType: "document_printer",
-      targetDevice: "document_printer",
-      status: "pending",
-      priority: 25,
-      maxAttempts: 2,
-      payload: {
-        pdfUrl: `/api/sales/${sale.id}/receipt-certificate`,
-        title: `Cetak Ulang Invoice ${sale.invoiceNumber}`,
+      mode: "manual",
+      payload: buildReceiptDocumentPayloadV2({
         saleId: sale.id,
         invoiceNumber: sale.invoiceNumber,
-        totalAmount: sale.totalAmount,
         requestSource: "pos.transaction_detail",
         reprint: true,
-        requestedAt: now.toISOString(),
-      },
-      idempotencyKey: `receipt_certificate_reprint:${sale.id}:${randomUUID()}`,
+        requestedAt: now,
+      }),
+      idempotencyKey: `receipt:${sale.id}:reprint:${requestId}`,
       sourceType: "sale",
       sourceId: sale.id,
-      availableAt: now,
-      createdAt: now,
-      updatedAt: now,
+      now,
+      audit: {
+        source: "pos.transaction_detail",
+        requestId,
+        reason: `Cetak ulang invoice ${sale.invoiceNumber}.`,
+      },
     });
 
     revalidatePath(POS_TRANSACTIONS_PATH);

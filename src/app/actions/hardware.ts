@@ -14,7 +14,14 @@ import {
 import { requirePermission } from "@/lib/auth/session";
 import { cleanupHardwareJobs } from "@/lib/hardware/job-cleanup";
 import { recoverStaleHardwareJobs } from "@/lib/hardware/job-recovery";
-import { createHardwareJobWithDuplicateGuard } from "@/lib/hardware/job-queue";
+import { buildHardwareTestPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
+import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
+import {
+  getEnabledHardwareCapabilities,
+  getHardwareJobExpiresAt,
+  getRequiredHardwareCapability,
+  HARDWARE_JOB_PROTOCOL_V2,
+} from "@/lib/hardware/job-protocol-v2";
 
 const HARDWARE_DASHBOARD_PATH = "/admin/operasional/hardware";
 const UUID_PATTERN =
@@ -34,7 +41,10 @@ function isTestJobType(value: unknown): value is TestJobType {
   );
 }
 
-function redirectWithMessage(type: "success" | "error", message: string): never {
+function redirectWithMessage(
+  type: "success" | "error",
+  message: string,
+): never {
   const params = new URLSearchParams({ type, message });
 
   redirect(`${HARDWARE_DASHBOARD_PATH}?${params.toString()}`);
@@ -51,8 +61,12 @@ async function getAccessibleHardwareJob(jobId: string) {
       outletId: hardwareJobs.outletId,
       registerId: hardwareJobs.registerId,
       agentId: hardwareJobs.agentId,
+      currentAttemptId: hardwareJobs.currentAttemptId,
+      protocolVersion: hardwareJobs.protocolVersion,
       jobType: hardwareJobs.jobType,
       status: hardwareJobs.status,
+      attempts: hardwareJobs.attempts,
+      maxAttempts: hardwareJobs.maxAttempts,
     })
     .from(hardwareJobs)
     .where(
@@ -70,59 +84,17 @@ async function getAccessibleHardwareJob(jobId: string) {
   return { auth, job };
 }
 
-function getTestJobDefinition(jobType: TestJobType) {
-  const generatedAt = new Date().toISOString();
-
-  if (jobType === "test_label_printer") {
-    return {
-      deviceType: "label_printer" as const,
-      targetDevice: "label_printer",
-      payload: {
-        sku: "AJ-TEST-LABEL",
-        productName: "CINCIN EMAS TEST ASIHJAYA",
-        barcode: "AJTEST123456",
-        weightGram: "2.350",
-        purityPercent: "75",
-        exchangePurityPercent: "70",
-        size: "12",
-        color: "Kuning",
-        gemstone: "Zircon",
-        sellingAmount: "1850000",
-        labelProfile: "jewelry_compact",
-        generatedAt,
-      },
-      label: "test label printer",
-    };
-  }
-
-  if (jobType === "test_document_printer") {
-    return {
-      deviceType: "document_printer" as const,
-      targetDevice: "document_printer",
-      payload: {
-        pdfUrl: "/api/sales/receipt-certificate-preview",
-        title: "Test Nota & Certificate Asihjaya",
-        generatedAt,
-      },
-      label: "test document printer",
-    };
-  }
-
-  return {
-    deviceType: "cash_drawer" as const,
-    targetDevice: "cash_drawer",
-    payload: {
-      reason: "Test cash drawer dari Admin Hardware Hub",
-      generatedAt,
-    },
-    label: "test cash drawer",
-  };
+function getTestJobLabel(jobType: TestJobType) {
+  if (jobType === "test_label_printer") return "test label printer";
+  if (jobType === "test_document_printer") return "test document printer";
+  return "test cash drawer";
 }
 
 export async function createHardwareTestJobAction(formData: FormData) {
   const auth = await requirePermission("admin.access");
   const agentId = String(formData.get("agentId") ?? "").trim();
   const jobType = String(formData.get("jobType") ?? "").trim();
+  const requestId = String(formData.get("requestId") ?? "").trim();
 
   if (!UUID_PATTERN.test(agentId)) {
     redirectWithMessage("error", "Agent hardware tidak valid.");
@@ -130,6 +102,10 @@ export async function createHardwareTestJobAction(formData: FormData) {
 
   if (!isTestJobType(jobType)) {
     redirectWithMessage("error", "Tipe test hardware tidak valid.");
+  }
+
+  if (!UUID_PATTERN.test(requestId)) {
+    redirectWithMessage("error", "Request test hardware tidak valid.");
   }
 
   const accessibleOutletIds = new Set(auth.outlets.map((outlet) => outlet.id));
@@ -148,6 +124,7 @@ export async function createHardwareTestJobAction(formData: FormData) {
       registerName: registers.name,
       outletIsActive: outlets.isActive,
       registerIsActive: registers.isActive,
+      capabilities: hardwareAgents.capabilities,
     })
     .from(hardwareAgents)
     .innerJoin(outlets, eq(hardwareAgents.outletId, outlets.id))
@@ -173,23 +150,44 @@ export async function createHardwareTestJobAction(formData: FormData) {
     redirectWithMessage("error", "Agent hardware tidak aktif.");
   }
 
-  const definition = getTestJobDefinition(jobType);
+  const requiredCapability = getRequiredHardwareCapability(jobType);
+  if (
+    !getEnabledHardwareCapabilities(agent.capabilities).includes(
+      requiredCapability,
+    )
+  ) {
+    redirectWithMessage(
+      "error",
+      `Agent ${agent.name} belum melaporkan capability ${requiredCapability}.`,
+    );
+  }
 
-  const createResult = await createHardwareJobWithDuplicateGuard({
+  const now = new Date();
+  const label = getTestJobLabel(jobType);
+  const payload = buildHardwareTestPayloadV2({
+    jobType,
+    agentId: agent.id,
+    requestedAt: now,
+  });
+
+  const createResult = await createHardwareJobV2({
     organizationId: auth.organization.id,
     outletId: agent.outletId,
     registerId: agent.registerId,
-    agentId: null,
     createdByUserId: auth.user.id,
+    targetAgentId: agent.id,
     jobType,
-    deviceType: definition.deviceType,
-    targetDevice: definition.targetDevice,
-    status: "pending",
-    priority: 20,
-    maxAttempts: 1,
-    payload: definition.payload,
+    mode: "test",
+    payload,
+    idempotencyKey: `hardware-test:${requestId}`,
     sourceType: "hardware_test",
-    sourceId: agent.id,
+    sourceId: requestId,
+    now,
+    audit: {
+      source: "admin.hardware_dashboard",
+      requestId,
+      reason: `Menjalankan ${label} untuk agent ${agent.code}.`,
+    },
   });
 
   revalidatePath(HARDWARE_DASHBOARD_PATH);
@@ -197,13 +195,13 @@ export async function createHardwareTestJobAction(formData: FormData) {
   if (createResult.duplicate) {
     redirectWithMessage(
       "success",
-      `Job ${definition.label} untuk ${agent.name} masih aktif di antrean. Sistem tidak membuat duplikat baru.`,
+      `Job ${label} untuk ${agent.name} masih aktif di antrean. Sistem tidak membuat duplikat baru.`,
     );
   }
 
   redirectWithMessage(
     "success",
-    `Job ${definition.label} untuk ${agent.name} sudah masuk antrean.`,
+    `Job ${label} untuk ${agent.name} sudah masuk antrean.`,
   );
 }
 
@@ -220,7 +218,18 @@ export async function retryHardwareJobAction(formData: FormData) {
     redirectWithMessage("error", "Hardware job tidak ditemukan.");
   }
 
-  if (job.status !== "failed" && job.status !== "cancelled") {
+  const isProtocolV2 = job.protocolVersion === HARDWARE_JOB_PROTOCOL_V2;
+
+  if (isProtocolV2 && job.status !== "failed") {
+    redirectWithMessage(
+      "error",
+      job.status === "unknown_outcome"
+        ? "Job dengan hasil tidak pasti tidak boleh dicetak ulang dari Retry biasa. Gunakan alur resolusi manual agar risiko cetak ganda tercatat."
+        : "Untuk Protocol v2, hanya job gagal sebelum dispatch yang bisa dijalankan ulang.",
+    );
+  }
+
+  if (!isProtocolV2 && job.status !== "failed" && job.status !== "cancelled") {
     redirectWithMessage(
       "error",
       "Hanya job gagal atau dibatalkan yang bisa dijalankan ulang.",
@@ -229,24 +238,65 @@ export async function retryHardwareJobAction(formData: FormData) {
 
   const now = new Date();
 
-  await db
-    .update(hardwareJobs)
-    .set({
-      agentId: null,
-      createdByUserId: auth.user.id,
-      status: "pending",
-      attempts: 0,
-      error: null,
-      result: {},
-      availableAt: now,
-      claimedAt: null,
-      startedAt: null,
-      completedAt: null,
-      failedAt: null,
-      cancelledAt: null,
-      updatedAt: now,
-    })
-    .where(eq(hardwareJobs.id, job.id));
+  if (isProtocolV2) {
+    const nextMaxAttempts = Math.max(job.maxAttempts, job.attempts + 1);
+
+    await db
+      .update(hardwareJobs)
+      .set({
+        agentId: null,
+        currentAttemptId: null,
+        createdByUserId: auth.user.id,
+        status: "pending",
+        maxAttempts: nextMaxAttempts,
+        error: null,
+        result: {
+          manualRetryRequestedAt: now.toISOString(),
+          manualRetryRequestedByUserId: auth.user.id,
+          previousAttemptId: job.currentAttemptId,
+        },
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        availableAt: now,
+        expiresAt: getHardwareJobExpiresAt({
+          jobType: job.jobType,
+          mode: "manual",
+          now,
+        }),
+        claimedAt: null,
+        processingAt: null,
+        startedAt: null,
+        submittedAt: null,
+        completedAt: null,
+        failedAt: null,
+        unknownAt: null,
+        expiredAt: null,
+        cancelledAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(eq(hardwareJobs.id, job.id), eq(hardwareJobs.status, "failed")),
+      );
+  } else {
+    await db
+      .update(hardwareJobs)
+      .set({
+        agentId: null,
+        createdByUserId: auth.user.id,
+        status: "pending",
+        attempts: 0,
+        error: null,
+        result: {},
+        availableAt: now,
+        claimedAt: null,
+        startedAt: null,
+        completedAt: null,
+        failedAt: null,
+        cancelledAt: null,
+        updatedAt: now,
+      })
+      .where(eq(hardwareJobs.id, job.id));
+  }
 
   await markUnreadNotificationsReadByEntity({
     organizationId: auth.organization.id,
@@ -268,12 +318,17 @@ export async function retryHardwareJobAction(formData: FormData) {
     metadata: {
       jobType: job.jobType,
       retriedByUserId: auth.user.id,
+      protocolVersion: job.protocolVersion,
+      previousAttemptId: job.currentAttemptId,
     },
   });
 
   revalidatePath(HARDWARE_DASHBOARD_PATH);
   revalidatePath("/admin");
-  redirectWithMessage("success", "Hardware job sudah dimasukkan ulang ke antrean.");
+  redirectWithMessage(
+    "success",
+    "Hardware job sudah dimasukkan ulang ke antrean.",
+  );
 }
 
 export async function cancelHardwareJobAction(formData: FormData) {
@@ -346,7 +401,6 @@ export async function recoverStaleHardwareJobsAction() {
     `Auto-recovery selesai: ${result.requeued} job masuk ulang antrean, ${result.failed} job ditandai gagal.`,
   );
 }
-
 
 export async function cleanupHardwareJobsAction() {
   const auth = await requirePermission("admin.access");

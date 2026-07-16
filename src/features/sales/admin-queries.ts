@@ -396,9 +396,13 @@ function normalizePrintStatus(status: string | null | undefined): AdminSalePrint
   if (
     status === "pending" ||
     status === "claimed" ||
+    status === "processing" ||
     status === "printing" ||
+    status === "submitted" ||
     status === "completed" ||
     status === "failed" ||
+    status === "unknown_outcome" ||
+    status === "expired" ||
     status === "cancelled"
   ) {
     return status;
@@ -1175,7 +1179,7 @@ export async function getAdminSaleDetailData({
           tone:
             job.status === "completed"
               ? ("success" as const)
-              : job.status === "failed"
+              : job.status === "failed" || job.status === "unknown_outcome"
                 ? ("danger" as const)
                 : ("warning" as const),
         }))

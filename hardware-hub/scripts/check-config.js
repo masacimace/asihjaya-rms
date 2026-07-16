@@ -58,8 +58,11 @@ if (!apiUrl) {
     if (!["http:", "https:"].includes(parsed.protocol)) {
       errors.push("ASIHJAYA_API_URL harus memakai http:// atau https://.");
     }
-    if (parsed.protocol === "http:" && !["localhost", "127.0.0.1"].includes(parsed.hostname)) {
-      warnings.push("ASIHJAYA_API_URL production seharusnya memakai HTTPS.");
+    if (
+      parsed.protocol === "http:" &&
+      !["localhost", "127.0.0.1", "::1"].includes(parsed.hostname)
+    ) {
+      errors.push("ASIHJAYA_API_URL production wajib memakai HTTPS.");
     }
   } catch {
     errors.push("ASIHJAYA_API_URL bukan URL yang valid.");

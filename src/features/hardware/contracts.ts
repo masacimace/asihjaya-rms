@@ -1,4 +1,5 @@
-export type HardwareAgentDisplayStatus = "online" | "stale" | "offline" | "disabled";
+export type HardwareAgentDisplayStatus =
+  "online" | "stale" | "offline" | "disabled";
 
 export type HardwareAgentDiagnostics = {
   configWarnings: string[];
@@ -41,6 +42,7 @@ export type HardwareAgentSummary = {
 
 export type HardwareJobSummary = {
   id: string;
+  protocolVersion: number;
   jobType:
     | "print_label_sato"
     | "print_receipt_certificate"

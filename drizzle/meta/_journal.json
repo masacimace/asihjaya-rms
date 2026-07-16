@@ -176,6 +176,13 @@
       "when": 1784201864946,
       "tag": "0024_hardware_job_protocol_v2_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784208047300,
+      "tag": "0025_hardware_v2_secure_job_producers",
+      "breakpoints": true
     }
   ]
 }
