@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { hardwareJobAttempts, hardwareJobs } from "@/db/schema";
+import { auditLogs, hardwareJobAttempts, hardwareJobs } from "@/db/schema";
 import type { HardwareAgentAuth } from "@/lib/hardware/agent-auth";
 import {
   getHardwareJobLeaseExpiresAt,
@@ -417,6 +417,56 @@ export async function applyHardwareJobAttemptV2Event({
         code: "JOB_UPDATE_CONFLICT",
         message: "Job gagal diperbarui setelah attempt event.",
         status: 409,
+      });
+    }
+
+    const auditAction =
+      event.status === "dispatching"
+        ? "hardware.job_dispatch_started"
+        : event.status === "submitted"
+          ? "hardware.job_submitted"
+          : event.status === "acknowledged"
+            ? "hardware.job_completed"
+            : event.status === "unknown_after_dispatch"
+              ? "hardware.job_unknown_outcome"
+              : event.status === "failed_before_dispatch"
+                ? disposition === "requeued"
+                  ? "hardware.job_retry_scheduled"
+                  : "hardware.job_failed"
+                : null;
+
+    if (auditAction) {
+      await tx.insert(auditLogs).values({
+        organizationId: auth.agent.organizationId,
+        outletId: auth.agent.outletId,
+        actorUserId: null,
+        action: auditAction,
+        entityType: "hardware_job",
+        entityId: job.id,
+        beforeData: {
+          jobStatus,
+          attemptStatus: attempt.status,
+          eventSequence: attempt.eventSequence,
+        },
+        afterData: {
+          jobStatus: nextJobStatus,
+          attemptStatus: updatedAttempt.status,
+          eventSequence: updatedAttempt.eventSequence,
+          disposition,
+        },
+        reason: event.error?.message ?? null,
+        requestId: event.idempotencyKey.slice(0, 120),
+        metadata: {
+          protocolVersion: HARDWARE_JOB_PROTOCOL_V2,
+          jobType: job.jobType,
+          deviceType: job.deviceType,
+          attemptId: attempt.id,
+          attemptNumber: attempt.attemptNumber,
+          agentId: auth.agent.id,
+          errorCode: event.error?.code ?? null,
+          retrySafe: event.error?.retrySafe ?? null,
+          agentOccurredAt: event.occurredAt.toISOString(),
+        },
       });
     }
 

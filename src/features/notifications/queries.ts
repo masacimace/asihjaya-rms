@@ -30,7 +30,10 @@ import {
   type AdminNotificationPageData,
   type AdminNotificationRow,
 } from "@/features/notifications/contracts";
-import { syncHardwareAgentHealthNotifications } from "@/features/notifications/hardware";
+import {
+  syncHardwareAgentHealthNotifications,
+  syncHardwareJobOperationalNotifications,
+} from "@/features/notifications/hardware";
 import { runNotificationMaintenanceForOrganization } from "@/features/notifications/maintenance";
 import type { AuthContext } from "@/lib/auth/session";
 
@@ -117,7 +120,10 @@ function mapNotificationRow(row: {
 export async function getAdminNotificationDrawerData(
   auth: AuthContext,
 ): Promise<AdminNotificationDrawerData> {
-  await syncHardwareAgentHealthNotifications(auth);
+  await Promise.all([
+    syncHardwareAgentHealthNotifications(auth),
+    syncHardwareJobOperationalNotifications(auth),
+  ]);
   await runNotificationMaintenanceForOrganization(auth.organization.id);
 
   const baseCondition = getAccessibleNotificationCondition(auth);
@@ -403,7 +409,10 @@ export async function getAdminNotificationPageData(
   auth: AuthContext,
   filters: AdminNotificationFilters,
 ): Promise<AdminNotificationPageData> {
-  await syncHardwareAgentHealthNotifications(auth);
+  await Promise.all([
+    syncHardwareAgentHealthNotifications(auth),
+    syncHardwareJobOperationalNotifications(auth),
+  ]);
   await runNotificationMaintenanceForOrganization(auth.organization.id);
 
   const { conditions, periodLabel } = createNotificationPageBaseConditions({

@@ -183,6 +183,13 @@
       "when": 1784208047300,
       "tag": "0025_hardware_v2_secure_job_producers",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784214260284,
+      "tag": "0026_hardware_v2_operations_observability",
+      "breakpoints": true
     }
   ]
 }

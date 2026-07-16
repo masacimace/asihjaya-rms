@@ -8,6 +8,7 @@ import {
 } from "@/features/notifications/mutations";
 import { resolveNotificationEventsByEntity } from "@/features/notifications/event-service";
 import type { AuthContext } from "@/lib/auth/session";
+import { getHardwareOperationalThresholds } from "@/lib/hardware/observability-v2";
 
 const HARDWARE_DASHBOARD_PATH = "/admin/operasional/hardware";
 const DEFAULT_AGENT_STALE_MINUTES = 5;
@@ -27,6 +28,29 @@ type HardwareJobNotificationInput = {
   deviceType: string;
   error?: string | null;
   source?: string;
+};
+
+type HardwareUnknownOutcomeNotificationInput = HardwareJobNotificationInput & {
+  attemptId?: string | null;
+};
+
+type HardwareV2LeaseRecoveryNotificationInput = {
+  organizationId: string;
+  outletId: string;
+  registerId: string;
+  agentId: string;
+  unknownJobIds: string[];
+  failedJobIds: string[];
+};
+
+type HardwareUnknownOutcomeResolutionNotificationInput = {
+  organizationId: string;
+  outletId: string;
+  jobId: string;
+  jobType: string;
+  resolutionType: "confirmed_completed" | "retry_authorized" | "cancelled";
+  resolvedByUserId: string;
+  reason: string;
 };
 
 type HardwareAgentOfflineInput = {
@@ -163,6 +187,176 @@ export async function createHardwareJobFailedNotification({
   });
 }
 
+export async function createHardwareJobUnknownOutcomeNotification({
+  organizationId,
+  outletId,
+  registerId = null,
+  agentId = null,
+  jobId,
+  jobType,
+  deviceType,
+  error,
+  source = "hardware_job",
+  attemptId = null,
+}: HardwareUnknownOutcomeNotificationInput) {
+  const label = getHardwareJobLabel(jobType);
+  const safeError = error?.trim() ? error.trim().slice(0, 220) : null;
+
+  await createAdminNotification({
+    organizationId,
+    outletId,
+    type: "hardware",
+    eventType: "hardware.job_unknown_outcome",
+    severity: "critical",
+    title: "Hasil cetak belum dapat dipastikan",
+    message: safeError
+      ? `${label} mungkin sudah dijalankan, tetapi konfirmasi akhirnya gagal. ${safeError}`
+      : `${label} mungkin sudah dijalankan. Periksa hasil fisik sebelum memilih selesai, retry, atau batalkan.`,
+    entityType: "hardware_job",
+    entityId: jobId,
+    actionUrl: HARDWARE_DASHBOARD_PATH,
+    requiresAction: true,
+    deduplicationKey: `hardware.job_unknown_outcome:${jobId}`,
+    recipientPermissionCodes: ["hardware.resolve_unknown"],
+    metadata: {
+      jobId,
+      jobType,
+      deviceType,
+      registerId,
+      agentId,
+      attemptId,
+      source,
+      error: safeError,
+      duplicateRisk: true,
+    },
+    dedupeUnread: true,
+  });
+}
+
+export async function markHardwareJobUnknownOutcomeResolved({
+  organizationId,
+  jobId,
+  resolvedAt = new Date(),
+}: {
+  organizationId: string;
+  jobId: string;
+  resolvedAt?: Date;
+}) {
+  return resolveNotificationEventsByEntity({
+    organizationId,
+    category: "hardware",
+    eventType: "hardware.job_unknown_outcome",
+    entityType: "hardware_job",
+    entityId: jobId,
+    resolvedAt,
+  });
+}
+
+export async function createHardwareJobUnknownOutcomeResolutionNotification({
+  organizationId,
+  outletId,
+  jobId,
+  jobType,
+  resolutionType,
+  resolvedByUserId,
+  reason,
+}: HardwareUnknownOutcomeResolutionNotificationInput) {
+  const label = getHardwareJobLabel(jobType);
+  const resolutionLabel =
+    resolutionType === "confirmed_completed"
+      ? "ditandai sudah tercetak"
+      : resolutionType === "retry_authorized"
+        ? "diizinkan untuk dicoba ulang"
+        : "dibatalkan tanpa retry";
+
+  await createAdminNotification({
+    organizationId,
+    outletId,
+    type: "hardware",
+    eventType: "hardware.job_unknown_resolved",
+    severity: resolutionType === "retry_authorized" ? "warning" : "success",
+    title: "Hasil hardware sudah diresolusi",
+    message: `${label} ${resolutionLabel}. Alasan: ${reason.slice(0, 180)}`,
+    entityType: "hardware_job_resolution",
+    entityId: jobId,
+    actionUrl: HARDWARE_DASHBOARD_PATH,
+    requiresAction: false,
+    deduplicationKey: `hardware.job_unknown_resolved:${jobId}:${Date.now()}`,
+    recipientPermissionCodes: ["hardware.resolve_unknown"],
+    metadata: {
+      jobId,
+      jobType,
+      resolutionType,
+      resolvedByUserId,
+      reason,
+    },
+  });
+}
+
+export async function notifyHardwareJobV2LeaseRecovery({
+  organizationId,
+  outletId,
+  registerId,
+  agentId,
+  unknownJobIds,
+  failedJobIds,
+}: HardwareV2LeaseRecoveryNotificationInput) {
+  const jobIds = [...new Set([...unknownJobIds, ...failedJobIds])];
+
+  if (jobIds.length === 0) {
+    return;
+  }
+
+  const rows = await db
+    .select({
+      id: hardwareJobs.id,
+      jobType: hardwareJobs.jobType,
+      deviceType: hardwareJobs.deviceType,
+      lastErrorMessage: hardwareJobs.lastErrorMessage,
+      currentAttemptId: hardwareJobs.currentAttemptId,
+    })
+    .from(hardwareJobs)
+    .where(
+      and(
+        eq(hardwareJobs.organizationId, organizationId),
+        eq(hardwareJobs.outletId, outletId),
+        eq(hardwareJobs.registerId, registerId),
+        inArray(hardwareJobs.id, jobIds),
+      ),
+    );
+
+  const unknownSet = new Set(unknownJobIds);
+
+  await Promise.all(
+    rows.map((job) =>
+      unknownSet.has(job.id)
+        ? createHardwareJobUnknownOutcomeNotification({
+            organizationId,
+            outletId,
+            registerId,
+            agentId,
+            jobId: job.id,
+            attemptId: job.currentAttemptId,
+            jobType: job.jobType,
+            deviceType: job.deviceType,
+            error: job.lastErrorMessage,
+            source: "lease_recovery_v2",
+          })
+        : createHardwareJobFailedNotification({
+            organizationId,
+            outletId,
+            registerId,
+            agentId,
+            jobId: job.id,
+            jobType: job.jobType,
+            deviceType: job.deviceType,
+            error: job.lastErrorMessage,
+            source: "lease_recovery_v2",
+          }),
+    ),
+  );
+}
+
 export async function markHardwareJobFailureResolved({
   organizationId,
   outletId,
@@ -207,6 +401,142 @@ export async function markHardwareJobFailureResolved({
   ]);
 
   return groupCount + legacyCount;
+}
+
+export async function createHardwareJobSubmittedStaleNotification({
+  organizationId,
+  outletId,
+  registerId = null,
+  agentId = null,
+  jobId,
+  jobType,
+  deviceType,
+  error,
+  source = "operational_sync",
+}: HardwareJobNotificationInput) {
+  const label = getHardwareJobLabel(jobType);
+  const safeError = error?.trim() ? error.trim().slice(0, 180) : null;
+
+  await createAdminNotification({
+    organizationId,
+    outletId,
+    type: "hardware",
+    eventType: "hardware.job_submitted_stale",
+    severity: "warning",
+    title: "Hardware job menunggu ACK final",
+    message: safeError
+      ? `${label} sudah submitted tetapi belum selesai. ${safeError}`
+      : `${label} sudah dikirim ke printer, tetapi agent belum menyelesaikan acknowledgement final.`,
+    entityType: "hardware_job",
+    entityId: jobId,
+    actionUrl: `/admin/operasional/hardware/jobs/${jobId}`,
+    requiresAction: true,
+    deduplicationKey: `hardware.job_submitted_stale:${jobId}`,
+    recipientPermissionCodes: ["admin.access"],
+    metadata: {
+      jobId,
+      jobType,
+      deviceType,
+      registerId,
+      agentId,
+      source,
+      error: safeError,
+    },
+    dedupeUnread: true,
+  });
+}
+
+export async function markHardwareJobSubmittedStaleResolved({
+  organizationId,
+  jobId,
+  resolvedAt = new Date(),
+}: {
+  organizationId: string;
+  jobId: string;
+  resolvedAt?: Date;
+}) {
+  return resolveNotificationEventsByEntity({
+    organizationId,
+    category: "hardware",
+    eventType: "hardware.job_submitted_stale",
+    entityType: "hardware_job",
+    entityId: jobId,
+    resolvedAt,
+  });
+}
+
+export async function syncHardwareJobOperationalNotifications(
+  auth: AuthContext,
+) {
+  const outletIds = auth.outlets.map((outlet) => outlet.id);
+
+  if (outletIds.length === 0) {
+    return;
+  }
+
+  const now = new Date();
+  const thresholds = getHardwareOperationalThresholds();
+  const submittedCutoff = new Date(
+    now.getTime() - thresholds.submittedWarningSeconds * 1000,
+  );
+
+  const rows = await db
+    .select({
+      id: hardwareJobs.id,
+      organizationId: hardwareJobs.organizationId,
+      outletId: hardwareJobs.outletId,
+      registerId: hardwareJobs.registerId,
+      agentId: hardwareJobs.agentId,
+      currentAttemptId: hardwareJobs.currentAttemptId,
+      jobType: hardwareJobs.jobType,
+      deviceType: hardwareJobs.deviceType,
+      status: hardwareJobs.status,
+      updatedAt: hardwareJobs.updatedAt,
+      lastErrorMessage: hardwareJobs.lastErrorMessage,
+    })
+    .from(hardwareJobs)
+    .where(
+      and(
+        eq(hardwareJobs.organizationId, auth.organization.id),
+        inArray(hardwareJobs.outletId, outletIds),
+        or(
+          eq(hardwareJobs.status, "unknown_outcome"),
+          and(
+            eq(hardwareJobs.status, "submitted"),
+            lt(hardwareJobs.updatedAt, submittedCutoff),
+          ),
+        )!,
+      ),
+    );
+
+  await Promise.all(
+    rows.map((job) =>
+      job.status === "unknown_outcome"
+        ? createHardwareJobUnknownOutcomeNotification({
+            organizationId: job.organizationId,
+            outletId: job.outletId,
+            registerId: job.registerId,
+            agentId: job.agentId,
+            jobId: job.id,
+            attemptId: job.currentAttemptId,
+            jobType: job.jobType,
+            deviceType: job.deviceType,
+            error: job.lastErrorMessage,
+            source: "operational_sync",
+          })
+        : createHardwareJobSubmittedStaleNotification({
+            organizationId: job.organizationId,
+            outletId: job.outletId,
+            registerId: job.registerId,
+            agentId: job.agentId,
+            jobId: job.id,
+            jobType: job.jobType,
+            deviceType: job.deviceType,
+            error: job.lastErrorMessage,
+            source: "operational_sync",
+          }),
+    ),
+  );
 }
 
 export async function createHardwareAgentOfflineNotification({

@@ -1,7 +1,7 @@
 import { and, count, eq, inArray, lt, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { hardwareJobs } from "@/db/schema";
+import { hardwareJobResolutions, hardwareJobs } from "@/db/schema";
 
 const DEFAULT_COMPLETED_RETENTION_DAYS = 30;
 const DEFAULT_CANCELLED_RETENTION_DAYS = 30;
@@ -113,6 +113,11 @@ function buildCleanupWhere({
     eq(hardwareJobs.organizationId, organizationId),
     eq(hardwareJobs.status, status),
     lt(getStatusCompletedAtExpression(status), cutoff),
+    sql`not exists (
+      select 1
+      from ${hardwareJobResolutions}
+      where ${hardwareJobResolutions.jobId} = ${hardwareJobs.id}
+    )`,
   ];
 
   if (outletIds && outletIds.length > 0) {

@@ -196,6 +196,11 @@ const permissionSeeds = [
     module: "settings",
   },
   {
+    code: "hardware.resolve_unknown",
+    name: "Menyelesaikan hardware job dengan hasil tidak pasti",
+    module: "operations",
+  },
+  {
     code: "audit.view",
     name: "Melihat audit log",
     module: "administration",
@@ -341,6 +346,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "returns.receive",
     "returns.inspect",
     "shifts.manage",
+    "hardware.resolve_unknown",
     "reports.view",
     "audit.view",
   ],

@@ -12,6 +12,7 @@ import {
 
 import { db } from "@/db";
 import {
+  auditLogs,
   hardwareJobAttempts,
   hardwareJobs,
 } from "@/db/schema";
@@ -32,6 +33,10 @@ export type HardwareJobLeaseRecoveryV2 = {
   requeuedAttempts: number;
   failedAttempts: number;
   unknownAttempts: number;
+  expiredJobIds: string[];
+  requeuedJobIds: string[];
+  failedJobIds: string[];
+  unknownJobIds: string[];
 };
 
 export type ClaimedHardwareJobV2 = {
@@ -62,27 +67,56 @@ async function expirePendingHardwareJobsV2({
 }: {
   auth: HardwareAgentAuth;
   now: Date;
-}): Promise<number> {
-  const expired = await db
-    .update(hardwareJobs)
-    .set({
-      status: "expired",
-      expiredAt: now,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(hardwareJobs.organizationId, auth.agent.organizationId),
-        eq(hardwareJobs.outletId, auth.agent.outletId),
-        eq(hardwareJobs.registerId, auth.agent.registerId),
-        eq(hardwareJobs.protocolVersion, HARDWARE_JOB_PROTOCOL_V2),
-        eq(hardwareJobs.status, "pending"),
-        lte(hardwareJobs.expiresAt, now),
-      ),
-    )
-    .returning({ id: hardwareJobs.id });
+}): Promise<string[]> {
+  return db.transaction(async (tx) => {
+    const expired = await tx
+      .update(hardwareJobs)
+      .set({
+        status: "expired",
+        expiredAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(hardwareJobs.organizationId, auth.agent.organizationId),
+          eq(hardwareJobs.outletId, auth.agent.outletId),
+          eq(hardwareJobs.registerId, auth.agent.registerId),
+          eq(hardwareJobs.protocolVersion, HARDWARE_JOB_PROTOCOL_V2),
+          eq(hardwareJobs.status, "pending"),
+          lte(hardwareJobs.expiresAt, now),
+        ),
+      )
+      .returning({
+        id: hardwareJobs.id,
+        jobType: hardwareJobs.jobType,
+        deviceType: hardwareJobs.deviceType,
+      });
 
-  return expired.length;
+    if (expired.length > 0) {
+      await tx.insert(auditLogs).values(
+        expired.map((job) => ({
+          organizationId: auth.agent.organizationId,
+          outletId: auth.agent.outletId,
+          actorUserId: null,
+          action: "hardware.job_expired",
+          entityType: "hardware_job",
+          entityId: job.id,
+          beforeData: { status: "pending" },
+          afterData: { status: "expired" },
+          reason: "Job melewati expiresAt sebelum diklaim agent.",
+          metadata: {
+            protocolVersion: HARDWARE_JOB_PROTOCOL_V2,
+            jobType: job.jobType,
+            deviceType: job.deviceType,
+            registerId: auth.agent.registerId,
+            agentId: auth.agent.id,
+          },
+        })),
+      );
+    }
+
+    return expired.map((job) => job.id);
+  });
 }
 
 async function recoverExpiredHardwareJobLeasesV2({
@@ -91,7 +125,9 @@ async function recoverExpiredHardwareJobLeasesV2({
 }: {
   auth: HardwareAgentAuth;
   now: Date;
-}): Promise<Omit<HardwareJobLeaseRecoveryV2, "expiredPendingJobs">> {
+}): Promise<
+  Omit<HardwareJobLeaseRecoveryV2, "expiredPendingJobs" | "expiredJobIds">
+> {
   return db.transaction(async (tx) => {
     const rows = await tx
       .select({
@@ -103,6 +139,8 @@ async function recoverExpiredHardwareJobLeasesV2({
         attemptId: hardwareJobAttempts.id,
         attemptNumber: hardwareJobAttempts.attemptNumber,
         attemptStatus: hardwareJobAttempts.status,
+        jobType: hardwareJobs.jobType,
+        deviceType: hardwareJobs.deviceType,
       })
       .from(hardwareJobs)
       .innerJoin(
@@ -125,9 +163,9 @@ async function recoverExpiredHardwareJobLeasesV2({
       .limit(MAX_LEASE_RECOVERY_PER_CLAIM)
       .for("update", { skipLocked: true });
 
-    let requeuedAttempts = 0;
-    let failedAttempts = 0;
-    let unknownAttempts = 0;
+    const requeuedJobIds: string[] = [];
+    const failedJobIds: string[] = [];
+    const unknownJobIds: string[] = [];
 
     for (const row of rows) {
       if (row.attemptStatus === "dispatching") {
@@ -156,7 +194,35 @@ async function recoverExpiredHardwareJobLeasesV2({
           })
           .where(eq(hardwareJobs.id, row.jobId));
 
-        unknownAttempts += 1;
+        await tx.insert(auditLogs).values({
+          organizationId: auth.agent.organizationId,
+          outletId: auth.agent.outletId,
+          actorUserId: null,
+          action: "hardware.job_unknown_outcome",
+          entityType: "hardware_job",
+          entityId: row.jobId,
+          beforeData: {
+            jobStatus: row.jobStatus,
+            attemptStatus: row.attemptStatus,
+          },
+          afterData: {
+            jobStatus: "unknown_outcome",
+            attemptStatus: "unknown_after_dispatch",
+          },
+          reason:
+            "Lease berakhir setelah dispatch dimulai; hasil hardware tidak dapat dipastikan.",
+          metadata: {
+            protocolVersion: HARDWARE_JOB_PROTOCOL_V2,
+            jobType: row.jobType,
+            deviceType: row.deviceType,
+            attemptId: row.attemptId,
+            attemptNumber: row.attemptNumber,
+            agentId: auth.agent.id,
+            errorCode: "LEASE_EXPIRED_AFTER_DISPATCH",
+          },
+        });
+
+        unknownJobIds.push(row.jobId);
         continue;
       }
 
@@ -196,7 +262,34 @@ async function recoverExpiredHardwareJobLeasesV2({
           })
           .where(eq(hardwareJobs.id, row.jobId));
 
-        requeuedAttempts += 1;
+        await tx.insert(auditLogs).values({
+          organizationId: auth.agent.organizationId,
+          outletId: auth.agent.outletId,
+          actorUserId: null,
+          action: "hardware.job_retry_scheduled",
+          entityType: "hardware_job",
+          entityId: row.jobId,
+          beforeData: {
+            jobStatus: row.jobStatus,
+            attemptStatus: row.attemptStatus,
+          },
+          afterData: {
+            jobStatus: "pending",
+            attemptStatus: "lease_expired",
+          },
+          reason: "Lease berakhir sebelum dispatch; retry aman dijadwalkan.",
+          metadata: {
+            protocolVersion: HARDWARE_JOB_PROTOCOL_V2,
+            jobType: row.jobType,
+            deviceType: row.deviceType,
+            attemptId: row.attemptId,
+            attemptNumber: row.attemptNumber,
+            agentId: auth.agent.id,
+            errorCode: "LEASE_EXPIRED_BEFORE_DISPATCH",
+          },
+        });
+
+        requeuedJobIds.push(row.jobId);
       } else {
         await tx
           .update(hardwareJobs)
@@ -210,11 +303,46 @@ async function recoverExpiredHardwareJobLeasesV2({
           })
           .where(eq(hardwareJobs.id, row.jobId));
 
-        failedAttempts += 1;
+        await tx.insert(auditLogs).values({
+          organizationId: auth.agent.organizationId,
+          outletId: auth.agent.outletId,
+          actorUserId: null,
+          action: "hardware.job_failed",
+          entityType: "hardware_job",
+          entityId: row.jobId,
+          beforeData: {
+            jobStatus: row.jobStatus,
+            attemptStatus: row.attemptStatus,
+          },
+          afterData: {
+            jobStatus: "failed",
+            attemptStatus: "lease_expired",
+          },
+          reason:
+            "Lease berakhir sebelum dispatch dan batas attempt/expiry telah tercapai.",
+          metadata: {
+            protocolVersion: HARDWARE_JOB_PROTOCOL_V2,
+            jobType: row.jobType,
+            deviceType: row.deviceType,
+            attemptId: row.attemptId,
+            attemptNumber: row.attemptNumber,
+            agentId: auth.agent.id,
+            errorCode: "LEASE_EXPIRED_BEFORE_DISPATCH",
+          },
+        });
+
+        failedJobIds.push(row.jobId);
       }
     }
 
-    return { requeuedAttempts, failedAttempts, unknownAttempts };
+    return {
+      requeuedAttempts: requeuedJobIds.length,
+      failedAttempts: failedJobIds.length,
+      unknownAttempts: unknownJobIds.length,
+      requeuedJobIds,
+      failedJobIds,
+      unknownJobIds,
+    };
   });
 }
 
@@ -236,12 +364,16 @@ export async function claimHardwareJobV2({
     requestedCapabilities,
   });
 
-  const [expiredPendingJobs, leaseRecovery] = await Promise.all([
+  const [expiredJobIds, leaseRecovery] = await Promise.all([
     expirePendingHardwareJobsV2({ auth, now }),
     recoverExpiredHardwareJobLeasesV2({ auth, now }),
   ]);
 
-  const recovery = { expiredPendingJobs, ...leaseRecovery };
+  const recovery = {
+    expiredPendingJobs: expiredJobIds.length,
+    expiredJobIds,
+    ...leaseRecovery,
+  };
 
   if (effectiveCapabilities.length === 0) {
     return { claimed: null, recovery, effectiveCapabilities };

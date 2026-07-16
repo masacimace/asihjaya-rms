@@ -40,6 +40,15 @@ export type HardwareAgentSummary = {
   updatedAt: Date;
 };
 
+export type HardwareJobManualResolution = {
+  resolutionType: "confirmed_completed" | "retry_authorized" | "cancelled";
+  reason: string;
+  duplicateRiskAcknowledged: boolean;
+  resolvedByUserId: string;
+  resolvedByName: string | null;
+  createdAt: Date;
+};
+
 export type HardwareJobSummary = {
   id: string;
   protocolVersion: number;
@@ -78,6 +87,7 @@ export type HardwareJobSummary = {
   completedAt: Date | null;
   failedAt: Date | null;
   isStale: boolean;
+  manualResolution: HardwareJobManualResolution | null;
   agent: {
     id: string;
     code: string;
@@ -93,6 +103,58 @@ export type HardwareJobSummary = {
     code: string;
     name: string;
   };
+};
+
+export type HardwareJobAttemptDetail = {
+  id: string;
+  attemptNumber: number;
+  status:
+    | "claimed"
+    | "processing"
+    | "dispatching"
+    | "submitted"
+    | "acknowledged"
+    | "failed_before_dispatch"
+    | "unknown_after_dispatch"
+    | "lease_expired"
+    | "cancelled";
+  eventSequence: number;
+  dispatchStartedAt: Date | null;
+  submittedAt: Date | null;
+  serverAcknowledgedAt: Date | null;
+  finishedAt: Date | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  retrySafe: boolean | null;
+  createdAt: Date;
+  updatedAt: Date;
+  agent: {
+    id: string;
+    code: string;
+    name: string;
+  };
+};
+
+export type HardwareJobResolutionDetail = HardwareJobManualResolution & {
+  id: string;
+  attemptId: string | null;
+  previousStatus: HardwareJobSummary["status"];
+  nextStatus: HardwareJobSummary["status"];
+};
+
+export type HardwareJobOperationalDetail = {
+  job: HardwareJobSummary & {
+    payloadHash: string | null;
+    requiredCapability: string | null;
+    currentAttemptId: string | null;
+    lastErrorCode: string | null;
+    lastErrorMessage: string | null;
+    unknownAt: Date | null;
+    submittedAt: Date | null;
+    expiresAt: Date | null;
+  };
+  attempts: HardwareJobAttemptDetail[];
+  resolutions: HardwareJobResolutionDetail[];
 };
 
 export type HardwareJobStatusSummary = {
@@ -125,11 +187,46 @@ export type HardwareJobCleanupPreview = {
   };
 };
 
+export type HardwareOperationalAlert = {
+  code:
+    | "UNKNOWN_OUTCOME"
+    | "STALE_SUBMITTED"
+    | "AGENT_OFFLINE"
+    | "AGENT_STALE"
+    | "PENDING_TOO_OLD"
+    | "FAILURE_RATE_HIGH";
+  severity: "warning" | "critical";
+  message: string;
+};
+
+export type HardwareOperationalObservability = {
+  status: "healthy" | "warning" | "critical";
+  generatedAt: Date;
+  thresholds: {
+    pendingWarningSeconds: number;
+    submittedWarningSeconds: number;
+    failureRateWarningPercent: number;
+  };
+  metrics: {
+    unknownOutcomeJobs: number;
+    staleSubmittedJobs: number;
+    oldestPendingAgeSeconds: number | null;
+    oldestSubmittedAgeSeconds: number | null;
+    completedLast24Hours: number;
+    failedLast24Hours: number;
+    expiredLast24Hours: number;
+    successRateLast24Hours: number | null;
+    failureRateLast24Hours: number | null;
+  };
+  alerts: HardwareOperationalAlert[];
+};
+
 export type HardwareHubDashboard = {
   agents: HardwareAgentSummary[];
   recentJobs: HardwareJobSummary[];
   jobStatusSummary: HardwareJobStatusSummary;
   cleanupPreview: HardwareJobCleanupPreview;
+  observability: HardwareOperationalObservability;
   totals: {
     agents: number;
     onlineAgents: number;

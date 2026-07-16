@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { notifyHardwareJobV2LeaseRecovery } from "@/features/notifications/hardware";
 import { authenticateHardwareAgent } from "@/lib/hardware/agent-auth";
 import { touchHardwareAgent } from "@/lib/hardware/agent-presence";
 import { claimHardwareJobV2 } from "@/lib/hardware/job-claim-v2";
@@ -44,6 +45,20 @@ export async function POST(req: NextRequest) {
 
     await touchHardwareAgent({ auth, req, now });
 
+    await notifyHardwareJobV2LeaseRecovery({
+      organizationId: auth.agent.organizationId,
+      outletId: auth.agent.outletId,
+      registerId: auth.agent.registerId,
+      agentId: auth.agent.id,
+      unknownJobIds: result.recovery.unknownJobIds,
+      failedJobIds: result.recovery.failedJobIds,
+    }).catch((notificationError) => {
+      console.error(
+        "[hardware-v2] gagal membuat lease recovery notification",
+        notificationError,
+      );
+    });
+
     return NextResponse.json({
       success: true,
       protocolVersion: HARDWARE_JOB_PROTOCOL_V2,
@@ -61,7 +76,12 @@ export async function POST(req: NextRequest) {
           }
         : null,
       effectiveCapabilities: result.effectiveCapabilities,
-      recovery: result.recovery,
+      recovery: {
+        expiredPendingJobs: result.recovery.expiredPendingJobs,
+        requeuedAttempts: result.recovery.requeuedAttempts,
+        failedAttempts: result.recovery.failedAttempts,
+        unknownAttempts: result.recovery.unknownAttempts,
+      },
       serverTime: now.toISOString(),
     });
   } catch (error) {

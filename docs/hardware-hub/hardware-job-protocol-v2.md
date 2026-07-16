@@ -1160,3 +1160,57 @@ Agent hanya menerima document download pada same-origin path berikut:
 ```
 
 Cloud API URL non-loopback wajib HTTPS.
+
+---
+
+## 29. Implementation status — PR 5 Unknown Outcome & Observability
+
+Job `unknown_outcome` wajib diselesaikan oleh user dengan permission:
+
+```text
+hardware.resolve_unknown
+```
+
+Tiga resolusi yang tersedia:
+
+```text
+confirmed_completed
+retry_authorized
+cancelled
+```
+
+`retry_authorized` wajib menyimpan pengakuan risiko duplicate output. Resolusi
+operator disimpan pada `hardware_job_resolutions` dan audit log. Attempt lama
+tidak diubah agar evidence agent tetap utuh.
+
+Lifecycle penting dari agent v2 juga menghasilkan audit event:
+
+```text
+hardware.job_dispatch_started
+hardware.job_submitted
+hardware.job_completed
+hardware.job_retry_scheduled
+hardware.job_failed
+hardware.job_unknown_outcome
+```
+
+Dashboard Hardware Hub menampilkan operational snapshot untuk:
+
+- unknown-outcome aktif
+- submitted job tanpa final acknowledgement
+- umur pending job tertua
+- umur submitted job tertua
+- agent stale/offline
+- completed, failed, expired, success rate, dan failure rate 24 jam
+
+Threshold dapat disesuaikan dengan:
+
+```text
+HARDWARE_PENDING_WARNING_SECONDS=300
+HARDWARE_SUBMITTED_WARNING_SECONDS=120
+HARDWARE_FAILURE_RATE_WARNING_PERCENT=10
+```
+
+Unknown outcome tidak pernah di-retry otomatis. Operator harus membuka detail
+job, memeriksa output fisik atau artifact simulasi, memberikan alasan, lalu
+memilih satu resolusi yang tercatat permanen.

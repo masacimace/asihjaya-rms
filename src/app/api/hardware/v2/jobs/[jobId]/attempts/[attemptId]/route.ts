@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   createHardwareJobFailedNotification,
+  createHardwareJobUnknownOutcomeNotification,
   markHardwareJobFailureResolved,
+  markHardwareJobSubmittedStaleResolved,
 } from "@/features/notifications/hardware";
 import { authenticateHardwareAgent } from "@/lib/hardware/agent-auth";
 import { touchHardwareAgent } from "@/lib/hardware/agent-presence";
@@ -85,12 +87,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     if (!result.duplicate && result.job.status === "unknown_outcome") {
-      await createHardwareJobFailedNotification({
+      await createHardwareJobUnknownOutcomeNotification({
         organizationId: auth.agent.organizationId,
         outletId: auth.agent.outletId,
         registerId: auth.agent.registerId,
         agentId: auth.agent.id,
         jobId,
+        attemptId,
         jobType: result.job.jobType,
         deviceType: result.job.deviceType,
         error:
@@ -106,6 +109,17 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     if (!result.duplicate && result.job.status === "completed") {
+      await markHardwareJobSubmittedStaleResolved({
+        organizationId: auth.agent.organizationId,
+        jobId,
+        resolvedAt: now,
+      }).catch((notificationError) => {
+        console.error(
+          "[hardware-v2] gagal resolve submitted-stale notification",
+          notificationError,
+        );
+      });
+
       await markHardwareJobFailureResolved({
         organizationId: auth.agent.organizationId,
         outletId: auth.agent.outletId,

@@ -1853,6 +1853,11 @@ export const hardwareJobAttemptStatusEnum = pgEnum(
   ],
 );
 
+export const hardwareJobResolutionTypeEnum = pgEnum(
+  "hardware_job_resolution_type",
+  ["confirmed_completed", "retry_authorized", "cancelled"],
+);
+
 export const hardwareJobTypeEnum = pgEnum("hardware_job_type", [
   "print_label_sato",
   "print_receipt_certificate",
@@ -2099,6 +2104,64 @@ export const hardwareJobs = pgTable(
   ],
 );
 
+
+export const hardwareJobResolutions = pgTable(
+  "hardware_job_resolutions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => hardwareJobs.id, { onDelete: "cascade" }),
+    attemptId: uuid("attempt_id").references(() => hardwareJobAttempts.id, {
+      onDelete: "set null",
+    }),
+    resolvedByUserId: uuid("resolved_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    resolutionType: hardwareJobResolutionTypeEnum("resolution_type").notNull(),
+    reason: text("reason").notNull(),
+    duplicateRiskAcknowledged: boolean("duplicate_risk_acknowledged")
+      .default(false)
+      .notNull(),
+    previousStatus: hardwareJobStatusEnum("previous_status").notNull(),
+    nextStatus: hardwareJobStatusEnum("next_status").notNull(),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("hardware_job_resolutions_job_time_idx").on(
+      table.jobId,
+      table.createdAt,
+    ),
+    index("hardware_job_resolutions_org_time_idx").on(
+      table.organizationId,
+      table.createdAt,
+    ),
+    check(
+      "hardware_job_resolutions_reason_ck",
+      sql`char_length(trim(${table.reason})) between 12 and 500`,
+    ),
+    check(
+      "hardware_job_resolutions_retry_ack_ck",
+      sql`${table.resolutionType} <> 'retry_authorized' or ${table.duplicateRiskAcknowledged} = true`,
+    ),
+    check(
+      "hardware_job_resolutions_status_ck",
+      sql`${table.previousStatus} = 'unknown_outcome' and ${table.nextStatus} in ('completed', 'pending', 'cancelled')`,
+    ),
+  ],
+);
 
 export const notificationCategoryEnum = pgEnum("notification_category", [
   "sales",

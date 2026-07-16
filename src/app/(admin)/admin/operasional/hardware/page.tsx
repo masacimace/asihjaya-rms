@@ -7,11 +7,13 @@ import {
   CheckCircle2,
   Clock3,
   Cpu,
+  Eye,
   FileText,
   RefreshCw,
   RotateCcw,
   ScanBarcode,
   Server,
+  ShieldAlert,
   ShieldCheck,
   Trash2,
   WalletCards,
@@ -89,6 +91,13 @@ function formatDateTime(value: Date | null) {
     timeStyle: "short",
     timeZone: "Asia/Jakarta",
   }).format(value);
+}
+
+function formatAgeSeconds(value: number | null) {
+  if (value === null) return "-";
+  if (value < 60) return `${value} detik`;
+  if (value < 3600) return `${Math.floor(value / 60)} menit`;
+  return `${Math.floor(value / 3600)} jam ${Math.floor((value % 3600) / 60)} menit`;
 }
 
 function formatDuration(value: number | null) {
@@ -537,7 +546,22 @@ function RecentJobMobileCard({ job }: { job: HardwareJobSummary }) {
         </p>
       ) : null}
 
+      {job.manualResolution ? (
+        <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
+          Resolusi manual: {job.manualResolution.resolutionType} oleh {job.manualResolution.resolvedByName ?? "operator"}.
+        </p>
+      ) : null}
+
       <div className="mt-3 grid gap-2">
+        {job.status === "unknown_outcome" ? (
+          <Link
+            href={`/admin/operasional/hardware/jobs/${job.id}`}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-900 transition hover:bg-orange-100"
+          >
+            <ShieldAlert className="size-3.5" />
+            Periksa & Resolusi
+          </Link>
+        ) : null}
         {job.isStale ? (
           <form action={recoverStaleHardwareJobsAction}>
             <button
@@ -571,6 +595,14 @@ function RecentJobMobileCard({ job }: { job: HardwareJobSummary }) {
             Batalkan
           </HardwareJobActionButton>
         ) : null}
+
+        <Link
+          href={`/admin/operasional/hardware/jobs/${job.id}`}
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+        >
+          <Eye className="size-3.5" />
+          Detail
+        </Link>
       </div>
     </article>
   );
@@ -728,6 +760,100 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
         />
       </section>
 
+      <section
+        className={cn(
+          "rounded-3xl border p-5 lg:p-6",
+          dashboard.observability.status === "healthy" &&
+            "border-emerald-200 bg-emerald-50",
+          dashboard.observability.status === "warning" &&
+            "border-amber-200 bg-amber-50",
+          dashboard.observability.status === "critical" &&
+            "border-red-300 bg-red-50",
+        )}
+      >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex gap-3">
+            <ShieldAlert
+              className={cn(
+                "mt-0.5 size-6 shrink-0",
+                dashboard.observability.status === "healthy" &&
+                  "text-emerald-700",
+                dashboard.observability.status === "warning" &&
+                  "text-amber-800",
+                dashboard.observability.status === "critical" &&
+                  "text-red-800",
+              )}
+            />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Operational observability
+              </p>
+              <h2 className="mt-1 text-xl font-semibold text-neutral-950">
+                Status: {dashboard.observability.status}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-neutral-700">
+                Snapshot ini mengukur unknown outcome, acknowledgement yang
+                terlambat, umur antrean, status agent, dan hasil 24 jam terakhir.
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-[var(--muted)]">
+            Diperbarui {formatDateTime(dashboard.observability.generatedAt)}
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <HeaderMetric
+            label="Unknown outcome"
+            value={dashboard.observability.metrics.unknownOutcomeJobs}
+            helper="Wajib diperiksa operator sebelum retry."
+          />
+          <HeaderMetric
+            label="Submitted stale"
+            value={dashboard.observability.metrics.staleSubmittedJobs}
+            helper={`Belum ACK final lebih dari ${dashboard.observability.thresholds.submittedWarningSeconds} detik.`}
+          />
+          <HeaderMetric
+            label="Pending tertua"
+            value={formatAgeSeconds(
+              dashboard.observability.metrics.oldestPendingAgeSeconds,
+            )}
+            helper="Umur job pending paling lama."
+          />
+          <HeaderMetric
+            label="Success 24 jam"
+            value={
+              dashboard.observability.metrics.successRateLast24Hours === null
+                ? "-"
+                : `${dashboard.observability.metrics.successRateLast24Hours.toFixed(1)}%`
+            }
+            helper={`${dashboard.observability.metrics.completedLast24Hours} selesai · ${dashboard.observability.metrics.failedLast24Hours} gagal.`}
+          />
+        </div>
+
+        {dashboard.observability.alerts.length > 0 ? (
+          <div className="mt-4 grid gap-2">
+            {dashboard.observability.alerts.map((alert) => (
+              <div
+                key={alert.code}
+                className={cn(
+                  "rounded-xl border bg-white px-3 py-2 text-sm",
+                  alert.severity === "critical"
+                    ? "border-red-300 text-red-800"
+                    : "border-amber-300 text-amber-900",
+                )}
+              >
+                <strong>{alert.code}</strong> · {alert.message}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-800">
+            Tidak ada indikator hardware yang memerlukan tindakan saat ini.
+          </p>
+        )}
+      </section>
+
       <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -740,8 +866,8 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
               Cleanup hanya menghapus job terminal yang sudah lama: selesai,
-              dibatalkan, atau gagal. Job aktif seperti pending, claimed, dan
-              printing tidak akan dihapus.
+              dibatalkan, atau gagal. Job aktif dan job yang memiliki resolusi
+              manual operator tidak akan dihapus agar evidence audit tetap utuh.
             </p>
           </div>
           <form action={cleanupHardwareJobsAction}>
@@ -878,6 +1004,11 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                             Terdeteksi macet
                           </div>
                         ) : null}
+                        {job.manualResolution ? (
+                          <div className="mt-2 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                            Resolusi: {job.manualResolution.resolutionType}
+                          </div>
+                        ) : null}
                       </div>
                       <div>
                         <JobStatusPill status={job.status} />
@@ -911,6 +1042,16 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                         )}
                       </div>
                       <div className="grid gap-2">
+                        {job.status === "unknown_outcome" ? (
+                          <Link
+                            href={`/admin/operasional/hardware/jobs/${job.id}`}
+                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-900 transition hover:bg-orange-100"
+                          >
+                            <ShieldAlert className="size-3.5" />
+                            Resolusi
+                          </Link>
+                        ) : null}
+
                         {job.isStale ? (
                           <form action={recoverStaleHardwareJobsAction}>
                             <button
@@ -946,14 +1087,13 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                           </HardwareJobActionButton>
                         ) : null}
 
-                        {!job.isStale &&
-                        job.status !== "failed" &&
-                        job.status !== "cancelled" &&
-                        job.status !== "pending" ? (
-                          <span className="text-right text-xs text-[var(--muted)]">
-                            -
-                          </span>
-                        ) : null}
+                        <Link
+                          href={`/admin/operasional/hardware/jobs/${job.id}`}
+                          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                        >
+                          <Eye className="size-3.5" />
+                          Detail
+                        </Link>
                       </div>
                     </div>
                   ))}
@@ -978,18 +1118,12 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
         <div className="flex gap-3">
           <ShieldCheck className="mt-0.5 size-5 shrink-0" />
           <p>
-            Test job akan masuk antrean <strong>hardware_jobs</strong>. Kalau
-            laptop dev belum memiliki printer fisik, job bisa berubah menjadi
-            gagal dengan error printer Windows. Itu normal selama agent berhasil
-            online, claim job, dan mengirim status balik ke server. Job gagal
-            bisa di-retry dari tabel Recent Jobs, sedangkan job yang masih
-            menunggu bisa dibatalkan sebelum diklaim agent. Sistem juga menahan
-            duplikat job aktif untuk source yang sama supaya tombol test/cetak
-            tidak membuat antrean ganda. Job yang macet di status
-            diklaim/diproses akan dipulihkan otomatis saat agent melakukan claim
-            berikutnya, atau bisa dipulihkan manual melalui tombol Pulihkan Job
-            Macet. Job terminal yang sudah melewati masa retensi bisa
-            dibersihkan melalui tombol Bersihkan Job Lama.
+            Development tanpa printer fisik tetap dapat dilanjutkan dengan
+            dry-run dan fake adapter. Job <strong>unknown_outcome</strong> tidak
+            pernah di-retry otomatis: operator harus membuka Detail, memeriksa
+            bukti fisik atau output simulasi, lalu memilih sudah tercetak, retry
+            dengan risiko duplikat, atau batalkan. Semua keputusan dan lifecycle
+            penting disimpan pada audit log serta riwayat resolusi.
           </p>
         </div>
       </section>

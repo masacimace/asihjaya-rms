@@ -2,20 +2,38 @@
 
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { db } from "@/db";
-import { hardwareAgents, hardwareJobs, outlets, registers } from "@/db/schema";
+import {
+  auditLogs,
+  hardwareAgents,
+  hardwareJobs,
+  outlets,
+  registers,
+} from "@/db/schema";
 import { getHardwareJobLabel } from "@/features/notifications/hardware";
 import {
   createAdminNotification,
   markUnreadNotificationsReadByEntity,
 } from "@/features/notifications/mutations";
+import {
+  createHardwareJobUnknownOutcomeResolutionNotification,
+  markHardwareJobFailureResolved,
+  markHardwareJobSubmittedStaleResolved,
+  markHardwareJobUnknownOutcomeResolved,
+} from "@/features/notifications/hardware";
 import { requirePermission } from "@/lib/auth/session";
 import { cleanupHardwareJobs } from "@/lib/hardware/job-cleanup";
 import { recoverStaleHardwareJobs } from "@/lib/hardware/job-recovery";
 import { buildHardwareTestPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
+import {
+  HardwareUnknownResolutionError,
+  resolveHardwareUnknownOutcome,
+} from "@/lib/hardware/job-resolution-v2";
+import { parseHardwareUnknownResolutionInput } from "@/lib/hardware/job-resolution-policy-v2";
 import {
   getEnabledHardwareCapabilities,
   getHardwareJobExpiresAt,
@@ -39,6 +57,19 @@ function isTestJobType(value: unknown): value is TestJobType {
   return (
     typeof value === "string" && testJobTypes.includes(value as TestJobType)
   );
+}
+
+async function getActionRequestMetadata() {
+  const headerStore = await headers();
+  const forwardedFor = headerStore.get("x-forwarded-for");
+
+  return {
+    ipAddress:
+      forwardedFor?.split(",")[0]?.trim() ||
+      headerStore.get("x-real-ip")?.trim() ||
+      null,
+    userAgent: headerStore.get("user-agent")?.slice(0, 500) ?? null,
+  };
 }
 
 function redirectWithMessage(
@@ -205,6 +236,109 @@ export async function createHardwareTestJobAction(formData: FormData) {
   );
 }
 
+export async function resolveUnknownHardwareJobAction(formData: FormData) {
+  const auth = await requirePermission("hardware.resolve_unknown");
+  const jobId = String(formData.get("jobId") ?? "").trim();
+  const requestId = String(formData.get("requestId") ?? "").trim();
+
+  if (!UUID_PATTERN.test(jobId)) {
+    redirectWithMessage("error", "Hardware job tidak valid.");
+  }
+
+  let resolutionInput;
+
+  try {
+    resolutionInput = parseHardwareUnknownResolutionInput({
+      resolutionType: formData.get("resolutionType"),
+      reason: formData.get("reason"),
+      duplicateRiskAcknowledged: formData.get("duplicateRiskAcknowledged"),
+    });
+  } catch (error) {
+    redirectWithMessage(
+      "error",
+      error instanceof Error ? error.message : "Resolusi hardware tidak valid.",
+    );
+  }
+
+  const requestMetadata = await getActionRequestMetadata();
+  let result;
+
+  try {
+    result = await resolveHardwareUnknownOutcome({
+      jobId,
+      organizationId: auth.organization.id,
+      accessibleOutletIds: auth.outlets.map((outlet) => outlet.id),
+      resolvedByUserId: auth.user.id,
+      requestId: UUID_PATTERN.test(requestId) ? requestId : null,
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      ...resolutionInput,
+    });
+  } catch (error) {
+    redirectWithMessage(
+      "error",
+      error instanceof HardwareUnknownResolutionError
+        ? error.message
+        : "Resolusi hardware job gagal diproses.",
+    );
+  }
+
+  await Promise.all([
+    markHardwareJobUnknownOutcomeResolved({
+      organizationId: auth.organization.id,
+      jobId: result.jobId,
+    }),
+    markHardwareJobSubmittedStaleResolved({
+      organizationId: auth.organization.id,
+      jobId: result.jobId,
+    }),
+    markHardwareJobFailureResolved({
+      organizationId: auth.organization.id,
+      outletId: result.outletId,
+      registerId: result.registerId,
+      jobId: result.jobId,
+      deviceType: result.deviceType,
+    }),
+  ]).catch((notificationError) => {
+    console.error(
+      "[hardware] gagal menutup notification unknown outcome",
+      notificationError,
+    );
+  });
+
+  await createHardwareJobUnknownOutcomeResolutionNotification({
+    organizationId: auth.organization.id,
+    outletId: result.outletId,
+    jobId: result.jobId,
+    jobType: result.jobType,
+    resolutionType: result.resolutionType,
+    resolvedByUserId: auth.user.id,
+    reason: result.reason,
+  }).catch((notificationError) => {
+    console.error(
+      "[hardware] gagal membuat notification resolusi unknown outcome",
+      notificationError,
+    );
+  });
+
+  revalidatePath(HARDWARE_DASHBOARD_PATH);
+  revalidatePath("/admin");
+  revalidatePath("/admin/penjualan");
+
+  if (result.sourceType === "sale" && result.sourceId) {
+    revalidatePath(`/admin/penjualan/${result.sourceId}`);
+  }
+
+  const successMessage =
+    result.resolutionType === "confirmed_completed"
+      ? "Job ditandai sudah tercetak berdasarkan pemeriksaan operator."
+      : result.resolutionType === "retry_authorized"
+        ? "Retry manual sudah diotorisasi dan job masuk kembali ke antrean."
+        : "Job dibatalkan tanpa retry dan keputusan sudah tercatat di audit.";
+
+  redirectWithMessage("success", successMessage);
+}
+
 export async function retryHardwareJobAction(formData: FormData) {
   const jobId = String(formData.get("jobId") ?? "").trim();
 
@@ -237,6 +371,7 @@ export async function retryHardwareJobAction(formData: FormData) {
   }
 
   const now = new Date();
+  const requestMetadata = await getActionRequestMetadata();
 
   if (isProtocolV2) {
     const nextMaxAttempts = Math.max(job.maxAttempts, job.attempts + 1);
@@ -298,6 +433,33 @@ export async function retryHardwareJobAction(formData: FormData) {
       .where(eq(hardwareJobs.id, job.id));
   }
 
+  await db.insert(auditLogs).values({
+    organizationId: auth.organization.id,
+    outletId: job.outletId,
+    actorUserId: auth.user.id,
+    action: "hardware.job_manual_retry",
+    entityType: "hardware_job",
+    entityId: job.id,
+    beforeData: {
+      status: job.status,
+      currentAttemptId: job.currentAttemptId,
+      attempts: job.attempts,
+      maxAttempts: job.maxAttempts,
+    },
+    afterData: {
+      status: "pending",
+      currentAttemptId: null,
+      protocolVersion: job.protocolVersion,
+    },
+    reason: "Retry manual dari dashboard Hardware Hub.",
+    ipAddress: requestMetadata.ipAddress,
+    userAgent: requestMetadata.userAgent,
+    metadata: {
+      jobType: job.jobType,
+      previousAttemptId: job.currentAttemptId,
+    },
+  });
+
   await markUnreadNotificationsReadByEntity({
     organizationId: auth.organization.id,
     type: "hardware",
@@ -352,6 +514,7 @@ export async function cancelHardwareJobAction(formData: FormData) {
   }
 
   const now = new Date();
+  const requestMetadata = await getActionRequestMetadata();
 
   await db
     .update(hardwareJobs)
@@ -367,6 +530,24 @@ export async function cancelHardwareJobAction(formData: FormData) {
       updatedAt: now,
     })
     .where(eq(hardwareJobs.id, job.id));
+
+  await db.insert(auditLogs).values({
+    organizationId: auth.organization.id,
+    outletId: job.outletId,
+    actorUserId: auth.user.id,
+    action: "hardware.job_cancelled",
+    entityType: "hardware_job",
+    entityId: job.id,
+    beforeData: { status: job.status },
+    afterData: { status: "cancelled" },
+    reason: "Dibatalkan manual dari dashboard Hardware Hub.",
+    ipAddress: requestMetadata.ipAddress,
+    userAgent: requestMetadata.userAgent,
+    metadata: {
+      jobType: job.jobType,
+      protocolVersion: job.protocolVersion,
+    },
+  });
 
   revalidatePath(HARDWARE_DASHBOARD_PATH);
   redirectWithMessage("success", "Hardware job sudah dibatalkan.");
