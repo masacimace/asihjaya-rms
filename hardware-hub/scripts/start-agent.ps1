@@ -18,4 +18,11 @@ if (-not $NodeCommand) {
   throw "Node.js tidak ditemukan di PATH. Install Node.js LTS dulu, lalu buka terminal baru."
 }
 
-node agent.js 2>&1 | Tee-Object -FilePath $LogFile -Append
+& node agent.js 2>&1 | Tee-Object -FilePath $LogFile -Append
+$NodeExitCode = $LASTEXITCODE
+
+if ($NodeExitCode -ne 0) {
+  Write-Error "Hardware Hub Agent exited with code $NodeExitCode."
+}
+
+exit $NodeExitCode

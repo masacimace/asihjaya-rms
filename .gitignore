@@ -35,6 +35,7 @@ pnpm-debug.log*
 # local hardware hub runtime files
 /hardware-hub/logs/
 /hardware-hub/dry-run-output/
+/hardware-hub/data/
 /hardware-hub/*.log
 /hardware-hub/hardware_job_*.txt
 /hardware-hub/hardware_job_*.pdf

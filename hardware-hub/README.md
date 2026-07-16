@@ -1,111 +1,163 @@
 # Asihjaya Hardware Hub Agent
 
-Hardware Hub Agent adalah proses lokal yang berjalan di Mini PC outlet. Agent melakukan heartbeat ke Asihjaya RMS, mengambil `hardware_jobs`, lalu menjalankan pekerjaan lokal seperti cetak label SATO, silent print nota/certificate PDF, dan buka cash drawer.
+Hardware Hub Agent berjalan pada Mini PC Windows outlet. Agent melakukan heartbeat, mengambil hardware job dari cloud, mencatat execution attempt ke SQLite, lalu menjalankan printer atau cash drawer lokal.
 
-## Cara setup di Mini PC Windows
+Protocol v2 dirancang agar restart agent atau putus internet setelah printer menerima command tidak menyebabkan automatic reprint.
 
-### 1. Install Node.js
+## Runtime
 
-Gunakan Node.js LTS. Setelah install, buka terminal baru dan cek:
+Protocol v2 memakai built-in `node:sqlite` dan membutuhkan:
+
+```text
+Node.js >= 22.5 dan < 25
+```
+
+Cek runtime:
 
 ```powershell
 node -v
 npm -v
 ```
 
-### 2. Siapkan folder agent
+## Setup Windows
 
-Copy folder `hardware-hub` ke Mini PC, misalnya:
-
-```txt
-C:\Asihjaya\hardware-hub
-```
-
-Lalu buka terminal di folder tersebut:
+### 1. Siapkan folder
 
 ```powershell
 cd C:\Asihjaya\hardware-hub
-```
-
-### 3. Install dependency agent
-
-```powershell
 npm install --omit=dev
-```
-
-### 4. Buat file `.env`
-
-Copy:
-
-```powershell
 copy .env.example .env
 ```
 
-Isi `.env` dengan `ASIHJAYA_API_URL`, `HARDWARE_AGENT_ID`, dan `HARDWARE_AGENT_SECRET` dari root web app:
+Isi `ASIHJAYA_API_URL`, `HARDWARE_AGENT_ID`, dan `HARDWARE_AGENT_SECRET`. Credential agent dibuat dari root web app:
 
 ```powershell
 npm run hardware:agent:create
 ```
 
-Untuk production, pastikan `HARDWARE_DRY_RUN=false` dan isi printer sesuai share name Windows.
+### 2. Pilih mode protocol
 
-### 5. Cek konfigurasi
+```env
+HARDWARE_PROTOCOL_MODE=v2-preferred
+```
+
+Pilihan:
+
+- `v2-preferred`: recovery dan claim v2 terlebih dahulu, lalu fallback ke queue v1 ketika queue v2 kosong.
+- `v2-only`: hanya memproses Protocol v2.
+- `v1-only`: compatibility mode tanpa SQLite journal.
+
+Gunakan `v2-preferred` selama rollout bertahap. Ubah ke `v2-only` setelah semua job producer dan outlet sudah memakai Protocol v2.
+
+### 3. Execution journal
+
+```env
+HARDWARE_JOURNAL_PATH=./data/hardware-executions.sqlite
+HARDWARE_JOURNAL_KEY_PATH=./data/hardware-journal.key
+HARDWARE_TEMP_DIR=./data/temp
+LEASE_RENEW_INTERVAL_MS=20000
+```
+
+Pada Windows, lease token di database dilindungi memakai DPAPI `CurrentUser`. Agent harus selalu dijalankan oleh Windows account yang sama. Mengganti account dapat membuat lease token attempt lama tidak dapat dibuka.
+
+Jangan menghapus database journal ketika masih ada attempt aktif. Journal menyimpan bukti bahwa command mungkin sudah dikirim ke printer.
+
+File runtime berikut tidak boleh masuk Git:
+
+```text
+hardware-hub/data/
+hardware-hub/dry-run-output/
+hardware-hub/logs/
+```
+
+### 4. Cek konfigurasi dan recovery test
 
 ```powershell
 npm run check
+npm run check:v2
 ```
 
-Kalau masih ada warning printer, cek lagi share name printer Windows dan `PDF_PRINT_COMMAND`.
+Dari root repository:
 
-### 6. Test manual
+```powershell
+npm run check:hardware:v2-agent
+```
+
+`check:v2` menguji skenario berikut dengan fake printer:
+
+- HTTP response hilang setelah server menyimpan event `submitted`.
+- Agent restart setelah `dispatch_started_at`.
+- Payload hash mismatch.
+- Recovery tidak menjalankan physical dispatch untuk kedua kalinya.
+
+### 5. Test manual
+
+Mulai dengan dry-run:
+
+```env
+HARDWARE_DRY_RUN=true
+```
 
 ```powershell
 npm start
 ```
 
-Buka Admin → Operasional → Hardware Hub. Agent harus muncul online. Stop dengan `Ctrl + C` setelah test.
+Buka Admin → Operasional → Hardware Hub. Agent harus terlihat online. File hasil dry-run tersedia di `dry-run-output`.
 
-### 7. Install startup task
-
-Agar agent otomatis jalan saat Windows user login:
+### 6. Startup task
 
 ```powershell
 npm run install:startup
 ```
 
-Task Scheduler akan membuat task bernama:
+Task berjalan pada Windows user logon agar printer yang terpasang pada user tersebut tetap terlihat. Gunakan account Windows khusus outlet dan jangan menjalankan task bergantian melalui user berbeda karena DPAPI journal terikat pada user.
 
-```txt
-Asihjaya Hardware Hub Agent
-```
-
-Task ini sengaja berjalan pada user logon, bukan LocalSystem service, supaya printer user Windows tetap terlihat oleh agent.
-
-### 8. Buka log agent
+Buka log:
 
 ```powershell
 npm run logs
 ```
 
-Log tersimpan di:
-
-```txt
-hardware-hub\logs
-```
-
-### 9. Uninstall startup task
+Hapus startup task:
 
 ```powershell
 npm run uninstall:startup
 ```
 
-## Catatan printer
+## Crash-safe lifecycle
 
-### Label SATO
+Alur normal Protocol v2:
 
-Agent memakai layout awal `jewelry_compact` untuk label perhiasan. Konfigurasi yang bisa diubah dari `.env`:
+```text
+claim
+→ journal: claimed
+→ server: processing
+→ prepare file/command
+→ server: dispatching
+→ journal: dispatch_started_at
+→ physical command
+→ journal: submitted
+→ server: submitted
+→ server: acknowledged/completed
+→ journal: acknowledged
+```
+
+Recovery rules:
+
+- `claimed` atau `processing` tanpa dispatch marker dapat dilanjutkan selama lease aktif.
+- `dispatching` tanpa dispatch marker dapat disiapkan ulang dan dijalankan.
+- `dispatch_started_at` tanpa `submitted` menjadi `unknown_after_dispatch`; agent tidak mencetak ulang.
+- `submitted` tanpa HTTP ACK dikirim ulang sebagai event yang sama; printer tidak dijalankan lagi.
+- Lease expired sebelum dispatch ditinggalkan untuk direqueue oleh cloud.
+
+`completed` berarti agent dan cloud menyelesaikan acknowledgement bahwa command diterima runner/spooler. Status tersebut bukan jaminan bahwa kertas fisik sudah keluar sempurna.
+
+## Label SATO
+
+Konfigurasi:
 
 ```env
+LABEL_PRINTER_NAME=SATO CG408TT
 LABEL_PROFILE=jewelry_compact
 LABEL_COPIES=1
 LABEL_LEFT_OFFSET_DOTS=0
@@ -113,35 +165,58 @@ LABEL_TOP_OFFSET_DOTS=0
 LABEL_INCLUDE_PRICE=false
 ```
 
-Untuk development tanpa printer, aktifkan `HARDWARE_DRY_RUN=true`, klik **Test Label**, lalu cek file `raw-printer_*.txt` dan metadata `raw-printer_*.txt.json` di folder `dry-run-output`.
+Raw print saat ini memakai Windows printer share:
 
-Gunakan `LABEL_LEFT_OFFSET_DOTS` dan `LABEL_TOP_OFFSET_DOTS` untuk menggeser posisi label setelah test print di printer fisik. Nilai positif menggeser ke kanan/bawah.
-
-### Printer Windows
-
-Untuk label SATO dan cash drawer, agent memakai raw Windows printer share:
-
-```txt
+```text
 \\localhost\NAMA_SHARE_PRINTER
 ```
 
-Jadi nilai `LABEL_PRINTER_NAME`, `DOCUMENT_PRINTER_NAME`, dan `CASH_DRAWER_PRINTER_NAME` sebaiknya mengikuti **Share name** di Windows Printer Properties → Sharing.
+Gunakan share name dari Printer Properties → Sharing.
 
-Untuk silent print PDF, rekomendasi awal adalah SumatraPDF:
+## Document printer
 
-```env
-PDF_PRINT_COMMAND="C:\\Program Files\\SumatraPDF\\SumatraPDF.exe" -print-to "{printer}" -silent "{file}"
-```
-
-Token `{printer}` dan `{file}` akan diganti otomatis oleh agent.
-
-## Dry-run mode
-
-Untuk development tanpa hardware fisik:
+Konfigurasi baru yang disarankan menggunakan executable dan argument array, bukan satu shell command:
 
 ```env
-HARDWARE_DRY_RUN=true
-DRY_RUN_OUTPUT_DIR=./dry-run-output
+DOCUMENT_PRINTER_NAME=EPSON L3250 Series
+PDF_PRINT_EXECUTABLE=C:\Program Files\SumatraPDF\SumatraPDF.exe
+PDF_PRINT_ARGS_JSON=["-print-to","{printer}","-silent","{file}"]
 ```
 
-Saat dry-run aktif, agent tetap claim job dan menandai job completed, tapi output disimpan ke folder `dry-run-output`.
+Token berikut diganti agent:
+
+```text
+{printer}
+{file}
+```
+
+`PDF_PRINT_COMMAND` masih didukung untuk kompatibilitas, tetapi menghasilkan warning dan sebaiknya dimigrasikan.
+
+Protocol tidak mengunci ukuran kertas. Receipt A5 saat ini dan layout A4 berikutnya dipilih melalui `printProfileId`; penyesuaian A4 dilakukan pada tahap document-printer validation.
+
+## Cash drawer
+
+Konfigurasi awal:
+
+```env
+CASH_DRAWER_PRINTER_NAME=NAMA_SHARE_PRINTER_TRIGGER
+```
+
+Agent mengirim pulse ESC/POS melalui printer share. Fitur ini belum dianggap final sampai interface cash drawer fisik dipilih dan divalidasi.
+
+## Troubleshooting journal
+
+Lihat file:
+
+```text
+hardware-hub\data\hardware-executions.sqlite
+hardware-hub\data\hardware-executions.sqlite-wal
+hardware-hub\data\hardware-executions.sqlite-shm
+```
+
+Jangan mengedit file tersebut saat agent berjalan. Sebelum memindahkan Mini PC atau Windows account:
+
+1. Stop agent.
+2. Pastikan tidak ada job `submitted`, `dispatching`, atau pending event.
+3. Simpan backup folder `data` untuk audit.
+4. Lakukan perpindahan credential/journal melalui prosedur operasional, bukan dengan menghapus database secara langsung.

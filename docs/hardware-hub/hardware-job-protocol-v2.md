@@ -610,10 +610,16 @@ Agent v2 wajib memakai SQLite.
 CREATE TABLE executions (
   attempt_id TEXT PRIMARY KEY,
   job_id TEXT NOT NULL,
+  attempt_number INTEGER NOT NULL,
+  job_type TEXT NOT NULL,
+  device_type TEXT NOT NULL,
+  required_capability TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
   payload_hash TEXT NOT NULL,
+  lease_token_protected TEXT NOT NULL,
+  lease_expires_at TEXT NOT NULL,
   event_sequence INTEGER NOT NULL DEFAULT 0,
   state TEXT NOT NULL,
-  lease_token_encrypted TEXT NOT NULL,
   received_at TEXT NOT NULL,
   processing_at TEXT,
   dispatch_started_at TEXT,
@@ -622,41 +628,58 @@ CREATE TABLE executions (
   finished_at TEXT,
   result_json TEXT,
   error_code TEXT,
-  error_message TEXT
+  error_message TEXT,
+  pending_event_status TEXT,
+  pending_event_sequence INTEGER,
+  pending_event_idempotency_key TEXT,
+  pending_event_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE UNIQUE INDEX executions_job_active_uq
 ON executions(job_id)
-WHERE state NOT IN ('acknowledged', 'failed_before_dispatch', 'cancelled');
+WHERE state IN ('claimed', 'processing', 'dispatching', 'submitted');
 ```
 
-Lease token lokal harus dilindungi dengan Windows DPAPI atau mekanisme secret storage setara.
+`pending_event_*` menyimpan event yang sudah dicatat lokal tetapi belum menerima HTTP ACK. Event tersebut harus dikirim ulang dengan sequence dan idempotency key yang sama.
+
+Pada Windows, lease token lokal dilindungi dengan DPAPI scope `CurrentUser`. Runtime non-Windows untuk development/test memakai AES-256-GCM dengan machine-local key file.
 
 ### Store-before-execute rule
 
 Urutan wajib:
 
-1. Claim diterima.
-2. Validasi payload hash.
-3. Simpan attempt dan lease ke SQLite.
-4. Kirim `processing`.
-5. Simpan `dispatch_started_at` sebelum memulai child process.
-6. Jalankan printer adapter.
-7. Setelah adapter sukses, simpan `submitted_at`.
-8. Kirim event `submitted`.
-9. Setelah server ACK, simpan `server_acknowledged_at`.
-10. Kirim/finalisasi `acknowledged` atau `completed`.
-11. Tandai local execution selesai.
+1. Claim diterima dan attempt disimpan ke SQLite sebelum eksekusi.
+2. Canonical payload dihitung ulang dan dibandingkan dengan `payload_hash`.
+3. Event `processing` dicatat sebagai pending event, dikirim, lalu ACK disimpan.
+4. Resource preparation yang aman untuk retry dilakukan, misalnya download PDF dan pembuatan temporary file.
+5. Event `dispatching` dicatat, dikirim, dan harus menerima ACK server.
+6. `dispatch_started_at` disimpan secara sinkron tepat sebelum child process/perintah hardware dimulai.
+7. Printer adapter dijalankan.
+8. Setelah adapter sukses, event `submitted` dan result disimpan lokal sebelum request cloud.
+9. Event `submitted` dikirim ulang sampai server ACK, tanpa menjalankan adapter lagi.
+10. Event final `acknowledged` dikirim dan local execution menjadi terminal.
 
 ### Startup recovery
 
 Saat agent restart:
 
-- `claimed` atau `processing` tanpa `dispatch_started_at`: aman dievaluasi untuk dilanjutkan.
-- `dispatching` dengan `dispatch_started_at`: jangan print ulang; laporkan `unknown_after_dispatch`.
+- Pending event dikirim ulang memakai body, sequence, dan idempotency key yang tersimpan.
+- `claimed` atau `processing` tanpa `dispatch_started_at`: aman dievaluasi untuk dilanjutkan selama lease lokal masih aktif.
+- `dispatching` tanpa `dispatch_started_at`: preparation boleh diulang, lalu hardware dijalankan satu kali.
+- State apa pun dengan `dispatch_started_at` tetapi belum `submitted`: jangan print ulang; laporkan `unknown_after_dispatch`.
 - `submitted` tanpa server ACK: kirim ulang event `submitted`; jangan print ulang.
+- `submitted` dengan server ACK: kirim ulang `acknowledged`; jangan print ulang.
+- Lease expired sebelum dispatch: tandai local `lease_expired` dan tunggu server melakukan requeue.
 - `acknowledged`: tidak melakukan tindakan hardware.
 - Payload hash berbeda: hentikan dan laporkan integrity error.
+
+---
+
+### Implementasi PR 3
+
+Windows agent PR 3 menggunakan built-in `node:sqlite`, sehingga runtime minimum agent adalah Node.js 22.5. Database memakai WAL dan `synchronous=FULL`. Agent rollout default memakai `HARDWARE_PROTOCOL_MODE=v2-preferred`: recovery dan claim v2 dijalankan lebih dahulu, sedangkan queue v1 masih dapat diproses ketika tidak ada local execution v2 yang tertunda.
 
 ---
 
