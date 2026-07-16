@@ -42,6 +42,21 @@ export type HardwareJobAttemptStatus =
 
 export type HardwareJobCreationMode = "automatic" | "manual" | "test";
 
+export const hardwareJobAttemptActiveStatuses = [
+  "claimed",
+  "processing",
+  "dispatching",
+  "submitted",
+] as const satisfies readonly HardwareJobAttemptStatus[];
+
+export const hardwareJobLeaseRequiredStatuses = [
+  "claimed",
+  "processing",
+  "dispatching",
+] as const satisfies readonly HardwareJobAttemptStatus[];
+
+const HARDWARE_JOB_RETRY_BACKOFF_MS = [5_000, 15_000, 45_000, 120_000, 300_000] as const;
+
 export type HardwareJobTransitionContext = {
   dispatchStarted?: boolean;
   retrySafe?: boolean;
@@ -223,3 +238,80 @@ export function isHardwareJobAttemptTerminalStatus(
     "cancelled",
   ].includes(status);
 }
+
+export function getEnabledHardwareCapabilities(
+  capabilities: Record<string, unknown> | null | undefined,
+): HardwareCapability[] {
+  if (!capabilities) {
+    return [];
+  }
+
+  const enabled: HardwareCapability[] = [];
+
+  if (capabilities.print_label_sato === true) {
+    enabled.push("print_label_sato");
+  }
+
+  if (
+    capabilities.print_document_pdf === true ||
+    capabilities.print_receipt_certificate === true
+  ) {
+    enabled.push("print_document_pdf");
+  }
+
+  if (capabilities.open_cash_drawer === true) {
+    enabled.push("open_cash_drawer");
+  }
+
+  return enabled;
+}
+
+export function getClaimableHardwareCapabilities({
+  storedCapabilities,
+  requestedCapabilities,
+}: {
+  storedCapabilities: Record<string, unknown> | null | undefined;
+  requestedCapabilities: readonly HardwareCapability[];
+}): HardwareCapability[] {
+  const stored = new Set(getEnabledHardwareCapabilities(storedCapabilities));
+  return Array.from(
+    new Set(requestedCapabilities.filter((capability) => stored.has(capability))),
+  );
+}
+
+export function getHardwareJobRetryBackoffMs(attemptNumber: number): number {
+  const normalizedAttempt = Math.max(1, Math.trunc(attemptNumber));
+  const index = Math.min(
+    normalizedAttempt - 1,
+    HARDWARE_JOB_RETRY_BACKOFF_MS.length - 1,
+  );
+
+  return HARDWARE_JOB_RETRY_BACKOFF_MS[index] ?? 300_000;
+}
+
+export function getHardwareJobRetryAvailableAt({
+  attemptNumber,
+  now = new Date(),
+}: {
+  attemptNumber: number;
+  now?: Date;
+}): Date {
+  return new Date(now.getTime() + getHardwareJobRetryBackoffMs(attemptNumber));
+}
+
+export function doesHardwareJobAttemptRequireLiveLease(
+  status: HardwareJobAttemptStatus,
+): boolean {
+  return hardwareJobLeaseRequiredStatuses.includes(
+    status as (typeof hardwareJobLeaseRequiredStatuses)[number],
+  );
+}
+
+export function isHardwareJobAttemptActiveStatus(
+  status: HardwareJobAttemptStatus,
+): boolean {
+  return hardwareJobAttemptActiveStatuses.includes(
+    status as (typeof hardwareJobAttemptActiveStatuses)[number],
+  );
+}
+

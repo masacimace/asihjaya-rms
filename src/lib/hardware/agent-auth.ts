@@ -13,6 +13,7 @@ export type HardwareAgentAuth = {
     organizationId: string;
     outletId: string;
     registerId: string;
+    capabilities: Record<string, unknown>;
   };
   outlet: {
     id: string;
@@ -59,6 +60,7 @@ export async function authenticateHardwareAgentHeaders(
       secretHash: hardwareAgents.secretHash,
       isActive: hardwareAgents.isActive,
       status: hardwareAgents.status,
+      capabilities: hardwareAgents.capabilities,
       outletCode: outlets.code,
       outletName: outlets.name,
       outletIsActive: outlets.isActive,
@@ -96,6 +98,7 @@ export async function authenticateHardwareAgentHeaders(
       organizationId: row.organizationId,
       outletId: row.outletId,
       registerId: row.registerId,
+      capabilities: row.capabilities ?? {},
     },
     outlet: {
       id: row.outletId,

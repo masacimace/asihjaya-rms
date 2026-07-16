@@ -559,7 +559,7 @@ Server harus memeriksa:
 - Attempt dimiliki agent.
 - Lease token valid.
 - Lease belum expired, kecuali idempotent replay dari event yang sudah diterima.
-- `eventSequence` lebih besar atau sama dengan event terakhir.
+- Event baru wajib memakai `eventSequence` tepat satu angka setelah event terakhir; replay dengan sequence lama diperlakukan idempotent.
 - Transition valid.
 - Payload hash tetap sama.
 - Error code sesuai allowlist.
@@ -1059,3 +1059,32 @@ PR pertama disarankan mencakup:
 9. Dokumen protocol ini di repository.
 
 Belum perlu mengubah physical printer adapter pada PR pertama.
+
+---
+
+## 27. Implementation status — PR 2 Claim Lease API
+
+PR 2 mengimplementasikan bagian server-side berikut:
+
+- Endpoint claim v2 dengan `FOR UPDATE SKIP LOCKED`.
+- Capability-aware dan target-agent-aware routing.
+- Attempt creation dan lease token 256-bit.
+- Lease token hanya disimpan sebagai SHA-256 hash.
+- Pending-job expiry saat claim.
+- Recovery lease sebelum dispatch sebagai retry-safe.
+- Recovery lease setelah dispatch menjadi `unknown_outcome`.
+- Event sequence dan idempotent replay.
+- Stale-attempt rejection.
+- State-transition validation.
+- Lease renewal untuk `claimed`, `processing`, dan `dispatching`.
+- `submitted` tetap dapat di-ACK setelah lease berakhir dan tidak di-requeue.
+
+Endpoint yang tersedia:
+
+```text
+POST  /api/hardware/v2/jobs/claim
+PATCH /api/hardware/v2/jobs/{jobId}/attempts/{attemptId}
+POST  /api/hardware/v2/jobs/{jobId}/attempts/{attemptId}/lease
+```
+
+PR ini belum mengubah Windows agent. Endpoint v1 tetap aktif sampai agent v2 dengan SQLite journal tersedia.
