@@ -5,6 +5,7 @@ const http = require("http");
 const https = require("https");
 const path = require("path");
 const { spawn } = require("child_process");
+const { createFakeHardwareBackend } = require("./fake-hardware-adapters");
 
 
 const DOCUMENT_DOWNLOAD_PATH_PATTERNS = [
@@ -489,9 +490,49 @@ function parsePdfArgs(config, filePath) {
 
 function createHardwareAdapterFactory(config) {
   const buildSatoLabel = createSatoBuilder(config);
+  const adapterModes = {
+    label_printer: config.adapterModes?.label_printer || (config.dryRun ? "fake" : "real"),
+    document_printer: config.adapterModes?.document_printer || (config.dryRun ? "fake" : "real"),
+    cash_drawer: config.adapterModes?.cash_drawer || (config.dryRun ? "fake" : "real"),
+  };
+  const fakeBackend = config.failureController
+    ? createFakeHardwareBackend({
+        controller: config.failureController,
+        agentVersion: config.agentVersion,
+        logger: config.logger,
+      })
+    : null;
 
-  async function prepareLabel(job) {
+  function isFake(deviceType) {
+    return adapterModes[deviceType] === "fake";
+  }
+
+  function requireFakeBackend(deviceType) {
+    if (!fakeBackend) {
+      throw new HardwareAdapterError(
+        `Fake adapter ${deviceType} aktif tetapi failure controller belum tersedia.`,
+        {
+          code: "FAKE_ADAPTER_NOT_CONFIGURED",
+          retrySafe: false,
+          category: "configuration",
+        },
+      );
+    }
+    return fakeBackend;
+  }
+
+  async function prepareLabel(job, attemptId) {
     const { command, label, copies } = buildSatoLabel(job.payload || {});
+    if (isFake("label_printer")) {
+      return requireFakeBackend("label_printer").prepareLabel({
+        job,
+        attemptId,
+        command,
+        label,
+        copies,
+        labelProfile: config.labelProfile,
+      });
+    }
     return prepareRawWindowsJob(config, {
       printerName: config.labelPrinterName,
       content: command,
@@ -504,7 +545,7 @@ function createHardwareAdapterFactory(config) {
     });
   }
 
-  async function prepareDocument(job) {
+  async function prepareDocument(job, attemptId) {
     const payload = job.payload || {};
     const download = payload.download && typeof payload.download === "object" ? payload.download : {};
     const pdfUrl =
@@ -521,41 +562,39 @@ function createHardwareAdapterFactory(config) {
       });
     }
 
-    if (config.dryRun) {
-      const outputFile = createDryRunPath(config, "receipt-certificate", "pdf");
-      const downloaded = await downloadFile(config, pdfUrl, outputFile, {
-        contentType: download.contentType || "application/pdf",
-        maxBytes: download.maxBytes,
-        sha256: download.sha256,
-      });
-      return {
-        adapter: "dry_run_pdf_file",
-        target: config.documentPrinterName || null,
-        async dispatch() {
-          writeDryRunMetadata(config, outputFile, {
-            kind: "pdf_document_job",
-            pdfUrl,
-            printerName: config.documentPrinterName || null,
-            printProfileId: payload.printProfileId || null,
-            ...downloaded,
-          });
-          return { mode: "dry_run", outputFile, pdfUrl, ...downloaded };
-        },
-        async cleanup() {},
-      };
-    }
-
-    if (process.platform !== "win32") {
-      throw new HardwareAdapterError("Document printer adapter hanya dapat berjalan di Windows.", {
-        code: "WINDOWS_PRINTER_REQUIRED",
-        retrySafe: false,
-        category: "configuration",
-      });
-    }
-    validatePrinterShareName(config.documentPrinterName);
     const tmpFile = createTempPath(config, "document", "pdf");
     let downloaded;
     try {
+      if (isFake("document_printer")) {
+        const controller = requireFakeBackend("document_printer");
+        const context = config.failureController.registerAttempt(job, attemptId);
+        await config.failureController.beforePrepare(context);
+        downloaded = await downloadFile(config, pdfUrl, tmpFile, {
+          contentType: download.contentType || "application/pdf",
+          maxBytes: download.maxBytes,
+          sha256: download.sha256,
+        });
+        return controller.prepareDocument({
+          job,
+          attemptId,
+          sourcePath: tmpFile,
+          download: {
+            pdfUrl,
+            ...downloaded,
+          },
+          printProfileId: payload.printProfileId || null,
+          skipBeforePrepare: true,
+        });
+      }
+
+      if (process.platform !== "win32") {
+        throw new HardwareAdapterError("Document printer adapter hanya dapat berjalan di Windows.", {
+          code: "WINDOWS_PRINTER_REQUIRED",
+          retrySafe: false,
+          category: "configuration",
+        });
+      }
+      validatePrinterShareName(config.documentPrinterName);
       downloaded = await downloadFile(config, pdfUrl, tmpFile, {
         contentType: download.contentType || "application/pdf",
         maxBytes: download.maxBytes,
@@ -592,28 +631,36 @@ function createHardwareAdapterFactory(config) {
     }
   }
 
-  async function prepareCashDrawer() {
+  async function prepareCashDrawer(job, attemptId) {
+    const drawerProfileId = job.payload?.drawerProfileId || "drawer_default_v1";
+    if (isFake("cash_drawer")) {
+      return requireFakeBackend("cash_drawer").prepareCashDrawer({
+        job,
+        attemptId,
+        drawerProfileId,
+      });
+    }
     const kick = Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]).toString("binary");
     return prepareRawWindowsJob(config, {
       printerName: config.cashDrawerPrinterName,
       content: kick,
       extension: "bin",
-      metadata: { drawerProfileId: "drawer_default_v1" },
+      metadata: { drawerProfileId },
     });
   }
 
-  async function prepareHardwareJob({ job }) {
+  async function prepareHardwareJob({ job, attemptId }) {
     if (job.jobType === "print_label_sato" || job.jobType === "test_label_printer") {
-      return prepareLabel(job);
+      return prepareLabel(job, attemptId);
     }
     if (
       job.jobType === "print_receipt_certificate" ||
       job.jobType === "test_document_printer"
     ) {
-      return prepareDocument(job);
+      return prepareDocument(job, attemptId);
     }
     if (job.jobType === "open_cash_drawer" || job.jobType === "test_cash_drawer") {
-      return prepareCashDrawer(job);
+      return prepareCashDrawer(job, attemptId);
     }
     throw new HardwareAdapterError(`Unsupported job type: ${job.jobType}`, {
       code: "UNSUPPORTED_JOB_TYPE",
@@ -623,11 +670,11 @@ function createHardwareAdapterFactory(config) {
   }
 
   function classifyPrepareError(error) {
-    if (error instanceof HardwareAdapterError) {
+    if (error instanceof HardwareAdapterError || error?.code || error?.category) {
       return {
-        category: error.category,
-        code: error.code,
-        retrySafe: error.retrySafe,
+        category: error.category || "adapter",
+        code: error.code || "HARDWARE_ADAPTER_ERROR",
+        retrySafe: error.retrySafe === true,
       };
     }
     const message = String(error?.message || error || "Unknown error").toLowerCase();
@@ -637,7 +684,7 @@ function createHardwareAdapterFactory(config) {
     return { category: "pre_dispatch", code: "PREPARE_FAILED", retrySafe: false };
   }
 
-  return { prepareHardwareJob, classifyPrepareError };
+  return { prepareHardwareJob, classifyPrepareError, adapterModes };
 }
 
 module.exports = {

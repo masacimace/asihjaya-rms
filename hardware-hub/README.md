@@ -90,19 +90,85 @@ npm run check:hardware:v2-agent
 - Payload hash mismatch.
 - Recovery tidak menjalankan physical dispatch untuk kedua kalinya.
 
-### 5. Test manual
+### 5. Development tanpa hardware fisik
 
-Mulai dengan dry-run:
+Gunakan fake adapter, bukan printer Windows:
 
 ```env
-HARDWARE_DRY_RUN=true
+HARDWARE_ADAPTER_MODE=fake
+LABEL_PRINTER_ADAPTER=fake
+DOCUMENT_PRINTER_ADAPTER=fake
+CASH_DRAWER_ADAPTER=fake
+FAKE_HARDWARE_SCENARIO=success
+FAKE_HARDWARE_OUTPUT_DIR=./data/fake-output
 ```
+
+Fake adapter tetap menjalankan claim, lease, payload hash, SQLite journal, download PDF, dispatch marker, submitted, dan acknowledgement. Perbedaannya hanya tindakan fisik diganti dengan artifact:
+
+```text
+data/fake-output/
+├── label_printer/{jobId}/{attemptId}/label.sbpl
+├── document_printer/{jobId}/{attemptId}/document.pdf
+└── cash_drawer/{jobId}/{attemptId}/drawer.json
+```
+
+Setiap artifact dibuat secara eksklusif. Apabila attempt yang sama melakukan dispatch kedua kali, agent menghasilkan `FAKE_DUPLICATE_DISPATCH_DETECTED` sehingga duplicate execution tidak tersembunyi.
+
+Jalankan harness otomatis:
 
 ```powershell
-npm start
+npm run check:simulation
 ```
 
-Buka Admin → Operasional → Hardware Hub. Agent harus terlihat online. File hasil dry-run tersedia di `dry-run-output`.
+Simpan hasil simulasi untuk diperiksa:
+
+```powershell
+npm run simulate:v2
+```
+
+Output tersimpan pada `data/simulation-<timestamp>/` dan mencakup report JSON serta artifact tiap skenario.
+
+Skenario yang didukung:
+
+```text
+success
+fail_before_dispatch
+timeout_before_dispatch
+printer_not_found
+slow_execution
+unknown_after_dispatch
+crash_after_dispatch
+success_then_ack_lost
+```
+
+Skenario global dapat diganti melalui `FAKE_HARDWARE_SCENARIO`. Override per perangkat tersedia melalui:
+
+```env
+FAKE_LABEL_SCENARIO=
+FAKE_DOCUMENT_SCENARIO=
+FAKE_CASH_DRAWER_SCENARIO=
+FAKE_HARDWARE_DELAY_MS=250
+```
+
+Untuk pengaturan per job atau job type, salin `fake-plan.example.json`, lalu isi:
+
+```env
+FAKE_HARDWARE_PLAN_PATH=./fake-plan.json
+```
+
+File plan dibaca ulang ketika berubah, sehingga skenario dapat diganti tanpa restart agent.
+
+`crash_after_dispatch` secara default melempar simulated crash ke poll loop, lalu recovery berikutnya mengubah job menjadi `unknown_outcome`. Untuk menguji restart process nyata:
+
+```env
+FAKE_EXIT_ON_CRASH=true
+```
+
+Agent akan keluar dengan exit code `86` setelah fake dispatch. Scheduled Task atau developer dapat menjalankan ulang agent untuk memverifikasi startup recovery.
+
+`HARDWARE_DRY_RUN=true` masih didukung sebagai compatibility mode, tetapi konfigurasi adapter fake di atas lebih eksplisit dan disarankan.
+
+Buka Admin → Operasional → Hardware Hub. Agent harus terlihat online dan capability fake tetap tersedia seperti perangkat production.
 
 ### 6. Startup task
 

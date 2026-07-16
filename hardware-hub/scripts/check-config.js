@@ -1,6 +1,7 @@
 /* eslint-disable */
 const fs = require("fs");
 const path = require("path");
+const { SUPPORTED_FAKE_SCENARIOS, normalizeScenario } = require("../lib/failure-injection");
 
 try {
   require("dotenv").config({ path: path.resolve(__dirname, "..", ".env") });
@@ -81,6 +82,67 @@ if (!["v2-preferred", "v2-only", "v1-only"].includes(protocolMode)) {
   errors.push("HARDWARE_PROTOCOL_MODE harus v2-preferred, v2-only, atau v1-only.");
 }
 
+const dryRun = getBoolean("HARDWARE_DRY_RUN", false);
+const globalAdapterMode = (getEnv("HARDWARE_ADAPTER_MODE") || (dryRun ? "fake" : "real")).toLowerCase();
+const adapterModes = {
+  label_printer: (getEnv("LABEL_PRINTER_ADAPTER") || globalAdapterMode).toLowerCase(),
+  document_printer: (getEnv("DOCUMENT_PRINTER_ADAPTER") || globalAdapterMode).toLowerCase(),
+  cash_drawer: (getEnv("CASH_DRAWER_ADAPTER") || globalAdapterMode).toLowerCase(),
+};
+for (const [name, value] of Object.entries(adapterModes)) {
+  if (!["real", "fake"].includes(value)) {
+    errors.push(`${name} adapter harus real atau fake.`);
+  }
+}
+const fakeEnabled = Object.values(adapterModes).includes("fake");
+const fakeOutputDir = resolveLocalPath(
+  "FAKE_HARDWARE_OUTPUT_DIR",
+  getEnv("DRY_RUN_OUTPUT_DIR") || "data/fake-output",
+);
+const fakePlanPath = getEnv("FAKE_HARDWARE_PLAN_PATH")
+  ? resolveLocalPath("FAKE_HARDWARE_PLAN_PATH", "data/fake-plan.json")
+  : "";
+const fakeScenarioEntries = [
+  ["FAKE_HARDWARE_SCENARIO", getEnv("FAKE_HARDWARE_SCENARIO") || "success"],
+  ["FAKE_LABEL_SCENARIO", getEnv("FAKE_LABEL_SCENARIO")],
+  ["FAKE_DOCUMENT_SCENARIO", getEnv("FAKE_DOCUMENT_SCENARIO")],
+  ["FAKE_CASH_DRAWER_SCENARIO", getEnv("FAKE_CASH_DRAWER_SCENARIO")],
+].filter(([, value]) => value);
+for (const [name, value] of fakeScenarioEntries) {
+  try {
+    normalizeScenario(value);
+  } catch (error) {
+    errors.push(`${name}: ${error.message}`);
+  }
+}
+const fakeDelayMs = getNumber("FAKE_HARDWARE_DELAY_MS", 250);
+if (fakeDelayMs < 0 || fakeDelayMs > 120000) {
+  errors.push("FAKE_HARDWARE_DELAY_MS harus antara 0 dan 120000 ms.");
+}
+if (dryRun) {
+  warnings.push("HARDWARE_DRY_RUN adalah compatibility mode; gunakan HARDWARE_ADAPTER_MODE=fake.");
+}
+if (fakeEnabled) {
+  try {
+    fs.mkdirSync(fakeOutputDir, { recursive: true });
+    fs.accessSync(fakeOutputDir, fs.constants.R_OK | fs.constants.W_OK);
+  } catch (error) {
+    errors.push(`FAKE_HARDWARE_OUTPUT_DIR tidak writable (${fakeOutputDir}): ${error.message}`);
+  }
+  if (fakePlanPath && fs.existsSync(fakePlanPath)) {
+    try {
+      const plan = JSON.parse(fs.readFileSync(fakePlanPath, "utf8"));
+      if (!plan || typeof plan !== "object" || Array.isArray(plan)) {
+        errors.push("FAKE_HARDWARE_PLAN_PATH wajib berisi JSON object.");
+      }
+    } catch (error) {
+      errors.push(`FAKE_HARDWARE_PLAN_PATH tidak valid: ${error.message}`);
+    }
+  } else if (fakePlanPath) {
+    warnings.push(`FAKE_HARDWARE_PLAN_PATH belum ditemukan: ${fakePlanPath}`);
+  }
+}
+
 const pollInterval = getNumber("POLL_INTERVAL_MS", 2000);
 if (pollInterval < 1000) errors.push("POLL_INTERVAL_MS minimal 1000 ms.");
 const heartbeatInterval = getNumber("HEARTBEAT_INTERVAL_MS", 30000);
@@ -124,20 +186,12 @@ if (Math.abs(labelLeftOffset) > 500 || Math.abs(labelTopOffset) > 500) {
   warnings.push("Offset label cukup besar; pastikan sesuai hasil physical test.");
 }
 
-const dryRun = getBoolean("HARDWARE_DRY_RUN", false);
-const dryRunOutputDir = resolveLocalPath("DRY_RUN_OUTPUT_DIR", "dry-run-output");
-if (dryRun) {
-  try {
-    fs.mkdirSync(dryRunOutputDir, { recursive: true });
-  } catch (error) {
-    errors.push(`DRY_RUN_OUTPUT_DIR tidak bisa dibuat: ${error.message}`);
-  }
-} else {
-  if (!getEnv("LABEL_PRINTER_NAME")) {
-    warnings.push("LABEL_PRINTER_NAME kosong; job label akan gagal sampai dikonfigurasi.");
-  }
+if (adapterModes.label_printer === "real" && !getEnv("LABEL_PRINTER_NAME")) {
+  warnings.push("LABEL_PRINTER_NAME kosong; job label real akan gagal sampai dikonfigurasi.");
+}
+if (adapterModes.document_printer === "real") {
   if (!getEnv("DOCUMENT_PRINTER_NAME")) {
-    warnings.push("DOCUMENT_PRINTER_NAME kosong; job document akan gagal sampai dikonfigurasi.");
+    warnings.push("DOCUMENT_PRINTER_NAME kosong; job document real akan gagal sampai dikonfigurasi.");
   }
   const pdfExecutable = getEnv("PDF_PRINT_EXECUTABLE");
   const pdfArgsJson = getEnv("PDF_PRINT_ARGS_JSON");
@@ -161,9 +215,9 @@ if (dryRun) {
   if (legacyPdfCommand) {
     warnings.push("PDF_PRINT_COMMAND adalah compatibility mode; migrasikan ke executable + args JSON.");
   }
-  if (!getEnv("CASH_DRAWER_PRINTER_NAME")) {
-    warnings.push("CASH_DRAWER_PRINTER_NAME kosong; job cash drawer akan gagal.");
-  }
+}
+if (adapterModes.cash_drawer === "real" && !getEnv("CASH_DRAWER_PRINTER_NAME")) {
+  warnings.push("CASH_DRAWER_PRINTER_NAME kosong; job cash drawer real akan gagal.");
 }
 
 console.log("Asihjaya Hardware Hub config check");
@@ -176,8 +230,14 @@ console.log(`Protocol mode         : ${protocolMode}`);
 console.log(`Journal path          : ${protocolMode === "v1-only" ? "disabled" : journalPath}`);
 console.log(`Journal key           : ${protocolMode === "v1-only" ? "disabled" : process.platform === "win32" ? "Windows DPAPI" : journalKeyPath}`);
 console.log(`Temporary directory   : ${tempDir}`);
-console.log(`Dry run               : ${dryRun ? "enabled" : "disabled"}`);
-console.log(`Dry-run output dir    : ${dryRun ? dryRunOutputDir : "-"}`);
+console.log(`Adapter mode (global) : ${globalAdapterMode}`);
+console.log(`Label adapter         : ${adapterModes.label_printer}`);
+console.log(`Document adapter      : ${adapterModes.document_printer}`);
+console.log(`Cash drawer adapter   : ${adapterModes.cash_drawer}`);
+console.log(`Fake scenario         : ${fakeEnabled ? getEnv("FAKE_HARDWARE_SCENARIO") || "success" : "-"}`);
+console.log(`Fake output dir       : ${fakeEnabled ? fakeOutputDir : "-"}`);
+console.log(`Fake plan             : ${fakePlanPath || "-"}`);
+console.log(`Fake scenarios        : ${Array.from(SUPPORTED_FAKE_SCENARIOS).join(", ")}`);
 console.log(`Label printer         : ${getEnv("LABEL_PRINTER_NAME") || "-"}`);
 console.log(`Label profile         : ${labelProfile}`);
 console.log(`Label copies          : ${labelCopies}`);

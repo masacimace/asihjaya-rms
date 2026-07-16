@@ -1214,3 +1214,36 @@ HARDWARE_FAILURE_RATE_WARNING_PERCENT=10
 Unknown outcome tidak pernah di-retry otomatis. Operator harus membuka detail
 job, memeriksa output fisik atau artifact simulasi, memberikan alasan, lalu
 memilih satu resolusi yang tercatat permanen.
+
+---
+
+## 27. Development simulation and failure injection
+
+Protocol v2 agent menyediakan fake adapter yang mempertahankan lifecycle production tetapi mengganti physical dispatch dengan exclusive artifact file. Fake adapter mendukung label SBPL, PDF document, dan cash drawer intent.
+
+Failure scenarios minimum:
+
+```text
+success
+fail_before_dispatch
+timeout_before_dispatch
+printer_not_found
+slow_execution
+unknown_after_dispatch
+crash_after_dispatch
+success_then_ack_lost
+```
+
+Simulation acceptance criteria:
+
+1. Satu attempt sukses menghasilkan satu artifact.
+2. Dispatch attempt yang sama untuk kedua kalinya menghasilkan `FAKE_DUPLICATE_DISPATCH_DETECTED`.
+3. Failure sebelum dispatch tidak menghasilkan artifact.
+4. Unknown setelah dispatch menghasilkan tepat satu artifact dan tidak automatic retry.
+5. Crash setelah dispatch dilanjutkan sebagai recovery `unknown_after_dispatch` tanpa artifact kedua.
+6. ACK submitted yang hilang dipulihkan dengan event replay tanpa artifact kedua.
+7. Fake document adapter tetap memvalidasi download origin, path, MIME, maximum bytes, dan SHA-256.
+8. Dua agent yang claim bersamaan hanya menghasilkan satu physical-simulation artifact.
+9. Targeted job hanya diproses target agent.
+
+Physical validation tetap menjadi release gate terpisah.

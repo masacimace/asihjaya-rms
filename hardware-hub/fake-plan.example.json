@@ -1,0 +1,18 @@
+{
+  "defaultScenario": "success",
+  "delayMs": 250,
+  "devices": {
+    "label_printer": "success",
+    "document_printer": "success",
+    "cash_drawer": "success"
+  },
+  "jobTypes": {
+    "test_label_printer": "slow_execution"
+  },
+  "jobs": {
+    "00000000-0000-4000-8000-000000000000": "success_then_ack_lost"
+  },
+  "jobDelayMs": {
+    "00000000-0000-4000-8000-000000000000": 1000
+  }
+}

@@ -16,9 +16,11 @@ const { createHardwareAdapterFactory } = require("./lib/hardware-adapters");
 const { HardwareProtocolV2Client } = require("./lib/protocol-v2-client");
 const { HardwareProtocolV2Runner } = require("./lib/protocol-v2-runner");
 const { createSecretProtector } = require("./lib/secret-protector");
+const { createFailureInjectionController } = require("./lib/failure-injection");
 
-const AGENT_VERSION = "2.0.0-pr4-secure-producers";
+const AGENT_VERSION = "2.0.0-pr6-failure-injection";
 const PROTOCOL_MODES = new Set(["v2-preferred", "v2-only", "v1-only"]);
+const ADAPTER_MODES = new Set(["real", "fake"]);
 process.title = "asihjaya-hardware-hub";
 
 function requiredEnv(name) {
@@ -68,7 +70,29 @@ const HARDWARE_AGENT_ID = requiredEnv("HARDWARE_AGENT_ID");
 const HARDWARE_AGENT_SECRET = requiredEnv("HARDWARE_AGENT_SECRET");
 const HARDWARE_PROTOCOL_MODE = process.env.HARDWARE_PROTOCOL_MODE?.trim() || "v2-preferred";
 const HARDWARE_DRY_RUN = optionalBoolean("HARDWARE_DRY_RUN", false);
+const HARDWARE_ADAPTER_MODE =
+  process.env.HARDWARE_ADAPTER_MODE?.trim().toLowerCase() ||
+  (HARDWARE_DRY_RUN ? "fake" : "real");
+const LABEL_PRINTER_ADAPTER =
+  process.env.LABEL_PRINTER_ADAPTER?.trim().toLowerCase() || HARDWARE_ADAPTER_MODE;
+const DOCUMENT_PRINTER_ADAPTER =
+  process.env.DOCUMENT_PRINTER_ADAPTER?.trim().toLowerCase() || HARDWARE_ADAPTER_MODE;
+const CASH_DRAWER_ADAPTER =
+  process.env.CASH_DRAWER_ADAPTER?.trim().toLowerCase() || HARDWARE_ADAPTER_MODE;
 const DRY_RUN_OUTPUT_DIR = resolveLocalPath("DRY_RUN_OUTPUT_DIR", "dry-run-output");
+const FAKE_HARDWARE_OUTPUT_DIR = resolveLocalPath(
+  "FAKE_HARDWARE_OUTPUT_DIR",
+  process.env.DRY_RUN_OUTPUT_DIR?.trim() || "data/fake-output",
+);
+const FAKE_HARDWARE_PLAN_PATH = process.env.FAKE_HARDWARE_PLAN_PATH?.trim()
+  ? resolveLocalPath("FAKE_HARDWARE_PLAN_PATH", "data/fake-plan.json")
+  : "";
+const FAKE_HARDWARE_SCENARIO = process.env.FAKE_HARDWARE_SCENARIO?.trim() || "success";
+const FAKE_LABEL_SCENARIO = process.env.FAKE_LABEL_SCENARIO?.trim() || "";
+const FAKE_DOCUMENT_SCENARIO = process.env.FAKE_DOCUMENT_SCENARIO?.trim() || "";
+const FAKE_CASH_DRAWER_SCENARIO = process.env.FAKE_CASH_DRAWER_SCENARIO?.trim() || "";
+const FAKE_HARDWARE_DELAY_MS = optionalNumber("FAKE_HARDWARE_DELAY_MS", 250);
+const FAKE_EXIT_ON_CRASH = optionalBoolean("FAKE_EXIT_ON_CRASH", false);
 const HARDWARE_JOURNAL_PATH = resolveLocalPath(
   "HARDWARE_JOURNAL_PATH",
   "data/hardware-executions.sqlite",
@@ -104,6 +128,17 @@ if (!PROTOCOL_MODES.has(HARDWARE_PROTOCOL_MODE)) {
     "[-] HARDWARE_PROTOCOL_MODE harus v2-preferred, v2-only, atau v1-only.",
   );
   process.exit(1);
+}
+for (const [name, value] of [
+  ["HARDWARE_ADAPTER_MODE", HARDWARE_ADAPTER_MODE],
+  ["LABEL_PRINTER_ADAPTER", LABEL_PRINTER_ADAPTER],
+  ["DOCUMENT_PRINTER_ADAPTER", DOCUMENT_PRINTER_ADAPTER],
+  ["CASH_DRAWER_ADAPTER", CASH_DRAWER_ADAPTER],
+]) {
+  if (!ADAPTER_MODES.has(value)) {
+    console.error(`[-] ${name} harus real atau fake.`);
+    process.exit(1);
+  }
 }
 if (HARDWARE_AGENT_SECRET.length < 32) {
   console.error("[-] HARDWARE_AGENT_SECRET minimal harus 32 karakter.");
@@ -239,17 +274,26 @@ function requestJson(
   });
 }
 
+function isFakeAdapter(deviceType) {
+  return {
+    label_printer: LABEL_PRINTER_ADAPTER,
+    document_printer: DOCUMENT_PRINTER_ADAPTER,
+    cash_drawer: CASH_DRAWER_ADAPTER,
+  }[deviceType] === "fake";
+}
+
 function getSupportedCapabilities() {
   const capabilities = [];
-  if (HARDWARE_DRY_RUN || LABEL_PRINTER_NAME) capabilities.push("print_label_sato");
+  if (isFakeAdapter("label_printer") || LABEL_PRINTER_NAME) {
+    capabilities.push("print_label_sato");
+  }
   if (
-    HARDWARE_DRY_RUN ||
-    (DOCUMENT_PRINTER_NAME &&
-      (PDF_PRINT_EXECUTABLE || PDF_PRINT_COMMAND))
+    isFakeAdapter("document_printer") ||
+    (DOCUMENT_PRINTER_NAME && (PDF_PRINT_EXECUTABLE || PDF_PRINT_COMMAND))
   ) {
     capabilities.push("print_document_pdf");
   }
-  if (HARDWARE_DRY_RUN || CASH_DRAWER_PRINTER_NAME) {
+  if (isFakeAdapter("cash_drawer") || CASH_DRAWER_PRINTER_NAME) {
     capabilities.push("open_cash_drawer");
   }
   return capabilities;
@@ -257,24 +301,29 @@ function getSupportedCapabilities() {
 
 function getConfigWarnings() {
   const warnings = [];
-  if (HARDWARE_DRY_RUN) return warnings;
-  if (!LABEL_PRINTER_NAME) warnings.push("LABEL_PRINTER_NAME belum dikonfigurasi.");
-  if (!DOCUMENT_PRINTER_NAME) {
+  if (HARDWARE_DRY_RUN) {
+    warnings.push("HARDWARE_DRY_RUN compatibility mode aktif; gunakan HARDWARE_ADAPTER_MODE=fake.");
+  }
+  if (!isFakeAdapter("label_printer") && !LABEL_PRINTER_NAME) {
+    warnings.push("LABEL_PRINTER_NAME belum dikonfigurasi.");
+  }
+  if (!isFakeAdapter("document_printer") && !DOCUMENT_PRINTER_NAME) {
     warnings.push("DOCUMENT_PRINTER_NAME belum dikonfigurasi.");
   }
   if (
+    !isFakeAdapter("document_printer") &&
     DOCUMENT_PRINTER_NAME &&
     !PDF_PRINT_EXECUTABLE &&
     !PDF_PRINT_COMMAND
   ) {
     warnings.push("PDF_PRINT_EXECUTABLE/PDF_PRINT_COMMAND belum dikonfigurasi.");
   }
-  if (PDF_PRINT_COMMAND) {
+  if (!isFakeAdapter("document_printer") && PDF_PRINT_COMMAND) {
     warnings.push(
       "PDF_PRINT_COMMAND legacy masih aktif; migrasikan ke PDF_PRINT_EXECUTABLE + PDF_PRINT_ARGS_JSON.",
     );
   }
-  if (!CASH_DRAWER_PRINTER_NAME) {
+  if (!isFakeAdapter("cash_drawer") && !CASH_DRAWER_PRINTER_NAME) {
     warnings.push("CASH_DRAWER_PRINTER_NAME belum dikonfigurasi.");
   }
   if (ASIHJAYA_API_URL.startsWith("http://") && !ASIHJAYA_API_URL.includes("localhost")) {
@@ -282,6 +331,25 @@ function getConfigWarnings() {
   }
   return warnings;
 }
+
+const fakeAdaptersEnabled = [
+  LABEL_PRINTER_ADAPTER,
+  DOCUMENT_PRINTER_ADAPTER,
+  CASH_DRAWER_ADAPTER,
+].includes("fake");
+const failureController = createFailureInjectionController({
+  enabled: fakeAdaptersEnabled,
+  outputDir: FAKE_HARDWARE_OUTPUT_DIR,
+  planPath: FAKE_HARDWARE_PLAN_PATH,
+  defaultScenario: FAKE_HARDWARE_SCENARIO,
+  deviceScenarios: {
+    ...(FAKE_LABEL_SCENARIO ? { label_printer: FAKE_LABEL_SCENARIO } : {}),
+    ...(FAKE_DOCUMENT_SCENARIO ? { document_printer: FAKE_DOCUMENT_SCENARIO } : {}),
+    ...(FAKE_CASH_DRAWER_SCENARIO ? { cash_drawer: FAKE_CASH_DRAWER_SCENARIO } : {}),
+  },
+  delayMs: FAKE_HARDWARE_DELAY_MS,
+  logger: console,
+});
 
 const adapterFactory = createHardwareAdapterFactory({
   agentVersion: AGENT_VERSION,
@@ -291,6 +359,12 @@ const adapterFactory = createHardwareAdapterFactory({
   dryRun: HARDWARE_DRY_RUN,
   dryRunOutputDir: DRY_RUN_OUTPUT_DIR,
   tempDir: HARDWARE_TEMP_DIR,
+  adapterModes: {
+    label_printer: LABEL_PRINTER_ADAPTER,
+    document_printer: DOCUMENT_PRINTER_ADAPTER,
+    cash_drawer: CASH_DRAWER_ADAPTER,
+  },
+  failureController,
   labelPrinterName: LABEL_PRINTER_NAME,
   documentPrinterName: DOCUMENT_PRINTER_NAME,
   cashDrawerPrinterName: CASH_DRAWER_PRINTER_NAME,
@@ -314,10 +388,12 @@ if (HARDWARE_PROTOCOL_MODE !== "v1-only") {
   const secretProtector = createSecretProtector({
     keyPath: HARDWARE_JOURNAL_KEY_PATH,
   });
-  const protocolV2Client = new HardwareProtocolV2Client({
-    requestJson,
-    agentVersion: AGENT_VERSION,
-  });
+  const protocolV2Client = failureController.createProtocolClient(
+    new HardwareProtocolV2Client({
+      requestJson,
+      agentVersion: AGENT_VERSION,
+    }),
+  );
   protocolV2Runner = new HardwareProtocolV2Runner({
     journal,
     client: protocolV2Client,
@@ -337,7 +413,10 @@ console.log(`[+] Agent version: ${AGENT_VERSION}`);
 console.log(`[+] API URL: ${ASIHJAYA_API_URL}`);
 console.log(`[+] Agent ID: ${HARDWARE_AGENT_ID}`);
 console.log(`[+] Protocol mode: ${HARDWARE_PROTOCOL_MODE}`);
-console.log(`[+] Dry run mode: ${HARDWARE_DRY_RUN ? "enabled" : "disabled"}`);
+console.log(`[+] Dry run compatibility: ${HARDWARE_DRY_RUN ? "enabled" : "disabled"}`);
+console.log(`[+] Adapter modes: label=${LABEL_PRINTER_ADAPTER}, document=${DOCUMENT_PRINTER_ADAPTER}, drawer=${CASH_DRAWER_ADAPTER}`);
+console.log(`[+] Fake output: ${fakeAdaptersEnabled ? FAKE_HARDWARE_OUTPUT_DIR : "disabled"}`);
+console.log(`[+] Fake scenario: ${fakeAdaptersEnabled ? FAKE_HARDWARE_SCENARIO : "disabled"}`);
 console.log(`[+] Journal: ${journal ? HARDWARE_JOURNAL_PATH : "disabled"}`);
 console.log(`[+] Label printer: ${LABEL_PRINTER_NAME || "not configured"}`);
 console.log(`[+] Document printer: ${DOCUMENT_PRINTER_NAME || "not configured"}`);
@@ -368,7 +447,12 @@ function getCapabilitiesPayload() {
         }
       : { enabled: false },
     dry_run: HARDWARE_DRY_RUN,
-    dry_run_output_dir: HARDWARE_DRY_RUN ? DRY_RUN_OUTPUT_DIR : null,
+    adapter_modes: {
+      label_printer: LABEL_PRINTER_ADAPTER,
+      document_printer: DOCUMENT_PRINTER_ADAPTER,
+      cash_drawer: CASH_DRAWER_ADAPTER,
+    },
+    fake_hardware: fakeAdaptersEnabled ? failureController.describe() : { enabled: false },
     agent_version: AGENT_VERSION,
     node_version: process.version,
     platform: process.platform,
@@ -380,9 +464,9 @@ function getCapabilitiesPayload() {
     print_command_timeout_ms: PRINT_COMMAND_TIMEOUT_MS,
     lease_renew_interval_ms: LEASE_RENEW_INTERVAL_MS,
     configured_devices: {
-      label_printer: Boolean(LABEL_PRINTER_NAME),
-      document_printer: Boolean(DOCUMENT_PRINTER_NAME),
-      cash_drawer_printer: Boolean(CASH_DRAWER_PRINTER_NAME),
+      label_printer: isFakeAdapter("label_printer") || Boolean(LABEL_PRINTER_NAME),
+      document_printer: isFakeAdapter("document_printer") || Boolean(DOCUMENT_PRINTER_NAME),
+      cash_drawer_printer: isFakeAdapter("cash_drawer") || Boolean(CASH_DRAWER_PRINTER_NAME),
       pdf_print_executable: Boolean(PDF_PRINT_EXECUTABLE),
       pdf_print_command_legacy: Boolean(PDF_PRINT_COMMAND),
     },
@@ -519,6 +603,10 @@ async function pollOnce() {
       `[-] Poll/claim failed${error.code ? ` (${error.code})` : ""}:`,
       error.message,
     );
+    if (error?.simulatedAgentCrash === true && FAKE_EXIT_ON_CRASH) {
+      console.error("[-] FAKE_EXIT_ON_CRASH aktif; process dihentikan dengan exit code 86.");
+      process.exit(86);
+    }
   } finally {
     isPolling = false;
   }

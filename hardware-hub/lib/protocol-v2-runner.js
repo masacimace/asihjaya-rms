@@ -457,6 +457,7 @@ class HardwareProtocolV2Runner {
       try {
         deviceResult = await prepared.dispatch();
       } catch (error) {
+        if (error?.simulatedAgentCrash === true) throw error;
         return await this.reportUnknownAfterDispatch(current, error, {
           adapter: prepared.adapter,
           target: prepared.target || null,
@@ -474,6 +475,7 @@ class HardwareProtocolV2Runner {
 
       return await this.finishSubmitted(current);
     } catch (error) {
+      if (error?.simulatedAgentCrash === true) throw error;
       const current = this.journal.get(record.attemptId);
       if (current?.pendingEventStatus) {
         throw error;

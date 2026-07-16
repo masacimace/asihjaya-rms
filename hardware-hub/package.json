@@ -1,6 +1,6 @@
 {
   "name": "asihjaya-hardware-hub",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Local Hardware Hub agent for Asihjaya RMS Mini PC deployments.",
   "main": "agent.js",
@@ -13,7 +13,9 @@
     "install:startup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-startup-task.ps1 -RunNow",
     "uninstall:startup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall-startup-task.ps1",
     "logs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/open-logs.ps1",
-    "check:v2": "node scripts/check-crash-safe-agent.js"
+    "check:v2": "node scripts/check-crash-safe-agent.js",
+    "check:simulation": "node scripts/run-failure-injection-harness.js",
+    "simulate:v2": "node scripts/run-failure-injection-harness.js --keep-output"
   },
   "dependencies": {
     "dotenv": "^17.4.2"

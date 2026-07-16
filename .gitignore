@@ -36,6 +36,7 @@ pnpm-debug.log*
 /hardware-hub/logs/
 /hardware-hub/dry-run-output/
 /hardware-hub/data/
+/hardware-hub/fake-plan.json
 /hardware-hub/*.log
 /hardware-hub/hardware_job_*.txt
 /hardware-hub/hardware_job_*.pdf
