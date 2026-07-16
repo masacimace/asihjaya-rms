@@ -38,15 +38,16 @@ export const metadata = {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const saleStatusLabels: Record<AdminCustomerTransactionRow["status"], string> = {
-  draft: "Draft",
-  awaiting_payment: "Menunggu Bayar",
-  completed: "Selesai",
-  cancelled: "Dibatalkan",
-  voided: "Void",
-  partially_refunded: "Refund Parsial",
-  refunded: "Refund",
-};
+const saleStatusLabels: Record<AdminCustomerTransactionRow["status"], string> =
+  {
+    draft: "Draft",
+    awaiting_payment: "Menunggu Bayar",
+    completed: "Selesai",
+    cancelled: "Dibatalkan",
+    voided: "Void",
+    partially_refunded: "Refund Parsial",
+    refunded: "Refund",
+  };
 
 const paymentMethodLabels: Record<string, string> = {
   cash: "Cash",
@@ -237,7 +238,12 @@ function ProfileMetaItem({
       <div className="mt-0.5 text-neutral-400">{icon}</div>
       <div className="min-w-0">
         <p className="text-xs font-medium text-[var(--muted)]">{label}</p>
-        <p className={cn("mt-1 break-words text-sm font-medium text-neutral-900", valueClassName)}>
+        <p
+          className={cn(
+            "mt-1 break-words text-sm font-medium text-neutral-900",
+            valueClassName,
+          )}
+        >
           {value}
         </p>
       </div>
@@ -255,7 +261,7 @@ function CustomerProfileHeader({ data }: { data: AdminCustomerDetailData }) {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] xl:items-stretch">
         <div className="min-w-0">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            <div className="grid size-20 shrink-0 place-items-center rounded-2xl border border-[var(--border)] bg-[var(--accent)] text-xl font-semibold text-white sm:size-24 sm:text-2xl">
+            <div className="grid size-20 shrink-0 place-items-center rounded-2xl border border-[var(--border)] bg-[var(--accent-soft)] text-xl font-semibold text-[var(--accent)] sm:size-24 sm:text-2xl">
               {getCustomerInitials(customer.fullName)}
             </div>
 
@@ -285,8 +291,8 @@ function CustomerProfileHeader({ data }: { data: AdminCustomerDetailData }) {
               </div>
 
               <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-                Profil terpusat untuk melihat nilai pelanggan, riwayat pembelian,
-                kanal kontak, dan konteks pelayanan terakhir.
+                Profil terpusat untuk melihat nilai pelanggan, riwayat
+                pembelian, kanal kontak, dan konteks pelayanan terakhir.
               </p>
             </div>
           </div>
@@ -338,7 +344,9 @@ function CustomerProfileHeader({ data }: { data: AdminCustomerDetailData }) {
               <Clock3 className="size-5" />
             </div>
             <div>
-              <h2 className="font-semibold text-neutral-950">Aktivitas terakhir</h2>
+              <h2 className="font-semibold text-neutral-950">
+                Aktivitas terakhir
+              </h2>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
                 Konteks pelayanan terbaru yang tercatat untuk pelanggan ini.
               </p>
@@ -347,7 +355,9 @@ function CustomerProfileHeader({ data }: { data: AdminCustomerDetailData }) {
 
           <dl className="mt-5 space-y-3">
             <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] pb-3">
-              <dt className="text-xs text-[var(--muted)]">Transaksi terakhir</dt>
+              <dt className="text-xs text-[var(--muted)]">
+                Transaksi terakhir
+              </dt>
               <dd className="text-right text-sm font-medium text-neutral-900">
                 {formatDateTime(summary.lastTransactionAt)}
               </dd>
@@ -395,7 +405,9 @@ function CustomerInsights({ data }: { data: AdminCustomerDetailData }) {
             <Sparkles className="size-5" />
           </div>
           <div className="min-w-0">
-            <h2 className="font-semibold text-neutral-950">Catatan pelayanan</h2>
+            <h2 className="font-semibold text-neutral-950">
+              Catatan pelayanan
+            </h2>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
               Informasi internal untuk menjaga konteks dan kualitas pelayanan.
             </p>
@@ -433,7 +445,9 @@ function CustomerInsights({ data }: { data: AdminCustomerDetailData }) {
             <UserRound className="size-5" />
           </div>
           <div className="min-w-0">
-            <h2 className="font-semibold text-neutral-950">Profil & metadata</h2>
+            <h2 className="font-semibold text-neutral-950">
+              Profil & metadata
+            </h2>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
               Identitas permanen dan waktu pembaruan data pelanggan.
             </p>
@@ -471,8 +485,9 @@ function CustomerInsights({ data }: { data: AdminCustomerDetailData }) {
           <Store className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
           <p className="text-xs leading-5 text-neutral-700">
             Ringkasan dan riwayat di halaman ini mengikuti outlet yang dapat
-            diakses oleh akun admin saat ini. Total nilai pelanggan tercatat dari
-            transaksi selesai sebesar <strong>{formatMoney(summary.totalSpent)}</strong>.
+            diakses oleh akun admin saat ini. Total nilai pelanggan tercatat
+            dari transaksi selesai sebesar{" "}
+            <strong>{formatMoney(summary.totalSpent)}</strong>.
           </p>
         </div>
       </article>
@@ -580,7 +595,8 @@ function TransactionHistory({
             </span>
           </div>
           <p className="mt-1.5 text-sm leading-6 text-[var(--muted)]">
-            Maksimal 50 transaksi terbaru dari outlet yang dapat diakses akun admin.
+            Maksimal 50 transaksi terbaru dari outlet yang dapat diakses akun
+            admin.
           </p>
         </div>
 
@@ -625,13 +641,25 @@ function TransactionHistory({
         <table className="w-full min-w-[1120px] table-auto text-left text-sm">
           <thead className="border-b border-[var(--border)] bg-neutral-50/80 text-xs text-[var(--muted)]">
             <tr>
-              <th className="w-[190px] px-5 py-4 font-semibold">Nota & tanggal</th>
-              <th className="w-[175px] px-5 py-4 font-semibold">Status & pembayaran</th>
-              <th className="min-w-[260px] px-5 py-4 font-semibold">Ringkasan item</th>
+              <th className="w-[190px] px-5 py-4 font-semibold">
+                Nota & tanggal
+              </th>
+              <th className="w-[175px] px-5 py-4 font-semibold">
+                Status & pembayaran
+              </th>
+              <th className="min-w-[260px] px-5 py-4 font-semibold">
+                Ringkasan item
+              </th>
               <th className="w-[170px] px-5 py-4 font-semibold">Outlet</th>
-              <th className="w-[190px] px-5 py-4 font-semibold">Register & sales</th>
-              <th className="w-[165px] px-5 py-4 text-right font-semibold">Total</th>
-              <th className="w-[92px] px-5 py-4 text-right font-semibold">Aksi</th>
+              <th className="w-[190px] px-5 py-4 font-semibold">
+                Register & sales
+              </th>
+              <th className="w-[165px] px-5 py-4 text-right font-semibold">
+                Total
+              </th>
+              <th className="w-[92px] px-5 py-4 text-right font-semibold">
+                Aksi
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
@@ -649,7 +677,9 @@ function TransactionHistory({
                       {transaction.invoiceNumber}
                     </Link>
                     <p className="mt-1.5 whitespace-nowrap text-xs text-[var(--muted)]">
-                      {formatDateTime(transaction.completedAt ?? transaction.createdAt)}
+                      {formatDateTime(
+                        transaction.completedAt ?? transaction.createdAt,
+                      )}
                     </p>
                   </td>
                   <td className="px-5 py-4 align-top">
@@ -708,7 +738,9 @@ function TransactionHistory({
                         Diskon {formatMoney(transaction.discountAmount)}
                       </p>
                     ) : (
-                      <p className="mt-1.5 text-xs text-[var(--muted)]">Tanpa diskon</p>
+                      <p className="mt-1.5 text-xs text-[var(--muted)]">
+                        Tanpa diskon
+                      </p>
                     )}
                   </td>
                   <td className="px-5 py-4 text-right align-top">
@@ -731,7 +763,8 @@ function TransactionHistory({
                     Belum ada transaksi
                   </p>
                   <p className="mt-1 text-sm text-[var(--muted)]">
-                    Riwayat akan muncul setelah pelanggan dipilih saat checkout POS.
+                    Riwayat akan muncul setelah pelanggan dipilih saat checkout
+                    POS.
                   </p>
                 </td>
               </tr>
@@ -806,7 +839,9 @@ export default async function CustomerDetailPage({
   const { customerId } = await params;
 
   if (!isUuid(customerId)) {
-    return <CustomerUnavailableState customerId={customerId} reason="invalid" />;
+    return (
+      <CustomerUnavailableState customerId={customerId} reason="invalid" />
+    );
   }
 
   const [data, query] = await Promise.all([
@@ -815,7 +850,9 @@ export default async function CustomerDetailPage({
   ]);
 
   if (!data) {
-    return <CustomerUnavailableState customerId={customerId} reason="not-found" />;
+    return (
+      <CustomerUnavailableState customerId={customerId} reason="not-found" />
+    );
   }
 
   const noticeType =
