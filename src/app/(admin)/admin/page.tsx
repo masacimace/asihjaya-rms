@@ -683,7 +683,7 @@ export default async function AdminDashboardPage({
                       </div>
 
                       <div className="min-w-0">
-                        <p className="text-xs text-[var(--muted)] sm:text-sm">
+                        <p className="text-xs font-semibold uppercase text-[var(--muted)]">
                           {label}
                         </p>
                         <p className="mt-1 truncate text-sm font-semibold text-neutral-950 sm:text-xl">
@@ -721,7 +721,9 @@ export default async function AdminDashboardPage({
                   </div>
 
                   <div className="min-w-0">
-                    <p className="text-xs text-[var(--muted)]">{label}</p>
+                    <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+                      {label}
+                    </p>
                     <p className="mt-0.5 text-lg font-semibold text-neutral-950">
                       {value}
                     </p>

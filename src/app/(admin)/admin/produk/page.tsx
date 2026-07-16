@@ -120,7 +120,9 @@ function SummaryCard({
     <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-[var(--muted)]">{title}</p>
+          <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+            {title}
+          </p>
           <p className="mt-3 truncate text-sm font-semibold text-neutral-950 sm:text-2xl">
             {value}
           </p>
