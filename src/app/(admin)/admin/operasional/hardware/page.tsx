@@ -58,9 +58,13 @@ const statusLabels: Record<HardwareAgentDisplayStatus, string> = {
 const jobStatusLabels: Record<HardwareJobSummary["status"], string> = {
   pending: "Menunggu",
   claimed: "Diklaim",
-  printing: "Diproses",
+  processing: "Diproses",
+  printing: "Diproses (v1)",
+  submitted: "Terkirim ke printer",
   completed: "Selesai",
   failed: "Gagal",
+  unknown_outcome: "Hasil belum diketahui",
+  expired: "Kedaluwarsa",
   cancelled: "Dibatalkan",
 };
 
@@ -136,10 +140,14 @@ function JobStatusPill({ status }: { status: HardwareJobSummary["status"] }) {
         "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
         status === "completed" && "bg-emerald-50 text-emerald-700",
         status === "failed" && "bg-red-50 text-red-700",
-        status === "printing" && "bg-blue-50 text-blue-700",
+        status === "unknown_outcome" && "bg-orange-50 text-orange-800",
+        (status === "processing" || status === "printing") &&
+          "bg-blue-50 text-blue-700",
+        status === "submitted" && "bg-violet-50 text-violet-700",
         status === "claimed" && "bg-amber-50 text-amber-700",
         status === "pending" && "bg-neutral-100 text-neutral-600",
-        status === "cancelled" && "bg-neutral-100 text-neutral-500",
+        (status === "cancelled" || status === "expired") &&
+          "bg-neutral-100 text-neutral-500",
       )}
     >
       {jobStatusLabels[status]}

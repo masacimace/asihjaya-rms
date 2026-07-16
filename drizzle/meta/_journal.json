@@ -169,6 +169,13 @@
       "when": 1784037454538,
       "tag": "0023_notification_center_v1a_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784201864946,
+      "tag": "0024_hardware_job_protocol_v2_foundation",
+      "breakpoints": true
     }
   ]
 }

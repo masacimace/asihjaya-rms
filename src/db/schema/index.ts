@@ -1828,11 +1828,30 @@ export const hardwareAgentStatusEnum = pgEnum("hardware_agent_status", [
 export const hardwareJobStatusEnum = pgEnum("hardware_job_status", [
   "pending",
   "claimed",
+  "processing",
   "printing",
+  "submitted",
   "completed",
   "failed",
+  "unknown_outcome",
+  "expired",
   "cancelled",
 ]);
+
+export const hardwareJobAttemptStatusEnum = pgEnum(
+  "hardware_job_attempt_status",
+  [
+    "claimed",
+    "processing",
+    "dispatching",
+    "submitted",
+    "acknowledged",
+    "failed_before_dispatch",
+    "unknown_after_dispatch",
+    "lease_expired",
+    "cancelled",
+  ],
+);
 
 export const hardwareJobTypeEnum = pgEnum("hardware_job_type", [
   "print_label_sato",
@@ -1890,6 +1909,77 @@ export const hardwareAgents = pgTable(
   ],
 );
 
+export const hardwareJobAttempts = pgTable(
+  "hardware_job_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    jobId: uuid("job_id")
+      .notNull()
+      .references((): AnyPgColumn => hardwareJobs.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => hardwareAgents.id),
+    attemptNumber: integer("attempt_number").notNull(),
+    status: hardwareJobAttemptStatusEnum("status")
+      .default("claimed")
+      .notNull(),
+    leaseTokenHash: text("lease_token_hash").notNull(),
+    leaseExpiresAt: timestamp("lease_expires_at", {
+      withTimezone: true,
+    }).notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    eventSequence: integer("event_sequence").default(0).notNull(),
+    dispatchStartedAt: timestamp("dispatch_started_at", {
+      withTimezone: true,
+    }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    serverAcknowledgedAt: timestamp("server_acknowledged_at", {
+      withTimezone: true,
+    }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    errorCode: varchar("error_code", { length: 80 }),
+    errorMessage: text("error_message"),
+    retrySafe: boolean("retry_safe"),
+    result: jsonb("result")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("hardware_job_attempts_job_number_uq").on(
+      table.jobId,
+      table.attemptNumber,
+    ),
+    uniqueIndex("hardware_job_attempts_one_active_uq")
+      .on(table.jobId)
+      .where(
+        sql`${table.status} in ('claimed', 'processing', 'dispatching', 'submitted')`,
+      ),
+    index("hardware_job_attempts_agent_status_idx").on(
+      table.agentId,
+      table.status,
+      table.createdAt,
+    ),
+    index("hardware_job_attempts_lease_idx").on(
+      table.status,
+      table.leaseExpiresAt,
+    ),
+    check(
+      "hardware_job_attempts_number_ck",
+      sql`${table.attemptNumber} > 0`,
+    ),
+    check(
+      "hardware_job_attempts_event_sequence_ck",
+      sql`${table.eventSequence} >= 0`,
+    ),
+    check(
+      "hardware_job_attempts_payload_hash_ck",
+      sql`${table.payloadHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
 export const hardwareJobs = pgTable(
   "hardware_jobs",
   {
@@ -1903,28 +1993,44 @@ export const hardwareJobs = pgTable(
     registerId: uuid("register_id")
       .notNull()
       .references(() => registers.id),
+    // Legacy v1 claim owner. Protocol v2 uses currentAttemptId + attempt.agentId.
     agentId: uuid("agent_id").references(() => hardwareAgents.id),
+    targetAgentId: uuid("target_agent_id").references(() => hardwareAgents.id),
+    currentAttemptId: uuid("current_attempt_id").references(
+      () => hardwareJobAttempts.id,
+      { onDelete: "set null" },
+    ),
     createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    protocolVersion: integer("protocol_version").default(1).notNull(),
     jobType: hardwareJobTypeEnum("job_type").notNull(),
     deviceType: hardwareDeviceTypeEnum("device_type").notNull(),
+    requiredCapability: varchar("required_capability", { length: 80 }),
     targetDevice: varchar("target_device", { length: 120 }),
     status: hardwareJobStatusEnum("status").default("pending").notNull(),
     priority: integer("priority").default(100).notNull(),
     attempts: integer("attempts").default(0).notNull(),
     maxAttempts: integer("max_attempts").default(3).notNull(),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }),
     result: jsonb("result").$type<Record<string, unknown>>().default({}),
     error: text("error"),
+    lastErrorCode: varchar("last_error_code", { length: 80 }),
+    lastErrorMessage: text("last_error_message"),
     idempotencyKey: varchar("idempotency_key", { length: 160 }),
     sourceType: varchar("source_type", { length: 80 }),
     sourceId: varchar("source_id", { length: 160 }),
     availableAt: timestamp("available_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }),
+    processingAt: timestamp("processing_at", { withTimezone: true }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     failedAt: timestamp("failed_at", { withTimezone: true }),
+    unknownAt: timestamp("unknown_at", { withTimezone: true }),
+    expiredAt: timestamp("expired_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     ...timestamps,
   },
@@ -1936,11 +2042,60 @@ export const hardwareJobs = pgTable(
       table.status,
       table.availableAt,
     ),
+    index("hardware_jobs_v2_claim_idx").on(
+      table.organizationId,
+      table.outletId,
+      table.registerId,
+      table.protocolVersion,
+      table.status,
+      table.requiredCapability,
+      table.availableAt,
+      table.priority,
+    ),
     index("hardware_jobs_agent_status_idx").on(table.agentId, table.status),
+    index("hardware_jobs_target_agent_idx").on(
+      table.targetAgentId,
+      table.status,
+      table.availableAt,
+    ),
+    index("hardware_jobs_expiry_idx")
+      .on(table.status, table.expiresAt)
+      .where(sql`${table.expiresAt} is not null`),
     index("hardware_jobs_source_idx").on(table.sourceType, table.sourceId),
+    uniqueIndex("hardware_jobs_current_attempt_uq")
+      .on(table.currentAttemptId)
+      .where(sql`${table.currentAttemptId} is not null`),
     uniqueIndex("hardware_jobs_idempotency_uq")
       .on(table.organizationId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} is not null`),
+    check(
+      "hardware_jobs_protocol_version_ck",
+      sql`${table.protocolVersion} in (1, 2)`,
+    ),
+    check(
+      "hardware_jobs_attempts_ck",
+      sql`${table.protocolVersion} <> 2 or (${table.attempts} >= 0 and ${table.maxAttempts} > 0 and ${table.attempts} <= ${table.maxAttempts})`,
+    ),
+    check(
+      "hardware_jobs_required_capability_ck",
+      sql`${table.requiredCapability} is null or ${table.requiredCapability} in ('print_label_sato', 'print_document_pdf', 'open_cash_drawer')`,
+    ),
+    check(
+      "hardware_jobs_payload_hash_ck",
+      sql`${table.payloadHash} is null or ${table.payloadHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "hardware_jobs_v2_required_fields_ck",
+      sql`${table.protocolVersion} <> 2 or (${table.requiredCapability} is not null and ${table.payloadHash} is not null and ${table.expiresAt} is not null and ${table.idempotencyKey} is not null)`,
+    ),
+    check(
+      "hardware_jobs_v2_status_ck",
+      sql`${table.protocolVersion} <> 2 or ${table.status} <> 'printing'`,
+    ),
+    check(
+      "hardware_jobs_expiry_after_creation_ck",
+      sql`${table.expiresAt} is null or ${table.expiresAt} > ${table.createdAt}`,
+    ),
   ],
 );
 

@@ -18,6 +18,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "hardware:agent:create": "tsx scripts/create-hardware-agent.ts",
+    "check:hardware:v2-foundation": "tsx scripts/check-hardware-protocol-v2-foundation.ts",
     "db:preflight:p0a": "tsx scripts/preflight-p0a.ts",
     "check:p1a": "tsx scripts/check-p1a-manual-payment-verification.ts",
     "db:preflight:p1a": "tsx scripts/preflight-p1a.ts",

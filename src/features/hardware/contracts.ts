@@ -49,7 +49,17 @@ export type HardwareJobSummary = {
     | "test_document_printer"
     | "test_cash_drawer";
   deviceType: "label_printer" | "document_printer" | "cash_drawer" | "other";
-  status: "pending" | "claimed" | "printing" | "completed" | "failed" | "cancelled";
+  status:
+    | "pending"
+    | "claimed"
+    | "processing"
+    | "printing"
+    | "submitted"
+    | "completed"
+    | "failed"
+    | "unknown_outcome"
+    | "expired"
+    | "cancelled";
   targetDevice: string | null;
   attempts: number;
   maxAttempts: number;
@@ -86,9 +96,13 @@ export type HardwareJobSummary = {
 export type HardwareJobStatusSummary = {
   pending: number;
   claimed: number;
+  processing: number;
   printing: number;
+  submitted: number;
   completed: number;
   failed: number;
+  unknown_outcome: number;
+  expired: number;
   cancelled: number;
 };
 

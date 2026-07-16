@@ -99,9 +99,13 @@ function createEmptyStatusSummary(): HardwareJobStatusSummary {
   return {
     pending: 0,
     claimed: 0,
+    processing: 0,
     printing: 0,
+    submitted: 0,
     completed: 0,
     failed: 0,
+    unknown_outcome: 0,
+    expired: 0,
     cancelled: 0,
   };
 }
@@ -399,8 +403,11 @@ export async function getHardwareHubDashboard(
       pendingJobs:
         jobStatusSummary.pending +
         jobStatusSummary.claimed +
-        jobStatusSummary.printing,
-      failedJobs: jobStatusSummary.failed,
+        jobStatusSummary.processing +
+        jobStatusSummary.printing +
+        jobStatusSummary.submitted,
+      failedJobs:
+        jobStatusSummary.failed + jobStatusSummary.unknown_outcome,
       staleJobs,
       cleanupEligibleJobs: cleanupSummary.totalEligible,
     },
