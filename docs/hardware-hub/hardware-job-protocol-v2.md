@@ -1249,3 +1249,18 @@ Simulation acceptance criteria:
 9. Targeted job hanya diproses target agent.
 
 Physical validation tetap menjadi release gate terpisah.
+
+---
+
+## Production Windows operations addendum
+
+The Protocol v2 Windows agent uses a dedicated user-scoped operational runtime:
+
+- single-instance process lock;
+- structured log rotation and secret redaction;
+- atomic health-state persistence;
+- loopback health/readiness endpoint;
+- absolute Node.js executable path in Task Scheduler;
+- redacted support bundle that excludes the execution journal and credentials.
+
+These operational facilities do not change Hardware Job Protocol state transitions or delivery semantics.

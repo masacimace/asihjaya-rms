@@ -338,3 +338,44 @@ Jangan mengedit file tersebut saat agent berjalan. Sebelum memindahkan Mini PC a
 2. Pastikan tidak ada job `submitted`, `dispatching`, atau pending event.
 3. Simpan backup folder `data` untuk audit.
 4. Lakukan perpindahan credential/journal melalui prosedur operasional, bukan dengan menghapus database secara langsung.
+
+## Production Windows operations
+
+PR 7 adds production operational tooling:
+
+```powershell
+npm run setup:production
+npm run status
+npm run health
+npm run support:bundle
+```
+
+The agent now uses:
+
+- structured rotating JSONL logs;
+- a process lock preventing duplicate agent instances;
+- an atomic local health-state file;
+- loopback `/health` and `/ready` endpoints;
+- a redacted support-bundle exporter;
+- a Scheduled Task action pinned to the absolute `node.exe` path.
+
+Operational configuration:
+
+```env
+HARDWARE_LOG_DIR=./logs
+HARDWARE_LOG_LEVEL=info
+HARDWARE_LOG_RETENTION_DAYS=30
+HARDWARE_LOG_MAX_FILE_MB=20
+HARDWARE_LOG_MAX_FILES=90
+HARDWARE_LOCK_PATH=./data/agent.lock
+HARDWARE_HEALTH_STATE_PATH=./data/health-state.json
+HARDWARE_HEALTH_SERVER_ENABLED=true
+HARDWARE_HEALTH_SERVER_HOST=127.0.0.1
+HARDWARE_HEALTH_SERVER_PORT=3210
+```
+
+The health server must remain loopback-only. Full operating procedures are documented in:
+
+```text
+docs/hardware-hub/windows-production-operations.md
+```

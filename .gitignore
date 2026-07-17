@@ -51,3 +51,4 @@ next-env.d.ts
 
 # local uploaded media/documents
 /.data/
+/hardware-hub/support-bundles/

@@ -1,28 +1,32 @@
-$ErrorActionPreference = "Stop"
+param(
+  [string]$NodeExecutable = "node.exe"
+)
 
+$ErrorActionPreference = "Stop"
 $HubRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $HubRoot
 
 $LogDir = Join-Path $HubRoot "logs"
+$DataDir = Join-Path $HubRoot "data"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 
-$Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$LogFile = Join-Path $LogDir "agent-$Stamp.log"
-
-Write-Host "Starting Asihjaya Hardware Hub Agent..."
-Write-Host "Hub root : $HubRoot"
-Write-Host "Log file : $LogFile"
-
-$NodeCommand = Get-Command node -ErrorAction SilentlyContinue
-if (-not $NodeCommand) {
-  throw "Node.js tidak ditemukan di PATH. Install Node.js LTS dulu, lalu buka terminal baru."
+if (-not (Test-Path $NodeExecutable)) {
+  $ResolvedNode = Get-Command $NodeExecutable -ErrorAction SilentlyContinue
+  if (-not $ResolvedNode) {
+    throw "Node.js tidak ditemukan: $NodeExecutable"
+  }
+  $NodeExecutable = $ResolvedNode.Source
 }
 
-& node agent.js 2>&1 | Tee-Object -FilePath $LogFile -Append
-$NodeExitCode = $LASTEXITCODE
+Write-Host "Starting Asihjaya Hardware Hub Agent..."
+Write-Host "Hub root       : $HubRoot"
+Write-Host "Node executable: $NodeExecutable"
+Write-Host "Structured logs: $LogDir"
 
+& $NodeExecutable agent.js
+$NodeExitCode = $LASTEXITCODE
 if ($NodeExitCode -ne 0) {
   Write-Error "Hardware Hub Agent exited with code $NodeExitCode."
 }
-
 exit $NodeExitCode

@@ -5,7 +5,7 @@ const { SUPPORTED_FAKE_SCENARIOS, normalizeScenario } = require("../lib/failure-
 const { createSecretProtector } = require("../lib/secret-protector");
 
 try {
-  require("dotenv").config({ path: path.resolve(__dirname, "..", ".env") });
+  require("dotenv").config({ path: path.resolve(__dirname, "..", ".env"), quiet: true });
 } catch {
   // dotenv optional; production task may inject environment variables directly.
 }
@@ -162,7 +162,31 @@ if (leaseRenewInterval < 5000 || leaseRenewInterval > 45000) {
 const journalPath = resolveLocalPath("HARDWARE_JOURNAL_PATH", "data/hardware-executions.sqlite");
 const journalKeyPath = resolveLocalPath("HARDWARE_JOURNAL_KEY_PATH", "data/hardware-journal.key");
 const tempDir = resolveLocalPath("HARDWARE_TEMP_DIR", "data/temp");
+const lockPath = resolveLocalPath("HARDWARE_LOCK_PATH", "data/agent.lock");
+const healthStatePath = resolveLocalPath("HARDWARE_HEALTH_STATE_PATH", "data/health-state.json");
+const logDir = resolveLocalPath("HARDWARE_LOG_DIR", "logs");
+const healthHost = getEnv("HARDWARE_HEALTH_SERVER_HOST") || "127.0.0.1";
+const healthPort = getNumber("HARDWARE_HEALTH_SERVER_PORT", 3210);
+const logRetentionDays = getNumber("HARDWARE_LOG_RETENTION_DAYS", 30);
+const logMaxFileMb = getNumber("HARDWARE_LOG_MAX_FILE_MB", 20);
+const logMaxFiles = getNumber("HARDWARE_LOG_MAX_FILES", 90);
 const powershellExecutable = getEnv("HARDWARE_POWERSHELL_EXECUTABLE") || "powershell.exe";
+
+if (!["127.0.0.1", "::1", "localhost"].includes(healthHost)) {
+  errors.push("HARDWARE_HEALTH_SERVER_HOST hanya boleh loopback (127.0.0.1, ::1, localhost).");
+}
+if (healthPort < 1 || healthPort > 65535) errors.push("HARDWARE_HEALTH_SERVER_PORT harus 1-65535.");
+if (logRetentionDays < 1 || logRetentionDays > 365) errors.push("HARDWARE_LOG_RETENTION_DAYS harus 1-365.");
+if (logMaxFileMb < 1 || logMaxFileMb > 1024) errors.push("HARDWARE_LOG_MAX_FILE_MB harus 1-1024.");
+if (logMaxFiles < 2 || logMaxFiles > 1000) errors.push("HARDWARE_LOG_MAX_FILES harus 2-1000.");
+for (const directory of [path.dirname(lockPath), path.dirname(healthStatePath), logDir]) {
+  try {
+    fs.mkdirSync(directory, { recursive: true });
+    fs.accessSync(directory, fs.constants.R_OK | fs.constants.W_OK);
+  } catch (error) {
+    errors.push(`Directory operational tidak writable (${directory}): ${error.message}`);
+  }
+}
 let secretProtectorReport = null;
 if (protocolMode !== "v1-only") {
   for (const directory of [path.dirname(journalPath), path.dirname(journalKeyPath), tempDir]) {
@@ -250,6 +274,11 @@ if (process.platform === "win32" && protocolMode !== "v1-only") {
   console.log(`PowerShell executable : ${powershellExecutable}`);
 }
 console.log(`Temporary directory   : ${tempDir}`);
+console.log(`Process lock          : ${lockPath}`);
+console.log(`Health state          : ${healthStatePath}`);
+console.log(`Health endpoint       : http://${healthHost}:${healthPort}/health`);
+console.log(`Structured log dir    : ${logDir}`);
+console.log(`Log retention         : ${logRetentionDays} days, ${logMaxFileMb} MB/file, ${logMaxFiles} files`);
 console.log(`Adapter mode (global) : ${globalAdapterMode}`);
 console.log(`Label adapter         : ${adapterModes.label_printer}`);
 console.log(`Document adapter      : ${adapterModes.document_printer}`);

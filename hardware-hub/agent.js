@@ -6,10 +6,25 @@ const os = require("os");
 const path = require("path");
 
 try {
-  require("dotenv").config({ path: path.resolve(__dirname, ".env") });
+  require("dotenv").config({ path: path.resolve(__dirname, ".env"), quiet: true });
 } catch {
   // dotenv optional agar agent tetap bisa dijalankan lewat environment variable OS.
 }
+
+const AGENT_VERSION = "2.1.0-pr7-windows-operations";
+const { createOperationalLogger } = require("./lib/operational-logger");
+const operationalLogger = createOperationalLogger({
+  logDir: path.resolve(__dirname, process.env.HARDWARE_LOG_DIR?.trim() || "logs"),
+  service: "asihjaya-hardware-hub",
+  version: AGENT_VERSION,
+  agentId: process.env.HARDWARE_AGENT_ID?.trim() || null,
+  level: process.env.HARDWARE_LOG_LEVEL?.trim().toLowerCase() || "info",
+  retentionDays: Number(process.env.HARDWARE_LOG_RETENTION_DAYS || 30),
+  maxFileBytes: Number(process.env.HARDWARE_LOG_MAX_FILE_MB || 20) * 1024 * 1024,
+  maxFiles: Number(process.env.HARDWARE_LOG_MAX_FILES || 90),
+  redactionValues: [process.env.HARDWARE_AGENT_SECRET || ""],
+});
+operationalLogger.installConsoleBridge();
 
 const { ExecutionJournal } = require("./lib/execution-journal");
 const { createHardwareAdapterFactory } = require("./lib/hardware-adapters");
@@ -17,8 +32,9 @@ const { HardwareProtocolV2Client } = require("./lib/protocol-v2-client");
 const { HardwareProtocolV2Runner } = require("./lib/protocol-v2-runner");
 const { createSecretProtector } = require("./lib/secret-protector");
 const { createFailureInjectionController } = require("./lib/failure-injection");
+const { OperationalHealth } = require("./lib/operational-health");
+const { acquireProcessLock } = require("./lib/process-lock");
 
-const AGENT_VERSION = "2.0.1-pr6.1-dpapi-hotfix";
 const PROTOCOL_MODES = new Set(["v2-preferred", "v2-only", "v1-only"]);
 const ADAPTER_MODES = new Set(["real", "fake"]);
 process.title = "asihjaya-hardware-hub";
@@ -104,6 +120,20 @@ const HARDWARE_JOURNAL_KEY_PATH = resolveLocalPath(
 const HARDWARE_POWERSHELL_EXECUTABLE =
   process.env.HARDWARE_POWERSHELL_EXECUTABLE?.trim() || "powershell.exe";
 const HARDWARE_TEMP_DIR = resolveLocalPath("HARDWARE_TEMP_DIR", "data/temp");
+const HARDWARE_LOCK_PATH = resolveLocalPath("HARDWARE_LOCK_PATH", "data/agent.lock");
+const HARDWARE_HEALTH_STATE_PATH = resolveLocalPath(
+  "HARDWARE_HEALTH_STATE_PATH",
+  "data/health-state.json",
+);
+const HARDWARE_HEALTH_SERVER_ENABLED = optionalBoolean("HARDWARE_HEALTH_SERVER_ENABLED", true);
+const HARDWARE_HEALTH_SERVER_HOST =
+  process.env.HARDWARE_HEALTH_SERVER_HOST?.trim() || "127.0.0.1";
+const HARDWARE_HEALTH_SERVER_PORT = optionalNumber("HARDWARE_HEALTH_SERVER_PORT", 3210);
+const HARDWARE_LOG_RETENTION_DAYS = optionalNumber("HARDWARE_LOG_RETENTION_DAYS", 30);
+const HARDWARE_LOG_PRUNE_INTERVAL_MS = optionalNumber(
+  "HARDWARE_LOG_PRUNE_INTERVAL_MS",
+  60 * 60 * 1000,
+);
 const LABEL_PRINTER_NAME = process.env.LABEL_PRINTER_NAME?.trim() || "";
 const DOCUMENT_PRINTER_NAME = process.env.DOCUMENT_PRINTER_NAME?.trim() || "";
 const CASH_DRAWER_PRINTER_NAME = process.env.CASH_DRAWER_PRINTER_NAME?.trim() || "";
@@ -162,6 +192,37 @@ if (LEASE_RENEW_INTERVAL_MS < 5000 || LEASE_RENEW_INTERVAL_MS > 45000) {
   console.error("[-] LEASE_RENEW_INTERVAL_MS harus antara 5000 dan 45000 ms.");
   process.exit(1);
 }
+if (HARDWARE_HEALTH_SERVER_PORT < 1 || HARDWARE_HEALTH_SERVER_PORT > 65535) {
+  console.error("[-] HARDWARE_HEALTH_SERVER_PORT harus antara 1 dan 65535.");
+  process.exit(1);
+}
+if (HARDWARE_LOG_RETENTION_DAYS < 1 || HARDWARE_LOG_RETENTION_DAYS > 365) {
+  console.error("[-] HARDWARE_LOG_RETENTION_DAYS harus antara 1 dan 365 hari.");
+  process.exit(1);
+}
+
+let processLock;
+try {
+  processLock = acquireProcessLock({
+    filePath: HARDWARE_LOCK_PATH,
+    metadata: { agentId: HARDWARE_AGENT_ID, version: AGENT_VERSION },
+  });
+} catch (error) {
+  console.error(`[-] ${error.message}`);
+  operationalLogger.close();
+  process.exit(error.exitCode || 73);
+}
+
+const operationalHealth = new OperationalHealth({
+  filePath: HARDWARE_HEALTH_STATE_PATH,
+  logger: console,
+  agent: {
+    id: HARDWARE_AGENT_ID,
+    version: AGENT_VERSION,
+    hostname: os.hostname(),
+    protocolMode: HARDWARE_PROTOCOL_MODE,
+  },
+});
 
 class HardwareHttpError extends Error {
   constructor(message, { status = 0, code = "HTTP_REQUEST_FAILED", retryable = true } = {}) {
@@ -430,6 +491,9 @@ console.log(`[+] Adapter modes: label=${LABEL_PRINTER_ADAPTER}, document=${DOCUM
 console.log(`[+] Fake output: ${fakeAdaptersEnabled ? FAKE_HARDWARE_OUTPUT_DIR : "disabled"}`);
 console.log(`[+] Fake scenario: ${fakeAdaptersEnabled ? FAKE_HARDWARE_SCENARIO : "disabled"}`);
 console.log(`[+] Journal: ${journal ? HARDWARE_JOURNAL_PATH : "disabled"}`);
+console.log(`[+] Process lock: ${HARDWARE_LOCK_PATH}`);
+console.log(`[+] Structured logs: ${operationalLogger.getCurrentLogPath()}`);
+console.log(`[+] Health state: ${HARDWARE_HEALTH_STATE_PATH}`);
 console.log(
   `[+] Secret protector: ${secretProtectorSelfTest?.kind || (HARDWARE_PROTOCOL_MODE === "v1-only" ? "disabled" : "unhealthy")}`,
 );
@@ -450,9 +514,12 @@ if (protocolV2StartupError) {
       "[-] Pastikan agent selalu dijalankan oleh Windows user yang sama karena DPAPI memakai scope CurrentUser.",
     );
   }
+  operationalHealth.markUnhealthy(protocolV2StartupError, "startup_failed");
   try {
     journal?.close();
   } catch {}
+  processLock?.release();
+  operationalLogger.close();
   process.exit(78);
 }
 
@@ -463,6 +530,7 @@ let isHeartbeatRunning = false;
 let isShuttingDown = false;
 let heartbeatTimer;
 let pollTimer;
+let logPruneTimer;
 let currentPollPromise = null;
 
 function getCapabilitiesPayload() {
@@ -519,6 +587,14 @@ function getCapabilitiesPayload() {
       top_offset_dots: LABEL_TOP_OFFSET_DOTS,
       include_price: LABEL_INCLUDE_PRICE,
     },
+    operations: {
+      structured_logs: true,
+      log_retention_days: HARDWARE_LOG_RETENTION_DAYS,
+      health_server_enabled: HARDWARE_HEALTH_SERVER_ENABLED,
+      health_server_host: HARDWARE_HEALTH_SERVER_HOST,
+      health_server_port: HARDWARE_HEALTH_SERVER_PORT,
+      process_lock: true,
+    },
     config_warnings: getConfigWarnings(),
   };
 }
@@ -526,11 +602,14 @@ function getCapabilitiesPayload() {
 async function heartbeat(status = "online") {
   if (isHeartbeatRunning && status === "online") return;
   isHeartbeatRunning = true;
+  operationalHealth.heartbeatAttempt();
   try {
     await requestJson("/api/hardware-agents/heartbeat", {
       body: { status, capabilities: getCapabilitiesPayload() },
     });
+    operationalHealth.heartbeatSuccess();
   } catch (error) {
+    operationalHealth.heartbeatFailure(error);
     console.error("[-] Heartbeat failed:", error.message);
   } finally {
     isHeartbeatRunning = false;
@@ -556,6 +635,7 @@ async function processV1Job(job) {
   const startedMs = Date.now();
   let prepared = null;
   console.log(`[+] Claimed legacy v1 job ${job.id}: ${job.jobType}`);
+  operationalHealth.startJob(job, 1);
   await patchV1Job(job.id, "printing", {
     result: {
       startedAt: new Date().toISOString(),
@@ -576,9 +656,11 @@ async function processV1Job(job) {
         deviceResult,
       },
     });
+    operationalHealth.finishJob({ status: "completed" });
     console.log(`[+] Completed legacy v1 job ${job.id}`);
   } catch (error) {
     const classification = adapterFactory.classifyPrepareError(error, job);
+    operationalHealth.finishJob({ status: "failed", error });
     console.error(`[-] Legacy v1 job ${job.id} failed:`, error.message);
     await patchV1Job(job.id, "failed", {
       error: error.message,
@@ -604,6 +686,7 @@ async function processV1Job(job) {
 async function pollOnce() {
   if (isShuttingDown || isPolling) return;
   isPolling = true;
+  operationalHealth.pollAttempt();
 
   try {
     if (protocolV2Runner) {
@@ -612,6 +695,8 @@ async function pollOnce() {
         console.warn(
           `[!] ${recovery.remaining} local v2 execution masih menunggu recovery/ACK; claim baru ditunda.`,
         );
+        operationalHealth.pollSuccess();
+        operationalHealth.updateJournal(journal?.getStats() || null);
         return;
       }
 
@@ -621,7 +706,16 @@ async function pollOnce() {
           const response = await protocolV2Runner.claim(capabilities);
           if (response.job) {
             console.log(`[+] Claimed v2 job ${response.job.id}: ${response.job.jobType}`);
-            await protocolV2Runner.processClaim(response);
+            operationalHealth.startJob(response.job, 2);
+            try {
+              await protocolV2Runner.processClaim(response);
+              operationalHealth.finishJob({ status: "processed" });
+            } catch (error) {
+              operationalHealth.finishJob({ status: "error", error });
+              throw error;
+            }
+            operationalHealth.pollSuccess();
+            operationalHealth.updateJournal(journal?.getStats() || null);
             return;
           }
         } catch (error) {
@@ -640,7 +734,10 @@ async function pollOnce() {
       const response = await requestJson("/api/hardware-jobs/claim", { body: {} });
       if (response.job) await processV1Job(response.job);
     }
+    operationalHealth.pollSuccess();
+    operationalHealth.updateJournal(journal?.getStats() || null);
   } catch (error) {
+    operationalHealth.pollFailure(error);
     console.error(
       `[-] Poll/claim failed${error.code ? ` (${error.code})` : ""}:`,
       error.message,
@@ -668,6 +765,7 @@ async function shutdown(signal, exitCode = 0) {
   console.log(`[!] Received ${signal}. Stopping Asihjaya Hardware Hub Agent...`);
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   if (pollTimer) clearInterval(pollTimer);
+  if (logPruneTimer) clearInterval(logPruneTimer);
 
   try {
     await currentPollPromise;
@@ -685,6 +783,13 @@ async function shutdown(signal, exitCode = 0) {
   } catch (error) {
     console.error("[-] Failed to close local journal:", error.message);
   }
+  try {
+    await operationalHealth.close();
+  } catch (error) {
+    console.error("[-] Failed to close local health server:", error.message);
+  }
+  processLock?.release();
+  operationalLogger.close();
   process.exit(exitCode);
 }
 
@@ -699,8 +804,37 @@ process.on("unhandledRejection", (reason) => {
   shutdown("unhandledRejection", 1);
 });
 
-fs.mkdirSync(HARDWARE_TEMP_DIR, { recursive: true });
-heartbeat("online");
-claimAndProcessJob();
-heartbeatTimer = setInterval(() => heartbeat("online"), HEARTBEAT_INTERVAL_MS);
-pollTimer = setInterval(claimAndProcessJob, POLL_INTERVAL_MS);
+async function startAgent() {
+  fs.mkdirSync(HARDWARE_TEMP_DIR, { recursive: true });
+  operationalHealth.markReady({ journal: journal?.getStats() || null });
+  try {
+    const healthAddress = await operationalHealth.startServer({
+      enabled: HARDWARE_HEALTH_SERVER_ENABLED,
+      host: HARDWARE_HEALTH_SERVER_HOST,
+      port: HARDWARE_HEALTH_SERVER_PORT,
+    });
+    if (healthAddress) {
+      console.log(`[+] Local health endpoint: http://${healthAddress.host}:${healthAddress.port}/health`);
+    }
+  } catch (error) {
+    operationalHealth.markUnhealthy(error, "health_server_failed");
+    console.error(`[-] Local health server gagal: ${error.message}`);
+    processLock?.release();
+    operationalLogger.close();
+    process.exit(79);
+  }
+
+  await heartbeat("online");
+  await claimAndProcessJob();
+  heartbeatTimer = setInterval(() => heartbeat("online"), HEARTBEAT_INTERVAL_MS);
+  pollTimer = setInterval(claimAndProcessJob, POLL_INTERVAL_MS);
+  logPruneTimer = setInterval(() => operationalLogger.prune(), HARDWARE_LOG_PRUNE_INTERVAL_MS);
+}
+
+startAgent().catch((error) => {
+  console.error("[-] Agent startup failed:", error);
+  operationalHealth.markUnhealthy(error, "startup_failed");
+  processLock?.release();
+  operationalLogger.close();
+  process.exit(1);
+});
