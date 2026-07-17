@@ -6,6 +6,7 @@ const { spawnSync } = require("child_process");
 
 const AES_PREFIX = "aesgcm:v1";
 const DPAPI_PREFIX = "dpapi:v1";
+const DEFAULT_POWERSHELL_EXECUTABLE = "powershell.exe";
 
 function ensureParent(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
@@ -34,27 +35,80 @@ function getOrCreateLocalKey(keyPath) {
   return key;
 }
 
-function runDpapi(operation, input) {
-  const protect = operation === "protect";
-  const script = protect
-    ? [
-        "$ErrorActionPreference='Stop'",
-        "$raw=[Console]::In.ReadToEnd()",
-        "$bytes=[Text.Encoding]::UTF8.GetBytes($raw)",
-        "$out=[Security.Cryptography.ProtectedData]::Protect($bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)",
-        "[Console]::Out.Write([Convert]::ToBase64String($out))",
-      ].join(";")
-    : [
-        "$ErrorActionPreference='Stop'",
-        "$raw=[Console]::In.ReadToEnd().Trim()",
-        "$bytes=[Convert]::FromBase64String($raw)",
-        "$out=[Security.Cryptography.ProtectedData]::Unprotect($bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)",
-        "[Console]::Out.Write([Text.Encoding]::UTF8.GetString($out))",
-      ].join(";");
+function buildDpapiBootstrapScript() {
+  return [
+    "$assemblyErrors=@()",
+    "foreach($assemblyName in @('System.Security.Cryptography.ProtectedData','System.Security')) {",
+    "  try {",
+    "    Add-Type -AssemblyName $assemblyName -ErrorAction Stop",
+    "    break",
+    "  } catch {",
+    "    $assemblyErrors += $_.Exception.Message",
+    "  }",
+    "}",
+    "$protectedDataType=('System.Security.Cryptography.ProtectedData' -as [type])",
+    "$scopeType=('System.Security.Cryptography.DataProtectionScope' -as [type])",
+    "if($null -eq $protectedDataType -or $null -eq $scopeType) {",
+    "  throw ('DPAPI type tidak tersedia. Assembly errors: '+($assemblyErrors -join ' | '))",
+    "}",
+  ].join("\n");
+}
 
-  const result = spawnSync(
-    "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+function buildDpapiScript(operation) {
+  const common = [
+    "$ErrorActionPreference='Stop'",
+    buildDpapiBootstrapScript(),
+    "$raw=[Console]::In.ReadToEnd()",
+  ];
+
+  if (operation === "protect") {
+    return [
+      ...common,
+      "$bytes=[System.Text.Encoding]::UTF8.GetBytes($raw)",
+      "$out=[System.Security.Cryptography.ProtectedData]::Protect($bytes,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser)",
+      "[Console]::Out.Write([System.Convert]::ToBase64String($out))",
+    ].join("\n");
+  }
+
+  if (operation === "unprotect") {
+    return [
+      ...common,
+      "$bytes=[System.Convert]::FromBase64String($raw.Trim())",
+      "$out=[System.Security.Cryptography.ProtectedData]::Unprotect($bytes,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser)",
+      "[Console]::Out.Write([System.Text.Encoding]::UTF8.GetString($out))",
+    ].join("\n");
+  }
+
+  throw new Error(`Operasi DPAPI tidak dikenal: ${operation}`);
+}
+
+function normalizePowerShellError(result) {
+  const stderr = String(result?.stderr || "").trim();
+  const stdout = String(result?.stdout || "").trim();
+  const processError = result?.error?.message || "";
+  return stderr || processError || stdout || "unknown error";
+}
+
+function runDpapi(
+  operation,
+  input,
+  {
+    powershellExecutable = process.env.HARDWARE_POWERSHELL_EXECUTABLE?.trim() ||
+      DEFAULT_POWERSHELL_EXECUTABLE,
+    spawnSyncImpl = spawnSync,
+  } = {},
+) {
+  const result = spawnSyncImpl(
+    powershellExecutable,
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      buildDpapiScript(operation),
+    ],
     {
       input,
       encoding: "utf8",
@@ -64,30 +118,71 @@ function runDpapi(operation, input) {
     },
   );
 
-  if (result.error || result.status !== 0) {
+  if (result?.error || result?.status !== 0) {
+    const detail = normalizePowerShellError(result);
     throw new Error(
-      `Windows DPAPI ${operation} gagal: ${result.stderr || result.error?.message || "unknown error"}`,
+      `Windows DPAPI ${operation} gagal melalui ${powershellExecutable}: ${detail}`,
     );
   }
 
-  return result.stdout.trim();
+  const output = String(result.stdout || "").trim();
+  if (!output) {
+    throw new Error(
+      `Windows DPAPI ${operation} gagal melalui ${powershellExecutable}: output kosong.`,
+    );
+  }
+  return output;
 }
 
-function createSecretProtector({ keyPath, platform = process.platform } = {}) {
+function createRoundTripSelfTest(protector) {
+  const sentinel = `asihjaya-hardware-hub-self-test:${crypto.randomUUID()}`;
+  const encrypted = protector.protect(sentinel);
+  if (encrypted === sentinel || !encrypted.includes(":")) {
+    throw new Error("Secret protector self-test menghasilkan ciphertext yang tidak valid.");
+  }
+  const decrypted = protector.unprotect(encrypted);
+  if (decrypted !== sentinel) {
+    throw new Error("Secret protector self-test gagal: hasil decrypt tidak sama.");
+  }
+  return {
+    ok: true,
+    kind: protector.kind,
+    testedAt: new Date().toISOString(),
+  };
+}
+
+function createSecretProtector({
+  keyPath,
+  platform = process.platform,
+  powershellExecutable = process.env.HARDWARE_POWERSHELL_EXECUTABLE?.trim() ||
+    DEFAULT_POWERSHELL_EXECUTABLE,
+  spawnSyncImpl = spawnSync,
+} = {}) {
   if (platform === "win32") {
-    return {
+    const protector = {
       kind: "windows-dpapi-current-user",
+      powershellExecutable,
       protect(value) {
-        return `${DPAPI_PREFIX}:${runDpapi("protect", String(value))}`;
+        return `${DPAPI_PREFIX}:${runDpapi("protect", String(value), {
+          powershellExecutable,
+          spawnSyncImpl,
+        })}`;
       },
       unprotect(value) {
         const prefix = `${DPAPI_PREFIX}:`;
         if (!String(value).startsWith(prefix)) {
           throw new Error("Encrypted journal secret bukan format DPAPI yang dikenal.");
         }
-        return runDpapi("unprotect", String(value).slice(prefix.length));
+        return runDpapi("unprotect", String(value).slice(prefix.length), {
+          powershellExecutable,
+          spawnSyncImpl,
+        });
+      },
+      selfTest() {
+        return createRoundTripSelfTest(protector);
       },
     };
+    return protector;
   }
 
   if (!keyPath) {
@@ -95,8 +190,7 @@ function createSecretProtector({ keyPath, platform = process.platform } = {}) {
   }
 
   const key = getOrCreateLocalKey(keyPath);
-
-  return {
+  const protector = {
     kind: "aes-256-gcm-local-key",
     protect(value) {
       const iv = crypto.randomBytes(12);
@@ -125,7 +219,17 @@ function createSecretProtector({ keyPath, platform = process.platform } = {}) {
       decipher.setAuthTag(tag);
       return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
     },
+    selfTest() {
+      return createRoundTripSelfTest(protector);
+    },
   };
+  return protector;
 }
 
-module.exports = { createSecretProtector };
+module.exports = {
+  DEFAULT_POWERSHELL_EXECUTABLE,
+  buildDpapiBootstrapScript,
+  buildDpapiScript,
+  createSecretProtector,
+  runDpapi,
+};

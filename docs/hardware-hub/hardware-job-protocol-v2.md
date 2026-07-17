@@ -646,6 +646,8 @@ WHERE state IN ('claimed', 'processing', 'dispatching', 'submitted');
 
 Pada Windows, lease token lokal dilindungi dengan DPAPI scope `CurrentUser`. Runtime non-Windows untuk development/test memakai AES-256-GCM dengan machine-local key file.
 
+Agent Windows wajib menjalankan DPAPI protect–unprotect startup self-test sebelum heartbeat atau claim. Kegagalan self-test bersifat fail-closed: agent tidak boleh mengambil job dan harus keluar dengan diagnostic error yang dapat ditindaklanjuti.
+
 ### Store-before-execute rule
 
 Urutan wajib:

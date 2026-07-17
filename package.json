@@ -45,7 +45,8 @@
     "check:hardware:v2-agent": "tsx scripts/check-hardware-protocol-v2-agent.ts",
     "check:hardware:v2-producers": "tsx scripts/check-hardware-protocol-v2-producers.ts",
     "check:hardware:v2-operations": "tsx scripts/check-hardware-protocol-v2-operations.ts",
-    "check:hardware:v2-simulation": "tsx scripts/check-hardware-protocol-v2-simulation.ts"
+    "check:hardware:v2-simulation": "tsx scripts/check-hardware-protocol-v2-simulation.ts",
+    "check:hardware:v2-dpapi": "tsx scripts/check-hardware-protocol-v2-dpapi.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

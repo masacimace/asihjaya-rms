@@ -18,7 +18,7 @@ const { HardwareProtocolV2Runner } = require("./lib/protocol-v2-runner");
 const { createSecretProtector } = require("./lib/secret-protector");
 const { createFailureInjectionController } = require("./lib/failure-injection");
 
-const AGENT_VERSION = "2.0.0-pr6-failure-injection";
+const AGENT_VERSION = "2.0.1-pr6.1-dpapi-hotfix";
 const PROTOCOL_MODES = new Set(["v2-preferred", "v2-only", "v1-only"]);
 const ADAPTER_MODES = new Set(["real", "fake"]);
 process.title = "asihjaya-hardware-hub";
@@ -101,6 +101,8 @@ const HARDWARE_JOURNAL_KEY_PATH = resolveLocalPath(
   "HARDWARE_JOURNAL_KEY_PATH",
   "data/hardware-journal.key",
 );
+const HARDWARE_POWERSHELL_EXECUTABLE =
+  process.env.HARDWARE_POWERSHELL_EXECUTABLE?.trim() || "powershell.exe";
 const HARDWARE_TEMP_DIR = resolveLocalPath("HARDWARE_TEMP_DIR", "data/temp");
 const LABEL_PRINTER_NAME = process.env.LABEL_PRINTER_NAME?.trim() || "";
 const DOCUMENT_PRINTER_NAME = process.env.DOCUMENT_PRINTER_NAME?.trim() || "";
@@ -383,29 +385,39 @@ const adapterFactory = createHardwareAdapterFactory({
 
 let journal = null;
 let protocolV2Runner = null;
+let secretProtector = null;
+let secretProtectorSelfTest = null;
+let protocolV2StartupError = null;
 if (HARDWARE_PROTOCOL_MODE !== "v1-only") {
-  journal = new ExecutionJournal({ filePath: HARDWARE_JOURNAL_PATH });
-  const secretProtector = createSecretProtector({
-    keyPath: HARDWARE_JOURNAL_KEY_PATH,
-  });
-  const protocolV2Client = failureController.createProtocolClient(
-    new HardwareProtocolV2Client({
-      requestJson,
+  try {
+    journal = new ExecutionJournal({ filePath: HARDWARE_JOURNAL_PATH });
+    secretProtector = createSecretProtector({
+      keyPath: HARDWARE_JOURNAL_KEY_PATH,
+      powershellExecutable: HARDWARE_POWERSHELL_EXECUTABLE,
+    });
+    secretProtectorSelfTest = secretProtector.selfTest();
+
+    const protocolV2Client = failureController.createProtocolClient(
+      new HardwareProtocolV2Client({
+        requestJson,
+        agentVersion: AGENT_VERSION,
+      }),
+    );
+    protocolV2Runner = new HardwareProtocolV2Runner({
+      journal,
+      client: protocolV2Client,
+      secretProtector,
+      prepareHardwareJob: adapterFactory.prepareHardwareJob,
+      classifyPrepareError: adapterFactory.classifyPrepareError,
+      logger: console,
       agentVersion: AGENT_VERSION,
-    }),
-  );
-  protocolV2Runner = new HardwareProtocolV2Runner({
-    journal,
-    client: protocolV2Client,
-    secretProtector,
-    prepareHardwareJob: adapterFactory.prepareHardwareJob,
-    classifyPrepareError: adapterFactory.classifyPrepareError,
-    logger: console,
-    agentVersion: AGENT_VERSION,
-    dryRun: HARDWARE_DRY_RUN,
-    leaseRenewIntervalMs: LEASE_RENEW_INTERVAL_MS,
-    recoveryLimit: LOCAL_RECOVERY_LIMIT,
-  });
+      dryRun: HARDWARE_DRY_RUN,
+      leaseRenewIntervalMs: LEASE_RENEW_INTERVAL_MS,
+      recoveryLimit: LOCAL_RECOVERY_LIMIT,
+    });
+  } catch (error) {
+    protocolV2StartupError = error;
+  }
 }
 
 console.log("[+] Starting Asihjaya Hardware Hub Agent...");
@@ -418,10 +430,33 @@ console.log(`[+] Adapter modes: label=${LABEL_PRINTER_ADAPTER}, document=${DOCUM
 console.log(`[+] Fake output: ${fakeAdaptersEnabled ? FAKE_HARDWARE_OUTPUT_DIR : "disabled"}`);
 console.log(`[+] Fake scenario: ${fakeAdaptersEnabled ? FAKE_HARDWARE_SCENARIO : "disabled"}`);
 console.log(`[+] Journal: ${journal ? HARDWARE_JOURNAL_PATH : "disabled"}`);
+console.log(
+  `[+] Secret protector: ${secretProtectorSelfTest?.kind || (HARDWARE_PROTOCOL_MODE === "v1-only" ? "disabled" : "unhealthy")}`,
+);
+if (process.platform === "win32" && HARDWARE_PROTOCOL_MODE !== "v1-only") {
+  console.log(`[+] PowerShell executable: ${HARDWARE_POWERSHELL_EXECUTABLE}`);
+}
 console.log(`[+] Label printer: ${LABEL_PRINTER_NAME || "not configured"}`);
 console.log(`[+] Document printer: ${DOCUMENT_PRINTER_NAME || "not configured"}`);
 console.log(`[+] Cash drawer printer: ${CASH_DRAWER_PRINTER_NAME || "not configured"}`);
 for (const warning of getConfigWarnings()) console.warn(`[!] Config warning: ${warning}`);
+
+if (protocolV2StartupError) {
+  console.error("[-] Protocol v2 startup self-test gagal. Agent tidak akan heartbeat atau claim job.");
+  console.error(`[-] ${protocolV2StartupError.message}`);
+  if (process.platform === "win32") {
+    console.error("[-] Jalankan `npm run check:dpapi` dari folder hardware-hub untuk diagnosis.");
+    console.error(
+      "[-] Pastikan agent selalu dijalankan oleh Windows user yang sama karena DPAPI memakai scope CurrentUser.",
+    );
+  }
+  try {
+    journal?.close();
+  } catch {}
+  process.exit(78);
+}
+
+console.log(`[+] Secret protector self-test: OK (${secretProtectorSelfTest?.kind || "disabled"})`);
 
 let isPolling = false;
 let isHeartbeatRunning = false;
@@ -444,6 +479,13 @@ function getCapabilitiesPayload() {
           enabled: true,
           path: HARDWARE_JOURNAL_PATH,
           stats: journal.getStats(),
+          secretProtector: secretProtectorSelfTest
+            ? {
+                healthy: true,
+                kind: secretProtectorSelfTest.kind,
+                testedAt: secretProtectorSelfTest.testedAt,
+              }
+            : { healthy: false },
         }
       : { enabled: false },
     dry_run: HARDWARE_DRY_RUN,

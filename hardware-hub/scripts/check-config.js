@@ -2,6 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const { SUPPORTED_FAKE_SCENARIOS, normalizeScenario } = require("../lib/failure-injection");
+const { createSecretProtector } = require("../lib/secret-protector");
 
 try {
   require("dotenv").config({ path: path.resolve(__dirname, "..", ".env") });
@@ -161,6 +162,8 @@ if (leaseRenewInterval < 5000 || leaseRenewInterval > 45000) {
 const journalPath = resolveLocalPath("HARDWARE_JOURNAL_PATH", "data/hardware-executions.sqlite");
 const journalKeyPath = resolveLocalPath("HARDWARE_JOURNAL_KEY_PATH", "data/hardware-journal.key");
 const tempDir = resolveLocalPath("HARDWARE_TEMP_DIR", "data/temp");
+const powershellExecutable = getEnv("HARDWARE_POWERSHELL_EXECUTABLE") || "powershell.exe";
+let secretProtectorReport = null;
 if (protocolMode !== "v1-only") {
   for (const directory of [path.dirname(journalPath), path.dirname(journalKeyPath), tempDir]) {
     try {
@@ -169,6 +172,19 @@ if (protocolMode !== "v1-only") {
     } catch (error) {
       errors.push(`Directory Hardware Hub tidak writable (${directory}): ${error.message}`);
     }
+  }
+
+  try {
+    const protector = createSecretProtector({
+      keyPath: journalKeyPath,
+      powershellExecutable,
+    });
+    secretProtectorReport = protector.selfTest();
+  } catch (error) {
+    errors.push(
+      `Secret protector startup self-test gagal: ${error.message}. ` +
+        "Agent tidak boleh dijalankan sebelum masalah ini selesai.",
+    );
   }
 }
 
@@ -228,7 +244,11 @@ console.log(`ENV file              : ${envPath}`);
 console.log(`API URL               : ${apiUrl || "-"}`);
 console.log(`Protocol mode         : ${protocolMode}`);
 console.log(`Journal path          : ${protocolMode === "v1-only" ? "disabled" : journalPath}`);
-console.log(`Journal key           : ${protocolMode === "v1-only" ? "disabled" : process.platform === "win32" ? "Windows DPAPI" : journalKeyPath}`);
+console.log(`Journal key           : ${protocolMode === "v1-only" ? "disabled" : process.platform === "win32" ? "Windows DPAPI CurrentUser" : journalKeyPath}`);
+console.log(`Secret protector      : ${protocolMode === "v1-only" ? "disabled" : secretProtectorReport?.kind || "FAILED"}`);
+if (process.platform === "win32" && protocolMode !== "v1-only") {
+  console.log(`PowerShell executable : ${powershellExecutable}`);
+}
 console.log(`Temporary directory   : ${tempDir}`);
 console.log(`Adapter mode (global) : ${globalAdapterMode}`);
 console.log(`Label adapter         : ${adapterModes.label_printer}`);

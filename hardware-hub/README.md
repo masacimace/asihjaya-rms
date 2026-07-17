@@ -60,6 +60,16 @@ LEASE_RENEW_INTERVAL_MS=20000
 
 Pada Windows, lease token di database dilindungi memakai DPAPI `CurrentUser`. Agent harus selalu dijalankan oleh Windows account yang sama. Mengganti account dapat membuat lease token attempt lama tidak dapat dibuka.
 
+Secret protector menjalankan protect–unprotect self-test **sebelum heartbeat dan claim pertama**. Jika DPAPI tidak sehat, agent keluar dengan code `78` dan tidak mengambil job dari cloud. Ini mencegah job terlanjur `claimed` sebelum lease token dapat disimpan secara aman.
+
+Default executable:
+
+```env
+HARDWARE_POWERSHELL_EXECUTABLE=powershell.exe
+```
+
+Ubah hanya bila instalasi Windows menggunakan executable PowerShell pada path lain.
+
 Jangan menghapus database journal ketika masih ada attempt aktif. Journal menyimpan bukti bahwa command mungkin sudah dikirim ke printer.
 
 File runtime berikut tidak boleh masuk Git:
@@ -70,12 +80,29 @@ hardware-hub/dry-run-output/
 hardware-hub/logs/
 ```
 
-### 4. Cek konfigurasi dan recovery test
+### 4. Cek DPAPI, konfigurasi, dan recovery test
+
+Jalankan DPAPI check menggunakan Windows user yang sama dengan Scheduled Task agent:
+
+```powershell
+npm run check:dpapi
+```
+
+Hasil yang diharapkan:
+
+```text
+Round-trip test    : OK
+OK: Windows DPAPI siap dipakai Hardware Hub Protocol v2.
+```
+
+Lanjutkan dengan:
 
 ```powershell
 npm run check
 npm run check:v2
 ```
+
+`npm run check` juga menjalankan secret protector startup self-test. Apabila check ini gagal, jangan start agent dan jangan klik test hardware terlebih dahulu.
 
 Dari root repository:
 
@@ -170,7 +197,32 @@ Agent akan keluar dengan exit code `86` setelah fake dispatch. Scheduled Task at
 
 Buka Admin → Operasional → Hardware Hub. Agent harus terlihat online dan capability fake tetap tersedia seperti perangkat production.
 
-### 6. Startup task
+### 6. Troubleshooting DPAPI
+
+Apabila muncul error seperti:
+
+```text
+Unable to find type [Security.Cryptography.ProtectedData]
+```
+
+Pastikan file hotfix sudah diterapkan, lalu jalankan:
+
+```powershell
+npm run check:dpapi
+npm run check
+```
+
+Hotfix memuat assembly `System.Security.Cryptography.ProtectedData` dengan fallback ke `System.Security`, lalu menggunakan fully-qualified type name.
+
+Jika self-test masih gagal:
+
+1. Pastikan command dijalankan pada Windows, bukan WSL.
+2. Pastikan `powershell.exe` dapat dijalankan oleh account tersebut.
+3. Pastikan Scheduled Task dan command manual memakai Windows user yang sama.
+4. Jangan menghapus SQLite journal untuk memaksa recovery.
+5. Setelah self-test sukses, restart agent; attempt yang sebelumnya diklaim akan diproses oleh lease recovery cloud/local sesuai state-nya.
+
+### 7. Startup task
 
 ```powershell
 npm run install:startup
