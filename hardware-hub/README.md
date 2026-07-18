@@ -272,15 +272,36 @@ Recovery rules:
 
 ## Label SATO
 
+Protocol v2 memisahkan template bisnis dan profile printer:
+
+```text
+jewelry_compact_v1
+→ sato_cg408tt_jewelry_v1
+→ deterministic SBPL
+```
+
 Konfigurasi:
 
 ```env
 LABEL_PRINTER_NAME=SATO CG408TT
-LABEL_PROFILE=jewelry_compact
-LABEL_COPIES=1
-LABEL_LEFT_OFFSET_DOTS=0
-LABEL_TOP_OFFSET_DOTS=0
-LABEL_INCLUDE_PRICE=false
+LABEL_TEMPLATE_ID=jewelry_compact_v1
+SATO_PRINTER_PROFILE=sato_cg408tt_jewelry_v1
+SATO_COPIES=1
+SATO_HORIZONTAL_OFFSET_DOTS=0
+SATO_VERTICAL_OFFSET_DOTS=0
+SATO_INCLUDE_PRICE=false
+SATO_MEDIA_WIDTH_DOTS=400
+SATO_MEDIA_HEIGHT_DOTS=300
+SATO_PRINT_SPEED=
+SATO_DARKNESS=
+```
+
+`SATO_PRINT_SPEED` dan `SATO_DARKNESS` disimpan untuk physical tuning, tetapi belum dipancarkan sebagai device-control command sampai profile diuji di outlet.
+
+Jalankan golden tests:
+
+```powershell
+npm run check:sato
 ```
 
 Raw print saat ini memakai Windows printer share:
@@ -289,7 +310,7 @@ Raw print saat ini memakai Windows printer share:
 \\localhost\NAMA_SHARE_PRINTER
 ```
 
-Gunakan share name dari Printer Properties → Sharing.
+Gunakan share name dari Printer Properties → Sharing. Output fake tersedia sebagai `label.sbpl` dan `artifact.json`; metadata mencatat template, profile, DPI, ukuran media, offset, SHA-256 command, dan status physical validation.
 
 ## Document printer
 

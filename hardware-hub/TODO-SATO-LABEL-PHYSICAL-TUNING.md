@@ -5,8 +5,8 @@ Dokumen ini dipakai sebagai pengingat saat printer SATO fisik sudah tersedia di 
 Status saat ini:
 
 - Hardware Hub agent sudah bisa heartbeat, claim job, retry, recovery, cleanup, dry-run, dan startup task.
-- Label SATO sudah bisa diproses lewat `print_label_sato`.
-- Dry-run label sudah berhasil membuat output di `hardware-hub/dry-run-output`.
+- Label SATO sudah memakai deterministic generator, profile registry, dan golden tests.
+- Fake adapter label menghasilkan `label.sbpl` dan metadata profile di `hardware-hub/data/fake-output`.
 - Testing fisik printer SATO belum dilakukan karena hardware belum tersedia.
 
 ## Tujuan testing fisik
@@ -32,20 +32,22 @@ hardware-hub/.env
 Pastikan minimal berisi:
 
 ```env
-HARDWARE_DRY_RUN=false
+HARDWARE_ADAPTER_MODE=real
+LABEL_PRINTER_ADAPTER=real
 LABEL_PRINTER_NAME=SATO-CG408TT
-LABEL_PROFILE=jewelry_compact
-LABEL_COPIES=1
-LABEL_LEFT_OFFSET_DOTS=0
-LABEL_TOP_OFFSET_DOTS=0
-LABEL_INCLUDE_PRICE=false
+LABEL_TEMPLATE_ID=jewelry_compact_v1
+SATO_PRINTER_PROFILE=sato_cg408tt_jewelry_v1
+SATO_COPIES=1
+SATO_HORIZONTAL_OFFSET_DOTS=0
+SATO_VERTICAL_OFFSET_DOTS=0
+SATO_INCLUDE_PRICE=false
 ```
 
 Catatan:
 
 - `LABEL_PRINTER_NAME` harus mengikuti **share name** printer di Windows, bukan selalu display name.
 - Kalau share name berbeda, sesuaikan value `LABEL_PRINTER_NAME`.
-- Untuk test awal, gunakan `LABEL_INCLUDE_PRICE=false` dulu.
+- Untuk test awal, gunakan `SATO_INCLUDE_PRICE=false` dulu.
 
 ## Checklist setup Windows printer
 
@@ -55,7 +57,7 @@ Catatan:
 - [ ] Share name printer sudah dicatat.
 - [ ] `LABEL_PRINTER_NAME` di `.env` sama dengan share name printer.
 - [ ] Hardware Hub dijalankan oleh Windows user yang sama dengan user yang punya akses printer.
-- [ ] `npm run check` di folder `hardware-hub` berhasil.
+- [ ] `npm run check` dan `npm run check:sato` di folder `hardware-hub` berhasil.
 - [ ] Agent muncul `Online` di `/admin/operasional/hardware`.
 
 ## Cara test print label fisik
@@ -99,24 +101,24 @@ Expected result:
 Gunakan dua env ini:
 
 ```env
-LABEL_LEFT_OFFSET_DOTS=0
-LABEL_TOP_OFFSET_DOTS=0
+SATO_HORIZONTAL_OFFSET_DOTS=0
+SATO_VERTICAL_OFFSET_DOTS=0
 ```
 
 Panduan:
 
 | Masalah hasil print | Yang diubah |
 |---|---|
-| Label terlalu ke kiri | Naikkan `LABEL_LEFT_OFFSET_DOTS` |
-| Label terlalu ke kanan | Turunkan `LABEL_LEFT_OFFSET_DOTS` |
-| Label terlalu ke atas | Naikkan `LABEL_TOP_OFFSET_DOTS` |
-| Label terlalu ke bawah | Turunkan `LABEL_TOP_OFFSET_DOTS` |
+| Label terlalu ke kiri | Naikkan `SATO_HORIZONTAL_OFFSET_DOTS` |
+| Label terlalu ke kanan | Turunkan `SATO_HORIZONTAL_OFFSET_DOTS` |
+| Label terlalu ke atas | Naikkan `SATO_VERTICAL_OFFSET_DOTS` |
+| Label terlalu ke bawah | Turunkan `SATO_VERTICAL_OFFSET_DOTS` |
 
 Mulai dengan perubahan kecil:
 
 ```env
-LABEL_LEFT_OFFSET_DOTS=10
-LABEL_TOP_OFFSET_DOTS=10
+SATO_HORIZONTAL_OFFSET_DOTS=10
+SATO_VERTICAL_OFFSET_DOTS=10
 ```
 
 Lalu naik/turunkan bertahap:
@@ -148,10 +150,10 @@ Get-ScheduledTask -TaskName "Asihjaya Hardware Hub Agent" | Start-ScheduledTask
 - [ ] Nama produk cukup terbaca.
 - [ ] Berat/kadar/kadar tukar terbaca jelas.
 - [ ] Label tidak terlalu padat.
-- [ ] `LABEL_LEFT_OFFSET_DOTS` final dicatat.
-- [ ] `LABEL_TOP_OFFSET_DOTS` final dicatat.
+- [ ] `SATO_HORIZONTAL_OFFSET_DOTS` final dicatat.
+- [ ] `SATO_VERTICAL_OFFSET_DOTS` final dicatat.
 - [ ] `.env` Mini PC outlet sudah memakai value final.
-- [ ] Jika perlu harga di label, test ulang dengan `LABEL_INCLUDE_PRICE=true`.
+- [ ] Jika perlu harga di label, test ulang dengan `SATO_INCLUDE_PRICE=true`.
 
 ## Value final hasil testing
 
@@ -159,11 +161,12 @@ Isi setelah test fisik selesai:
 
 ```env
 LABEL_PRINTER_NAME=
-LABEL_PROFILE=jewelry_compact
-LABEL_COPIES=1
-LABEL_LEFT_OFFSET_DOTS=
-LABEL_TOP_OFFSET_DOTS=
-LABEL_INCLUDE_PRICE=false
+LABEL_TEMPLATE_ID=jewelry_compact_v1
+SATO_PRINTER_PROFILE=sato_cg408tt_jewelry_v1
+SATO_COPIES=1
+SATO_HORIZONTAL_OFFSET_DOTS=
+SATO_VERTICAL_OFFSET_DOTS=
+SATO_INCLUDE_PRICE=false
 ```
 
 Tanggal test:

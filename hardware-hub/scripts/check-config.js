@@ -4,6 +4,13 @@ const path = require("path");
 const { SUPPORTED_FAKE_SCENARIOS, normalizeScenario } = require("../lib/failure-injection");
 const { createSecretProtector } = require("../lib/secret-protector");
 const { DOCUMENT_PRINT_PROFILES } = require("../lib/document-print-profiles");
+const {
+  SATO_LABEL_TEMPLATE_JEWELRY_COMPACT_V1,
+  SATO_PRINTER_PROFILE_CG408TT_JEWELRY_V1,
+  SATO_PRINTER_PROFILES,
+  resolveSatoLabelTemplate,
+  resolveSatoProfileConfiguration,
+} = require("../lib/sato-label-profiles");
 
 try {
   require("dotenv").config({ path: path.resolve(__dirname, "..", ".env"), quiet: true });
@@ -22,7 +29,9 @@ function getBoolean(name, fallback = false) {
 }
 
 function getNumber(name, fallback) {
-  const value = Number(getEnv(name));
+  const raw = getEnv(name);
+  if (!raw) return fallback;
+  const value = Number(raw);
   return Number.isFinite(value) ? value : fallback;
 }
 
@@ -213,18 +222,69 @@ if (protocolMode !== "v1-only") {
   }
 }
 
-const labelProfile = getEnv("LABEL_PROFILE") || "jewelry_compact";
-if (labelProfile !== "jewelry_compact") {
-  warnings.push(`LABEL_PROFILE ${labelProfile} belum dikenal; layout jewelry_compact tetap digunakan.`);
+const labelTemplateId =
+  getEnv("LABEL_TEMPLATE_ID") ||
+  getEnv("LABEL_PROFILE") ||
+  SATO_LABEL_TEMPLATE_JEWELRY_COMPACT_V1;
+const satoPrinterProfileId =
+  getEnv("SATO_PRINTER_PROFILE") || SATO_PRINTER_PROFILE_CG408TT_JEWELRY_V1;
+const satoCopies = getNumber("SATO_COPIES", getNumber("LABEL_COPIES", 1));
+const satoHorizontalOffset = getNumber(
+  "SATO_HORIZONTAL_OFFSET_DOTS",
+  getNumber("LABEL_LEFT_OFFSET_DOTS", 0),
+);
+const satoVerticalOffset = getNumber(
+  "SATO_VERTICAL_OFFSET_DOTS",
+  getNumber("LABEL_TOP_OFFSET_DOTS", 0),
+);
+const satoIncludePrice = getEnv("SATO_INCLUDE_PRICE")
+  ? getBoolean("SATO_INCLUDE_PRICE", false)
+  : getBoolean("LABEL_INCLUDE_PRICE", false);
+const satoPrintSpeed = getEnv("SATO_PRINT_SPEED") || null;
+const satoDarkness = getEnv("SATO_DARKNESS") || null;
+const satoMediaWidthDots = getEnv("SATO_MEDIA_WIDTH_DOTS") || null;
+const satoMediaHeightDots = getEnv("SATO_MEDIA_HEIGHT_DOTS") || null;
+let resolvedSatoTemplate = null;
+let resolvedSatoConfiguration = null;
+try {
+  resolvedSatoTemplate = resolveSatoLabelTemplate(labelTemplateId);
+  resolvedSatoConfiguration = resolveSatoProfileConfiguration({
+    printerProfileId: satoPrinterProfileId,
+    horizontalOffsetDots: satoHorizontalOffset,
+    verticalOffsetDots: satoVerticalOffset,
+    includePrice: satoIncludePrice,
+    copies: satoCopies,
+    printSpeed: satoPrintSpeed,
+    darkness: satoDarkness,
+    mediaWidthDots: satoMediaWidthDots,
+    mediaHeightDots: satoMediaHeightDots,
+  });
+  if (!resolvedSatoTemplate.compatiblePrinterProfiles.includes(satoPrinterProfileId)) {
+    errors.push(
+      `Template ${resolvedSatoTemplate.id} tidak kompatibel dengan ${satoPrinterProfileId}.`,
+    );
+  }
+} catch (error) {
+  errors.push(`Konfigurasi label SATO tidak valid: ${error.message}`);
 }
-const labelCopies = getNumber("LABEL_COPIES", 1);
-if (!Number.isInteger(labelCopies) || labelCopies < 1 || labelCopies > 20) {
-  errors.push("LABEL_COPIES harus integer antara 1 sampai 20.");
+if (getEnv("LABEL_PROFILE")) {
+  warnings.push("LABEL_PROFILE deprecated; gunakan LABEL_TEMPLATE_ID.");
 }
-const labelLeftOffset = getNumber("LABEL_LEFT_OFFSET_DOTS", 0);
-const labelTopOffset = getNumber("LABEL_TOP_OFFSET_DOTS", 0);
-if (Math.abs(labelLeftOffset) > 500 || Math.abs(labelTopOffset) > 500) {
-  warnings.push("Offset label cukup besar; pastikan sesuai hasil physical test.");
+if (getEnv("LABEL_COPIES")) {
+  warnings.push("LABEL_COPIES deprecated; gunakan SATO_COPIES.");
+}
+if (getEnv("LABEL_LEFT_OFFSET_DOTS") || getEnv("LABEL_TOP_OFFSET_DOTS")) {
+  warnings.push(
+    "LABEL_LEFT_OFFSET_DOTS/LABEL_TOP_OFFSET_DOTS deprecated; gunakan SATO_HORIZONTAL_OFFSET_DOTS/SATO_VERTICAL_OFFSET_DOTS.",
+  );
+}
+if (getEnv("LABEL_INCLUDE_PRICE")) {
+  warnings.push("LABEL_INCLUDE_PRICE deprecated; gunakan SATO_INCLUDE_PRICE.");
+}
+if (satoPrintSpeed || satoDarkness) {
+  warnings.push(
+    "SATO_PRINT_SPEED/SATO_DARKNESS tersimpan untuk physical tuning, tetapi command device-control belum diaktifkan sebelum validasi outlet.",
+  );
 }
 
 if (adapterModes.label_printer === "real" && !getEnv("LABEL_PRINTER_NAME")) {
@@ -286,9 +346,15 @@ console.log(`Fake output dir       : ${fakeEnabled ? fakeOutputDir : "-"}`);
 console.log(`Fake plan             : ${fakePlanPath || "-"}`);
 console.log(`Fake scenarios        : ${Array.from(SUPPORTED_FAKE_SCENARIOS).join(", ")}`);
 console.log(`Label printer         : ${getEnv("LABEL_PRINTER_NAME") || "-"}`);
-console.log(`Label profile         : ${labelProfile}`);
-console.log(`Label copies          : ${labelCopies}`);
-console.log(`Label offset          : left ${labelLeftOffset}, top ${labelTopOffset}`);
+console.log(`Label template        : ${resolvedSatoTemplate?.id || labelTemplateId}`);
+console.log(`SATO printer profile  : ${resolvedSatoConfiguration?.profile.id || satoPrinterProfileId}`);
+console.log(`SATO profiles         : ${Object.keys(SATO_PRINTER_PROFILES).join(", ")}`);
+console.log(`SATO media            : ${resolvedSatoConfiguration ? `${resolvedSatoConfiguration.mediaWidthDots}x${resolvedSatoConfiguration.mediaHeightDots} dots` : "-"}`);
+console.log(`SATO copies           : ${resolvedSatoConfiguration?.copies ?? satoCopies}`);
+console.log(`SATO offset           : horizontal ${resolvedSatoConfiguration?.horizontalOffsetDots ?? satoHorizontalOffset}, vertical ${resolvedSatoConfiguration?.verticalOffsetDots ?? satoVerticalOffset}`);
+console.log(`SATO include price    : ${resolvedSatoConfiguration?.includePrice ?? satoIncludePrice}`);
+console.log(`SATO speed/darkness   : ${resolvedSatoConfiguration?.printSpeed ?? "pending"} / ${resolvedSatoConfiguration?.darkness ?? "pending"}`);
+console.log(`Physical validation   : pending`);
 console.log(`Document printer      : ${getEnv("DOCUMENT_PRINTER_NAME") || "-"}`);
 console.log(`PDF executable        : ${getEnv("PDF_PRINT_EXECUTABLE") || "-"}`);
 console.log(`Document profiles     : ${Object.keys(DOCUMENT_PRINT_PROFILES).join(", ")}`);

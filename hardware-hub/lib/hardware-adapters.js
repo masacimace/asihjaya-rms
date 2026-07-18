@@ -11,6 +11,7 @@ const {
   resolveDocumentPrintProfile,
 } = require("./document-print-profiles");
 const { validatePdfFile } = require("./pdf-validation");
+const { generateSatoSbpl } = require("./sato-sbpl-generator");
 
 
 const DOCUMENT_DOWNLOAD_PATH_PATTERNS = [
@@ -32,136 +33,14 @@ class HardwareAdapterError extends Error {
   }
 }
 
-function normalizeForPrinter(value) {
-  return String(value ?? "")
+function sanitizeCode(value, fallback = "-") {
+  const text = String(value ?? "")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[\x00-\x1F\x7F]/g, " ")
-    .replace(/[\r\n]+/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[^a-zA-Z0-9._-]/g, "")
     .trim();
-}
-
-function sanitizeText(value, fallback = "-", maxLength = 64) {
-  const text = normalizeForPrinter(value).replace(/[\x1B]/g, "").replace(/[<>]/g, "");
-  return (text || fallback).slice(0, maxLength);
-}
-
-function sanitizeCode(value, fallback = "-") {
-  const text = normalizeForPrinter(value).replace(/[^a-zA-Z0-9._-]/g, "").trim();
   return (text || fallback).slice(0, 80);
-}
-
-function sanitizeNumericText(value, fallback = "-") {
-  const text = normalizeForPrinter(value)
-    .replace(/[^0-9.,-]/g, "")
-    .replace(/,/g, ".")
-    .trim();
-  if (!text) return fallback;
-  const parsed = Number(text);
-  if (!Number.isFinite(parsed)) return text.slice(0, 16);
-  return parsed.toFixed(3).replace(/\.?0+$/, "").slice(0, 16);
-}
-
-function formatMoneyForLabel(value) {
-  const number = Number(String(value ?? "").replace(/[^0-9-]/g, ""));
-  if (!Number.isFinite(number) || number <= 0) return null;
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  })
-    .format(number)
-    .replace(/\s+/g, " ");
-}
-
-function wrapLabelText(value, maxChars, maxLines) {
-  const words = sanitizeText(value, "Produk", 96).split(" ").filter(Boolean);
-  const lines = [];
-  for (const word of words) {
-    const current = lines[lines.length - 1];
-    if (!current) {
-      lines.push(word.slice(0, maxChars));
-    } else if (`${current} ${word}`.length <= maxChars) {
-      lines[lines.length - 1] = `${current} ${word}`;
-    } else if (lines.length < maxLines) {
-      lines.push(word.slice(0, maxChars));
-    }
-  }
-  return lines.slice(0, maxLines);
-}
-
-function createSatoBuilder(config) {
-  const formatDots = (value) => String(Math.round(Math.max(0, Math.min(Number(value) || 0, 9999)))).padStart(4, "0");
-  const addDots = (base, offset) => formatDots(base + (Number(offset) || 0));
-  const satoText = ({ x, y, size = "XS", text }) => {
-    const ESC = "\x1B";
-    return `${ESC}H${addDots(x, config.labelLeftOffsetDots)}${ESC}V${addDots(y, config.labelTopOffsetDots)}${ESC}L0101${ESC}${size}${sanitizeText(text, "-")}`;
-  };
-  const satoBarcode = ({ x, y, barcode }) => {
-    const ESC = "\x1B";
-    return `${ESC}H${addDots(x, config.labelLeftOffsetDots)}${ESC}V${addDots(y, config.labelTopOffsetDots)}${ESC}B102060*${sanitizeCode(barcode, "000000")}*`;
-  };
-
-  return function buildSatoLabel(payload) {
-    const fields = payload?.fields && typeof payload.fields === "object" ? payload.fields : {};
-    const merged = { ...payload, ...fields };
-    const copies = Math.max(
-      1,
-      Math.min(Math.round(Number(payload?.copies) || config.labelCopies), 20),
-    );
-    const label = {
-      barcode: sanitizeCode(merged.barcode, "000000"),
-      sku: sanitizeCode(merged.sku, merged.barcode || "000000"),
-      weightGram: sanitizeNumericText(merged.weightGram, "-"),
-      exchangePurity: sanitizeNumericText(merged.exchangePurityPercent, "-"),
-      purity: sanitizeNumericText(merged.purityPercent ?? merged.purity, "-"),
-      productName: sanitizeText(merged.productName ?? merged.name, "Produk", 96),
-      size: sanitizeText(merged.size, "", 24),
-      gemstone: sanitizeText(merged.gemstone, "", 32),
-      color: sanitizeText(merged.color, "", 24),
-      price: formatMoneyForLabel(merged.sellingAmount ?? merged.price),
-    };
-    const ESC = "\x1B";
-    const productLines = wrapLabelText(label.productName, 26, 2);
-    const specs = [
-      label.weightGram !== "-" ? `BRT ${label.weightGram}g` : null,
-      label.exchangePurity !== "-" ? `TUKAR ${label.exchangePurity}%` : null,
-    ].filter(Boolean);
-    const attrs = [
-      label.size ? `UK ${label.size}` : null,
-      label.color || null,
-      label.gemstone || null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    const lines = [
-      `${ESC}A`,
-      satoText({ x: 30, y: 18, size: "XM", text: productLines[0] || label.productName }),
-    ];
-    if (productLines[1]) lines.push(satoText({ x: 30, y: 50, size: "XS", text: productLines[1] }));
-    lines.push(satoText({ x: 30, y: 82, size: "XS", text: specs.join("  ") || label.sku }));
-    if (attrs) lines.push(satoText({ x: 30, y: 112, size: "XS", text: attrs }));
-    if (config.labelIncludePrice && label.price) {
-      lines.push(satoText({ x: 30, y: 142, size: "XS", text: label.price }));
-    }
-    lines.push(
-      satoBarcode({
-        x: 30,
-        y: config.labelIncludePrice && label.price ? 174 : 150,
-        barcode: label.barcode,
-      }),
-      satoText({
-        x: 30,
-        y: config.labelIncludePrice && label.price ? 252 : 228,
-        size: "XS",
-        text: label.sku,
-      }),
-      `${ESC}Q${copies}`,
-      `${ESC}Z`,
-    );
-    return { command: lines.join(""), label, copies };
-  };
 }
 
 function spawnCommand(executable, args, { timeoutMs, logger }) {
@@ -469,7 +348,6 @@ function buildLegacyPdfCommand(config, filePath) {
 }
 
 function createHardwareAdapterFactory(config) {
-  const buildSatoLabel = createSatoBuilder(config);
   const adapterModes = {
     label_printer: config.adapterModes?.label_printer || (config.dryRun ? "fake" : "real"),
     document_printer: config.adapterModes?.document_printer || (config.dryRun ? "fake" : "real"),
@@ -502,25 +380,42 @@ function createHardwareAdapterFactory(config) {
   }
 
   async function prepareLabel(job, attemptId) {
-    const { command, label, copies } = buildSatoLabel(job.payload || {});
+    const generated = generateSatoSbpl(job.payload || {}, {
+      templateId: config.satoTemplateId,
+      printerProfileId: config.satoPrinterProfileId,
+      horizontalOffsetDots: config.satoHorizontalOffsetDots,
+      verticalOffsetDots: config.satoVerticalOffsetDots,
+      includePrice: config.satoIncludePrice,
+      copies: config.satoCopies,
+      printSpeed: config.satoPrintSpeed,
+      darkness: config.satoDarkness,
+      mediaWidthDots: config.satoMediaWidthDots,
+      mediaHeightDots: config.satoMediaHeightDots,
+    });
     if (isFake("label_printer")) {
       return requireFakeBackend("label_printer").prepareLabel({
         job,
         attemptId,
-        command,
-        label,
-        copies,
-        labelProfile: config.labelProfile,
+        command: generated.command,
+        label: generated.label,
+        copies: generated.copies,
+        template: generated.template,
+        printerProfile: generated.printerProfile,
+        commandSha256: generated.commandSha256,
+        bytes: generated.bytes,
       });
     }
     return prepareRawWindowsJob(config, {
       printerName: config.labelPrinterName,
-      content: command,
+      content: generated.command,
       extension: "sbpl",
       metadata: {
-        labelProfile: config.labelProfile,
-        copies,
-        label,
+        template: generated.template,
+        printerProfile: generated.printerProfile,
+        copies: generated.copies,
+        label: generated.label,
+        commandSha256: generated.commandSha256,
+        bytes: generated.bytes,
       },
     });
   }

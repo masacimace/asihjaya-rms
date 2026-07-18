@@ -74,6 +74,16 @@ async function main() {
       ),
       "support diagnostics harus mencantumkan deterministic Epson A4 profile",
     );
+    assert.equal(
+      diagnostics.labelPrinting.configuredProfileId,
+      "sato_cg408tt_jewelry_v1",
+      "support diagnostics harus mencantumkan deterministic SATO profile",
+    );
+    assert.equal(
+      diagnostics.labelPrinting.active?.physicalValidation,
+      "pending",
+      "SATO physical validation harus tetap eksplisit pending",
+    );
 
     for (const file of ["start-agent.ps1", "install-startup-task.ps1", "export-support-bundle.ps1"]) {
       assert(fs.existsSync(path.join(__dirname, file)), `${file} wajib tersedia`);

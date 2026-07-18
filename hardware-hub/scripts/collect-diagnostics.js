@@ -3,6 +3,11 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { DOCUMENT_PRINT_PROFILES } = require("../lib/document-print-profiles");
+const {
+  SATO_PRINTER_PROFILE_CG408TT_JEWELRY_V1,
+  SATO_PRINTER_PROFILES,
+  resolveSatoProfileConfiguration,
+} = require("../lib/sato-label-profiles");
 
 const root = path.resolve(__dirname, "..");
 try { require("dotenv").config({ path: path.join(root, ".env"), quiet: true }); } catch {}
@@ -59,6 +64,62 @@ function collectDiagnostics() {
     health: readJson(healthPath),
     files: { health: statSafe(healthPath), journal: statSafe(journalPath), lock: statSafe(lockPath), logDirectory: logDir },
     disk,
+    labelPrinting: (() => {
+      const configuredProfileId =
+        process.env.SATO_PRINTER_PROFILE?.trim() ||
+        SATO_PRINTER_PROFILE_CG408TT_JEWELRY_V1;
+      let resolved = null;
+      try {
+        resolved = resolveSatoProfileConfiguration({
+          printerProfileId: configuredProfileId,
+          horizontalOffsetDots:
+            process.env.SATO_HORIZONTAL_OFFSET_DOTS ??
+            process.env.LABEL_LEFT_OFFSET_DOTS,
+          verticalOffsetDots:
+            process.env.SATO_VERTICAL_OFFSET_DOTS ??
+            process.env.LABEL_TOP_OFFSET_DOTS,
+          includePrice:
+            process.env.SATO_INCLUDE_PRICE !== undefined
+              ? /^(1|true|yes|on)$/i.test(process.env.SATO_INCLUDE_PRICE)
+              : /^(1|true|yes|on)$/i.test(process.env.LABEL_INCLUDE_PRICE || ""),
+          copies: process.env.SATO_COPIES ?? process.env.LABEL_COPIES,
+          printSpeed: process.env.SATO_PRINT_SPEED,
+          darkness: process.env.SATO_DARKNESS,
+          mediaWidthDots: process.env.SATO_MEDIA_WIDTH_DOTS,
+          mediaHeightDots: process.env.SATO_MEDIA_HEIGHT_DOTS,
+        });
+      } catch {}
+      return {
+        configuredPrinter: process.env.LABEL_PRINTER_NAME?.trim() || null,
+        configuredTemplate:
+          process.env.LABEL_TEMPLATE_ID?.trim() ||
+          process.env.LABEL_PROFILE?.trim() ||
+          "jewelry_compact_v1",
+        configuredProfileId,
+        active: resolved
+          ? {
+              id: resolved.profile.id,
+              manufacturer: resolved.profile.manufacturer,
+              model: resolved.profile.model,
+              language: resolved.profile.language,
+              dpi: resolved.profile.dpi,
+              mediaWidthDots: resolved.mediaWidthDots,
+              mediaHeightDots: resolved.mediaHeightDots,
+              horizontalOffsetDots: resolved.horizontalOffsetDots,
+              verticalOffsetDots: resolved.verticalOffsetDots,
+              includePrice: resolved.includePrice,
+              printSpeed: resolved.printSpeed,
+              darkness: resolved.darkness,
+              physicalValidation: resolved.profile.tuning.physicalValidation,
+              deviceControlCommands: {
+                speed: resolved.profile.tuning.speedCommandEmitted,
+                darkness: resolved.profile.tuning.darknessCommandEmitted,
+              },
+            }
+          : null,
+        availableProfiles: Object.keys(SATO_PRINTER_PROFILES),
+      };
+    })(),
     documentPrinting: {
       executable: statSafe(
         process.env.PDF_PRINT_EXECUTABLE?.trim() ||

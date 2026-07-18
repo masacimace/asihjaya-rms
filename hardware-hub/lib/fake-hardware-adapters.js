@@ -18,7 +18,7 @@ function createFakeHardwareBackend({ controller, agentVersion, logger = console 
     };
   }
 
-  async function prepareLabel({ job, attemptId, command, label, copies, labelProfile }) {
+  async function prepareLabel({ job, attemptId, command, label, copies, template, printerProfile, commandSha256, bytes }) {
     const context = createBaseContext({
       job,
       attemptId,
@@ -43,10 +43,12 @@ function createFakeHardwareBackend({ controller, agentVersion, logger = console 
           attemptId: context.attemptId,
           jobType: context.jobType,
           deviceType: context.deviceType,
-          labelProfile,
+          template,
+          printerProfile,
           copies,
           label,
-          bytes: Buffer.byteLength(command, "binary"),
+          commandSha256,
+          bytes,
           agentVersion,
           dispatchedAt: new Date().toISOString(),
         });
@@ -57,7 +59,10 @@ function createFakeHardwareBackend({ controller, agentVersion, logger = console 
           outputFile: artifactPath,
           metadataFile: metadataPath,
           copies,
-          bytes: Buffer.byteLength(command, "binary"),
+          template,
+          printerProfile,
+          commandSha256,
+          bytes,
         };
       },
       async cleanup() {},

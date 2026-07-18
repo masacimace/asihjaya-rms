@@ -13,13 +13,19 @@ export const RECEIPT_PRINT_PROFILE_A5_V1 = "receipt_a5_v1" as const;
 export const RECEIPT_PRINT_PROFILE_A4_V1 = "receipt_a4_v1" as const;
 export const EPSON_L3251_PRINT_PROFILE_A4_V1 =
   "epson_l3251_a4_v1" as const;
-export const INVENTORY_LABEL_TEMPLATE_V1 = "jewelry_compact" as const;
+export const INVENTORY_LABEL_TEMPLATE_V1 = "jewelry_compact_v1" as const;
+export const INVENTORY_LABEL_TEMPLATE_LEGACY_V1 = "jewelry_compact" as const;
+export const SATO_CG408TT_LABEL_PROFILE_V1 =
+  "sato_cg408tt_jewelry_v1" as const;
 export const DEFAULT_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 export type HardwareLabelPayloadV2 = {
   schemaVersion: 1;
-  templateId: typeof INVENTORY_LABEL_TEMPLATE_V1;
+  templateId:
+    | typeof INVENTORY_LABEL_TEMPLATE_V1
+    | typeof INVENTORY_LABEL_TEMPLATE_LEGACY_V1;
   templateVersion: 1;
+  printerProfileId?: typeof SATO_CG408TT_LABEL_PROFILE_V1;
   itemId: string;
   copies: number;
   fields: {
@@ -150,17 +156,35 @@ function requireInteger(
 function validateLabelPayload(payload: Record<string, unknown>) {
   assertOnlyKeys(
     payload,
-    ["schemaVersion", "templateId", "templateVersion", "itemId", "copies", "fields"],
+    [
+      "schemaVersion",
+      "templateId",
+      "templateVersion",
+      "printerProfileId",
+      "itemId",
+      "copies",
+      "fields",
+    ],
     "Label payload",
   );
   if (payload.schemaVersion !== 1) {
     throw new TypeError("Label payload schemaVersion harus 1.");
   }
-  if (payload.templateId !== INVENTORY_LABEL_TEMPLATE_V1) {
+  if (
+    payload.templateId !== INVENTORY_LABEL_TEMPLATE_V1 &&
+    payload.templateId !== INVENTORY_LABEL_TEMPLATE_LEGACY_V1
+  ) {
     throw new TypeError("Label payload templateId tidak didukung.");
   }
   if (payload.templateVersion !== 1) {
     throw new TypeError("Label payload templateVersion harus 1.");
+  }
+
+  if (
+    payload.printerProfileId !== undefined &&
+    payload.printerProfileId !== SATO_CG408TT_LABEL_PROFILE_V1
+  ) {
+    throw new TypeError("Label payload printerProfileId tidak didukung.");
   }
 
   const itemId = requireString(payload, "itemId", 64);
@@ -189,7 +213,12 @@ function validateLabelPayload(payload: Record<string, unknown>) {
     "Label payload fields",
   );
   requireString(payload.fields, "sku", 80);
-  requireString(payload.fields, "barcode", 120);
+  const barcode = requireString(payload.fields, "barcode", 40);
+  if (!/^[0-9A-Z .$/+%-]{1,40}$/.test(barcode)) {
+    throw new TypeError(
+      "Label barcode wajib format CODE39 uppercase maksimal 40 karakter.",
+    );
+  }
   requireString(payload.fields, "productName", 220);
   requireNullableString(payload.fields, "weightGram", 32);
   requireNullableString(payload.fields, "purityPercent", 32);
@@ -395,6 +424,7 @@ export function buildInventoryLabelPayloadV2(input: {
     schemaVersion: 1,
     templateId: INVENTORY_LABEL_TEMPLATE_V1,
     templateVersion: 1,
+    printerProfileId: SATO_CG408TT_LABEL_PROFILE_V1,
     itemId: input.itemId,
     copies: input.copies,
     fields: {

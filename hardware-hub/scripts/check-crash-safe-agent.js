@@ -22,7 +22,9 @@ function createTempContext(name) {
 function createClaim(idSuffix = "1") {
   const payload = {
     schemaVersion: 1,
-    templateId: "jewelry_compact",
+    templateId: "jewelry_compact_v1",
+    templateVersion: 1,
+    printerProfileId: "sato_cg408tt_jewelry_v1",
     fields: {
       barcode: `89900000000${idSuffix}`,
       name: "Cincin Emas",

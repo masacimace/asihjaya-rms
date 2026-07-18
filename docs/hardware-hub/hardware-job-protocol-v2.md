@@ -1294,3 +1294,9 @@ paper=A4,fit,color,simplex,ignore-pdf-print-settings
 Sebelum dispatch, server dan agent memvalidasi PDF header, page count, serta page `/MediaBox` terhadap document profile. Mismatch profile menghasilkan error non-retry-safe dan tidak mencapai dispatch.
 
 Physical margin, driver scaling, dan hasil cetak Epson tetap menjadi acceptance gate di outlet.
+
+---
+
+## Appendix — SATO label profile v1
+
+Job label baru menggunakan `templateId=jewelry_compact_v1` dan `printerProfileId=sato_cg408tt_jewelry_v1`. Alias `jewelry_compact` hanya untuk backward compatibility. Agent menghasilkan SBPL melalui deterministic generator, memvalidasi barcode CODE39 uppercase, mencatat command SHA-256, dan menolak raw printer command dari payload. Parameter fisik CG408TT tetap berstatus `pending` sampai outlet acceptance test.

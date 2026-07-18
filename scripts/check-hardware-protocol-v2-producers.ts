@@ -41,7 +41,8 @@ const labelPayload = buildInventoryLabelPayloadV2({
 });
 
 assert.equal(labelPayload.schemaVersion, 1);
-assert.equal(labelPayload.templateId, "jewelry_compact");
+assert.equal(labelPayload.templateId, "jewelry_compact_v1");
+assert.equal(labelPayload.printerProfileId, "sato_cg408tt_jewelry_v1");
 assert.equal(labelPayload.itemId, SAMPLE_ITEM_ID);
 assert.equal(labelPayload.copies, 2);
 assert.equal(labelPayload.fields.sku, "AJ-0001");

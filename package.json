@@ -48,7 +48,8 @@
     "check:hardware:v2-simulation": "tsx scripts/check-hardware-protocol-v2-simulation.ts",
     "check:hardware:v2-dpapi": "tsx scripts/check-hardware-protocol-v2-dpapi.ts",
     "check:hardware:v2-windows-operations": "tsx scripts/check-hardware-protocol-v2-windows-operations.ts",
-    "check:hardware:v2-receipt-a4": "tsx scripts/check-hardware-receipt-a4.tsx && node hardware-hub/scripts/check-document-print-profiles.js"
+    "check:hardware:v2-receipt-a4": "tsx scripts/check-hardware-receipt-a4.tsx && node hardware-hub/scripts/check-document-print-profiles.js",
+    "check:hardware:v2-sato": "tsx scripts/check-hardware-sato-cg408tt.ts && node hardware-hub/scripts/check-sato-label-profiles.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",
@@ -71,7 +72,7 @@
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.15.6",
-    "@types/react": "^19.0.0",
+    "@types/react": "19.2.17",
     "@types/react-dom": "^19.0.0",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.4",
@@ -79,6 +80,6 @@
     "eslint-config-next": "^16.0.0",
     "tailwindcss": "^4.1.0",
     "tsx": "^4.22.4",
-    "typescript": "^5.9.3"
+    "typescript": "5.9.3"
   }
 }

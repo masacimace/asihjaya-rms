@@ -11,7 +11,7 @@ try {
   // dotenv optional agar agent tetap bisa dijalankan lewat environment variable OS.
 }
 
-const AGENT_VERSION = "2.2.0-pr8-a4-print-profile";
+const AGENT_VERSION = "2.3.0-pr9-sato-profile";
 const { createOperationalLogger } = require("./lib/operational-logger");
 const operationalLogger = createOperationalLogger({
   logDir: path.resolve(__dirname, process.env.HARDWARE_LOG_DIR?.trim() || "logs"),
@@ -34,6 +34,12 @@ const { createSecretProtector } = require("./lib/secret-protector");
 const { createFailureInjectionController } = require("./lib/failure-injection");
 const { OperationalHealth } = require("./lib/operational-health");
 const { acquireProcessLock } = require("./lib/process-lock");
+const {
+  SATO_LABEL_TEMPLATE_JEWELRY_COMPACT_V1,
+  SATO_PRINTER_PROFILE_CG408TT_JEWELRY_V1,
+  resolveSatoLabelTemplate,
+  resolveSatoProfileConfiguration,
+} = require("./lib/sato-label-profiles");
 
 const PROTOCOL_MODES = new Set(["v2-preferred", "v2-only", "v1-only"]);
 const ADAPTER_MODES = new Set(["real", "fake"]);
@@ -146,14 +152,36 @@ const REQUEST_TIMEOUT_MS = optionalNumber("REQUEST_TIMEOUT_MS", 15000);
 const PRINT_COMMAND_TIMEOUT_MS = optionalNumber("PRINT_COMMAND_TIMEOUT_MS", 60000);
 const LEASE_RENEW_INTERVAL_MS = optionalNumber("LEASE_RENEW_INTERVAL_MS", 20000);
 const LOCAL_RECOVERY_LIMIT = optionalNumber("LOCAL_RECOVERY_LIMIT", 50);
-const LABEL_PROFILE = process.env.LABEL_PROFILE?.trim() || "jewelry_compact";
-const LABEL_COPIES = Math.max(
+const LABEL_TEMPLATE_ID =
+  process.env.LABEL_TEMPLATE_ID?.trim() ||
+  process.env.LABEL_PROFILE?.trim() ||
+  SATO_LABEL_TEMPLATE_JEWELRY_COMPACT_V1;
+const SATO_PRINTER_PROFILE =
+  process.env.SATO_PRINTER_PROFILE?.trim() ||
+  SATO_PRINTER_PROFILE_CG408TT_JEWELRY_V1;
+const SATO_COPIES = Math.max(
   1,
-  Math.min(Math.round(optionalNumber("LABEL_COPIES", 1)), 20),
+  Math.min(
+    Math.round(optionalNumber("SATO_COPIES", optionalNumber("LABEL_COPIES", 1))),
+    20,
+  ),
 );
-const LABEL_LEFT_OFFSET_DOTS = optionalNumber("LABEL_LEFT_OFFSET_DOTS", 0);
-const LABEL_TOP_OFFSET_DOTS = optionalNumber("LABEL_TOP_OFFSET_DOTS", 0);
-const LABEL_INCLUDE_PRICE = optionalBoolean("LABEL_INCLUDE_PRICE", false);
+const SATO_HORIZONTAL_OFFSET_DOTS = optionalNumber(
+  "SATO_HORIZONTAL_OFFSET_DOTS",
+  optionalNumber("LABEL_LEFT_OFFSET_DOTS", 0),
+);
+const SATO_VERTICAL_OFFSET_DOTS = optionalNumber(
+  "SATO_VERTICAL_OFFSET_DOTS",
+  optionalNumber("LABEL_TOP_OFFSET_DOTS", 0),
+);
+const SATO_INCLUDE_PRICE =
+  process.env.SATO_INCLUDE_PRICE !== undefined
+    ? optionalBoolean("SATO_INCLUDE_PRICE", false)
+    : optionalBoolean("LABEL_INCLUDE_PRICE", false);
+const SATO_PRINT_SPEED = process.env.SATO_PRINT_SPEED?.trim() || null;
+const SATO_DARKNESS = process.env.SATO_DARKNESS?.trim() || null;
+const SATO_MEDIA_WIDTH_DOTS = process.env.SATO_MEDIA_WIDTH_DOTS?.trim() || null;
+const SATO_MEDIA_HEIGHT_DOTS = process.env.SATO_MEDIA_HEIGHT_DOTS?.trim() || null;
 
 if (!PROTOCOL_MODES.has(HARDWARE_PROTOCOL_MODE)) {
   console.error(
@@ -198,6 +226,23 @@ if (HARDWARE_HEALTH_SERVER_PORT < 1 || HARDWARE_HEALTH_SERVER_PORT > 65535) {
 }
 if (HARDWARE_LOG_RETENTION_DAYS < 1 || HARDWARE_LOG_RETENTION_DAYS > 365) {
   console.error("[-] HARDWARE_LOG_RETENTION_DAYS harus antara 1 dan 365 hari.");
+  process.exit(1);
+}
+try {
+  resolveSatoLabelTemplate(LABEL_TEMPLATE_ID);
+  resolveSatoProfileConfiguration({
+    printerProfileId: SATO_PRINTER_PROFILE,
+    horizontalOffsetDots: SATO_HORIZONTAL_OFFSET_DOTS,
+    verticalOffsetDots: SATO_VERTICAL_OFFSET_DOTS,
+    includePrice: SATO_INCLUDE_PRICE,
+    copies: SATO_COPIES,
+    printSpeed: SATO_PRINT_SPEED,
+    darkness: SATO_DARKNESS,
+    mediaWidthDots: SATO_MEDIA_WIDTH_DOTS,
+    mediaHeightDots: SATO_MEDIA_HEIGHT_DOTS,
+  });
+} catch (error) {
+  console.error(`[-] Konfigurasi SATO tidak valid: ${error.message}`);
   process.exit(1);
 }
 
@@ -436,11 +481,16 @@ const adapterFactory = createHardwareAdapterFactory({
   pdfPrintCommand: PDF_PRINT_COMMAND,
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
   printCommandTimeoutMs: PRINT_COMMAND_TIMEOUT_MS,
-  labelProfile: LABEL_PROFILE,
-  labelCopies: LABEL_COPIES,
-  labelLeftOffsetDots: LABEL_LEFT_OFFSET_DOTS,
-  labelTopOffsetDots: LABEL_TOP_OFFSET_DOTS,
-  labelIncludePrice: LABEL_INCLUDE_PRICE,
+  satoTemplateId: LABEL_TEMPLATE_ID,
+  satoPrinterProfileId: SATO_PRINTER_PROFILE,
+  satoCopies: SATO_COPIES,
+  satoHorizontalOffsetDots: SATO_HORIZONTAL_OFFSET_DOTS,
+  satoVerticalOffsetDots: SATO_VERTICAL_OFFSET_DOTS,
+  satoIncludePrice: SATO_INCLUDE_PRICE,
+  satoPrintSpeed: SATO_PRINT_SPEED,
+  satoDarkness: SATO_DARKNESS,
+  satoMediaWidthDots: SATO_MEDIA_WIDTH_DOTS,
+  satoMediaHeightDots: SATO_MEDIA_HEIGHT_DOTS,
   logger: console,
 });
 
@@ -501,6 +551,7 @@ if (process.platform === "win32" && HARDWARE_PROTOCOL_MODE !== "v1-only") {
   console.log(`[+] PowerShell executable: ${HARDWARE_POWERSHELL_EXECUTABLE}`);
 }
 console.log(`[+] Label printer: ${LABEL_PRINTER_NAME || "not configured"}`);
+console.log(`[+] SATO template/profile: ${LABEL_TEMPLATE_ID} / ${SATO_PRINTER_PROFILE}`);
 console.log(`[+] Document printer: ${DOCUMENT_PRINTER_NAME || "not configured"}`);
 console.log(`[+] Cash drawer printer: ${CASH_DRAWER_PRINTER_NAME || "not configured"}`);
 for (const warning of getConfigWarnings()) console.warn(`[!] Config warning: ${warning}`);
@@ -581,11 +632,17 @@ function getCapabilitiesPayload() {
       pdf_print_command_legacy: Boolean(PDF_PRINT_COMMAND),
     },
     label_config: {
-      profile: LABEL_PROFILE,
-      copies: LABEL_COPIES,
-      left_offset_dots: LABEL_LEFT_OFFSET_DOTS,
-      top_offset_dots: LABEL_TOP_OFFSET_DOTS,
-      include_price: LABEL_INCLUDE_PRICE,
+      template_id: LABEL_TEMPLATE_ID,
+      printer_profile_id: SATO_PRINTER_PROFILE,
+      copies: SATO_COPIES,
+      horizontal_offset_dots: SATO_HORIZONTAL_OFFSET_DOTS,
+      vertical_offset_dots: SATO_VERTICAL_OFFSET_DOTS,
+      include_price: SATO_INCLUDE_PRICE,
+      print_speed: SATO_PRINT_SPEED,
+      darkness: SATO_DARKNESS,
+      media_width_dots: SATO_MEDIA_WIDTH_DOTS,
+      media_height_dots: SATO_MEDIA_HEIGHT_DOTS,
+      physical_validation: "pending",
     },
     operations: {
       structured_logs: true,
