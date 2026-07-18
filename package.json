@@ -47,7 +47,8 @@
     "check:hardware:v2-operations": "tsx scripts/check-hardware-protocol-v2-operations.ts",
     "check:hardware:v2-simulation": "tsx scripts/check-hardware-protocol-v2-simulation.ts",
     "check:hardware:v2-dpapi": "tsx scripts/check-hardware-protocol-v2-dpapi.ts",
-    "check:hardware:v2-windows-operations": "tsx scripts/check-hardware-protocol-v2-windows-operations.ts"
+    "check:hardware:v2-windows-operations": "tsx scripts/check-hardware-protocol-v2-windows-operations.ts",
+    "check:hardware:v2-receipt-a4": "tsx scripts/check-hardware-receipt-a4.tsx && node hardware-hub/scripts/check-document-print-profiles.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",
@@ -57,7 +58,7 @@
     "lucide-react": "^1.21.0",
     "next": "^16.0.0",
     "pg": "^8.22.0",
-    "playwright": "^1.49.1",
+    "playwright": "1.61.0",
     "react": "^19.2.0",
     "react-barcode": "^1.6.1",
     "react-dom": "^19.2.0",

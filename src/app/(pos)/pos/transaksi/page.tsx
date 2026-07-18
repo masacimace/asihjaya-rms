@@ -844,7 +844,7 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
               Daftar transaksi real dari outlet aktif untuk cek invoice,
-              customer, item, payment, dan buka ulang dokumen A5.
+              customer, item, payment, dan buka ulang dokumen A4 landscape.
             </p>
           </div>
           <div className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm">

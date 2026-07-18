@@ -2068,7 +2068,7 @@ function CheckoutSuccessContent({
                 Nota/certificate masuk antrean print
               </p>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Dokumen A5 landscape sudah dibuat dari data transaksi real
+                Dokumen A4 landscape sudah dibuat dari data transaksi real
                 {sale.receiptCertificateJobId
                   ? " dan dikirim ke Hardware Hub untuk silent print."
                   : ". PDF tetap bisa dibuka manual dari tombol di bawah."}
@@ -2114,7 +2114,7 @@ function CheckoutSuccessContent({
             rel="noreferrer"
             className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
           >
-            Buka PDF A5
+            Buka PDF A4
           </a>
           <a
             href={`/api/sales/${sale.id}/receipt-certificate`}

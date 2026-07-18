@@ -19,6 +19,7 @@ Thumbs.db
 *.key
 credentials.json
 service-account.json
+.env.validation
 
 # debug
 npm-debug.log*

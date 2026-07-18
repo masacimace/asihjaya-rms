@@ -1,0 +1,32 @@
+services:
+  app:
+    image: asihjaya-rms:pr8
+    container_name: asihjaya-rms-app
+    restart: unless-stopped
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    env_file:
+      - .env.validation
+
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+
+      # Override nilai dari .env.validation karena di dalam Docker
+      # PostgreSQL diakses melalui nama service "db".
+      DATABASE_URL: postgresql://asihjaya:asihjaya_dev@db:5432/asihjaya_rms
+
+    ports:
+      - "3001:3000"
+
+    shm_size: "1gb"
+
+    volumes:
+      - app_uploads:/app/.data/uploads
+
+volumes:
+  app_uploads:

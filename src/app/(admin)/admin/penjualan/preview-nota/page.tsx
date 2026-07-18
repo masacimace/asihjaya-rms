@@ -1,6 +1,10 @@
 import { ExternalLink, FileText, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
+import {
+  RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1,
+  RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
+} from "@/features/sales/documents/receipt-document-profiles";
 import { requirePermission } from "@/lib/auth/session";
 
 export const metadata = {
@@ -10,7 +14,8 @@ export const metadata = {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const previewPdfUrl = "/api/sales/receipt-certificate-preview";
+const previewPdfUrl = `/api/sales/receipt-certificate-preview?profile=${RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1}`;
+const legacyPreviewPdfUrl = `/api/sales/receipt-certificate-preview?profile=${RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1}`;
 
 export default async function PreviewNotaCertificatePage() {
   await requirePermission("sales.view");
@@ -25,7 +30,7 @@ export default async function PreviewNotaCertificatePage() {
             Preview Sandbox
           </p>
           <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
-            Nota & Certificate A5 Landscape
+            Nota & Certificate A4 Landscape
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
             Halaman ini memakai sample data agar redesign UI PDF bisa dicek cepat
@@ -34,7 +39,7 @@ export default async function PreviewNotaCertificatePage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Link
-            href="/admin/penjualan/preview-nota/html"
+            href={`/admin/penjualan/preview-nota/html?profile=${RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1}`}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
           >
             <FileText className="size-4" />
@@ -49,12 +54,20 @@ export default async function PreviewNotaCertificatePage() {
             Buka PDF
           </Link>
           <Link
+            href={legacyPreviewPdfUrl}
+            target="_blank"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+          >
+            <FileText className="size-4" />
+            Bandingkan A5 Legacy
+          </Link>
+          <Link
             href={previewPdfUrl}
             target="_blank"
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:opacity-90"
           >
             <FileText className="size-4" />
-            Preview A5
+            Preview A4
           </Link>
         </div>
       </header>
@@ -128,7 +141,7 @@ export default async function PreviewNotaCertificatePage() {
             <object
               data={livePreviewPdfUrl}
               type="application/pdf"
-              title="Preview Nota Certificate A5"
+              title="Preview Nota Certificate A4 Landscape"
               className="h-full w-full rounded-2xl border border-neutral-200 bg-white"
             >
               <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-white p-8 text-center">

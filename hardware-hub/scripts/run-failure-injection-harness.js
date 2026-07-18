@@ -16,7 +16,11 @@ const { createSecretProtector } = require("../lib/secret-protector");
 const KEEP_OUTPUT = process.argv.includes("--keep-output");
 const QUIET_LOGGER = { log() {}, warn() {}, error() {} };
 const PDF_BYTES = Buffer.from(
-  "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
+  "%PDF-1.4\n" +
+    "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n" +
+    "2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n" +
+    "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 841.89 595.28]>>endobj\n" +
+    "trailer<</Root 1 0 R>>\n%%EOF\n",
   "utf8",
 );
 
@@ -156,12 +160,13 @@ function createJob(seed, kind, apiUrl) {
       documentType: "receipt_certificate",
       documentId: saleId,
       download: {
-        path: `/api/sales/${saleId}/receipt-certificate`,
+        path: `/api/sales/${saleId}/receipt-certificate?profile=receipt_a4_landscape_v1`,
         contentType: "application/pdf",
         sha256: crypto.createHash("sha256").update(PDF_BYTES).digest("hex"),
         maxBytes: 1024 * 1024,
       },
-      printProfileId: "receipt_a5_v1",
+      documentProfileId: "receipt_a4_landscape_v1",
+      printProfileId: "epson_l3251_a4_v1",
       copies: 1,
     };
   } else {
@@ -252,7 +257,8 @@ async function claimAndProcess(runtime, capabilities) {
 
 async function withPdfServer(callback) {
   const server = http.createServer((req, res) => {
-    if (/^\/api\/sales\/[0-9a-f-]+\/receipt-certificate$/.test(req.url || "")) {
+    const requestUrl = new URL(req.url || "/", "http://127.0.0.1");
+    if (/^\/api\/sales\/[0-9a-f-]+\/receipt-certificate$/.test(requestUrl.pathname)) {
       res.writeHead(200, {
         "content-type": "application/pdf",
         "content-length": PDF_BYTES.length,

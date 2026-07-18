@@ -1,3 +1,8 @@
+import {
+  RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1,
+  RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
+  type ReceiptDocumentProfileId,
+} from "@/features/sales/documents/receipt-document-profiles";
 import type { HardwareJobType } from "@/lib/hardware/job-protocol-v2";
 
 const UUID_PATTERN =
@@ -6,6 +11,8 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
 export const RECEIPT_PRINT_PROFILE_A5_V1 = "receipt_a5_v1" as const;
 export const RECEIPT_PRINT_PROFILE_A4_V1 = "receipt_a4_v1" as const;
+export const EPSON_L3251_PRINT_PROFILE_A4_V1 =
+  "epson_l3251_a4_v1" as const;
 export const INVENTORY_LABEL_TEMPLATE_V1 = "jewelry_compact" as const;
 export const DEFAULT_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -39,9 +46,11 @@ export type HardwareDocumentPayloadV2 = {
     maxBytes: number;
     sha256?: string;
   };
+  documentProfileId?: ReceiptDocumentProfileId;
   printProfileId:
     | typeof RECEIPT_PRINT_PROFILE_A5_V1
-    | typeof RECEIPT_PRINT_PROFILE_A4_V1;
+    | typeof RECEIPT_PRINT_PROFILE_A4_V1
+    | typeof EPSON_L3251_PRINT_PROFILE_A4_V1;
   copies: number;
   metadata: {
     invoiceNumber?: string;
@@ -199,6 +208,7 @@ function validateDocumentPayload(payload: Record<string, unknown>) {
       "documentType",
       "documentId",
       "download",
+      "documentProfileId",
       "printProfileId",
       "copies",
       "metadata",
@@ -222,7 +232,8 @@ function validateDocumentPayload(payload: Record<string, unknown>) {
 
   if (
     payload.printProfileId !== RECEIPT_PRINT_PROFILE_A5_V1 &&
-    payload.printProfileId !== RECEIPT_PRINT_PROFILE_A4_V1
+    payload.printProfileId !== RECEIPT_PRINT_PROFILE_A4_V1 &&
+    payload.printProfileId !== EPSON_L3251_PRINT_PROFILE_A4_V1
   ) {
     throw new TypeError("Document payload printProfileId tidak didukung.");
   }
@@ -238,12 +249,47 @@ function validateDocumentPayload(payload: Record<string, unknown>) {
   if (!path.startsWith("/api/")) {
     throw new TypeError("Document download path wajib relative /api/ path.");
   }
-  const expectedPath =
+  let documentProfileId: ReceiptDocumentProfileId | undefined;
+  if (payload.documentProfileId !== undefined) {
+    if (
+      payload.documentProfileId !==
+        RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1 &&
+      payload.documentProfileId !== RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1
+    ) {
+      throw new TypeError("Document payload documentProfileId tidak didukung.");
+    }
+    documentProfileId = payload.documentProfileId;
+  }
+
+  if (
+    documentProfileId === RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1 &&
+    payload.printProfileId !== RECEIPT_PRINT_PROFILE_A5_V1
+  ) {
+    throw new TypeError("A5 document wajib memakai legacy A5 print profile.");
+  }
+  if (
+    documentProfileId === RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1 &&
+    payload.printProfileId !== RECEIPT_PRINT_PROFILE_A4_V1 &&
+    payload.printProfileId !== EPSON_L3251_PRINT_PROFILE_A4_V1
+  ) {
+    throw new TypeError("A4 document wajib memakai A4 print profile.");
+  }
+  if (
+    documentProfileId === undefined &&
+    payload.printProfileId === EPSON_L3251_PRINT_PROFILE_A4_V1
+  ) {
+    throw new TypeError("Epson A4 print profile wajib memiliki documentProfileId.");
+  }
+
+  const basePath =
     payload.documentType === "receipt_certificate"
       ? `/api/sales/${documentId}/receipt-certificate`
       : "/api/sales/receipt-certificate-preview";
+  const expectedPath = documentProfileId
+    ? `${basePath}?profile=${encodeURIComponent(documentProfileId)}`
+    : basePath;
   if (path !== expectedPath) {
-    throw new TypeError("Document download path tidak cocok dengan document intent.");
+    throw new TypeError("Document download path tidak cocok dengan document intent/profile.");
   }
   if (payload.download.contentType !== "application/pdf") {
     throw new TypeError("Document contentType wajib application/pdf.");
@@ -374,18 +420,26 @@ export function buildReceiptDocumentPayloadV2(input: {
   requestSource: string;
   reprint: boolean;
   requestedAt: Date;
+  documentProfileId?: ReceiptDocumentProfileId;
   printProfileId?: HardwareDocumentPayloadV2["printProfileId"];
 }): HardwareDocumentPayloadV2 {
+  const documentProfileId =
+    input.documentProfileId ?? RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1;
   const payload: HardwareDocumentPayloadV2 = {
     schemaVersion: 1,
     documentType: "receipt_certificate",
     documentId: input.saleId,
     download: {
-      path: `/api/sales/${input.saleId}/receipt-certificate`,
+      path: `/api/sales/${input.saleId}/receipt-certificate?profile=${encodeURIComponent(documentProfileId)}`,
       contentType: "application/pdf",
       maxBytes: DEFAULT_DOCUMENT_MAX_BYTES,
     },
-    printProfileId: input.printProfileId ?? RECEIPT_PRINT_PROFILE_A5_V1,
+    documentProfileId,
+    printProfileId:
+      input.printProfileId ??
+      (documentProfileId === RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1
+        ? EPSON_L3251_PRINT_PROFILE_A4_V1
+        : RECEIPT_PRINT_PROFILE_A5_V1),
     copies: 1,
     metadata: {
       invoiceNumber: input.invoiceNumber,
@@ -426,11 +480,12 @@ export function buildHardwareTestPayloadV2(input: {
       documentType: "hardware_test_document",
       documentId: input.agentId,
       download: {
-        path: "/api/sales/receipt-certificate-preview",
+        path: `/api/sales/receipt-certificate-preview?profile=${encodeURIComponent(RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1)}`,
         contentType: "application/pdf",
         maxBytes: DEFAULT_DOCUMENT_MAX_BYTES,
       },
-      printProfileId: RECEIPT_PRINT_PROFILE_A5_V1,
+      documentProfileId: RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1,
+      printProfileId: EPSON_L3251_PRINT_PROFILE_A4_V1,
       copies: 1,
       metadata: {
         requestSource: "admin.hardware_test",

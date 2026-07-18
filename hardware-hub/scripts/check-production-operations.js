@@ -66,6 +66,15 @@ async function main() {
     assert.equal(redacted.SOME_PASSWORD, "[REDACTED]");
     assert.equal(redacted.ASIHJAYA_API_URL, "https://example.test");
 
+    const diagnosticsModule = require("./collect-diagnostics");
+    const diagnostics = diagnosticsModule.collectDiagnostics();
+    assert(
+      diagnostics.documentPrinting.profiles.some(
+        (profile) => profile.id === "epson_l3251_a4_v1" && profile.paper === "A4",
+      ),
+      "support diagnostics harus mencantumkan deterministic Epson A4 profile",
+    );
+
     for (const file of ["start-agent.ps1", "install-startup-task.ps1", "export-support-bundle.ps1"]) {
       assert(fs.existsSync(path.join(__dirname, file)), `${file} wajib tersedia`);
     }

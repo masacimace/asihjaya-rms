@@ -293,24 +293,42 @@ Gunakan share name dari Printer Properties → Sharing.
 
 ## Document printer
 
-Konfigurasi baru yang disarankan menggunakan executable dan argument array, bukan satu shell command:
+Receipt baru menggunakan layout A4 landscape tanpa mengubah identitas desain A5 lama. Canvas desain 210 × 148 mm dipertahankan lalu diskalakan secara proporsional ke halaman A4 297 × 210 mm.
+
+Konfigurasi Windows yang disarankan:
 
 ```env
 DOCUMENT_PRINTER_NAME=EPSON L3250 Series
 PDF_PRINT_EXECUTABLE=C:\Program Files\SumatraPDF\SumatraPDF.exe
-PDF_PRINT_ARGS_JSON=["-print-to","{printer}","-silent","{file}"]
+PDF_PRINT_ARGS_JSON=
+PDF_PRINT_COMMAND=
 ```
 
-Token berikut diganti agent:
+Protocol v2 hanya mengirim ID profile yang sudah diizinkan. Agent membentuk command SumatraPDF sendiri dengan `spawn(..., { shell: false })` dan setting deterministik.
+
+Profile aktif:
 
 ```text
-{printer}
-{file}
+receipt_a5_v1          -> receipt_a5_landscape_v1  (legacy)
+receipt_a4_v1          -> receipt_a4_landscape_v1  (compatibility)
+epson_l3251_a4_v1      -> receipt_a4_landscape_v1  (default job baru)
 ```
 
-`PDF_PRINT_COMMAND` masih didukung untuk kompatibilitas, tetapi menghasilkan warning dan sebaiknya dimigrasikan.
+Setting Epson A4 awal:
 
-Protocol tidak mengunci ukuran kertas. Receipt A5 saat ini dan layout A4 berikutnya dipilih melalui `printProfileId`; penyesuaian A4 dilakukan pada tahap document-printer validation.
+```text
+paper=A4,fit,color,simplex,ignore-pdf-print-settings
+```
+
+`PDF_PRINT_ARGS_JSON` dan `PDF_PRINT_COMMAND` hanya dipertahankan untuk compatibility job lama. Payload v2 tidak dapat menentukan executable, raw command, atau raw print settings.
+
+Validasi sebelum dispatch mencakup header `%PDF`, jumlah halaman, ukuran file, serta `/MediaBox` A4/A5 sesuai profile. Physical margin, scaling driver, dan hasil warna tetap harus divalidasi di outlet.
+
+Panduan lengkap:
+
+```text
+docs/hardware-hub/receipt-a4-epson-profile.md
+```
 
 ## Cash drawer
 

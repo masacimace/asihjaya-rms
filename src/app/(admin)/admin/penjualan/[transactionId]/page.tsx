@@ -821,7 +821,7 @@ export default async function SaleDetailPage({
 
           <DetailSection
             title="Receipt / Certificate"
-            description="Status dokumen A5 dan job print receipt certificate."
+            description="Status dokumen A4 landscape dan job print receipt certificate."
             icon={<FileText className="size-5" />}
           >
             <div className="grid gap-4 md:grid-cols-3">
@@ -851,13 +851,13 @@ export default async function SaleDetailPage({
                     href={sale.receiptCertificate.htmlHref}
                     icon={<Eye className="size-4" />}
                     label="Preview dokumen"
-                    description="Buka layout HTML A5 untuk pengecekan cepat sebelum cetak."
+                    description="Buka layout HTML A4 landscape untuk pengecekan cepat sebelum cetak."
                   />
                   <DocumentActionLink
                     href={buildDownloadHref(sale.receiptCertificate.downloadHref)}
                     icon={<Download className="size-4" />}
                     label="Download PDF"
-                    description="Unduh nota/certificate A5 transaksi ini sebagai file PDF."
+                    description="Unduh nota/certificate A4 landscape transaksi ini sebagai file PDF."
                     download={`${sale.invoiceNumber}-nota-certificate-a5.pdf`}
                   />
                   <ReprintDocumentAction

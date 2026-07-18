@@ -11,7 +11,7 @@ try {
   // dotenv optional agar agent tetap bisa dijalankan lewat environment variable OS.
 }
 
-const AGENT_VERSION = "2.1.0-pr7-windows-operations";
+const AGENT_VERSION = "2.2.0-pr8-a4-print-profile";
 const { createOperationalLogger } = require("./lib/operational-logger");
 const operationalLogger = createOperationalLogger({
   logDir: path.resolve(__dirname, process.env.HARDWARE_LOG_DIR?.trim() || "logs"),
@@ -383,7 +383,7 @@ function getConfigWarnings() {
   }
   if (!isFakeAdapter("document_printer") && PDF_PRINT_COMMAND) {
     warnings.push(
-      "PDF_PRINT_COMMAND legacy masih aktif; migrasikan ke PDF_PRINT_EXECUTABLE + PDF_PRINT_ARGS_JSON.",
+      "PDF_PRINT_COMMAND legacy masih aktif; migrasikan ke PDF_PRINT_EXECUTABLE dan deterministic print profile.",
     );
   }
   if (!isFakeAdapter("cash_drawer") && !CASH_DRAWER_PRINTER_NAME) {

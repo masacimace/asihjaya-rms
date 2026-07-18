@@ -6,6 +6,11 @@ const https = require("https");
 const path = require("path");
 const { spawn } = require("child_process");
 const { createFakeHardwareBackend } = require("./fake-hardware-adapters");
+const {
+  buildSumatraPdfCommand,
+  resolveDocumentPrintProfile,
+} = require("./document-print-profiles");
+const { validatePdfFile } = require("./pdf-validation");
 
 
 const DOCUMENT_DOWNLOAD_PATH_PATTERNS = [
@@ -442,36 +447,11 @@ function downloadFile(config, urlString, destination, options = {}) {
   });
 }
 
-function parsePdfArgs(config, filePath) {
+function buildLegacyPdfCommand(config, filePath) {
   const replace = (value) =>
     String(value)
       .replaceAll("{file}", filePath)
       .replaceAll("{printer}", config.documentPrinterName);
-
-  if (config.pdfPrintExecutable) {
-    let args;
-    try {
-      args = JSON.parse(config.pdfPrintArgsJson || "[]");
-    } catch {
-      throw new HardwareAdapterError("PDF_PRINT_ARGS_JSON bukan JSON array yang valid.", {
-        code: "INVALID_PDF_PRINT_ARGS",
-        retrySafe: false,
-        category: "configuration",
-      });
-    }
-    if (!Array.isArray(args) || !args.every((entry) => typeof entry === "string")) {
-      throw new HardwareAdapterError("PDF_PRINT_ARGS_JSON wajib berupa array string.", {
-        code: "INVALID_PDF_PRINT_ARGS",
-        retrySafe: false,
-        category: "configuration",
-      });
-    }
-    return {
-      executable: config.pdfPrintExecutable,
-      args: args.map(replace),
-      legacy: false,
-    };
-  }
 
   if (config.pdfPrintCommand) {
     return {
@@ -481,7 +461,7 @@ function parsePdfArgs(config, filePath) {
     };
   }
 
-  throw new HardwareAdapterError("PDF print executable belum dikonfigurasi.", {
+  throw new HardwareAdapterError("PDF_PRINT_EXECUTABLE belum dikonfigurasi.", {
     code: "PDF_PRINTER_NOT_CONFIGURED",
     retrySafe: false,
     category: "configuration",
@@ -574,6 +554,8 @@ function createHardwareAdapterFactory(config) {
           maxBytes: download.maxBytes,
           sha256: download.sha256,
         });
+        const resolvedProfile = resolveDocumentPrintProfile(payload);
+        const pdfContract = validatePdfFile(tmpFile, resolvedProfile.profile);
         return controller.prepareDocument({
           job,
           attemptId,
@@ -582,7 +564,10 @@ function createHardwareAdapterFactory(config) {
             pdfUrl,
             ...downloaded,
           },
-          printProfileId: payload.printProfileId || null,
+          documentProfileId: resolvedProfile.documentProfileId,
+          pdfContract,
+          printProfile: resolvedProfile.profile,
+          printProfileId: resolvedProfile.profile.id,
           skipBeforePrepare: true,
         });
       }
@@ -600,9 +585,21 @@ function createHardwareAdapterFactory(config) {
         maxBytes: download.maxBytes,
         sha256: download.sha256,
       });
-      const command = parsePdfArgs(config, tmpFile);
+      const resolvedProfile = resolveDocumentPrintProfile(payload);
+      const pdfContract = validatePdfFile(tmpFile, resolvedProfile.profile);
+      const command = config.pdfPrintExecutable
+        ? {
+            ...buildSumatraPdfCommand({
+              executable: config.pdfPrintExecutable,
+              printerName: config.documentPrinterName,
+              filePath: tmpFile,
+              payload,
+            }),
+            legacy: false,
+          }
+        : buildLegacyPdfCommand(config, tmpFile);
       return {
-        adapter: command.legacy ? "legacy_pdf_command" : "pdf_executable",
+        adapter: command.legacy ? "legacy_pdf_command" : "sumatrapdf_profile",
         target: config.documentPrinterName,
         async dispatch() {
           const result = await spawnCommand(command.executable, command.args, {
@@ -610,10 +607,14 @@ function createHardwareAdapterFactory(config) {
             logger: config.logger,
           });
           return {
-            mode: command.legacy ? "legacy_pdf_command" : "pdf_executable",
+            mode: command.legacy ? "legacy_pdf_command" : "sumatrapdf_profile",
             printerName: config.documentPrinterName,
             exitCode: result.exitCode,
-            printProfileId: payload.printProfileId || null,
+            documentProfileId: resolvedProfile.documentProfileId,
+            printProfileId: resolvedProfile.profile.id,
+            printSettings: command.profile?.printSettings || null,
+            copies: command.copies || Number(payload.copies) || 1,
+            pdfContract,
             ...downloaded,
           };
         },

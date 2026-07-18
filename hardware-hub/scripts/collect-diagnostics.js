@@ -2,6 +2,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { DOCUMENT_PRINT_PROFILES } = require("../lib/document-print-profiles");
 
 const root = path.resolve(__dirname, "..");
 try { require("dotenv").config({ path: path.join(root, ".env"), quiet: true }); } catch {}
@@ -58,6 +59,21 @@ function collectDiagnostics() {
     health: readJson(healthPath),
     files: { health: statSafe(healthPath), journal: statSafe(journalPath), lock: statSafe(lockPath), logDirectory: logDir },
     disk,
+    documentPrinting: {
+      executable: statSafe(
+        process.env.PDF_PRINT_EXECUTABLE?.trim() ||
+          "C:\\Program Files\\SumatraPDF\\SumatraPDF.exe",
+      ),
+      configuredPrinter: process.env.DOCUMENT_PRINTER_NAME?.trim() || null,
+      profiles: Object.values(DOCUMENT_PRINT_PROFILES).map((profile) => ({
+        id: profile.id,
+        documentProfileId: profile.documentProfileId,
+        paper: profile.paper,
+        orientation: profile.orientation,
+        engine: profile.engine,
+        printSettings: profile.printSettings,
+      })),
+    },
     config,
     exclusions: [".env raw file", "agent secret", "lease tokens", "SQLite journal content", "journal encryption key", "print artifacts"],
   };

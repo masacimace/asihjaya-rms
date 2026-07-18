@@ -2,6 +2,12 @@ import { notFound } from "next/navigation";
 import { type NextRequest } from "next/server";
 
 import { getReceiptCertificateData } from "@/features/sales/documents/receipt-certificate";
+import {
+  DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
+  isReceiptDocumentProfileId,
+  LEGACY_RECEIPT_DOCUMENT_PROFILE_ID,
+  type ReceiptDocumentProfileId,
+} from "@/features/sales/documents/receipt-document-profiles";
 import { generateReceiptCertificatePdfFromUrl } from "@/features/sales/documents/receipt-certificate-pdf";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgent } from "@/lib/hardware/agent-auth";
@@ -30,6 +36,19 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 
   const hardwareAuth = await authenticateHardwareAgent(request);
+  const requestedProfileId = request.nextUrl.searchParams.get("profile");
+  if (requestedProfileId && !isReceiptDocumentProfileId(requestedProfileId)) {
+    return Response.json(
+      { success: false, error: "Document profile tidak didukung." },
+      { status: 422 },
+    );
+  }
+  const documentProfileId: ReceiptDocumentProfileId = requestedProfileId
+    ? (requestedProfileId as ReceiptDocumentProfileId)
+    : hardwareAuth
+      ? LEGACY_RECEIPT_DOCUMENT_PROFILE_ID
+      : DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID;
+
   let cookieHeader: string | null = null;
   let extraHeaders: Record<string, string> | undefined;
   let documentData: Awaited<ReturnType<typeof getReceiptCertificateData>>;
@@ -75,22 +94,28 @@ export async function GET(request: NextRequest, context: RouteContext) {
     `/documents/sales/${saleId}/receipt-certificate-html`,
     request.url,
   );
-  const pdfBuffer = await generateReceiptCertificatePdfFromUrl({
+  htmlUrl.searchParams.set("profile", documentProfileId);
+
+  const pdf = await generateReceiptCertificatePdfFromUrl({
     cookieHeader,
+    documentProfileId,
     extraHeaders,
     url: htmlUrl.toString(),
   });
   const filename = sanitizeFilename(
-    `${documentData.sale.invoiceNumber}-nota-certificate-a5.pdf`,
+    `${documentData.sale.invoiceNumber}-nota-certificate-${pdf.profile.paper.toLowerCase()}-landscape.pdf`,
   );
   const shouldDownload = request.nextUrl.searchParams.get("download") === "1";
   const dispositionType = shouldDownload ? "attachment" : "inline";
 
-  return new Response(new Uint8Array(pdfBuffer), {
+  return new Response(new Uint8Array(pdf.buffer), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `${dispositionType}; filename="${filename}"`,
       "Cache-Control": "private, no-store, max-age=0",
+      "X-Document-Profile": pdf.profile.id,
+      "X-PDF-Page-Count": String(pdf.contract.pageCount),
+      "X-PDF-Paper": `${pdf.profile.paper} landscape`,
     },
   });
 }

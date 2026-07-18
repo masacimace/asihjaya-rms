@@ -1,3 +1,9 @@
+import {
+  DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
+  isReceiptDocumentProfileId,
+  LEGACY_RECEIPT_DOCUMENT_PROFILE_ID,
+  type ReceiptDocumentProfileId,
+} from "@/features/sales/documents/receipt-document-profiles";
 import { generateReceiptCertificatePdfFromUrl } from "@/features/sales/documents/receipt-certificate-pdf";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
@@ -26,21 +32,41 @@ export async function GET(request: Request) {
     await requirePermission("sales.view");
   }
 
+  const requestUrl = new URL(request.url);
+  const requestedProfileId = requestUrl.searchParams.get("profile");
+  if (requestedProfileId && !isReceiptDocumentProfileId(requestedProfileId)) {
+    return Response.json(
+      { success: false, error: "Document profile tidak didukung." },
+      { status: 422 },
+    );
+  }
+  const documentProfileId: ReceiptDocumentProfileId = requestedProfileId
+    ? (requestedProfileId as ReceiptDocumentProfileId)
+    : hardwareAuth
+      ? LEGACY_RECEIPT_DOCUMENT_PROFILE_ID
+      : DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID;
+
   const htmlUrl = new URL(
     "/documents/sales/receipt-certificate-preview-html",
     request.url,
   );
-  const pdfBuffer = await generateReceiptCertificatePdfFromUrl({
+  htmlUrl.searchParams.set("profile", documentProfileId);
+
+  const pdf = await generateReceiptCertificatePdfFromUrl({
     cookieHeader: hardwareAuth ? null : request.headers.get("cookie"),
+    documentProfileId,
     extraHeaders: hardwareAuth ? getHardwareAgentHeaders(request) : undefined,
     url: htmlUrl.toString(),
   });
 
-  return new Response(new Uint8Array(pdfBuffer), {
+  return new Response(new Uint8Array(pdf.buffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": 'inline; filename="preview-nota-certificate-a5.pdf"',
+      "Content-Disposition": `inline; filename="preview-nota-certificate-${pdf.profile.paper.toLowerCase()}-landscape.pdf"`,
       "Cache-Control": "private, no-store, max-age=0",
+      "X-Document-Profile": pdf.profile.id,
+      "X-PDF-Page-Count": String(pdf.contract.pageCount),
+      "X-PDF-Paper": `${pdf.profile.paper} landscape`,
     },
   });
 }

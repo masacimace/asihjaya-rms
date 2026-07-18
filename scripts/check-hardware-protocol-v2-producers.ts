@@ -7,8 +7,9 @@ import {
   buildHardwareTestPayloadV2,
   buildInventoryLabelPayloadV2,
   buildReceiptDocumentPayloadV2,
-  RECEIPT_PRINT_PROFILE_A5_V1,
+  EPSON_L3251_PRINT_PROFILE_A4_V1,
 } from "@/lib/hardware/job-payload-contracts-v2";
+import { RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1 } from "@/features/sales/documents/receipt-document-profiles";
 import { hashHardwareJobPayloadV2 } from "@/lib/hardware/job-payload-v2";
 
 const ROOT = process.cwd();
@@ -53,10 +54,14 @@ const receiptPayload = buildReceiptDocumentPayloadV2({
   reprint: false,
   requestedAt: new Date("2026-07-16T10:00:00.000Z"),
 });
-assert.equal(receiptPayload.printProfileId, RECEIPT_PRINT_PROFILE_A5_V1);
+assert.equal(
+  receiptPayload.documentProfileId,
+  RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1,
+);
+assert.equal(receiptPayload.printProfileId, EPSON_L3251_PRINT_PROFILE_A4_V1);
 assert.equal(
   receiptPayload.download.path,
-  `/api/sales/${SAMPLE_SALE_ID}/receipt-certificate`,
+  `/api/sales/${SAMPLE_SALE_ID}/receipt-certificate?profile=receipt_a4_landscape_v1`,
 );
 assert.equal(receiptPayload.download.contentType, "application/pdf");
 assertHardwareJobPayloadV2("print_receipt_certificate", receiptPayload);

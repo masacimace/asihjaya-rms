@@ -1,6 +1,11 @@
 import { createQrSvgDataUri } from "@/lib/qr-code/svg";
 
 import type { ReceiptCertificateData } from "./receipt-certificate";
+import {
+  DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
+  resolveReceiptDocumentProfile,
+  type ReceiptDocumentProfileId,
+} from "./receipt-document-profiles";
 
 const receiptTerms = [
   "1. Barang yang tercantum dalam nota telah diperiksa, disetujui, ditimbang, dan diterima oleh pembeli.",
@@ -11,11 +16,6 @@ const receiptTerms = [
 ];
 
 const styles = String.raw`
-  @page {
-    size: A5 landscape;
-    margin: 0;
-  }
-
   html,
   body {
     min-height: 100%;
@@ -48,8 +48,8 @@ const styles = String.raw`
 
   .aj-receipt-stage {
     display: grid;
-    width: 210mm;
-    min-height: 148mm;
+    width: var(--receipt-page-width);
+    min-height: var(--receipt-page-height);
     gap: clamp(16px, 2.8vw, 28px);
   }
 
@@ -61,6 +61,23 @@ const styles = String.raw`
   }
 
   .aj-receipt-page {
+    position: relative;
+    display: grid;
+    width: var(--receipt-page-width);
+    height: var(--receipt-page-height);
+    overflow: hidden;
+    place-items: center;
+    margin: 0;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .aj-receipt-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .aj-receipt-design {
     --gold: #b37a1f;
     --gold-2: #d7ad4a;
     --gold-soft: #f6ead0;
@@ -74,24 +91,18 @@ const styles = String.raw`
     width: 210mm;
     height: 148mm;
     overflow: hidden;
-    margin: 0;
     padding: 6mm 7mm;
-    break-after: page;
-    page-break-after: always;
     color: var(--ink);
-    background:#fafaf6;
+    background: #fafaf6;
     border: 0.45mm solid var(--gold);
     border-radius: 2.2mm;
     font-family: Arial, Helvetica, sans-serif;
     box-shadow: 0 20px 54px rgba(58, 42, 22, 0.16);
+    transform: scale(var(--receipt-design-scale));
+    transform-origin: center;
   }
 
-  .aj-receipt-page:last-child {
-    break-after: auto;
-    page-break-after: auto;
-  }
-
-  .aj-receipt-page::before {
+  .aj-receipt-design::before {
     content: "";
     position: absolute;
     inset: 2.5mm;
@@ -631,8 +642,8 @@ const styles = String.raw`
   @media print {
     html,
     body {
-      width: 210mm;
-      min-height: 148mm;
+      width: var(--receipt-page-width);
+      min-height: var(--receipt-page-height);
       margin: 0;
       padding: 0;
       background: #f9f9f9;
@@ -640,7 +651,7 @@ const styles = String.raw`
 
     .aj-preview-shell {
       display: block;
-      width: 210mm;
+      width: var(--receipt-page-width);
       min-height: 0;
       overflow: visible;
       padding: 0;
@@ -649,7 +660,7 @@ const styles = String.raw`
 
     .aj-receipt-stage {
       display: block;
-      width: 210mm;
+      width: var(--receipt-page-width);
       min-height: 0;
       gap: 0;
       zoom: 1;
@@ -657,6 +668,9 @@ const styles = String.raw`
 
     .aj-receipt-page {
       margin: 0;
+    }
+
+    .aj-receipt-design {
       box-shadow: none;
     }
   }
@@ -837,10 +851,29 @@ function getPaymentSummary(data: ReceiptCertificateData) {
     .join(" + ");
 }
 
+function buildProfileStyles(documentProfileId: ReceiptDocumentProfileId) {
+  const profile = resolveReceiptDocumentProfile(documentProfileId);
+
+  return String.raw`
+    @page {
+      size: ${profile.cssPageSize};
+      margin: 0;
+    }
+
+    :root {
+      --receipt-page-width: ${profile.widthMm}mm;
+      --receipt-page-height: ${profile.heightMm}mm;
+      --receipt-design-scale: ${profile.designScale};
+    }
+  `;
+}
+
 export function ReceiptCertificateHtmlDocument({
   data,
+  documentProfileId = DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
 }: {
   data: ReceiptCertificateData;
+  documentProfileId?: ReceiptDocumentProfileId;
 }) {
   const customerName = data.customer?.fullName ?? "Pelanggan Umum";
   const customerPhone = data.customer?.phone ?? "-";
@@ -857,7 +890,11 @@ export function ReceiptCertificateHtmlDocument({
     <div
       className={`aj-preview-shell${pageCount <= 1 ? " aj-preview-shell-single" : ""}`}
     >
-      <style dangerouslySetInnerHTML={{ __html: styles }} />
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `${buildProfileStyles(documentProfileId)}${styles}`,
+        }}
+      />
       <div className="aj-receipt-stage">
         {certificateItems.map((item, itemIndex) => {
           const pageNumber = itemIndex + 1;
@@ -871,11 +908,12 @@ export function ReceiptCertificateHtmlDocument({
               key={item.lineNumber}
               aria-label={`Nota dan certificate pembelian item ${pageNumber} dari ${pageCount}`}
             >
-              <div className="aj-watermark">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo/nota-logo.png" alt="" />
-              </div>
-              <div className="aj-document-content">
+              <div className="aj-receipt-design">
+                <div className="aj-watermark">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/logo/nota-logo.png" alt="" />
+                </div>
+                <div className="aj-document-content">
                 <header className="aj-header">
                   <div className="aj-logo-block">
                     <div className="aj-logo-ring">
@@ -1045,7 +1083,8 @@ export function ReceiptCertificateHtmlDocument({
                       Pindai QR untuk verifikasi nota
                     </div>
                   </section>
-                </footer>
+                  </footer>
+                </div>
               </div>
             </article>
           );

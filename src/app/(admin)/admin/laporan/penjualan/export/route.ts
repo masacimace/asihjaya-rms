@@ -8,6 +8,7 @@ import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function parseSearchParams(request: NextRequest) {
   const searchParams: Record<string, string> = {};

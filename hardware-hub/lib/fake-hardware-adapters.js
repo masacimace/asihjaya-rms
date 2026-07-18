@@ -64,7 +64,17 @@ function createFakeHardwareBackend({ controller, agentVersion, logger = console 
     };
   }
 
-  async function prepareDocument({ job, attemptId, sourcePath, download, printProfileId, skipBeforePrepare = false }) {
+  async function prepareDocument({
+    job,
+    attemptId,
+    sourcePath,
+    download,
+    documentProfileId,
+    pdfContract,
+    printProfile,
+    printProfileId,
+    skipBeforePrepare = false,
+  }) {
     const context = createBaseContext({
       job,
       attemptId,
@@ -90,7 +100,12 @@ function createFakeHardwareBackend({ controller, agentVersion, logger = console 
           attemptId: context.attemptId,
           jobType: context.jobType,
           deviceType: context.deviceType,
+          documentProfileId: documentProfileId || null,
           printProfileId: printProfileId || null,
+          paper: printProfile?.paper || null,
+          orientation: printProfile?.orientation || null,
+          printSettings: printProfile?.printSettings || null,
+          pdfContract: pdfContract || null,
           bytes: content.length,
           sha256: download.sha256,
           contentType: download.contentType,
@@ -103,7 +118,12 @@ function createFakeHardwareBackend({ controller, agentVersion, logger = console 
           scenario: context.scenario,
           outputFile: artifactPath,
           metadataFile: metadataPath,
+          documentProfileId: documentProfileId || null,
           printProfileId: printProfileId || null,
+          paper: printProfile?.paper || null,
+          orientation: printProfile?.orientation || null,
+          printSettings: printProfile?.printSettings || null,
+          pdfContract: pdfContract || null,
           ...download,
         };
       },

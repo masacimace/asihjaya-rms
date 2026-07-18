@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { SUPPORTED_FAKE_SCENARIOS, normalizeScenario } = require("../lib/failure-injection");
 const { createSecretProtector } = require("../lib/secret-protector");
+const { DOCUMENT_PRINT_PROFILES } = require("../lib/document-print-profiles");
 
 try {
   require("dotenv").config({ path: path.resolve(__dirname, "..", ".env"), quiet: true });
@@ -239,21 +240,18 @@ if (adapterModes.document_printer === "real") {
   if (getEnv("DOCUMENT_PRINTER_NAME") && !pdfExecutable && !legacyPdfCommand) {
     warnings.push("PDF_PRINT_EXECUTABLE atau PDF_PRINT_COMMAND belum dikonfigurasi.");
   }
-  if (pdfExecutable) {
-    if (!fs.existsSync(pdfExecutable)) {
-      warnings.push(`PDF_PRINT_EXECUTABLE belum ditemukan: ${pdfExecutable}`);
-    }
-    try {
-      const args = JSON.parse(pdfArgsJson || "[]");
-      if (!Array.isArray(args) || !args.every((entry) => typeof entry === "string")) {
-        errors.push("PDF_PRINT_ARGS_JSON wajib berupa JSON array string.");
-      }
-    } catch {
-      errors.push("PDF_PRINT_ARGS_JSON bukan JSON yang valid.");
-    }
+  if (pdfExecutable && !fs.existsSync(pdfExecutable)) {
+    warnings.push(`PDF_PRINT_EXECUTABLE belum ditemukan: ${pdfExecutable}`);
+  }
+  if (pdfArgsJson) {
+    warnings.push(
+      "PDF_PRINT_ARGS_JSON diabaikan untuk Protocol v2; argument SumatraPDF dibentuk dari allowlisted print profile.",
+    );
   }
   if (legacyPdfCommand) {
-    warnings.push("PDF_PRINT_COMMAND adalah compatibility mode; migrasikan ke executable + args JSON.");
+    warnings.push(
+      "PDF_PRINT_COMMAND adalah compatibility mode; gunakan PDF_PRINT_EXECUTABLE untuk deterministic print profile.",
+    );
   }
 }
 if (adapterModes.cash_drawer === "real" && !getEnv("CASH_DRAWER_PRINTER_NAME")) {
@@ -293,6 +291,7 @@ console.log(`Label copies          : ${labelCopies}`);
 console.log(`Label offset          : left ${labelLeftOffset}, top ${labelTopOffset}`);
 console.log(`Document printer      : ${getEnv("DOCUMENT_PRINTER_NAME") || "-"}`);
 console.log(`PDF executable        : ${getEnv("PDF_PRINT_EXECUTABLE") || "-"}`);
+console.log(`Document profiles     : ${Object.keys(DOCUMENT_PRINT_PROFILES).join(", ")}`);
 console.log(`Cash drawer printer   : ${getEnv("CASH_DRAWER_PRINTER_NAME") || "-"}`);
 console.log(`Lease renewal         : ${leaseRenewInterval} ms`);
 console.log("");

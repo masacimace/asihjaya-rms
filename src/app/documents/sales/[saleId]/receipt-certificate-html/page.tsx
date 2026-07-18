@@ -3,6 +3,10 @@ import { notFound } from "next/navigation";
 
 import { getReceiptCertificateData } from "@/features/sales/documents/receipt-certificate";
 import { ReceiptCertificateHtmlDocument } from "@/features/sales/documents/receipt-certificate-html";
+import {
+  DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
+  isReceiptDocumentProfileId,
+} from "@/features/sales/documents/receipt-document-profiles";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
 
@@ -17,6 +21,9 @@ type PageProps = {
   params: Promise<{
     saleId: string;
   }>;
+  searchParams: Promise<{
+    profile?: string;
+  }>;
 };
 
 const UUID_PATTERN =
@@ -24,10 +31,16 @@ const UUID_PATTERN =
 
 export default async function ReceiptCertificateSaleHtmlDocumentPage({
   params,
+  searchParams,
 }: PageProps) {
-  const { saleId } = await params;
+  const [{ saleId }, query] = await Promise.all([params, searchParams]);
 
   if (!UUID_PATTERN.test(saleId)) {
+    notFound();
+  }
+
+  const documentProfileId = query.profile ?? DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID;
+  if (!isReceiptDocumentProfileId(documentProfileId)) {
     notFound();
   }
 
@@ -44,7 +57,12 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
       notFound();
     }
 
-    return <ReceiptCertificateHtmlDocument data={documentData} />;
+    return (
+      <ReceiptCertificateHtmlDocument
+        data={documentData}
+        documentProfileId={documentProfileId}
+      />
+    );
   }
 
   const auth = await requirePermission("sales.view");
@@ -64,5 +82,10 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
     notFound();
   }
 
-  return <ReceiptCertificateHtmlDocument data={documentData} />;
+  return (
+    <ReceiptCertificateHtmlDocument
+      data={documentData}
+      documentProfileId={documentProfileId}
+    />
+  );
 }

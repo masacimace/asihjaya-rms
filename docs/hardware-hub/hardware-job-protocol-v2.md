@@ -1151,8 +1151,9 @@ dan dipertahankan untuk retry request yang sama:
 receipt:{saleId}:reprint:{requestId}
 ```
 
-Document payload masih memakai `receipt_a5_v1`. Migrasi ke `receipt_a4_v1`
-tidak membutuhkan perubahan protocol atau producer lifecycle.
+Job baru menggunakan `documentProfileId=receipt_a4_landscape_v1` dan
+`printProfileId=epson_l3251_a4_v1`. Job A5 lama tetap didukung melalui
+`receipt_a5_v1` tanpa mengubah lifecycle Protocol v2.
 
 Agent hanya menerima document download pada same-origin path berikut:
 
@@ -1264,3 +1265,32 @@ The Protocol v2 Windows agent uses a dedicated user-scoped operational runtime:
 - redacted support bundle that excludes the execution journal and credentials.
 
 These operational facilities do not change Hardware Job Protocol state transitions or delivery semantics.
+
+---
+
+## 30. Implementation status — PR 8 Receipt A4 dan Epson print profile
+
+Receipt job baru menggunakan pemisahan profile berikut:
+
+```text
+documentProfileId = receipt_a4_landscape_v1
+printProfileId    = epson_l3251_a4_v1
+```
+
+Desain A5 lama tetap menjadi source canvas 210 × 148 mm dan diskalakan secara proporsional ke A4 landscape 297 × 210 mm. Job lama tetap kompatibel melalui:
+
+```text
+receipt_a5_v1 -> receipt_a5_landscape_v1
+```
+
+Agent memilih print setting hanya dari registry lokal. Raw executable, raw command, dan raw print settings tidak diterima dari payload.
+
+Default SumatraPDF setting:
+
+```text
+paper=A4,fit,color,simplex,ignore-pdf-print-settings
+```
+
+Sebelum dispatch, server dan agent memvalidasi PDF header, page count, serta page `/MediaBox` terhadap document profile. Mismatch profile menghasilkan error non-retry-safe dan tidak mencapai dispatch.
+
+Physical margin, driver scaling, dan hasil cetak Epson tetap menjadi acceptance gate di outlet.
