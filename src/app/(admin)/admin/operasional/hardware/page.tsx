@@ -4,6 +4,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  BookOpenCheck,
   CheckCircle2,
   Clock3,
   Cpu,
@@ -678,6 +679,14 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                 Bersihkan Job Lama
               </button>
             </form>
+
+            <Link
+              href="/admin/operasional/hardware/setup-guide"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] sm:w-auto"
+            >
+              <BookOpenCheck className="size-4" />
+              Panduan Setup
+            </Link>
 
             <Link
               href="/admin/operasional/hardware"

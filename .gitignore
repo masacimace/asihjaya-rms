@@ -19,7 +19,6 @@ Thumbs.db
 *.key
 credentials.json
 service-account.json
-.env.validation
 
 # debug
 npm-debug.log*
@@ -53,3 +52,7 @@ next-env.d.ts
 # local uploaded media/documents
 /.data/
 /hardware-hub/support-bundles/
+!hardware-hub/.env.outlet.example
+/hardware-hub/outlet-fixtures/
+/hardware-hub/outlet-reports/
+/hardware-hub/data/env-backups/

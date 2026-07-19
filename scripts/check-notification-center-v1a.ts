@@ -32,7 +32,6 @@ async function main() {
     liveCounts,
     posAction,
     salesNotifications,
-    migration,
     adminShell,
   ] = await Promise.all([
     readFile("src/db/schema/index.ts", "utf8"),
@@ -42,31 +41,34 @@ async function main() {
     readFile("src/app/api/admin/live-counts/route.ts", "utf8"),
     readFile("src/app/actions/pos.ts", "utf8"),
     readFile("src/features/notifications/sales.ts", "utf8"),
-    readFile("drizzle/0023_notification_center_v1a_foundation.sql", "utf8"),
     readFile("src/components/layout/admin-shell.tsx", "utf8"),
   ]);
 
   assert.match(schema, /notification_events/);
   assert.match(schema, /notification_recipients/);
   assert.match(schema, /notification_recipient_status/);
+
   assert.match(service, /requiredAnyPermissionCodes/);
   assert.match(service, /pg_advisory_xact_lock/);
   assert.match(service, /deduplicationKey/);
   assert.match(service, /resolveNotificationEventsByEntity/);
+
   assert.match(queries, /notificationRecipients\.userId/);
   assert.match(actions, /notificationRecipients\.status, "unread"/);
   assert.match(liveCounts, /notificationRecipients/);
   assert.match(posAction, /publishSaleCompletedNotificationInTransaction/);
   assert.match(salesNotifications, /eventType: "sale\.completed"/);
   assert.doesNotMatch(posAction, /transaction\.insert\(notifications\)/);
-  assert.match(migration, /Preserve the existing drawer history/);
-  assert.match(migration, /legacy\."is_read"/);
   assert.match(adminShell, /notificationDrawerData\.unreadCount/);
 
+  // Assertions terhadap SQL backfill migration lama sengaja dihapus.
+  // Setelah migration squash, compatibility backfill historis tidak lagi
+  // menjadi kontrak untuk fresh database; kontrak aktif divalidasi melalui
+  // schema dan implementation source di atas.
   console.log("Notification Center V1-A event foundation checks passed.");
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error("Notification Center V1-A check gagal.", error);
   process.exitCode = 1;
 });

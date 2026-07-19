@@ -1300,3 +1300,17 @@ Physical margin, driver scaling, dan hasil cetak Epson tetap menjadi acceptance 
 ## Appendix — SATO label profile v1
 
 Job label baru menggunakan `templateId=jewelry_compact_v1` dan `printerProfileId=sato_cg408tt_jewelry_v1`. Alias `jewelry_compact` hanya untuk backward compatibility. Agent menghasilkan SBPL melalui deterministic generator, memvalidasi barcode CODE39 uppercase, mencatat command SHA-256, dan menolak raw printer command dari payload. Parameter fisik CG408TT tetap berstatus `pending` sampai outlet acceptance test.
+
+## PR 10 — Outlet readiness and setup guide
+
+PR 10 menambahkan readiness tooling tanpa mengubah delivery semantics Protocol v2:
+
+- Web guide `/admin/operasional/hardware/setup-guide` dengan search, copy command, live agent summary, dan checklist browser-local.
+- `.env.outlet.example` dengan fake adapter sebagai default.
+- Windows preflight report dengan status PASS, WARNING, atau BLOCKED.
+- Safe adapter switch yang membuat backup `.env`, memblokir agent aktif/local recoverable attempt, dan menjalankan config check dengan rollback otomatis.
+- Calibration fixtures tanpa data transaksi untuk SATO CG408TT dan Epson A4 landscape.
+- Outlet acceptance report dan sanitized support bundle.
+- Cash drawer real tetap diblokir sampai model/interface fisik disetujui.
+
+Readiness tooling tidak pernah menghapus SQLite execution journal dan tidak melakukan automatic retry terhadap `unknown_outcome`.

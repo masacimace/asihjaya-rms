@@ -1,0 +1,195 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1782343504118,
+      "tag": "0000_remarkable_firebird",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782354457841,
+      "tag": "0001_fast_songbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782547250697,
+      "tag": "0002_workable_zaran",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782576096952,
+      "tag": "0003_remarkable_anthem",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782682788057,
+      "tag": "0004_friendly_snowbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782810000000,
+      "tag": "0005_item_display_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783539004544,
+      "tag": "0006_watery_blindfold",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783549637347,
+      "tag": "0007_add_refund_approval_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783559000000,
+      "tag": "0008_add_outlet_google_maps_embed_url",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783565000000,
+      "tag": "0009_create_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783861280108,
+      "tag": "0010_ancient_alice",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1783865406450,
+      "tag": "0011_p0c_authorization",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783882626944,
+      "tag": "0012_p0d_checkout_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1783887475303,
+      "tag": "0013_p1a_manual_payment_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783892311954,
+      "tag": "0014_p1a1_fast_manual_payment_ux",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1783897343464,
+      "tag": "0015_p1b_refund_return_inspection",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1783951250752,
+      "tag": "0016_p1c1_manual_payment_reconciliation",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783958173680,
+      "tag": "0017_p1c1_reconciliation_permissions_hotfix",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783965000000,
+      "tag": "0018_p1c1_reconciliation_schema_hotfix",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783971000000,
+      "tag": "0019_p1c1_reconciliation_constraint_repair",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783981771842,
+      "tag": "0020_p1c2_settlement_import_auto_matching",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1783989000000,
+      "tag": "0021_p1c2_import_permission_hotfix",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783995000000,
+      "tag": "0022_p1c2_import_permission_schema_repair",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784037454538,
+      "tag": "0023_notification_center_v1a_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784201864946,
+      "tag": "0024_hardware_job_protocol_v2_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784208047300,
+      "tag": "0025_hardware_v2_secure_job_producers",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784214260284,
+      "tag": "0026_hardware_v2_operations_observability",
+      "breakpoints": true
+    }
+  ]
+}

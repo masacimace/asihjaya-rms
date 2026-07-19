@@ -37,9 +37,7 @@ const styles = String.raw`
     justify-items: center;
     overflow: auto;
     padding: clamp(12px, 3vw, 32px);
-    background:
-      radial-gradient(circle at top, rgba(215, 173, 74, 0.15), transparent 34rem),
-      linear-gradient(180deg, #fffdf8 0%, #f4f1eb 100%);
+    background: #fff;
   }
 
   .aj-preview-shell-single {
@@ -94,7 +92,6 @@ const styles = String.raw`
     padding: 6mm 7mm;
     color: var(--ink);
     background: #fafaf6;
-    border: 0.45mm solid var(--gold);
     border-radius: 2.2mm;
     font-family: Arial, Helvetica, sans-serif;
     box-shadow: 0 20px 54px rgba(58, 42, 22, 0.16);
@@ -106,7 +103,7 @@ const styles = String.raw`
     content: "";
     position: absolute;
     inset: 2.5mm;
-    border: 0.18mm solid rgba(179, 122, 31, 0.35);
+    border: 0.35mm solid rgba(179, 122, 31, 0.35);
     pointer-events: none;
   }
 
@@ -296,7 +293,6 @@ const styles = String.raw`
     background: rgba(168, 31, 61, 0.055);
     font-size: 6pt;
     font-weight: 900;
-    letter-spacing: 0.08em;
     text-align: center;
     text-transform: uppercase;
   }
@@ -328,7 +324,6 @@ const styles = String.raw`
     grid-template-columns: 20mm 45mm minmax(0, 1fr) 18mm 18mm 26mm 23mm;
     align-items: center;
     padding: 0 4mm;
-    border-bottom: 0.18mm solid rgba(234, 215, 173, 0.76);
   }
 
   .aj-product-body {
@@ -914,175 +909,182 @@ export function ReceiptCertificateHtmlDocument({
                   <img src="/logo/nota-logo.png" alt="" />
                 </div>
                 <div className="aj-document-content">
-                <header className="aj-header">
-                  <div className="aj-logo-block">
-                    <div className="aj-logo-ring">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        className="aj-logo"
-                        src="/logo/nota-logo.png"
-                        alt="Asih Jaya"
-                      />
+                  <header className="aj-header">
+                    <div className="aj-logo-block">
+                      <div className="aj-logo-ring">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          className="aj-logo"
+                          src="/logo/nota-logo.png"
+                          alt="Asih Jaya"
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="aj-brand-block">
-                    <div className="aj-eyebrow">
-                      Nota Pembelian & Certificate
-                    </div>
-                    <div className="aj-brand-title">Toko Emas Asih Jaya</div>
-                    <div className="aj-branch-title">{data.outlet.name}</div>
-                    <div className="aj-contact-lines">
-                      <span className="aj-contact-item">
-                        {data.outlet.address ?? "Alamat outlet belum diatur"}
-                      </span>
-                      <span className="aj-contact-item">
-                        Whatsapp: {data.outlet.phone ?? "-"}
-                      </span>
-                      <span className="aj-contact-item">
-                        Instagram: @asihjaya.bantargebang
-                      </span>
-                    </div>
-                  </div>
-
-                  <aside className="aj-certificate-card">
-                    <div className="aj-summary-lines">
-                      <div className="aj-summary-row">
-                        <span>No. Order :</span>
-                        <span className="aj-summary-value">
-                          {data.sale.invoiceNumber}
-                        </span>
+                    <div className="aj-brand-block">
+                      <div className="aj-eyebrow">
+                        Nota Pembelian & Certificate
                       </div>
-                      <div className="aj-summary-row">
-                        <span>Item :</span>
-                        <span className="aj-summary-value">
-                          {pageNumber} dari {pageCount}
+                      <div className="aj-brand-title">Toko Emas Asih Jaya</div>
+                      <div className="aj-branch-title">{data.outlet.name}</div>
+                      <div className="aj-contact-lines">
+                        <span className="aj-contact-item">
+                          {data.outlet.address ?? "Alamat outlet belum diatur"}
                         </span>
-                      </div>
-                      <div className="aj-summary-row">
-                        <span>Tanggal :</span>
-                        <span className="aj-summary-value">
-                          {completedDate}
+                        <span className="aj-contact-item">
+                          Whatsapp: {data.outlet.phone ?? "-"}
                         </span>
-                      </div>
-                      <div className="aj-summary-row">
-                        <span>Sales :</span>
-                        <span className="aj-summary-value">
-                          {data.cashier.fullName}
+                        <span className="aj-contact-item">
+                          Instagram: @asihjaya.bantargebang
                         </span>
                       </div>
                     </div>
-                  </aside>
-                </header>
 
-                <section className="aj-info-strip">
-                  <div className="aj-info-box">
-                    <div>
-                      <div className="aj-info-label">Konsumen</div>
-                      <div className="aj-info-value">{customerName}</div>
-                    </div>
-                  </div>
-                  <div className="aj-info-box">
-                    <div>
-                      <div className="aj-info-label">Telepon</div>
-                      <div className="aj-info-value">{customerPhone}</div>
-                    </div>
-                  </div>
-                  <div className="aj-info-box aj-payment-badge">
-                    {paymentSummary}
-                  </div>
-                </section>
-
-                <section className="aj-products-card">
-                  <div className="aj-products-grid aj-products-grid-single">
-                    <div className="aj-product-row aj-product-head">
-                      <div className="aj-head-center">KODE</div>
-                      <div className="aj-head-center">FOTO</div>
-                      <div>PRODUCT</div>
-                      <div className="aj-head-center">KADAR ±%</div>
-                      <div className="aj-head-center">GRAM</div>
-                      <div className="aj-head-center">POTONGAN /GRAM</div>
-                      <div className="aj-head-right">HARGA</div>
-                    </div>
-                    <div className="aj-product-row aj-product-body">
-                      <div className="aj-code">{getProductCode(item)}</div>
-                      <ProductThumbnail item={item} />
-                      <div className="aj-product-copy">
-                        <div className="aj-product-name">
-                          {getItemName(item)}
+                    <aside className="aj-certificate-card">
+                      <div className="aj-summary-lines">
+                        <div className="aj-summary-row">
+                          <span>No. Order :</span>
+                          <span className="aj-summary-value">
+                            {data.sale.invoiceNumber}
+                          </span>
                         </div>
-                        <div className="aj-product-meta">
-                          {buildProductMeta(item)}
+                        <div className="aj-summary-row">
+                          <span>Item :</span>
+                          <span className="aj-summary-value">
+                            {pageNumber} dari {pageCount}
+                          </span>
+                        </div>
+                        <div className="aj-summary-row">
+                          <span>Tanggal :</span>
+                          <span className="aj-summary-value">
+                            {completedDate}
+                          </span>
+                        </div>
+                        <div className="aj-summary-row">
+                          <span>Sales :</span>
+                          <span className="aj-summary-value">
+                            {data.cashier.fullName}
+                          </span>
                         </div>
                       </div>
-                      <div className="aj-kadar">
-                        {formatPercent(item.snapshot.exchangePurityPercent)}
-                      </div>
-                      <div className="aj-gram">
-                        {formatGram(item.snapshot.weightGram)}
-                      </div>
-                      <div className="aj-deduction">
-                        {formatDeductionPerGram(item.snapshot.deductionPerGram)}
-                      </div>
-                      <div className="aj-price">
-                        {formatAmount(item.finalPriceAmount)}
+                    </aside>
+                  </header>
+
+                  <section className="aj-info-strip">
+                    <div className="aj-info-box">
+                      <div>
+                        <div className="aj-info-label">Konsumen</div>
+                        <div className="aj-info-value">{customerName}</div>
                       </div>
                     </div>
-                  </div>
-                </section>
-
-                <footer className="aj-footer">
-                  <section className="aj-notes">
-                    <div className="aj-notes-title">Perhatian</div>
-                    <ol className="aj-terms">
-                      {receiptTerms.map((term) => (
-                        <li key={term}>{term}</li>
-                      ))}
-                    </ol>
+                    <div className="aj-info-box">
+                      <div>
+                        <div className="aj-info-label">Telepon</div>
+                        <div className="aj-info-value">{customerPhone}</div>
+                      </div>
+                    </div>
+                    <div className="aj-info-box aj-payment-badge">
+                      {paymentSummary}
+                    </div>
                   </section>
 
-                  <section className="aj-total-card">
-                    <div
-                      className="aj-total-breakdown"
-                      aria-label="Rincian harga item"
-                    >
-                      <div className="aj-total-detail-row">
-                        <span>Harga Item</span>
-                        <strong>{formatAmount(itemSubtotalAmount)}</strong>
+                  <section className="aj-products-card">
+                    <div className="aj-products-grid aj-products-grid-single">
+                      <div className="aj-product-row aj-product-head">
+                        <div className="aj-head-center">KODE</div>
+                        <div className="aj-head-center">FOTO</div>
+                        <div>PRODUCT</div>
+                        <div className="aj-head-center">KADAR ±%</div>
+                        <div className="aj-head-center">GRAM</div>
+                        <div className="aj-head-center">POTONGAN /GRAM</div>
+                        <div className="aj-head-right">HARGA</div>
                       </div>
-                      {itemDiscountAmount > 0 ? (
-                        <div className="aj-total-detail-row aj-total-row-discount">
-                          <span>Diskon Item</span>
-                          <strong>
-                            {formatNegativeAmount(itemDiscountAmount)}
-                          </strong>
+                      <div className="aj-product-row aj-product-body">
+                        <div className="aj-code">{getProductCode(item)}</div>
+                        <ProductThumbnail item={item} />
+                        <div className="aj-product-copy">
+                          <div className="aj-product-name">
+                            {getItemName(item)}
+                          </div>
+                          <div className="aj-product-meta">
+                            {buildProductMeta(item)}
+                          </div>
                         </div>
-                      ) : null}
-                      {pageCount > 1 ? (
+                        <div className="aj-kadar">
+                          {formatPercent(item.snapshot.exchangePurityPercent)}
+                        </div>
+                        <div className="aj-gram">
+                          {formatGram(item.snapshot.weightGram)}
+                        </div>
+                        <div className="aj-deduction">
+                          {formatDeductionPerGram(
+                            item.snapshot.deductionPerGram,
+                          )}
+                        </div>
+                        <div className="aj-price">
+                          {formatAmount(item.finalPriceAmount)}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <footer className="aj-footer">
+                    <section className="aj-notes">
+                      <div className="aj-notes-title">Perhatian</div>
+                      <ol className="aj-terms">
+                        {receiptTerms.map((term) => (
+                          <li key={term}>{term}</li>
+                        ))}
+                      </ol>
+                    </section>
+
+                    <section className="aj-total-card">
+                      <div
+                        className="aj-total-breakdown"
+                        aria-label="Rincian harga item"
+                      >
                         <div className="aj-total-detail-row">
-                          <span>Total Order</span>
-                          <strong>{formatAmount(data.sale.totalAmount)}</strong>
+                          <span>Harga Item</span>
+                          <strong>{formatAmount(itemSubtotalAmount)}</strong>
                         </div>
-                      ) : null}
-                    </div>
-                    <div className="aj-total-box">
-                      <span className="aj-total-label">Total Item</span>
-                      <strong className="aj-total-amount">
-                        {formatAmount(itemTotalAmount)}
-                      </strong>
-                    </div>
-                  </section>
+                        {itemDiscountAmount > 0 ? (
+                          <div className="aj-total-detail-row aj-total-row-discount">
+                            <span>Diskon Item</span>
+                            <strong>
+                              {formatNegativeAmount(itemDiscountAmount)}
+                            </strong>
+                          </div>
+                        ) : null}
+                        {pageCount > 1 ? (
+                          <div className="aj-total-detail-row">
+                            <span>Total Order</span>
+                            <strong>
+                              {formatAmount(data.sale.totalAmount)}
+                            </strong>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="aj-total-box">
+                        <span className="aj-total-label">Total Item</span>
+                        <strong className="aj-total-amount">
+                          {formatAmount(itemTotalAmount)}
+                        </strong>
+                      </div>
+                    </section>
 
-                  <section className="aj-qr-card">
-                    <div className="aj-qr-box">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={verificationQrImage} alt="QR verifikasi nota" />
-                    </div>
-                    <div className="aj-qr-label">Scan Keaslian</div>
-                    <div className="aj-qr-note">
-                      Pindai QR untuk verifikasi nota
-                    </div>
-                  </section>
+                    <section className="aj-qr-card">
+                      <div className="aj-qr-box">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={verificationQrImage}
+                          alt="QR verifikasi nota"
+                        />
+                      </div>
+                      <div className="aj-qr-label">Scan Keaslian</div>
+                      <div className="aj-qr-note">
+                        Pindai QR untuk verifikasi nota
+                      </div>
+                    </section>
                   </footer>
                 </div>
               </div>

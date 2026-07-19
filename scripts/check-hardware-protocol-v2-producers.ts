@@ -214,13 +214,24 @@ assertContains(
   "Agent wajib menolak path document di luar allowlist.",
 );
 
-const permissionMigration = read(
-  "drizzle/0025_hardware_v2_secure_job_producers.sql",
+const seedSource = read("src/db/seed.ts");
+
+assert.match(
+  seedSource,
+  /code:\s*"inventory\.print_label"/,
+  "Seed wajib mendefinisikan permission inventory.print_label.",
 );
-assertContains(
-  permissionMigration,
-  "inventory.print_label",
-  "Migration permission cetak label belum tersedia.",
+
+assert.match(
+  seedSource,
+  /stock_admin:\s*\[[\s\S]*?"inventory\.print_label"/,
+  "Role stock_admin wajib memperoleh permission inventory.print_label.",
+);
+
+assert.match(
+  seedSource,
+  /"inventory\.manage":\s*\[[\s\S]*?"inventory\.print_label"/,
+  "Compatibility mapping inventory.manage wajib menyertakan inventory.print_label.",
 );
 
 console.log(

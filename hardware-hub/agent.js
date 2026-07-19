@@ -11,7 +11,7 @@ try {
   // dotenv optional agar agent tetap bisa dijalankan lewat environment variable OS.
 }
 
-const AGENT_VERSION = "2.3.0-pr9-sato-profile";
+const AGENT_VERSION = "2.4.0-pr10-outlet-readiness";
 const { createOperationalLogger } = require("./lib/operational-logger");
 const operationalLogger = createOperationalLogger({
   logDir: path.resolve(__dirname, process.env.HARDWARE_LOG_DIR?.trim() || "logs"),

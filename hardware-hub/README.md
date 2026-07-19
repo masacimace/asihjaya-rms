@@ -418,3 +418,43 @@ The health server must remain loopback-only. Full operating procedures are docum
 ```text
 docs/hardware-hub/windows-production-operations.md
 ```
+
+## Outlet readiness and complete setup guide
+
+Panduan web tersedia pada:
+
+```text
+/admin/operasional/hardware/setup-guide
+```
+
+Panduan repository:
+
+```text
+docs/hardware-hub/windows-setup-guide.md
+```
+
+Safe-first workflow:
+
+```powershell
+Copy-Item .env.outlet.example .env
+npm install --omit=dev
+npm run check:dpapi
+npm run check
+npm run outlet:preflight
+npm run outlet:fixtures
+```
+
+Aktivasi real adapter dilakukan satu per satu dan agent wajib dihentikan terlebih dahulu:
+
+```powershell
+npm run outlet:enable-real-label
+npm run outlet:enable-real-document
+```
+
+Cash drawer real tetap diblokir sampai model/interface disetujui. Rollback tidak menghapus SQLite journal:
+
+```powershell
+npm run outlet:rollback-to-fake
+npm run support:bundle
+npm run outlet:report
+```
