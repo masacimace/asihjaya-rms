@@ -41,10 +41,6 @@ export const serverEnv = {
     return secret("SESSION_SECRET");
   },
 
-  get HARDWARE_HUB_SECRET() {
-    return secret("HARDWARE_HUB_SECRET");
-  },
-
   get DEFAULT_ORGANIZATION_SLUG() {
     return required("DEFAULT_ORGANIZATION_SLUG").toLowerCase();
   },

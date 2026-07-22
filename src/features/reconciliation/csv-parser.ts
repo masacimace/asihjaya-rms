@@ -252,18 +252,28 @@ export function parseSettlementImportDate(value: string) {
     year = Number(match[3]);
   }
 
-  const date = new Date(`${year.toString().padStart(4, "0")}-${month
-    .toString()
-    .padStart(2, "0")}-${day.toString().padStart(2, "0")}T00:00:00+07:00`);
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    throw new Error("Tanggal transaksi tidak valid.");
+  }
+
+  const validationDate = new Date(Date.UTC(year, month - 1, day));
   if (
-    Number.isNaN(date.getTime()) ||
-    month < 1 ||
-    month > 12 ||
-    day < 1 ||
-    day > 31
+    validationDate.getUTCFullYear() !== year ||
+    validationDate.getUTCMonth() + 1 !== month ||
+    validationDate.getUTCDate() !== day
   ) {
     throw new Error("Tanggal transaksi tidak valid.");
   }
+
+  const isoDate = `${year.toString().padStart(4, "0")}-${month
+    .toString()
+    .padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+  const date = new Date(`${isoDate}T00:00:00+07:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Tanggal transaksi tidak valid.");
+  }
+
   return date;
 }
 

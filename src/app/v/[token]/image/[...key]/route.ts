@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { sales } from "@/db/schema";
+import { saleItems, sales } from "@/db/schema";
 import { verifyReceiptVerificationToken } from "@/features/sales/verification/receipt-token";
 import {
   imageKeyBelongsToOrganization,
@@ -17,6 +17,44 @@ type RouteContext = {
     key: string[];
   }>;
 };
+
+type SaleItemSnapshot = {
+  imageKey?: unknown;
+  productImageKey?: unknown;
+};
+
+function normalizeImageKey(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .join("/");
+
+  return normalized || null;
+}
+
+function readImageKeyFromSegments(segments: string[]) {
+  try {
+    return normalizeImageKey(
+      segments.map((segment) => decodeURIComponent(segment)).join("/"),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function saleItemAllowsImageKey(snapshot: unknown, imageKey: string) {
+  const value = snapshot as SaleItemSnapshot | null;
+
+  return (
+    normalizeImageKey(value?.imageKey) === imageKey ||
+    normalizeImageKey(value?.productImageKey) === imageKey
+  );
+}
 
 export async function GET(_request: Request, context: RouteContext) {
   const { token, key } = await context.params;
@@ -38,9 +76,25 @@ export async function GET(_request: Request, context: RouteContext) {
     return new Response("Not found", { status: 404 });
   }
 
-  const imageKey = key.map((segment) => decodeURIComponent(segment)).join("/");
+  const imageKey = readImageKeyFromSegments(key);
 
-  if (!imageKeyBelongsToOrganization(imageKey, saleRow.organizationId)) {
+  if (
+    !imageKey ||
+    !imageKeyBelongsToOrganization(imageKey, saleRow.organizationId)
+  ) {
+    return new Response("Not found", { status: 404 });
+  }
+
+  const saleItemRows = await db
+    .select({
+      snapshot: saleItems.snapshot,
+    })
+    .from(saleItems)
+    .where(eq(saleItems.saleId, parsedToken.saleId));
+
+  if (
+    !saleItemRows.some((item) => saleItemAllowsImageKey(item.snapshot, imageKey))
+  ) {
     return new Response("Not found", { status: 404 });
   }
 

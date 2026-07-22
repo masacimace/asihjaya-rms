@@ -23,6 +23,18 @@ function sanitizeText(value: ExportCell) {
   return normalizedValue;
 }
 
+function sanitizeXlsxCell(value: ExportCell): ExportCell {
+  if (value === null || value === undefined || value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+
+  return sanitizeText(value);
+}
+
 function escapeCsvCell(value: ExportCell) {
   const stringValue = sanitizeText(value);
 
@@ -61,11 +73,18 @@ function sanitizeSheetName(name: string) {
   return name.replace(/[\\/?*\[\]:]/g, " ").trim().slice(0, 31) || "Sheet";
 }
 
+function sanitizeSheetRows(sheet: ExportSheet) {
+  return [
+    sheet.columns.map((column) => sanitizeText(column)),
+    ...sheet.rows.map((row) => row.map(sanitizeXlsxCell)),
+  ];
+}
+
 export function buildXlsxBuffer(sheets: ExportSheet[]) {
   const workbook = XLSX.utils.book_new();
 
   for (const sheet of sheets) {
-    const worksheet = XLSX.utils.aoa_to_sheet([sheet.columns, ...sheet.rows]);
+    const worksheet = XLSX.utils.aoa_to_sheet(sanitizeSheetRows(sheet));
     const lastColumn = XLSX.utils.encode_col(
       Math.max((sheet.columns.length || 1) - 1, 0),
     );
@@ -76,7 +95,11 @@ export function buildXlsxBuffer(sheets: ExportSheet[]) {
       ref: `A1:${lastColumn}${lastRow}`,
     };
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, sanitizeSheetName(sheet.name));
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      sanitizeSheetName(sheet.name),
+    );
   }
 
   return XLSX.write(workbook, {
