@@ -221,8 +221,7 @@ export function PaymentReconciliationForm({
               Hasil pemeriksaan finance
             </h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              Pilih status berdasarkan mutasi bank, laporan merchant, atau batch
-              terminal EDC milik toko.
+              Pilih status berdasarkan batch settlement terminal EDC milik toko.
             </p>
           </div>
         </div>

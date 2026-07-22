@@ -6,6 +6,8 @@ import { hashPassword } from "../lib/auth/password";
 import { db, pool } from "./index";
 import {
   metalPurities,
+  manualPaymentPolicies,
+  manualPaymentProfiles,
   metals,
   organizations,
   outlets,
@@ -537,7 +539,90 @@ async function seed() {
         id: registers.id,
       });
 
-    getFirst(registerRows, "Register");
+    const register = getFirst(registerRows, "Register");
+
+    const edcBanks = ["BCA", "BRI", "BNI", "MANDIRI"] as const;
+
+    for (const [index, bank] of edcBanks.entries()) {
+      await tx
+        .insert(manualPaymentProfiles)
+        .values({
+          organizationId: organization.id,
+          outletId: outlet.id,
+          registerId: register.id,
+          profileType: "edc",
+          code: `EDC-${bank}`,
+          name: `EDC ${bank}`,
+          provider: bank,
+          verificationSource: "edc_terminal",
+          merchantId: null,
+          terminalId: `TID-${bank}-${registerCode}`,
+          destinationAccount: null,
+          displayOrder: (index + 1) * 10,
+          isActive: true,
+        })
+        .onConflictDoUpdate({
+          target: [
+            manualPaymentProfiles.organizationId,
+            manualPaymentProfiles.outletId,
+            manualPaymentProfiles.code,
+          ],
+          set: {
+            registerId: register.id,
+            profileType: "edc",
+            name: `EDC ${bank}`,
+            provider: bank,
+            verificationSource: "edc_terminal",
+            merchantId: null,
+            terminalId: `TID-${bank}-${registerCode}`,
+            destinationAccount: null,
+            displayOrder: (index + 1) * 10,
+            isActive: true,
+            updatedAt: now,
+          },
+        });
+    }
+
+    const manualEdcPolicies = [
+      {
+        method: "debit_card" as const,
+        coVerificationThreshold: 30_000_000,
+        evidenceThreshold: 20_000_000,
+        duplicateLookbackDays: 7,
+      },
+      {
+        method: "credit_card" as const,
+        coVerificationThreshold: 30_000_000,
+        evidenceThreshold: 20_000_000,
+        duplicateLookbackDays: 7,
+      },
+    ];
+
+    for (const policy of manualEdcPolicies) {
+      await tx
+        .insert(manualPaymentPolicies)
+        .values({
+          organizationId: organization.id,
+          method: policy.method,
+          coVerificationThreshold: String(policy.coVerificationThreshold),
+          evidenceThreshold: String(policy.evidenceThreshold),
+          duplicateLookbackDays: policy.duplicateLookbackDays,
+          isEnabled: true,
+        })
+        .onConflictDoUpdate({
+          target: [
+            manualPaymentPolicies.organizationId,
+            manualPaymentPolicies.method,
+          ],
+          set: {
+            coVerificationThreshold: String(policy.coVerificationThreshold),
+            evidenceThreshold: String(policy.evidenceThreshold),
+            duplicateLookbackDays: policy.duplicateLookbackDays,
+            isEnabled: true,
+            updatedAt: now,
+          },
+        });
+    }
 
     const metalIds = new Map<string, string>();
 
@@ -841,7 +926,7 @@ async function main() {
     console.log("✅ Database seed berhasil dijalankan.");
 
     console.log(
-      "✅ Organization, outlet, register, katalog dasar, role, permission, dan administrator siap.",
+      "✅ Organization, outlet, register, preset EDC, katalog dasar, role, permission, dan administrator siap.",
     );
   } catch (error) {
     console.error("❌ Database seed gagal:", error);

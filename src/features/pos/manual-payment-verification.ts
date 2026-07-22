@@ -8,10 +8,8 @@ import type {
 } from "@/features/pos/contracts";
 
 export const NON_CASH_MANUAL_PAYMENT_METHODS = [
-  "qris_manual",
   "debit_card",
   "credit_card",
-  "bank_transfer",
 ] as const satisfies readonly PosManualPaymentMethod[];
 
 export type NonCashManualPaymentMethod =
@@ -29,13 +27,6 @@ export const DEFAULT_MANUAL_PAYMENT_POLICIES: Record<
   NonCashManualPaymentMethod,
   ManualPaymentPolicy
 > = {
-  qris_manual: {
-    method: "qris_manual",
-    coVerificationThreshold: 9_000_000,
-    evidenceThreshold: 7_500_000,
-    duplicateLookbackDays: 90,
-    isEnabled: true,
-  },
   debit_card: {
     method: "debit_card",
     coVerificationThreshold: 30_000_000,
@@ -48,13 +39,6 @@ export const DEFAULT_MANUAL_PAYMENT_POLICIES: Record<
     coVerificationThreshold: 30_000_000,
     evidenceThreshold: 20_000_000,
     duplicateLookbackDays: 7,
-    isEnabled: true,
-  },
-  bank_transfer: {
-    method: "bank_transfer",
-    coVerificationThreshold: 40_000_000,
-    evidenceThreshold: 25_000_000,
-    duplicateLookbackDays: 180,
     isEnabled: true,
   },
 };
@@ -88,12 +72,10 @@ export function isNonCashManualPaymentMethod(
 
 export function getManualPaymentProfileType(
   method: NonCashManualPaymentMethod,
-): "qris" | "edc" | "bank_account" {
-  if (method === "qris_manual") return "qris";
-  if (method === "bank_transfer") return "bank_account";
+): "edc" {
+  void method;
   return "edc";
 }
-
 
 export function isValidPaymentEvidenceKey(
   evidenceKey: string | null | undefined,
@@ -179,7 +161,7 @@ export function normalizeAndValidateManualPaymentVerification({
 
   if (!payment.verificationConfirmed) {
     throw new Error(
-      "Konfirmasi bahwa pembayaran sudah terlihat berhasil di perangkat atau rekening toko.",
+      "Konfirmasi bahwa pembayaran sudah terlihat berhasil di terminal EDC outlet.",
     );
   }
 
@@ -215,21 +197,6 @@ export function normalizeAndValidateManualPaymentVerification({
     );
   }
 
-  if (payment.method === "qris_manual") {
-    if (
-      verificationSource !== "merchant_app" &&
-      verificationSource !== "bank_app"
-    ) {
-      throw new Error(
-        "QRIS manual harus diverifikasi dari aplikasi merchant atau bank.",
-      );
-    }
-
-    if (!details.merchantId) {
-      throw new Error("Merchant ID/akun QRIS wajib diisi.");
-    }
-  }
-
   if (payment.method === "debit_card" || payment.method === "credit_card") {
     if (verificationSource !== "edc_terminal") {
       throw new Error(
@@ -245,30 +212,6 @@ export function normalizeAndValidateManualPaymentVerification({
 
     if (details.cardLast4 && !/^\d{4}$/.test(details.cardLast4)) {
       throw new Error("Empat digit terakhir kartu harus terdiri dari 4 angka.");
-    }
-  }
-
-  if (payment.method === "bank_transfer") {
-    if (
-      verificationSource !== "bank_app" &&
-      verificationSource !== "bank_statement"
-    ) {
-      throw new Error(
-        "Transfer harus diverifikasi dari aplikasi atau mutasi bank toko.",
-      );
-    }
-
-    if (!details.destinationAccount) {
-      throw new Error("Rekening tujuan toko belum dipilih.");
-    }
-
-    if (
-      payment.amount >= policy.coVerificationThreshold &&
-      !details.senderName
-    ) {
-      throw new Error(
-        "Nama pengirim wajib diisi untuk transfer yang memerlukan co-verification.",
-      );
     }
   }
 

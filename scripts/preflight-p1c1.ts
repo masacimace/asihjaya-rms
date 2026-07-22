@@ -26,7 +26,7 @@ const checks: Check[] = [
         payment.amount
       from payments payment
       join sales sale on sale.id = payment.sale_id
-      where payment.method in ('qris_manual', 'debit_card', 'credit_card', 'bank_transfer')
+      where payment.method in ('debit_card', 'credit_card')
         and payment.status in ('paid', 'partially_refunded', 'refunded')
         and payment.settlement_status = 'not_applicable'
       order by payment.created_at

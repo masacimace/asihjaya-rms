@@ -72,6 +72,7 @@ export async function getSettlementImportSetupData(auth: AuthContext) {
           eq(manualPaymentProfiles.organizationId, auth.organization.id),
           inArray(manualPaymentProfiles.outletId, outletIds),
           eq(manualPaymentProfiles.isActive, true),
+          eq(manualPaymentProfiles.profileType, "edc"),
         ),
       )
       .orderBy(outlets.name, manualPaymentProfiles.displayOrder),

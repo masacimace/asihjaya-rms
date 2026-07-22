@@ -36,12 +36,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const methodLabels: Record<ReconciliationPaymentMethod, string> = {
-  qris_manual: "QRIS Manual",
   debit_card: "Debit EDC",
   credit_card: "Credit EDC",
-  bank_transfer: "Bank Transfer",
-  qris_gateway: "QRIS Gateway",
-  other: "Lainnya",
 };
 
 const statusLabels: Record<ReconciliationStatus, string> = {
@@ -291,8 +287,7 @@ export default async function PaymentReconciliationPage({
             </h1>
 
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Cocokkan payment POS dengan mutasi bank, laporan merchant QRIS,
-              dan batch terminal EDC. Omzet tetap memakai gross payment,
+              Cocokkan payment POS dengan batch settlement terminal EDC. Omzet tetap memakai gross payment,
               sedangkan MDR dan pajak dicatat terpisah.
             </p>
           </div>

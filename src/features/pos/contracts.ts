@@ -66,7 +66,7 @@ export type PosCustomerOption = {
   email: string | null;
 };
 
-export type PosManualPaymentProfileType = "qris" | "edc" | "bank_account";
+export type PosManualPaymentProfileType = "edc";
 
 export type PosManualPaymentProfile = {
   id: string;
@@ -110,8 +110,7 @@ export type PosScanLookupResult =
       message: string;
     };
 
-export type PosManualPaymentMethod =
-  "cash" | "qris_manual" | "debit_card" | "credit_card" | "bank_transfer";
+export type PosManualPaymentMethod = "cash" | "debit_card" | "credit_card";
 
 export type PosManualPaymentVerificationSource =
   "merchant_app" | "edc_terminal" | "bank_app" | "bank_statement";

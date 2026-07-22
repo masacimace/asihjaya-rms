@@ -16,7 +16,7 @@ import {
 import Link from "next/link";
 
 import {
-  adminPaymentMethods,
+  activeAdminPaymentMethodOptions,
   adminSaleStatuses,
   adminSalesDateRanges,
   parseAdminSalesFilters,
@@ -633,7 +633,7 @@ export default async function PenjualanListPage({
             className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)]"
           >
             <option value="">Semua payment</option>
-            {adminPaymentMethods.map((method) => (
+            {activeAdminPaymentMethodOptions.map((method) => (
               <option key={method} value={method}>
                 {paymentMethodLabels[method]}
               </option>

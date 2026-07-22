@@ -31,6 +31,12 @@ export const adminSalesDateRanges = [
 
 export type AdminSaleStatus = (typeof adminSaleStatuses)[number];
 export type AdminPaymentMethod = (typeof adminPaymentMethods)[number];
+
+export const activeAdminPaymentMethodOptions = [
+  "cash",
+  "debit_card",
+  "credit_card",
+] as const satisfies readonly AdminPaymentMethod[];
 export type AdminSalesDateRange = (typeof adminSalesDateRanges)[number];
 
 export type AdminSalesFilters = {

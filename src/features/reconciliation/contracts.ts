@@ -15,12 +15,8 @@ export const reconciliationFilterStatuses = [
 ] as const;
 
 export const reconciliationPaymentMethods = [
-  "qris_manual",
   "debit_card",
   "credit_card",
-  "bank_transfer",
-  "qris_gateway",
-  "other",
 ] as const;
 
 export const reconciliationDateRanges = [

@@ -363,12 +363,8 @@ export const reportPaymentMethodOptions: Array<{
 }> = [
   { value: "all", label: "Semua metode bayar" },
   { value: "cash", label: "Cash" },
-  { value: "debit_card", label: "Debit Card" },
-  { value: "credit_card", label: "Credit Card" },
-  { value: "bank_transfer", label: "Transfer Bank" },
-  { value: "qris_manual", label: "QRIS Manual" },
-  { value: "qris_gateway", label: "QRIS Gateway" },
-  { value: "other", label: "Lainnya" },
+  { value: "debit_card", label: "Debit EDC" },
+  { value: "credit_card", label: "Credit EDC" },
 ];
 
 function getSingleParam(value: string | string[] | undefined) {

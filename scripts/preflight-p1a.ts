@@ -31,7 +31,7 @@ const checks: Check[] = [
         upper(regexp_replace(coalesce(payment.provider_reference, ''), '[^A-Za-z0-9]', '', 'g')) as normalized_reference
       from payments payment
       inner join sales sale on sale.id = payment.sale_id
-      where payment.method in ('qris_manual', 'debit_card', 'credit_card', 'bank_transfer')
+      where payment.method in ('debit_card', 'credit_card')
         and (
           payment.provider_reference is null
           or btrim(payment.provider_reference) = ''
@@ -59,7 +59,7 @@ const checks: Check[] = [
         array_agg(sale.invoice_number order by payment.created_at) as invoices
       from payments payment
       inner join sales sale on sale.id = payment.sale_id
-      where payment.method in ('qris_manual', 'debit_card', 'credit_card', 'bank_transfer')
+      where payment.method in ('debit_card', 'credit_card')
         and payment.status = 'paid'
         and payment.provider_reference is not null
       group by
@@ -84,7 +84,7 @@ const checks: Check[] = [
         count(*)::int as payment_count,
         coalesce(sum(payment.amount), 0)::text as total_amount
       from payments payment
-      where payment.method in ('qris_manual', 'debit_card', 'credit_card', 'bank_transfer')
+      where payment.method in ('debit_card', 'credit_card')
       group by payment.method
       order by payment.method
     `,

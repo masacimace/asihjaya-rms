@@ -238,6 +238,7 @@ export async function uploadSettlementCsvAction(formData: FormData) {
         eq(manualPaymentProfiles.organizationId, auth.organization.id),
         eq(manualPaymentProfiles.outletId, outletId),
         eq(manualPaymentProfiles.isActive, true),
+        eq(manualPaymentProfiles.profileType, "edc"),
       ),
     )
     .limit(1);

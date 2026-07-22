@@ -35,12 +35,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const methodLabels: Record<ReconciliationPaymentMethod, string> = {
-  qris_manual: "QRIS Manual",
   debit_card: "Debit EDC",
   credit_card: "Credit EDC",
-  bank_transfer: "Bank Transfer",
-  qris_gateway: "QRIS Gateway",
-  other: "Lainnya",
 };
 
 const statusLabels: Record<ReconciliationStatus, string> = {

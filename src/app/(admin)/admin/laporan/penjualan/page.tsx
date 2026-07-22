@@ -915,7 +915,7 @@ export default async function LaporanPenjualanPage({
     {
       label: "Non-cash revenue",
       value: formatMoney(data.summary.nonCashRevenue),
-      helper: "transfer, EDC, QRIS, dan lainnya",
+      helper: "Debit/Credit EDC",
       icon: Banknote,
     },
     {

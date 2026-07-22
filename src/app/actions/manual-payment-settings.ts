@@ -50,33 +50,14 @@ function redirectWithMessage(type: "success" | "error", message: string): never 
 }
 
 function isProfileType(value: string): value is PosManualPaymentProfileType {
-  return value === "qris" || value === "edc" || value === "bank_account";
+  return value === "edc";
 }
 
-function resolveVerificationSource({
-  profileType,
-  value,
-}: {
-  profileType: PosManualPaymentProfileType;
-  value: string;
-}): PosManualPaymentVerificationSource | null {
-  if (profileType === "edc") return "edc_terminal";
-
-  if (
-    profileType === "qris" &&
-    (value === "merchant_app" || value === "bank_app")
-  ) {
-    return value;
-  }
-
-  if (
-    profileType === "bank_account" &&
-    (value === "bank_app" || value === "bank_statement")
-  ) {
-    return value;
-  }
-
-  return null;
+function resolveVerificationSource(
+  profileType: PosManualPaymentProfileType,
+): PosManualPaymentVerificationSource {
+  void profileType;
+  return "edc_terminal";
 }
 
 function isUniqueViolation(error: unknown, constraintName: string) {
@@ -240,15 +221,7 @@ export async function saveManualPaymentProfileAction(formData: FormData) {
   const code = readText(formData, "code", 40).toUpperCase();
   const name = readText(formData, "name", 120);
   const provider = readText(formData, "provider", 80);
-  const verificationSourceValue = readText(
-    formData,
-    "verificationSource",
-    40,
-  );
-  const merchantId = readText(formData, "merchantId", 80) || null;
   const terminalId = readText(formData, "terminalId", 80) || null;
-  const destinationAccount =
-    readText(formData, "destinationAccount", 120) || null;
   const displayOrder = parseIntegerInput(formData.get("displayOrder"));
   const isActive = formData.get("isActive") === "on";
 
@@ -264,14 +237,7 @@ export async function saveManualPaymentProfileAction(formData: FormData) {
     redirectWithMessage("error", "Tipe profil pembayaran tidak valid.");
   }
 
-  const verificationSource = resolveVerificationSource({
-    profileType: profileTypeValue,
-    value: verificationSourceValue,
-  });
-
-  if (!verificationSource) {
-    redirectWithMessage("error", "Sumber verifikasi profil tidak valid.");
-  }
+  const verificationSource = resolveVerificationSource(profileTypeValue);
 
   if (!/^[A-Z0-9][A-Z0-9_-]{1,39}$/.test(code)) {
     redirectWithMessage(
@@ -295,16 +261,8 @@ export async function saveManualPaymentProfileAction(formData: FormData) {
     redirectWithMessage("error", "Urutan profil harus antara 0–9999.");
   }
 
-  if (profileTypeValue === "qris" && !merchantId) {
-    redirectWithMessage("error", "Merchant ID/akun QRIS wajib diisi.");
-  }
-
   if (profileTypeValue === "edc" && !terminalId) {
     redirectWithMessage("error", "Terminal ID EDC wajib diisi.");
-  }
-
-  if (profileTypeValue === "bank_account" && !destinationAccount) {
-    redirectWithMessage("error", "Rekening tujuan toko wajib diisi.");
   }
 
   const registerId =
@@ -386,10 +344,9 @@ export async function saveManualPaymentProfileAction(formData: FormData) {
         name,
         provider,
         verificationSource,
-        merchantId: profileTypeValue === "qris" ? merchantId : null,
-        terminalId: profileTypeValue === "edc" ? terminalId : null,
-        destinationAccount:
-          profileTypeValue === "bank_account" ? destinationAccount : null,
+        merchantId: null,
+        terminalId,
+        destinationAccount: null,
         displayOrder,
         isActive,
         updatedAt: now,

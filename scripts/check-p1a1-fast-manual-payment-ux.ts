@@ -9,14 +9,10 @@ import {
 
 const organizationId = "11111111-1111-4111-8111-111111111111";
 
-assert.equal(
-  DEFAULT_MANUAL_PAYMENT_POLICIES.qris_manual.evidenceThreshold,
-  7_500_000,
-);
-assert.equal(
-  DEFAULT_MANUAL_PAYMENT_POLICIES.qris_manual.coVerificationThreshold,
-  9_000_000,
-);
+assert.deepEqual(Object.keys(DEFAULT_MANUAL_PAYMENT_POLICIES).sort(), [
+  "credit_card",
+  "debit_card",
+]);
 assert.equal(
   DEFAULT_MANUAL_PAYMENT_POLICIES.debit_card.evidenceThreshold,
   20_000_000,
@@ -26,20 +22,25 @@ assert.equal(
   30_000_000,
 );
 assert.equal(
-  DEFAULT_MANUAL_PAYMENT_POLICIES.bank_transfer.coVerificationThreshold,
-  40_000_000,
+  DEFAULT_MANUAL_PAYMENT_POLICIES.credit_card.evidenceThreshold,
+  20_000_000,
 );
-assert.equal(getManualPaymentProfileType("qris_manual"), "qris");
+assert.equal(
+  DEFAULT_MANUAL_PAYMENT_POLICIES.credit_card.coVerificationThreshold,
+  30_000_000,
+);
 assert.equal(getManualPaymentProfileType("debit_card"), "edc");
-assert.equal(getManualPaymentProfileType("bank_transfer"), "bank_account");
+assert.equal(getManualPaymentProfileType("credit_card"), "edc");
 
 function validate(payment: PosCheckoutPaymentInput) {
+  if (payment.method === "cash") {
+    throw new Error("Check ini khusus metode EDC non-tunai.");
+  }
+
   return normalizeAndValidateManualPaymentVerification({
     payment,
     organizationId,
-    policy: DEFAULT_MANUAL_PAYMENT_POLICIES[
-      payment.method as keyof typeof DEFAULT_MANUAL_PAYMENT_POLICIES
-    ],
+    policy: DEFAULT_MANUAL_PAYMENT_POLICIES[payment.method],
     now: new Date("2026-07-13T10:00:00.000Z"),
   });
 }
@@ -59,32 +60,14 @@ const edcPayment: PosCheckoutPaymentInput = {
 };
 
 assert.equal(validate(edcPayment).details.terminalId, "TERM-01");
-
-const transferPayment: PosCheckoutPaymentInput = {
-  method: "bank_transfer",
-  amount: 10_000_000,
-  manualPaymentProfileId: "33333333-3333-4333-8333-333333333333",
-  verificationConfirmed: true,
-  provider: "BCA",
-  reference: "TRANSFER-1234",
-  verificationSource: "bank_app",
-  providerPaidAtIso: "2026-07-13T09:59:00.000Z",
-  verificationDetails: {
-    destinationAccount: "BCA •••• 1234 — Asih Jaya",
-  },
-};
-
-assert.equal(validate(transferPayment).details.senderName, null);
-
-assert.throws(
-  () =>
-    validate({
-      ...transferPayment,
-      amount: 40_000_000,
-      evidenceKey:
-        "organizations/11111111-1111-4111-8111-111111111111/payment-evidence/44444444-4444-4444-8444-444444444444.webp",
-    }),
-  /Nama pengirim wajib/,
+assert.equal(
+  validate({
+    ...edcPayment,
+    method: "credit_card",
+    provider: "BNI",
+    reference: "APPROVAL-5678",
+  }).normalizedProvider,
+  "BNI",
 );
 
 assert.throws(
@@ -97,4 +80,4 @@ assert.throws(
   /Bukti pembayaran wajib/,
 );
 
-console.log("P1-A.1 fast manual payment UX checks passed.");
+console.log("P1-A.1 fast manual EDC payment UX checks passed.");

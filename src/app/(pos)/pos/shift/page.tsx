@@ -428,7 +428,7 @@ export default async function PosShiftPage() {
                       value={formatMoney(
                         activeShift.transactionSummary.nonCashPaymentAmount,
                       )}
-                      helper="QRIS, EDC, transfer, dan lainnya."
+                      helper="Pembayaran Debit/Credit EDC."
                       icon={<ReceiptText className="size-5" />}
                     />
                   </div>

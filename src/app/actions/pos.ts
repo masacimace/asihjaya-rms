@@ -118,10 +118,8 @@ const HARDWARE_AGENT_STALE_WINDOW_MS = 5 * 60 * 1000;
 
 const manualPaymentMethodLabels: Record<PosManualPaymentMethod, string> = {
   cash: "Cash",
-  qris_manual: "QRIS Manual",
   debit_card: "Debit Card EDC",
   credit_card: "Credit Card EDC",
-  bank_transfer: "Bank Transfer",
 };
 
 const manualPaymentMethods = Object.keys(

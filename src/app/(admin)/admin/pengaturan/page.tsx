@@ -3,8 +3,6 @@ import {
   CheckCircle2,
   ChevronDown,
   CreditCard,
-  Landmark,
-  QrCode,
   Settings2,
   ShieldCheck,
   Store,
@@ -32,16 +30,12 @@ const inputClassName =
 const labelClassName = "mb-1.5 block text-xs font-semibold text-neutral-700";
 
 const methodLabels: Record<NonCashManualPaymentMethod, string> = {
-  qris_manual: "QRIS Manual",
   debit_card: "Debit EDC",
   credit_card: "Credit EDC",
-  bank_transfer: "Bank Transfer",
 };
 
 const profileTypeLabels = {
-  qris: "Akun QRIS",
   edc: "Terminal EDC",
-  bank_account: "Rekening Bank",
 } as const;
 
 function formatCurrency(value: number) {
@@ -59,16 +53,8 @@ function ProfileFields({
 }: {
   data: ManualPaymentSettingsData;
   profile?: ManualPaymentSettingsProfile;
-  profileType: "qris" | "edc" | "bank_account";
+  profileType: "edc";
 }) {
-  const defaultSource =
-    profile?.verificationSource ??
-    (profileType === "qris"
-      ? "merchant_app"
-      : profileType === "edc"
-        ? "edc_terminal"
-        : "bank_app");
-
   return (
     <>
       {profile ? (
@@ -103,13 +89,7 @@ function ProfileFields({
             required
             maxLength={40}
             defaultValue={profile?.code ?? ""}
-            placeholder={
-              profileType === "qris"
-                ? "QRIS-BCA"
-                : profileType === "edc"
-                  ? "EDC-BCA-01"
-                  : "BANK-BCA"
-            }
+            placeholder="EDC-BCA-01"
             className={inputClassName}
           />
         </label>
@@ -121,13 +101,7 @@ function ProfileFields({
             required
             maxLength={120}
             defaultValue={profile?.name ?? ""}
-            placeholder={
-              profileType === "qris"
-                ? "BCA Merchant — Outlet Utama"
-                : profileType === "edc"
-                  ? "BCA EDC — Kasir 1"
-                  : "BCA •••• 1234 — Asih Jaya"
-            }
+            placeholder="BCA EDC — Kasir 1"
             className={inputClassName}
           />
         </label>
@@ -144,36 +118,7 @@ function ProfileFields({
           />
         </label>
 
-        {profileType === "qris" ? (
-          <>
-            <label>
-              <span className={labelClassName}>Merchant ID / akun QRIS</span>
-              <input
-                name="merchantId"
-                required
-                maxLength={80}
-                defaultValue={profile?.merchantId ?? ""}
-                placeholder="MID / nama akun merchant"
-                className={inputClassName}
-              />
-            </label>
-            <label>
-              <span className={labelClassName}>Diperiksa melalui</span>
-              <select
-                name="verificationSource"
-                defaultValue={defaultSource}
-                className={inputClassName}
-              >
-                <option value="merchant_app">Aplikasi merchant</option>
-                <option value="bank_app">Aplikasi bank</option>
-              </select>
-            </label>
-          </>
-        ) : null}
-
-        {profileType === "edc" ? (
-          <>
-            <label>
+        <label>
               <span className={labelClassName}>Terminal ID</span>
               <input
                 name="terminalId"
@@ -206,35 +151,6 @@ function ProfileFields({
                 value="edc_terminal"
               />
             </label>
-          </>
-        ) : null}
-
-        {profileType === "bank_account" ? (
-          <>
-            <label>
-              <span className={labelClassName}>Rekening tujuan (masked)</span>
-              <input
-                name="destinationAccount"
-                required
-                maxLength={120}
-                defaultValue={profile?.destinationAccount ?? ""}
-                placeholder="BCA •••• 1234 — Asih Jaya"
-                className={inputClassName}
-              />
-            </label>
-            <label>
-              <span className={labelClassName}>Diperiksa melalui</span>
-              <select
-                name="verificationSource"
-                defaultValue={defaultSource}
-                className={inputClassName}
-              >
-                <option value="bank_app">Aplikasi bank</option>
-                <option value="bank_statement">Mutasi bank</option>
-              </select>
-            </label>
-          </>
-        ) : null}
 
         <label>
           <span className={labelClassName}>Urutan pilihan POS</span>
@@ -295,12 +211,12 @@ export default async function SettingsPage({
               Pengaturan pembayaran
             </div>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
-              Fast Manual Payment UX
+              Manual EDC Payment
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Simpan akun QRIS, terminal EDC, dan rekening toko sebagai preset.
-              Cashier cukup memilih preset, memasukkan reference, lalu
-              mengonfirmasi bahwa pembayaran terlihat berhasil.
+              Simpan terminal EDC outlet sebagai preset. Kasir cukup memilih
+              terminal BCA, BRI, BNI, atau Mandiri, memasukkan approval code,
+              lalu mengonfirmasi bahwa pembayaran terlihat berhasil.
             </p>
           </div>
 
@@ -427,26 +343,13 @@ export default async function SettingsPage({
               Preset pembayaran outlet
             </h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              Data provider dan identifier disimpan sekali di sini, bukan
-              diketik berulang pada setiap transaksi.
+              Data terminal EDC disimpan sekali di sini, bukan diketik
+              berulang pada setiap transaksi.
             </p>
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 xl:grid-cols-3">
-          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white open:shadow-sm">
-            <summary className="flex w-full cursor-pointer list-none items-center gap-2 font-semibold text-neutral-950 select-none marker:content-none [&::-webkit-details-marker]:hidden">
-              <QrCode className="size-4 text-[var(--accent)]" />
-              <span>Tambah akun QRIS</span>
-              <span className="ml-auto grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--border)] bg-white text-neutral-500 transition group-open:border-[var(--accent)]/30 group-open:bg-[var(--accent-soft)] group-open:text-[var(--accent)]">
-                <ChevronDown className="size-4 transition-transform duration-200 group-open:rotate-180" />
-              </span>
-            </summary>
-            <form action={saveManualPaymentProfileAction} className="mt-4">
-              <ProfileFields data={data} profileType="qris" />
-            </form>
-          </details>
-
+        <div className="mt-5 grid gap-4 xl:grid-cols-1">
           <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white open:shadow-sm">
             <summary className="flex w-full cursor-pointer list-none items-center gap-2 font-semibold text-neutral-950 select-none marker:content-none [&::-webkit-details-marker]:hidden">
               <CreditCard className="size-4 text-blue-700" />
@@ -457,19 +360,6 @@ export default async function SettingsPage({
             </summary>
             <form action={saveManualPaymentProfileAction} className="mt-4">
               <ProfileFields data={data} profileType="edc" />
-            </form>
-          </details>
-
-          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white open:shadow-sm">
-            <summary className="flex w-full cursor-pointer list-none items-center gap-2 font-semibold text-neutral-950 select-none marker:content-none [&::-webkit-details-marker]:hidden">
-              <Landmark className="size-4 text-emerald-700" />
-              <span>Tambah rekening bank</span>
-              <span className="ml-auto grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--border)] bg-white text-neutral-500 transition group-open:border-emerald-200 group-open:bg-emerald-50 group-open:text-emerald-700">
-                <ChevronDown className="size-4 transition-transform duration-200 group-open:rotate-180" />
-              </span>
-            </summary>
-            <form action={saveManualPaymentProfileAction} className="mt-4">
-              <ProfileFields data={data} profileType="bank_account" />
             </form>
           </details>
         </div>

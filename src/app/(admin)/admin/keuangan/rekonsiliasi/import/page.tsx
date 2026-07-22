@@ -115,7 +115,7 @@ export default async function SettlementImportPage({
               Import settlement CSV
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Upload laporan QRIS, batch EDC, atau mutasi bank. Sistem akan
+              Upload laporan batch settlement EDC. Sistem akan
               memetakan kolom, mencegah file duplikat, lalu mencocokkan payment
               POS tanpa mengubah data sebelum kamu menyetujui hasilnya.
             </p>
@@ -177,7 +177,7 @@ export default async function SettlementImportPage({
                 required
                 className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
               >
-                <option value="">Pilih akun QRIS, EDC, atau rekening</option>
+                <option value="">Pilih terminal EDC</option>
                 {data.profiles.map((profile) => (
                   <option key={profile.id} value={profile.id}>
                     {profile.outletName} · {profile.name} · {profile.provider}

@@ -642,26 +642,18 @@ function formatLocalDateTimeInput(date = new Date()) {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
-function getDefaultVerificationSource(
-  method: PosManualPaymentMethod,
-): PosManualPaymentVerificationSource {
-  if (method === "qris_manual") return "merchant_app";
-  if (method === "debit_card" || method === "credit_card") {
-    return "edc_terminal";
-  }
-  return "bank_app";
+function getDefaultVerificationSource(): PosManualPaymentVerificationSource {
+  return "edc_terminal";
 }
 
 function profileSupportsMethod(
   profile: PosManualPaymentProfile,
   method: PosManualPaymentMethod,
 ) {
-  if (method === "qris_manual") return profile.profileType === "qris";
-  if (method === "debit_card" || method === "credit_card") {
-    return profile.profileType === "edc";
-  }
-  if (method === "bank_transfer") return profile.profileType === "bank_account";
-  return false;
+  return (
+    profile.profileType === "edc" &&
+    (method === "debit_card" || method === "credit_card")
+  );
 }
 
 function getProfilesForMethod(
@@ -677,7 +669,7 @@ function createPaymentVerificationForm(
 ): PaymentVerificationFormState {
   return {
     verificationSource:
-      profile?.verificationSource ?? getDefaultVerificationSource(method),
+      profile?.verificationSource ?? getDefaultVerificationSource(),
     providerPaidAtLocal: formatLocalDateTimeInput(),
     merchantId: profile?.merchantId ?? "",
     terminalId: profile?.terminalId ?? "",
@@ -705,23 +697,10 @@ const paymentMethodConfigs: PaymentMethodConfig[] = [
     allowOverpayment: true,
   },
   {
-    method: "qris_manual",
-    label: "QRIS Manual",
-    shortLabel: "QRIS",
-    description: "Kasir verifikasi dari aplikasi merchant/bank.",
-    amountLabel: "Nominal QRIS",
-    providerLabel: "Provider/PJP",
-    providerPlaceholder: "Contoh: BCA Merchant, GoPay, DANA",
-    referenceLabel: "Reference number",
-    referencePlaceholder: "Nomor referensi / ID transaksi QRIS",
-    requiresReference: true,
-    allowOverpayment: false,
-  },
-  {
     method: "debit_card",
     label: "Debit Card EDC",
     shortLabel: "Debit",
-    description: "EDC manual dengan approval code.",
+    description: "Pembayaran kartu debit melalui terminal EDC outlet.",
     amountLabel: "Nominal debit",
     providerLabel: "Bank/acquirer",
     providerPlaceholder: "Contoh: BCA, Mandiri, BRI",
@@ -734,25 +713,12 @@ const paymentMethodConfigs: PaymentMethodConfig[] = [
     method: "credit_card",
     label: "Credit Card EDC",
     shortLabel: "Credit",
-    description: "Kartu kredit EDC manual.",
+    description: "Pembayaran kartu kredit melalui terminal EDC outlet.",
     amountLabel: "Nominal credit",
     providerLabel: "Bank/acquirer",
     providerPlaceholder: "Contoh: BCA, Mandiri, BNI",
     referenceLabel: "Approval code",
     referencePlaceholder: "Kode approval dari mesin EDC",
-    requiresReference: true,
-    allowOverpayment: false,
-  },
-  {
-    method: "bank_transfer",
-    label: "Bank Transfer",
-    shortLabel: "Transfer",
-    description: "Transfer manual yang sudah diverifikasi.",
-    amountLabel: "Nominal transfer",
-    providerLabel: "Bank pengirim/tujuan",
-    providerPlaceholder: "Contoh: BCA a.n. Customer ke BCA toko",
-    referenceLabel: "Reference number",
-    referencePlaceholder: "Nomor referensi transfer",
     requiresReference: true,
     allowOverpayment: false,
   },
@@ -881,25 +847,12 @@ function getPaymentDraftValidationMessage({
     }
 
     if (
-      payment.method === "qris_manual" &&
-      !payment.verificationDetails.merchantId
-    ) {
-      return "Merchant ID/akun QRIS pada preset belum lengkap.";
-    }
-
-    if (
       (payment.method === "debit_card" || payment.method === "credit_card") &&
       !payment.verificationDetails.terminalId
     ) {
       return "Terminal ID pada preset EDC belum lengkap.";
     }
 
-    if (
-      payment.method === "bank_transfer" &&
-      !payment.verificationDetails.destinationAccount
-    ) {
-      return "Rekening tujuan pada preset bank belum lengkap.";
-    }
   }
 
   if (totalPaidAmount !== totalAmount) {
@@ -2457,13 +2410,7 @@ function PaymentContent({
                       <p className="font-semibold text-neutral-950">
                         {selectedProfile.provider}
                       </p>
-                      <p>
-                        {selectedProfile.profileType === "qris"
-                          ? `Merchant: ${selectedProfile.merchantId ?? "-"}`
-                          : selectedProfile.profileType === "edc"
-                            ? `Terminal: ${selectedProfile.terminalId ?? "-"}`
-                            : `Rekening: ${selectedProfile.destinationAccount ?? "-"}`}
-                      </p>
+                      <p>Terminal: {selectedProfile.terminalId ?? "-"}</p>
                     </div>
                   ) : eligibleProfiles.length === 0 ? (
                     <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
@@ -2507,8 +2454,8 @@ function PaymentContent({
                       Konfirmasi pembayaran
                     </p>
                     <p className="mt-1 text-xs leading-5 text-amber-800">
-                      Pastikan status berhasil terlihat di perangkat atau
-                      rekening toko, bukan hanya dari screenshot customer.
+                      Pastikan status berhasil terlihat di terminal EDC outlet,
+                      bukan hanya dari screenshot customer.
                     </p>
                   </div>
 
@@ -2648,35 +2595,6 @@ function PaymentContent({
                             </div>
                           </label>
                         </div>
-                      ) : null}
-
-                      {selectedMethod === "bank_transfer" ? (
-                        <label className="block text-sm">
-                          <span className="mb-2 block font-medium text-neutral-800">
-                            Nama pengirim
-                            {coVerificationRequired ? (
-                              <span className="ml-1 text-xs font-semibold text-[var(--accent)]">
-                                Wajib
-                              </span>
-                            ) : (
-                              <span className="ml-1 text-xs text-[var(--muted)]">
-                                Opsional
-                              </span>
-                            )}
-                          </span>
-                          <input
-                            value={verificationForm.senderName}
-                            disabled={isCheckoutPending || isAddingPayment}
-                            onChange={(event) =>
-                              onVerificationFormChange(
-                                "senderName",
-                                event.target.value,
-                              )
-                            }
-                            maxLength={120}
-                            className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                          />
-                        </label>
                       ) : null}
 
                       <label className="block text-sm">
@@ -4087,7 +4005,7 @@ export function PosWorkspace({
 
     if (selectedMethod !== "cash" && !paymentVerificationConfirmed) {
       setPaymentFeedback(
-        "Konfirmasi bahwa pembayaran sudah terlihat berhasil di perangkat atau rekening toko.",
+        "Konfirmasi bahwa pembayaran sudah terlihat berhasil di terminal EDC outlet.",
       );
       return;
     }
@@ -4136,18 +4054,6 @@ export function PosWorkspace({
         !/^\d{4}$/.test(paymentVerificationForm.cardLast4)
       ) {
         setPaymentFeedback("Last 4 kartu harus terdiri dari empat angka.");
-        return;
-      }
-
-      if (
-        selectedMethod === "bank_transfer" &&
-        selectedPolicy &&
-        inputAmount >= selectedPolicy.coVerificationThreshold &&
-        !paymentVerificationForm.senderName.trim()
-      ) {
-        setPaymentFeedback(
-          "Nama pengirim wajib diisi untuk transfer yang memerlukan co-verification.",
-        );
         return;
       }
 

@@ -302,6 +302,7 @@ export async function getReconciliationListData(
           and(
             eq(manualPaymentProfiles.organizationId, auth.organization.id),
             inArray(manualPaymentProfiles.outletId, outletIds),
+            eq(manualPaymentProfiles.profileType, "edc"),
           ),
         )
         .orderBy(asc(manualPaymentProfiles.name)),
