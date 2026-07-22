@@ -124,7 +124,27 @@ export function SingleImageInput({
         </div>
 
         <div className="space-y-3">
-          <label
+          <input
+            ref={fileInputRef}
+            type="file"
+            name={name}
+            accept={acceptedTypes}
+            disabled={disabled}
+            onChange={handleFileChange}
+            className="hidden"
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!disabled) {
+                fileInputRef.current?.click();
+              }
+            }}
+            disabled={disabled}
+            aria-required={required && !initialImageUrl ? true : undefined}
             className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition ${
               disabled
                 ? "cursor-not-allowed opacity-50"
@@ -133,18 +153,7 @@ export function SingleImageInput({
           >
             <ImagePlus className="size-4" />
             {previewUrl ? "Ganti Foto" : "Pilih Foto"}
-            <input
-              ref={fileInputRef}
-              type="file"
-              name={name}
-              accept={acceptedTypes}
-              capture="environment"
-              required={required && !initialImageUrl}
-              disabled={disabled}
-              onChange={handleFileChange}
-              className="sr-only"
-            />
-          </label>
+          </button>
 
           {previewUrl ? (
             <button
