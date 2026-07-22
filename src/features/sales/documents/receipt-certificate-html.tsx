@@ -1077,12 +1077,12 @@ export function ReceiptCertificateHtmlDocument({
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={verificationQrImage}
-                          alt="QR verifikasi nota"
+                          alt="QR riwayat transaksi pelanggan"
                         />
                       </div>
-                      <div className="aj-qr-label">Scan Keaslian</div>
+                      <div className="aj-qr-label">Riwayat Transaksi</div>
                       <div className="aj-qr-note">
-                        Pindai QR untuk verifikasi nota
+                        Scan untuk melihat riwayat pembelian
                       </div>
                     </section>
                   </footer>
