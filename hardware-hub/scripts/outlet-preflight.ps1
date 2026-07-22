@@ -65,9 +65,29 @@ finally { Pop-Location }
 
 try {
   Push-Location $HubRoot
-  $ConfigOutput = (& node scripts/check-config.js 2>&1 | Out-String).Trim()
-  if ($LASTEXITCODE -eq 0) { Add-Result "Agent configuration" "PASS" "check-config lulus." }
-  else { Add-Result "Agent configuration" "BLOCKED" $ConfigOutput }
+  $PreviousErrorActionPreference = $ErrorActionPreference
+  try {
+    # Windows PowerShell 5.1 dapat memperlakukan stderr native command sebagai
+    # ErrorRecord ketika ErrorActionPreference=Stop. check-config memakai
+    # console.warn (stderr) untuk warning non-fatal, jadi capture dengan Continue
+    # dan tentukan status hanya dari native exit code.
+    $ErrorActionPreference = "Continue"
+    $ConfigOutput = (& node scripts/check-config.js 2>&1 | Out-String).Trim()
+    $ConfigExitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $PreviousErrorActionPreference
+  }
+
+  if ($ConfigExitCode -eq 0) {
+    $ConfigLastLine = (
+      $ConfigOutput -split "`r?`n" |
+        Where-Object { $_.Trim() } |
+        Select-Object -Last 1
+    )
+    Add-Result "Agent configuration" "PASS" $ConfigLastLine
+  } else {
+    Add-Result "Agent configuration" "BLOCKED" $ConfigOutput
+  }
 } catch { Add-Result "Agent configuration" "BLOCKED" $_.Exception.Message }
 finally { Pop-Location }
 
@@ -85,7 +105,12 @@ if ($ApiUrl) {
 } else { Add-Result "RMS connectivity" "BLOCKED" "ASIHJAYA_API_URL belum diisi." }
 
 try {
-  $Drive = Get-PSDrive -Name ([System.IO.Path]::GetPathRoot($HubRoot.Path).TrimEnd(':','\\'))
+  # Ambil huruf drive secara langsung. TrimEnd(':','\\') gagal pada
+  # Windows PowerShell 5.1 karena "\\" dikonversi sebagai string dua karakter,
+  # sedangkan overload .NET mengharapkan System.Char.
+  $DriveRoot = [System.IO.Path]::GetPathRoot($HubRoot.Path)
+  $DriveName = $DriveRoot.Substring(0, 1)
+  $Drive = Get-PSDrive -Name $DriveName
   $FreeGb = [Math]::Round($Drive.Free / 1GB, 2)
   if ($FreeGb -ge 10) { Add-Result "Disk space" "PASS" "$FreeGb GB free" }
   elseif ($FreeGb -ge 3) { Add-Result "Disk space" "WARNING" "$FreeGb GB free; disarankan minimal 10 GB." }
