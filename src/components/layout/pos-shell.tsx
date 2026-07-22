@@ -14,7 +14,6 @@ import {
   ShoppingBag,
   Store,
   UsersRound,
-  Wifi,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -541,15 +540,16 @@ export function PosShell({
                 );
               })}
 
-              <button
-                type="button"
-                className="flex items-center gap-3 rounded-2xl border border-[var(--border)] p-4 text-left"
+              <Link
+                href="/pos/shift"
+                onClick={() => setIsMoreOpen(false)}
+                className="flex items-center gap-3 rounded-2xl border border-[var(--border)] p-4"
               >
                 <Printer className="size-5 text-[var(--accent)]" />
                 <span className="text-sm font-medium">
                   Pemeriksaan Perangkat
                 </span>
-              </button>
+              </Link>
 
               {user.canAccessAdmin ? (
                 <Link
@@ -758,13 +758,18 @@ export function PosShell({
 
       {/* Status dan navigation mobile */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-white lg:hidden">
-        <div className="flex h-9 items-center justify-between border-b border-[var(--border)] px-4 text-[11px] text-[var(--muted)]">
-          <span className="flex items-center gap-2 text-[var(--success)]">
-            <Wifi className="size-3.5" />
-            Online
+        <div className="flex h-9 items-center justify-between gap-3 border-b border-[var(--border)] px-4 text-[11px] text-[var(--muted)]">
+          <span
+            className={cn(
+              "flex min-w-0 items-center gap-1.5",
+              getHardwareStatusClassName(operationalStatus.hardware.status),
+            )}
+          >
+            <Printer className="size-3.5 shrink-0" />
+            <span className="truncate">{operationalStatus.hardware.label}</span>
           </span>
 
-          <span className="truncate">
+          <span className="min-w-0 shrink-0 truncate text-right">
             {operationalStatus.outletName || user.outletName} · {shiftLabel}
           </span>
         </div>

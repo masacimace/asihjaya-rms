@@ -67,8 +67,11 @@ export type HardwareJobTransitionContext = {
 const JOB_EXPIRY_SECONDS = {
   cashDrawer: 30,
   hardwareTest: 2 * 60,
-  receiptAutomatic: 10 * 60,
-  receiptManual: 15 * 60,
+  // Receipt jobs are created by POS checkout from multiple sales devices.
+  // Keep them alive for a full outlet work window so a temporarily offline
+  // Hardware Hub laptop can still auto-claim and print when it comes back.
+  receiptAutomatic: 4 * 60 * 60,
+  receiptManual: 8 * 60 * 60,
   inventoryLabel: 4 * 60 * 60,
 } as const;
 

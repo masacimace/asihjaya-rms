@@ -662,6 +662,19 @@ export async function lookupPosItemByScanValue({
 const HARDWARE_ONLINE_WINDOW_MS = 2 * 60 * 1000;
 const HARDWARE_STALE_WINDOW_MS = 10 * 60 * 1000;
 
+const RECEIPT_PRINT_ACTIVE_STATUSES = [
+  "pending",
+  "claimed",
+  "processing",
+  "printing",
+  "submitted",
+] as const;
+
+const RECEIPT_PRINT_ATTENTION_STATUSES = [
+  "failed",
+  "unknown_outcome",
+] as const;
+
 export type PosShellNotification = {
   id: string;
   title: string;
@@ -896,8 +909,13 @@ export async function getPosShellStatus({
     };
   }
 
-  const [activeShiftRows, agentRows, heldCartSummaryRows, failedPrintJobRows] =
-    await Promise.all([
+  const [
+    activeShiftRows,
+    agentRows,
+    heldCartSummaryRows,
+    activePrintJobRows,
+    failedPrintJobRows,
+  ] = await Promise.all([
       db
         .select({
           id: shifts.id,
@@ -955,6 +973,19 @@ export async function getPosShellStatus({
         ),
 
       db
+        .select({ activeCount: count() })
+        .from(hardwareJobs)
+        .where(
+          and(
+            eq(hardwareJobs.organizationId, organizationId),
+            eq(hardwareJobs.outletId, outlet.id),
+            eq(hardwareJobs.registerId, register.id),
+            eq(hardwareJobs.jobType, "print_receipt_certificate"),
+            inArray(hardwareJobs.status, [...RECEIPT_PRINT_ACTIVE_STATUSES]),
+          ),
+        ),
+
+      db
         .select({ failedCount: count() })
         .from(hardwareJobs)
         .where(
@@ -963,7 +994,7 @@ export async function getPosShellStatus({
             eq(hardwareJobs.outletId, outlet.id),
             eq(hardwareJobs.registerId, register.id),
             eq(hardwareJobs.jobType, "print_receipt_certificate"),
-            eq(hardwareJobs.status, "failed"),
+            inArray(hardwareJobs.status, [...RECEIPT_PRINT_ATTENTION_STATUSES]),
           ),
         ),
     ]);
@@ -978,6 +1009,7 @@ export async function getPosShellStatus({
     totalItems: 0,
     totalAmount: "0",
   };
+  const activePrintJobCount = activePrintJobRows[0]?.activeCount ?? 0;
   const failedPrintJobCount = failedPrintJobRows[0]?.failedCount ?? 0;
   const notifications: PosShellNotification[] = [];
 
@@ -1006,12 +1038,27 @@ export async function getPosShellStatus({
     });
   }
 
+  if (activePrintJobCount > 0) {
+    notifications.push({
+      id: "active-print-jobs",
+      title: `${activePrintJobCount} nota menunggu printer`,
+      description:
+        hardware.status === "online"
+          ? "Hardware Hub sedang mengambil antrean cetak otomatis."
+          : "Nota akan tercetak otomatis saat Hardware Hub kembali online.",
+      href: "/pos/transaksi?range=all",
+      actionLabel: "Cek Antrean",
+      tone: hardware.status === "online" ? "info" : "warning",
+      icon: "print",
+    });
+  }
+
   if (failedPrintJobCount > 0) {
     notifications.push({
       id: "failed-print-jobs",
-      title: `${failedPrintJobCount} nota gagal dicetak`,
+      title: `${failedPrintJobCount} nota perlu tindakan`,
       description:
-        "Ada job cetak nota/certificate yang gagal dan perlu dicek ulang.",
+        "Ada job cetak nota/certificate yang gagal atau hasil cetaknya belum pasti.",
       href: "/pos/transaksi?range=all",
       actionLabel: "Cek Transaksi",
       tone: "danger",
