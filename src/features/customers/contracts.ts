@@ -91,6 +91,12 @@ export type AdminCustomerDepositBalanceRow = {
   balanceAmount: string;
   balance: number;
   lastLedgerEntryAt: Date | null;
+  pendingWithdrawalApproval: {
+    id: string;
+    amount: number;
+    requestedByName: string;
+    createdAt: Date;
+  } | null;
 };
 
 export type AdminCustomerDepositLedgerRow = {

@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { requestCustomerDepositWithdrawalApprovalAction } from "@/app/actions/customer-deposits";
+import { CustomerDepositWithdrawalRequestForm } from "@/components/customer-deposits/customer-deposit-withdrawal-request-form";
 import {
   type AdminCustomerDepositLedgerRow,
   type AdminCustomerDetailData,
@@ -192,7 +194,53 @@ function getPaymentMethodLabel(methods: string[]) {
     .join(" + ");
 }
 
-function SuccessNotice({ type }: { type?: string }) {
+function SuccessNotice({
+  depositMessage,
+  depositStatus,
+  type,
+}: {
+  depositMessage?: string;
+  depositStatus?: string;
+  type?: string;
+}) {
+  if (depositMessage) {
+    const isSuccess = depositStatus === "success";
+
+    return (
+      <div
+        className={cn(
+          "flex items-start gap-3 rounded-2xl border px-4 py-3.5",
+          isSuccess
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-red-200 bg-red-50 text-red-800",
+        )}
+      >
+        <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/80">
+          {isSuccess ? (
+            <BadgeCheck className="size-5" />
+          ) : (
+            <Clock3 className="size-5" />
+          )}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">
+            {isSuccess
+              ? "Pengajuan Dana Titip berhasil dibuat"
+              : "Pengajuan Dana Titip belum berhasil"}
+          </p>
+          <p
+            className={cn(
+              "mt-1 text-xs leading-5",
+              isSuccess ? "text-emerald-700" : "text-red-700",
+            )}
+          >
+            {depositMessage}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (type !== "created" && type !== "updated") {
     return null;
   }
@@ -435,21 +483,20 @@ function CustomerDepositPanel({ data }: { data: AdminCustomerDetailData }) {
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
             Saldo ditampilkan per outlet dan tidak dapat dipakai lintas outlet.
-            Mutasi ini masih bersifat ringkasan admin sebelum integrasi checkout
-            Dana Titip aktif di POS.
+            Pengajuan tarik tunai Dana Titip wajib melalui approval admin sebelum
+            saldo dan kas outlet berubah.
           </p>
         </div>
 
         <div className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-3 lg:min-w-72 lg:text-right">
           <p className="text-xs font-medium uppercase text-[var(--muted)]">
-            Sisa Saldo Dana Titip
+            Total saldo terakses
           </p>
           <p className="mt-1 text-2xl font-semibold text-neutral-950">
             {formatMoney(customerDeposits.totalBalance)}
           </p>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            {formatInteger(customerDeposits.outletsWithBalance)} outlet memiliki
-            saldo
+            {formatInteger(customerDeposits.outletsWithBalance)} outlet memiliki saldo
           </p>
         </div>
       </div>
@@ -458,9 +505,7 @@ function CustomerDepositPanel({ data }: { data: AdminCustomerDetailData }) {
         <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/60 p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-neutral-950">
-                Saldo per outlet
-              </h3>
+              <h3 className="font-semibold text-neutral-950">Saldo per outlet</h3>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
                 Hanya outlet yang dapat diakses akun admin saat ini.
               </p>
@@ -493,6 +538,35 @@ function CustomerDepositPanel({ data }: { data: AdminCustomerDetailData }) {
                   <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
                     Mutasi terakhir: {formatDateTime(balance.lastLedgerEntryAt)}
                   </p>
+
+                  {balance.pendingWithdrawalApproval ? (
+                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">
+                      <p className="font-semibold">Tarik tunai menunggu approval</p>
+                      <p className="mt-1">
+                        {formatMoney(balance.pendingWithdrawalApproval.amount)} diajukan
+                        oleh {balance.pendingWithdrawalApproval.requestedByName} pada{" "}
+                        {formatDateTime(balance.pendingWithdrawalApproval.createdAt)}.
+                      </p>
+                      <Link
+                        href="/admin/operasional/approval?type=customer_deposit_withdrawal"
+                        className="mt-2 inline-flex font-semibold text-amber-900 underline-offset-4 hover:underline"
+                      >
+                        Buka halaman approval
+                      </Link>
+                    </div>
+                  ) : balance.balance > 0 ? (
+                    <CustomerDepositWithdrawalRequestForm
+                      action={requestCustomerDepositWithdrawalApprovalAction}
+                      customerId={data.customer.id}
+                      outletId={balance.outletId}
+                      maxAmount={Math.floor(balance.balance)}
+                      title="Ajukan tarik tunai"
+                    />
+                  ) : (
+                    <p className="mt-3 rounded-xl border border-dashed border-neutral-200 bg-neutral-50 px-3 py-2 text-xs leading-5 text-[var(--muted)]">
+                      Saldo outlet ini masih Rp 0, sehingga belum bisa diajukan tarik tunai.
+                    </p>
+                  )}
                 </article>
               ))
             ) : (
@@ -502,8 +576,7 @@ function CustomerDepositPanel({ data }: { data: AdminCustomerDetailData }) {
                   Belum ada outlet terakses
                 </p>
                 <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                  Saldo Dana Titip akan tampil setelah admin memiliki akses
-                  outlet.
+                  Saldo Dana Titip akan tampil setelah admin memiliki akses outlet.
                 </p>
               </div>
             )}
@@ -546,8 +619,7 @@ function CustomerDepositPanel({ data }: { data: AdminCustomerDetailData }) {
                         </span>
                       </div>
                       <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-                        {formatDateTime(entry.occurredAt)} oleh{" "}
-                        {entry.createdByName}
+                        {formatDateTime(entry.occurredAt)} oleh {entry.createdByName}
                       </p>
                       {entry.description ? (
                         <p className="mt-2 text-xs leading-5 text-neutral-700">
@@ -871,7 +943,7 @@ function TransactionHistory({
                       <td className="px-4 py-4">
                         <Link
                           href={`/admin/penjualan/${transaction.id}`}
-                          className="break-words text-xs font-semibold leading-5 text-neutral-950 hover:text-[var(--accent)]"
+                          className="break-words font-semibold leading-5 text-neutral-950 hover:text-[var(--accent)]"
                         >
                           {transaction.invoiceNumber}
                         </Link>
@@ -1034,7 +1106,12 @@ export default async function CustomerDetailPage({
   searchParams,
 }: {
   params: Promise<{ customerId: string }>;
-  searchParams: Promise<{ created?: string; updated?: string }>;
+  searchParams: Promise<{
+    created?: string;
+    depositMessage?: string;
+    depositStatus?: string;
+    updated?: string;
+  }>;
 }) {
   const auth = await requirePermission("admin.access");
   const { customerId } = await params;
@@ -1073,7 +1150,11 @@ export default async function CustomerDetailPage({
         Kembali ke daftar pelanggan
       </Link>
 
-      <SuccessNotice type={noticeType} />
+      <SuccessNotice
+        depositMessage={query.depositMessage}
+        depositStatus={query.depositStatus}
+        type={noticeType}
+      />
 
       <CustomerProfileHeader data={data} />
 

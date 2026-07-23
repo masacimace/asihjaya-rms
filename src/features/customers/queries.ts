@@ -14,6 +14,7 @@ import {
 
 import { db } from "@/db";
 import {
+  approvals,
   customers,
   outlets,
   payments,
@@ -544,7 +545,12 @@ export async function getAdminCustomerDetailData(
     };
   }
 
-  const [saleRows, depositBalances, depositLedgerEntriesByOutlet] = await Promise.all([
+  const [
+    saleRows,
+    depositBalances,
+    depositLedgerEntriesByOutlet,
+    pendingWithdrawalApprovalRows,
+  ] = await Promise.all([
     db
     .select({
       id: sales.id,
@@ -589,6 +595,28 @@ export async function getAdminCustomerDetailData(
         }),
       ),
     ),
+
+    db
+      .select({
+        id: approvals.id,
+        outletId: approvals.outletId,
+        requestData: approvals.requestData,
+        requestedByName: users.fullName,
+        createdAt: approvals.createdAt,
+      })
+      .from(approvals)
+      .innerJoin(users, eq(approvals.requestedBy, users.id))
+      .where(
+        and(
+          eq(approvals.organizationId, auth.organization.id),
+          eq(approvals.type, "customer_deposit_withdrawal"),
+          eq(approvals.status, "pending"),
+          eq(approvals.referenceType, "customer"),
+          eq(approvals.referenceId, customerId),
+          inArray(approvals.outletId, outletIds),
+        ),
+      )
+      .orderBy(desc(approvals.createdAt)),
   ]);
 
   const saleIds = saleRows.map((sale) => sale.id);
@@ -668,6 +696,26 @@ export async function getAdminCustomerDetailData(
   const lastCompletedItems = lastCompletedTransaction
     ? itemsBySaleId.get(lastCompletedTransaction.id) ?? []
     : [];
+  const pendingWithdrawalApprovalByOutletId = new Map<
+    string,
+    AdminCustomerDepositBalanceRow["pendingWithdrawalApproval"]
+  >();
+
+  for (const approval of pendingWithdrawalApprovalRows) {
+    if (!approval.outletId || pendingWithdrawalApprovalByOutletId.has(approval.outletId)) {
+      continue;
+    }
+
+    const amount = parseAmount(String(approval.requestData.withdrawalAmount ?? "0"));
+
+    pendingWithdrawalApprovalByOutletId.set(approval.outletId, {
+      id: approval.id,
+      amount,
+      requestedByName: approval.requestedByName,
+      createdAt: approval.createdAt,
+    });
+  }
+
   const customerDepositBalances = depositBalances.map(
     (balance): AdminCustomerDepositBalanceRow => ({
       outletId: balance.outletId,
@@ -676,6 +724,8 @@ export async function getAdminCustomerDetailData(
       balanceAmount: balance.balanceAmount,
       balance: balance.balance,
       lastLedgerEntryAt: balance.lastLedgerEntryAt,
+      pendingWithdrawalApproval:
+        pendingWithdrawalApprovalByOutletId.get(balance.outletId) ?? null,
     }),
   );
   const recentDepositEntries = sortDepositLedgerEntries(

@@ -372,16 +372,51 @@ export function summarizeApprovalRequest(
       "depositAmount",
       "amount",
     ]);
+    const balanceBefore = getNumberValue(requestData, ["balanceBefore"]);
+    const balanceAfterIfApproved = getNumberValue(requestData, [
+      "balanceAfter",
+      "balanceAfterIfApproved",
+    ]);
     const customer = getRecordValue(requestData, ["customerName", "customerCode"]);
     const outlet = getRecordValue(requestData, ["outletName", "outletCode"]);
+    const executionStage = getRecordValue(requestData, ["executionStage"]);
+    const executedBy = getRecordValue(requestData, ["executedByName"]);
+    const executionLabel =
+      executionStage === "executed"
+        ? executedBy
+          ? `Sudah dicatat oleh ${stringifyValue(executedBy)}`
+          : "Saldo dan kas keluar sudah dicatat"
+        : executionStage === "awaiting_approval"
+          ? "Menunggu approval"
+          : null;
     const lines = [
       customer ? { label: "Customer", value: stringifyValue(customer) } : null,
       outlet ? { label: "Outlet", value: stringifyValue(outlet) } : null,
+      executionLabel
+        ? {
+            label: "Eksekusi",
+            value: executionLabel,
+            tone: executionStage === "executed" ? ("success" as const) : ("warning" as const),
+          }
+        : null,
+      balanceBefore !== null
+        ? {
+            label: "Saldo saat diajukan",
+            value: formatMoney(balanceBefore),
+            tone: "success" as const,
+          }
+        : null,
       impactAmount
         ? {
             label: "Nominal tarik tunai",
             value: formatMoney(impactAmount),
             tone: "warning" as const,
+          }
+        : null,
+      balanceAfterIfApproved !== null
+        ? {
+            label: "Estimasi saldo akhir",
+            value: formatMoney(balanceAfterIfApproved),
           }
         : null,
       reason ? { label: "Alasan", value: stringifyValue(reason) } : null,
