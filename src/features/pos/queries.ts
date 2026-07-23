@@ -15,6 +15,7 @@ import {
 import { db } from "@/db";
 import {
   cashMovements,
+  customerDepositLedger,
   customers,
   hardwareAgents,
   hardwareJobs,
@@ -404,6 +405,40 @@ export async function getPosInitialData({
         .limit(80),
     ]);
 
+  const customerIds = customerRows.map((customer) => customer.id);
+  const customerDepositRows =
+    customerIds.length > 0
+      ? await db
+          .select({
+            customerId: customerDepositLedger.customerId,
+            balanceAfter: customerDepositLedger.balanceAfter,
+            occurredAt: customerDepositLedger.occurredAt,
+            createdAt: customerDepositLedger.createdAt,
+          })
+          .from(customerDepositLedger)
+          .where(
+            and(
+              eq(customerDepositLedger.organizationId, organizationId),
+              eq(customerDepositLedger.outletId, outlet.id),
+              inArray(customerDepositLedger.customerId, customerIds),
+            ),
+          )
+          .orderBy(
+            desc(customerDepositLedger.occurredAt),
+            desc(customerDepositLedger.createdAt),
+          )
+      : [];
+  const latestDepositByCustomerId = new Map<
+    string,
+    (typeof customerDepositRows)[number]
+  >();
+
+  for (const depositRow of customerDepositRows) {
+    if (!latestDepositByCustomerId.has(depositRow.customerId)) {
+      latestDepositByCustomerId.set(depositRow.customerId, depositRow);
+    }
+  }
+
   const register = registerRows[0] ?? null;
 
   const [activeShiftRows, paymentProfileRows, paymentPolicyRows] =
@@ -514,7 +549,17 @@ export async function getPosInitialData({
       totalAvailableItems: Number(category.totalAvailableItems),
     })),
     items: itemRows,
-    customers: customerRows satisfies PosCustomerOption[],
+    customers: customerRows.map((customer): PosCustomerOption => {
+      const latestDeposit = latestDepositByCustomerId.get(customer.id) ?? null;
+      const balanceAmount = latestDeposit?.balanceAfter ?? "0";
+
+      return {
+        ...customer,
+        customerDepositBalanceAmount: balanceAmount,
+        customerDepositBalance: parseAmount(balanceAmount),
+        customerDepositLastLedgerEntryAt: latestDeposit?.occurredAt ?? null,
+      };
+    }),
     paymentProfiles,
     paymentPolicies: Object.values(
       paymentPolicies,
@@ -1524,6 +1569,9 @@ export async function getPosHeldCartListData({
           fullName: heldCart.customerName ?? "Customer tanpa nama",
           phone: heldCart.customerPhone,
           email: heldCart.customerEmail,
+          customerDepositBalanceAmount: "0",
+          customerDepositBalance: 0,
+          customerDepositLastLedgerEntryAt: null,
         }
       : null,
     heldBy: {

@@ -169,10 +169,16 @@ type PaymentMethodConfig = {
 
 type PaymentContentProps = {
   totalAmount: number;
+  customerDepositUsedAmount: number;
+  customerDepositInAmount: number;
+  externalPaymentDueAmount: number;
   paidAmount: number;
   remainingAmount: number;
   totalChangeAmount: number;
   payments: PosPaymentDraft[];
+  selectedCustomer: PosCustomerOption | null;
+  customerDepositUsedInput: string;
+  customerDepositInInput: string;
   paymentProfiles: PosManualPaymentProfile[];
   paymentPolicies: PosManualPaymentPolicy[];
   selectedMethod: PosManualPaymentMethod;
@@ -194,6 +200,8 @@ type PaymentContentProps = {
   onProfileChange: (profileId: string) => void;
   onVerificationConfirmedChange: (confirmed: boolean) => void;
   onAmountInputChange: (value: string) => void;
+  onCustomerDepositUsedInputChange: (value: string) => void;
+  onCustomerDepositInInputChange: (value: string) => void;
   onReferenceInputChange: (value: string) => void;
   onNoteInputChange: (value: string) => void;
   onVerificationFormChange: (
@@ -787,7 +795,9 @@ function getPaymentDraftValidationMessage({
   totalAmount: number;
 }) {
   if (payments.length === 0) {
-    return "Tambahkan minimal satu pembayaran sebelum menyelesaikan transaksi.";
+    return totalAmount > 0
+      ? "Tambahkan minimal satu pembayaran sebelum menyelesaikan transaksi."
+      : null;
   }
 
   let totalPaidAmount = 0;
@@ -852,11 +862,10 @@ function getPaymentDraftValidationMessage({
     ) {
       return "Terminal ID pada preset EDC belum lengkap.";
     }
-
   }
 
   if (totalPaidAmount !== totalAmount) {
-    return `Total pembayaran harus sama dengan total transaksi ${formatCurrency(totalAmount)}.`;
+    return `Total pembayaran eksternal harus sama dengan ${formatCurrency(totalAmount)} setelah Dana Titip.`;
   }
 
   return null;
@@ -2091,10 +2100,16 @@ function CheckoutSuccessContent({
 
 function PaymentContent({
   totalAmount,
+  customerDepositUsedAmount,
+  customerDepositInAmount,
+  externalPaymentDueAmount,
   paidAmount,
   remainingAmount,
   totalChangeAmount,
   payments,
+  selectedCustomer,
+  customerDepositUsedInput,
+  customerDepositInInput,
   paymentProfiles,
   paymentPolicies,
   selectedMethod,
@@ -2116,6 +2131,8 @@ function PaymentContent({
   onProfileChange,
   onVerificationConfirmedChange,
   onAmountInputChange,
+  onCustomerDepositUsedInputChange,
+  onCustomerDepositInInputChange,
   onReferenceInputChange,
   onNoteInputChange,
   onVerificationFormChange,
@@ -2155,7 +2172,14 @@ function PaymentContent({
       : 0;
   const hasPayments = payments.length > 0;
   const paymentProgressPercentage =
-    totalAmount > 0 ? Math.min((paidAmount / totalAmount) * 100, 100) : 0;
+    externalPaymentDueAmount > 0
+      ? Math.min((paidAmount / externalPaymentDueAmount) * 100, 100)
+      : 100;
+  const customerDepositBalance = selectedCustomer?.customerDepositBalance ?? 0;
+  const customerDepositUsedIsTooHigh =
+    customerDepositUsedAmount > Math.min(totalAmount, customerDepositBalance);
+  const customerDepositControlsDisabled =
+    isCheckoutPending || isAddingPayment || payments.length > 0;
   const nonCashAmountIsTooHigh =
     !selectedConfig.allowOverpayment && parsedInputAmount > remainingAmount;
 
@@ -2205,6 +2229,28 @@ function PaymentContent({
                 {formatCurrency(totalAmount)}
               </span>
             </div>
+            {customerDepositInAmount > 0 ? (
+              <div className="flex items-center justify-between gap-3 text-[#9a681d]">
+                <span>Deposit Dana Titip</span>
+                <span className="font-semibold">
+                  +{formatCurrency(customerDepositInAmount)}
+                </span>
+              </div>
+            ) : null}
+            {customerDepositUsedAmount > 0 ? (
+              <div className="flex items-center justify-between gap-3 text-emerald-700">
+                <span>Gunakan Saldo</span>
+                <span className="font-semibold">
+                  -{formatCurrency(customerDepositUsedAmount)}
+                </span>
+              </div>
+            ) : null}
+            <div className="flex items-center justify-between gap-3 text-[var(--muted)]">
+              <span>Tagihan eksternal</span>
+              <span className="font-semibold text-neutral-950">
+                {formatCurrency(externalPaymentDueAmount)}
+              </span>
+            </div>
             <div className="flex items-center justify-between gap-3 text-[var(--muted)]">
               <span>Sudah dibayar</span>
               <span className="font-semibold text-neutral-950">
@@ -2226,6 +2272,82 @@ function PaymentContent({
             />
           </div>
         </div>
+
+        {selectedCustomer ? (
+          <div className="rounded-2xl border border-[#ead7ad] bg-[#fffaf0] p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-neutral-950">
+                  Dana Titip {selectedCustomer.fullName}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[#815618]">
+                  Saldo di outlet ini {formatCurrency(customerDepositBalance)}.
+                  Dana Titip hanya berlaku untuk customer dan outlet ini.
+                </p>
+              </div>
+              {payments.length > 0 ? (
+                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#815618] ring-1 ring-[#ead7ad]">
+                  Reset payment untuk ubah
+                </span>
+              ) : null}
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-semibold text-neutral-700">
+                Deposit Dana Titip
+                <input
+                  value={customerDepositInInput}
+                  disabled={customerDepositControlsDisabled}
+                  onChange={(event) =>
+                    onCustomerDepositInInputChange(
+                      formatRupiahInput(event.target.value),
+                    )
+                  }
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="0"
+                  className="mt-2 h-11 w-full rounded-2xl border border-[#ead7ad] bg-white px-3 text-sm font-semibold text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                />
+              </label>
+
+              <label className="block text-xs font-semibold text-neutral-700">
+                Gunakan Saldo
+                <input
+                  value={customerDepositUsedInput}
+                  disabled={
+                    customerDepositControlsDisabled ||
+                    customerDepositBalance <= 0
+                  }
+                  onChange={(event) =>
+                    onCustomerDepositUsedInputChange(
+                      formatRupiahInput(event.target.value),
+                    )
+                  }
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="0"
+                  className={cn(
+                    "mt-2 h-11 w-full rounded-2xl border bg-white px-3 text-sm font-semibold text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:ring-4",
+                    customerDepositUsedIsTooHigh
+                      ? "border-red-300 focus:border-red-400 focus:ring-red-50"
+                      : "border-[#ead7ad] focus:border-[var(--accent)] focus:ring-[var(--accent-soft)]",
+                  )}
+                />
+              </label>
+            </div>
+
+            {customerDepositUsedIsTooHigh ? (
+              <p className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
+                Gunakan saldo tidak boleh melebihi saldo customer atau total
+                belanja.
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white px-3 py-3 text-xs leading-5 text-[var(--muted)]">
+            Pilih customer terdaftar untuk deposit atau menggunakan saldo.
+          </div>
+        )}
 
         {totalChangeAmount > 0 ? (
           <div className="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-emerald-700">
@@ -3154,6 +3276,8 @@ export function PosWorkspace({
   const [paymentVerificationConfirmed, setPaymentVerificationConfirmed] =
     useState(false);
   const [paymentAmountInput, setPaymentAmountInput] = useState("");
+  const [customerDepositUsedInput, setCustomerDepositUsedInput] = useState("");
+  const [customerDepositInInput, setCustomerDepositInInput] = useState("");
   const [paymentProviderInput, setPaymentProviderInput] = useState("");
   const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
   const [paymentNoteInput, setPaymentNoteInput] = useState("");
@@ -3233,6 +3357,7 @@ export function PosWorkspace({
         setPayments([]);
         setPaymentFeedback(null);
         setPaymentAmountInput("");
+        resetCustomerDepositDraft();
         setPaymentProviderInput("");
         setPaymentReferenceInput("");
         setPaymentNoteInput("");
@@ -3277,6 +3402,12 @@ export function PosWorkspace({
       setSelectedMethod(storedAttempt.payments[0]?.method ?? "cash");
       setSelectedPaymentProfileId(
         storedAttempt.payments[0]?.manualPaymentProfileId ?? "",
+      );
+      setCustomerDepositUsedInput(
+        formatRupiahInput(storedAttempt.payload.customerDepositUsedAmount ?? 0),
+      );
+      setCustomerDepositInInput(
+        formatRupiahInput(storedAttempt.payload.customerDepositInAmount ?? 0),
       );
       setPaymentVerificationConfirmed(
         storedAttempt.payments[0]?.verificationConfirmed ?? false,
@@ -3388,11 +3519,32 @@ export function PosWorkspace({
           : discountApproval
             ? "Selesaikan atau reset request diskon yang sedang aktif."
             : "Minta approval diskon manager/owner.";
+  const customerDepositBalance = selectedCustomer?.customerDepositBalance ?? 0;
+  const rawCustomerDepositUsedAmount = parsePaymentAmountInput(
+    customerDepositUsedInput,
+  );
+  const rawCustomerDepositInAmount = parsePaymentAmountInput(
+    customerDepositInInput,
+  );
+  const customerDepositUsedAmount = selectedCustomer
+    ? Math.min(
+        rawCustomerDepositUsedAmount,
+        totalAmount,
+        customerDepositBalance,
+      )
+    : 0;
+  const customerDepositInAmount = selectedCustomer
+    ? rawCustomerDepositInAmount
+    : 0;
+  const externalPaymentDueAmount = Math.max(
+    totalAmount - customerDepositUsedAmount + customerDepositInAmount,
+    0,
+  );
   const paidAmount = useMemo(
     () => payments.reduce((total, payment) => total + payment.amount, 0),
     [payments],
   );
-  const remainingAmount = Math.max(totalAmount - paidAmount, 0);
+  const remainingAmount = Math.max(externalPaymentDueAmount - paidAmount, 0);
   const totalChangeAmount = useMemo(
     () => payments.reduce((total, payment) => total + payment.changeAmount, 0),
     [payments],
@@ -3413,7 +3565,10 @@ export function PosWorkspace({
           ? "Request diskon masih pending. Cek status approval atau reset request."
           : "Lanjutkan ke pembayaran manual.";
   const canFinalizePayment =
-    canCheckout && payments.length > 0 && remainingAmount === 0;
+    canCheckout &&
+    remainingAmount === 0 &&
+    (payments.length > 0 || customerDepositUsedAmount > 0) &&
+    rawCustomerDepositUsedAmount === customerDepositUsedAmount;
   const canHoldCart =
     panelMode === "cart" &&
     cartItems.length > 0 &&
@@ -3432,6 +3587,11 @@ export function PosWorkspace({
           : !context.activeShift
             ? "Shift aktif belum dibuka, hold cart belum bisa dibuat."
             : "Transaksi bisa ditahan.";
+
+  function resetCustomerDepositDraft() {
+    setCustomerDepositUsedInput("");
+    setCustomerDepositInInput("");
+  }
 
   function resetPaymentForm(
     nextMethod: PosManualPaymentMethod = selectedMethod,
@@ -3470,6 +3630,7 @@ export function PosWorkspace({
   function resetPaymentFlow() {
     setPanelMode("cart");
     resetPayments();
+    resetCustomerDepositDraft();
   }
 
   function applyCheckoutSuccess(
@@ -3479,6 +3640,7 @@ export function PosWorkspace({
     setCheckoutResult(sale);
     setPaymentFeedback(null);
     setCartFeedback(null);
+    resetCustomerDepositDraft();
     setCartItems([]);
     setSelectedCustomer(null);
     setCustomerQuery("");
@@ -3984,6 +4146,13 @@ export function PosWorkspace({
     const reference = paymentReferenceInput.trim();
     const note = paymentNoteInput.trim();
 
+    if (rawCustomerDepositUsedAmount !== customerDepositUsedAmount) {
+      setPaymentFeedback(
+        "Dana Titip digunakan tidak boleh melebihi saldo customer atau total belanja.",
+      );
+      return;
+    }
+
     if (!Number.isFinite(inputAmount) || inputAmount <= 0) {
       setPaymentFeedback("Nominal pembayaran harus lebih dari Rp0.");
       return;
@@ -4219,8 +4388,15 @@ export function PosWorkspace({
   function finalizePayment() {
     const paymentValidationMessage = getPaymentDraftValidationMessage({
       payments,
-      totalAmount,
+      totalAmount: externalPaymentDueAmount,
     });
+
+    if (rawCustomerDepositUsedAmount !== customerDepositUsedAmount) {
+      setPaymentFeedback(
+        "Dana Titip digunakan tidak boleh melebihi saldo customer atau total belanja.",
+      );
+      return;
+    }
 
     if (!canFinalizePayment || paymentValidationMessage) {
       setPaymentFeedback(
@@ -4250,6 +4426,10 @@ export function PosWorkspace({
         verificationDetails: payment.verificationDetails,
       })),
       idempotencyKey,
+      customerDepositUsedAmount:
+        customerDepositUsedAmount > 0 ? customerDepositUsedAmount : null,
+      customerDepositInAmount:
+        customerDepositInAmount > 0 ? customerDepositInAmount : null,
       manualPaymentApprovalId: manualPaymentApproval?.id ?? null,
       customerId: selectedCustomer?.id ?? null,
       note: null,
@@ -4377,10 +4557,16 @@ export function PosWorkspace({
   const paymentContent = (
     <PaymentContent
       totalAmount={totalAmount}
+      customerDepositUsedAmount={customerDepositUsedAmount}
+      customerDepositInAmount={customerDepositInAmount}
+      externalPaymentDueAmount={externalPaymentDueAmount}
       paidAmount={paidAmount}
       remainingAmount={remainingAmount}
       totalChangeAmount={totalChangeAmount}
       payments={payments}
+      selectedCustomer={selectedCustomer}
+      customerDepositUsedInput={customerDepositUsedInput}
+      customerDepositInInput={customerDepositInInput}
       paymentProfiles={paymentProfiles}
       paymentPolicies={paymentPolicies}
       selectedMethod={selectedMethod}
@@ -4402,6 +4588,30 @@ export function PosWorkspace({
       onProfileChange={selectPaymentProfile}
       onVerificationConfirmedChange={setPaymentVerificationConfirmed}
       onAmountInputChange={setPaymentAmountInput}
+      onCustomerDepositUsedInputChange={(value) => {
+        if (payments.length > 0) {
+          setPaymentFeedback(
+            "Reset daftar pembayaran sebelum mengubah Dana Titip.",
+          );
+          return;
+        }
+
+        invalidateCheckoutAttempt();
+        setCustomerDepositUsedInput(value);
+        setPaymentAmountInput("");
+      }}
+      onCustomerDepositInInputChange={(value) => {
+        if (payments.length > 0) {
+          setPaymentFeedback(
+            "Reset daftar pembayaran sebelum mengubah Dana Titip.",
+          );
+          return;
+        }
+
+        invalidateCheckoutAttempt();
+        setCustomerDepositInInput(value);
+        setPaymentAmountInput("");
+      }}
       onReferenceInputChange={setPaymentReferenceInput}
       onNoteInputChange={setPaymentNoteInput}
       onVerificationFormChange={(field, value) => {
@@ -4431,6 +4641,7 @@ export function PosWorkspace({
         setCartFeedback(null);
         setPaymentFeedback(null);
         setSelectedCustomer(null);
+        resetCustomerDepositDraft();
         setCustomerQuery("");
         setIsCustomerSelectorOpen(false);
         setPanelMode("cart");

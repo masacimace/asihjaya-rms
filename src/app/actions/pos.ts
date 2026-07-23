@@ -23,6 +23,7 @@ import {
   approvals,
   auditLogs,
   cashMovements,
+  customerDepositLedger,
   customers,
   hardwareAgents,
   inventoryMovements,
@@ -900,6 +901,14 @@ function parseDbAmount(amount: string | null) {
   return Number.isSafeInteger(parsedAmount) ? parsedAmount : 0;
 }
 
+function formatServerCurrency(amount: number) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 function normalizeNullableText(value: string | null | undefined, maxLength: number) {
   const trimmedValue = String(value ?? "").trim();
 
@@ -1077,6 +1086,9 @@ function mapHeldCartSummary(row: {
           fullName: row.customerName ?? "Customer tanpa nama",
           phone: row.customerPhone,
           email: row.customerEmail,
+          customerDepositBalanceAmount: "0",
+          customerDepositBalance: 0,
+          customerDepositLastLedgerEntryAt: null,
         }
       : null,
     heldBy: {
@@ -2810,6 +2822,8 @@ export async function completePosCheckoutAction(
     payload.discountReason,
     500,
   );
+  const customerDepositUsedAmount = Number(payload.customerDepositUsedAmount ?? 0);
+  const customerDepositInAmount = Number(payload.customerDepositInAmount ?? 0);
 
   if (itemIds.length === 0) {
     fieldErrors.items = "Tambahkan minimal satu item sebelum checkout.";
@@ -2839,6 +2853,24 @@ export async function completePosCheckoutAction(
     fieldErrors.discountApprovalId = "Diskon POS wajib memakai approval manager/owner.";
   }
 
+  if (
+    !Number.isSafeInteger(customerDepositUsedAmount) ||
+    customerDepositUsedAmount < 0
+  ) {
+    fieldErrors.customerDepositUsedAmount = "Nominal Dana Titip digunakan tidak valid.";
+  }
+
+  if (
+    !Number.isSafeInteger(customerDepositInAmount) ||
+    customerDepositInAmount < 0
+  ) {
+    fieldErrors.customerDepositInAmount = "Nominal Dana Titip baru tidak valid.";
+  }
+
+  if ((customerDepositUsedAmount > 0 || customerDepositInAmount > 0) && !customerId) {
+    fieldErrors.customerId = "Dana Titip wajib terikat ke customer terdaftar.";
+  }
+
   if (discountApprovalId && !UUID_PATTERN.test(discountApprovalId)) {
     fieldErrors.discountApprovalId = "Approval diskon tidak valid.";
   }
@@ -2850,8 +2882,8 @@ export async function completePosCheckoutAction(
 
   const submittedPayments = payload.payments ?? [];
 
-  if (submittedPayments.length === 0) {
-    fieldErrors.payments = "Tambahkan minimal satu pembayaran.";
+  if (submittedPayments.length === 0 && customerDepositUsedAmount <= 0) {
+    fieldErrors.payments = "Tambahkan minimal satu pembayaran atau gunakan Dana Titip customer.";
   }
 
   if (submittedPayments.length > 8) {
@@ -3152,6 +3184,8 @@ export async function completePosCheckoutAction(
     discountApprovalId,
     discountAmount: submittedDiscountAmount || null,
     discountReason: submittedDiscountReason,
+    customerDepositUsedAmount: customerDepositUsedAmount || null,
+    customerDepositInAmount: customerDepositInAmount || null,
     manualPaymentApprovalId,
   };
 
@@ -3567,6 +3601,55 @@ export async function completePosCheckoutAction(
         );
       }
 
+      let customerDepositRunningBalance = 0;
+
+      if (customerDepositUsedAmount > 0 || customerDepositInAmount > 0) {
+        if (!selectedCustomer) {
+          throw new CheckoutValidationError(
+            "Dana Titip wajib memakai customer terdaftar.",
+          );
+        }
+
+        const depositLockKey = [
+          auth.organization.id,
+          primaryOutlet.id,
+          selectedCustomer.id,
+        ].join(":");
+
+        await transaction.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${depositLockKey}))`,
+        );
+
+        const [latestDepositEntry] = await transaction
+          .select({
+            balanceAfter: customerDepositLedger.balanceAfter,
+          })
+          .from(customerDepositLedger)
+          .where(
+            and(
+              eq(customerDepositLedger.organizationId, auth.organization.id),
+              eq(customerDepositLedger.outletId, primaryOutlet.id),
+              eq(customerDepositLedger.customerId, selectedCustomer.id),
+            ),
+          )
+          .orderBy(
+            sql`${customerDepositLedger.occurredAt} desc`,
+            sql`${customerDepositLedger.createdAt} desc`,
+          )
+          .limit(1)
+          .for("update");
+
+        customerDepositRunningBalance = parseDbAmount(
+          latestDepositEntry?.balanceAfter ?? "0",
+        );
+
+        if (customerDepositUsedAmount > customerDepositRunningBalance) {
+          throw new CheckoutValidationError(
+            "Saldo Dana Titip customer tidak mencukupi untuk transaksi ini.",
+          );
+        }
+      }
+
       const itemRows = await transaction
         .select({
           id: productItems.id,
@@ -3795,9 +3878,24 @@ export async function completePosCheckoutAction(
         );
       }
 
-      if (totalPaidAmount !== totalAmount) {
+      if (customerDepositUsedAmount > totalAmount) {
         throw new CheckoutValidationError(
-          "Total pembayaran harus sama dengan total transaksi setelah diskon.",
+          "Dana Titip digunakan tidak boleh lebih besar dari total transaksi.",
+        );
+      }
+
+      const externalPaymentDueAmount =
+        totalAmount - customerDepositUsedAmount + customerDepositInAmount;
+
+      if (externalPaymentDueAmount < 0) {
+        throw new CheckoutValidationError(
+          "Total pembayaran eksternal tidak valid setelah Dana Titip.",
+        );
+      }
+
+      if (totalPaidAmount !== externalPaymentDueAmount) {
+        throw new CheckoutValidationError(
+          `Total pembayaran eksternal harus sama dengan ${formatServerCurrency(externalPaymentDueAmount)} setelah Dana Titip.`,
         );
       }
 
@@ -4029,64 +4127,68 @@ export async function completePosCheckoutAction(
         })),
       );
 
-      await transaction.insert(payments).values(
-        normalizedPayments.map((payment) => {
-          const isNonCash = isNonCashManualPaymentMethod(payment.method);
-          const isCoVerified = isNonCash && Boolean(manualPaymentCoVerifierId);
+      if (normalizedPayments.length > 0) {
+        await transaction.insert(payments).values(
+          normalizedPayments.map((payment) => {
+            const isNonCash = isNonCashManualPaymentMethod(payment.method);
+            const isCoVerified = isNonCash && Boolean(manualPaymentCoVerifierId);
 
-          return {
-            saleId: sale.id,
-            method: payment.method,
-            provider: getPaymentProvider({
+            return {
+              saleId: sale.id,
               method: payment.method,
-              provider: payment.provider,
-            }),
-            amount: String(payment.amount),
-            status: "paid" as const,
-            providerReference: payment.reference,
-            normalizedReference: payment.normalizedReference,
-            externalOrderId: null,
-            verificationStatus: isCoVerified
-              ? ("co_verified" as const)
-              : ("self_verified" as const),
-            verificationSource: payment.verificationSource,
-            providerPaidAt: payment.providerPaidAt,
-            verificationApprovalId: isCoVerified
-              ? manualPaymentVerifiedApprovalId
-              : null,
-            coVerifiedBy: isCoVerified ? manualPaymentCoVerifierId : null,
-            coVerifiedAt: isCoVerified ? manualPaymentCoVerifiedAt : null,
-            evidenceKey: payment.evidenceKey,
-            manualPaymentProfileId: payment.manualPaymentProfileId,
-            settlementStatus: isNonCash
-              ? ("unreconciled" as const)
-              : ("not_applicable" as const),
-            verifiedBy: auth.user.id,
-            verifiedAt: now,
-            paidAt: payment.providerPaidAt ?? now,
-            metadata: {
-              source: "pos.manual_payment_verification_v1",
-              methodLabel: manualPaymentMethodLabels[payment.method],
-              receivedAmount: payment.receivedAmount,
-              changeAmount: payment.changeAmount,
-              note: payment.note,
-              verificationFingerprint: manualPaymentVerificationFingerprint,
-              manualPaymentProfile: payment.manualPaymentProfileId
-                ? {
-                    id: payment.manualPaymentProfileId,
-                    code: payment.manualPaymentProfileCode,
-                    name: payment.manualPaymentProfileName,
-                  }
+              provider: getPaymentProvider({
+                method: payment.method,
+                provider: payment.provider,
+              }),
+              amount: String(payment.amount),
+              status: "paid" as const,
+              providerReference: payment.reference,
+              normalizedReference: payment.normalizedReference,
+              externalOrderId: null,
+              verificationStatus: isCoVerified
+                ? ("co_verified" as const)
+                : ("self_verified" as const),
+              verificationSource: payment.verificationSource,
+              providerPaidAt: payment.providerPaidAt,
+              verificationApprovalId: isCoVerified
+                ? manualPaymentVerifiedApprovalId
                 : null,
-              verificationDetails: payment.verificationDetails,
-              duplicatePaymentIds: manualPaymentDuplicatePaymentIds,
-              makerCheckerEnforced: isCoVerified,
-            },
-            createdAt: now,
-            updatedAt: now,
-          };
-        }),
-      );
+              coVerifiedBy: isCoVerified ? manualPaymentCoVerifierId : null,
+              coVerifiedAt: isCoVerified ? manualPaymentCoVerifiedAt : null,
+              evidenceKey: payment.evidenceKey,
+              manualPaymentProfileId: payment.manualPaymentProfileId,
+              settlementStatus: isNonCash
+                ? ("unreconciled" as const)
+                : ("not_applicable" as const),
+              verifiedBy: auth.user.id,
+              verifiedAt: now,
+              paidAt: payment.providerPaidAt ?? now,
+              metadata: {
+                source: "pos.manual_payment_verification_v1",
+                methodLabel: manualPaymentMethodLabels[payment.method],
+                receivedAmount: payment.receivedAmount,
+                changeAmount: payment.changeAmount,
+                note: payment.note,
+                customerDepositUsedAmount: String(customerDepositUsedAmount),
+                customerDepositInAmount: String(customerDepositInAmount),
+                verificationFingerprint: manualPaymentVerificationFingerprint,
+                manualPaymentProfile: payment.manualPaymentProfileId
+                  ? {
+                      id: payment.manualPaymentProfileId,
+                      code: payment.manualPaymentProfileCode,
+                      name: payment.manualPaymentProfileName,
+                    }
+                  : null,
+                verificationDetails: payment.verificationDetails,
+                duplicatePaymentIds: manualPaymentDuplicatePaymentIds,
+                makerCheckerEnforced: isCoVerified,
+              },
+              createdAt: now,
+              updatedAt: now,
+            };
+          }),
+        );
+      }
 
       const cashPaidAmount = normalizedPayments
         .filter((payment) => payment.method === "cash")
@@ -4111,6 +4213,74 @@ export async function completePosCheckoutAction(
             updatedAt: now,
           })
           .where(eq(shifts.id, activeShift.id));
+      }
+
+      if (selectedCustomer && customerDepositUsedAmount > 0) {
+        const nextBalance = customerDepositRunningBalance - customerDepositUsedAmount;
+
+        await transaction.insert(customerDepositLedger).values({
+          organizationId: auth.organization.id,
+          outletId: primaryOutlet.id,
+          customerId: selectedCustomer.id,
+          saleId: sale.id,
+          paymentId: null,
+          cashMovementId: null,
+          approvalId: null,
+          entryType: "deposit_used",
+          direction: "debit",
+          amount: String(customerDepositUsedAmount),
+          balanceAfter: String(nextBalance),
+          idempotencyKey: `pos:${idempotencyKey}:customer_deposit_used`,
+          referenceType: "sale",
+          referenceId: sale.id,
+          description: `Dana Titip digunakan untuk transaksi ${invoiceNumber}.`,
+          metadata: {
+            source: "pos.checkout",
+            invoiceNumber,
+            subtotalAmount: String(subtotalAmount),
+            discountAmount: String(approvedDiscountAmount),
+            totalAmount: String(totalAmount),
+            externalPaymentDueAmount: String(externalPaymentDueAmount),
+          },
+          createdBy: auth.user.id,
+          occurredAt: now,
+          createdAt: now,
+        });
+
+        customerDepositRunningBalance = nextBalance;
+      }
+
+      if (selectedCustomer && customerDepositInAmount > 0) {
+        const nextBalance = customerDepositRunningBalance + customerDepositInAmount;
+
+        await transaction.insert(customerDepositLedger).values({
+          organizationId: auth.organization.id,
+          outletId: primaryOutlet.id,
+          customerId: selectedCustomer.id,
+          saleId: sale.id,
+          paymentId: null,
+          cashMovementId: null,
+          approvalId: null,
+          entryType: "deposit_in",
+          direction: "credit",
+          amount: String(customerDepositInAmount),
+          balanceAfter: String(nextBalance),
+          idempotencyKey: `pos:${idempotencyKey}:customer_deposit_in`,
+          referenceType: "sale",
+          referenceId: sale.id,
+          description: `Dana Titip masuk dari transaksi ${invoiceNumber}.`,
+          metadata: {
+            source: "pos.checkout",
+            invoiceNumber,
+            subtotalAmount: String(subtotalAmount),
+            discountAmount: String(approvedDiscountAmount),
+            totalAmount: String(totalAmount),
+            externalPaymentDueAmount: String(externalPaymentDueAmount),
+          },
+          createdBy: auth.user.id,
+          occurredAt: now,
+          createdAt: now,
+        });
       }
 
       await transaction.insert(auditLogs).values({
@@ -4139,6 +4309,9 @@ export async function completePosCheckoutAction(
           discountReason: approvedDiscountReason,
           discountApprovalId: appliedDiscountApprovalId,
           totalAmount: String(totalAmount),
+          customerDepositUsedAmount: String(customerDepositUsedAmount),
+          customerDepositInAmount: String(customerDepositInAmount),
+          externalPaymentDueAmount: String(externalPaymentDueAmount),
           payments: normalizedPayments.map((payment) => ({
             method: payment.method,
             amount: String(payment.amount),
@@ -4154,6 +4327,8 @@ export async function completePosCheckoutAction(
           idempotencyKey,
           customerId: selectedCustomer?.id ?? null,
           discountApprovalId: appliedDiscountApprovalId,
+          customerDepositUsedAmount: String(customerDepositUsedAmount),
+          customerDepositInAmount: String(customerDepositInAmount),
         },
         createdAt: now,
       });

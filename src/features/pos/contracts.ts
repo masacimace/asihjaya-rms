@@ -64,6 +64,9 @@ export type PosCustomerOption = {
   fullName: string;
   phone: string | null;
   email: string | null;
+  customerDepositBalanceAmount: string;
+  customerDepositBalance: number;
+  customerDepositLastLedgerEntryAt: Date | null;
 };
 
 export type PosManualPaymentProfileType = "edc";
@@ -146,6 +149,8 @@ export type PosCheckoutPayload = {
   itemIds: string[];
   payments: PosCheckoutPaymentInput[];
   idempotencyKey: string;
+  customerDepositUsedAmount?: number | null;
+  customerDepositInAmount?: number | null;
   customerId?: string | null;
   note?: string | null;
   discountApprovalId?: string | null;
