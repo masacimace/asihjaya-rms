@@ -23,6 +23,7 @@ import {
 import Link from "next/link";
 
 import {
+  type AdminCustomerDepositLedgerRow,
   type AdminCustomerDetailData,
   type AdminCustomerTransactionRow,
   isUuid,
@@ -58,6 +59,30 @@ const paymentMethodLabels: Record<string, string> = {
   qris_gateway: "QRIS Gateway",
   other: "Lainnya",
 };
+
+const customerDepositEntryTypeLabels: Record<
+  AdminCustomerDepositLedgerRow["entryType"],
+  string
+> = {
+  adjustment: "Koreksi saldo",
+  deposit_in: "Dana Titip masuk",
+  deposit_used: "Dana Titip digunakan",
+  deposit_withdrawal: "Dana Titip ditarik",
+};
+
+function getCustomerDepositDirectionClass(
+  direction: AdminCustomerDepositLedgerRow["direction"],
+) {
+  return direction === "credit"
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : "border-amber-200 bg-amber-50 text-amber-700";
+}
+
+function getCustomerDepositDirectionPrefix(
+  direction: AdminCustomerDepositLedgerRow["direction"],
+) {
+  return direction === "credit" ? "+" : "-";
+}
 
 function getSaleStatusClass(status: AdminCustomerTransactionRow["status"]) {
   if (status === "completed") {
@@ -393,6 +418,179 @@ function CustomerProfileHeader({ data }: { data: AdminCustomerDetailData }) {
   );
 }
 
+function CustomerDepositPanel({ data }: { data: AdminCustomerDetailData }) {
+  const { customerDeposits } = data;
+  const hasLedgerEntries = customerDeposits.recentEntries.length > 0;
+
+  return (
+    <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#ead7ad] bg-[#fff8e8] px-3 py-1 text-xs font-semibold text-[#815618]">
+            <WalletCards className="size-3.5" />
+            Dana Titip
+          </div>
+          <h2 className="mt-3 text-xl font-semibold text-neutral-950 sm:text-2xl">
+            Saldo Dana Titip pelanggan
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+            Saldo ditampilkan per outlet dan tidak dapat dipakai lintas outlet.
+            Mutasi ini masih bersifat ringkasan admin sebelum integrasi checkout
+            Dana Titip aktif di POS.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-3 lg:min-w-72 lg:text-right">
+          <p className="text-xs font-medium uppercase text-[var(--muted)]">
+            Total saldo terakses
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-neutral-950">
+            {formatMoney(customerDeposits.totalBalance)}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+            {formatInteger(customerDeposits.outletsWithBalance)} outlet memiliki
+            saldo
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(340px,1.05fr)]">
+        <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/60 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-neutral-950">
+                Saldo per outlet
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                Hanya outlet yang dapat diakses akun admin saat ini.
+              </p>
+            </div>
+            <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs font-semibold text-neutral-600">
+              {formatInteger(customerDeposits.balances.length)} outlet
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            {customerDeposits.balances.length > 0 ? (
+              customerDeposits.balances.map((balance) => (
+                <article
+                  key={balance.outletId}
+                  className="rounded-xl border border-[var(--border)] bg-white p-3.5"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-semibold leading-5 text-neutral-950">
+                        {balance.outletName}
+                      </p>
+                      <p className="mt-1 font-mono text-xs text-[var(--muted)]">
+                        {balance.outletCode}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-right text-sm font-semibold text-neutral-950">
+                      {formatMoney(balance.balance)}
+                    </p>
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
+                    Mutasi terakhir: {formatDateTime(balance.lastLedgerEntryAt)}
+                  </p>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-[var(--border)] bg-white px-4 py-8 text-center">
+                <WalletCards className="mx-auto size-8 text-neutral-300" />
+                <p className="mt-3 text-sm font-semibold text-neutral-950">
+                  Belum ada outlet terakses
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Saldo Dana Titip akan tampil setelah admin memiliki akses
+                  outlet.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-neutral-950">Mutasi terbaru</h3>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                Maksimal 8 mutasi Dana Titip terbaru pelanggan ini.
+              </p>
+            </div>
+            <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-xs font-semibold text-neutral-600">
+              {formatInteger(customerDeposits.recentEntries.length)} mutasi
+            </span>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {hasLedgerEntries ? (
+              customerDeposits.recentEntries.map((entry) => (
+                <article
+                  key={entry.id}
+                  className="rounded-xl border border-[var(--border)] bg-neutral-50/60 p-3.5"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-xs font-semibold",
+                            getCustomerDepositDirectionClass(entry.direction),
+                          )}
+                        >
+                          {customerDepositEntryTypeLabels[entry.entryType]}
+                        </span>
+                        <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs font-semibold text-neutral-600">
+                          {entry.outletName}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+                        {formatDateTime(entry.occurredAt)} oleh{" "}
+                        {entry.createdByName}
+                      </p>
+                      {entry.description ? (
+                        <p className="mt-2 text-xs leading-5 text-neutral-700">
+                          {entry.description}
+                        </p>
+                      ) : null}
+                      {entry.invoiceNumber ? (
+                        <p className="mt-2 font-mono text-xs text-[var(--muted)]">
+                          Ref nota: {entry.invoiceNumber}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="shrink-0 sm:text-right">
+                      <p className="text-sm font-semibold text-neutral-950">
+                        {getCustomerDepositDirectionPrefix(entry.direction)}{" "}
+                        {formatMoney(entry.amount)}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        Saldo: {formatMoney(entry.balanceAfter)}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-[var(--border)] bg-neutral-50/60 px-4 py-8 text-center">
+                <Clock3 className="mx-auto size-8 text-neutral-300" />
+                <p className="mt-3 text-sm font-semibold text-neutral-950">
+                  Belum ada mutasi Dana Titip
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Mutasi akan muncul setelah Dana Titip masuk, digunakan,
+                  ditarik, atau dikoreksi.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CustomerInsights({ data }: { data: AdminCustomerDetailData }) {
   const { customer, summary } = data;
   const hasContact = Boolean(customer.phone || customer.email);
@@ -637,140 +835,143 @@ function TransactionHistory({
         )}
       </div>
 
-      <div className="hidden min-w-0 overflow-x-auto lg:block">
-        <table className="w-full min-w-[1120px] table-auto text-left text-sm">
-          <thead className="border-b border-[var(--border)] bg-neutral-50/80 text-xs text-[var(--muted)]">
-            <tr>
-              <th className="w-[190px] px-5 py-4 font-semibold">
-                Nota & tanggal
-              </th>
-              <th className="w-[175px] px-5 py-4 font-semibold">
-                Status & pembayaran
-              </th>
-              <th className="min-w-[260px] px-5 py-4 font-semibold">
-                Ringkasan item
-              </th>
-              <th className="w-[170px] px-5 py-4 font-semibold">Outlet</th>
-              <th className="w-[190px] px-5 py-4 font-semibold">
-                Register & sales
-              </th>
-              <th className="w-[165px] px-5 py-4 text-right font-semibold">
-                Total
-              </th>
-              <th className="w-[92px] px-5 py-4 text-right font-semibold">
-                Aksi
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border)]">
-            {transactions.length > 0 ? (
-              transactions.map((transaction) => (
-                <tr
-                  key={transaction.id}
-                  className="transition-colors hover:bg-neutral-50/70"
-                >
-                  <td className="px-5 py-4 align-top">
-                    <Link
-                      href={`/admin/penjualan/${transaction.id}`}
-                      className="font-semibold text-neutral-950 hover:text-[var(--accent)]"
-                    >
-                      {transaction.invoiceNumber}
-                    </Link>
-                    <p className="mt-1.5 whitespace-nowrap text-xs text-[var(--muted)]">
-                      {formatDateTime(
-                        transaction.completedAt ?? transaction.createdAt,
-                      )}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 align-top">
-                    <span
-                      className={cn(
-                        "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
-                        getSaleStatusClass(transaction.status),
-                      )}
-                    >
-                      {saleStatusLabels[transaction.status]}
-                    </span>
-                    <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-                      {getPaymentMethodLabel(transaction.paymentMethods)}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 align-top">
-                    <div className="flex items-center gap-2">
-                      <ShoppingBag className="size-4 shrink-0 text-neutral-400" />
-                      <p className="font-medium text-neutral-950">
-                        {formatInteger(transaction.totalItems)} item
-                      </p>
-                    </div>
-                    <p className="mt-1.5 line-clamp-2 max-w-xl text-xs leading-5 text-[var(--muted)]">
-                      {transaction.itemSummary.length > 0
-                        ? transaction.itemSummary.join(", ")
-                        : "Item belum tersedia"}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 align-top">
-                    <div className="flex items-start gap-2">
-                      <Store className="mt-0.5 size-4 shrink-0 text-neutral-400" />
-                      <p className="font-medium leading-5 text-neutral-950">
-                        {transaction.outletName}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 align-top">
-                    <div className="flex items-start gap-2">
-                      <MonitorSmartphone className="mt-0.5 size-4 shrink-0 text-neutral-400" />
-                      <div>
-                        <p className="font-medium leading-5 text-neutral-950">
-                          {transaction.registerName}
-                        </p>
-                        <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                          {transaction.cashierName}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 text-right align-top">
-                    <p className="whitespace-nowrap font-semibold text-neutral-950">
-                      {formatMoney(transaction.totalAmount)}
-                    </p>
-                    {Number(transaction.discountAmount) > 0 ? (
-                      <p className="mt-1.5 whitespace-nowrap text-xs font-medium text-amber-700">
-                        Diskon {formatMoney(transaction.discountAmount)}
-                      </p>
-                    ) : (
-                      <p className="mt-1.5 text-xs text-[var(--muted)]">
-                        Tanpa diskon
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-5 py-4 text-right align-top">
-                    <Link
-                      href={`/admin/penjualan/${transaction.id}`}
-                      aria-label={`Buka transaksi ${transaction.invoiceNumber}`}
-                      title="Buka detail transaksi"
-                      className="inline-flex size-9 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-neutral-600 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
-                    >
-                      <ArrowRight className="size-4" />
-                    </Link>
-                  </td>
+      <div className="hidden p-4 lg:block lg:p-5">
+        <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1060px] table-fixed text-left text-sm">
+              <colgroup>
+                <col className="w-[17%]" />
+                <col className="w-[13%]" />
+                <col className="w-[27%]" />
+                <col className="w-[14%]" />
+                <col className="w-[16%]" />
+                <col className="w-[9%]" />
+                <col className="w-[4%]" />
+              </colgroup>
+              <thead className="border-b border-[var(--border)] bg-neutral-50/80 text-xs text-[var(--muted)]">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Nota & tanggal</th>
+                  <th className="px-4 py-3 font-semibold">
+                    Status & pembayaran
+                  </th>
+                  <th className="px-4 py-3 font-semibold">Ringkasan item</th>
+                  <th className="px-4 py-3 font-semibold">Outlet</th>
+                  <th className="px-4 py-3 font-semibold">Register & sales</th>
+                  <th className="px-4 py-3 text-right font-semibold">Total</th>
+                  <th className="px-3 py-3 text-right font-semibold">Aksi</th>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={7} className="px-5 py-14 text-center">
-                  <ReceiptText className="mx-auto size-10 text-neutral-300" />
-                  <p className="mt-3 font-semibold text-neutral-950">
-                    Belum ada transaksi
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    Riwayat akan muncul setelah pelanggan dipilih saat checkout
-                    POS.
-                  </p>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {transactions.length > 0 ? (
+                  transactions.map((transaction) => (
+                    <tr
+                      key={transaction.id}
+                      className="align-top transition-colors hover:bg-neutral-50/70"
+                    >
+                      <td className="px-4 py-4">
+                        <Link
+                          href={`/admin/penjualan/${transaction.id}`}
+                          className="break-words text-xs font-semibold leading-5 text-neutral-950 hover:text-[var(--accent)]"
+                        >
+                          {transaction.invoiceNumber}
+                        </Link>
+                        <p className="mt-2 whitespace-nowrap text-xs text-[var(--muted)]">
+                          {formatDateTime(
+                            transaction.completedAt ?? transaction.createdAt,
+                          )}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+                            getSaleStatusClass(transaction.status),
+                          )}
+                        >
+                          {saleStatusLabels[transaction.status]}
+                        </span>
+                        <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+                          {getPaymentMethodLabel(transaction.paymentMethods)}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <ShoppingBag className="size-4 shrink-0 text-neutral-400" />
+                          <p className="font-semibold text-neutral-950">
+                            {formatInteger(transaction.totalItems)} item
+                          </p>
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
+                          {transaction.itemSummary.length > 0
+                            ? transaction.itemSummary.join(", ")
+                            : "Item belum tersedia"}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-start gap-2">
+                          <Store className="mt-0.5 size-4 shrink-0 text-neutral-400" />
+                          <p className="font-semibold leading-5 text-neutral-950">
+                            {transaction.outletName}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-start gap-2">
+                          <MonitorSmartphone className="mt-0.5 size-4 shrink-0 text-neutral-400" />
+                          <div className="min-w-0">
+                            <p className="font-semibold leading-5 text-neutral-950">
+                              {transaction.registerName}
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                              {transaction.cashierName}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <p className="whitespace-nowrap font-semibold text-neutral-950">
+                          {formatMoney(transaction.totalAmount)}
+                        </p>
+                        {Number(transaction.discountAmount) > 0 ? (
+                          <p className="mt-1.5 whitespace-nowrap text-xs font-medium text-amber-700">
+                            Diskon {formatMoney(transaction.discountAmount)}
+                          </p>
+                        ) : (
+                          <p className="mt-1.5 text-xs text-[var(--muted)]">
+                            Tanpa diskon
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-3 py-4 text-right">
+                        <Link
+                          href={`/admin/penjualan/${transaction.id}`}
+                          aria-label={`Buka transaksi ${transaction.invoiceNumber}`}
+                          title="Buka detail transaksi"
+                          className="inline-flex size-9 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-neutral-600 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                        >
+                          <ArrowRight className="size-4" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-14 text-center">
+                      <ReceiptText className="mx-auto size-10 text-neutral-300" />
+                      <p className="mt-3 font-semibold text-neutral-950">
+                        Belum ada transaksi
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--muted)]">
+                        Riwayat akan muncul setelah pelanggan dipilih saat
+                        checkout POS.
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -906,6 +1107,8 @@ export default async function CustomerDetailPage({
           icon={<CalendarDays className="size-5" />}
         />
       </section>
+
+      <CustomerDepositPanel data={data} />
 
       <CustomerInsights data={data} />
 

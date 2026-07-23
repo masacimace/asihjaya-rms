@@ -27,6 +27,8 @@ import {
 } from "@/db/schema";
 import {
   ADMIN_CUSTOMERS_PAGE_SIZE,
+  type AdminCustomerDepositBalanceRow,
+  type AdminCustomerDepositLedgerRow,
   type AdminCustomerDetailData,
   type AdminCustomerFilters,
   type AdminCustomerFormData,
@@ -34,6 +36,10 @@ import {
   type AdminCustomerListRow,
   type AdminCustomerTransactionRow,
 } from "@/features/customers/contracts";
+import {
+  getCustomerDepositBalancesForCustomer,
+  getCustomerDepositLedgerEntries,
+} from "@/features/customer-deposits/queries";
 import type { AuthContext } from "@/lib/auth/session";
 
 const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -164,6 +170,43 @@ function mapLastTransactionRow(
 
 function getTransactionTime(value: { completedAt: Date | null; createdAt: Date }) {
   return value.completedAt ?? value.createdAt;
+}
+
+function getLatestDate(values: Array<Date | null>) {
+  const validTimes = values
+    .filter((value): value is Date => Boolean(value))
+    .map((value) => value.getTime());
+
+  if (validTimes.length === 0) {
+    return null;
+  }
+
+  return new Date(Math.max(...validTimes));
+}
+
+function sortDepositLedgerEntries(
+  entries: AdminCustomerDepositLedgerRow[],
+) {
+  return [...entries].sort((firstEntry, secondEntry) => {
+    const occurredDelta =
+      secondEntry.occurredAt.getTime() - firstEntry.occurredAt.getTime();
+
+    if (occurredDelta !== 0) {
+      return occurredDelta;
+    }
+
+    return secondEntry.createdAt.getTime() - firstEntry.createdAt.getTime();
+  });
+}
+
+function createEmptyCustomerDepositData() {
+  return {
+    totalBalance: 0,
+    outletsWithBalance: 0,
+    lastLedgerEntryAt: null,
+    balances: [] satisfies AdminCustomerDepositBalanceRow[],
+    recentEntries: [] satisfies AdminCustomerDepositLedgerRow[],
+  };
 }
 
 export async function getAdminCustomerListData(
@@ -497,10 +540,12 @@ export async function getAdminCustomerDetailData(
         lastItemName: null,
       },
       transactions: [],
+      customerDeposits: createEmptyCustomerDepositData(),
     };
   }
 
-  const saleRows = await db
+  const [saleRows, depositBalances, depositLedgerEntriesByOutlet] = await Promise.all([
+    db
     .select({
       id: sales.id,
       invoiceNumber: sales.invoiceNumber,
@@ -526,7 +571,25 @@ export async function getAdminCustomerDetailData(
       ),
     )
     .orderBy(desc(sales.completedAt), desc(sales.createdAt))
-    .limit(50);
+    .limit(50),
+
+    getCustomerDepositBalancesForCustomer({
+      organizationId: auth.organization.id,
+      customerId,
+      outletIds,
+    }),
+
+    Promise.all(
+      outletIds.map((outletId) =>
+        getCustomerDepositLedgerEntries({
+          organizationId: auth.organization.id,
+          customerId,
+          outletId,
+          limit: 8,
+        }),
+      ),
+    ),
+  ]);
 
   const saleIds = saleRows.map((sale) => sale.id);
 
@@ -605,6 +668,23 @@ export async function getAdminCustomerDetailData(
   const lastCompletedItems = lastCompletedTransaction
     ? itemsBySaleId.get(lastCompletedTransaction.id) ?? []
     : [];
+  const customerDepositBalances = depositBalances.map(
+    (balance): AdminCustomerDepositBalanceRow => ({
+      outletId: balance.outletId,
+      outletCode: balance.outletCode,
+      outletName: balance.outletName,
+      balanceAmount: balance.balanceAmount,
+      balance: balance.balance,
+      lastLedgerEntryAt: balance.lastLedgerEntryAt,
+    }),
+  );
+  const recentDepositEntries = sortDepositLedgerEntries(
+    depositLedgerEntriesByOutlet.flat(),
+  ).slice(0, 8);
+  const totalDepositBalance = customerDepositBalances.reduce(
+    (total, balance) => total + balance.balance,
+    0,
+  );
 
   return {
     customer,
@@ -624,5 +704,16 @@ export async function getAdminCustomerDetailData(
       lastItemName: lastCompletedItems[0]?.productName ?? null,
     },
     transactions,
+    customerDeposits: {
+      totalBalance: totalDepositBalance,
+      outletsWithBalance: customerDepositBalances.filter(
+        (balance) => balance.balance > 0,
+      ).length,
+      lastLedgerEntryAt: getLatestDate(
+        customerDepositBalances.map((balance) => balance.lastLedgerEntryAt),
+      ),
+      balances: customerDepositBalances,
+      recentEntries: recentDepositEntries,
+    },
   };
 }

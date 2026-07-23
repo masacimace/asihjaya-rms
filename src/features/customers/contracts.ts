@@ -83,6 +83,30 @@ export type AdminCustomerTransactionRow = {
   paymentMethods: string[];
 };
 
+
+export type AdminCustomerDepositBalanceRow = {
+  outletId: string;
+  outletCode: string;
+  outletName: string;
+  balanceAmount: string;
+  balance: number;
+  lastLedgerEntryAt: Date | null;
+};
+
+export type AdminCustomerDepositLedgerRow = {
+  id: string;
+  outletName: string;
+  entryType: "deposit_in" | "deposit_used" | "deposit_withdrawal" | "adjustment";
+  direction: "credit" | "debit";
+  amount: string;
+  balanceAfter: string;
+  description: string | null;
+  invoiceNumber: string | null;
+  createdByName: string;
+  occurredAt: Date;
+  createdAt: Date;
+};
+
 export type AdminCustomerDetailData = {
   customer: {
     id: string;
@@ -107,6 +131,13 @@ export type AdminCustomerDetailData = {
     lastItemName: string | null;
   };
   transactions: AdminCustomerTransactionRow[];
+  customerDeposits: {
+    totalBalance: number;
+    outletsWithBalance: number;
+    lastLedgerEntryAt: Date | null;
+    balances: AdminCustomerDepositBalanceRow[];
+    recentEntries: AdminCustomerDepositLedgerRow[];
+  };
 };
 
 export type AdminCustomerFormData = AdminCustomerDetailData["customer"];
