@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
 import { saleItems, sales } from "@/db/schema";
@@ -22,6 +22,12 @@ type SaleItemSnapshot = {
   imageKey?: unknown;
   productImageKey?: unknown;
 };
+
+const PUBLIC_HISTORY_SALE_STATUSES = [
+  "completed",
+  "partially_refunded",
+  "refunded",
+] as const;
 
 function normalizeImageKey(value: unknown) {
   if (typeof value !== "string") {
@@ -67,12 +73,14 @@ export async function GET(_request: Request, context: RouteContext) {
   const [saleRow] = await db
     .select({
       organizationId: sales.organizationId,
+      outletId: sales.outletId,
+      customerId: sales.customerId,
     })
     .from(sales)
     .where(eq(sales.id, parsedToken.saleId))
     .limit(1);
 
-  if (!saleRow) {
+  if (!saleRow?.customerId) {
     return new Response("Not found", { status: 404 });
   }
 
@@ -90,7 +98,15 @@ export async function GET(_request: Request, context: RouteContext) {
       snapshot: saleItems.snapshot,
     })
     .from(saleItems)
-    .where(eq(saleItems.saleId, parsedToken.saleId));
+    .innerJoin(sales, eq(saleItems.saleId, sales.id))
+    .where(
+      and(
+        eq(sales.organizationId, saleRow.organizationId),
+        eq(sales.outletId, saleRow.outletId),
+        eq(sales.customerId, saleRow.customerId),
+        inArray(sales.status, [...PUBLIC_HISTORY_SALE_STATUSES]),
+      ),
+    );
 
   if (
     !saleItemRows.some((item) => saleItemAllowsImageKey(item.snapshot, imageKey))

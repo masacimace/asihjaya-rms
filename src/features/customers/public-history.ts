@@ -132,26 +132,6 @@ function readSnapshotString(snapshot: unknown, key: keyof SaleItemSnapshot) {
   return normalizedValue || null;
 }
 
-function maskName(value: string | null | undefined) {
-  const name = value?.trim();
-
-  if (!name) {
-    return "Pelanggan";
-  }
-
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => {
-      if (word.length <= 2) {
-        return `${word[0] ?? ""}*`;
-      }
-
-      return `${word[0]}${"*".repeat(Math.min(word.length - 2, 4))}${word[word.length - 1]}`;
-    })
-    .join(" ");
-}
-
 function maskPhone(value: string | null | undefined) {
   const phone = value?.replace(/\D/g, "") ?? "";
 
@@ -290,6 +270,8 @@ export async function getPublicCustomerHistoryData(
               finalPriceAmount: saleItems.finalPriceAmount,
               snapshot: saleItems.snapshot,
               sku: productItems.sku,
+              productItemImageKey: productItems.imageKey,
+              productMasterImageKey: productMasters.imageKey,
               productName: sql<string>`coalesce(${saleItems.snapshot}->>'productName', ${saleItems.snapshot}->>'itemDisplayName', ${productItems.displayName}, ${productMasters.name})`,
               categoryName: sql<string | null>`coalesce(${saleItems.snapshot}->>'categoryName', ${productCategories.name})`,
             })
@@ -361,7 +343,9 @@ export async function getPublicCustomerHistoryData(
         ),
         imageKey:
           readSnapshotString(item.snapshot, "imageKey") ??
-          readSnapshotString(item.snapshot, "productImageKey"),
+          readSnapshotString(item.snapshot, "productImageKey") ??
+          item.productItemImageKey ??
+          item.productMasterImageKey,
       })),
       paymentMethods: Array.from(
         new Set(paidPayments.map((payment) => getPaymentMethodLabel(payment.method))),
@@ -399,7 +383,7 @@ export async function getPublicCustomerHistoryData(
     customer: {
       id: baseSale.customerId,
       customerCode: baseSale.customerCode,
-      name: maskName(baseSale.customerName),
+      name: baseSale.customerName,
       phone: maskPhone(baseSale.customerPhone),
     },
     scannedSale,

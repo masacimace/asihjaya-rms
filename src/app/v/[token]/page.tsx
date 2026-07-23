@@ -117,11 +117,6 @@ function BrandHeader() {
           </p>
         </div>
       </div>
-
-      <div className="inline-flex w-fit items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-600">
-        <LockKeyhole className="size-3.5" />
-        Customer History · Read only
-      </div>
     </header>
   );
 }
@@ -131,7 +126,7 @@ function InvalidState({ message }: { message: string }) {
     <main className="min-h-screen bg-[#f7f6f2] px-4 py-6 text-neutral-950 sm:px-6 sm:py-10">
       <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top,_rgba(211,164,77,0.14),_transparent_68%)]" />
 
-      <section className="relative mx-auto max-w-3xl overflow-hidden rounded-[28px] border border-neutral-200 bg-white shadow-[0_24px_70px_-38px_rgba(23,23,23,0.35)]">
+      <section className="relative mx-auto max-w-3xl overflow-hidden rounded-[28px] border border-neutral-200 bg-white ">
         <BrandHeader />
 
         <div className="px-5 py-10 sm:px-10 sm:py-14">
@@ -172,7 +167,8 @@ function InvalidState({ message }: { message: string }) {
                 <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white text-xs font-bold text-neutral-700 ring-1 ring-neutral-200">
                   3
                 </span>
-                Hubungi outlet penerbit nota jika informasi tetap tidak tersedia.
+                Hubungi outlet penerbit nota jika informasi tetap tidak
+                tersedia.
               </li>
             </ol>
           </div>
@@ -197,7 +193,7 @@ function NoCustomerState({
     <main className="min-h-screen bg-[#f7f6f2] px-4 py-6 text-neutral-950 sm:px-6 sm:py-10">
       <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top,_rgba(211,164,77,0.14),_transparent_68%)]" />
 
-      <section className="relative mx-auto max-w-3xl overflow-hidden rounded-[28px] border border-neutral-200 bg-white shadow-[0_24px_70px_-38px_rgba(23,23,23,0.35)]">
+      <section className="relative mx-auto max-w-3xl overflow-hidden rounded-[28px] border border-neutral-200 bg-white ">
         <BrandHeader />
 
         <div className="px-5 py-10 sm:px-10 sm:py-14">
@@ -261,19 +257,17 @@ function TransactionItemList({
   return (
     <div className="grid gap-3">
       {transaction.itemSummary.map((item) => {
-        const imageUrl = transaction.isScannedSale
-          ? getPublicCustomerHistoryImageUrl({
-              imageKey: item.imageKey,
-              token,
-            })
-          : null;
+        const imageUrl = getPublicCustomerHistoryImageUrl({
+          imageKey: item.imageKey,
+          token,
+        });
 
         return (
           <article
             key={`${transaction.id}-${item.lineNumber}-${item.productCode}`}
-            className="grid gap-4 rounded-2xl border border-neutral-200 bg-white p-3 sm:grid-cols-[76px_minmax(0,1fr)]"
+            className="grid gap-4 rounded-2xl border border-neutral-200 bg-white p-3  "
           >
-            <div className="grid aspect-square w-full place-items-center overflow-hidden rounded-xl border border-neutral-200 bg-[#faf8f2] text-[#9a681d]">
+            <div className="grid aspect-square w-full place-items-center overflow-hidden rounded-xl border-neutral-200 bg-[#faf8f2] text-[#9a681d]">
               {imageUrl ? (
                 <Image
                   src={imageUrl}
@@ -303,7 +297,7 @@ function TransactionItemList({
                 </span>
               </div>
 
-              <dl className="mt-4 grid grid-cols-4 divide-x divide-neutral-200 rounded-2xl bg-neutral-50 px-2 py-3">
+              <dl className="mt-3 grid grid-cols-3 divide-x divide-neutral-200 rounded-2xl bg-neutral-50 px-2 py-3">
                 <div className="px-2">
                   <dt className="text-[10px] font-medium uppercase text-neutral-500">
                     Berat
@@ -328,14 +322,6 @@ function TransactionItemList({
                     {formatPercent(item.exchangePurityPercent)}
                   </dd>
                 </div>
-                <div className="px-2">
-                  <dt className="text-[10px] font-medium uppercase text-neutral-500">
-                    Harga
-                  </dt>
-                  <dd className="mt-1 text-xs font-bold text-neutral-950">
-                    {formatAmount(item.finalPriceAmount)}
-                  </dd>
-                </div>
               </dl>
             </div>
           </article>
@@ -355,16 +341,14 @@ function TransactionCard({
   return (
     <article
       className={`overflow-hidden rounded-3xl border bg-white ${
-        transaction.isScannedSale
-          ? "border-[#d4a64a] shadow-[0_18px_44px_-32px_rgba(122,78,29,0.55)]"
-          : "border-neutral-200"
+        transaction.isScannedSale ? "border-[#d4a64a]" : "border-neutral-200"
       }`}
     >
       <div className="grid gap-4 border-b border-neutral-100 p-5 sm:grid-cols-[1fr_auto] sm:items-start">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {transaction.isScannedSale ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fff1cd] px-3 py-1 text-xs font-bold uppercase text-[#815618]">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fff1cd] px-3 py-1 text-xs font-semibold text-[#815618]">
                 <BadgeCheck className="size-3.5" />
                 Nota yang discan
               </span>
@@ -373,7 +357,7 @@ function TransactionCard({
               {getStatusLabel(transaction.status)}
             </span>
           </div>
-          <h2 className="mt-3 break-all font-mono text-lg font-bold text-neutral-950">
+          <h2 className="mt-3 break-all font-mono text-md font-bold text-neutral-950">
             {transaction.invoiceNumber}
           </h2>
           <p className="mt-1 text-sm text-neutral-500">
@@ -455,33 +439,41 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f6f2] px-4 py-6 text-neutral-950 sm:px-6 sm:py-10">
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,_rgba(211,164,77,0.16),_transparent_68%)]" />
+    <main className="min-h-screen bg-white px-2 py-2 text-neutral-950 sm:px-2 sm:py-2">
+      <div className="pointer-events-none fixed inset-x-0 top-0 h-80" />
 
-      <section className="relative mx-auto max-w-6xl overflow-hidden rounded-[28px] border border-neutral-200 bg-white shadow-[0_24px_70px_-38px_rgba(23,23,23,0.35)]">
+      <section className="relative mx-auto max-w-6xl overflow-hidden border border-neutral-200 bg-white ">
         <BrandHeader />
 
-        <div className="px-5 py-6 sm:px-8 sm:py-8">
+        <div className="px-2 py-6 sm:px-8 sm:py-8">
           <section className="overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-[#fffaf0]">
             <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase text-emerald-800">
-                  <BadgeCheck className="size-3.5" />
-                  Riwayat resmi Asihjaya
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                    <BadgeCheck className="size-3.5" />
+                    Riwayat resmi Asihjaya
+                  </div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold text-neutral-600">
+                    <LockKeyhole className="size-3.5" />
+                    Read only
+                  </div>
                 </div>
                 <h1 className="mt-3 text-2xl font-bold sm:text-3xl">
                   Riwayat transaksi pelanggan di {data.outlet.name}
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-neutral-600 sm:text-base">
                   Halaman ini menampilkan riwayat transaksi customer terdaftar
-                  pada outlet yang sama dengan nota yang kamu scan.
+                  pada outlet yang sama dengan nota yang kamu scan dalam mode
+                  baca saja.
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-[#ead7ad] bg-white/90 p-4 shadow-sm lg:min-w-80">
-                <p className="text-[11px] font-semibold uppercase text-neutral-500">
+              <div className="rounded-2xl border border-[#ead7ad] bg-white/90 p-4 lg:min-w-80">
+                <div className="inline-flex items-center gap-2 rounded-full bg-[#fff6df] px-3 py-1 text-xs font-semibold text-emerald-800">
+                  <UserRound className="size-3.5" />
                   Customer
-                </p>
+                </div>
                 <p className="mt-2 text-lg font-bold text-neutral-950">
                   {data.customer.name}
                 </p>
@@ -503,7 +495,7 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                   <p className="text-xs font-semibold uppercase text-neutral-500">
                     Total transaksi
                   </p>
-                  <p className="mt-1 text-2xl font-bold text-neutral-950">
+                  <p className="mt-1 text-md font-bold text-neutral-950">
                     {data.summary.totalTransactions}
                   </p>
                 </div>
@@ -519,7 +511,7 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                   <p className="text-xs font-semibold uppercase text-neutral-500">
                     Total belanja
                   </p>
-                  <p className="mt-1 text-xl font-bold text-neutral-950">
+                  <p className="mt-1 text-md font-bold text-neutral-950">
                     {formatAmount(data.summary.totalSpent)}
                   </p>
                 </div>
@@ -535,7 +527,7 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                   <p className="text-xs font-semibold uppercase text-neutral-500">
                     Total item
                   </p>
-                  <p className="mt-1 text-2xl font-bold text-neutral-950">
+                  <p className="mt-1 text-md font-bold text-neutral-950">
                     {data.summary.totalItems}
                   </p>
                 </div>
@@ -587,7 +579,8 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                   </dt>
                   <dd className="text-sm font-semibold text-neutral-900">
                     {formatDateTime(
-                      data.scannedSale.completedAt ?? data.scannedSale.createdAt,
+                      data.scannedSale.completedAt ??
+                        data.scannedSale.createdAt,
                     )}
                   </dd>
                 </div>
@@ -602,36 +595,33 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                 </div>
                 <div className="grid gap-1 py-3 last:pb-0">
                   <dt className="text-sm text-neutral-500">Total nota</dt>
-                  <dd className="text-2xl font-bold text-[#9a681d]">
+                  <dd className="text-xl font-bold text-[#9a681d]">
                     {formatAmount(data.scannedSale.totalAmount)}
                   </dd>
                 </div>
               </dl>
             </aside>
 
-            <section className="grid gap-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase text-[#9a681d]">
-                    Detail riwayat
-                  </p>
-                  <h2 className="mt-1 text-2xl font-bold">
-                    {data.transactions.length} transaksi terakhir
-                  </h2>
+            <section className="rounded-3xl border border-neutral-200 bg-white p-5 sm:p-6">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                  <History className="size-3.5" />
+                  Detail transaksi
                 </div>
-                <div className="inline-flex w-fit items-center gap-2 rounded-full bg-neutral-100 px-3 py-1.5 text-xs font-semibold text-neutral-600">
-                  <LockKeyhole className="size-4" />
-                  Data sensitif dimasking
-                </div>
+                <h2 className="mt-1 text-2xl font-bold">
+                  {data.transactions.length} transaksi terakhir
+                </h2>
               </div>
 
-              {data.transactions.map((transaction) => (
-                <TransactionCard
-                  key={transaction.id}
-                  token={data.token}
-                  transaction={transaction}
-                />
-              ))}
+              <div className="mt-5 max-h-[75vh] space-y-4 overflow-y-auto pr-1">
+                {data.transactions.map((transaction) => (
+                  <TransactionCard
+                    key={transaction.id}
+                    token={data.token}
+                    transaction={transaction}
+                  />
+                ))}
+              </div>
             </section>
           </section>
 
@@ -646,13 +636,20 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                 </h2>
                 <p className="mt-2 text-xs leading-6 text-neutral-600 sm:text-sm">
                   Riwayat ini hanya tersedia melalui QR nota resmi dan dibatasi
-                  untuk customer serta outlet yang sama. Nomor kontak dan data
-                  sensitif pelanggan ditampilkan secara terbatas.
+                  untuk customer serta outlet yang sama. Halaman ini bersifat
+                  baca saja dan tidak dapat mengubah data transaksi.
                 </p>
                 <ul className="mt-3 grid gap-1.5 text-xs leading-5 text-neutral-500 sm:text-sm">
-                  <li>• Pastikan alamat situs berasal dari domain resmi Asihjaya.</li>
-                  <li>• Jangan membagikan tautan atau QR kepada pihak yang tidak berkepentingan.</li>
-                  <li>• Hubungi outlet penerbit jika rincian riwayat tidak sesuai.</li>
+                  <li>
+                    • Pastikan alamat situs berasal dari domain resmi Asihjaya.
+                  </li>
+                  <li>
+                    • Gunakan halaman ini hanya untuk melihat riwayat transaksi
+                    resmi pelanggan.
+                  </li>
+                  <li>
+                    • Hubungi outlet penerbit jika rincian riwayat tidak sesuai.
+                  </li>
                 </ul>
               </div>
             </div>
