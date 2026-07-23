@@ -13,6 +13,7 @@ export const adminApprovalTypes = [
   "void_receipt",
   "refund_transaction",
   "manual_payment_verification",
+  "customer_deposit_withdrawal",
   "stock_adjustment",
   "other",
 ] as const;

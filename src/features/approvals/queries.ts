@@ -155,6 +155,7 @@ function getApprovalTypeTitle(type: ApprovalType) {
   if (type === "void_receipt") return "Pembatalan Nota (Void)";
   if (type === "refund_transaction") return "Refund Transaksi";
   if (type === "manual_payment_verification") return "Verifikasi Pembayaran Manual";
+  if (type === "customer_deposit_withdrawal") return "Penarikan Dana Titip";
   if (type === "stock_adjustment") return "Penyesuaian Stok";
 
   return "Approval Operasional";
@@ -360,6 +361,39 @@ export function summarizeApprovalRequest(
         "Pembayaran non-tunai membutuhkan pemeriksaan manager/finance sebelum transaksi diselesaikan.",
       reason: triggerReason ? stringifyValue(triggerReason) : null,
       impactLabel: impactAmount ? "Nilai pembayaran" : null,
+      impactValue: impactAmount,
+      lines,
+    };
+  }
+
+  if (type === "customer_deposit_withdrawal") {
+    const impactAmount = getNumberValue(requestData, [
+      "withdrawalAmount",
+      "depositAmount",
+      "amount",
+    ]);
+    const customer = getRecordValue(requestData, ["customerName", "customerCode"]);
+    const outlet = getRecordValue(requestData, ["outletName", "outletCode"]);
+    const lines = [
+      customer ? { label: "Customer", value: stringifyValue(customer) } : null,
+      outlet ? { label: "Outlet", value: stringifyValue(outlet) } : null,
+      impactAmount
+        ? {
+            label: "Nominal tarik tunai",
+            value: formatMoney(impactAmount),
+            tone: "warning" as const,
+          }
+        : null,
+      reason ? { label: "Alasan", value: stringifyValue(reason) } : null,
+    ].filter(Boolean) as AdminApprovalRequestSummary["lines"];
+
+    return {
+      title: "Penarikan Dana Titip",
+      description: customer
+        ? `Permintaan tarik tunai Dana Titip untuk ${stringifyValue(customer)}`
+        : "Permintaan tarik tunai Dana Titip customer.",
+      reason: reason ? stringifyValue(reason) : null,
+      impactLabel: impactAmount ? "Nominal tarik tunai" : null,
       impactValue: impactAmount,
       lines,
     };

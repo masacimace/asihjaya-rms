@@ -58,6 +58,7 @@ const approvalTypeLabels: Record<AdminApprovalType, string> = {
   void_receipt: "Void Nota",
   refund_transaction: "Refund Transaksi",
   manual_payment_verification: "Verifikasi Payment Manual",
+  customer_deposit_withdrawal: "Penarikan Dana Titip",
   stock_adjustment: "Penyesuaian Stok",
   other: "Lainnya",
 };

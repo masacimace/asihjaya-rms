@@ -214,6 +214,16 @@ export const approvalExecutionStatusEnum = pgEnum("approval_execution_status", [
   "cancelled",
 ]);
 
+export const customerDepositLedgerEntryTypeEnum = pgEnum(
+  "customer_deposit_ledger_entry_type",
+  ["deposit_in", "deposit_used", "deposit_withdrawal", "adjustment"],
+);
+
+export const customerDepositLedgerDirectionEnum = pgEnum(
+  "customer_deposit_ledger_direction",
+  ["credit", "debit"],
+);
+
 export const paymentMethodEnum = pgEnum("payment_method", [
   "cash",
   "debit_card",
@@ -2358,6 +2368,7 @@ export const approvalTypeEnum = pgEnum("approval_type", [
   "void_receipt",
   "refund_transaction",
   "manual_payment_verification",
+  "customer_deposit_withdrawal",
   "stock_adjustment",
   "other",
 ]);
@@ -2425,6 +2436,91 @@ export const approvals = pgTable(
       sql`${table.executionStatus} <> 'completed' or (
         ${table.executedAt} is not null and ${table.executedBy} is not null
       )`,
+    ),
+  ],
+);
+
+export const customerDepositLedger = pgTable(
+  "customer_deposit_ledger",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    saleId: uuid("sale_id").references(() => sales.id, {
+      onDelete: "set null",
+    }),
+    paymentId: uuid("payment_id").references(() => payments.id, {
+      onDelete: "set null",
+    }),
+    cashMovementId: uuid("cash_movement_id").references(() => cashMovements.id, {
+      onDelete: "set null",
+    }),
+    approvalId: uuid("approval_id").references(() => approvals.id, {
+      onDelete: "set null",
+    }),
+    entryType: customerDepositLedgerEntryTypeEnum("entry_type").notNull(),
+    direction: customerDepositLedgerDirectionEnum("direction").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 0 }).notNull(),
+    balanceAfter: numeric("balance_after", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 160 }),
+    referenceType: varchar("reference_type", { length: 80 }),
+    referenceId: uuid("reference_id"),
+    description: text("description"),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("customer_deposit_ledger_scope_time_idx").on(
+      table.organizationId,
+      table.outletId,
+      table.customerId,
+      table.occurredAt,
+    ),
+    index("customer_deposit_ledger_sale_idx").on(table.saleId),
+    index("customer_deposit_ledger_reference_idx").on(
+      table.referenceType,
+      table.referenceId,
+    ),
+    uniqueIndex("customer_deposit_ledger_idempotency_uq")
+      .on(table.organizationId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} is not null`),
+    check("customer_deposit_ledger_amount_positive_ck", sql`${table.amount} > 0`),
+    check(
+      "customer_deposit_ledger_balance_nonnegative_ck",
+      sql`${table.balanceAfter} >= 0`,
+    ),
+    check(
+      "customer_deposit_ledger_direction_ck",
+      sql`(
+        (${table.entryType} = 'deposit_in' and ${table.direction} = 'credit')
+        or (${table.entryType} in ('deposit_used', 'deposit_withdrawal') and ${table.direction} = 'debit')
+        or (${table.entryType} = 'adjustment' and ${table.direction} in ('credit', 'debit'))
+      )`,
+    ),
+    check(
+      "customer_deposit_ledger_reference_pair_ck",
+      sql`(${table.referenceType} is null and ${table.referenceId} is null)
+        or (${table.referenceType} is not null and ${table.referenceId} is not null)`,
     ),
   ],
 );

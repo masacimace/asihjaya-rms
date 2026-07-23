@@ -74,6 +74,7 @@ function approvalTypeLabel(type: ApprovalType) {
   if (type === "manual_payment_verification") {
     return "Verifikasi pembayaran manual";
   }
+  if (type === "customer_deposit_withdrawal") return "Penarikan Dana Titip";
   if (type === "stock_adjustment") return "Penyesuaian inventaris";
   return "Permintaan operasional";
 }
@@ -103,6 +104,10 @@ function createSafeApprovalSnapshot(requestData: Record<string, unknown>) {
     "discountAmount",
     "itemCount",
     "paymentMethodsLabel",
+    "withdrawalAmount",
+    "depositAmount",
+    "customerName",
+    "customerCode",
     "profileName",
     "provider",
     "verificationSource",

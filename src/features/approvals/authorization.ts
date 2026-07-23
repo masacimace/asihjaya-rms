@@ -37,6 +37,7 @@ const approvalResolutionPermissionMap: Record<
   void_receipt: [SALE_VOID_APPROVE_PERMISSION],
   refund_transaction: [PAYMENT_REFUND_APPROVE_PERMISSION],
   manual_payment_verification: [MANUAL_PAYMENT_VERIFY_PERMISSION],
+  customer_deposit_withdrawal: ["payments.manage", "shifts.manage"],
   stock_adjustment: ["inventory.adjust"],
   other: ["settings.manage", "shifts.manage", "audit.view"],
 };
@@ -60,6 +61,7 @@ const approvalVisibilityPermissionMap: Record<
     "payments.manage",
     MANUAL_PAYMENT_VERIFY_PERMISSION,
   ],
+  customer_deposit_withdrawal: ["payments.manage", "shifts.manage"],
   stock_adjustment: ["inventory.adjust"],
   other: ["settings.manage", "shifts.manage", "audit.view"],
 };
@@ -69,6 +71,7 @@ const approvalTypes: readonly ApprovalType[] = [
   "void_receipt",
   "refund_transaction",
   "manual_payment_verification",
+  "customer_deposit_withdrawal",
   "stock_adjustment",
   "other",
 ];
