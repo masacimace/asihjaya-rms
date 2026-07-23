@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
+  customerDepositLedger,
   customers,
   outlets,
   payments,
@@ -42,6 +43,8 @@ export type PublicCustomerHistoryData =
         totalSpent: number;
         totalItems: number;
         lastTransactionAt: Date | null;
+        customerDepositBalanceAmount: string;
+        customerDepositBalance: number;
       };
       transactions: PublicCustomerHistoryTransaction[];
     }
@@ -87,6 +90,12 @@ export type PublicCustomerHistoryTransaction = {
     imageKey: string | null;
   }>;
   paymentMethods: string[];
+  customerDeposit: {
+    usedAmount: string;
+    inAmount: string;
+    balanceAfterAmount: string | null;
+    externalPaymentDueAmount: string;
+  };
 };
 
 type SaleItemSnapshot = {
@@ -260,7 +269,7 @@ export async function getPublicCustomerHistoryData(
 
   const saleIds = saleRows.map((sale) => sale.id);
 
-  const [itemRows, paymentRows] =
+  const [itemRows, paymentRows, customerDepositRows, latestDepositRows] =
     saleIds.length > 0
       ? await Promise.all([
           db
@@ -291,11 +300,49 @@ export async function getPublicCustomerHistoryData(
             .from(payments)
             .where(inArray(payments.saleId, saleIds))
             .orderBy(asc(payments.createdAt)),
+
+          db
+            .select({
+              saleId: customerDepositLedger.saleId,
+              entryType: customerDepositLedger.entryType,
+              direction: customerDepositLedger.direction,
+              amount: customerDepositLedger.amount,
+              balanceAfter: customerDepositLedger.balanceAfter,
+              occurredAt: customerDepositLedger.occurredAt,
+              createdAt: customerDepositLedger.createdAt,
+            })
+            .from(customerDepositLedger)
+            .where(inArray(customerDepositLedger.saleId, saleIds))
+            .orderBy(
+              asc(customerDepositLedger.occurredAt),
+              asc(customerDepositLedger.createdAt),
+            ),
+
+          db
+            .select({
+              balanceAfter: customerDepositLedger.balanceAfter,
+              occurredAt: customerDepositLedger.occurredAt,
+              createdAt: customerDepositLedger.createdAt,
+            })
+            .from(customerDepositLedger)
+            .where(
+              and(
+                eq(customerDepositLedger.organizationId, baseSale.organizationId),
+                eq(customerDepositLedger.outletId, baseSale.outletId),
+                eq(customerDepositLedger.customerId, baseSale.customerId),
+              ),
+            )
+            .orderBy(
+              desc(customerDepositLedger.occurredAt),
+              desc(customerDepositLedger.createdAt),
+            )
+            .limit(1),
         ])
-      : [[], []];
+      : [[], [], [], []];
 
   const itemsBySaleId = new Map<string, typeof itemRows>();
   const paymentsBySaleId = new Map<string, typeof paymentRows>();
+  const customerDepositsBySaleId = new Map<string, typeof customerDepositRows>();
 
   for (const item of itemRows) {
     const currentItems = itemsBySaleId.get(item.saleId) ?? [];
@@ -309,11 +356,48 @@ export async function getPublicCustomerHistoryData(
     paymentsBySaleId.set(payment.saleId, currentPayments);
   }
 
+  for (const deposit of customerDepositRows) {
+    if (!deposit.saleId) {
+      continue;
+    }
+
+    const currentDeposits = customerDepositsBySaleId.get(deposit.saleId) ?? [];
+    currentDeposits.push(deposit);
+    customerDepositsBySaleId.set(deposit.saleId, currentDeposits);
+  }
+
   const transactions = saleRows.map((sale): PublicCustomerHistoryTransaction => {
     const items = itemsBySaleId.get(sale.id) ?? [];
     const paidPayments = (paymentsBySaleId.get(sale.id) ?? []).filter(
       (payment) => payment.status === "paid",
     );
+    const depositEntries = customerDepositsBySaleId.get(sale.id) ?? [];
+    const customerDepositUsedAmount = depositEntries
+      .filter(
+        (entry) =>
+          entry.entryType === "deposit_used" && entry.direction === "debit",
+      )
+      .reduce((total, entry) => total + parseAmount(entry.amount), 0);
+    const customerDepositInAmount = depositEntries
+      .filter(
+        (entry) =>
+          entry.entryType === "deposit_in" && entry.direction === "credit",
+      )
+      .reduce((total, entry) => total + parseAmount(entry.amount), 0);
+    const lastCustomerDepositEntry = depositEntries.at(-1) ?? null;
+    const externalPaymentDueAmount = Math.max(
+      parseAmount(sale.totalAmount) -
+        customerDepositUsedAmount +
+        customerDepositInAmount,
+      0,
+    );
+    const paymentMethods = Array.from(
+      new Set(paidPayments.map((payment) => getPaymentMethodLabel(payment.method))),
+    );
+
+    if (customerDepositUsedAmount > 0) {
+      paymentMethods.push("Dana Titip");
+    }
 
     return {
       id: sale.id,
@@ -347,9 +431,13 @@ export async function getPublicCustomerHistoryData(
           item.productItemImageKey ??
           item.productMasterImageKey,
       })),
-      paymentMethods: Array.from(
-        new Set(paidPayments.map((payment) => getPaymentMethodLabel(payment.method))),
-      ),
+      paymentMethods,
+      customerDeposit: {
+        usedAmount: String(customerDepositUsedAmount),
+        inAmount: String(customerDepositInAmount),
+        balanceAfterAmount: lastCustomerDepositEntry?.balanceAfter ?? null,
+        externalPaymentDueAmount: String(externalPaymentDueAmount),
+      },
     };
   });
 
@@ -362,6 +450,8 @@ export async function getPublicCustomerHistoryData(
     0,
   );
   const lastTransaction = transactions[0] ?? null;
+  const latestDeposit = latestDepositRows[0] ?? null;
+  const customerDepositBalanceAmount = latestDeposit?.balanceAfter ?? "0";
   const scannedSale = transactions.find((sale) => sale.isScannedSale);
 
   if (!scannedSale) {
@@ -394,6 +484,8 @@ export async function getPublicCustomerHistoryData(
       lastTransactionAt: lastTransaction
         ? getTransactionTime(lastTransaction)
         : null,
+      customerDepositBalanceAmount,
+      customerDepositBalance: parseAmount(customerDepositBalanceAmount),
     },
     transactions,
   };

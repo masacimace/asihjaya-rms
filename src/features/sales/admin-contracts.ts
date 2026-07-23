@@ -119,6 +119,8 @@ export type AdminSaleListRow = {
   totalAmount: string;
   paidAmount: number;
   refundedAmount: number;
+  customerDepositUsedAmount: number;
+  customerDepositInAmount: number;
   paymentStatus: "paid" | "partial" | "pending";
   completedAt: Date | null;
   createdAt: Date;

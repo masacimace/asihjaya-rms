@@ -112,6 +112,12 @@ export const receiptCertificateSampleData: ReceiptCertificateData = {
       },
     },
   ],
+  customerDeposit: {
+    usedAmount: "500000",
+    inAmount: "250000",
+    balanceAfterAmount: "1250000",
+    externalPaymentDueAmount: "6935000",
+  },
   verification: {
     token: "preview-token",
     url: "http://localhost:3000/v/preview-token",
@@ -120,11 +126,11 @@ export const receiptCertificateSampleData: ReceiptCertificateData = {
     {
       method: "cash",
       provider: "Cash",
-      amount: "7185000",
+      amount: "6935000",
       providerReference: null,
       paidAt: new Date("2026-06-25T07:30:00.000Z"),
       metadata: {
-        receivedAmount: 7200000,
+        receivedAmount: 6950000,
         changeAmount: 15000,
         methodLabel: "Cash",
       },

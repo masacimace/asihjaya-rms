@@ -3,6 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { createReceiptVerificationUrl } from "@/features/sales/verification/receipt-token";
 import {
+  customerDepositLedger,
   customers,
   organizations,
   outlets,
@@ -103,6 +104,12 @@ export type ReceiptCertificateData = {
     paidAt: Date | null;
     metadata: Record<string, unknown> | null;
   }>;
+  customerDeposit: {
+    usedAmount: string;
+    inAmount: string;
+    balanceAfterAmount: string | null;
+    externalPaymentDueAmount: string;
+  };
   verification: {
     token: string;
     url: string;
@@ -225,18 +232,50 @@ export async function getReceiptCertificateData({
     .where(eq(saleItems.saleId, saleId))
     .orderBy(asc(saleItems.lineNumber));
 
-  const paymentRows = await db
-    .select({
-      method: payments.method,
-      provider: payments.provider,
-      amount: payments.amount,
-      providerReference: payments.providerReference,
-      paidAt: payments.paidAt,
-      metadata: payments.metadata,
-    })
-    .from(payments)
-    .where(eq(payments.saleId, saleId))
-    .orderBy(asc(payments.createdAt));
+  const [paymentRows, customerDepositRows] = await Promise.all([
+    db
+      .select({
+        method: payments.method,
+        provider: payments.provider,
+        amount: payments.amount,
+        providerReference: payments.providerReference,
+        paidAt: payments.paidAt,
+        metadata: payments.metadata,
+      })
+      .from(payments)
+      .where(eq(payments.saleId, saleId))
+      .orderBy(asc(payments.createdAt)),
+
+    db
+      .select({
+        entryType: customerDepositLedger.entryType,
+        direction: customerDepositLedger.direction,
+        amount: customerDepositLedger.amount,
+        balanceAfter: customerDepositLedger.balanceAfter,
+        occurredAt: customerDepositLedger.occurredAt,
+        createdAt: customerDepositLedger.createdAt,
+      })
+      .from(customerDepositLedger)
+      .where(eq(customerDepositLedger.saleId, saleId))
+      .orderBy(
+        asc(customerDepositLedger.occurredAt),
+        asc(customerDepositLedger.createdAt),
+      ),
+  ]);
+
+  const customerDepositUsedAmount = customerDepositRows
+    .filter(
+      (entry) => entry.entryType === "deposit_used" && entry.direction === "debit",
+    )
+    .reduce((total, entry) => total + Number(entry.amount), 0);
+  const customerDepositInAmount = customerDepositRows
+    .filter(
+      (entry) => entry.entryType === "deposit_in" && entry.direction === "credit",
+    )
+    .reduce((total, entry) => total + Number(entry.amount), 0);
+  const lastCustomerDepositEntry = customerDepositRows.at(-1) ?? null;
+  const externalPaymentDueAmount =
+    Number(sale.totalAmount) - customerDepositUsedAmount + customerDepositInAmount;
 
   return {
     organization: {
@@ -301,6 +340,12 @@ export async function getReceiptCertificateData({
       paidAt: payment.paidAt,
       metadata: payment.metadata ?? null,
     })),
+    customerDeposit: {
+      usedAmount: String(customerDepositUsedAmount),
+      inAmount: String(customerDepositInAmount),
+      balanceAfterAmount: lastCustomerDepositEntry?.balanceAfter ?? null,
+      externalPaymentDueAmount: String(Math.max(externalPaymentDueAmount, 0)),
+    },
     verification: createReceiptVerificationUrl(sale.saleId),
   };
 }

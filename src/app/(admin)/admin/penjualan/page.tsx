@@ -350,8 +350,14 @@ function buildAdminSalesXlsxExportUrl(filters: AdminSalesFilters) {
     : "/admin/penjualan/export/xlsx";
 }
 
-function PaymentBadges({ methods }: { methods: AdminPaymentMethod[] }) {
-  if (methods.length === 0) {
+function PaymentBadges({
+  customerDepositUsedAmount,
+  methods,
+}: {
+  customerDepositUsedAmount: number;
+  methods: AdminPaymentMethod[];
+}) {
+  if (methods.length === 0 && customerDepositUsedAmount <= 0) {
     return (
       <span className="inline-flex rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-xs font-medium text-neutral-500">
         Belum bayar
@@ -361,6 +367,11 @@ function PaymentBadges({ methods }: { methods: AdminPaymentMethod[] }) {
 
   return (
     <div className="flex flex-wrap gap-1.5">
+      {customerDepositUsedAmount > 0 ? (
+        <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+          Gunakan saldo
+        </span>
+      ) : null}
       {methods.slice(0, 3).map((method) => (
         <span
           key={method}
@@ -735,9 +746,13 @@ export default async function PenjualanListPage({
 
                     <div className="min-w-0">
                       <PaymentStatusSummary sale={sale} />
-                      {sale.paymentMethods.length > 0 ? (
+                      {sale.paymentMethods.length > 0 ||
+                      sale.customerDepositUsedAmount > 0 ? (
                         <div className="mt-2">
-                          <PaymentBadges methods={sale.paymentMethods} />
+                          <PaymentBadges
+                            customerDepositUsedAmount={sale.customerDepositUsedAmount}
+                            methods={sale.paymentMethods}
+                          />
                         </div>
                       ) : null}
                     </div>
@@ -847,8 +862,12 @@ export default async function PenjualanListPage({
                   <div className="mt-4 flex flex-col gap-3">
                     <PaymentStatusSummary sale={sale} />
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      {sale.paymentMethods.length > 0 ? (
-                        <PaymentBadges methods={sale.paymentMethods} />
+                      {sale.paymentMethods.length > 0 ||
+                      sale.customerDepositUsedAmount > 0 ? (
+                        <PaymentBadges
+                          customerDepositUsedAmount={sale.customerDepositUsedAmount}
+                          methods={sale.paymentMethods}
+                        />
                       ) : (
                         <span className="text-xs text-neutral-500">
                           Tanpa metode pembayaran

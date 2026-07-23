@@ -46,6 +46,20 @@ function formatAmount(value: string | number | null | undefined) {
   }).format(amount);
 }
 
+function isPositiveAmount(value: string | number | null | undefined) {
+  const amount = Number(value ?? 0);
+
+  return Number.isFinite(amount) && amount > 0;
+}
+
+function formatPositiveAmount(value: string | number | null | undefined) {
+  return `+${formatAmount(value)}`;
+}
+
+function formatNegativeAmount(value: string | number | null | undefined) {
+  return `-${formatAmount(value)}`;
+}
+
 function formatDateTime(value: Date | null | undefined) {
   if (!value) {
     return "-";
@@ -338,6 +352,12 @@ function TransactionCard({
   token: string;
   transaction: PublicCustomerHistoryTransaction;
 }) {
+  const hasDepositSaldo = isPositiveAmount(
+    transaction.customerDeposit.inAmount,
+  );
+  const hasUsedSaldo = isPositiveAmount(transaction.customerDeposit.usedAmount);
+  const hasDepositActivity = hasDepositSaldo || hasUsedSaldo;
+
   return (
     <article
       className={`overflow-hidden rounded-3xl border bg-white ${
@@ -395,6 +415,38 @@ function TransactionCard({
               {formatAmount(transaction.discountAmount)}
             </dd>
           </div>
+          {hasDepositSaldo ? (
+            <div className="grid gap-1 py-3">
+              <dt className="text-xs font-semibold uppercase text-neutral-500">
+                Deposit Saldo
+              </dt>
+              <dd className="text-sm font-bold text-emerald-700">
+                {formatPositiveAmount(transaction.customerDeposit.inAmount)}
+              </dd>
+            </div>
+          ) : null}
+          {hasUsedSaldo ? (
+            <div className="grid gap-1 py-3">
+              <dt className="text-xs font-semibold uppercase text-neutral-500">
+                Gunakan saldo
+              </dt>
+              <dd className="text-sm font-bold text-[#9a681d]">
+                {formatNegativeAmount(transaction.customerDeposit.usedAmount)}
+              </dd>
+            </div>
+          ) : null}
+          {hasDepositActivity ? (
+            <div className="grid gap-1 py-3">
+              <dt className="text-xs font-semibold uppercase text-neutral-500">
+                Total dibayar
+              </dt>
+              <dd className="text-sm font-bold text-neutral-950">
+                {formatAmount(
+                  transaction.customerDeposit.externalPaymentDueAmount,
+                )}
+              </dd>
+            </div>
+          ) : null}
           <div className="grid gap-1 py-3">
             <dt className="text-xs font-semibold uppercase text-neutral-500">
               Pembayaran
@@ -481,6 +533,14 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                   {data.customer.customerCode ?? "Kode customer tidak tersedia"}
                   {data.customer.phone ? ` · ${data.customer.phone}` : ""}
                 </p>
+                <div className="mt-4 rounded-2xl border border-[#ead7ad] bg-[#fffaf0] p-3">
+                  <p className="text-[11px] font-semibold uppercase text-neutral-500">
+                    Sisa Dana Titip
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-[#9a681d]">
+                    {formatAmount(data.summary.customerDepositBalanceAmount)}
+                  </p>
+                </div>
               </div>
             </div>
           </section>
@@ -593,10 +653,40 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                     {data.outlet.name}
                   </dd>
                 </div>
-                <div className="grid gap-1 py-3 last:pb-0">
+                <div className="grid gap-1 py-3">
                   <dt className="text-sm text-neutral-500">Total nota</dt>
                   <dd className="text-xl font-bold text-[#9a681d]">
                     {formatAmount(data.scannedSale.totalAmount)}
+                  </dd>
+                </div>
+                {isPositiveAmount(data.scannedSale.customerDeposit.inAmount) ? (
+                  <div className="grid gap-1 py-3">
+                    <dt className="text-sm text-neutral-500">Deposit Saldo</dt>
+                    <dd className="text-sm font-bold text-emerald-700">
+                      {formatPositiveAmount(
+                        data.scannedSale.customerDeposit.inAmount,
+                      )}
+                    </dd>
+                  </div>
+                ) : null}
+                {isPositiveAmount(
+                  data.scannedSale.customerDeposit.usedAmount,
+                ) ? (
+                  <div className="grid gap-1 py-3">
+                    <dt className="text-sm text-neutral-500">Gunakan saldo</dt>
+                    <dd className="text-sm font-bold text-[#9a681d]">
+                      {formatNegativeAmount(
+                        data.scannedSale.customerDeposit.usedAmount,
+                      )}
+                    </dd>
+                  </div>
+                ) : null}
+                <div className="grid gap-1 py-3 last:pb-0">
+                  <dt className="text-sm text-neutral-500">Total dibayar</dt>
+                  <dd className="text-lg font-bold text-neutral-950">
+                    {formatAmount(
+                      data.scannedSale.customerDeposit.externalPaymentDueAmount,
+                    )}
                   </dd>
                 </div>
               </dl>

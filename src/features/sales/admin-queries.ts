@@ -20,6 +20,7 @@ import {
   approvals,
   auditLogs,
   customers,
+  customerDepositLedger,
   hardwareJobs,
   outlets,
   payments,
@@ -443,6 +444,18 @@ export async function getAdminSalesListData(
             from ${payments}
             where ${payments.saleId} = ${sales.id}
               and ${payments.status} = 'paid'::payment_status
+          ) + (
+            select coalesce(sum(${customerDepositLedger.amount}), 0)
+            from ${customerDepositLedger}
+            where ${customerDepositLedger.saleId} = ${sales.id}
+              and ${customerDepositLedger.entryType} = 'deposit_used'::customer_deposit_ledger_entry_type
+              and ${customerDepositLedger.direction} = 'debit'::customer_deposit_ledger_direction
+          ) - (
+            select coalesce(sum(${customerDepositLedger.amount}), 0)
+            from ${customerDepositLedger}
+            where ${customerDepositLedger.saleId} = ${sales.id}
+              and ${customerDepositLedger.entryType} = 'deposit_in'::customer_deposit_ledger_entry_type
+              and ${customerDepositLedger.direction} = 'credit'::customer_deposit_ledger_direction
           )
         ), 0)`.mapWith(Number),
         averageTransactionAmount: sql<number>`coalesce(avg(${sales.totalAmount}), 0)`.mapWith(Number),
@@ -532,7 +545,7 @@ export async function getAdminSalesListData(
 
   const saleIds = saleRows.map((sale) => sale.id);
 
-  const [paymentRows, itemRows, hardwareJobRows] =
+  const [paymentRows, itemRows, hardwareJobRows, customerDepositRows] =
     saleIds.length > 0
       ? await Promise.all([
           db
@@ -581,11 +594,28 @@ export async function getAdminSalesListData(
               ),
             )
             .orderBy(desc(hardwareJobs.createdAt)),
+
+          db
+            .select({
+              saleId: customerDepositLedger.saleId,
+              entryType: customerDepositLedger.entryType,
+              direction: customerDepositLedger.direction,
+              amount: customerDepositLedger.amount,
+            })
+            .from(customerDepositLedger)
+            .where(
+              and(
+                eq(customerDepositLedger.organizationId, auth.organization.id),
+                inArray(customerDepositLedger.saleId, saleIds),
+              ),
+            )
+            .orderBy(asc(customerDepositLedger.occurredAt)),
         ])
-      : [[], [], []];
+      : [[], [], [], []];
 
   const paymentsBySaleId = new Map<string, typeof paymentRows>();
   const itemsBySaleId = new Map<string, typeof itemRows>();
+  const customerDepositsBySaleId = new Map<string, typeof customerDepositRows>();
   const printStatusBySaleId = new Map<string, AdminSalePrintStatus>();
 
   for (const payment of paymentRows) {
@@ -600,6 +630,14 @@ export async function getAdminSalesListData(
     itemsBySaleId.set(item.saleId, currentItems);
   }
 
+  for (const deposit of customerDepositRows) {
+    if (!deposit.saleId) continue;
+
+    const currentDeposits = customerDepositsBySaleId.get(deposit.saleId) ?? [];
+    currentDeposits.push(deposit);
+    customerDepositsBySaleId.set(deposit.saleId, currentDeposits);
+  }
+
   for (const job of hardwareJobRows) {
     if (job.sourceId && !printStatusBySaleId.has(job.sourceId)) {
       printStatusBySaleId.set(job.sourceId, normalizePrintStatus(job.status));
@@ -609,13 +647,32 @@ export async function getAdminSalesListData(
   const rows = saleRows.map((sale): AdminSaleListRow => {
     const salePayments = paymentsBySaleId.get(sale.id) ?? [];
     const saleItemsRows = itemsBySaleId.get(sale.id) ?? [];
+    const saleDepositEntries = customerDepositsBySaleId.get(sale.id) ?? [];
     const totalAmount = parseAmount(sale.totalAmount);
-    const paidAmount = salePayments.reduce(
+    const externalPaidAmount = salePayments.reduce(
       (paymentTotal, payment) =>
         payment.status === "paid"
           ? paymentTotal + parseAmount(payment.amount)
           : paymentTotal,
       0,
+    );
+    const customerDepositUsedAmount = saleDepositEntries.reduce(
+      (depositTotal, deposit) =>
+        deposit.entryType === "deposit_used" && deposit.direction === "debit"
+          ? depositTotal + parseAmount(deposit.amount)
+          : depositTotal,
+      0,
+    );
+    const customerDepositInAmount = saleDepositEntries.reduce(
+      (depositTotal, deposit) =>
+        deposit.entryType === "deposit_in" && deposit.direction === "credit"
+          ? depositTotal + parseAmount(deposit.amount)
+          : depositTotal,
+      0,
+    );
+    const paidAmount = Math.max(
+      0,
+      externalPaidAmount + customerDepositUsedAmount - customerDepositInAmount,
     );
     const refundedAmount = salePayments.reduce(
       (paymentTotal, payment) =>
@@ -644,6 +701,8 @@ export async function getAdminSalesListData(
       totalAmount: sale.totalAmount,
       paidAmount,
       refundedAmount,
+      customerDepositUsedAmount,
+      customerDepositInAmount,
       paymentStatus: getPaymentStatusFromAmounts(totalAmount, paidAmount),
       completedAt: sale.completedAt,
       createdAt: sale.createdAt,

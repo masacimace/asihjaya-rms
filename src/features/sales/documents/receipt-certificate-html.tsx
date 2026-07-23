@@ -515,8 +515,14 @@ const styles = String.raw`
   }
 
   .aj-total-row-discount strong,
-  .aj-total-row-change strong {
+  .aj-total-row-change strong,
+  .aj-total-row-deposit-used strong {
     color: var(--maroon);
+  }
+
+  .aj-total-row-deposit-in strong,
+  .aj-total-row-external strong {
+    color: #166534;
   }
 
   .aj-total-row-paid strong {
@@ -705,6 +711,16 @@ function formatNegativeAmount(value: string | number | null | undefined) {
   return `-${formatAmount(amount)}`;
 }
 
+function formatPositiveAmount(value: string | number | null | undefined) {
+  const amount = toNumber(value);
+
+  if (amount <= 0) {
+    return formatAmount(0);
+  }
+
+  return `+${formatAmount(amount)}`;
+}
+
 function formatDeductionPerGram(value: string | number | null | undefined) {
   const amount = toNumber(value);
 
@@ -825,7 +841,13 @@ function ProductThumbnail({
 }
 
 function getPaymentSummary(data: ReceiptCertificateData) {
-  if (data.payments.length === 0) {
+  const methodNames = data.payments.map((payment) => payment.method);
+
+  if (toNumber(data.customerDeposit.usedAmount) > 0) {
+    methodNames.push("customer_deposit");
+  }
+
+  if (methodNames.length === 0) {
     return "Pembayaran tercatat";
   }
 
@@ -836,13 +858,11 @@ function getPaymentSummary(data: ReceiptCertificateData) {
     debit_card: "Debit Card",
     qris_manual: "QRIS",
     qris_gateway: "QRIS",
+    customer_deposit: "Dana Titip",
   };
 
-  return data.payments
-    .map(
-      (payment) =>
-        methodLabels[payment.method] ?? payment.method.replaceAll("_", " "),
-    )
+  return methodNames
+    .map((method) => methodLabels[method] ?? method.replaceAll("_", " "))
     .join(" + ");
 }
 
@@ -878,6 +898,10 @@ export function ReceiptCertificateHtmlDocument({
   );
   const certificateItems = data.items;
   const pageCount = Math.max(certificateItems.length, 1);
+  const customerDepositUsedAmount = toNumber(data.customerDeposit.usedAmount);
+  const customerDepositInAmount = toNumber(data.customerDeposit.inAmount);
+  const hasCustomerDepositActivity =
+    customerDepositUsedAmount > 0 || customerDepositInAmount > 0;
   const paymentSummary = getPaymentSummary(data);
   const verificationQrImage = createQrSvgDataUri(data.verification.url);
 
@@ -1060,6 +1084,32 @@ export function ReceiptCertificateHtmlDocument({
                             <span>Total Order</span>
                             <strong>
                               {formatAmount(data.sale.totalAmount)}
+                            </strong>
+                          </div>
+                        ) : null}
+                        {customerDepositInAmount > 0 ? (
+                          <div className="aj-total-detail-row aj-total-row-deposit-in">
+                            <span>Deposit Saldo</span>
+                            <strong>
+                              {formatPositiveAmount(customerDepositInAmount)}
+                            </strong>
+                          </div>
+                        ) : null}
+                        {customerDepositUsedAmount > 0 ? (
+                          <div className="aj-total-detail-row aj-total-row-deposit-used">
+                            <span>Gunakan Saldo</span>
+                            <strong>
+                              {formatNegativeAmount(customerDepositUsedAmount)}
+                            </strong>
+                          </div>
+                        ) : null}
+                        {hasCustomerDepositActivity ? (
+                          <div className="aj-total-detail-row aj-total-row-external">
+                            <span>Total Pembayaran</span>
+                            <strong>
+                              {formatAmount(
+                                data.customerDeposit.externalPaymentDueAmount,
+                              )}
                             </strong>
                           </div>
                         ) : null}

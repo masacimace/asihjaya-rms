@@ -442,7 +442,7 @@ function CustomerDepositPanel({ data }: { data: AdminCustomerDetailData }) {
 
         <div className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-3 lg:min-w-72 lg:text-right">
           <p className="text-xs font-medium uppercase text-[var(--muted)]">
-            Total saldo terakses
+            Sisa Saldo Dana Titip
           </p>
           <p className="mt-1 text-2xl font-semibold text-neutral-950">
             {formatMoney(customerDeposits.totalBalance)}
