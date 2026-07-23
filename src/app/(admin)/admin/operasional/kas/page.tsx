@@ -57,6 +57,17 @@ const movementTypeLabels: Record<AdminCashMovementType, string> = {
   closing_adjustment: "Koreksi Closing",
 };
 
+function getMovementDisplayLabel(movement: Pick<AdminCashMovementRow, "type" | "referenceType">) {
+  if (
+    movement.type === "cash_out" &&
+    movement.referenceType === "customer_deposit_withdrawal"
+  ) {
+    return "Tarik Dana Titip";
+  }
+
+  return movementTypeLabels[movement.type];
+}
+
 const rangeLabels = {
   today: "Hari ini",
   "7d": "7 hari",
@@ -262,8 +273,8 @@ function SummaryCard({
   );
 }
 
-function MovementBadge({ type }: { type: AdminCashMovementRow["type"] }) {
-  const tone = getMovementTone(type);
+function MovementBadge({ movement }: { movement: AdminCashMovementRow }) {
+  const tone = getMovementTone(movement.type);
   const Icon = tone.icon;
 
   return (
@@ -274,12 +285,27 @@ function MovementBadge({ type }: { type: AdminCashMovementRow["type"] }) {
       )}
     >
       <Icon className="size-3" />
-      {movementTypeLabels[type]}
+      {getMovementDisplayLabel(movement)}
     </span>
   );
 }
 
 function ReferenceLink({ movement }: { movement: AdminCashMovementRow }) {
+  if (
+    movement.referenceType === "customer_deposit_withdrawal" &&
+    movement.referenceId
+  ) {
+    return (
+      <Link
+        href="/admin/operasional/approval"
+        className="inline-flex items-center gap-1 font-medium text-[var(--accent)] hover:underline"
+      >
+        Penarikan Dana Titip
+        <ArrowRight className="size-3" />
+      </Link>
+    );
+  }
+
   if (movement.referenceType === "sale" && movement.referenceId) {
     return (
       <Link
@@ -303,7 +329,7 @@ function MovementMobileCard({ movement }: { movement: AdminCashMovementRow }) {
     <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <MovementBadge type={movement.type} />
+          <MovementBadge movement={movement} />
           <p className="mt-3 text-sm font-semibold text-neutral-950">
             {movement.reason || "Tanpa catatan"}
           </p>
@@ -386,7 +412,8 @@ export default async function KasPage({ searchParams }: PageProps) {
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-neutral-600">
               Pantau arus kas fisik outlet dari modal awal, cash sale, kas
-              masuk/keluar manual, refund cash, sampai koreksi closing shift.
+              masuk/keluar manual, refund cash, penarikan Dana Titip, sampai
+              koreksi closing shift.
             </p>
           </div>
 
@@ -408,11 +435,11 @@ export default async function KasPage({ searchParams }: PageProps) {
 
       <FlashMessage type={query.type} message={query.message} />
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryCard
           title="Net Movement"
           value={formatSignedMoney(data.summary.netMovement)}
-          helper="Modal awal + cash sale + kas masuk - kas keluar/refund."
+          helper="Modal awal + cash sale + kas masuk - kas keluar/refund/Dana Titip."
           icon={<WalletCards className="size-5" />}
           tone="dark"
         />
@@ -424,19 +451,114 @@ export default async function KasPage({ searchParams }: PageProps) {
           tone="success"
         />
         <SummaryCard
-          title="Kas Masuk Manual"
-          value={formatMoney(data.summary.manualCashIn)}
-          helper="Tambahan kas non-transaksi yang dicatat admin/kasir."
+          title="Deposit Saldo"
+          value={formatMoney(data.customerDepositSummary.depositIn)}
+          helper="Penambahan saldo Dana Titip customer pada periode ini."
           icon={<PlusCircle className="size-5" />}
           tone="success"
         />
         <SummaryCard
-          title="Kas Keluar Manual"
-          value={formatMoney(data.summary.manualCashOut)}
-          helper="Pengeluaran operasional, setoran, atau penarikan kas."
+          title="Tarik Dana Titip"
+          value={formatMoney(data.summary.customerDepositCashWithdrawals)}
+          helper="Kas keluar dari approval penarikan Dana Titip."
           icon={<MinusCircle className="size-5" />}
           tone="danger"
         />
+        <SummaryCard
+          title="Kas Keluar Manual"
+          value={formatMoney(data.summary.manualCashOut)}
+          helper="Kas keluar operasional non-Dana Titip."
+          icon={<MinusCircle className="size-5" />}
+          tone="danger"
+        />
+      </section>
+
+      <section className="rounded-[1.75rem] border border-[var(--border)] bg-white p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+              <WalletCards className="size-3.5" />
+              Liability Dana Titip
+            </div>
+            <h2 className="mt-3 text-lg font-semibold text-neutral-950">
+              Rekap Dana Titip periode ini
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+              Saldo ini adalah kewajiban outlet ke customer, bukan omzet. Deposit
+              Saldo menambah liability, sedangkan Gunakan saldo dan penarikan
+              tunai mengurangi liability.
+            </p>
+          </div>
+          <div className="rounded-2xl bg-neutral-950 px-5 py-4 text-white lg:min-w-64 lg:text-right">
+            <p className="text-xs font-semibold uppercase text-white/55">
+              Saldo akhir Dana Titip
+            </p>
+            <p className="mt-2 text-2xl font-semibold tracking-tight text-[#f1ce80]">
+              {formatMoney(data.customerDepositSummary.closingBalance)}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <div className="rounded-2xl bg-neutral-50 p-4">
+            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+              Saldo awal
+            </p>
+            <p className="mt-2 font-semibold text-neutral-950">
+              {formatMoney(data.customerDepositSummary.openingBalance)}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-emerald-50 p-4">
+            <p className="text-xs font-semibold uppercase text-emerald-700">
+              Deposit Saldo
+            </p>
+            <p className="mt-2 font-semibold text-emerald-700">
+              +{formatMoney(data.customerDepositSummary.depositIn)}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-red-50 p-4">
+            <p className="text-xs font-semibold uppercase text-red-700">
+              Gunakan saldo
+            </p>
+            <p className="mt-2 font-semibold text-red-700">
+              -{formatMoney(data.customerDepositSummary.depositUsed)}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-red-50 p-4">
+            <p className="text-xs font-semibold uppercase text-red-700">
+              Tarik tunai
+            </p>
+            <p className="mt-2 font-semibold text-red-700">
+              -{formatMoney(data.customerDepositSummary.depositWithdrawals)}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-amber-50 p-4">
+            <p className="text-xs font-semibold uppercase text-amber-700">
+              Adjustment
+            </p>
+            <p className="mt-2 font-semibold text-amber-700">
+              {formatSignedMoney(
+                data.customerDepositSummary.adjustmentIn -
+                  data.customerDepositSummary.adjustmentOut,
+              )}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-neutral-50 p-4">
+            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+              Net change
+            </p>
+            <p
+              className={cn(
+                "mt-2 font-semibold",
+                data.customerDepositSummary.netChange >= 0
+                  ? "text-emerald-700"
+                  : "text-red-700",
+              )}
+            >
+              {formatSignedMoney(data.customerDepositSummary.netChange)}
+            </p>
+          </div>
+        </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px] xl:items-start">
@@ -593,7 +715,7 @@ export default async function KasPage({ searchParams }: PageProps) {
                               {formatDateTime(movement.createdAt)}
                             </td>
                             <td className="px-5 py-4">
-                              <MovementBadge type={movement.type} />
+                              <MovementBadge movement={movement} />
                               <p className="mt-2 max-w-xs text-xs leading-5 text-[var(--muted)]">
                                 {movement.reason || "Tanpa catatan"}
                               </p>
@@ -719,6 +841,13 @@ export default async function KasPage({ searchParams }: PageProps) {
                 <span className="text-[var(--muted)]">Refund cash:</span>
                 <span className="ml-auto font-semibold text-neutral-950">
                   {formatMoney(data.summary.cashRefunds)}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl bg-neutral-50 p-3">
+                <WalletCards className="size-4 text-neutral-500" />
+                <span className="text-[var(--muted)]">Ledger Dana Titip:</span>
+                <span className="ml-auto font-semibold text-neutral-950">
+                  {formatInteger(data.customerDepositSummary.ledgerEntryCount)}
                 </span>
               </div>
             </div>

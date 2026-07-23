@@ -60,6 +60,19 @@ export type AdminCashMovementActiveShift = {
   expectedCash: string | null;
 };
 
+
+export type AdminCashMovementCustomerDepositSummary = {
+  openingBalance: number;
+  depositIn: number;
+  depositUsed: number;
+  depositWithdrawals: number;
+  adjustmentIn: number;
+  adjustmentOut: number;
+  closingBalance: number;
+  netChange: number;
+  ledgerEntryCount: number;
+};
+
 export type AdminCashMovementListData = {
   filters: AdminCashMovementFilters;
   outlets: Array<{
@@ -77,10 +90,12 @@ export type AdminCashMovementListData = {
     manualCashIn: number;
     manualCashOut: number;
     cashRefunds: number;
+    customerDepositCashWithdrawals: number;
     closingAdjustments: number;
     netMovement: number;
     activeShiftCount: number;
   };
+  customerDepositSummary: AdminCashMovementCustomerDepositSummary;
   total: number;
   page: number;
   pageCount: number;

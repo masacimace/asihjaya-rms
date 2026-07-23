@@ -17,6 +17,7 @@ import { db } from "@/db";
 import {
   approvals,
   cashMovements,
+  customerDepositLedger,
   customers,
   inventoryMovements,
   outlets,
@@ -272,7 +273,16 @@ function createEmptyData(
       cashRefunds: 0,
       manualCashIn: 0,
       manualCashOut: 0,
+      customerDepositCashWithdrawals: 0,
       closingAdjustments: 0,
+      customerDepositOpeningBalance: 0,
+      customerDepositIn: 0,
+      customerDepositUsed: 0,
+      customerDepositWithdrawals: 0,
+      customerDepositAdjustmentIn: 0,
+      customerDepositAdjustmentOut: 0,
+      customerDepositClosingBalance: 0,
+      customerDepositNetChange: 0,
       netCashMovement: 0,
     },
   };
@@ -326,6 +336,8 @@ export async function getReportSummaryData(
     outletRows,
     recentSaleRows,
     cashRows,
+    customerDepositOpeningRows,
+    customerDepositRows,
     voidRefundRows,
     activeShiftRows,
     pendingApprovalRows,
@@ -472,7 +484,8 @@ export async function getReportSummaryData(
         cashSales: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_sale' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         cashRefunds: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_refund' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         manualCashIn: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_in' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
-        manualCashOut: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
+        manualCashOut: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and coalesce(${cashMovements.referenceType}, '') <> 'customer_deposit_withdrawal' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
+        customerDepositCashWithdrawals: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and ${cashMovements.referenceType} = 'customer_deposit_withdrawal' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         closingAdjustments: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'closing_adjustment' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
       })
       .from(cashMovements)
@@ -484,6 +497,37 @@ export async function getReportSummaryData(
           inArray(shifts.outletId, outletIds),
           gte(cashMovements.createdAt, period.currentStart),
           lt(cashMovements.createdAt, period.currentEnd),
+        ),
+      ),
+
+    db
+      .select({
+        openingBalance: sql<number>`coalesce(sum(case when ${customerDepositLedger.direction} = 'credit' then ${customerDepositLedger.amount}::numeric else -${customerDepositLedger.amount}::numeric end), 0)`.mapWith(Number),
+      })
+      .from(customerDepositLedger)
+      .where(
+        and(
+          eq(customerDepositLedger.organizationId, auth.organization.id),
+          inArray(customerDepositLedger.outletId, outletIds),
+          lt(customerDepositLedger.occurredAt, period.currentStart),
+        ),
+      ),
+
+    db
+      .select({
+        depositIn: sql<number>`coalesce(sum(case when ${customerDepositLedger.entryType} = 'deposit_in' and ${customerDepositLedger.direction} = 'credit' then ${customerDepositLedger.amount}::numeric else 0 end), 0)`.mapWith(Number),
+        depositUsed: sql<number>`coalesce(sum(case when ${customerDepositLedger.entryType} = 'deposit_used' and ${customerDepositLedger.direction} = 'debit' then ${customerDepositLedger.amount}::numeric else 0 end), 0)`.mapWith(Number),
+        depositWithdrawals: sql<number>`coalesce(sum(case when ${customerDepositLedger.entryType} = 'deposit_withdrawal' and ${customerDepositLedger.direction} = 'debit' then ${customerDepositLedger.amount}::numeric else 0 end), 0)`.mapWith(Number),
+        adjustmentIn: sql<number>`coalesce(sum(case when ${customerDepositLedger.entryType} = 'adjustment' and ${customerDepositLedger.direction} = 'credit' then ${customerDepositLedger.amount}::numeric else 0 end), 0)`.mapWith(Number),
+        adjustmentOut: sql<number>`coalesce(sum(case when ${customerDepositLedger.entryType} = 'adjustment' and ${customerDepositLedger.direction} = 'debit' then ${customerDepositLedger.amount}::numeric else 0 end), 0)`.mapWith(Number),
+      })
+      .from(customerDepositLedger)
+      .where(
+        and(
+          eq(customerDepositLedger.organizationId, auth.organization.id),
+          inArray(customerDepositLedger.outletId, outletIds),
+          gte(customerDepositLedger.occurredAt, period.currentStart),
+          lt(customerDepositLedger.occurredAt, period.currentEnd),
         ),
       ),
 
@@ -617,15 +661,48 @@ export async function getReportSummaryData(
   const cashRefunds = cash?.cashRefunds ?? 0;
   const manualCashIn = cash?.manualCashIn ?? 0;
   const manualCashOut = cash?.manualCashOut ?? 0;
+  const customerDepositCashWithdrawals =
+    cash?.customerDepositCashWithdrawals ?? 0;
   const closingAdjustments = cash?.closingAdjustments ?? 0;
+  const customerDepositOpeningBalance =
+    customerDepositOpeningRows[0]?.openingBalance ?? 0;
+  const customerDepositIn = customerDepositRows[0]?.depositIn ?? 0;
+  const customerDepositUsed = customerDepositRows[0]?.depositUsed ?? 0;
+  const customerDepositWithdrawals =
+    customerDepositRows[0]?.depositWithdrawals ?? 0;
+  const customerDepositAdjustmentIn =
+    customerDepositRows[0]?.adjustmentIn ?? 0;
+  const customerDepositAdjustmentOut =
+    customerDepositRows[0]?.adjustmentOut ?? 0;
+  const customerDepositNetChange =
+    customerDepositIn +
+    customerDepositAdjustmentIn -
+    customerDepositUsed -
+    customerDepositWithdrawals -
+    customerDepositAdjustmentOut;
   const cashSnapshot: ReportCashSnapshot = {
     cashSales,
     cashRefunds,
     manualCashIn,
     manualCashOut,
+    customerDepositCashWithdrawals,
     closingAdjustments,
+    customerDepositOpeningBalance,
+    customerDepositIn,
+    customerDepositUsed,
+    customerDepositWithdrawals,
+    customerDepositAdjustmentIn,
+    customerDepositAdjustmentOut,
+    customerDepositClosingBalance:
+      customerDepositOpeningBalance + customerDepositNetChange,
+    customerDepositNetChange,
     netCashMovement:
-      cashSales + manualCashIn + closingAdjustments - cashRefunds - manualCashOut,
+      cashSales +
+      manualCashIn +
+      closingAdjustments -
+      cashRefunds -
+      manualCashOut -
+      customerDepositCashWithdrawals,
   };
 
   return {

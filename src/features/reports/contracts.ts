@@ -116,7 +116,16 @@ export type ReportCashSnapshot = {
   cashRefunds: number;
   manualCashIn: number;
   manualCashOut: number;
+  customerDepositCashWithdrawals: number;
   closingAdjustments: number;
+  customerDepositOpeningBalance: number;
+  customerDepositIn: number;
+  customerDepositUsed: number;
+  customerDepositWithdrawals: number;
+  customerDepositAdjustmentIn: number;
+  customerDepositAdjustmentOut: number;
+  customerDepositClosingBalance: number;
+  customerDepositNetChange: number;
   netCashMovement: number;
 };
 

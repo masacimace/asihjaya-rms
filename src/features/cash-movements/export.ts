@@ -15,6 +15,14 @@ const cashMovementTypeLabels: Record<CashMovementType, string> = {
   closing_adjustment: "Koreksi closing",
 };
 
+function getCashMovementTypeLabel(row: Pick<AdminCashMovementRow, "type" | "referenceType">) {
+  if (row.type === "cash_out" && row.referenceType === "customer_deposit_withdrawal") {
+    return "Penarikan Dana Titip";
+  }
+
+  return cashMovementTypeLabels[row.type];
+}
+
 function formatDateTime(value: Date | null | undefined) {
   if (!value) return "";
 
@@ -64,8 +72,48 @@ export function buildCashMovementSheets({
         ["Penjualan cash", roundAmount(data.summary.cashSales), ""],
         ["Kas masuk manual", roundAmount(data.summary.manualCashIn), ""],
         ["Kas keluar manual", roundAmount(data.summary.manualCashOut), ""],
+        [
+          "Tarik tunai Dana Titip",
+          roundAmount(data.summary.customerDepositCashWithdrawals),
+          "Kas keluar dari approval penarikan Dana Titip",
+        ],
         ["Refund cash", roundAmount(data.summary.cashRefunds), ""],
         ["Koreksi closing", roundAmount(data.summary.closingAdjustments), ""],
+        [
+          "Saldo awal Dana Titip",
+          roundAmount(data.customerDepositSummary.openingBalance),
+          "Saldo liability sebelum periode aktif",
+        ],
+        [
+          "Deposit Saldo",
+          roundAmount(data.customerDepositSummary.depositIn),
+          "Penambahan saldo Dana Titip customer",
+        ],
+        [
+          "Gunakan saldo",
+          roundAmount(data.customerDepositSummary.depositUsed),
+          "Penggunaan Dana Titip untuk transaksi",
+        ],
+        [
+          "Penarikan Dana Titip",
+          roundAmount(data.customerDepositSummary.depositWithdrawals),
+          "Pengurangan saldo karena tarik tunai approved",
+        ],
+        [
+          "Koreksi Dana Titip masuk",
+          roundAmount(data.customerDepositSummary.adjustmentIn),
+          "Adjustment credit",
+        ],
+        [
+          "Koreksi Dana Titip keluar",
+          roundAmount(data.customerDepositSummary.adjustmentOut),
+          "Adjustment debit",
+        ],
+        [
+          "Saldo akhir Dana Titip",
+          roundAmount(data.customerDepositSummary.closingBalance),
+          "Estimasi liability akhir berdasarkan ledger",
+        ],
         ["Net movement", roundAmount(data.summary.netMovement), "Signed cash movement"],
         ["Shift aktif", data.summary.activeShiftCount, ""],
       ],
@@ -95,7 +143,7 @@ export function buildCashMovementSheets({
         row.registerCode,
         row.registerName,
         row.shiftStatus,
-        cashMovementTypeLabels[row.type],
+        getCashMovementTypeLabel(row),
         roundAmount(row.amount),
         roundAmount(getCashMovementSignedAmount(row)),
         row.referenceLabel ?? row.referenceType ?? "-",

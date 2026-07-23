@@ -6,6 +6,7 @@ import {
   gte,
   ilike,
   inArray,
+  lt,
   lte,
   or,
   sql,
@@ -15,6 +16,7 @@ import {
 import { db } from "@/db";
 import {
   cashMovements,
+  customerDepositLedger,
   outlets,
   registers,
   sales,
@@ -24,6 +26,7 @@ import {
 import {
   ADMIN_CASH_MOVEMENTS_PAGE_SIZE,
   type AdminCashMovementActiveShift,
+  type AdminCashMovementCustomerDepositSummary,
   type AdminCashMovementFilters,
   type AdminCashMovementListData,
   type AdminCashMovementRow,
@@ -180,6 +183,20 @@ function getSignedMovementAmount(type: CashMovementType, amount: number) {
   return amount;
 }
 
+function createEmptyCustomerDepositSummary(): AdminCashMovementCustomerDepositSummary {
+  return {
+    openingBalance: 0,
+    depositIn: 0,
+    depositUsed: 0,
+    depositWithdrawals: 0,
+    adjustmentIn: 0,
+    adjustmentOut: 0,
+    closingBalance: 0,
+    netChange: 0,
+    ledgerEntryCount: 0,
+  };
+}
+
 function createEmptyData(
   auth: AuthContext,
   filters: AdminCashMovementFilters,
@@ -197,15 +214,97 @@ function createEmptyData(
       manualCashIn: 0,
       manualCashOut: 0,
       cashRefunds: 0,
+      customerDepositCashWithdrawals: 0,
       closingAdjustments: 0,
       netMovement: 0,
       activeShiftCount: 0,
     },
+    customerDepositSummary: createEmptyCustomerDepositSummary(),
     total: 0,
     page: 1,
     pageCount: 1,
     pageSize: ADMIN_CASH_MOVEMENTS_PAGE_SIZE,
     periodLabel,
+  };
+}
+
+
+async function getCustomerDepositSummary({
+  auth,
+  outletIds,
+  rangeBounds,
+}: {
+  auth: AuthContext;
+  outletIds: string[];
+  rangeBounds: ReturnType<typeof getRangeBounds>;
+}): Promise<AdminCashMovementCustomerDepositSummary> {
+  if (outletIds.length === 0) {
+    return createEmptyCustomerDepositSummary();
+  }
+
+  const baseConditions: SQL[] = [
+    eq(customerDepositLedger.organizationId, auth.organization.id),
+    inArray(customerDepositLedger.outletId, outletIds),
+  ];
+  const currentConditions: SQL[] = [...baseConditions];
+
+  if (rangeBounds.start) {
+    currentConditions.push(gte(customerDepositLedger.occurredAt, rangeBounds.start));
+  }
+
+  if (rangeBounds.end) {
+    currentConditions.push(lt(customerDepositLedger.occurredAt, rangeBounds.end));
+  }
+
+  const openingBalancePromise = rangeBounds.start
+    ? db
+        .select({
+          openingBalance: sql<string>`coalesce(sum(case when ${customerDepositLedger.direction} = 'credit' then ${customerDepositLedger.amount}::numeric else -${customerDepositLedger.amount}::numeric end), 0)`,
+        })
+        .from(customerDepositLedger)
+        .where(
+          and(
+            ...baseConditions,
+            lt(customerDepositLedger.occurredAt, rangeBounds.start),
+          ),
+        )
+    : Promise.resolve([{ openingBalance: "0" }]);
+
+  const [openingRows, periodRows] = await Promise.all([
+    openingBalancePromise,
+    db
+      .select({
+        ledgerEntryCount: count(),
+        depositIn: sql<string>`coalesce(sum(case when ${customerDepositLedger.entryType} = 'deposit_in' and ${customerDepositLedger.direction} = 'credit' then ${customerDepositLedger.amount}::numeric else 0 end), 0)`,
+        depositUsed: sql<string>`coalesce(sum(case when ${customerDepositLedger.entryType} = 'deposit_used' and ${customerDepositLedger.direction} = 'debit' then ${customerDepositLedger.amount}::numeric else 0 end), 0)`,
+        depositWithdrawals: sql<string>`coalesce(sum(case when ${customerDepositLedger.entryType} = 'deposit_withdrawal' and ${customerDepositLedger.direction} = 'debit' then ${customerDepositLedger.amount}::numeric else 0 end), 0)`,
+        adjustmentIn: sql<string>`coalesce(sum(case when ${customerDepositLedger.entryType} = 'adjustment' and ${customerDepositLedger.direction} = 'credit' then ${customerDepositLedger.amount}::numeric else 0 end), 0)`,
+        adjustmentOut: sql<string>`coalesce(sum(case when ${customerDepositLedger.entryType} = 'adjustment' and ${customerDepositLedger.direction} = 'debit' then ${customerDepositLedger.amount}::numeric else 0 end), 0)`,
+      })
+      .from(customerDepositLedger)
+      .where(and(...currentConditions)),
+  ]);
+
+  const openingBalance = parseAmount(openingRows[0]?.openingBalance);
+  const period = periodRows[0];
+  const depositIn = parseAmount(period?.depositIn);
+  const depositUsed = parseAmount(period?.depositUsed);
+  const depositWithdrawals = parseAmount(period?.depositWithdrawals);
+  const adjustmentIn = parseAmount(period?.adjustmentIn);
+  const adjustmentOut = parseAmount(period?.adjustmentOut);
+  const netChange =
+    depositIn + adjustmentIn - depositUsed - depositWithdrawals - adjustmentOut;
+
+  return {
+    openingBalance,
+    depositIn,
+    depositUsed,
+    depositWithdrawals,
+    adjustmentIn,
+    adjustmentOut,
+    closingBalance: openingBalance + netChange,
+    netChange,
+    ledgerEntryCount: period?.ledgerEntryCount ?? 0,
   };
 }
 
@@ -220,6 +319,7 @@ export async function getAdminCashMovementListData(
     outletIds,
   });
   const whereClause = and(...conditions);
+  const rangeBounds = getRangeBounds(filters);
 
   if (!whereClause) {
     return createEmptyData(auth, filters, periodLabel);
@@ -254,7 +354,12 @@ export async function getAdminCashMovementListData(
           )
           .orderBy(desc(shifts.openedAt));
 
-  const [totalRows, summaryRows, activeShiftRows] = await Promise.all([
+  const [
+    totalRows,
+    summaryRows,
+    activeShiftRows,
+    customerDepositSummary,
+  ] = await Promise.all([
     db
       .select({ total: count() })
       .from(cashMovements)
@@ -277,8 +382,9 @@ export async function getAdminCashMovementListData(
         openingBalance: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'opening_balance' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         cashSales: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_sale' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         manualCashIn: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_in' then ${cashMovements.amount}::numeric else 0 end), 0)`,
-        manualCashOut: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' then ${cashMovements.amount}::numeric else 0 end), 0)`,
+        manualCashOut: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and coalesce(${cashMovements.referenceType}, '') <> 'customer_deposit_withdrawal' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         cashRefunds: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_refund' then ${cashMovements.amount}::numeric else 0 end), 0)`,
+        customerDepositCashWithdrawals: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and ${cashMovements.referenceType} = 'customer_deposit_withdrawal' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         closingAdjustments: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'closing_adjustment' then ${cashMovements.amount}::numeric else 0 end), 0)`,
       })
       .from(cashMovements)
@@ -296,6 +402,7 @@ export async function getAdminCashMovementListData(
       .where(whereClause),
 
     activeShiftRowsPromise,
+    getCustomerDepositSummary({ auth, outletIds, rangeBounds }),
   ]);
 
   const total = totalRows[0]?.total ?? 0;
@@ -347,6 +454,9 @@ export async function getAdminCashMovementListData(
   const manualCashIn = parseAmount(summaryRow?.manualCashIn);
   const manualCashOut = parseAmount(summaryRow?.manualCashOut);
   const cashRefunds = parseAmount(summaryRow?.cashRefunds);
+  const customerDepositCashWithdrawals = parseAmount(
+    summaryRow?.customerDepositCashWithdrawals,
+  );
   const closingAdjustments = parseAmount(summaryRow?.closingAdjustments);
   const netMovement =
     openingBalance +
@@ -354,7 +464,8 @@ export async function getAdminCashMovementListData(
     manualCashIn +
     closingAdjustments -
     manualCashOut -
-    cashRefunds;
+    cashRefunds -
+    customerDepositCashWithdrawals;
 
   const mappedRows: AdminCashMovementRow[] = rows.map((row) => ({
     id: row.id,
@@ -365,7 +476,11 @@ export async function getAdminCashMovementListData(
     referenceId: row.referenceId,
     referenceLabel:
       row.saleInvoiceNumber ??
-      (row.referenceType === "shift" ? "Shift kasir" : row.referenceType),
+      (row.referenceType === "customer_deposit_withdrawal"
+        ? "Penarikan Dana Titip"
+        : row.referenceType === "shift"
+          ? "Shift kasir"
+          : row.referenceType),
     reason: row.reason,
     createdAt: row.createdAt,
     createdByName: row.createdByName,
@@ -398,10 +513,12 @@ export async function getAdminCashMovementListData(
       manualCashIn,
       manualCashOut,
       cashRefunds,
+      customerDepositCashWithdrawals,
       closingAdjustments,
       netMovement,
       activeShiftCount: activeShifts.length,
     },
+    customerDepositSummary,
     total,
     page,
     pageCount,
@@ -473,7 +590,11 @@ export async function getAdminCashMovementExportRows(
     referenceId: row.referenceId,
     referenceLabel:
       row.saleInvoiceNumber ??
-      (row.referenceType === "shift" ? "Shift kasir" : row.referenceType),
+      (row.referenceType === "customer_deposit_withdrawal"
+        ? "Penarikan Dana Titip"
+        : row.referenceType === "shift"
+          ? "Shift kasir"
+          : row.referenceType),
     reason: row.reason,
     createdAt: row.createdAt,
     createdByName: row.createdByName,
