@@ -157,7 +157,11 @@ export type AdminSalesExportRow = {
   additionalFeeAmount: string;
   totalAmount: string;
   paidAmount: number;
+  externalPaidAmount: number;
   refundedAmount: number;
+  customerDepositUsedAmount: number;
+  customerDepositInAmount: number;
+  paymentStatus: "paid" | "partial" | "pending";
   receivedAmount: number;
   changeAmount: number;
   completedAt: Date | null;

@@ -818,57 +818,76 @@ export async function getAdminSalesExportRows(
     return [];
   }
 
-  const [paymentRows, itemRows, hardwareJobRows] = await Promise.all([
-    db
-      .select({
-        saleId: payments.saleId,
-        method: payments.method,
-        amount: payments.amount,
-        status: payments.status,
-        metadata: payments.metadata,
-        createdAt: payments.createdAt,
-      })
-      .from(payments)
-      .where(inArray(payments.saleId, saleIds))
-      .orderBy(asc(payments.createdAt)),
+  const [paymentRows, itemRows, hardwareJobRows, customerDepositRows] =
+    await Promise.all([
+      db
+        .select({
+          saleId: payments.saleId,
+          method: payments.method,
+          amount: payments.amount,
+          status: payments.status,
+          metadata: payments.metadata,
+          createdAt: payments.createdAt,
+        })
+        .from(payments)
+        .where(inArray(payments.saleId, saleIds))
+        .orderBy(asc(payments.createdAt)),
 
-    db
-      .select({
-        saleId: saleItems.saleId,
-        lineNumber: saleItems.lineNumber,
-        sku: productItems.sku,
-        barcode: productItems.barcode,
-        productName: sql<string>`coalesce(${saleItems.snapshot}->>'itemDisplayName', ${saleItems.snapshot}->>'productName', ${productItems.displayName}, ${productMasters.name})`,
-        categoryName: productCategories.name,
-        finalPriceAmount: saleItems.finalPriceAmount,
-      })
-      .from(saleItems)
-      .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
-      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
-      .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
-      .where(inArray(saleItems.saleId, saleIds))
-      .orderBy(asc(saleItems.lineNumber)),
+      db
+        .select({
+          saleId: saleItems.saleId,
+          lineNumber: saleItems.lineNumber,
+          sku: productItems.sku,
+          barcode: productItems.barcode,
+          productName: sql<string>`coalesce(${saleItems.snapshot}->>'itemDisplayName', ${saleItems.snapshot}->>'productName', ${productItems.displayName}, ${productMasters.name})`,
+          categoryName: productCategories.name,
+          finalPriceAmount: saleItems.finalPriceAmount,
+        })
+        .from(saleItems)
+        .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
+        .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+        .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
+        .where(inArray(saleItems.saleId, saleIds))
+        .orderBy(asc(saleItems.lineNumber)),
 
-    db
-      .select({
-        sourceId: hardwareJobs.sourceId,
-        status: hardwareJobs.status,
-        createdAt: hardwareJobs.createdAt,
-      })
-      .from(hardwareJobs)
-      .where(
-        and(
-          eq(hardwareJobs.organizationId, auth.organization.id),
-          eq(hardwareJobs.sourceType, "sale"),
-          eq(hardwareJobs.jobType, "print_receipt_certificate"),
-          inArray(hardwareJobs.sourceId, saleIds),
-        ),
-      )
-      .orderBy(desc(hardwareJobs.createdAt)),
-  ]);
+      db
+        .select({
+          sourceId: hardwareJobs.sourceId,
+          status: hardwareJobs.status,
+          createdAt: hardwareJobs.createdAt,
+        })
+        .from(hardwareJobs)
+        .where(
+          and(
+            eq(hardwareJobs.organizationId, auth.organization.id),
+            eq(hardwareJobs.sourceType, "sale"),
+            eq(hardwareJobs.jobType, "print_receipt_certificate"),
+            inArray(hardwareJobs.sourceId, saleIds),
+          ),
+        )
+        .orderBy(desc(hardwareJobs.createdAt)),
+
+      db
+        .select({
+          saleId: customerDepositLedger.saleId,
+          entryType: customerDepositLedger.entryType,
+          direction: customerDepositLedger.direction,
+          amount: customerDepositLedger.amount,
+          occurredAt: customerDepositLedger.occurredAt,
+        })
+        .from(customerDepositLedger)
+        .where(
+          and(
+            eq(customerDepositLedger.organizationId, auth.organization.id),
+            inArray(customerDepositLedger.saleId, saleIds),
+          ),
+        )
+        .orderBy(asc(customerDepositLedger.occurredAt)),
+    ]);
 
   const paymentsBySaleId = new Map<string, typeof paymentRows>();
   const itemsBySaleId = new Map<string, typeof itemRows>();
+  const customerDepositsBySaleId = new Map<string, typeof customerDepositRows>();
   const printStatusBySaleId = new Map<string, AdminSalePrintStatus>();
 
   for (const payment of paymentRows) {
@@ -883,6 +902,14 @@ export async function getAdminSalesExportRows(
     itemsBySaleId.set(item.saleId, currentItems);
   }
 
+  for (const deposit of customerDepositRows) {
+    if (!deposit.saleId) continue;
+
+    const currentDeposits = customerDepositsBySaleId.get(deposit.saleId) ?? [];
+    currentDeposits.push(deposit);
+    customerDepositsBySaleId.set(deposit.saleId, currentDeposits);
+  }
+
   for (const job of hardwareJobRows) {
     if (job.sourceId && !printStatusBySaleId.has(job.sourceId)) {
       printStatusBySaleId.set(job.sourceId, normalizePrintStatus(job.status));
@@ -892,6 +919,8 @@ export async function getAdminSalesExportRows(
   return saleRows.map((sale): AdminSalesExportRow => {
     const salePayments = paymentsBySaleId.get(sale.id) ?? [];
     const saleItemsRows = itemsBySaleId.get(sale.id) ?? [];
+    const saleDepositEntries = customerDepositsBySaleId.get(sale.id) ?? [];
+    const totalAmount = parseAmount(sale.totalAmount);
     const paidPayments = salePayments.filter((payment) => payment.status === "paid");
     const refundedPayments = salePayments.filter(
       (payment) => payment.status === "refunded",
@@ -899,9 +928,27 @@ export async function getAdminSalesExportRows(
     const displayPayments = salePayments.filter(
       (payment) => payment.status === "paid" || payment.status === "refunded",
     );
-    const paidAmount = paidPayments.reduce(
+    const externalPaidAmount = paidPayments.reduce(
       (paymentTotal, payment) => paymentTotal + parseAmount(payment.amount),
       0,
+    );
+    const customerDepositUsedAmount = saleDepositEntries.reduce(
+      (depositTotal, deposit) =>
+        deposit.entryType === "deposit_used" && deposit.direction === "debit"
+          ? depositTotal + parseAmount(deposit.amount)
+          : depositTotal,
+      0,
+    );
+    const customerDepositInAmount = saleDepositEntries.reduce(
+      (depositTotal, deposit) =>
+        deposit.entryType === "deposit_in" && deposit.direction === "credit"
+          ? depositTotal + parseAmount(deposit.amount)
+          : depositTotal,
+      0,
+    );
+    const paidAmount = Math.max(
+      0,
+      externalPaidAmount + customerDepositUsedAmount - customerDepositInAmount,
     );
     const refundedAmount = refundedPayments.reduce(
       (paymentTotal, payment) => paymentTotal + parseAmount(payment.amount),
@@ -930,7 +977,11 @@ export async function getAdminSalesExportRows(
       additionalFeeAmount: sale.additionalFeeAmount,
       totalAmount: sale.totalAmount,
       paidAmount,
+      externalPaidAmount,
       refundedAmount,
+      customerDepositUsedAmount,
+      customerDepositInAmount,
+      paymentStatus: getPaymentStatusFromAmounts(totalAmount, paidAmount),
       receivedAmount,
       changeAmount,
       completedAt: sale.completedAt,

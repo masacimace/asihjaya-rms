@@ -60,10 +60,14 @@ const transactionHeaders = [
   "Telepon Customer",
   "Jumlah Item",
   "Payment Method",
+  "Status Pembayaran",
   "Subtotal",
   "Diskon",
   "Biaya Tambahan",
   "Total",
+  "Pembayaran Eksternal",
+  "Gunakan Saldo",
+  "Deposit Saldo",
   "Dibayar",
   "Uang Cash Diterima",
   "Kembalian",
@@ -124,8 +128,18 @@ function sanitizeWorksheetText(value: string | number | null | undefined) {
 }
 
 function getPaymentMethodLabel(row: Awaited<ReturnType<typeof getAdminSalesExportRows>>[number]) {
-  if (row.paymentMethods.length > 0) {
-    return row.paymentMethods.map((method) => paymentMethodLabels[method]).join(" + ");
+  const paymentLabels = row.paymentMethods.map((method) => paymentMethodLabels[method]);
+
+  if (row.customerDepositUsedAmount > 0) {
+    paymentLabels.push("Dana Titip");
+  }
+
+  if (row.customerDepositInAmount > 0) {
+    paymentLabels.push("Deposit Saldo");
+  }
+
+  if (paymentLabels.length > 0) {
+    return paymentLabels.join(" + ");
   }
 
   if (row.status === "voided") {
@@ -138,6 +152,20 @@ function getPaymentMethodLabel(row: Awaited<ReturnType<typeof getAdminSalesExpor
 
   if (row.status === "partially_refunded") {
     return "Refund parsial";
+  }
+
+  return "Belum bayar";
+}
+
+function getPaymentStatusLabel(
+  status: Awaited<ReturnType<typeof getAdminSalesExportRows>>[number]["paymentStatus"],
+) {
+  if (status === "paid") {
+    return "Lunas";
+  }
+
+  if (status === "partial") {
+    return "Bayar sebagian";
   }
 
   return "Belum bayar";
@@ -158,10 +186,14 @@ function buildTransactionRows(rows: Awaited<ReturnType<typeof getAdminSalesExpor
     sanitizeWorksheetText(row.customerPhone ?? ""),
     row.totalItems,
     getPaymentMethodLabel(row),
+    getPaymentStatusLabel(row.paymentStatus),
     toNumericAmount(row.subtotalAmount),
     toNumericAmount(row.discountAmount),
     toNumericAmount(row.additionalFeeAmount),
     toNumericAmount(row.totalAmount),
+    toNumericAmount(row.externalPaidAmount),
+    toNumericAmount(row.customerDepositUsedAmount),
+    toNumericAmount(row.customerDepositInAmount),
     toNumericAmount(row.paidAmount),
     toNumericAmount(row.receivedAmount),
     toNumericAmount(row.changeAmount),
@@ -236,8 +268,13 @@ function buildWorkbook(rows: Awaited<ReturnType<typeof getAdminSalesExportRows>>
       { wch: 24 },
       { wch: 18 },
       { wch: 12 },
-      { wch: 24 },
+      { wch: 30 },
       { wch: 18 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 22 },
       { wch: 18 },
       { wch: 18 },
       { wch: 18 },
@@ -248,7 +285,7 @@ function buildWorkbook(rows: Awaited<ReturnType<typeof getAdminSalesExportRows>>
       { wch: 22 },
       { wch: 22 },
     ],
-    [13, 14, 15, 16, 17, 18, 19],
+    [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
   );
 
   const itemWorksheet = createWorksheet(

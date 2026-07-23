@@ -60,10 +60,14 @@ const csvHeaders = [
   "Jumlah Item",
   "Item Terjual",
   "Payment Method",
+  "Status Pembayaran",
   "Subtotal",
   "Diskon",
   "Biaya Tambahan",
   "Total",
+  "Pembayaran Eksternal",
+  "Gunakan Saldo",
+  "Deposit Saldo",
   "Dibayar",
   "Uang Cash Diterima",
   "Kembalian",
@@ -123,8 +127,18 @@ function escapeCsvCell(value: string | number | null | undefined) {
 }
 
 function getPaymentMethodLabel(row: Awaited<ReturnType<typeof getAdminSalesExportRows>>[number]) {
-  if (row.paymentMethods.length > 0) {
-    return row.paymentMethods.map((method) => paymentMethodLabels[method]).join(" + ");
+  const paymentLabels = row.paymentMethods.map((method) => paymentMethodLabels[method]);
+
+  if (row.customerDepositUsedAmount > 0) {
+    paymentLabels.push("Dana Titip");
+  }
+
+  if (row.customerDepositInAmount > 0) {
+    paymentLabels.push("Deposit Saldo");
+  }
+
+  if (paymentLabels.length > 0) {
+    return paymentLabels.join(" + ");
   }
 
   if (row.status === "voided") {
@@ -137,6 +151,20 @@ function getPaymentMethodLabel(row: Awaited<ReturnType<typeof getAdminSalesExpor
 
   if (row.status === "partially_refunded") {
     return "Refund parsial";
+  }
+
+  return "Belum bayar";
+}
+
+function getPaymentStatusLabel(
+  status: Awaited<ReturnType<typeof getAdminSalesExportRows>>[number]["paymentStatus"],
+) {
+  if (status === "paid") {
+    return "Lunas";
+  }
+
+  if (status === "partial") {
+    return "Bayar sebagian";
   }
 
   return "Belum bayar";
@@ -166,10 +194,14 @@ function buildCsv(rows: Awaited<ReturnType<typeof getAdminSalesExportRows>>) {
         )
         .join("; "),
       getPaymentMethodLabel(row),
+      getPaymentStatusLabel(row.paymentStatus),
       toCsvAmount(row.subtotalAmount),
       toCsvAmount(row.discountAmount),
       toCsvAmount(row.additionalFeeAmount),
       toCsvAmount(row.totalAmount),
+      toCsvAmount(row.externalPaidAmount),
+      toCsvAmount(row.customerDepositUsedAmount),
+      toCsvAmount(row.customerDepositInAmount),
       toCsvAmount(row.paidAmount),
       toCsvAmount(row.receivedAmount),
       toCsvAmount(row.changeAmount),
