@@ -351,8 +351,8 @@ const styles = String.raw`
 
   .aj-thumb {
     display: grid;
-    width: 32mm;
-    height: 32mm;
+    width: 36mm;
+    height: 36mm;
     overflow: hidden;
     place-items: center;
     justify-self: center;
@@ -627,6 +627,202 @@ const styles = String.raw`
     color: var(--muted);
     font-size: 4.4pt;
     line-height: 1.2;
+  }
+
+
+  /* ─── BACK PAGE ─── */
+
+  .aj-receipt-back-design {
+    background:
+      radial-gradient(circle at 16% 18%, rgba(179, 122, 31, 0.08), transparent 28%),
+      radial-gradient(circle at 84% 82%, rgba(168, 31, 61, 0.06), transparent 30%),
+      #fafaf6;
+  }
+
+  .aj-back-content {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 3.4mm;
+    height: 100%;
+  }
+
+  .aj-back-header {
+    display: grid;
+    grid-template-columns: 23mm 1fr 43mm;
+    gap: 3.5mm;
+    align-items: center;
+    padding: 1.8mm 2.5mm 2.4mm;
+    border-bottom: 0.22mm solid rgba(179, 122, 31, 0.28);
+  }
+
+  .aj-back-logo {
+    width: 18mm;
+    height: 18mm;
+    object-fit: contain;
+    justify-self: center;
+  }
+
+  .aj-back-eyebrow {
+    color: var(--gold);
+    font-size: 4.5pt;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .aj-back-title {
+    margin-top: 1mm;
+    color: var(--ink);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 13.4pt;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .aj-back-subtitle {
+    margin-top: 1.2mm;
+    color: var(--muted);
+    font-size: 6pt;
+    line-height: 1.32;
+  }
+
+  .aj-back-outlet-card {
+    display: grid;
+    gap: 0.8mm;
+    padding: 2.4mm;
+    border: 0.2mm solid rgba(179, 122, 31, 0.22);
+    border-radius: 2.4mm;
+    background: rgba(255, 255, 255, 0.54);
+  }
+
+  .aj-back-outlet-label {
+    color: var(--muted);
+    font-size: 4.9pt;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .aj-back-outlet-name {
+    color: var(--ink);
+    font-size: 7.2pt;
+    font-weight: 900;
+    line-height: 1.1;
+  }
+
+  .aj-back-outlet-text {
+    color: var(--muted);
+    font-size: 5.35pt;
+    line-height: 1.25;
+  }
+
+  .aj-back-grid {
+    display: grid;
+    grid-template-columns: 1.12fr 0.88fr;
+    grid-template-rows: 1fr 0.95fr;
+    gap: 3mm;
+    min-height: 0;
+  }
+
+  .aj-back-card {
+    display: grid;
+    min-height: 0;
+    align-content: start;
+    gap: 2mm;
+    padding: 3.2mm;
+    border: 0.2mm solid rgba(179, 122, 31, 0.22);
+    border-radius: 2.7mm;
+    background: rgba(255, 255, 255, 0.58);
+  }
+
+  .aj-back-card-terms {
+    grid-row: 1 / span 2;
+  }
+
+  .aj-back-section-title {
+    display: flex;
+    align-items: center;
+    gap: 1.5mm;
+    color: var(--ink);
+    font-size: 6.4pt;
+    font-weight: 900;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+
+  .aj-back-section-title::before {
+    content: "";
+    width: 5.5mm;
+    height: 0.9mm;
+    border-radius: 999px;
+    background: var(--gold);
+  }
+
+  .aj-back-list {
+    display: grid;
+    gap: 1.35mm;
+    margin: 0;
+    padding-left: 4.4mm;
+    color: #3f352e;
+    font-size: 5.95pt;
+    line-height: 1.35;
+  }
+
+  .aj-back-list li {
+    padding-left: 0.7mm;
+  }
+
+  .aj-back-card-compact .aj-back-list {
+    gap: 1.1mm;
+    font-size: 5.8pt;
+  }
+
+  .aj-back-service-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5mm;
+  }
+
+  .aj-back-service-pill {
+    display: grid;
+    min-height: 8.4mm;
+    align-items: center;
+    padding: 1.6mm 2mm;
+    border-radius: 2mm;
+    color: #4b4037;
+    background: rgba(245, 245, 245, 0.78);
+    font-size: 5.35pt;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .aj-back-contact-heading {
+    color: var(--ink);
+    font-size: 5.65pt;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .aj-back-contact-item {
+    min-width: 0;
+  }
+
+  .aj-back-contact-label {
+    color: var(--gold);
+    font-size: 4.75pt;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .aj-back-contact-value {
+    margin-top: 0.7mm;
+    color: var(--ink);
+    font-size: 5.55pt;
+    font-weight: 800;
+    line-height: 1.22;
   }
 
   @media screen and (max-width: 860px) {
@@ -924,9 +1120,7 @@ export function ReceiptCertificateHtmlDocument({
   const verificationQrImage = createQrSvgDataUri(data.verification.url);
 
   return (
-    <div
-      className={`aj-preview-shell${pageCount <= 1 ? " aj-preview-shell-single" : ""}`}
-    >
+    <div className="aj-preview-shell">
       <style
         dangerouslySetInnerHTML={{
           __html: `${buildProfileStyles(documentProfileId)}${styles}`,
@@ -1192,6 +1386,123 @@ export function ReceiptCertificateHtmlDocument({
             </article>
           );
         })}
+        <article
+          className="aj-receipt-page"
+          aria-label="Ketentuan transaksi dan informasi layanan"
+        >
+          <div className="aj-receipt-design aj-receipt-back-design">
+            <div className="aj-watermark">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo/nota-logo.png" alt="" />
+            </div>
+
+            <div className="aj-back-content">
+              <header className="aj-back-header">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  className="aj-back-logo"
+                  src="/logo/nota-logo.png"
+                  alt="Asih Jaya"
+                />
+
+                <div>
+                  <div className="aj-back-title">Informasi & Ketentuan</div>
+                  <div className="aj-back-subtitle">
+                    Simpan nota ini sebagai bukti transaksi resmi dan referensi
+                    saat melakukan layanan lanjutan di outlet Asihjaya.
+                  </div>
+                </div>
+
+                <div className="aj-back-outlet-card">
+                  <div className="aj-back-outlet-label">Outlet</div>
+                  <div className="aj-back-outlet-name">{data.outlet.name}</div>
+                  <div className="aj-back-outlet-text">
+                    {data.outlet.address ?? "Alamat outlet belum diatur"}
+                  </div>
+                </div>
+              </header>
+
+              <section className="aj-back-grid">
+                <article className="aj-back-card aj-back-card-terms">
+                  <div className="aj-back-section-title">
+                    Ketentuan Transaksi
+                  </div>
+                  <ol className="aj-back-list">
+                    <li>
+                      Barang yang tercantum dalam nota telah diperiksa,
+                      disetujui, ditimbang, dan diterima oleh pembeli.
+                    </li>
+                    <li>
+                      Barang dapat dijual kembali mengikuti harga pasar, kondisi
+                      barang, dan kebijakan toko yang berlaku.
+                    </li>
+                    <li>
+                      Barang permata cacat, retak, atau pecah tidak dapat
+                      diterima kembali.
+                    </li>
+                    <li>
+                      Perhiasan batu dan sejenisnya hanya kami terima bagian
+                      emasnya saja.
+                    </li>
+                    <li>
+                      Nota wajib dibawa saat menjual kembali. Jika nota hilang,
+                      transaksi dapat ditolak atau perlu verifikasi tambahan.
+                    </li>
+                    <li>
+                      Selisih berat, kadar, kelengkapan, atau kondisi barang
+                      saat penjualan kembali dapat memengaruhi nilai transaksi.
+                    </li>
+                    <li>
+                      Dana Titip dan riwayat transaksi mengikuti catatan sistem
+                      pada outlet terkait.
+                    </li>
+                  </ol>
+                </article>
+
+                <article className="aj-back-card aj-back-card-compact">
+                  <div className="aj-back-section-title">
+                    Perawatan Perhiasan
+                  </div>
+                  <ul className="aj-back-list">
+                    <li>
+                      Hindari kontak langsung dengan parfum, sabun, cairan
+                      kimia, dan air laut.
+                    </li>
+                    <li>
+                      Simpan perhiasan secara terpisah agar tidak saling
+                      bergesekan.
+                    </li>
+                    <li>
+                      Bersihkan perhiasan menggunakan kain lembut dan kering.
+                    </li>
+                    <li>
+                      Lakukan pemeriksaan berkala ke outlet Asihjaya jika
+                      diperlukan.
+                    </li>
+                  </ul>
+                </article>
+
+                <article className="aj-back-card aj-back-card-compact">
+                  <div className="aj-back-section-title">Layanan Asihjaya</div>
+                  <div className="aj-back-service-grid">
+                    <div className="aj-back-service-pill">
+                      Pembelian emas dan perhiasan
+                    </div>
+                    <div className="aj-back-service-pill">
+                      Penjualan kembali
+                    </div>
+                    <div className="aj-back-service-pill">
+                      Cek nota dan riwayat transaksi
+                    </div>
+                    <div className="aj-back-service-pill">
+                      Konsultasi produk di outlet
+                    </div>
+                  </div>
+                </article>
+              </section>
+            </div>
+          </div>
+        </article>
       </div>
     </div>
   );
