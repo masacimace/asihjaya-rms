@@ -7,14 +7,6 @@ import {
   type ReceiptDocumentProfileId,
 } from "./receipt-document-profiles";
 
-const receiptTerms = [
-  "1. Barang yang tercantum dalam nota telah diperiksa, disetujui, ditimbang, dan diterima oleh pembeli.",
-  "2. Barang dapat dijual kembali dalam keadaan utuh sesuai kebijakan toko dan harga pasar yang berlaku.",
-  "3. Barang permata cacat atau pecah tidak dapat diterima kembali.",
-  "4. Perhiasan batu dan sejenisnya hanya kami terima emasnya saja.",
-  "5. Nota ini wajib dibawa saat menjual kembali. Jika nota hilang, transaksi dapat ditolak.",
-];
-
 const styles = String.raw`
   html,
   body {
@@ -115,7 +107,7 @@ const styles = String.raw`
     width: 128mm;
     height: 128mm;
     pointer-events: none;
-    opacity: 0.09;
+    opacity: 0.03;
   }
 
   .aj-watermark img {
@@ -153,8 +145,8 @@ const styles = String.raw`
   }
 
   .aj-logo {
-    width: 22mm;
-    height: 22mm;
+    width: 23mm;
+    height: 23mm;
     object-fit: contain;
   }
 
@@ -164,19 +156,6 @@ const styles = String.raw`
     min-width: 0;
   }
 
-  .aj-eyebrow {
-    width: fit-content;
-    margin-bottom: 1.2mm;
-    padding: 0.7mm 2mm;
-    border-radius: 999px;
-    color: var(--gold);
-    background: rgba(246, 234, 208, 0.68);
-    border: 0.18mm solid rgba(179, 122, 31, 0.34);
-    font-size: 5.2pt;
-    font-weight: 900;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
-  }
 
   .aj-brand-title {
     color: var(--ink);
@@ -251,11 +230,11 @@ const styles = String.raw`
 
   .aj-info-strip {
     display: grid;
-    grid-template-columns: 1fr 1fr 40mm;
+    grid-template-columns: 1fr 1fr;
     overflow: hidden;
     border: 0.2mm solid rgba(179, 122, 31, 0.28);
     border-radius: 2.5mm;
-    background: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.55);
   }
 
   .aj-info-box {
@@ -285,31 +264,20 @@ const styles = String.raw`
     line-height: 1.05;
   }
 
-  .aj-payment-badge {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--maroon);
-    background: rgba(168, 31, 61, 0.055);
-    font-size: 6pt;
-    font-weight: 900;
-    text-align: center;
-    text-transform: uppercase;
-  }
 
   /* ─── PRODUCTS TABLE ─── */
 
   .aj-products-card {
-    overflow: hidden;
-    border: 0.22mm solid rgba(179, 122, 31, 0.25);
-    border-radius: 2.5mm;
-    background: rgba(255, 255, 255, 1.0);
+    display: grid;
     min-height: 0;
+    overflow: hidden;
+    border: 0.22mm solid rgba(179, 122, 31, 0.3);
+    border-radius: 2.8mm;
   }
 
   .aj-products-grid {
     display: grid;
-    grid-template-rows: 7.5mm;
+    grid-template-rows: 7.2mm;
     grid-auto-rows: 1fr;
     height: 100%;
   }
@@ -321,15 +289,22 @@ const styles = String.raw`
 
   .aj-product-row {
     display: grid;
-    grid-template-columns: 20mm 45mm minmax(0, 1fr) 18mm 18mm 26mm 23mm;
+    grid-template-columns: 20mm 35mm minmax(0, 1fr) 17mm 15mm 21mm 17mm 24mm;
     align-items: center;
-    padding: 0 4mm;
+    column-gap: 1.2mm;
+    padding: 0 3.2mm;
+  }
+
+  .aj-product-row > div {
+    min-width: 0;
   }
 
   .aj-product-body {
     min-height: 0;
-    padding-top: 2.5mm;
-    padding-bottom: 2.5mm;
+    padding-top: 2.2mm;
+    padding-bottom: 2.2mm;
+    background: rgba(255, 255, 255, 0.55);
+    border-top: 0.16mm solid rgba(179, 122, 31, 0.12);
   }
 
   .aj-product-row:last-child {
@@ -337,16 +312,20 @@ const styles = String.raw`
   }
 
   .aj-product-head {
-    color: #000;
-    background: #f5f5dc;
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: 5.8pt;
+    color: #2d251c;
+    background:
+      linear-gradient(180deg, #fbf8df 0%, #f3efd2 100%);
+    font-size: 5.25pt;
     font-weight: 900;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
   }
 
   .aj-product-head > div {
+    overflow: hidden;
     text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .aj-product-head .aj-head-center {
@@ -358,22 +337,29 @@ const styles = String.raw`
   }
 
   .aj-code {
-    font-size: 7.6pt;
+    display: grid;
+    min-height: 10mm;
+    align-items: center;
+    padding: 1.2mm 1mm;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 6.8pt;
     font-weight: 900;
+    line-height: 1.15;
     text-align: center;
+    word-break: break-word;
   }
 
   .aj-thumb {
     display: grid;
-    width: 44mm;
-    height: 44mm;
+    width: 32mm;
+    height: 32mm;
     overflow: hidden;
     place-items: center;
     justify-self: center;
+    padding: 1.5mm;
     color: var(--gold);
-    background: linear-gradient(135deg, rgba(255, 254, 250, 0.96), rgba(251, 240, 216, 0.58));
-    border-radius: 2mm;
-    font-size: 6pt;
+    border-radius: 2.4mm;
+    font-size: 5.7pt;
     font-weight: 900;
     text-align: center;
   }
@@ -391,109 +377,162 @@ const styles = String.raw`
   }
 
   .aj-product-copy {
+    display: grid;
     min-width: 0;
+    min-height: 25mm;
+    align-content: center;
+    padding-left: 1.2mm;
   }
 
   .aj-product-name {
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 6.9pt;
+    font-size: 7.55pt;
     font-weight: 900;
     line-height: 1.12;
     text-transform: uppercase;
   }
 
   .aj-product-meta {
-    margin-top: 1.1mm;
+    margin-top: 1mm;
     color: var(--muted);
-    font-size: 6.4pt;
+    font-size: 6.35pt;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.22;
   }
 
   .aj-kadar {
     display: grid;
-    width: 12.5mm;
-    height: 12.5mm;
+    width: 12.6mm;
+    height: 12.6mm;
     place-items: center;
     justify-self: center;
     color: #000;
-    background: rgba(255, 253, 248, 0.94);
-    font-size: 7.6pt;
+    font-size: 7.35pt;
     font-weight: 900;
   }
 
   .aj-gram {
-    font-size: 7.6pt;
-    font-weight: 900;
-    text-align: center;
-  }
-
-  .aj-deduction {
-    color: var(--maroon);
-    font-size: 7.6pt;
+    font-size: 7.35pt;
     font-weight: 900;
     text-align: center;
     white-space: nowrap;
   }
 
-  .aj-price {
-    font-size: 7.6pt;
+  .aj-deduction,
+  .aj-discount {
+    font-size: 7.25pt;
     font-weight: 900;
     text-align: right;
+    white-space: nowrap;
+  }
+
+  .aj-money-negative {
+    color: var(--maroon);
+  }
+
+  .aj-money-muted {
+    color: var(--maroon);
+  }
+
+  .aj-price {
+    color: #111;
+    font-size: 7.95pt;
+    font-weight: 900;
+    text-align: right;
+    white-space: nowrap;
   }
 
   /* ─── FOOTER ─── */
 
   .aj-footer {
     display: grid;
-    grid-template-columns: 1fr 52mm 26mm;
+    grid-template-columns: 68mm 43mm 52mm 26mm;
     gap: 2.5mm;
     min-height: 0;
   }
 
-  .aj-notes,
+  .aj-payment-support,
+  .aj-signature-card,
   .aj-total-card,
   .aj-qr-card {
     border: 0.2mm solid rgba(179, 122, 31, 0.23);
     border-radius: 2.5mm;
-    background: rgba(255, 255, 255, 0.74);
+    background: rgba(255, 255, 255, 0.55);
   }
 
-  .aj-notes {
-    padding: 2.5mm 3mm;
-    overflow: hidden;
+  .aj-payment-support {
+    display: grid;
+    align-content: center;
+    gap: 2.3mm;
+    padding: 3mm;
   }
 
-  .aj-notes-title {
-    display: flex;
-    align-items: center;
-    gap: 1.2mm;
-    margin-bottom: 1mm;
+  .aj-payment-support-title,
+  .aj-signature-title {
     color: var(--gold);
-    font-size: 6pt;
+    font-size: 5pt;
     font-weight: 900;
-    letter-spacing: 0.1em;
     text-transform: uppercase;
   }
 
-  .aj-terms {
-    margin: 0;
-    color: #382f28;
-    font-size: 6.2pt;
-    line-height: 1.36;
+  .aj-edc-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5mm;
+  }
+
+  .aj-edc-logo {
+    display: grid;
+    height: 10mm;
+    place-items: center;
+    border-radius: 1.8mm;
+    background: rgb(245 245 245);
+  }
+
+  .aj-edc-logo img {
+    max-width: 82%;
+    max-height: 6mm;
+    object-fit: contain;
+  }
+
+  .aj-payment-support-note {
+    color: var(--muted);
+    font-size: 4.8pt;
+    line-height: 1.3;
+  }
+
+  .aj-signature-card {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 3mm;
+    padding: 3mm;
+    text-align: center;
+  }
+
+  .aj-signature-space {
+    width: 100%;
+    height: 18mm;
+    border-bottom: 0.25mm solid rgba(28, 23, 18, 0.62);
+  }
+
+  .aj-signature-name {
+    color: var(--muted);
+    font-size: 5.1pt;
+    font-weight: 700;
   }
 
   .aj-total-card {
     display: grid;
     align-content: center;
-    gap: 1.7mm;
-    padding: 2.2mm 3mm;
+    padding: 2mm 3mm;
   }
 
   .aj-total-breakdown {
     display: grid;
-    gap: 0.9mm;
-    padding-bottom: 1.5mm;
+    gap: 0.45mm;
+    padding-bottom: 1.4mm;
+    margin-bottom: 1.6mm;
     border-bottom: 0.2mm solid rgba(179, 122, 31, 0.42);
   }
 
@@ -501,10 +540,8 @@ const styles = String.raw`
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 3mm;
     color: #4b4037;
-    font-size: 5.8pt;
-    line-height: 1.1;
+    font-size: 5.45pt;
   }
 
   .aj-total-detail-row strong {
@@ -563,8 +600,8 @@ const styles = String.raw`
 
   .aj-qr-box {
     display: grid;
-    width: 18mm;
-    height: 18mm;
+    width: 20mm;
+    height: 20mm;
     place-items: center;
     overflow: hidden;
     background: #fff;
@@ -731,6 +768,16 @@ function formatDeductionPerGram(value: string | number | null | undefined) {
   return formatAmount(amount);
 }
 
+function formatDiscountAmount(value: string | number | null | undefined) {
+  const amount = toNumber(value);
+
+  if (amount <= 0) {
+    return "Rp 0";
+  }
+
+  return formatNegativeAmount(amount);
+}
+
 function formatDate(value: Date | null, timezone: string) {
   if (!value) {
     return "-";
@@ -840,32 +887,6 @@ function ProductThumbnail({
   );
 }
 
-function getPaymentSummary(data: ReceiptCertificateData) {
-  const methodNames = data.payments.map((payment) => payment.method);
-
-  if (toNumber(data.customerDeposit.usedAmount) > 0) {
-    methodNames.push("customer_deposit");
-  }
-
-  if (methodNames.length === 0) {
-    return "Pembayaran tercatat";
-  }
-
-  const methodLabels: Record<string, string> = {
-    bank_transfer: "Transfer",
-    cash: "Cash",
-    credit_card: "Credit Card",
-    debit_card: "Debit Card",
-    qris_manual: "QRIS",
-    qris_gateway: "QRIS",
-    customer_deposit: "Dana Titip",
-  };
-
-  return methodNames
-    .map((method) => methodLabels[method] ?? method.replaceAll("_", " "))
-    .join(" + ");
-}
-
 function buildProfileStyles(documentProfileId: ReceiptDocumentProfileId) {
   const profile = resolveReceiptDocumentProfile(documentProfileId);
 
@@ -900,9 +921,6 @@ export function ReceiptCertificateHtmlDocument({
   const pageCount = Math.max(certificateItems.length, 1);
   const customerDepositUsedAmount = toNumber(data.customerDeposit.usedAmount);
   const customerDepositInAmount = toNumber(data.customerDeposit.inAmount);
-  const hasCustomerDepositActivity =
-    customerDepositUsedAmount > 0 || customerDepositInAmount > 0;
-  const paymentSummary = getPaymentSummary(data);
   const verificationQrImage = createQrSvgDataUri(data.verification.url);
 
   return (
@@ -946,9 +964,6 @@ export function ReceiptCertificateHtmlDocument({
                     </div>
 
                     <div className="aj-brand-block">
-                      <div className="aj-eyebrow">
-                        Nota Pembelian & Certificate
-                      </div>
                       <div className="aj-brand-title">Toko Emas Asih Jaya</div>
                       <div className="aj-branch-title">{data.outlet.name}</div>
                       <div className="aj-contact-lines">
@@ -1007,9 +1022,6 @@ export function ReceiptCertificateHtmlDocument({
                         <div className="aj-info-value">{customerPhone}</div>
                       </div>
                     </div>
-                    <div className="aj-info-box aj-payment-badge">
-                      {paymentSummary}
-                    </div>
                   </section>
 
                   <section className="aj-products-card">
@@ -1020,7 +1032,8 @@ export function ReceiptCertificateHtmlDocument({
                         <div>PRODUCT</div>
                         <div className="aj-head-center">KADAR ±%</div>
                         <div className="aj-head-center">GRAM</div>
-                        <div className="aj-head-center">POTONGAN /GRAM</div>
+                        <div className="aj-head-right">POT/GRAM</div>
+                        <div className="aj-head-right">DISKON</div>
                         <div className="aj-head-right">HARGA</div>
                       </div>
                       <div className="aj-product-row aj-product-body">
@@ -1040,10 +1053,25 @@ export function ReceiptCertificateHtmlDocument({
                         <div className="aj-gram">
                           {formatGram(item.snapshot.weightGram)}
                         </div>
-                        <div className="aj-deduction">
+                        <div
+                          className={`aj-deduction ${
+                            toNumber(item.snapshot.deductionPerGram) > 0
+                              ? "aj-money-negative"
+                              : "aj-money-muted"
+                          }`}
+                        >
                           {formatDeductionPerGram(
                             item.snapshot.deductionPerGram,
                           )}
+                        </div>
+                        <div
+                          className={`aj-discount ${
+                            itemDiscountAmount > 0
+                              ? "aj-money-negative"
+                              : "aj-money-muted"
+                          }`}
+                        >
+                          {formatDiscountAmount(itemDiscountAmount)}
                         </div>
                         <div className="aj-price">
                           {formatAmount(item.finalPriceAmount)}
@@ -1053,16 +1081,57 @@ export function ReceiptCertificateHtmlDocument({
                   </section>
 
                   <footer className="aj-footer">
-                    <section className="aj-notes">
-                      <div className="aj-notes-title">Perhatian</div>
-                      <ol className="aj-terms">
-                        {receiptTerms.map((term) => (
-                          <li key={term}>{term}</li>
-                        ))}
-                      </ol>
+                    <section className="aj-payment-support">
+                      <div className="aj-payment-support-title">
+                        Support Payment
+                      </div>
+                      <div
+                        className="aj-edc-grid"
+                        aria-label="Provider EDC yang didukung"
+                      >
+                        <div className="aj-edc-logo">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/logo/edc/bca.svg" alt="BCA" />
+                        </div>
+                        <div className="aj-edc-logo">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/logo/edc/bri.svg" alt="BRI" />
+                        </div>
+                        <div className="aj-edc-logo">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/logo/edc/bni.svg" alt="BNI" />
+                        </div>
+                        <div className="aj-edc-logo">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/logo/edc/mandiri.svg" alt="Mandiri" />
+                        </div>
+                      </div>
+                      <div className="aj-payment-support-note">
+                        Pembayaran EDC yang tersedia di outlet.
+                      </div>
+                    </section>
+
+                    <section className="aj-signature-card">
+                      <div className="aj-signature-title"></div>
+                      <div className="aj-signature-space" aria-hidden="true" />
+                      <div className="aj-signature-name">
+                        Nama / Paraf Petugas
+                      </div>
                     </section>
 
                     <section className="aj-total-card">
+                      <div className="aj-total-detail-row aj-total-row-deposit-in">
+                        <span>Dana Titip</span>
+                        <strong>
+                          {formatPositiveAmount(customerDepositInAmount)}
+                        </strong>
+                      </div>
+                      <div className="aj-total-detail-row aj-total-row-deposit-used">
+                        <span>Gunakan Saldo</span>
+                        <strong>
+                          {formatNegativeAmount(customerDepositUsedAmount)}
+                        </strong>
+                      </div>
                       <div
                         className="aj-total-breakdown"
                         aria-label="Rincian harga item"
@@ -1087,32 +1156,14 @@ export function ReceiptCertificateHtmlDocument({
                             </strong>
                           </div>
                         ) : null}
-                        {customerDepositInAmount > 0 ? (
-                          <div className="aj-total-detail-row aj-total-row-deposit-in">
-                            <span>Deposit Saldo</span>
-                            <strong>
-                              {formatPositiveAmount(customerDepositInAmount)}
-                            </strong>
-                          </div>
-                        ) : null}
-                        {customerDepositUsedAmount > 0 ? (
-                          <div className="aj-total-detail-row aj-total-row-deposit-used">
-                            <span>Gunakan Saldo</span>
-                            <strong>
-                              {formatNegativeAmount(customerDepositUsedAmount)}
-                            </strong>
-                          </div>
-                        ) : null}
-                        {hasCustomerDepositActivity ? (
-                          <div className="aj-total-detail-row aj-total-row-external">
-                            <span>Total Pembayaran</span>
-                            <strong>
-                              {formatAmount(
-                                data.customerDeposit.externalPaymentDueAmount,
-                              )}
-                            </strong>
-                          </div>
-                        ) : null}
+                        <div className="aj-total-detail-row aj-total-row-external">
+                          <span>Total Pembayaran</span>
+                          <strong>
+                            {formatAmount(
+                              data.customerDeposit.externalPaymentDueAmount,
+                            )}
+                          </strong>
+                        </div>
                       </div>
                       <div className="aj-total-box">
                         <span className="aj-total-label">Total Item</span>
