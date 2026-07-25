@@ -107,7 +107,7 @@ const styles = String.raw`
     width: 128mm;
     height: 128mm;
     pointer-events: none;
-    opacity: 0.03;
+    opacity: 0.05;
   }
 
   .aj-watermark img {
@@ -145,8 +145,9 @@ const styles = String.raw`
   }
 
   .aj-logo {
-    width: 23mm;
-    height: 23mm;
+    width: 28mm;
+    height: 28mm;
+    margin-bottom: 2mm;
     object-fit: contain;
   }
 
@@ -158,22 +159,26 @@ const styles = String.raw`
 
 
   .aj-brand-title {
+    display: grid;
+    align-content: center;
+    gap: 0.45mm;
     color: var(--ink);
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 16pt;
-    font-weight: 900;
     line-height: 1;
-    letter-spacing: 0.035em;
     text-transform: uppercase;
   }
 
-  .aj-branch-title {
-    margin-top: 1.2mm;
-    color: var(--gold);
-    font-size: 9.4pt;
+  .aj-brand-kicker {
+    font-size: 16pt;
     font-weight: 900;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    letter-spacing: 0.035em;
+  }
+
+  .aj-brand-main {
+    color: var(--maroon);
+    font-size: 40pt;
+    font-weight: 900;
+    letter-spacing: 0.052em;
   }
 
   .aj-contact-lines {
@@ -223,7 +228,13 @@ const styles = String.raw`
   }
 
   .aj-summary-value {
+    min-width: 0;
     font-weight: 900;
+    overflow-wrap: anywhere;
+  }
+
+  .aj-summary-value-compact {
+    line-height: 1.15;
   }
 
   /* ─── INFO STRIP ─── */
@@ -234,7 +245,7 @@ const styles = String.raw`
     overflow: hidden;
     border: 0.2mm solid rgba(179, 122, 31, 0.28);
     border-radius: 2.5mm;
-    background: rgba(255, 255, 255, 0.55);
+    background: rgb(255, 255, 255);
   }
 
   .aj-info-box {
@@ -289,10 +300,10 @@ const styles = String.raw`
 
   .aj-product-row {
     display: grid;
-    grid-template-columns: 20mm 35mm minmax(0, 1fr) 17mm 15mm 21mm 17mm 24mm;
+    grid-template-columns: 19mm 35mm minmax(0, 1fr) 18mm 17mm 24mm 15mm 21mm;
     align-items: center;
     column-gap: 1.2mm;
-    padding: 0 3.2mm;
+    padding: 0 2.5mm;
   }
 
   .aj-product-row > div {
@@ -302,8 +313,8 @@ const styles = String.raw`
   .aj-product-body {
     min-height: 0;
     padding-top: 2.2mm;
-    padding-bottom: 2.2mm;
-    background: rgba(255, 255, 255, 0.55);
+    padding-bottom: 1mm;
+    background: rgb(255, 255, 255);
     border-top: 0.16mm solid rgba(179, 122, 31, 0.12);
   }
 
@@ -312,10 +323,10 @@ const styles = String.raw`
   }
 
   .aj-product-head {
-    color: #2d251c;
+    color: #111;
     background:
-      linear-gradient(180deg, #fbf8df 0%, #f3efd2 100%);
-    font-size: 5.25pt;
+      linear-gradient(180deg, #fffde5 0%, #f5eda9f2 100%);
+    font-size: 4.6pt;
     font-weight: 900;
     letter-spacing: 0.055em;
     text-transform: uppercase;
@@ -323,7 +334,7 @@ const styles = String.raw`
 
   .aj-product-head > div {
     overflow: hidden;
-    text-align: left;
+    text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -333,7 +344,7 @@ const styles = String.raw`
   }
 
   .aj-product-head .aj-head-right {
-    text-align: right;
+    text-align: center;
   }
 
   .aj-code {
@@ -351,8 +362,8 @@ const styles = String.raw`
 
   .aj-thumb {
     display: grid;
-    width: 36mm;
-    height: 36mm;
+    width: 32mm;
+    height: 32mm;
     overflow: hidden;
     place-items: center;
     justify-self: center;
@@ -386,7 +397,7 @@ const styles = String.raw`
 
   .aj-product-name {
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 7.55pt;
+    font-size: 7.5pt;
     font-weight: 900;
     line-height: 1.12;
     text-transform: uppercase;
@@ -407,12 +418,12 @@ const styles = String.raw`
     place-items: center;
     justify-self: center;
     color: #000;
-    font-size: 7.35pt;
+    font-size: 6.5pt;
     font-weight: 900;
   }
 
   .aj-gram {
-    font-size: 7.35pt;
+    font-size: 6.5pt;
     font-weight: 900;
     text-align: center;
     white-space: nowrap;
@@ -420,9 +431,9 @@ const styles = String.raw`
 
   .aj-deduction,
   .aj-discount {
-    font-size: 7.25pt;
+    font-size: 6.5pt;
     font-weight: 900;
-    text-align: right;
+    text-align: center;
     white-space: nowrap;
   }
 
@@ -436,9 +447,9 @@ const styles = String.raw`
 
   .aj-price {
     color: #111;
-    font-size: 7.95pt;
+    font-size: 6.5pt;
     font-weight: 900;
-    text-align: right;
+    text-align: center;
     white-space: nowrap;
   }
 
@@ -457,7 +468,7 @@ const styles = String.raw`
   .aj-qr-card {
     border: 0.2mm solid rgba(179, 122, 31, 0.23);
     border-radius: 2.5mm;
-    background: rgba(255, 255, 255, 0.55);
+    background: rgb(255, 255, 255);
   }
 
   .aj-payment-support {
@@ -491,7 +502,7 @@ const styles = String.raw`
 
   .aj-edc-logo img {
     max-width: 82%;
-    max-height: 6mm;
+    max-height: 5mm;
     object-fit: contain;
   }
 
@@ -644,13 +655,13 @@ const styles = String.raw`
     z-index: 1;
     display: grid;
     grid-template-rows: auto 1fr auto;
-    gap: 3.4mm;
+    gap: 2.8mm;
     height: 100%;
   }
 
   .aj-back-header {
     display: grid;
-    grid-template-columns: 23mm 1fr 43mm;
+    grid-template-columns: 2mm 1fr 43mm;
     gap: 3.5mm;
     align-items: center;
     padding: 1.8mm 2.5mm 2.4mm;
@@ -662,6 +673,7 @@ const styles = String.raw`
     height: 18mm;
     object-fit: contain;
     justify-self: center;
+    opacity: 0;
   }
 
   .aj-back-eyebrow {
@@ -675,7 +687,7 @@ const styles = String.raw`
     margin-top: 1mm;
     color: var(--ink);
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 13.4pt;
+    font-size: 18.4pt;
     font-weight: 900;
     line-height: 1;
     text-transform: uppercase;
@@ -694,7 +706,7 @@ const styles = String.raw`
     padding: 2.4mm;
     border: 0.2mm solid rgba(179, 122, 31, 0.22);
     border-radius: 2.4mm;
-    background: rgba(255, 255, 255, 0.54);
+    background: rgba(255, 255, 255, 0.7);
   }
 
   .aj-back-outlet-label {
@@ -733,7 +745,7 @@ const styles = String.raw`
     padding: 3.2mm;
     border: 0.2mm solid rgba(179, 122, 31, 0.22);
     border-radius: 2.7mm;
-    background: rgba(255, 255, 255, 0.58);
+    background: rgba(255, 255, 255, 0.7);
   }
 
   .aj-back-card-terms {
@@ -743,27 +755,35 @@ const styles = String.raw`
   .aj-back-section-title {
     display: flex;
     align-items: center;
-    gap: 1.5mm;
+    gap: 1.7mm;
     color: var(--ink);
     font-size: 6.4pt;
     font-weight: 900;
-    letter-spacing: 0.11em;
     text-transform: uppercase;
+    padding-bottom: 1mm;
   }
 
-  .aj-back-section-title::before {
-    content: "";
-    width: 5.5mm;
-    height: 0.9mm;
-    border-radius: 999px;
-    background: var(--gold);
+  .aj-back-section-icon {
+    display: grid;
+    width: 6.2mm;
+    height: 6.2mm;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 1.7mm;
+    color: var(--maroon);
+    background: #fdf7df;
+  }
+
+  .aj-back-section-icon svg {
+    width: 3.55mm;
+    height: 3.55mm;
+    stroke: currentColor;
   }
 
   .aj-back-list {
     display: grid;
     gap: 1.35mm;
     margin: 0;
-    padding-left: 4.4mm;
     color: #3f352e;
     font-size: 5.95pt;
     line-height: 1.35;
@@ -823,6 +843,23 @@ const styles = String.raw`
     font-size: 5.55pt;
     font-weight: 800;
     line-height: 1.22;
+  }
+
+  .aj-back-thanks-title {
+    color: var(--maroon);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 10.4pt;
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .aj-back-thanks-subtitle {
+    color: var(--muted);
+    font-size: 5.75pt;
+    font-weight: 800;
+    line-height: 1.25;
   }
 
   @media screen and (max-width: 860px) {
@@ -1083,6 +1120,97 @@ function ProductThumbnail({
   );
 }
 
+type BackSectionIconName = "terms" | "care" | "services";
+
+function BackSectionIcon({ name }: { name: BackSectionIconName }) {
+  if (name === "care") {
+    return (
+      <span className="aj-back-section-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M12 3.5l1.65 4.05L18 9.2l-4.35 1.65L12 15l-1.65-4.15L6 9.2l4.35-1.65L12 3.5Z"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M18.6 13.5l.8 1.9 2.1.8-2.1.8-.8 2-.8-2-2.1-.8 2.1-.8.8-1.9Z"
+            strokeWidth="1.55"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "services") {
+    return (
+      <span className="aj-back-section-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M4.5 10.5h15l-1.1-4.2a1.7 1.7 0 0 0-1.65-1.3H7.25A1.7 1.7 0 0 0 5.6 6.3L4.5 10.5Z"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M6 10.5V19h12v-8.5"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M9.2 19v-4.2h5.6V19"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+    );
+  }
+
+  return (
+    <span className="aj-back-section-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M7 4.5h7.2L18 8.3V19.5H7V4.5Z"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M14 4.8V8.5h3.7"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9.7 12.1h5.8M9.7 15.2h4.6"
+          strokeWidth="1.65"
+          strokeLinecap="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
+function BackSectionTitle({
+  icon,
+  children,
+}: {
+  icon: BackSectionIconName;
+  children: string;
+}) {
+  return (
+    <div className="aj-back-section-title">
+      <BackSectionIcon name={icon} />
+      <span>{children}</span>
+    </div>
+  );
+}
+
 function buildProfileStyles(documentProfileId: ReceiptDocumentProfileId) {
   const profile = resolveReceiptDocumentProfile(documentProfileId);
 
@@ -1158,8 +1286,13 @@ export function ReceiptCertificateHtmlDocument({
                     </div>
 
                     <div className="aj-brand-block">
-                      <div className="aj-brand-title">Toko Emas Asih Jaya</div>
-                      <div className="aj-branch-title">{data.outlet.name}</div>
+                      <div
+                        className="aj-brand-title"
+                        aria-label="Toko Emas Asih Jaya"
+                      >
+                        <div className="aj-brand-kicker">Toko Emas</div>
+                        <div className="aj-brand-main">Asih Jaya</div>
+                      </div>
                       <div className="aj-contact-lines">
                         <span className="aj-contact-item">
                           {data.outlet.address ?? "Alamat outlet belum diatur"}
@@ -1199,6 +1332,12 @@ export function ReceiptCertificateHtmlDocument({
                             {data.cashier.fullName}
                           </span>
                         </div>
+                        <div className="aj-summary-row">
+                          <span>Outlet :</span>
+                          <span className="aj-summary-value aj-summary-value-compact">
+                            {data.outlet.name}
+                          </span>
+                        </div>
                       </div>
                     </aside>
                   </header>
@@ -1226,7 +1365,7 @@ export function ReceiptCertificateHtmlDocument({
                         <div>PRODUCT</div>
                         <div className="aj-head-center">KADAR ±%</div>
                         <div className="aj-head-center">GRAM</div>
-                        <div className="aj-head-right">POT/GRAM</div>
+                        <div className="aj-head-right">POTONGAN/GR</div>
                         <div className="aj-head-right">DISKON</div>
                         <div className="aj-head-right">HARGA</div>
                       </div>
@@ -1424,9 +1563,9 @@ export function ReceiptCertificateHtmlDocument({
 
               <section className="aj-back-grid">
                 <article className="aj-back-card aj-back-card-terms">
-                  <div className="aj-back-section-title">
+                  <BackSectionTitle icon="terms">
                     Ketentuan Transaksi
-                  </div>
+                  </BackSectionTitle>
                   <ol className="aj-back-list">
                     <li>
                       Barang yang tercantum dalam nota telah diperiksa,
@@ -1460,9 +1599,9 @@ export function ReceiptCertificateHtmlDocument({
                 </article>
 
                 <article className="aj-back-card aj-back-card-compact">
-                  <div className="aj-back-section-title">
+                  <BackSectionTitle icon="care">
                     Perawatan Perhiasan
-                  </div>
+                  </BackSectionTitle>
                   <ul className="aj-back-list">
                     <li>
                       Hindari kontak langsung dengan parfum, sabun, cairan
@@ -1483,7 +1622,9 @@ export function ReceiptCertificateHtmlDocument({
                 </article>
 
                 <article className="aj-back-card aj-back-card-compact">
-                  <div className="aj-back-section-title">Layanan Asihjaya</div>
+                  <BackSectionTitle icon="services">
+                    Layanan Asihjaya
+                  </BackSectionTitle>
                   <div className="aj-back-service-grid">
                     <div className="aj-back-service-pill">
                       Pembelian emas dan perhiasan
