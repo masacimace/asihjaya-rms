@@ -59,9 +59,7 @@ const styles = String.raw`
     place-items: center;
     margin: 0;
     break-after: page;
-    break-inside: avoid;
     page-break-after: always;
-    page-break-inside: avoid;
   }
 
   .aj-receipt-page:last-child {
@@ -89,8 +87,6 @@ const styles = String.raw`
     border-radius: 2.2mm;
     font-family: Arial, Helvetica, sans-serif;
     box-shadow: 0 20px 54px rgba(58, 42, 22, 0.16);
-    break-inside: avoid;
-    page-break-inside: avoid;
     transform: scale(var(--receipt-design-scale));
     transform-origin: center;
   }
@@ -111,7 +107,7 @@ const styles = String.raw`
     width: 128mm;
     height: 128mm;
     pointer-events: none;
-    opacity: 0.03;
+    opacity: 0.05;
   }
 
   .aj-watermark img {
@@ -710,7 +706,7 @@ const styles = String.raw`
     padding: 2.4mm;
     border: 0.2mm solid rgba(179, 122, 31, 0.22);
     border-radius: 2.4mm;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.7);
   }
 
   .aj-back-outlet-label {
@@ -749,7 +745,7 @@ const styles = String.raw`
     padding: 3.2mm;
     border: 0.2mm solid rgba(179, 122, 31, 0.22);
     border-radius: 2.7mm;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.7);
   }
 
   .aj-back-card-terms {
@@ -1258,7 +1254,7 @@ export function ReceiptCertificateHtmlDocument({
           __html: `${buildProfileStyles(documentProfileId)}${styles}`,
         }}
       />
-      <div className="aj-receipt-stage" data-aj-receipt-stage="true">
+      <div className="aj-receipt-stage">
         {certificateItems.map((item, itemIndex) => {
           const pageNumber = itemIndex + 1;
           const itemSubtotalAmount = toNumber(item.listPriceAmount);
@@ -1270,9 +1266,6 @@ export function ReceiptCertificateHtmlDocument({
               className="aj-receipt-page"
               key={item.lineNumber}
               aria-label={`Nota dan certificate pembelian item ${pageNumber} dari ${pageCount}`}
-              data-aj-receipt-page="front"
-              data-aj-page-number={pageNumber}
-              data-aj-total-pages={pageCount + 1}
             >
               <div className="aj-receipt-design">
                 <div className="aj-watermark">
@@ -1535,9 +1528,6 @@ export function ReceiptCertificateHtmlDocument({
         <article
           className="aj-receipt-page"
           aria-label="Ketentuan transaksi dan informasi layanan"
-          data-aj-receipt-page="back"
-          data-aj-page-number={pageCount + 1}
-          data-aj-total-pages={pageCount + 1}
         >
           <div className="aj-receipt-design aj-receipt-back-design">
             <div className="aj-watermark">
