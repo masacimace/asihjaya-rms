@@ -9,6 +9,13 @@ import {
   type ReceiptDocumentProfileId,
 } from "@/features/sales/documents/receipt-document-profiles";
 import { generateReceiptCertificatePdfFromUrl } from "@/features/sales/documents/receipt-certificate-pdf";
+import {
+  getReceiptCertificateRenderModeLabel,
+  isReceiptCertificateRenderMode,
+  RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+  RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
+  resolveReceiptCertificateRenderMode,
+} from "@/features/sales/documents/receipt-certificate-render-modes";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgent } from "@/lib/hardware/agent-auth";
 
@@ -37,12 +44,23 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const hardwareAuth = await authenticateHardwareAgent(request);
   const requestedProfileId = request.nextUrl.searchParams.get("profile");
+  const requestedRenderMode = request.nextUrl.searchParams.get("mode");
+
   if (requestedProfileId && !isReceiptDocumentProfileId(requestedProfileId)) {
     return Response.json(
       { success: false, error: "Document profile tidak didukung." },
       { status: 422 },
     );
   }
+  if (requestedRenderMode && !isReceiptCertificateRenderMode(requestedRenderMode)) {
+    return Response.json(
+      { success: false, error: "Mode render nota tidak didukung." },
+      { status: 422 },
+    );
+  }
+
+  const renderMode = resolveReceiptCertificateRenderMode(requestedRenderMode);
+
   const documentProfileId: ReceiptDocumentProfileId = requestedProfileId
     ? (requestedProfileId as ReceiptDocumentProfileId)
     : hardwareAuth
@@ -95,6 +113,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     request.url,
   );
   htmlUrl.searchParams.set("profile", documentProfileId);
+  htmlUrl.searchParams.set("mode", renderMode);
 
   const pdf = await generateReceiptCertificatePdfFromUrl({
     cookieHeader,
@@ -102,8 +121,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
     extraHeaders,
     url: htmlUrl.toString(),
   });
+  const filenameMode =
+    renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK
+      ? "vendor-static-artwork"
+      : renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY
+        ? "preprinted-overlay"
+        : "full-design";
   const filename = sanitizeFilename(
-    `${documentData.sale.invoiceNumber}-nota-certificate-${pdf.profile.paper.toLowerCase()}-landscape.pdf`,
+    `${documentData.sale.invoiceNumber}-nota-certificate-${pdf.profile.paper.toLowerCase()}-landscape-${filenameMode}.pdf`,
   );
   const shouldDownload = request.nextUrl.searchParams.get("download") === "1";
   const dispositionType = shouldDownload ? "attachment" : "inline";
@@ -116,6 +141,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
       "X-Document-Profile": pdf.profile.id,
       "X-PDF-Page-Count": String(pdf.contract.pageCount),
       "X-PDF-Paper": `${pdf.profile.paper} landscape`,
+      "X-Receipt-Render-Mode": renderMode,
+      "X-Receipt-Render-Mode-Label": getReceiptCertificateRenderModeLabel(renderMode),
     },
   });
 }

@@ -7,6 +7,10 @@ import {
   isReceiptDocumentProfileId,
 } from "@/features/sales/documents/receipt-document-profiles";
 import { receiptCertificateSampleData } from "@/features/sales/documents/receipt-certificate-sample-data";
+import {
+  isReceiptCertificateRenderMode,
+  resolveReceiptCertificateRenderMode,
+} from "@/features/sales/documents/receipt-certificate-render-modes";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
 
@@ -20,6 +24,7 @@ export const dynamic = "force-dynamic";
 type PageProps = {
   searchParams: Promise<{
     profile?: string;
+    mode?: string;
   }>;
 };
 
@@ -38,10 +43,17 @@ export default async function ReceiptCertificatePreviewHtmlDocumentPage({
     notFound();
   }
 
+  if (query.mode && !isReceiptCertificateRenderMode(query.mode)) {
+    notFound();
+  }
+
+  const renderMode = resolveReceiptCertificateRenderMode(query.mode);
+
   return (
     <ReceiptCertificateHtmlDocument
       data={receiptCertificateSampleData}
       documentProfileId={documentProfileId}
+      renderMode={renderMode}
     />
   );
 }

@@ -387,7 +387,7 @@ function ReprintDocumentAction({
             Reprint nota
           </p>
           <p className="mt-0.5 text-xs leading-5 text-[var(--muted)]">
-            Kirim ulang PDF multi-page ke document printer Hardware Hub.
+            Cetak ulang data transaksi saja ke kertas nota custom/pre-printed.
           </p>
           <div className="mt-3">
             <ReprintSubmitButton disabled={disabled} />
@@ -821,7 +821,7 @@ export default async function SaleDetailPage({
 
           <DetailSection
             title="Receipt / Certificate"
-            description="Status dokumen A4 landscape dan job print receipt certificate."
+            description="Preview dan download memakai full design, sedangkan reprint memakai overlay kertas custom."
             icon={<FileText className="size-5" />}
           >
             <div className="grid gap-4 md:grid-cols-3">
@@ -851,13 +851,13 @@ export default async function SaleDetailPage({
                     href={sale.receiptCertificate.htmlHref}
                     icon={<Eye className="size-4" />}
                     label="Preview dokumen"
-                    description="Buka layout HTML A4 landscape untuk pengecekan cepat sebelum cetak."
+                    description="Buka layout HTML full design untuk pengecekan cepat sebelum cetak."
                   />
                   <DocumentActionLink
                     href={buildDownloadHref(sale.receiptCertificate.downloadHref)}
                     icon={<Download className="size-4" />}
                     label="Download PDF"
-                    description="Unduh nota/certificate A4 landscape transaksi ini sebagai file PDF."
+                    description="Unduh nota/certificate full design transaksi ini sebagai file PDF."
                     download={`${sale.invoiceNumber}-nota-certificate-a5.pdf`}
                   />
                   <ReprintDocumentAction
@@ -891,9 +891,10 @@ export default async function SaleDetailPage({
               <div className="flex min-w-0 items-start gap-3">
                 <Printer className="mt-0.5 size-4 shrink-0 text-neutral-400" />
                 <p className="text-xs leading-5 text-[var(--muted)]">
-                  Reprint akan membuat 1 hardware job untuk transaksi ini. Karena
-                  template nota sudah 1 halaman per item, printer akan mencetak
-                  seluruh halaman product item dalam 1 job PDF multi-page.
+                  Preview Dokumen dan Download PDF tetap memakai full design
+                  sebagai arsip digital. Reprint Nota memakai pre-printed overlay
+                  supaya printer hanya mencetak data transaksi di atas kertas
+                  nota custom.
                 </p>
               </div>
             </div>
@@ -992,6 +993,22 @@ export default async function SaleDetailPage({
                   {formatMoney(sale.totalAmount)}
                 </span>
               </div>
+              {sale.customerDepositUsedAmount > 0 ? (
+                <div className="flex justify-between gap-4">
+                  <span className="text-[var(--muted)]">Gunakan Saldo</span>
+                  <span className="font-medium text-emerald-700">
+                    {formatMoney(sale.customerDepositUsedAmount)}
+                  </span>
+                </div>
+              ) : null}
+              {sale.customerDepositInAmount > 0 ? (
+                <div className="flex justify-between gap-4">
+                  <span className="text-[var(--muted)]">Deposit Saldo</span>
+                  <span className="font-medium text-amber-700">
+                    {formatMoney(sale.customerDepositInAmount)}
+                  </span>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-4">
                 <span className="text-[var(--muted)]">Terbayar</span>
                 <span className="font-medium text-emerald-700">

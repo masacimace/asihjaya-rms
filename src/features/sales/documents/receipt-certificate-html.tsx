@@ -2,6 +2,12 @@ import { createQrSvgDataUri } from "@/lib/qr-code/svg";
 
 import type { ReceiptCertificateData } from "./receipt-certificate";
 import {
+  RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
+  RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+  RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
+  type ReceiptCertificateRenderMode,
+} from "./receipt-certificate-render-modes";
+import {
   DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
   resolveReceiptDocumentProfile,
   type ReceiptDocumentProfileId,
@@ -101,6 +107,60 @@ const styles = String.raw`
     inset: 2.5mm;
     border: 0.35mm solid rgba(179, 122, 31, 0.35);
     pointer-events: none;
+  }
+
+  [data-aj-receipt-render-mode="vendor_static_artwork"] .aj-dynamic-print {
+    visibility: hidden;
+  }
+
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-receipt-design {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-receipt-design::before {
+    border-color: transparent;
+  }
+
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-watermark,
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-static-artwork {
+    visibility: hidden;
+  }
+
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-dynamic-print {
+    visibility: visible;
+  }
+
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-info-strip,
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-info-box,
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-products-card,
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-product-body,
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-payment-support,
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-signature-card,
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-total-card,
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-qr-card,
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-total-box,
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-qr-box {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-product-head {
+    background: transparent;
+  }
+
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-total-breakdown {
+    border-bottom-color: transparent;
+  }
+
+  .aj-vendor-photo-frame {
+    border: 0.18mm dashed rgba(179, 122, 31, 0.34);
+    background: rgba(255, 255, 255, 0.35);
+  }
+
+  .aj-vendor-qr-frame {
+    border: 0.18mm dashed rgba(28, 23, 18, 0.28);
   }
 
   .aj-watermark {
@@ -710,7 +770,7 @@ const styles = String.raw`
     padding: 2.4mm;
     border: 0.2mm solid rgba(179, 122, 31, 0.22);
     border-radius: 2.4mm;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.54);
   }
 
   .aj-back-outlet-label {
@@ -749,7 +809,7 @@ const styles = String.raw`
     padding: 3.2mm;
     border: 0.2mm solid rgba(179, 122, 31, 0.22);
     border-radius: 2.7mm;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.5);
   }
 
   .aj-back-card-terms {
@@ -1103,21 +1163,27 @@ function getMediaImageUrl(imageKey: string) {
 
 function ProductThumbnail({
   item,
+  renderMode,
 }: {
   item: ReceiptCertificateData["items"][number];
+  renderMode: ReceiptCertificateRenderMode;
 }) {
+  if (renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK) {
+    return <div className="aj-thumb aj-vendor-photo-frame" aria-hidden="true" />;
+  }
+
   const imageKey = getProductImageKey(item);
 
   if (!imageKey) {
     return (
-      <div className="aj-thumb aj-thumb-fallback">
+      <div className="aj-thumb aj-thumb-fallback aj-dynamic-print">
         {getThumbnailLabel(item)}
       </div>
     );
   }
 
   return (
-    <div className="aj-thumb">
+    <div className="aj-thumb aj-dynamic-print">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={getMediaImageUrl(imageKey)} alt={getItemName(item)} />
     </div>
@@ -1235,9 +1301,11 @@ function buildProfileStyles(documentProfileId: ReceiptDocumentProfileId) {
 export function ReceiptCertificateHtmlDocument({
   data,
   documentProfileId = DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
+  renderMode = RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
 }: {
   data: ReceiptCertificateData;
   documentProfileId?: ReceiptDocumentProfileId;
+  renderMode?: ReceiptCertificateRenderMode;
 }) {
   const customerName = data.customer?.fullName ?? "Pelanggan Umum";
   const customerPhone = data.customer?.phone ?? "-";
@@ -1245,14 +1313,25 @@ export function ReceiptCertificateHtmlDocument({
     data.sale.completedAt,
     data.organization.timezone,
   );
-  const certificateItems = data.items;
+  const isVendorStaticArtwork =
+    renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK;
+  const isPreprintedOverlay =
+    renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY;
+  const certificateItems = isVendorStaticArtwork
+    ? data.items.slice(0, 1)
+    : data.items;
   const pageCount = Math.max(certificateItems.length, 1);
+  const shouldRenderBackPage = !isPreprintedOverlay;
+  const totalPdfPages = pageCount + (shouldRenderBackPage ? 1 : 0);
   const customerDepositUsedAmount = toNumber(data.customerDeposit.usedAmount);
   const customerDepositInAmount = toNumber(data.customerDeposit.inAmount);
   const verificationQrImage = createQrSvgDataUri(data.verification.url);
 
   return (
-    <div className="aj-preview-shell">
+    <div
+      className="aj-preview-shell"
+      data-aj-receipt-render-mode={renderMode}
+    >
       <style
         dangerouslySetInnerHTML={{
           __html: `${buildProfileStyles(documentProfileId)}${styles}`,
@@ -1272,9 +1351,9 @@ export function ReceiptCertificateHtmlDocument({
               aria-label={`Nota dan certificate pembelian item ${pageNumber} dari ${pageCount}`}
               data-aj-receipt-page="front"
               data-aj-page-number={pageNumber}
-              data-aj-total-pages={pageCount + 1}
+              data-aj-total-pages={totalPdfPages}
             >
-              <div className="aj-receipt-design">
+              <div className="aj-receipt-design aj-receipt-front-design">
                 <div className="aj-watermark">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/logo/nota-logo.png" alt="" />
@@ -1285,7 +1364,7 @@ export function ReceiptCertificateHtmlDocument({
                       <div className="aj-logo-ring">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          className="aj-logo"
+                          className="aj-logo aj-static-artwork"
                           src="/logo/nota-logo.png"
                           alt="Asih Jaya"
                         />
@@ -1294,13 +1373,13 @@ export function ReceiptCertificateHtmlDocument({
 
                     <div className="aj-brand-block">
                       <div
-                        className="aj-brand-title"
+                        className="aj-brand-title aj-static-artwork"
                         aria-label="Toko Emas Asih Jaya"
                       >
                         <div className="aj-brand-kicker">Toko Emas</div>
                         <div className="aj-brand-main">Asih Jaya</div>
                       </div>
-                      <div className="aj-contact-lines">
+                      <div className="aj-contact-lines aj-static-artwork">
                         <span className="aj-contact-item">
                           {data.outlet.address ?? "Alamat outlet belum diatur"}
                         </span>
@@ -1316,32 +1395,32 @@ export function ReceiptCertificateHtmlDocument({
                     <aside className="aj-certificate-card">
                       <div className="aj-summary-lines">
                         <div className="aj-summary-row">
-                          <span>No. Order :</span>
-                          <span className="aj-summary-value">
+                          <span className="aj-static-artwork">No. Order :</span>
+                          <span className="aj-summary-value aj-dynamic-print">
                             {data.sale.invoiceNumber}
                           </span>
                         </div>
                         <div className="aj-summary-row">
-                          <span>Item :</span>
-                          <span className="aj-summary-value">
+                          <span className="aj-static-artwork">Item :</span>
+                          <span className="aj-summary-value aj-dynamic-print">
                             {pageNumber} dari {pageCount}
                           </span>
                         </div>
                         <div className="aj-summary-row">
-                          <span>Tanggal :</span>
-                          <span className="aj-summary-value">
+                          <span className="aj-static-artwork">Tanggal :</span>
+                          <span className="aj-summary-value aj-dynamic-print">
                             {completedDate}
                           </span>
                         </div>
                         <div className="aj-summary-row">
-                          <span>Sales :</span>
-                          <span className="aj-summary-value">
+                          <span className="aj-static-artwork">Sales :</span>
+                          <span className="aj-summary-value aj-dynamic-print">
                             {data.cashier.fullName}
                           </span>
                         </div>
                         <div className="aj-summary-row">
-                          <span>Outlet :</span>
-                          <span className="aj-summary-value aj-summary-value-compact">
+                          <span className="aj-static-artwork">Outlet :</span>
+                          <span className="aj-summary-value aj-summary-value-compact aj-dynamic-print">
                             {data.outlet.name}
                           </span>
                         </div>
@@ -1352,21 +1431,25 @@ export function ReceiptCertificateHtmlDocument({
                   <section className="aj-info-strip">
                     <div className="aj-info-box">
                       <div>
-                        <div className="aj-info-label">Konsumen</div>
-                        <div className="aj-info-value">{customerName}</div>
+                        <div className="aj-info-label aj-static-artwork">Konsumen</div>
+                        <div className="aj-info-value aj-dynamic-print">
+                          {customerName}
+                        </div>
                       </div>
                     </div>
                     <div className="aj-info-box">
                       <div>
-                        <div className="aj-info-label">Telepon</div>
-                        <div className="aj-info-value">{customerPhone}</div>
+                        <div className="aj-info-label aj-static-artwork">Telepon</div>
+                        <div className="aj-info-value aj-dynamic-print">
+                          {customerPhone}
+                        </div>
                       </div>
                     </div>
                   </section>
 
                   <section className="aj-products-card">
                     <div className="aj-products-grid aj-products-grid-single">
-                      <div className="aj-product-row aj-product-head">
+                      <div className="aj-product-row aj-product-head aj-static-artwork">
                         <div className="aj-head-center">KODE</div>
                         <div className="aj-head-center">FOTO</div>
                         <div>PRODUCT</div>
@@ -1377,24 +1460,28 @@ export function ReceiptCertificateHtmlDocument({
                         <div className="aj-head-right">HARGA</div>
                       </div>
                       <div className="aj-product-row aj-product-body">
-                        <div className="aj-code">{getProductCode(item)}</div>
-                        <ProductThumbnail item={item} />
+                        <div className="aj-code">
+                          <span className="aj-dynamic-print">
+                            {getProductCode(item)}
+                          </span>
+                        </div>
+                        <ProductThumbnail item={item} renderMode={renderMode} />
                         <div className="aj-product-copy">
-                          <div className="aj-product-name">
+                          <div className="aj-product-name aj-dynamic-print">
                             {getItemName(item)}
                           </div>
-                          <div className="aj-product-meta">
+                          <div className="aj-product-meta aj-dynamic-print">
                             {buildProductMeta(item)}
                           </div>
                         </div>
-                        <div className="aj-kadar">
+                        <div className="aj-kadar aj-dynamic-print">
                           {formatPercent(item.snapshot.exchangePurityPercent)}
                         </div>
-                        <div className="aj-gram">
+                        <div className="aj-gram aj-dynamic-print">
                           {formatGram(item.snapshot.weightGram)}
                         </div>
                         <div
-                          className={`aj-deduction ${
+                          className={`aj-deduction aj-dynamic-print ${
                             toNumber(item.snapshot.deductionPerGram) > 0
                               ? "aj-money-negative"
                               : "aj-money-muted"
@@ -1405,7 +1492,7 @@ export function ReceiptCertificateHtmlDocument({
                           )}
                         </div>
                         <div
-                          className={`aj-discount ${
+                          className={`aj-discount aj-dynamic-print ${
                             itemDiscountAmount > 0
                               ? "aj-money-negative"
                               : "aj-money-muted"
@@ -1413,7 +1500,7 @@ export function ReceiptCertificateHtmlDocument({
                         >
                           {formatDiscountAmount(itemDiscountAmount)}
                         </div>
-                        <div className="aj-price">
+                        <div className="aj-price aj-dynamic-print">
                           {formatAmount(item.finalPriceAmount)}
                         </div>
                       </div>
@@ -1422,11 +1509,11 @@ export function ReceiptCertificateHtmlDocument({
 
                   <footer className="aj-footer">
                     <section className="aj-payment-support">
-                      <div className="aj-payment-support-title">
+                      <div className="aj-payment-support-title aj-static-artwork">
                         Support Payment
                       </div>
                       <div
-                        className="aj-edc-grid"
+                        className="aj-edc-grid aj-static-artwork"
                         aria-label="Provider EDC yang didukung"
                       >
                         <div className="aj-edc-logo">
@@ -1446,29 +1533,29 @@ export function ReceiptCertificateHtmlDocument({
                           <img src="/logo/edc/mandiri.svg" alt="Mandiri" />
                         </div>
                       </div>
-                      <div className="aj-payment-support-note">
+                      <div className="aj-payment-support-note aj-static-artwork">
                         Pembayaran EDC yang tersedia di outlet.
                       </div>
                     </section>
 
                     <section className="aj-signature-card">
-                      <div className="aj-signature-title"></div>
-                      <div className="aj-signature-space" aria-hidden="true" />
-                      <div className="aj-signature-name">
+                      <div className="aj-signature-title aj-static-artwork"></div>
+                      <div className="aj-signature-space aj-static-artwork" aria-hidden="true" />
+                      <div className="aj-signature-name aj-static-artwork">
                         Nama / Paraf Petugas
                       </div>
                     </section>
 
                     <section className="aj-total-card">
                       <div className="aj-total-detail-row aj-total-row-deposit-in">
-                        <span>Dana Titip</span>
-                        <strong>
+                        <span className="aj-static-artwork">Dana Titip</span>
+                        <strong className="aj-dynamic-print">
                           {formatPositiveAmount(customerDepositInAmount)}
                         </strong>
                       </div>
                       <div className="aj-total-detail-row aj-total-row-deposit-used">
-                        <span>Gunakan Saldo</span>
-                        <strong>
+                        <span className="aj-static-artwork">Gunakan Saldo</span>
+                        <strong className="aj-dynamic-print">
                           {formatNegativeAmount(customerDepositUsedAmount)}
                         </strong>
                       </div>
@@ -1477,28 +1564,30 @@ export function ReceiptCertificateHtmlDocument({
                         aria-label="Rincian harga item"
                       >
                         <div className="aj-total-detail-row">
-                          <span>Harga Item</span>
-                          <strong>{formatAmount(itemSubtotalAmount)}</strong>
+                          <span className="aj-static-artwork">Harga Item</span>
+                          <strong className="aj-dynamic-print">
+                            {formatAmount(itemSubtotalAmount)}
+                          </strong>
                         </div>
                         {itemDiscountAmount > 0 ? (
                           <div className="aj-total-detail-row aj-total-row-discount">
-                            <span>Diskon Item</span>
-                            <strong>
+                            <span className="aj-static-artwork">Diskon Item</span>
+                            <strong className="aj-dynamic-print">
                               {formatNegativeAmount(itemDiscountAmount)}
                             </strong>
                           </div>
                         ) : null}
                         {pageCount > 1 ? (
                           <div className="aj-total-detail-row">
-                            <span>Total Order</span>
-                            <strong>
+                            <span className="aj-static-artwork">Total Order</span>
+                            <strong className="aj-dynamic-print">
                               {formatAmount(data.sale.totalAmount)}
                             </strong>
                           </div>
                         ) : null}
                         <div className="aj-total-detail-row aj-total-row-external">
-                          <span>Total Pembayaran</span>
-                          <strong>
+                          <span className="aj-static-artwork">Total Pembayaran</span>
+                          <strong className="aj-dynamic-print">
                             {formatAmount(
                               data.customerDeposit.externalPaymentDueAmount,
                             )}
@@ -1506,23 +1595,30 @@ export function ReceiptCertificateHtmlDocument({
                         </div>
                       </div>
                       <div className="aj-total-box">
-                        <span className="aj-total-label">Total Item</span>
-                        <strong className="aj-total-amount">
+                        <span className="aj-total-label aj-static-artwork">Total Item</span>
+                        <strong className="aj-total-amount aj-dynamic-print">
                           {formatAmount(itemTotalAmount)}
                         </strong>
                       </div>
                     </section>
 
                     <section className="aj-qr-card">
-                      <div className="aj-qr-box">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={verificationQrImage}
-                          alt="QR riwayat transaksi pelanggan"
+                      {isVendorStaticArtwork ? (
+                        <div
+                          className="aj-qr-box aj-vendor-qr-frame"
+                          aria-hidden="true"
                         />
-                      </div>
-                      <div className="aj-qr-label">Riwayat Transaksi</div>
-                      <div className="aj-qr-note">
+                      ) : (
+                        <div className="aj-qr-box aj-dynamic-print">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={verificationQrImage}
+                            alt="QR riwayat transaksi pelanggan"
+                          />
+                        </div>
+                      )}
+                      <div className="aj-qr-label aj-static-artwork">Riwayat Transaksi</div>
+                      <div className="aj-qr-note aj-static-artwork">
                         Scan untuk melihat riwayat pembelian
                       </div>
                     </section>
@@ -1532,12 +1628,13 @@ export function ReceiptCertificateHtmlDocument({
             </article>
           );
         })}
-        <article
+        {shouldRenderBackPage ? (
+          <article
           className="aj-receipt-page"
           aria-label="Ketentuan transaksi dan informasi layanan"
           data-aj-receipt-page="back"
           data-aj-page-number={pageCount + 1}
-          data-aj-total-pages={pageCount + 1}
+          data-aj-total-pages={totalPdfPages}
         >
           <div className="aj-receipt-design aj-receipt-back-design">
             <div className="aj-watermark">
@@ -1653,7 +1750,8 @@ export function ReceiptCertificateHtmlDocument({
               </section>
             </div>
           </div>
-        </article>
+          </article>
+        ) : null}
       </div>
     </div>
   );

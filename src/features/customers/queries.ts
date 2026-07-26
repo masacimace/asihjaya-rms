@@ -16,6 +16,7 @@ import { db } from "@/db";
 import {
   approvals,
   customers,
+  customerDepositLedger,
   outlets,
   payments,
   productCategories,
@@ -621,7 +622,7 @@ export async function getAdminCustomerDetailData(
 
   const saleIds = saleRows.map((sale) => sale.id);
 
-  const [itemRows, paymentRows] =
+  const [itemRows, paymentRows, customerDepositRows] =
     saleIds.length > 0
       ? await Promise.all([
           db
@@ -649,11 +650,29 @@ export async function getAdminCustomerDetailData(
             .from(payments)
             .where(inArray(payments.saleId, saleIds))
             .orderBy(asc(payments.createdAt)),
+
+          db
+            .select({
+              saleId: customerDepositLedger.saleId,
+              entryType: customerDepositLedger.entryType,
+              direction: customerDepositLedger.direction,
+              amount: customerDepositLedger.amount,
+            })
+            .from(customerDepositLedger)
+            .where(
+              and(
+                eq(customerDepositLedger.organizationId, auth.organization.id),
+                eq(customerDepositLedger.customerId, customerId),
+                inArray(customerDepositLedger.saleId, saleIds),
+              ),
+            )
+            .orderBy(asc(customerDepositLedger.createdAt)),
         ])
-      : [[], []];
+      : [[], [], []];
 
   const itemsBySaleId = new Map<string, typeof itemRows>();
   const paymentsBySaleId = new Map<string, typeof paymentRows>();
+  const customerDepositsBySaleId = new Map<string, typeof customerDepositRows>();
 
   for (const item of itemRows) {
     const currentItems = itemsBySaleId.get(item.saleId) ?? [];
@@ -667,17 +686,53 @@ export async function getAdminCustomerDetailData(
     paymentsBySaleId.set(payment.saleId, currentPayments);
   }
 
+  for (const deposit of customerDepositRows) {
+    if (!deposit.saleId) {
+      continue;
+    }
+
+    const currentDeposits = customerDepositsBySaleId.get(deposit.saleId) ?? [];
+    currentDeposits.push(deposit);
+    customerDepositsBySaleId.set(deposit.saleId, currentDeposits);
+  }
+
   const transactions = saleRows.map((sale): AdminCustomerTransactionRow => {
     const items = itemsBySaleId.get(sale.id) ?? [];
     const paidPayments = (paymentsBySaleId.get(sale.id) ?? []).filter(
       (payment) => payment.status === "paid",
     );
+    const customerDeposits = customerDepositsBySaleId.get(sale.id) ?? [];
+    const customerDepositUsedAmount = customerDeposits.reduce(
+      (total, deposit) =>
+        deposit.entryType === "deposit_used" && deposit.direction === "debit"
+          ? total + parseAmount(deposit.amount)
+          : total,
+      0,
+    );
+    const customerDepositInAmount = customerDeposits.reduce(
+      (total, deposit) =>
+        deposit.entryType === "deposit_in" && deposit.direction === "credit"
+          ? total + parseAmount(deposit.amount)
+          : total,
+      0,
+    );
+    const paymentMethods: string[] = Array.from(
+      new Set(paidPayments.map((payment) => payment.method)),
+    );
+
+    if (customerDepositUsedAmount > 0) {
+      paymentMethods.push("customer_deposit");
+    }
+
+    if (customerDepositInAmount > 0) {
+      paymentMethods.push("customer_deposit_in");
+    }
 
     return {
       ...sale,
       totalItems: items.length,
       itemSummary: items.slice(0, 4).map((item) => item.productName),
-      paymentMethods: Array.from(new Set(paidPayments.map((payment) => payment.method))),
+      paymentMethods,
     };
   });
 

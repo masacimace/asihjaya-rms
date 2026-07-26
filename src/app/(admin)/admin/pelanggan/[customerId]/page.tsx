@@ -59,6 +59,8 @@ const paymentMethodLabels: Record<string, string> = {
   bank_transfer: "Transfer",
   qris_manual: "QRIS Manual",
   qris_gateway: "QRIS Gateway",
+  customer_deposit: "Dana Titip",
+  customer_deposit_in: "Deposit Saldo",
   other: "Lainnya",
 };
 

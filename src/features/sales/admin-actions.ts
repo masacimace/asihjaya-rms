@@ -26,6 +26,7 @@ import {
   SALE_VOID_REQUEST_PERMISSION,
 } from "@/features/approvals/authorization";
 import { requireAnyPermission, requirePermission } from "@/lib/auth/session";
+import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { buildReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
 import {
@@ -841,6 +842,7 @@ export async function reprintAdminReceiptCertificateAction(
         requestSource: "admin.sales.detail",
         reprint: true,
         requestedAt: now,
+        renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
       }),
       idempotencyKey: `receipt:${sale.id}:reprint:${requestId}`,
       sourceType: "sale",
@@ -851,7 +853,7 @@ export async function reprintAdminReceiptCertificateAction(
         requestId,
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
-        reason: `Cetak ulang nota ${sale.invoiceNumber}.`,
+        reason: `Cetak ulang nota ${sale.invoiceNumber} memakai overlay kertas custom.`,
       },
     });
 
@@ -871,11 +873,13 @@ export async function reprintAdminReceiptCertificateAction(
         hardwareJobId: result.job.id,
         duplicate: result.duplicate,
         queueState,
+        renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
       },
       metadata: {
         source: "admin.sales.detail",
         jobType: "print_receipt_certificate",
         documentMode: "one_page_per_item",
+        renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
       },
       createdAt: now,
     });

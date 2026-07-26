@@ -3,6 +3,10 @@ import {
   RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
   type ReceiptDocumentProfileId,
 } from "@/features/sales/documents/receipt-document-profiles";
+import {
+  RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
+  RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+} from "@/features/sales/documents/receipt-certificate-render-modes";
 import type { HardwareJobType } from "@/lib/hardware/job-protocol-v2";
 
 const UUID_PATTERN =
@@ -18,6 +22,11 @@ export const INVENTORY_LABEL_TEMPLATE_LEGACY_V1 = "jewelry_compact" as const;
 export const SATO_CG408TT_LABEL_PROFILE_V1 =
   "sato_cg408tt_jewelry_v1" as const;
 export const DEFAULT_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+export type HardwareReceiptRenderMode =
+  | typeof RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN
+  | typeof RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY;
+
 
 export type HardwareLabelPayloadV2 = {
   schemaVersion: 1;
@@ -63,6 +72,7 @@ export type HardwareDocumentPayloadV2 = {
     requestSource: string;
     reprint: boolean;
     requestedAt: string;
+    renderMode?: HardwareReceiptRenderMode;
   };
 };
 
@@ -310,15 +320,33 @@ function validateDocumentPayload(payload: Record<string, unknown>) {
     throw new TypeError("Epson A4 print profile wajib memiliki documentProfileId.");
   }
 
+  if (!isRecord(payload.metadata)) {
+    throw new TypeError("Document metadata wajib berupa object.");
+  }
+
+  const renderMode =
+    typeof payload.metadata.renderMode === "string"
+      ? payload.metadata.renderMode
+      : undefined;
   const basePath =
     payload.documentType === "receipt_certificate"
       ? `/api/sales/${documentId}/receipt-certificate`
       : "/api/sales/receipt-certificate-preview";
-  const expectedPath = documentProfileId
-    ? `${basePath}?profile=${encodeURIComponent(documentProfileId)}`
-    : basePath;
+  const expectedParams = new URLSearchParams();
+
+  if (documentProfileId) {
+    expectedParams.set("profile", documentProfileId);
+  }
+
+  if (renderMode && renderMode !== RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN) {
+    expectedParams.set("mode", renderMode);
+  }
+
+  const expectedQuery = expectedParams.toString();
+  const expectedPath = expectedQuery ? `${basePath}?${expectedQuery}` : basePath;
+
   if (path !== expectedPath) {
-    throw new TypeError("Document download path tidak cocok dengan document intent/profile.");
+    throw new TypeError("Document download path tidak cocok dengan document intent/profile/mode.");
   }
   if (payload.download.contentType !== "application/pdf") {
     throw new TypeError("Document contentType wajib application/pdf.");
@@ -331,12 +359,9 @@ function validateDocumentPayload(payload: Record<string, unknown>) {
   ) {
     throw new TypeError("Document download sha256 tidak valid.");
   }
-  if (!isRecord(payload.metadata)) {
-    throw new TypeError("Document metadata wajib berupa object.");
-  }
   assertOnlyKeys(
     payload.metadata,
-    ["invoiceNumber", "requestSource", "reprint", "requestedAt"],
+    ["invoiceNumber", "requestSource", "reprint", "requestedAt", "renderMode"],
     "Document metadata",
   );
   requireString(payload.metadata, "requestSource", 120);
@@ -346,6 +371,18 @@ function validateDocumentPayload(payload: Record<string, unknown>) {
   }
   if (payload.metadata.invoiceNumber !== undefined) {
     requireString(payload.metadata, "invoiceNumber", 120);
+  }
+  if (payload.metadata.renderMode !== undefined) {
+    if (
+      payload.metadata.renderMode !==
+        RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN &&
+      payload.metadata.renderMode !==
+        RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY
+    ) {
+      throw new TypeError(
+        "Document metadata renderMode hanya mendukung full design atau preprinted overlay.",
+      );
+    }
   }
 }
 
@@ -452,15 +489,24 @@ export function buildReceiptDocumentPayloadV2(input: {
   requestedAt: Date;
   documentProfileId?: ReceiptDocumentProfileId;
   printProfileId?: HardwareDocumentPayloadV2["printProfileId"];
+  renderMode?: HardwareReceiptRenderMode;
 }): HardwareDocumentPayloadV2 {
   const documentProfileId =
     input.documentProfileId ?? RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1;
+  const renderMode =
+    input.renderMode ?? RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN;
+  const pathParams = new URLSearchParams({ profile: documentProfileId });
+
+  if (renderMode !== RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN) {
+    pathParams.set("mode", renderMode);
+  }
+
   const payload: HardwareDocumentPayloadV2 = {
     schemaVersion: 1,
     documentType: "receipt_certificate",
     documentId: input.saleId,
     download: {
-      path: `/api/sales/${input.saleId}/receipt-certificate?profile=${encodeURIComponent(documentProfileId)}`,
+      path: `/api/sales/${input.saleId}/receipt-certificate?${pathParams.toString()}`,
       contentType: "application/pdf",
       maxBytes: DEFAULT_DOCUMENT_MAX_BYTES,
     },
@@ -478,6 +524,11 @@ export function buildReceiptDocumentPayloadV2(input: {
       requestedAt: input.requestedAt.toISOString(),
     },
   };
+
+  if (renderMode !== RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN) {
+    payload.metadata.renderMode = renderMode;
+  }
+
   assertHardwareJobPayloadV2("print_receipt_certificate", payload);
   return payload;
 }

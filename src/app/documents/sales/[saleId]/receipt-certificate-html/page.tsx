@@ -7,6 +7,10 @@ import {
   DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
   isReceiptDocumentProfileId,
 } from "@/features/sales/documents/receipt-document-profiles";
+import {
+  isReceiptCertificateRenderMode,
+  resolveReceiptCertificateRenderMode,
+} from "@/features/sales/documents/receipt-certificate-render-modes";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
 
@@ -23,6 +27,7 @@ type PageProps = {
   }>;
   searchParams: Promise<{
     profile?: string;
+    mode?: string;
   }>;
 };
 
@@ -44,6 +49,12 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
     notFound();
   }
 
+  if (query.mode && !isReceiptCertificateRenderMode(query.mode)) {
+    notFound();
+  }
+
+  const renderMode = resolveReceiptCertificateRenderMode(query.mode);
+
   const headerStore = await headers();
   const hardwareAuth = await authenticateHardwareAgentHeaders(headerStore);
 
@@ -61,6 +72,7 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
       <ReceiptCertificateHtmlDocument
         data={documentData}
         documentProfileId={documentProfileId}
+        renderMode={renderMode}
       />
     );
   }
@@ -86,6 +98,7 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
     <ReceiptCertificateHtmlDocument
       data={documentData}
       documentProfileId={documentProfileId}
+      renderMode={renderMode}
     />
   );
 }

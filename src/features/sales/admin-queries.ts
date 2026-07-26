@@ -1075,7 +1075,14 @@ export async function getAdminSaleDetailData({
     return null;
   }
 
-  const [paymentRows, itemRows, hardwareJobRows, approvalRows, auditLogRows] = await Promise.all([
+  const [
+    paymentRows,
+    customerDepositRows,
+    itemRows,
+    hardwareJobRows,
+    approvalRows,
+    auditLogRows,
+  ] = await Promise.all([
     db
       .select({
         id: payments.id,
@@ -1102,6 +1109,26 @@ export async function getAdminSaleDetailData({
       )
       .where(eq(payments.saleId, sale.id))
       .orderBy(asc(payments.createdAt)),
+
+    db
+      .select({
+        entryType: customerDepositLedger.entryType,
+        direction: customerDepositLedger.direction,
+        amount: customerDepositLedger.amount,
+        occurredAt: customerDepositLedger.occurredAt,
+        createdAt: customerDepositLedger.createdAt,
+      })
+      .from(customerDepositLedger)
+      .where(
+        and(
+          eq(customerDepositLedger.organizationId, auth.organization.id),
+          eq(customerDepositLedger.saleId, sale.id),
+        ),
+      )
+      .orderBy(
+        asc(customerDepositLedger.occurredAt),
+        asc(customerDepositLedger.createdAt),
+      ),
 
     db
       .select({
@@ -1220,12 +1247,30 @@ export async function getAdminSaleDetailData({
   ]);
 
   const totalAmount = parseAmount(sale.totalAmount);
-  const paidAmount = paymentRows.reduce(
+  const externalPaidAmount = paymentRows.reduce(
     (paymentTotal, payment) =>
       payment.status === "paid"
         ? paymentTotal + parseAmount(payment.amount)
         : paymentTotal,
     0,
+  );
+  const customerDepositUsedAmount = customerDepositRows.reduce(
+    (depositTotal, deposit) =>
+      deposit.entryType === "deposit_used" && deposit.direction === "debit"
+        ? depositTotal + parseAmount(deposit.amount)
+        : depositTotal,
+    0,
+  );
+  const customerDepositInAmount = customerDepositRows.reduce(
+    (depositTotal, deposit) =>
+      deposit.entryType === "deposit_in" && deposit.direction === "credit"
+        ? depositTotal + parseAmount(deposit.amount)
+        : depositTotal,
+    0,
+  );
+  const paidAmount = Math.max(
+    0,
+    externalPaidAmount + customerDepositUsedAmount - customerDepositInAmount,
   );
   const receiptUrl =
     sale.status === "completed" ? createReceiptVerificationUrl(sale.id).url : null;
@@ -1306,6 +1351,9 @@ export async function getAdminSaleDetailData({
     additionalFeeAmount: sale.additionalFeeAmount,
     totalAmount: sale.totalAmount,
     paidAmount,
+    externalPaidAmount,
+    customerDepositUsedAmount,
+    customerDepositInAmount,
     paymentStatus,
     completedAt: sale.completedAt,
     cancelledAt: sale.cancelledAt,

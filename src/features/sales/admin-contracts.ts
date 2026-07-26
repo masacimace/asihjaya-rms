@@ -304,6 +304,9 @@ export type AdminSaleDetailData = {
   additionalFeeAmount: string;
   totalAmount: string;
   paidAmount: number;
+  externalPaidAmount: number;
+  customerDepositUsedAmount: number;
+  customerDepositInAmount: number;
   paymentStatus: "paid" | "partial" | "pending";
   completedAt: Date | null;
   cancelledAt: Date | null;

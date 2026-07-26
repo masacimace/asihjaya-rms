@@ -5,6 +5,13 @@ import {
   type ReceiptDocumentProfileId,
 } from "@/features/sales/documents/receipt-document-profiles";
 import { generateReceiptCertificatePdfFromUrl } from "@/features/sales/documents/receipt-certificate-pdf";
+import {
+  getReceiptCertificateRenderModeLabel,
+  isReceiptCertificateRenderMode,
+  resolveReceiptCertificateRenderMode,
+  RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+  RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
+} from "@/features/sales/documents/receipt-certificate-render-modes";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
 
@@ -40,6 +47,20 @@ export async function GET(request: Request) {
       { status: 422 },
     );
   }
+
+  const requestedRenderMode = requestUrl.searchParams.get("mode");
+  if (
+    requestedRenderMode &&
+    !isReceiptCertificateRenderMode(requestedRenderMode)
+  ) {
+    return Response.json(
+      { success: false, error: "Mode render nota tidak didukung." },
+      { status: 422 },
+    );
+  }
+
+  const renderMode = resolveReceiptCertificateRenderMode(requestedRenderMode);
+
   const documentProfileId: ReceiptDocumentProfileId = requestedProfileId
     ? (requestedProfileId as ReceiptDocumentProfileId)
     : hardwareAuth
@@ -51,6 +72,7 @@ export async function GET(request: Request) {
     request.url,
   );
   htmlUrl.searchParams.set("profile", documentProfileId);
+  htmlUrl.searchParams.set("mode", renderMode);
 
   const pdf = await generateReceiptCertificatePdfFromUrl({
     cookieHeader: hardwareAuth ? null : request.headers.get("cookie"),
@@ -59,14 +81,24 @@ export async function GET(request: Request) {
     url: htmlUrl.toString(),
   });
 
+  const filenameMode =
+    renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK
+      ? "vendor-static-artwork"
+      : renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY
+        ? "preprinted-overlay"
+        : "full-design";
+
   return new Response(new Uint8Array(pdf.buffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="preview-nota-certificate-${pdf.profile.paper.toLowerCase()}-landscape.pdf"`,
+      "Content-Disposition": `inline; filename="preview-nota-certificate-${filenameMode}-${pdf.profile.paper.toLowerCase()}-landscape.pdf"`,
       "Cache-Control": "private, no-store, max-age=0",
       "X-Document-Profile": pdf.profile.id,
       "X-PDF-Page-Count": String(pdf.contract.pageCount),
       "X-PDF-Paper": `${pdf.profile.paper} landscape`,
+      "X-Receipt-Render-Mode": renderMode,
+      "X-Receipt-Render-Mode-Label":
+        getReceiptCertificateRenderModeLabel(renderMode),
     },
   });
 }
