@@ -25,7 +25,7 @@ export function ReprintSubmitButton({
         className,
       )}
     >
-      {pending ? "Mengirim job print..." : "Reprint ke kertas custom"}
+      {pending ? "Mengirim job print..." : "Reprint Nota"}
     </button>
   );
 }

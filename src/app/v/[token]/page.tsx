@@ -384,15 +384,6 @@ function TransactionCard({
             {formatDateTime(transaction.completedAt ?? transaction.createdAt)}
           </p>
         </div>
-
-        <div className="rounded-2xl bg-neutral-950 px-4 py-3 text-white sm:min-w-48 sm:text-right">
-          <p className="text-[11px] font-semibold uppercase text-neutral-400">
-            Total pembayaran
-          </p>
-          <p className="mt-1 text-xl font-bold text-[#f3d891]">
-            {formatAmount(transaction.totalAmount)}
-          </p>
-        </div>
       </div>
 
       <div className="grid gap-4 p-5 lg:grid-cols-[1fr_220px]">

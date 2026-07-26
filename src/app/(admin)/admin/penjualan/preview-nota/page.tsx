@@ -2,7 +2,7 @@ import { ExternalLink, FileText, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
 import {
-  RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1,
+  getConfiguredReceiptDocumentProfile,
   RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
 } from "@/features/sales/documents/receipt-document-profiles";
 import { requirePermission } from "@/lib/auth/session";
@@ -14,12 +14,12 @@ export const metadata = {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const previewPdfUrl = `/api/sales/receipt-certificate-preview?profile=${RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1}`;
-const legacyPreviewPdfUrl = `/api/sales/receipt-certificate-preview?profile=${RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1}`;
-
 export default async function PreviewNotaCertificatePage() {
   await requirePermission("sales.view");
 
+  const configuredProfile = getConfiguredReceiptDocumentProfile();
+  const previewPdfUrl = `/api/sales/receipt-certificate-preview?profile=${configuredProfile.id}`;
+  const legacyPreviewPdfUrl = `/api/sales/receipt-certificate-preview?profile=${RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1}`;
   const livePreviewPdfUrl = `${previewPdfUrl}#toolbar=1&navpanes=0&scrollbar=1&view=FitH`;
 
   return (
@@ -30,7 +30,7 @@ export default async function PreviewNotaCertificatePage() {
             Preview Sandbox
           </p>
           <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
-            Nota & Certificate A4 Landscape
+            Nota & Certificate {configuredProfile.paper} Landscape
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
             Halaman ini memakai sample data agar redesign UI PDF bisa dicek cepat
@@ -39,7 +39,7 @@ export default async function PreviewNotaCertificatePage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Link
-            href={`/admin/penjualan/preview-nota/html?profile=${RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1}`}
+            href={`/admin/penjualan/preview-nota/html?profile=${configuredProfile.id}`}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
           >
             <FileText className="size-4" />
@@ -67,7 +67,7 @@ export default async function PreviewNotaCertificatePage() {
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:opacity-90"
           >
             <FileText className="size-4" />
-            Preview A4
+            Preview {configuredProfile.paper}
           </Link>
         </div>
       </header>

@@ -5,7 +5,8 @@ const saleDetailPagePath =
 const reprintButtonPath =
   "src/app/(admin)/admin/penjualan/[transactionId]/reprint-button.tsx";
 const adminActionsPath = "src/features/sales/admin-actions.ts";
-const salePdfRoutePath = "src/app/api/sales/[saleId]/receipt-certificate/route.ts";
+const salePdfRoutePath =
+  "src/app/api/sales/[saleId]/receipt-certificate/route.ts";
 const saleHtmlPagePath =
   "src/app/documents/sales/[saleId]/receipt-certificate-html/page.tsx";
 const hardwarePayloadPath = "src/lib/hardware/job-payload-contracts-v2.ts";
@@ -45,7 +46,10 @@ for (const [snippet, description] of adminActionSnippets) {
 const salePdfRouteSnippets = [
   ['request.nextUrl.searchParams.get("mode")', "sale PDF mode query"],
   ["Mode render nota tidak didukung", "sale PDF mode validation"],
-  ['htmlUrl.searchParams.set("mode", renderMode)', "sale PDF forwards render mode"],
+  [
+    'htmlUrl.searchParams.set("mode", renderMode)',
+    "sale PDF forwards render mode",
+  ],
   ["preprinted-overlay", "sale PDF overlay filename marker"],
   ["X-Receipt-Render-Mode", "sale PDF render mode response header"],
 ] as const;
@@ -57,7 +61,10 @@ for (const [snippet, description] of salePdfRouteSnippets) {
 const saleHtmlSnippets = [
   ["mode?: string", "sale HTML mode query type"],
   ["isReceiptCertificateRenderMode(query.mode)", "sale HTML mode validation"],
-  ["resolveReceiptCertificateRenderMode(query.mode)", "sale HTML mode resolver"],
+  [
+    "resolveReceiptCertificateRenderMode(query.mode)",
+    "sale HTML mode resolver",
+  ],
   ["renderMode={renderMode}", "sale HTML forwards render mode"],
 ] as const;
 
@@ -67,9 +74,15 @@ for (const [snippet, description] of saleHtmlSnippets) {
 
 const hardwarePayloadSnippets = [
   ["HardwareReceiptRenderMode", "hardware receipt render mode type"],
-  ["renderMode?: HardwareReceiptRenderMode", "hardware payload renderMode support"],
+  [
+    "renderMode?: HardwareReceiptRenderMode",
+    "hardware payload renderMode support",
+  ],
   ['pathParams.set("mode", renderMode)', "hardware payload mode query"],
-  ["payload.metadata.renderMode = renderMode", "hardware metadata render mode marker"],
+  [
+    "payload.metadata.renderMode = renderMode",
+    "hardware metadata render mode marker",
+  ],
   ["document intent/profile/mode", "hardware path validator checks mode"],
 ] as const;
 
@@ -93,7 +106,7 @@ for (const [snippet, description] of saleDetailSnippets) {
 
 assertIncludes(
   reprintButtonSource,
-  "Reprint ke kertas custom",
+  "Reprint Nota",
   "reprint button custom paper label",
 );
 

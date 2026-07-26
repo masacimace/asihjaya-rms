@@ -125,7 +125,7 @@ export default async function OutletPage() {
           return (
             <article
               key={outlet.id}
-              className="flex flex-col rounded-2xl border border-[var(--border)] bg-white p-5 transition hover:border-[var(--accent)]/50 hover:bg-[var(--accent-soft)]/10"
+              className="flex flex-col rounded-2xl border border-[var(--border)] bg-white p-5 transition hover:border-[var(--accent)]/70"
             >
               <div className="flex items-start gap-4">
                 <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)] ring-1 ring-amber-100">

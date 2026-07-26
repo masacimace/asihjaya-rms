@@ -1,5 +1,6 @@
 import {
   RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1,
+  getConfiguredReceiptDocumentProfileId,
   RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
   type ReceiptDocumentProfileId,
 } from "@/features/sales/documents/receipt-document-profiles";
@@ -492,7 +493,7 @@ export function buildReceiptDocumentPayloadV2(input: {
   renderMode?: HardwareReceiptRenderMode;
 }): HardwareDocumentPayloadV2 {
   const documentProfileId =
-    input.documentProfileId ?? RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1;
+    input.documentProfileId ?? getConfiguredReceiptDocumentProfileId();
   const renderMode =
     input.renderMode ?? RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN;
   const pathParams = new URLSearchParams({ profile: documentProfileId });

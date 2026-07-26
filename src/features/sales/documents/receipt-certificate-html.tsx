@@ -12,6 +12,10 @@ import {
   resolveReceiptDocumentProfile,
   type ReceiptDocumentProfileId,
 } from "./receipt-document-profiles";
+import {
+  DEFAULT_RECEIPT_OVERLAY_CALIBRATION,
+  type ReceiptOverlayCalibration,
+} from "./receipt-overlay-calibration";
 
 const styles = String.raw`
   html,
@@ -116,6 +120,13 @@ const styles = String.raw`
   [data-aj-receipt-render-mode="preprinted_overlay"] .aj-receipt-design {
     background: transparent;
     box-shadow: none;
+  }
+
+  [data-aj-receipt-render-mode="preprinted_overlay"] .aj-receipt-front-design {
+    transform: translate(
+      var(--receipt-overlay-offset-x),
+      var(--receipt-overlay-offset-y)
+    ) scale(var(--receipt-overlay-design-scale));
   }
 
   [data-aj-receipt-render-mode="preprinted_overlay"] .aj-receipt-design::before {
@@ -1281,7 +1292,10 @@ function BackSectionTitle({
   );
 }
 
-function buildProfileStyles(documentProfileId: ReceiptDocumentProfileId) {
+function buildProfileStyles(
+  documentProfileId: ReceiptDocumentProfileId,
+  overlayCalibration: ReceiptOverlayCalibration,
+) {
   const profile = resolveReceiptDocumentProfile(documentProfileId);
 
   return String.raw`
@@ -1294,6 +1308,9 @@ function buildProfileStyles(documentProfileId: ReceiptDocumentProfileId) {
       --receipt-page-width: ${profile.widthMm}mm;
       --receipt-page-height: ${profile.heightMm}mm;
       --receipt-design-scale: ${profile.designScale};
+      --receipt-overlay-offset-x: ${overlayCalibration.offsetXmm}mm;
+      --receipt-overlay-offset-y: ${overlayCalibration.offsetYmm}mm;
+      --receipt-overlay-design-scale: ${profile.designScale * overlayCalibration.scale};
     }
   `;
 }
@@ -1301,10 +1318,12 @@ function buildProfileStyles(documentProfileId: ReceiptDocumentProfileId) {
 export function ReceiptCertificateHtmlDocument({
   data,
   documentProfileId = DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
+  overlayCalibration = DEFAULT_RECEIPT_OVERLAY_CALIBRATION,
   renderMode = RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
 }: {
   data: ReceiptCertificateData;
   documentProfileId?: ReceiptDocumentProfileId;
+  overlayCalibration?: ReceiptOverlayCalibration;
   renderMode?: ReceiptCertificateRenderMode;
 }) {
   const customerName = data.customer?.fullName ?? "Pelanggan Umum";
@@ -1331,10 +1350,13 @@ export function ReceiptCertificateHtmlDocument({
     <div
       className="aj-preview-shell"
       data-aj-receipt-render-mode={renderMode}
+      data-aj-overlay-offset-x-mm={overlayCalibration.offsetXmm}
+      data-aj-overlay-offset-y-mm={overlayCalibration.offsetYmm}
+      data-aj-overlay-scale={overlayCalibration.scale}
     >
       <style
         dangerouslySetInnerHTML={{
-          __html: `${buildProfileStyles(documentProfileId)}${styles}`,
+          __html: `${buildProfileStyles(documentProfileId, overlayCalibration)}${styles}`,
         }}
       />
       <div className="aj-receipt-stage" data-aj-receipt-stage="true">

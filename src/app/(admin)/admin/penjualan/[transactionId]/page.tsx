@@ -33,6 +33,8 @@ import {
   type AdminSaleTimelineEvent,
 } from "@/features/sales/admin-contracts";
 import { reprintAdminReceiptCertificateAction } from "@/features/sales/admin-actions";
+import { getConfiguredReceiptDocumentProfile } from "@/features/sales/documents/receipt-document-profiles";
+import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documents/receipt-overlay-calibration";
 import { getAdminSaleDetailData } from "@/features/sales/admin-queries";
 import { getSaleCorrectionEligibility } from "@/features/sales/correction-eligibility";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
@@ -478,6 +480,13 @@ export default async function SaleDetailPage({
   const printStatus = latestPrintJob?.status ?? "not_queued";
   const currentDetailHref = buildSaleDetailHref(sale.id);
   const canReprintReceiptCertificate = sale.receiptCertificate.isReady;
+  const receiptDocumentProfile = getConfiguredReceiptDocumentProfile();
+  const receiptOverlayCalibration = getConfiguredReceiptOverlayCalibration();
+  const overlayCalibrationLabel = [
+    `X ${receiptOverlayCalibration.offsetXmm}mm`,
+    `Y ${receiptOverlayCalibration.offsetYmm}mm`,
+    `Scale ${receiptOverlayCalibration.scale}`,
+  ].join(" · ");
   const sensitiveCapabilities = getSaleSensitiveCapabilities(auth);
   const canViewSensitiveActions = Object.values(sensitiveCapabilities).some(
     (capability) =>
@@ -824,13 +833,18 @@ export default async function SaleDetailPage({
             description="Preview dan download memakai full design, sedangkan reprint memakai overlay kertas custom."
             icon={<FileText className="size-5" />}
           >
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
               <KeyValue
                 label="Status dokumen"
                 value={sale.receiptCertificate.isReady ? "Ready" : "Belum ready"}
               />
               <KeyValue label="Verification URL" value={sale.receiptCertificate.verificationUrl ? "Aktif" : "Belum tersedia"} />
               <KeyValue label="Last print status" value={printStatusLabels[printStatus]} />
+              <KeyValue label="Profile nota" value={receiptDocumentProfile.label} />
+              <KeyValue
+                label="Overlay calibration"
+                value={overlayCalibrationLabel}
+              />
             </div>
 
             {sale.receiptCertificate.verificationUrl ? (
@@ -858,7 +872,7 @@ export default async function SaleDetailPage({
                     icon={<Download className="size-4" />}
                     label="Download PDF"
                     description="Unduh nota/certificate full design transaksi ini sebagai file PDF."
-                    download={`${sale.invoiceNumber}-nota-certificate-a5.pdf`}
+                    download={`${sale.invoiceNumber}-nota-certificate-${receiptDocumentProfile.paper.toLowerCase()}-landscape.pdf`}
                   />
                   <ReprintDocumentAction
                     saleId={sale.id}
@@ -892,9 +906,11 @@ export default async function SaleDetailPage({
                 <Printer className="mt-0.5 size-4 shrink-0 text-neutral-400" />
                 <p className="text-xs leading-5 text-[var(--muted)]">
                   Preview Dokumen dan Download PDF tetap memakai full design
-                  sebagai arsip digital. Reprint Nota memakai pre-printed overlay
-                  supaya printer hanya mencetak data transaksi di atas kertas
-                  nota custom.
+                  sebagai arsip digital. Profile nota saat ini memakai {" "}
+                  <strong>{receiptDocumentProfile.label}</strong>. Reprint Nota
+                  memakai pre-printed overlay supaya printer hanya mencetak data
+                  transaksi di atas kertas nota custom. Jika posisi print fisik
+                  meleset, ubah nilai overlay calibration di environment.
                 </p>
               </div>
             </div>

@@ -119,38 +119,34 @@ function ProfileFields({
         </label>
 
         <label>
-              <span className={labelClassName}>Terminal ID</span>
-              <input
-                name="terminalId"
-                required
-                maxLength={80}
-                defaultValue={profile?.terminalId ?? ""}
-                placeholder="Terminal ID dari EDC"
-                className={inputClassName}
-              />
-            </label>
-            <label>
-              <span className={labelClassName}>Mapping register</span>
-              <select
-                name="registerId"
-                defaultValue={profile?.registerId ?? ""}
-                className={inputClassName}
-              >
-                <option value="">Semua register pada outlet</option>
-                {data.outlets.flatMap((outlet) =>
-                  outlet.registers.map((register) => (
-                    <option key={register.id} value={register.id}>
-                      {outlet.name} · {register.name}
-                    </option>
-                  )),
-                )}
-              </select>
-              <input
-                type="hidden"
-                name="verificationSource"
-                value="edc_terminal"
-              />
-            </label>
+          <span className={labelClassName}>Terminal ID</span>
+          <input
+            name="terminalId"
+            required
+            maxLength={80}
+            defaultValue={profile?.terminalId ?? ""}
+            placeholder="Terminal ID dari EDC"
+            className={inputClassName}
+          />
+        </label>
+        <label>
+          <span className={labelClassName}>Mapping register</span>
+          <select
+            name="registerId"
+            defaultValue={profile?.registerId ?? ""}
+            className={inputClassName}
+          >
+            <option value="">Semua register pada outlet</option>
+            {data.outlets.flatMap((outlet) =>
+              outlet.registers.map((register) => (
+                <option key={register.id} value={register.id}>
+                  {outlet.name} · {register.name}
+                </option>
+              )),
+            )}
+          </select>
+          <input type="hidden" name="verificationSource" value="edc_terminal" />
+        </label>
 
         <label>
           <span className={labelClassName}>Urutan pilihan POS</span>
@@ -227,7 +223,7 @@ export default async function SettingsPage({
             </p>
             <p className="mt-1 max-w-sm text-xs leading-5">
               Duplicate reference, evidence threshold, co-verification, dan
-              audit trail P1-A tetap diperiksa oleh backend.
+              audit trail tetap diperiksa oleh system.
             </p>
           </div>
         </div>
@@ -343,8 +339,8 @@ export default async function SettingsPage({
               Preset pembayaran outlet
             </h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              Data terminal EDC disimpan sekali di sini, bukan diketik
-              berulang pada setiap transaksi.
+              Data terminal EDC disimpan sekali di sini, bukan diketik berulang
+              pada setiap transaksi.
             </p>
           </div>
         </div>

@@ -1,7 +1,6 @@
 import {
-  DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
+  getConfiguredReceiptDocumentProfileId,
   isReceiptDocumentProfileId,
-  LEGACY_RECEIPT_DOCUMENT_PROFILE_ID,
   type ReceiptDocumentProfileId,
 } from "@/features/sales/documents/receipt-document-profiles";
 import { generateReceiptCertificatePdfFromUrl } from "@/features/sales/documents/receipt-certificate-pdf";
@@ -12,6 +11,7 @@ import {
   RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
   RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
 } from "@/features/sales/documents/receipt-certificate-render-modes";
+import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documents/receipt-overlay-calibration";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
 
@@ -60,12 +60,11 @@ export async function GET(request: Request) {
   }
 
   const renderMode = resolveReceiptCertificateRenderMode(requestedRenderMode);
+  const overlayCalibration = getConfiguredReceiptOverlayCalibration();
 
   const documentProfileId: ReceiptDocumentProfileId = requestedProfileId
     ? (requestedProfileId as ReceiptDocumentProfileId)
-    : hardwareAuth
-      ? LEGACY_RECEIPT_DOCUMENT_PROFILE_ID
-      : DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID;
+    : getConfiguredReceiptDocumentProfileId();
 
   const htmlUrl = new URL(
     "/documents/sales/receipt-certificate-preview-html",
@@ -96,6 +95,9 @@ export async function GET(request: Request) {
       "X-Document-Profile": pdf.profile.id,
       "X-PDF-Page-Count": String(pdf.contract.pageCount),
       "X-PDF-Paper": `${pdf.profile.paper} landscape`,
+      "X-Receipt-Overlay-Offset-X-MM": String(overlayCalibration.offsetXmm),
+      "X-Receipt-Overlay-Offset-Y-MM": String(overlayCalibration.offsetYmm),
+      "X-Receipt-Overlay-Scale": String(overlayCalibration.scale),
       "X-Receipt-Render-Mode": renderMode,
       "X-Receipt-Render-Mode-Label":
         getReceiptCertificateRenderModeLabel(renderMode),

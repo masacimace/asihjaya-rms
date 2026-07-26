@@ -3,9 +3,8 @@ import { type NextRequest } from "next/server";
 
 import { getReceiptCertificateData } from "@/features/sales/documents/receipt-certificate";
 import {
-  DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
+  getConfiguredReceiptDocumentProfileId,
   isReceiptDocumentProfileId,
-  LEGACY_RECEIPT_DOCUMENT_PROFILE_ID,
   type ReceiptDocumentProfileId,
 } from "@/features/sales/documents/receipt-document-profiles";
 import { generateReceiptCertificatePdfFromUrl } from "@/features/sales/documents/receipt-certificate-pdf";
@@ -16,6 +15,7 @@ import {
   RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
   resolveReceiptCertificateRenderMode,
 } from "@/features/sales/documents/receipt-certificate-render-modes";
+import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documents/receipt-overlay-calibration";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgent } from "@/lib/hardware/agent-auth";
 
@@ -60,12 +60,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 
   const renderMode = resolveReceiptCertificateRenderMode(requestedRenderMode);
+  const overlayCalibration = getConfiguredReceiptOverlayCalibration();
 
   const documentProfileId: ReceiptDocumentProfileId = requestedProfileId
     ? (requestedProfileId as ReceiptDocumentProfileId)
-    : hardwareAuth
-      ? LEGACY_RECEIPT_DOCUMENT_PROFILE_ID
-      : DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID;
+    : getConfiguredReceiptDocumentProfileId();
 
   let cookieHeader: string | null = null;
   let extraHeaders: Record<string, string> | undefined;
@@ -141,6 +140,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
       "X-Document-Profile": pdf.profile.id,
       "X-PDF-Page-Count": String(pdf.contract.pageCount),
       "X-PDF-Paper": `${pdf.profile.paper} landscape`,
+      "X-Receipt-Overlay-Offset-X-MM": String(overlayCalibration.offsetXmm),
+      "X-Receipt-Overlay-Offset-Y-MM": String(overlayCalibration.offsetYmm),
+      "X-Receipt-Overlay-Scale": String(overlayCalibration.scale),
       "X-Receipt-Render-Mode": renderMode,
       "X-Receipt-Render-Mode-Label": getReceiptCertificateRenderModeLabel(renderMode),
     },

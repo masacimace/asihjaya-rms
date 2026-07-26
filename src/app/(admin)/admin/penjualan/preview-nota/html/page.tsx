@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { ReceiptCertificateHtmlDocument } from "@/features/sales/documents/receipt-certificate-html";
 import {
-  DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
+  getConfiguredReceiptDocumentProfileId,
   isReceiptDocumentProfileId,
   RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1,
   RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
@@ -19,6 +19,7 @@ import {
   RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
   resolveReceiptCertificateRenderMode,
 } from "@/features/sales/documents/receipt-certificate-render-modes";
+import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documents/receipt-overlay-calibration";
 import { requirePermission } from "@/lib/auth/session";
 
 export const metadata = {
@@ -40,7 +41,7 @@ export default async function ReceiptCertificateHtmlPreviewPage({
 }: PageProps) {
   await requirePermission("sales.view");
   const query = await searchParams;
-  const documentProfileId = query.profile ?? DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID;
+  const documentProfileId = query.profile ?? getConfiguredReceiptDocumentProfileId();
 
   if (!isReceiptDocumentProfileId(documentProfileId)) {
     notFound();
@@ -51,6 +52,12 @@ export default async function ReceiptCertificateHtmlPreviewPage({
   }
 
   const renderMode = resolveReceiptCertificateRenderMode(query.mode);
+  const overlayCalibration = getConfiguredReceiptOverlayCalibration();
+  const overlayCalibrationLabel = [
+    `X ${overlayCalibration.offsetXmm}mm`,
+    `Y ${overlayCalibration.offsetYmm}mm`,
+    `${overlayCalibration.scale}x`,
+  ].join(" · ");
   const profile = resolveReceiptDocumentProfile(documentProfileId);
   const currentUrl = `/admin/penjualan/preview-nota/html?profile=${documentProfileId}&mode=${renderMode}`;
   const pdfUrl = `/api/sales/receipt-certificate-preview?profile=${documentProfileId}&mode=${renderMode}`;
@@ -184,6 +191,14 @@ export default async function ReceiptCertificateHtmlPreviewPage({
             </div>
             <div>
               <dt className="text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
+                Overlay calibration
+              </dt>
+              <dd className="mt-1 font-semibold text-neutral-900">
+                {overlayCalibrationLabel}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
                 Mode
               </dt>
               <dd className="mt-1 font-semibold text-neutral-900">
@@ -236,6 +251,7 @@ export default async function ReceiptCertificateHtmlPreviewPage({
           <ReceiptCertificateHtmlDocument
             data={receiptCertificateSampleData}
             documentProfileId={documentProfileId}
+            overlayCalibration={overlayCalibration}
             renderMode={renderMode}
           />
         </section>

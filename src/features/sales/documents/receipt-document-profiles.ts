@@ -80,6 +80,9 @@ export const DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID =
 export const LEGACY_RECEIPT_DOCUMENT_PROFILE_ID =
   RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1;
 
+export const RECEIPT_DOCUMENT_PROFILE_ENV_KEY =
+  "RECEIPT_DOCUMENT_PROFILE_ID" as const;
+
 export function isReceiptDocumentProfileId(
   value: unknown,
 ): value is ReceiptDocumentProfileId {
@@ -96,4 +99,26 @@ export function resolveReceiptDocumentProfile(
   return receiptDocumentProfiles[
     isReceiptDocumentProfileId(value) ? value : fallback
   ];
+}
+
+export function getConfiguredReceiptDocumentProfileId(): ReceiptDocumentProfileId {
+  const value = process.env[RECEIPT_DOCUMENT_PROFILE_ENV_KEY]?.trim();
+
+  if (!value) {
+    return DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID;
+  }
+
+  if (isReceiptDocumentProfileId(value)) {
+    return value;
+  }
+
+  throw new Error(
+    `${RECEIPT_DOCUMENT_PROFILE_ENV_KEY} harus salah satu dari: ${Object.keys(
+      receiptDocumentProfiles,
+    ).join(", ")}.`,
+  );
+}
+
+export function getConfiguredReceiptDocumentProfile(): ReceiptDocumentProfile {
+  return receiptDocumentProfiles[getConfiguredReceiptDocumentProfileId()];
 }

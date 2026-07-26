@@ -4,13 +4,14 @@ import { notFound } from "next/navigation";
 import { getReceiptCertificateData } from "@/features/sales/documents/receipt-certificate";
 import { ReceiptCertificateHtmlDocument } from "@/features/sales/documents/receipt-certificate-html";
 import {
-  DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID,
+  getConfiguredReceiptDocumentProfileId,
   isReceiptDocumentProfileId,
 } from "@/features/sales/documents/receipt-document-profiles";
 import {
   isReceiptCertificateRenderMode,
   resolveReceiptCertificateRenderMode,
 } from "@/features/sales/documents/receipt-certificate-render-modes";
+import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documents/receipt-overlay-calibration";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
 
@@ -44,7 +45,7 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
     notFound();
   }
 
-  const documentProfileId = query.profile ?? DEFAULT_RECEIPT_DOCUMENT_PROFILE_ID;
+  const documentProfileId = query.profile ?? getConfiguredReceiptDocumentProfileId();
   if (!isReceiptDocumentProfileId(documentProfileId)) {
     notFound();
   }
@@ -54,6 +55,7 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
   }
 
   const renderMode = resolveReceiptCertificateRenderMode(query.mode);
+  const overlayCalibration = getConfiguredReceiptOverlayCalibration();
 
   const headerStore = await headers();
   const hardwareAuth = await authenticateHardwareAgentHeaders(headerStore);
@@ -72,6 +74,7 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
       <ReceiptCertificateHtmlDocument
         data={documentData}
         documentProfileId={documentProfileId}
+        overlayCalibration={overlayCalibration}
         renderMode={renderMode}
       />
     );
@@ -98,6 +101,7 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
     <ReceiptCertificateHtmlDocument
       data={documentData}
       documentProfileId={documentProfileId}
+      overlayCalibration={overlayCalibration}
       renderMode={renderMode}
     />
   );
