@@ -46,6 +46,13 @@ export default async function PreviewNotaCertificatePage() {
             Preview HTML/CSS
           </Link>
           <Link
+            href="/admin/penjualan/preview-nota/vendor-handoff"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+          >
+            <FileText className="size-4" />
+            Vendor Handoff
+          </Link>
+          <Link
             href={previewPdfUrl}
             target="_blank"
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
@@ -110,6 +117,12 @@ export default async function PreviewNotaCertificatePage() {
             iterasi desain lebih cepat. Setelah final, HTML tersebut akan
             dirender menjadi PDF transaksi real.
           </div>
+          <Link
+            href="/admin/penjualan/preview-nota/vendor-handoff"
+            className="inline-flex w-full items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 py-3 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+          >
+            Paket Vendor Handoff
+          </Link>
           <Link
             href="/admin/penjualan"
             className="inline-flex w-full items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 py-3 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"

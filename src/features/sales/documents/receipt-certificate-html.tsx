@@ -16,6 +16,12 @@ import {
   DEFAULT_RECEIPT_OVERLAY_CALIBRATION,
   type ReceiptOverlayCalibration,
 } from "./receipt-overlay-calibration";
+import {
+  formatReceiptInstagram,
+  formatReceiptWhatsapp,
+  resolveReceiptRuntimeOutletCopy,
+  resolveReceiptVendorStaticOutletCopy,
+} from "./receipt-outlet-copy";
 
 const styles = String.raw`
   html,
@@ -1336,6 +1342,9 @@ export function ReceiptCertificateHtmlDocument({
     renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK;
   const isPreprintedOverlay =
     renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY;
+  const receiptOutletCopy = isVendorStaticArtwork
+    ? resolveReceiptVendorStaticOutletCopy(data)
+    : resolveReceiptRuntimeOutletCopy(data);
   const certificateItems = isVendorStaticArtwork
     ? data.items.slice(0, 1)
     : data.items;
@@ -1403,13 +1412,15 @@ export function ReceiptCertificateHtmlDocument({
                       </div>
                       <div className="aj-contact-lines aj-static-artwork">
                         <span className="aj-contact-item">
-                          {data.outlet.address ?? "Alamat outlet belum diatur"}
+                          {receiptOutletCopy.address}
                         </span>
                         <span className="aj-contact-item">
-                          Whatsapp: {data.outlet.phone ?? "-"}
+                          {formatReceiptWhatsapp(receiptOutletCopy.phone)}
                         </span>
                         <span className="aj-contact-item">
-                          Instagram: @asihjaya.bantargebang
+                          {formatReceiptInstagram(
+                            receiptOutletCopy.instagramHandle,
+                          )}
                         </span>
                       </div>
                     </div>
@@ -1683,9 +1694,11 @@ export function ReceiptCertificateHtmlDocument({
 
                 <div className="aj-back-outlet-card">
                   <div className="aj-back-outlet-label">Outlet</div>
-                  <div className="aj-back-outlet-name">{data.outlet.name}</div>
+                  <div className="aj-back-outlet-name">
+                    {receiptOutletCopy.name}
+                  </div>
                   <div className="aj-back-outlet-text">
-                    {data.outlet.address ?? "Alamat outlet belum diatur"}
+                    {receiptOutletCopy.address}
                   </div>
                 </div>
               </header>
