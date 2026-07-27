@@ -888,6 +888,124 @@ export const customers = pgTable(
   ],
 );
 
+export const customerHistoryCredentials = pgTable(
+  "customer_history_credentials",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    pinHash: text("pin_hash").notNull(),
+    credentialVersion: integer("credential_version").default(1).notNull(),
+    mustChangePin: boolean("must_change_pin").default(true).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    failedAttemptCount: integer("failed_attempt_count").default(0).notNull(),
+    failedWindowStartedAt: timestamp("failed_window_started_at", {
+      withTimezone: true,
+    }),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+    pinCreatedAt: timestamp("pin_created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    pinResetAt: timestamp("pin_reset_at", { withTimezone: true }),
+    pinCreatedByUserId: uuid("pin_created_by_user_id").references(
+      () => users.id,
+    ),
+    lastSuccessfulAccessAt: timestamp("last_successful_access_at", {
+      withTimezone: true,
+    }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("customer_history_credentials_customer_uq").on(
+      table.customerId,
+    ),
+    index("customer_history_credentials_org_active_idx").on(
+      table.organizationId,
+      table.isActive,
+    ),
+    check(
+      "customer_history_credentials_version_ck",
+      sql`${table.credentialVersion} > 0`,
+    ),
+    check(
+      "customer_history_credentials_failed_count_ck",
+      sql`${table.failedAttemptCount} >= 0`,
+    ),
+  ],
+);
+
+export const customerHistorySessions = pgTable(
+  "customer_history_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    credentialVersion: integer("credential_version").notNull(),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    requiresPinChange: boolean("requires_pin_change").default(false).notNull(),
+    absoluteExpiresAt: timestamp("absolute_expires_at", {
+      withTimezone: true,
+    }).notNull(),
+    idleExpiresAt: timestamp("idle_expires_at", {
+      withTimezone: true,
+    }).notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    ipAddress: varchar("ip_address", { length: 64 }),
+    userAgent: text("user_agent"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("customer_history_sessions_token_hash_uq").on(table.tokenHash),
+    index("customer_history_sessions_customer_expiry_idx").on(
+      table.customerId,
+      table.absoluteExpiresAt,
+    ),
+    index("customer_history_sessions_expiry_idx").on(
+      table.absoluteExpiresAt,
+      table.idleExpiresAt,
+    ),
+    check(
+      "customer_history_sessions_version_ck",
+      sql`${table.credentialVersion} > 0`,
+    ),
+  ],
+);
+
+export const customerHistoryIpRateLimits = pgTable(
+  "customer_history_ip_rate_limits",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    keyHash: varchar("key_hash", { length: 64 }).notNull(),
+    windowStartedAt: timestamp("window_started_at", {
+      withTimezone: true,
+    }).notNull(),
+    failureCount: integer("failure_count").default(0).notNull(),
+    blockedUntil: timestamp("blocked_until", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("customer_history_ip_rate_limits_key_uq").on(table.keyHash),
+    index("customer_history_ip_rate_limits_blocked_idx").on(
+      table.blockedUntil,
+    ),
+    check(
+      "customer_history_ip_rate_limits_failure_count_ck",
+      sql`${table.failureCount} >= 0`,
+    ),
+  ],
+);
+
 export const posHeldCarts = pgTable(
   "pos_held_carts",
   {

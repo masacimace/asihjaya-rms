@@ -24,6 +24,7 @@ import Link from "next/link";
 
 import { requestCustomerDepositWithdrawalApprovalAction } from "@/app/actions/customer-deposits";
 import { CustomerDepositWithdrawalRequestForm } from "@/components/customer-deposits/customer-deposit-withdrawal-request-form";
+import { CustomerHistoryAccessCard } from "@/components/customers/customer-history-access-card";
 import {
   type AdminCustomerDepositLedgerRow,
   type AdminCustomerDetailData,
@@ -1159,6 +1160,13 @@ export default async function CustomerDetailPage({
       />
 
       <CustomerProfileHeader data={data} />
+
+      {auth.permissionCodes.includes("customers.history_pin.manage") ? (
+        <CustomerHistoryAccessCard
+          customerId={data.customer.id}
+          historyAccess={data.historyAccess}
+        />
+      ) : null}
 
       <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <SummaryCard

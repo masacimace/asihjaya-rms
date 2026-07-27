@@ -72,6 +72,7 @@ const expectedRouteFiles = [
   "app/(admin)/admin/penjualan/page.tsx",
   "app/(admin)/admin/penjualan/preview-nota/html/page.tsx",
   "app/(admin)/admin/penjualan/preview-nota/page.tsx",
+  "app/(admin)/admin/penjualan/preview-nota/vendor-handoff/page.tsx",
   "app/(admin)/admin/produk/[productId]/item/tambah/page.tsx",
   "app/(admin)/admin/produk/[productId]/page.tsx",
   "app/(admin)/admin/produk/kategori/[categoryId]/page.tsx",

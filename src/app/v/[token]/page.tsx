@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import {
   BadgeCheck,
   CalendarDays,
@@ -5,6 +7,7 @@ import {
   Gem,
   History,
   LockKeyhole,
+  LogOut,
   MapPin,
   PackageCheck,
   ReceiptText,
@@ -13,7 +16,19 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 
+import { logoutPublicCustomerHistoryAction } from "@/app/actions/customer-history";
 import {
+  PublicHistoryInitialPinChangeForm,
+  PublicHistoryPinVerificationForm,
+} from "@/components/customers/public-history-access-form";
+import {
+  CUSTOMER_HISTORY_ABSOLUTE_TIMEOUT_HOURS,
+  CUSTOMER_HISTORY_IDLE_TIMEOUT_MINUTES,
+  getCurrentCustomerHistorySession,
+  getCustomerHistoryCredentialStatus,
+} from "@/features/customers/history-access";
+import {
+  getPublicCustomerHistoryAccessContext,
   getPublicCustomerHistoryData,
   getPublicCustomerHistoryImageUrl,
   type PublicCustomerHistoryTransaction,
@@ -21,6 +36,10 @@ import {
 
 export const metadata = {
   title: "Riwayat Transaksi Pelanggan",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export const runtime = "nodejs";
@@ -253,6 +272,90 @@ function NoCustomerState({
   );
 }
 
+function PinAccessShell({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <main className="min-h-screen bg-[#f7f6f2] px-4 py-6 text-neutral-950 sm:px-6 sm:py-10">
+      <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top,_rgba(211,164,77,0.14),_transparent_68%)]" />
+      <section className="relative mx-auto max-w-xl overflow-hidden rounded-[28px] border border-neutral-200 bg-white">
+        <BrandHeader />
+        <div className="px-5 py-8 sm:px-8 sm:py-10">
+          <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[#fff6df] text-[#9a681d] ring-1 ring-[#ead7ad]">
+            <LockKeyhole className="size-8" />
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xs font-bold uppercase tracking-wide text-[#9a681d]">
+              {eyebrow}
+            </p>
+            <h1 className="mt-3 text-3xl font-bold">{title}</h1>
+            <p className="mt-3 text-sm leading-7 text-neutral-600">
+              {description}
+            </p>
+          </div>
+          {children}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function PinSetupRequiredState({
+  outletName,
+  outletPhone,
+}: {
+  outletName: string;
+  outletPhone: string | null;
+}) {
+  return (
+    <PinAccessShell
+      eyebrow="PIN belum tersedia"
+      title="Aktifkan akses riwayat pelanggan"
+      description="PIN riwayat untuk pelanggan pada nota ini belum dibuat. Hubungi outlet agar petugas membuat PIN sementara secara aman."
+    >
+      <div className="mt-7 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm leading-6 text-neutral-700">
+        <p className="font-semibold text-neutral-950">{outletName}</p>
+        <p className="mt-1">{outletPhone ?? "Nomor outlet tidak tersedia"}</p>
+      </div>
+    </PinAccessShell>
+  );
+}
+
+function PinRequiredState({ token }: { token: string }) {
+  return (
+    <PinAccessShell
+      eyebrow="Verifikasi pelanggan"
+      title="Masukkan PIN pelanggan"
+      description={`Sesi akan berakhir setelah ${CUSTOMER_HISTORY_IDLE_TIMEOUT_MINUTES} menit tidak aktif atau maksimal ${CUSTOMER_HISTORY_ABSOLUTE_TIMEOUT_HOURS} jam.`}
+    >
+      <PublicHistoryPinVerificationForm token={token} />
+      <p className="mt-5 text-center text-xs leading-5 text-neutral-500">
+        Setelah 5 percobaan gagal, akses akan dibatasi sementara.
+      </p>
+    </PinAccessShell>
+  );
+}
+
+function InitialPinChangeState({ token }: { token: string }) {
+  return (
+    <PinAccessShell
+      eyebrow="Akses pertama"
+      title="Buat PIN pribadi"
+      description="PIN sementara sudah benar. Ganti dengan 6 angka yang hanya diketahui pelanggan sebelum membuka riwayat transaksi."
+    >
+      <PublicHistoryInitialPinChangeForm token={token} />
+    </PinAccessShell>
+  );
+}
+
 function TransactionItemList({
   token,
   transaction,
@@ -464,22 +567,58 @@ function TransactionCard({
 
 export default async function PublicCustomerHistoryPage({ params }: PageProps) {
   const { token } = await params;
-  const data = await getPublicCustomerHistoryData(token);
+  const context = await getPublicCustomerHistoryAccessContext(token);
 
-  if (data.status === "invalid") {
-    return <InvalidState message={data.message} />;
+  if (context.status === "invalid") {
+    return <InvalidState message={context.message} />;
   }
 
-  if (data.status === "no_customer") {
+  if (context.status === "no_customer") {
     return (
       <NoCustomerState
-        message={data.message}
-        outletName={data.outlet.name}
-        saleDate={data.sale.completedAt ?? data.sale.createdAt}
-        invoiceNumber={data.sale.invoiceNumber}
+        message={context.message}
+        outletName={context.outlet.name}
+        saleDate={context.sale.completedAt ?? context.sale.createdAt}
+        invoiceNumber={context.sale.invoiceNumber}
       />
     );
   }
+
+  const credentialStatus = await getCustomerHistoryCredentialStatus({
+    organizationId: context.organizationId,
+    customerId: context.customer.id,
+  });
+
+  if (!credentialStatus.exists || !credentialStatus.isActive) {
+    return (
+      <PinSetupRequiredState
+        outletName={context.outlet.name}
+        outletPhone={context.outlet.phone}
+      />
+    );
+  }
+
+  const session = await getCurrentCustomerHistorySession({
+    organizationId: context.organizationId,
+    customerId: context.customer.id,
+    touch: true,
+  });
+
+  if (!session) {
+    return <PinRequiredState token={token} />;
+  }
+
+  if (session.requiresPinChange) {
+    return <InitialPinChangeState token={token} />;
+  }
+
+  const data = await getPublicCustomerHistoryData(token, session.customerId);
+
+  if (data.status !== "valid") {
+    return <InvalidState message="Riwayat transaksi tidak tersedia." />;
+  }
+
+  const logoutAction = logoutPublicCustomerHistoryAction.bind(null, token);
 
   return (
     <main className="min-h-screen bg-white px-2 py-2 text-neutral-950 sm:px-2 sm:py-2">
@@ -732,6 +871,15 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                     • Hubungi outlet penerbit jika rincian riwayat tidak sesuai.
                   </li>
                 </ul>
+                <form action={logoutAction} className="mt-4">
+                  <button
+                    type="submit"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
+                  >
+                    <LogOut className="size-4" />
+                    Akhiri sesi riwayat
+                  </button>
+                </form>
               </div>
             </div>
           </footer>

@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
 import { saleItems, sales } from "@/db/schema";
+import { getCurrentCustomerHistorySession } from "@/features/customers/history-access";
 import { verifyReceiptVerificationToken } from "@/features/sales/verification/receipt-token";
 import {
   imageKeyBelongsToOrganization,
@@ -84,6 +85,15 @@ export async function GET(_request: Request, context: RouteContext) {
     return new Response("Not found", { status: 404 });
   }
 
+  const session = await getCurrentCustomerHistorySession({
+    organizationId: saleRow.organizationId,
+    customerId: saleRow.customerId,
+  });
+
+  if (!session || session.requiresPinChange) {
+    return new Response("Not found", { status: 404 });
+  }
+
   const imageKey = readImageKeyFromSegments(key);
 
   if (
@@ -120,7 +130,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return new Response(new Uint8Array(image), {
       headers: {
         "Content-Type": "image/webp",
-        "Cache-Control": "public, max-age=3600",
+        "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
       },
     });

@@ -28,6 +28,11 @@ const permissionSeeds = [
     module: "admin",
   },
   {
+    code: "customers.history_pin.manage",
+    name: "Membuat dan mereset PIN riwayat pelanggan",
+    module: "customers",
+  },
+  {
     code: "pos.access",
     name: "Mengakses aplikasi POS",
     module: "pos",
@@ -319,6 +324,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
 
   manager: [
     "admin.access",
+    "customers.history_pin.manage",
     "pos.access",
     "outlets.manage",
     "products.view",

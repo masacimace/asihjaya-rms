@@ -15,6 +15,7 @@ import {
 import { db } from "@/db";
 import {
   approvals,
+  customerHistoryCredentials,
   customers,
   customerDepositLedger,
   outlets,
@@ -526,6 +527,43 @@ export async function getAdminCustomerDetailData(
     return null;
   }
 
+  const [historyCredential] = await db
+    .select({
+      isActive: customerHistoryCredentials.isActive,
+      mustChangePin: customerHistoryCredentials.mustChangePin,
+      lockedUntil: customerHistoryCredentials.lockedUntil,
+      pinCreatedAt: customerHistoryCredentials.pinCreatedAt,
+      pinResetAt: customerHistoryCredentials.pinResetAt,
+      lastSuccessfulAccessAt:
+        customerHistoryCredentials.lastSuccessfulAccessAt,
+    })
+    .from(customerHistoryCredentials)
+    .where(
+      and(
+        eq(customerHistoryCredentials.organizationId, auth.organization.id),
+        eq(customerHistoryCredentials.customerId, customerId),
+      ),
+    )
+    .limit(1);
+  const historyAccess = historyCredential
+    ? {
+        exists: true as const,
+        ...historyCredential,
+        isLocked: Boolean(
+          historyCredential.lockedUntil &&
+            historyCredential.lockedUntil > new Date(),
+        ),
+      }
+    : {
+        exists: false as const,
+        isActive: false,
+        mustChangePin: false,
+        isLocked: false,
+        lockedUntil: null,
+        pinCreatedAt: null,
+        pinResetAt: null,
+        lastSuccessfulAccessAt: null,
+      };
   const outletIds = getAccessibleOutletIds(auth, null);
 
   if (outletIds.length === 0) {
@@ -543,6 +581,7 @@ export async function getAdminCustomerDetailData(
       },
       transactions: [],
       customerDeposits: createEmptyCustomerDepositData(),
+      historyAccess,
     };
   }
 
@@ -820,5 +859,6 @@ export async function getAdminCustomerDetailData(
       balances: customerDepositBalances,
       recentEntries: recentDepositEntries,
     },
+    historyAccess,
   };
 }

@@ -83,7 +83,6 @@ export type AdminCustomerTransactionRow = {
   paymentMethods: string[];
 };
 
-
 export type AdminCustomerDepositBalanceRow = {
   outletId: string;
   outletCode: string;
@@ -144,6 +143,16 @@ export type AdminCustomerDetailData = {
     balances: AdminCustomerDepositBalanceRow[];
     recentEntries: AdminCustomerDepositLedgerRow[];
   };
+  historyAccess: {
+    exists: boolean;
+    isActive: boolean;
+    mustChangePin: boolean;
+    isLocked: boolean;
+    lockedUntil: Date | null;
+    pinCreatedAt: Date | null;
+    pinResetAt: Date | null;
+    lastSuccessfulAccessAt: Date | null;
+  };
 };
 
 export type AdminCustomerFormData = AdminCustomerDetailData["customer"];
@@ -155,6 +164,26 @@ export type AdminCustomerActionState = {
 };
 
 export const initialAdminCustomerActionState: AdminCustomerActionState = {
+  status: "idle",
+};
+
+export type AdminCustomerHistoryPinActionState = {
+  status: "idle" | "success" | "error";
+  message?: string;
+  temporaryPin?: string;
+};
+
+export const initialAdminCustomerHistoryPinActionState: AdminCustomerHistoryPinActionState = {
+  status: "idle",
+};
+
+export type PublicCustomerHistoryPinActionState = {
+  status: "idle" | "error";
+  message?: string;
+  fieldErrors?: Record<string, string>;
+};
+
+export const initialPublicCustomerHistoryPinActionState: PublicCustomerHistoryPinActionState = {
   status: "idle",
 };
 

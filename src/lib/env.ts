@@ -41,6 +41,18 @@ export const serverEnv = {
     return secret("SESSION_SECRET");
   },
 
+  get RECEIPT_VERIFICATION_SECRET() {
+    return secret("RECEIPT_VERIFICATION_SECRET");
+  },
+
+  get CUSTOMER_HISTORY_SESSION_SECRET() {
+    return secret("CUSTOMER_HISTORY_SESSION_SECRET");
+  },
+
+  get CUSTOMER_HISTORY_PIN_PEPPER() {
+    return secret("CUSTOMER_HISTORY_PIN_PEPPER");
+  },
+
   get DEFAULT_ORGANIZATION_SLUG() {
     return required("DEFAULT_ORGANIZATION_SLUG").toLowerCase();
   },

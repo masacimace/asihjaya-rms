@@ -67,6 +67,31 @@ export type PublicCustomerHistoryData =
       message: string;
     };
 
+export type PublicCustomerHistoryAccessContext =
+  | {
+      status: "valid";
+      token: string;
+      organizationId: string;
+      outlet: {
+        id: string;
+        name: string;
+        code: string;
+        phone: string | null;
+      };
+      customer: {
+        id: string;
+        customerCode: string | null;
+        name: string;
+      };
+      sale: {
+        id: string;
+        invoiceNumber: string;
+        completedAt: Date | null;
+        createdAt: Date;
+      };
+    }
+  | Extract<PublicCustomerHistoryData, { status: "invalid" | "no_customer" }>;
+
 export type PublicCustomerHistoryTransaction = {
   id: string;
   invoiceNumber: string;
@@ -183,16 +208,11 @@ function getPaymentMethodLabel(method: string) {
   return methodLabels[method] ?? method.replaceAll("_", " ");
 }
 
-export async function getPublicCustomerHistoryData(
-  token: string,
-): Promise<PublicCustomerHistoryData> {
+async function findPublicHistoryBaseSale(token: string) {
   const parsedToken = verifyReceiptVerificationToken(token);
 
   if (!parsedToken) {
-    return {
-      status: "invalid",
-      message: "Kode QR nota tidak valid atau sudah berubah.",
-    };
+    return null;
   }
 
   const [baseSale] = await db
@@ -219,6 +239,21 @@ export async function getPublicCustomerHistoryData(
     .where(eq(sales.id, parsedToken.saleId))
     .limit(1);
 
+  return baseSale ?? undefined;
+}
+
+export async function getPublicCustomerHistoryAccessContext(
+  token: string,
+): Promise<PublicCustomerHistoryAccessContext> {
+  const baseSale = await findPublicHistoryBaseSale(token);
+
+  if (baseSale === null) {
+    return {
+      status: "invalid",
+      message: "Kode QR nota tidak valid atau sudah berubah.",
+    };
+  }
+
   if (!baseSale) {
     return {
       status: "invalid",
@@ -241,6 +276,75 @@ export async function getPublicCustomerHistoryData(
         code: baseSale.outletCode,
         phone: baseSale.outletPhone,
       },
+    };
+  }
+
+  return {
+    status: "valid",
+    token,
+    organizationId: baseSale.organizationId,
+    outlet: {
+      id: baseSale.outletId,
+      name: baseSale.outletName,
+      code: baseSale.outletCode,
+      phone: baseSale.outletPhone,
+    },
+    customer: {
+      id: baseSale.customerId,
+      customerCode: baseSale.customerCode,
+      name: baseSale.customerName,
+    },
+    sale: {
+      id: baseSale.id,
+      invoiceNumber: baseSale.invoiceNumber,
+      completedAt: baseSale.completedAt,
+      createdAt: baseSale.createdAt,
+    },
+  };
+}
+
+export async function getPublicCustomerHistoryData(
+  token: string,
+  authorizedCustomerId: string,
+): Promise<PublicCustomerHistoryData> {
+  const baseSale = await findPublicHistoryBaseSale(token);
+
+  if (baseSale === null) {
+    return {
+      status: "invalid",
+      message: "Kode QR nota tidak valid atau sudah berubah.",
+    };
+  }
+
+  if (!baseSale) {
+    return {
+      status: "invalid",
+      message: "Nota tidak ditemukan di sistem Asihjaya.",
+    };
+  }
+
+  if (!baseSale.customerId || !baseSale.customerName) {
+    return {
+      status: "no_customer",
+      message:
+        "Riwayat transaksi pelanggan tidak tersedia karena nota ini dibuat tanpa customer terdaftar.",
+      sale: {
+        invoiceNumber: baseSale.invoiceNumber,
+        completedAt: baseSale.completedAt,
+        createdAt: baseSale.createdAt,
+      },
+      outlet: {
+        name: baseSale.outletName,
+        code: baseSale.outletCode,
+        phone: baseSale.outletPhone,
+      },
+    };
+  }
+
+  if (baseSale.customerId !== authorizedCustomerId) {
+    return {
+      status: "invalid",
+      message: "Sesi pelanggan tidak sesuai dengan nota yang dipindai.",
     };
   }
 
@@ -408,7 +512,7 @@ export async function getPublicCustomerHistoryData(
       discountAmount: sale.discountAmount,
       completedAt: sale.completedAt,
       createdAt: sale.createdAt,
-      isScannedSale: sale.id === parsedToken.saleId,
+      isScannedSale: sale.id === baseSale.id,
       totalItems: items.length,
       itemSummary: items.slice(0, 4).map((item) => ({
         lineNumber: item.lineNumber,
