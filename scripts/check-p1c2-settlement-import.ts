@@ -21,7 +21,11 @@ async function main() {
   validateSettlementImportMapping(parsed.headers, mapping);
   const firstRow = parsed.rows[0];
   assert.ok(firstRow);
-  const normalized = normalizeSettlementImportRow(firstRow, mapping);
+  const normalized = normalizeSettlementImportRow(
+    firstRow,
+    mapping,
+    "Asia/Jakarta",
+  );
   assert.equal(normalized.normalizedReference, "ABC001");
   assert.equal(normalized.grossAmount, 1_000_000);
   assert.equal(normalized.feeAmount, 7_000);

@@ -79,6 +79,7 @@ import {
   getDefaultPosRegisterCondition,
 } from "@/features/pos/context";
 import { lookupPosItemByScanValue } from "@/features/pos/queries";
+import { getBusinessCompactDate } from "@/lib/time/business-time";
 import {
   publishSaleCompletedNotificationInTransaction,
   publishSaleRecoveryNotification,
@@ -933,13 +934,11 @@ function normalizeEmail(value: string | null | undefined) {
   return email;
 }
 
-function generateCustomerCode(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+function generateCustomerCode(date: Date, timeZone: string) {
+  const dateKey = getBusinessCompactDate(date, timeZone);
   const randomSuffix = randomUUID().slice(0, 8).toUpperCase();
 
-  return `CUST-${year}${month}${day}-${randomSuffix}`;
+  return `CUST-${dateKey}-${randomSuffix}`;
 }
 
 function isManualPaymentMethod(
@@ -965,31 +964,31 @@ function getPaymentProvider({
 function generateInvoiceNumber({
   outletCode,
   date,
+  timeZone,
 }: {
   outletCode: string;
   date: Date;
+  timeZone: string;
 }) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const dateKey = getBusinessCompactDate(date, timeZone);
   const randomSuffix = randomUUID().slice(0, 8).toUpperCase();
 
-  return `AJ-${outletCode}-${year}${month}${day}-${randomSuffix}`.slice(0, 80);
+  return `AJ-${outletCode}-${dateKey}-${randomSuffix}`.slice(0, 80);
 }
 
 function generateHoldNumber({
   outletCode,
   date,
+  timeZone,
 }: {
   outletCode: string;
   date: Date;
+  timeZone: string;
 }) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const dateKey = getBusinessCompactDate(date, timeZone);
   const randomSuffix = randomUUID().slice(0, 8).toUpperCase();
 
-  return `HOLD-${outletCode}-${year}${month}${day}-${randomSuffix}`.slice(0, 80);
+  return `HOLD-${outletCode}-${dateKey}-${randomSuffix}`.slice(0, 80);
 }
 
 function heldCartFailure(
@@ -1730,7 +1729,10 @@ export async function createPosCustomerAction(formData: FormData) {
   try {
     createdCustomer = await db.transaction(async (transaction) => {
       const now = new Date();
-      const customerCode = generateCustomerCode(now);
+      const customerCode = generateCustomerCode(
+        now,
+        auth.organization.timezone,
+      );
       const createdCustomerRows = await transaction
         .insert(customers)
         .values({
@@ -2173,6 +2175,7 @@ export async function holdPosCartAction(
       const holdNumber = generateHoldNumber({
         outletCode: primaryOutlet.code,
         date: now,
+        timeZone: auth.organization.timezone,
       });
       const holdTitle =
         title ??
@@ -3962,6 +3965,7 @@ export async function completePosCheckoutAction(
       const invoiceNumber = generateInvoiceNumber({
         outletCode: primaryOutlet.code,
         date: now,
+        timeZone: auth.organization.timezone,
       });
 
       const saleRows = await transaction

@@ -5,6 +5,7 @@
 FROM mcr.microsoft.com/playwright:v1.61.0-noble AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV TZ=Asia/Jakarta
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 RUN apt-get update \

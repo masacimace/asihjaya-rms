@@ -14,6 +14,7 @@ import {
   type AdminCustomerActionState,
 } from "@/features/customers/contracts";
 import { requirePermission } from "@/lib/auth/session";
+import { getBusinessCompactDate } from "@/lib/time/business-time";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^[0-9+().\-\s]{6,32}$/;
@@ -45,13 +46,11 @@ function normalizeEmail(value: string) {
   return email;
 }
 
-function generateCustomerCode(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+function generateCustomerCode(date: Date, timeZone: string) {
+  const dateKey = getBusinessCompactDate(date, timeZone);
   const randomSuffix = randomUUID().slice(0, 8).toUpperCase();
 
-  return `CUST-${year}${month}${day}-${randomSuffix}`;
+  return `CUST-${dateKey}-${randomSuffix}`;
 }
 
 async function getRequestMetadata() {
@@ -256,7 +255,10 @@ export async function createAdminCustomerAction(
   try {
     createdCustomerId = await db.transaction(async (transaction) => {
       const now = new Date();
-      const customerCode = generateCustomerCode(now);
+      const customerCode = generateCustomerCode(
+        now,
+        auth.organization.timezone,
+      );
       const customerRows = await transaction
         .insert(customers)
         .values({

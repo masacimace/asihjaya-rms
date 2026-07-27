@@ -31,6 +31,15 @@ import {
 } from "@/db/schema";
 import { getVisibleApprovalTypes } from "@/features/approvals/authorization";
 import { hasPermission, type AuthContext } from "@/lib/auth/session";
+import {
+  addBusinessDays,
+  addBusinessHours,
+  getBusinessDateKey,
+  getBusinessDateTimeParts,
+  getStartOfBusinessDay,
+  getStartOfBusinessHour,
+  getStartOfBusinessMonth,
+} from "@/lib/time/business-time";
 import type {
   AdminDashboardActivityKind,
   AdminDashboardData,
@@ -42,56 +51,6 @@ import type {
   AdminDashboardTopProductItem,
   AdminDashboardTrendPoint,
 } from "./contracts";
-
-const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
-
-function getJakartaDateParts(date: Date) {
-  const shiftedDate = new Date(date.getTime() + JAKARTA_OFFSET_MS);
-
-  return {
-    year: shiftedDate.getUTCFullYear(),
-    month: shiftedDate.getUTCMonth(),
-    day: shiftedDate.getUTCDate(),
-  };
-}
-
-function getJakartaDayStartUtc(date: Date, dayOffset = 0) {
-  const parts = getJakartaDateParts(date);
-
-  return new Date(
-    Date.UTC(parts.year, parts.month, parts.day + dayOffset) -
-      JAKARTA_OFFSET_MS,
-  );
-}
-
-function addUtcDays(date: Date, days: number) {
-  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
-}
-
-function addUtcHours(date: Date, hours: number) {
-  return new Date(date.getTime() + hours * 60 * 60 * 1000);
-}
-
-function getJakartaMonthStartUtc(date: Date, monthOffset = 0) {
-  const parts = getJakartaDateParts(date);
-
-  return new Date(
-    Date.UTC(parts.year, parts.month + monthOffset, 1) - JAKARTA_OFFSET_MS,
-  );
-}
-
-function getJakartaHourStartUtc(date: Date) {
-  const shiftedDate = new Date(date.getTime() + JAKARTA_OFFSET_MS);
-
-  return new Date(
-    Date.UTC(
-      shiftedDate.getUTCFullYear(),
-      shiftedDate.getUTCMonth(),
-      shiftedDate.getUTCDate(),
-      shiftedDate.getUTCHours(),
-    ) - JAKARTA_OFFSET_MS,
-  );
-}
 
 export const ADMIN_DASHBOARD_PERIOD_OPTIONS: Array<{
   value: AdminDashboardPeriodRange;
@@ -124,20 +83,22 @@ export function parseAdminDashboardPeriodRange(
 function createPeriodMetadata({
   range,
   now,
+  timeZone,
 }: {
   range: AdminDashboardPeriodRange;
   now: Date;
+  timeZone: string;
 }): AdminDashboardPeriod & {
   previousStart: Date;
   previousEnd: Date;
   trendStart: Date;
   trendEnd: Date;
 } {
-  const todayStart = getJakartaDayStartUtc(now);
-  const tomorrowStart = getJakartaDayStartUtc(now, 1);
+  const todayStart = getStartOfBusinessDay(now, timeZone);
+  const tomorrowStart = getStartOfBusinessDay(now, timeZone, 1);
 
   if (range === "yesterday") {
-    const currentStart = getJakartaDayStartUtc(now, -1);
+    const currentStart = getStartOfBusinessDay(now, timeZone, -1);
     const currentEnd = todayStart;
 
     return {
@@ -151,15 +112,15 @@ function createPeriodMetadata({
       topProductsDescription: "Berdasarkan penjualan kemarin.",
       currentStart,
       currentEnd,
-      previousStart: getJakartaDayStartUtc(now, -2),
+      previousStart: getStartOfBusinessDay(now, timeZone, -2),
       previousEnd: currentStart,
-      trendStart: addUtcDays(currentStart, -6),
+      trendStart: addBusinessDays(currentStart, -6, timeZone),
       trendEnd: currentEnd,
     };
   }
 
   if (range === "last7") {
-    const currentStart = getJakartaDayStartUtc(now, -6);
+    const currentStart = getStartOfBusinessDay(now, timeZone, -6);
     const currentEnd = tomorrowStart;
 
     return {
@@ -173,7 +134,7 @@ function createPeriodMetadata({
       topProductsDescription: "Berdasarkan 7 hari terakhir.",
       currentStart,
       currentEnd,
-      previousStart: addUtcDays(currentStart, -7),
+      previousStart: addBusinessDays(currentStart, -7, timeZone),
       previousEnd: currentStart,
       trendStart: currentStart,
       trendEnd: currentEnd,
@@ -181,7 +142,7 @@ function createPeriodMetadata({
   }
 
   if (range === "last30") {
-    const currentStart = getJakartaDayStartUtc(now, -29);
+    const currentStart = getStartOfBusinessDay(now, timeZone, -29);
     const currentEnd = tomorrowStart;
 
     return {
@@ -195,7 +156,7 @@ function createPeriodMetadata({
       topProductsDescription: "Berdasarkan 30 hari terakhir.",
       currentStart,
       currentEnd,
-      previousStart: addUtcDays(currentStart, -30),
+      previousStart: addBusinessDays(currentStart, -30, timeZone),
       previousEnd: currentStart,
       trendStart: currentStart,
       trendEnd: currentEnd,
@@ -203,7 +164,7 @@ function createPeriodMetadata({
   }
 
   if (range === "thisMonth") {
-    const currentStart = getJakartaMonthStartUtc(now);
+    const currentStart = getStartOfBusinessMonth(now, timeZone);
     const currentEnd = tomorrowStart;
     const currentDurationMs = currentEnd.getTime() - currentStart.getTime();
 
@@ -227,7 +188,11 @@ function createPeriodMetadata({
 
   const currentStart = todayStart;
   const currentEnd = tomorrowStart;
-  const nextCurrentHour = addUtcHours(getJakartaHourStartUtc(now), 1);
+  const nextCurrentHour = addBusinessHours(
+    getStartOfBusinessHour(now, timeZone),
+    1,
+    timeZone,
+  );
 
   return {
     range: "today",
@@ -240,71 +205,62 @@ function createPeriodMetadata({
     topProductsDescription: "Berdasarkan penjualan hari ini.",
     currentStart,
     currentEnd,
-    previousStart: getJakartaDayStartUtc(now, -1),
+    previousStart: getStartOfBusinessDay(now, timeZone, -1),
     previousEnd: currentStart,
     trendStart: currentStart,
     trendEnd: nextCurrentHour > currentEnd ? currentEnd : nextCurrentHour,
   };
 }
 
-function getJakartaDateKey(date: Date) {
-  const parts = getJakartaDateParts(date);
+function getBusinessHourKey(date: Date, timeZone: string) {
+  const parts = getBusinessDateTimeParts(date, timeZone);
 
   return [
     parts.year,
-    String(parts.month + 1).padStart(2, "0"),
+    String(parts.month).padStart(2, "0"),
     String(parts.day).padStart(2, "0"),
+    String(parts.hour).padStart(2, "0"),
   ].join("-");
 }
 
-function getJakartaShortDateLabel(date: Date) {
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "short",
-    timeZone: "Asia/Jakarta",
-  }).format(date);
-}
-
-function getJakartaHourKey(date: Date) {
-  const shiftedDate = new Date(date.getTime() + JAKARTA_OFFSET_MS);
-
-  return [
-    shiftedDate.getUTCFullYear(),
-    String(shiftedDate.getUTCMonth() + 1).padStart(2, "0"),
-    String(shiftedDate.getUTCDate()).padStart(2, "0"),
-    String(shiftedDate.getUTCHours()).padStart(2, "0"),
-  ].join("-");
-}
-
-function getJakartaHourLabel(date: Date) {
-  const shiftedDate = new Date(date.getTime() + JAKARTA_OFFSET_MS);
-
-  return `${String(shiftedDate.getUTCHours()).padStart(2, "0")}.00`;
+function getBusinessHourLabel(date: Date, timeZone: string) {
+  const parts = getBusinessDateTimeParts(date, timeZone);
+  return `${String(parts.hour).padStart(2, "0")}.00`;
 }
 
 function createTrendSkeleton({
   start,
   end,
   granularity,
+  timeZone,
 }: {
   start: Date;
   end: Date;
   granularity: AdminDashboardTrendGranularity;
+  timeZone: string;
 }): AdminDashboardTrendPoint[] {
   const points: AdminDashboardTrendPoint[] = [];
-  const increment = granularity === "hour" ? addUtcHours : addUtcDays;
+  const increment = granularity === "hour" ? addBusinessHours : addBusinessDays;
   const maxPoints = granularity === "hour" ? 24 : 31;
 
-  for (let cursor = start; cursor < end && points.length < maxPoints; cursor = increment(cursor, 1)) {
+  for (
+    let cursor = start;
+    cursor < end && points.length < maxPoints;
+    cursor = increment(cursor, 1, timeZone)
+  ) {
     points.push({
       dateKey:
         granularity === "hour"
-          ? getJakartaHourKey(cursor)
-          : getJakartaDateKey(cursor),
+          ? getBusinessHourKey(cursor, timeZone)
+          : getBusinessDateKey(cursor, timeZone),
       label:
         granularity === "hour"
-          ? getJakartaHourLabel(cursor)
-          : getJakartaShortDateLabel(cursor),
+          ? getBusinessHourLabel(cursor, timeZone)
+          : new Intl.DateTimeFormat("id-ID", {
+              day: "numeric",
+              month: "short",
+              timeZone,
+            }).format(cursor),
       revenue: 0,
       transactionCount: 0,
       itemSold: 0,
@@ -348,11 +304,11 @@ function readNumber(value: unknown) {
   return null;
 }
 
-function getTimeLabel(value: Date) {
+function getTimeLabel(value: Date, timeZone: string) {
   return new Intl.DateTimeFormat("id-ID", {
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "Asia/Jakarta",
+    timeZone,
   }).format(value);
 }
 
@@ -407,12 +363,14 @@ function createActivityDescription({
   action,
   afterData,
   createdAt,
+  timeZone,
 }: {
   action: string;
   afterData: Record<string, unknown>;
   createdAt: Date;
+  timeZone: string;
 }) {
-  const timeLabel = getTimeLabel(createdAt);
+  const timeLabel = getTimeLabel(createdAt, timeZone);
 
   if (action === "sale.completed") {
     return `${readString(afterData.invoiceNumber) ?? "Invoice"} · ${timeLabel}`;
@@ -443,6 +401,7 @@ function createActivityDescription({
 
 function createEmptyDashboard(
   period: AdminDashboardPeriod & { trendStart?: Date; trendEnd?: Date },
+  timeZone: string,
 ): AdminDashboardData {
   return {
     period,
@@ -460,6 +419,7 @@ function createEmptyDashboard(
       start: period.trendStart ?? period.currentStart,
       end: period.trendEnd ?? period.currentEnd,
       granularity: period.chartGranularity,
+      timeZone,
     }),
     topProducts: [],
     recentTransactions: [],
@@ -482,10 +442,14 @@ export async function getAdminDashboardData(
 ): Promise<AdminDashboardData> {
   const outletIds = auth.outlets.map((outlet) => outlet.id);
   const now = new Date();
-  const period = createPeriodMetadata({ range, now });
+  const period = createPeriodMetadata({
+    range,
+    now,
+    timeZone: auth.organization.timezone,
+  });
 
   if (outletIds.length === 0) {
-    return createEmptyDashboard(period);
+    return createEmptyDashboard(period, auth.organization.timezone);
   }
 
   const currentStart = period.currentStart;
@@ -506,8 +470,8 @@ export async function getAdminDashboardData(
   const staleAgentCutoff = new Date(now.getTime() - 5 * 60 * 1000);
   const trendBucketSql =
     period.chartGranularity === "hour"
-      ? sql<string>`to_char(${sales.completedAt} at time zone 'Asia/Jakarta', 'YYYY-MM-DD-HH24')`
-      : sql<string>`to_char(${sales.completedAt} at time zone 'Asia/Jakarta', 'YYYY-MM-DD')`;
+      ? sql<string>`to_char(${sales.completedAt} at time zone ${auth.organization.timezone}, 'YYYY-MM-DD-HH24')`
+      : sql<string>`to_char(${sales.completedAt} at time zone ${auth.organization.timezone}, 'YYYY-MM-DD')`;
 
   const [
     todaySalesRows,
@@ -739,8 +703,8 @@ export async function getAdminDashboardData(
           lt(sales.completedAt, trendEnd),
         ),
       )
-      .groupBy(trendBucketSql)
-      .orderBy(trendBucketSql),
+      .groupBy(sql`1`)
+      .orderBy(sql`1`),
 
     db
       .select({
@@ -837,6 +801,7 @@ export async function getAdminDashboardData(
     start: trendStart,
     end: trendEnd,
     granularity: period.chartGranularity,
+    timeZone: auth.organization.timezone,
   }).map((point) => {
     const row = trendByDate.get(point.dateKey);
 
@@ -1001,7 +966,7 @@ export async function getAdminDashboardData(
       id: "active-shifts",
       title: `${activeShifts} shift kasir masih aktif`,
       description: latestShift
-        ? `${latestShift.outletName} / ${latestShift.registerName} dibuka ${getTimeLabel(latestShift.openedAt)} oleh ${latestShift.openedByName ?? "staff"}.`
+        ? `${latestShift.outletName} / ${latestShift.registerName} dibuka ${getTimeLabel(latestShift.openedAt, auth.organization.timezone)} oleh ${latestShift.openedByName ?? "staff"}.`
         : "Ada shift kasir yang masih berjalan.",
       href: "/admin/operasional/shift",
       tone: "neutral",
@@ -1058,6 +1023,7 @@ export async function getAdminDashboardData(
         action: row.action,
         afterData,
         createdAt: row.createdAt,
+        timeZone: auth.organization.timezone,
       }),
       value: row.action === "sale.completed" ? readNumber(afterData.totalAmount) : null,
       kind: getActivityKind(row.action),

@@ -6,6 +6,7 @@ import {
   type SettlementImportColumnMapping,
 } from "@/features/reconciliation/import-contracts";
 import { normalizeManualPaymentReference } from "@/features/pos/manual-payment-verification";
+import { getStartOfBusinessDateKey } from "@/lib/time/business-time";
 
 const MAX_COLUMNS = 100;
 const MAX_CELL_LENGTH = 2_000;
@@ -233,7 +234,10 @@ function parseIntegerMoney(value: string, fieldName: string, optional = false) {
   return amount;
 }
 
-export function parseSettlementImportDate(value: string) {
+export function parseSettlementImportDate(
+  value: string,
+  timeZone: string,
+) {
   const trimmed = value.trim();
   let year: number;
   let month: number;
@@ -268,9 +272,9 @@ export function parseSettlementImportDate(value: string) {
   const isoDate = `${year.toString().padStart(4, "0")}-${month
     .toString()
     .padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
-  const date = new Date(`${isoDate}T00:00:00+07:00`);
+  const date = getStartOfBusinessDateKey(isoDate, timeZone);
 
-  if (Number.isNaN(date.getTime())) {
+  if (!date) {
     throw new Error("Tanggal transaksi tidak valid.");
   }
 
@@ -289,6 +293,7 @@ function mappedValue(
 export function normalizeSettlementImportRow(
   row: Record<string, string>,
   mapping: SettlementImportColumnMapping,
+  timeZone: string,
 ): NormalizedSettlementRow {
   const paymentReference = mappedValue(
     row,
@@ -340,6 +345,7 @@ export function normalizeSettlementImportRow(
   return {
     transactionDate: parseSettlementImportDate(
       mappedValue(row, mapping, "transactionDate"),
+      timeZone,
     ),
     paymentReference: paymentReference.slice(0, 160),
     normalizedReference,

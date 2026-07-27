@@ -340,6 +340,7 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
     shiftStatus: sale.shiftStatus,
     completedAt: sale.completedAt,
     hasReturnCase: Boolean(existingReturnCase),
+    timeZone: auth.organization.timezone,
   });
 
   if (!eligibility.canRequestCorrection) {

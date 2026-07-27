@@ -30,36 +30,13 @@ import {
   type ApprovalType,
 } from "@/features/approvals/contracts";
 import type { AuthContext } from "@/lib/auth/session";
+import { addBusinessDays, getStartOfBusinessDay } from "@/lib/time/business-time";
 
 const approvedByUsers = alias(users, "approval_approved_by_users");
-const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
-
-function getJakartaDateParts(date: Date) {
-  const shiftedDate = new Date(date.getTime() + JAKARTA_OFFSET_MS);
-
-  return {
-    year: shiftedDate.getUTCFullYear(),
-    month: shiftedDate.getUTCMonth(),
-    day: shiftedDate.getUTCDate(),
-  };
-}
-
-function getJakartaDayStartUtc(date: Date) {
-  const parts = getJakartaDateParts(date);
-
-  return new Date(
-    Date.UTC(parts.year, parts.month, parts.day) - JAKARTA_OFFSET_MS,
-  );
-}
-
-function addDays(date: Date, days: number) {
-  const result = new Date(date);
-  result.setUTCDate(result.getUTCDate() + days);
-
-  return result;
-}
-
-function getRangeBounds(filters: AdminApprovalFilters) {
+function getRangeBounds(
+  filters: AdminApprovalFilters,
+  timeZone: string,
+) {
   if (filters.range === "all") {
     return {
       start: null,
@@ -68,27 +45,27 @@ function getRangeBounds(filters: AdminApprovalFilters) {
     };
   }
 
-  const todayStart = getJakartaDayStartUtc(new Date());
+  const todayStart = getStartOfBusinessDay(new Date(), timeZone);
 
   if (filters.range === "today") {
     return {
       start: todayStart,
-      end: addDays(todayStart, 1),
+      end: addBusinessDays(todayStart, 1, timeZone),
       label: "Hari ini",
     };
   }
 
   if (filters.range === "7d") {
     return {
-      start: addDays(todayStart, -6),
-      end: addDays(todayStart, 1),
+      start: addBusinessDays(todayStart, -6, timeZone),
+      end: addBusinessDays(todayStart, 1, timeZone),
       label: "7 hari terakhir",
     };
   }
 
   return {
-    start: addDays(todayStart, -29),
-    end: addDays(todayStart, 1),
+    start: addBusinessDays(todayStart, -29, timeZone),
+    end: addBusinessDays(todayStart, 1, timeZone),
     label: "30 hari terakhir",
   };
 }
@@ -542,7 +519,7 @@ function createApprovalConditions({
     conditions.push(eq(approvals.type, filters.type));
   }
 
-  const rangeBounds = getRangeBounds(filters);
+  const rangeBounds = getRangeBounds(filters, auth.organization.timezone);
 
   if (rangeBounds.start) {
     conditions.push(gte(approvals.createdAt, rangeBounds.start));

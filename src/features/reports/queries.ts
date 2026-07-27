@@ -32,6 +32,12 @@ import {
 } from "@/db/schema";
 import { getVisibleApprovalTypes } from "@/features/approvals/authorization";
 import type { AuthContext } from "@/lib/auth/session";
+import {
+  addBusinessDays,
+  getBusinessDateKey,
+  getStartOfBusinessDay,
+  getStartOfBusinessMonth,
+} from "@/lib/time/business-time";
 import type {
   ReportCashSnapshot,
   ReportOutletPerformanceRow,
@@ -60,75 +66,26 @@ import type {
   ReportTrendPoint,
 } from "./contracts";
 
-const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
-
 function parseAmount(value: string | number | null | undefined) {
   const amount = typeof value === "number" ? value : Number(value ?? 0);
 
   return Number.isFinite(amount) ? amount : 0;
 }
 
-function getJakartaDateParts(date: Date) {
-  const shiftedDate = new Date(date.getTime() + JAKARTA_OFFSET_MS);
-
-  return {
-    year: shiftedDate.getUTCFullYear(),
-    month: shiftedDate.getUTCMonth(),
-    day: shiftedDate.getUTCDate(),
-  };
-}
-
-function getJakartaDayStartUtc(date: Date, dayOffset = 0) {
-  const parts = getJakartaDateParts(date);
-
-  return new Date(
-    Date.UTC(parts.year, parts.month, parts.day + dayOffset) -
-      JAKARTA_OFFSET_MS,
-  );
-}
-
-function getJakartaMonthStartUtc(date: Date, monthOffset = 0) {
-  const parts = getJakartaDateParts(date);
-
-  return new Date(
-    Date.UTC(parts.year, parts.month + monthOffset, 1) - JAKARTA_OFFSET_MS,
-  );
-}
-
-function addUtcDays(date: Date, days: number) {
-  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
-}
-
-function getJakartaDateKey(date: Date) {
-  const parts = getJakartaDateParts(date);
-
-  return [
-    parts.year,
-    String(parts.month + 1).padStart(2, "0"),
-    String(parts.day).padStart(2, "0"),
-  ].join("-");
-}
-
-function getJakartaShortDateLabel(date: Date) {
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    timeZone: "Asia/Jakarta",
-  }).format(date);
-}
-
 function createPeriodMetadata({
   range,
   now,
+  timeZone,
 }: {
   range: ReportPeriodRange;
   now: Date;
+  timeZone: string;
 }): ReportPeriodMetadata {
-  const todayStart = getJakartaDayStartUtc(now);
-  const tomorrowStart = getJakartaDayStartUtc(now, 1);
+  const todayStart = getStartOfBusinessDay(now, timeZone);
+  const tomorrowStart = getStartOfBusinessDay(now, timeZone, 1);
 
   if (range === "yesterday") {
-    const currentStart = getJakartaDayStartUtc(now, -1);
+    const currentStart = getStartOfBusinessDay(now, timeZone, -1);
     const currentEnd = todayStart;
 
     return {
@@ -138,15 +95,15 @@ function createPeriodMetadata({
       comparisonLabel: "dari hari sebelumnya",
       currentStart,
       currentEnd,
-      previousStart: getJakartaDayStartUtc(now, -2),
+      previousStart: getStartOfBusinessDay(now, timeZone, -2),
       previousEnd: currentStart,
-      trendStart: addUtcDays(currentStart, -6),
+      trendStart: addBusinessDays(currentStart, -6, timeZone),
       trendEnd: currentEnd,
     };
   }
 
   if (range === "last7") {
-    const currentStart = getJakartaDayStartUtc(now, -6);
+    const currentStart = getStartOfBusinessDay(now, timeZone, -6);
     const currentEnd = tomorrowStart;
 
     return {
@@ -156,7 +113,7 @@ function createPeriodMetadata({
       comparisonLabel: "dari 7 hari sebelumnya",
       currentStart,
       currentEnd,
-      previousStart: addUtcDays(currentStart, -7),
+      previousStart: addBusinessDays(currentStart, -7, timeZone),
       previousEnd: currentStart,
       trendStart: currentStart,
       trendEnd: currentEnd,
@@ -164,7 +121,7 @@ function createPeriodMetadata({
   }
 
   if (range === "last30") {
-    const currentStart = getJakartaDayStartUtc(now, -29);
+    const currentStart = getStartOfBusinessDay(now, timeZone, -29);
     const currentEnd = tomorrowStart;
 
     return {
@@ -174,7 +131,7 @@ function createPeriodMetadata({
       comparisonLabel: "dari 30 hari sebelumnya",
       currentStart,
       currentEnd,
-      previousStart: addUtcDays(currentStart, -30),
+      previousStart: addBusinessDays(currentStart, -30, timeZone),
       previousEnd: currentStart,
       trendStart: currentStart,
       trendEnd: currentEnd,
@@ -182,7 +139,7 @@ function createPeriodMetadata({
   }
 
   if (range === "thisMonth") {
-    const currentStart = getJakartaMonthStartUtc(now);
+    const currentStart = getStartOfBusinessMonth(now, timeZone);
     const currentEnd = tomorrowStart;
     const currentDurationMs = currentEnd.getTime() - currentStart.getTime();
 
@@ -207,20 +164,32 @@ function createPeriodMetadata({
     comparisonLabel: "dari kemarin",
     currentStart: todayStart,
     currentEnd: tomorrowStart,
-    previousStart: getJakartaDayStartUtc(now, -1),
+    previousStart: getStartOfBusinessDay(now, timeZone, -1),
     previousEnd: todayStart,
-    trendStart: addUtcDays(todayStart, -6),
+    trendStart: addBusinessDays(todayStart, -6, timeZone),
     trendEnd: tomorrowStart,
   };
 }
 
-function createTrendSkeleton(start: Date, end: Date): ReportTrendPoint[] {
+function createTrendSkeleton(
+  start: Date,
+  end: Date,
+  timeZone: string,
+): ReportTrendPoint[] {
   const points: ReportTrendPoint[] = [];
 
-  for (let cursor = start; cursor < end; cursor = addUtcDays(cursor, 1)) {
+  for (
+    let cursor = start;
+    cursor < end;
+    cursor = addBusinessDays(cursor, 1, timeZone)
+  ) {
     points.push({
-      key: getJakartaDateKey(cursor),
-      label: getJakartaShortDateLabel(cursor),
+      key: getBusinessDateKey(cursor, timeZone),
+      label: new Intl.DateTimeFormat("id-ID", {
+        day: "2-digit",
+        month: "short",
+        timeZone,
+      }).format(cursor),
       revenue: 0,
       transactionCount: 0,
     });
@@ -264,7 +233,11 @@ function createEmptyData(
       availableStockCount: 0,
       stockReturnCount: 0,
     },
-    salesTrend: createTrendSkeleton(period.trendStart, period.trendEnd),
+    salesTrend: createTrendSkeleton(
+      period.trendStart,
+      period.trendEnd,
+      auth.organization.timezone,
+    ),
     paymentBreakdown: [],
     outletPerformance: [],
     recentSales: [],
@@ -294,7 +267,11 @@ export async function getReportSummaryData(
 ): Promise<ReportSummaryData> {
   const outletIds = getAccessibleOutletIds(auth, filters.outletId);
   const now = new Date();
-  const period = createPeriodMetadata({ range: filters.range, now });
+  const period = createPeriodMetadata({
+    range: filters.range,
+    now,
+    timeZone: auth.organization.timezone,
+  });
   const selectedOutlet = filters.outletId
     ? auth.outlets.find((outlet) => outlet.id === filters.outletId) ?? null
     : null;
@@ -319,7 +296,7 @@ export async function getReportSummaryData(
     lt(sales.completedAt, period.previousEnd),
   );
 
-  const trendBucketSql = sql<string>`to_char(${sales.completedAt} at time zone 'Asia/Jakarta', 'YYYY-MM-DD')`;
+  const trendBucketSql = sql<string>`to_char(${sales.completedAt} at time zone ${auth.organization.timezone}, 'YYYY-MM-DD')`;
   const visibleApprovalTypes = getVisibleApprovalTypes(auth);
   const approvalTypeCondition =
     visibleApprovalTypes.length > 0
@@ -402,8 +379,8 @@ export async function getReportSummaryData(
           lt(sales.completedAt, period.trendEnd),
         ),
       )
-      .groupBy(trendBucketSql)
-      .orderBy(trendBucketSql),
+      .groupBy(sql`1`)
+      .orderBy(sql`1`),
 
     db
       .select({
@@ -614,7 +591,11 @@ export async function getReportSummaryData(
     ]),
   );
 
-  const salesTrend = createTrendSkeleton(period.trendStart, period.trendEnd).map(
+  const salesTrend = createTrendSkeleton(
+    period.trendStart,
+    period.trendEnd,
+    auth.organization.timezone,
+  ).map(
     (point) => {
       const source = trendMap.get(point.key);
 
@@ -778,7 +759,11 @@ function createEmptySalesData(
       cashRevenue: 0,
       nonCashRevenue: 0,
     },
-    dailySales: createTrendSkeleton(period.trendStart, period.trendEnd).map(
+    dailySales: createTrendSkeleton(
+      period.trendStart,
+      period.trendEnd,
+      auth.organization.timezone,
+    ).map(
       (point) => ({ ...point, itemSold: 0, grossProfit: 0 }),
     ),
     paymentBreakdown: [],
@@ -851,7 +836,11 @@ export async function getReportSalesData(
 ): Promise<ReportSalesData> {
   const outletIds = getAccessibleOutletIds(auth, filters.outletId);
   const now = new Date();
-  const period = createPeriodMetadata({ range: filters.range, now });
+  const period = createPeriodMetadata({
+    range: filters.range,
+    now,
+    timeZone: auth.organization.timezone,
+  });
   const selectedOutlet = filters.outletId
     ? auth.outlets.find((outlet) => outlet.id === filters.outletId) ?? null
     : null;
@@ -880,7 +869,7 @@ export async function getReportSalesData(
     paymentMethodCondition,
     searchCondition,
   );
-  const dailyBucketSql = sql<string>`to_char(${sales.completedAt} at time zone 'Asia/Jakarta', 'YYYY-MM-DD')`;
+  const dailyBucketSql = sql<string>`to_char(${sales.completedAt} at time zone ${auth.organization.timezone}, 'YYYY-MM-DD')`;
 
   const [
     salesSummaryRows,
@@ -976,8 +965,8 @@ export async function getReportSalesData(
           paymentMethodCondition,
         ),
       )
-      .groupBy(dailyBucketSql)
-      .orderBy(dailyBucketSql),
+      .groupBy(sql`1`)
+      .orderBy(sql`1`),
 
     db
       .select({
@@ -998,8 +987,8 @@ export async function getReportSalesData(
           paymentMethodCondition,
         ),
       )
-      .groupBy(dailyBucketSql)
-      .orderBy(dailyBucketSql),
+      .groupBy(sql`1`)
+      .orderBy(sql`1`),
 
     db
       .select({
@@ -1157,7 +1146,11 @@ export async function getReportSalesData(
     ]),
   );
 
-  const dailySales = createTrendSkeleton(period.trendStart, period.trendEnd).map(
+  const dailySales = createTrendSkeleton(
+    period.trendStart,
+    period.trendEnd,
+    auth.organization.timezone,
+  ).map(
     (point) => {
       const revenueSource = dailyRevenueMap.get(point.key);
       const itemSource = dailyItemMap.get(point.key);
@@ -1267,7 +1260,11 @@ function createEmptyStockData(
       returnCount: 0,
       adjustmentCount: 0,
     },
-    movementTrend: createTrendSkeleton(period.trendStart, period.trendEnd).map(
+    movementTrend: createTrendSkeleton(
+      period.trendStart,
+      period.trendEnd,
+      auth.organization.timezone,
+    ).map(
       (point) => ({
         key: point.key,
         label: point.label,
@@ -1286,8 +1283,13 @@ function createEmptyStockData(
 
 function createStockTrendSkeleton(
   period: ReportPeriodMetadata,
+  timeZone: string,
 ): ReportStockTrendPoint[] {
-  return createTrendSkeleton(period.trendStart, period.trendEnd).map((point) => ({
+  return createTrendSkeleton(
+    period.trendStart,
+    period.trendEnd,
+    timeZone,
+  ).map((point) => ({
     key: point.key,
     label: point.label,
     stockInCount: 0,
@@ -1303,7 +1305,11 @@ export async function getReportStockData(
 ): Promise<ReportStockData> {
   const outletIds = getAccessibleOutletIds(auth, filters.outletId);
   const now = new Date();
-  const period = createPeriodMetadata({ range: filters.range, now });
+  const period = createPeriodMetadata({
+    range: filters.range,
+    now,
+    timeZone: auth.organization.timezone,
+  });
   const selectedOutlet = filters.outletId
     ? auth.outlets.find((outlet) => outlet.id === filters.outletId) ?? null
     : null;
@@ -1355,7 +1361,7 @@ export async function getReportStockData(
     eq(productItems.availability, "available"),
     inArray(productItems.currentOutletId, outletIds),
   );
-  const movementBucketSql = sql<string>`to_char(${inventoryMovements.occurredAt} at time zone 'Asia/Jakarta', 'YYYY-MM-DD')`;
+  const movementBucketSql = sql<string>`to_char(${inventoryMovements.occurredAt} at time zone ${auth.organization.timezone}, 'YYYY-MM-DD')`;
   const outletIdSqlList = sql.join(
     outletIds.map((outletId) => sql`${outletId}`),
     sql`, `,
@@ -1428,8 +1434,8 @@ export async function getReportStockData(
           movementTypeCondition,
         ),
       )
-      .groupBy(movementBucketSql)
-      .orderBy(movementBucketSql),
+      .groupBy(sql`1`)
+      .orderBy(sql`1`),
 
     db
       .select({
@@ -1580,7 +1586,10 @@ export async function getReportStockData(
       },
     ]),
   );
-  const movementTrend = createStockTrendSkeleton(period).map((point) => {
+  const movementTrend = createStockTrendSkeleton(
+    period,
+    auth.organization.timezone,
+  ).map((point) => {
     const source = trendMap.get(point.key);
 
     return {

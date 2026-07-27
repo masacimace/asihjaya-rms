@@ -45,50 +45,29 @@ import {
 } from "@/features/sales/admin-contracts";
 import { createReceiptVerificationUrl } from "@/features/sales/verification/receipt-token";
 import type { AuthContext } from "@/lib/auth/session";
+import {
+  getStartOfBusinessDay,
+  getStartOfBusinessMonth,
+} from "@/lib/time/business-time";
 
 const approvalRequestedByUsers = alias(users, "sales_detail_approval_requested_by_users");
 const approvalApprovedByUsers = alias(users, "sales_detail_approval_approved_by_users");
 const approvalExecutedByUsers = alias(users, "sales_detail_approval_executed_by_users");
 const paymentCoVerifiedByUsers = alias(users, "sales_detail_payment_co_verified_by_users");
 
-const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
-
-function getJakartaDateParts(date: Date) {
-  const shiftedDate = new Date(date.getTime() + JAKARTA_OFFSET_MS);
-
-  return {
-    year: shiftedDate.getUTCFullYear(),
-    month: shiftedDate.getUTCMonth(),
-    day: shiftedDate.getUTCDate(),
-  };
-}
-
-function getJakartaDayStartUtc(date: Date, dayOffset = 0) {
-  const parts = getJakartaDateParts(date);
-
-  return new Date(
-    Date.UTC(parts.year, parts.month, parts.day + dayOffset) -
-      JAKARTA_OFFSET_MS,
-  );
-}
-
-function getJakartaMonthStartUtc(date: Date, monthOffset = 0) {
-  const parts = getJakartaDateParts(date);
-
-  return new Date(
-    Date.UTC(parts.year, parts.month + monthOffset, 1) - JAKARTA_OFFSET_MS,
-  );
-}
-
-function createSalesPeriod(range: AdminSalesFilters["dateRange"], now = new Date()): AdminSalesPeriod {
-  const todayStart = getJakartaDayStartUtc(now);
-  const tomorrowStart = getJakartaDayStartUtc(now, 1);
+function createSalesPeriod(
+  range: AdminSalesFilters["dateRange"],
+  timeZone: string,
+  now = new Date(),
+): AdminSalesPeriod {
+  const todayStart = getStartOfBusinessDay(now, timeZone);
+  const tomorrowStart = getStartOfBusinessDay(now, timeZone, 1);
 
   if (range === "yesterday") {
     return {
       range,
       label: "Kemarin",
-      start: getJakartaDayStartUtc(now, -1),
+      start: getStartOfBusinessDay(now, timeZone, -1),
       end: todayStart,
     };
   }
@@ -97,7 +76,7 @@ function createSalesPeriod(range: AdminSalesFilters["dateRange"], now = new Date
     return {
       range,
       label: "7 hari terakhir",
-      start: getJakartaDayStartUtc(now, -6),
+      start: getStartOfBusinessDay(now, timeZone, -6),
       end: tomorrowStart,
     };
   }
@@ -106,7 +85,7 @@ function createSalesPeriod(range: AdminSalesFilters["dateRange"], now = new Date
     return {
       range,
       label: "30 hari terakhir",
-      start: getJakartaDayStartUtc(now, -29),
+      start: getStartOfBusinessDay(now, timeZone, -29),
       end: tomorrowStart,
     };
   }
@@ -115,7 +94,7 @@ function createSalesPeriod(range: AdminSalesFilters["dateRange"], now = new Date
     return {
       range,
       label: "Bulan ini",
-      start: getJakartaMonthStartUtc(now),
+      start: getStartOfBusinessMonth(now, timeZone),
       end: tomorrowStart,
     };
   }
@@ -416,7 +395,7 @@ export async function getAdminSalesListData(
   auth: AuthContext,
   filters: AdminSalesFilters,
 ): Promise<AdminSalesListData> {
-  const period = createSalesPeriod(filters.dateRange);
+  const period = createSalesPeriod(filters.dateRange, auth.organization.timezone);
   const { outletIds, conditions } = createSalesConditions({
     auth,
     filters,
@@ -767,7 +746,7 @@ export async function getAdminSalesExportRows(
   auth: AuthContext,
   filters: AdminSalesFilters,
 ): Promise<AdminSalesExportRow[]> {
-  const period = createSalesPeriod(filters.dateRange);
+  const period = createSalesPeriod(filters.dateRange, auth.organization.timezone);
   const { outletIds, conditions } = createSalesConditions({
     auth,
     filters,

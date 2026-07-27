@@ -22,6 +22,7 @@ import {
   deleteReconciliationEvidenceFile,
   storeReconciliationEvidenceFile,
 } from "@/lib/storage/reconciliation-evidence-storage";
+import { getStartOfBusinessDateKey } from "@/lib/time/business-time";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -52,10 +53,8 @@ function parseOptionalMoney(value: FormDataEntryValue | null) {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : Number.NaN;
 }
 
-function parseSettlementDate(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const date = new Date(`${value}T00:00:00+07:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
+function parseSettlementDate(value: string, timeZone: string) {
+  return getStartOfBusinessDateKey(value, timeZone);
 }
 
 function getDetailPath(paymentId: string) {
@@ -123,7 +122,7 @@ export async function savePaymentReconciliationAction(formData: FormData) {
     readText(formData, "settlementReference", 160) || null;
   const settlementDateInput = readText(formData, "settlementDate", 10);
   const settlementDate = settlementDateInput
-    ? parseSettlementDate(settlementDateInput)
+    ? parseSettlementDate(settlementDateInput, auth.organization.timezone)
     : null;
   const notes = readText(formData, "notes", 1200) || null;
   const removeEvidence = formData.get("removeEvidence") === "on";

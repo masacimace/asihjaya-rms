@@ -6,12 +6,15 @@ import {
   getSaleCorrectionEligibility,
 } from "../src/features/sales/correction-eligibility";
 
+const timeZone = "Asia/Jakarta";
+
 const sameDayOpen = getSaleCorrectionEligibility({
   saleStatus: "completed",
   shiftStatus: "open",
   completedAt: new Date("2026-07-13T02:00:00.000Z"),
   hasReturnCase: false,
   now: new Date("2026-07-13T10:00:00.000Z"),
+  timeZone,
 });
 assert.equal(sameDayOpen.voidEligibleBySystem, true);
 assert.equal(
@@ -42,6 +45,7 @@ const closedShift = getSaleCorrectionEligibility({
   completedAt: new Date("2026-07-13T02:00:00.000Z"),
   hasReturnCase: false,
   now: new Date("2026-07-13T10:00:00.000Z"),
+  timeZone,
 });
 assert.equal(closedShift.voidEligibleBySystem, false);
 assert.equal(
@@ -58,6 +62,7 @@ const existingReturn = getSaleCorrectionEligibility({
   completedAt: new Date("2026-07-13T02:00:00.000Z"),
   hasReturnCase: true,
   now: new Date("2026-07-13T10:00:00.000Z"),
+  timeZone,
 });
 assert.equal(existingReturn.canRequestCorrection, false);
 

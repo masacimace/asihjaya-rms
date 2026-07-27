@@ -36,42 +36,37 @@ import {
   type ReconciliationStatus,
 } from "@/features/reconciliation/contracts";
 import type { AuthContext } from "@/lib/auth/session";
+import { getStartOfBusinessDay } from "@/lib/time/business-time";
 
 const reconciledByUsers = alias(users, "reconciliation_reconciled_by_users");
 const resolvedByUsers = alias(users, "reconciliation_resolved_by_users");
-const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
-
-function getJakartaDateParts(date: Date) {
-  const shifted = new Date(date.getTime() + JAKARTA_OFFSET_MS);
-  return {
-    year: shifted.getUTCFullYear(),
-    month: shifted.getUTCMonth(),
-    day: shifted.getUTCDate(),
-  };
-}
-
-function getJakartaDayStartUtc(date: Date, offsetDays = 0) {
-  const parts = getJakartaDateParts(date);
-  return new Date(
-    Date.UTC(parts.year, parts.month, parts.day + offsetDays) -
-      JAKARTA_OFFSET_MS,
-  );
-}
-
-function getPeriod(range: ReconciliationFilters["range"], now = new Date()) {
-  const today = getJakartaDayStartUtc(now);
-  const tomorrow = getJakartaDayStartUtc(now, 1);
+function getPeriod(
+  range: ReconciliationFilters["range"],
+  timeZone: string,
+  now = new Date(),
+) {
+  const today = getStartOfBusinessDay(now, timeZone);
+  const tomorrow = getStartOfBusinessDay(now, timeZone, 1);
 
   if (range === "yesterday") {
-    return { start: getJakartaDayStartUtc(now, -1), end: today };
+    return {
+      start: getStartOfBusinessDay(now, timeZone, -1),
+      end: today,
+    };
   }
 
   if (range === "7d") {
-    return { start: getJakartaDayStartUtc(now, -6), end: tomorrow };
+    return {
+      start: getStartOfBusinessDay(now, timeZone, -6),
+      end: tomorrow,
+    };
   }
 
   if (range === "30d") {
-    return { start: getJakartaDayStartUtc(now, -29), end: tomorrow };
+    return {
+      start: getStartOfBusinessDay(now, timeZone, -29),
+      end: tomorrow,
+    };
   }
 
   if (range === "all") return { start: null, end: null };
@@ -132,7 +127,7 @@ function buildConditions(
     conditions.push(eq(payments.settlementStatus, filters.status));
   }
 
-  const period = getPeriod(filters.range);
+  const period = getPeriod(filters.range, auth.organization.timezone);
   if (period.start) conditions.push(gte(payments.paidAt, period.start));
   if (period.end) conditions.push(lt(payments.paidAt, period.end));
 

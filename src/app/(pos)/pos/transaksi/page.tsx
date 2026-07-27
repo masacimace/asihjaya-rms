@@ -811,6 +811,7 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
       query,
       range,
       shiftId,
+      timeZone: auth.organization.timezone,
     }),
     detailId
       ? getPosTransactionDetailData({

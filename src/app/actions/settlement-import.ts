@@ -448,7 +448,15 @@ export async function analyzeSettlementImportAction(formData: FormData) {
 
       const normalizedRows = rawRows.map((row) => {
         try {
-          return { id: row.id, value: normalizeSettlementImportRow(row.rawData ?? {}, mapping), error: null };
+          return {
+            id: row.id,
+            value: normalizeSettlementImportRow(
+              row.rawData ?? {},
+              mapping,
+              auth.organization.timezone,
+            ),
+            error: null,
+          };
         } catch (error) {
           return {
             id: row.id,

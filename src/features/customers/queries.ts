@@ -44,26 +44,8 @@ import {
   getCustomerDepositLedgerEntries,
 } from "@/features/customer-deposits/queries";
 import type { AuthContext } from "@/lib/auth/session";
+import { getStartOfBusinessMonth } from "@/lib/time/business-time";
 
-const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
-
-function getJakartaDateParts(date: Date) {
-  const shiftedDate = new Date(date.getTime() + JAKARTA_OFFSET_MS);
-
-  return {
-    year: shiftedDate.getUTCFullYear(),
-    month: shiftedDate.getUTCMonth(),
-    day: shiftedDate.getUTCDate(),
-  };
-}
-
-function getJakartaMonthStartUtc(date: Date, monthOffset = 0) {
-  const parts = getJakartaDateParts(date);
-
-  return new Date(
-    Date.UTC(parts.year, parts.month + monthOffset, 1) - JAKARTA_OFFSET_MS,
-  );
-}
 
 function parseAmount(value: string | null | undefined) {
   if (!value) {
@@ -232,7 +214,10 @@ export async function getAdminCustomerListData(
     outletIds,
   });
   const completedSaleWhereClause = and(...completedSaleConditions);
-  const thisMonthStart = getJakartaMonthStartUtc(new Date());
+  const thisMonthStart = getStartOfBusinessMonth(
+    new Date(),
+    auth.organization.timezone,
+  );
 
   const [totalRows, activeRows, inactiveRows, newRows, transactionSummaryRows] =
     await Promise.all([

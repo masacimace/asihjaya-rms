@@ -34,6 +34,7 @@ import {
   shifts,
   users,
 } from "@/db/schema";
+import { getStartOfBusinessDay } from "@/lib/time/business-time";
 import {
   DEFAULT_MANUAL_PAYMENT_POLICIES,
   isNonCashManualPaymentMethod,
@@ -1180,23 +1181,24 @@ function normalizeTransactionRange(range?: string | null): PosTransactionRange {
   return "today";
 }
 
-function getTransactionRangeStart(range: PosTransactionRange) {
+function getTransactionRangeStart(
+  range: PosTransactionRange,
+  timeZone: string,
+  now = new Date(),
+) {
   if (range === "all") {
     return null;
   }
 
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-
   if (range === "7d") {
-    start.setDate(start.getDate() - 6);
+    return getStartOfBusinessDay(now, timeZone, -6);
   }
 
   if (range === "30d") {
-    start.setDate(start.getDate() - 29);
+    return getStartOfBusinessDay(now, timeZone, -29);
   }
 
-  return start;
+  return getStartOfBusinessDay(now, timeZone);
 }
 
 function createEmptyPosShiftOverview(): PosShiftOverviewData {
@@ -2186,12 +2188,14 @@ export async function getPosTransactionListData({
   query,
   range,
   shiftId,
+  timeZone,
 }: {
   organizationId: string;
   outletId?: string | null;
   query?: string | null;
   range?: string | null;
   shiftId?: string | null;
+  timeZone: string;
 }): Promise<PosTransactionListData> {
   const normalizedRange = normalizeTransactionRange(range);
   const normalizedQuery = query?.trim() ?? "";
@@ -2278,7 +2282,7 @@ export async function getPosTransactionListData({
     eq(sales.status, "completed"),
   ];
 
-  const rangeStart = getTransactionRangeStart(normalizedRange);
+  const rangeStart = getTransactionRangeStart(normalizedRange, timeZone);
 
   if (rangeStart) {
     filters.push(gte(sales.createdAt, rangeStart));

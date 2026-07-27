@@ -475,6 +475,7 @@ export default async function SaleDetailPage({
     shiftStatus: sale.shift.status,
     completedAt: sale.completedAt,
     hasReturnCase: Boolean(returnCaseSummary),
+    timeZone: auth.organization.timezone,
   });
   const latestPrintJob = sale.hardwareJobs[0] ?? null;
   const printStatus = latestPrintJob?.status ?? "not_queued";

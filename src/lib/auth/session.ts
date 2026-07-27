@@ -38,6 +38,7 @@ export type AuthContext = {
     id: string;
     name: string;
     slug: string;
+    timezone: string;
   };
 
   user: {
@@ -140,6 +141,7 @@ export async function getCurrentAuth(): Promise<AuthContext | null> {
       organizationId: organizations.id,
       organizationName: organizations.name,
       organizationSlug: organizations.slug,
+      organizationTimezone: organizations.timezone,
 
       userId: users.id,
       email: users.email,
@@ -205,6 +207,7 @@ export async function getCurrentAuth(): Promise<AuthContext | null> {
       id: session.organizationId,
       name: session.organizationName,
       slug: session.organizationSlug,
+      timezone: session.organizationTimezone,
     },
 
     user: {

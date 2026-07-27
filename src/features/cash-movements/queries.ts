@@ -33,8 +33,8 @@ import {
   type CashMovementType,
 } from "@/features/cash-movements/contracts";
 import type { AuthContext } from "@/lib/auth/session";
+import { addBusinessDays, getStartOfBusinessDay } from "@/lib/time/business-time";
 
-const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 function parseAmount(value: string | null | undefined) {
   if (!value) return 0;
@@ -44,32 +44,10 @@ function parseAmount(value: string | null | undefined) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
-function getJakartaDateParts(date: Date) {
-  const shiftedDate = new Date(date.getTime() + JAKARTA_OFFSET_MS);
-
-  return {
-    year: shiftedDate.getUTCFullYear(),
-    month: shiftedDate.getUTCMonth(),
-    day: shiftedDate.getUTCDate(),
-  };
-}
-
-function getJakartaDayStartUtc(date: Date) {
-  const parts = getJakartaDateParts(date);
-
-  return new Date(
-    Date.UTC(parts.year, parts.month, parts.day) - JAKARTA_OFFSET_MS,
-  );
-}
-
-function addDays(date: Date, days: number) {
-  const result = new Date(date);
-  result.setUTCDate(result.getUTCDate() + days);
-
-  return result;
-}
-
-function getRangeBounds(filters: AdminCashMovementFilters) {
+function getRangeBounds(
+  filters: AdminCashMovementFilters,
+  timeZone: string,
+) {
   if (filters.range === "all") {
     return {
       start: null,
@@ -78,27 +56,27 @@ function getRangeBounds(filters: AdminCashMovementFilters) {
     };
   }
 
-  const todayStart = getJakartaDayStartUtc(new Date());
+  const todayStart = getStartOfBusinessDay(new Date(), timeZone);
 
   if (filters.range === "7d") {
     return {
-      start: addDays(todayStart, -6),
-      end: addDays(todayStart, 1),
+      start: addBusinessDays(todayStart, -6, timeZone),
+      end: addBusinessDays(todayStart, 1, timeZone),
       label: "7 hari terakhir",
     };
   }
 
   if (filters.range === "30d") {
     return {
-      start: addDays(todayStart, -29),
-      end: addDays(todayStart, 1),
+      start: addBusinessDays(todayStart, -29, timeZone),
+      end: addBusinessDays(todayStart, 1, timeZone),
       label: "30 hari terakhir",
     };
   }
 
   return {
     start: todayStart,
-    end: addDays(todayStart, 1),
+    end: addBusinessDays(todayStart, 1, timeZone),
     label: "Hari ini",
   };
 }
@@ -153,7 +131,7 @@ function createMovementConditions({
     conditions.push(eq(cashMovements.type, filters.type));
   }
 
-  const rangeBounds = getRangeBounds(filters);
+  const rangeBounds = getRangeBounds(filters, auth.organization.timezone);
 
   if (rangeBounds.start) {
     conditions.push(gte(cashMovements.createdAt, rangeBounds.start));
@@ -319,7 +297,7 @@ export async function getAdminCashMovementListData(
     outletIds,
   });
   const whereClause = and(...conditions);
-  const rangeBounds = getRangeBounds(filters);
+  const rangeBounds = getRangeBounds(filters, auth.organization.timezone);
 
   if (!whereClause) {
     return createEmptyData(auth, filters, periodLabel);

@@ -1,3 +1,5 @@
+import { getBusinessDateKey } from "@/lib/time/business-time";
+
 export type SaleCorrectionType = "void" | "refund";
 export type DeliveryAnswer = "not_delivered" | "delivered" | "unsure";
 export type PaymentAnswer = "received" | "not_received" | "unsure";
@@ -12,23 +14,13 @@ export type SaleCorrectionEligibility = {
   blockers: string[];
 };
 
-const JAKARTA_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Asia/Jakarta",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
-function jakartaDateKey(value: Date) {
-  return JAKARTA_DATE_FORMATTER.format(value);
-}
-
 export function getSaleCorrectionEligibility(input: {
   saleStatus: string;
   shiftStatus: string | null;
   completedAt: Date | null;
   hasReturnCase: boolean;
   now?: Date;
+  timeZone: string;
 }): SaleCorrectionEligibility {
   const blockers: string[] = [];
   const now = input.now ?? new Date();
@@ -42,7 +34,9 @@ export function getSaleCorrectionEligibility(input: {
   }
 
   const sameBusinessDate = Boolean(
-    input.completedAt && jakartaDateKey(input.completedAt) === jakartaDateKey(now),
+    input.completedAt &&
+      getBusinessDateKey(input.completedAt, input.timeZone) ===
+        getBusinessDateKey(now, input.timeZone),
   );
   const shiftOpen = input.shiftStatus === "open";
   const voidEligibleBySystem =

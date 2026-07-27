@@ -36,6 +36,11 @@ import {
 } from "@/features/notifications/hardware";
 import { runNotificationMaintenanceForOrganization } from "@/features/notifications/maintenance";
 import type { AuthContext } from "@/lib/auth/session";
+import {
+  addBusinessDays,
+  getStartOfBusinessDateKey,
+  getStartOfBusinessDay,
+} from "@/lib/time/business-time";
 
 const ACTIONABLE_RECIPIENT_STATUSES = [
   "unread",
@@ -195,62 +200,54 @@ export async function getAdminNotificationDrawerData(
   };
 }
 
-function jakartaDateString(date = new Date()) {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: "Asia/Jakarta",
-  }).format(date);
-}
-
-function formatPeriodDate(date: Date) {
+function formatPeriodDate(date: Date, timeZone: string) {
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-    timeZone: "Asia/Jakarta",
+    timeZone,
   }).format(date);
 }
 
-function startOfJakartaDate(value: string) {
-  return new Date(`${value}T00:00:00+07:00`);
-}
-
-function addDays(date: Date, days: number) {
-  return new Date(date.getTime() + days * 86_400_000);
-}
-
-function getNotificationRangeBounds(filters: AdminNotificationFilters) {
+function getNotificationRangeBounds(
+  filters: AdminNotificationFilters,
+  timeZone: string,
+) {
   if (filters.range === "all") {
     return { start: null, end: null, label: "Semua waktu" };
   }
 
   if (filters.range === "custom") {
-    const from = filters.from ? startOfJakartaDate(filters.from) : null;
-    const to = filters.to ? addDays(startOfJakartaDate(filters.to), 1) : null;
+    const from = filters.from
+      ? getStartOfBusinessDateKey(filters.from, timeZone)
+      : null;
+    const toStart = filters.to
+      ? getStartOfBusinessDateKey(filters.to, timeZone)
+      : null;
+    const to = toStart ? addBusinessDays(toStart, 1, timeZone) : null;
 
     if (from && to && from >= to) {
       return {
         start: from,
-        end: addDays(from, 1),
-        label: formatPeriodDate(from),
+        end: addBusinessDays(from, 1, timeZone),
+        label: formatPeriodDate(from, timeZone),
       };
     }
 
     const label =
-      from && to
-        ? `${formatPeriodDate(from)} – ${formatPeriodDate(addDays(to, -1))}`
+      from && toStart
+        ? `${formatPeriodDate(from, timeZone)} – ${formatPeriodDate(toStart, timeZone)}`
         : from
-          ? `Mulai ${formatPeriodDate(from)}`
-          : to
-            ? `Sampai ${formatPeriodDate(addDays(to, -1))}`
+          ? `Mulai ${formatPeriodDate(from, timeZone)}`
+          : toStart
+            ? `Sampai ${formatPeriodDate(toStart, timeZone)}`
             : "Semua waktu";
 
     return { start: from, end: to, label };
   }
 
-  const today = startOfJakartaDate(jakartaDateString());
+  const now = new Date();
+  const today = getStartOfBusinessDay(now, timeZone);
   const days =
     filters.range === "today"
       ? 1
@@ -259,8 +256,8 @@ function getNotificationRangeBounds(filters: AdminNotificationFilters) {
         : filters.range === "90d"
           ? 90
           : 30;
-  const start = addDays(today, -(days - 1));
-  const end = addDays(today, 1);
+  const start = addBusinessDays(today, -(days - 1), timeZone);
+  const end = addBusinessDays(today, 1, timeZone);
 
   return {
     start,
@@ -268,7 +265,7 @@ function getNotificationRangeBounds(filters: AdminNotificationFilters) {
     label:
       filters.range === "today"
         ? "Hari ini"
-        : `${formatPeriodDate(start)} – ${formatPeriodDate(today)}`,
+        : `${formatPeriodDate(start, timeZone)} – ${formatPeriodDate(today, timeZone)}`,
   };
 }
 
@@ -313,7 +310,10 @@ function createNotificationPageBaseConditions({
     conditions.push(eq(notificationEvents.severity, filters.severity));
   }
 
-  const range = getNotificationRangeBounds(filters);
+  const range = getNotificationRangeBounds(
+    filters,
+    auth.organization.timezone,
+  );
   if (range.start) conditions.push(gte(notificationEvents.occurredAt, range.start));
   if (range.end) conditions.push(lt(notificationEvents.occurredAt, range.end));
 
