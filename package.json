@@ -1,6 +1,6 @@
 {
   "name": "asihjaya-rms",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "private": true,
   "engines": {
@@ -13,46 +13,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "routes:check": "tsx scripts/check-routes.ts",
-    "check:p0d": "tsx scripts/check-p0d-checkout-recovery.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
-    "db:studio": "drizzle-kit studio",
-    "hardware:agent:create": "tsx scripts/create-hardware-agent.ts",
-    "check:hardware:v2-foundation": "tsx scripts/check-hardware-protocol-v2-foundation.ts",
-    "check:hardware:v2-claim-lease": "tsx scripts/check-hardware-protocol-v2-claim-lease.ts",
-    "db:preflight:p0a": "tsx scripts/preflight-p0a.ts",
-    "check:p1a": "tsx scripts/check-p1a-manual-payment-verification.ts",
-    "db:preflight:p1a": "tsx scripts/preflight-p1a.ts",
-    "payment:evidence:cleanup": "tsx scripts/cleanup-payment-evidence.ts",
-    "check:p1a1": "tsx scripts/check-p1a1-fast-manual-payment-ux.ts",
-    "db:preflight:p1a1": "tsx scripts/preflight-p1a1.ts",
-    "check:p1b": "tsx scripts/check-p1b-return-workflow.ts",
-    "db:preflight:p1b": "tsx scripts/preflight-p1b.ts",
-    "db:repair:p1b-legacy-refund": "tsx scripts/repair-p1b-legacy-refund-ledger.ts",
-    "check:p1b1": "tsx scripts/check-p1b1-transaction-correction.ts",
-    "check:p1c1": "tsx scripts/check-p1c1-payment-reconciliation.ts",
-    "db:preflight:p1c1": "tsx scripts/preflight-p1c1.ts",
-    "check:p1c2": "tsx scripts/check-p1c2-settlement-import.ts",
-    "db:preflight:p1c2": "tsx scripts/preflight-p1c2.ts",
-    "check:notifications:v1a": "tsx scripts/check-notification-center-v1a.ts",
-    "check:notifications:v1b": "tsx scripts/check-notification-center-v1b.ts",
-    "check:notifications:v1c": "tsx scripts/check-notification-center-v1c.ts",
-    "check:notifications:v1d": "tsx scripts/check-notification-center-v1d.ts",
-    "check:notifications:v1e": "tsx scripts/check-notification-center-v1e.ts",
-    "check:notifications:v1f": "tsx scripts/check-notification-center-v1f.ts",
-    "db:preflight:notifications:v1a": "tsx scripts/preflight-notification-center-v1a.ts",
-    "db:repair:p1c2-history": "tsx scripts/repair-p1c2-migration-history.ts",
-    "check:hardware:v2-agent": "tsx scripts/check-hardware-protocol-v2-agent.ts",
-    "check:hardware:v2-producers": "tsx scripts/check-hardware-protocol-v2-producers.ts",
-    "check:hardware:v2-operations": "tsx scripts/check-hardware-protocol-v2-operations.ts",
-    "check:hardware:v2-simulation": "tsx scripts/check-hardware-protocol-v2-simulation.ts",
-    "check:hardware:v2-dpapi": "tsx scripts/check-hardware-protocol-v2-dpapi.ts",
-    "check:hardware:v2-windows-operations": "tsx scripts/check-hardware-protocol-v2-windows-operations.ts",
-    "check:hardware:v2-receipt-a4": "tsx scripts/check-hardware-receipt-a4.tsx && node hardware-hub/scripts/check-document-print-profiles.js",
-    "check:hardware:v2-sato": "tsx scripts/check-hardware-sato-cg408tt.ts && node hardware-hub/scripts/check-sato-label-profiles.js",
-    "docs:hardware:setup-guide": "tsx scripts/generate-hardware-setup-guide-doc.ts",
-    "check:hardware:v2-outlet-readiness": "tsx scripts/check-hardware-outlet-readiness.ts && node hardware-hub/scripts/check-outlet-readiness-pack.js"
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",
@@ -84,5 +48,12 @@
     "tailwindcss": "^4.1.0",
     "tsx": "^4.22.4",
     "typescript": "^5.9.3"
+  },
+  "allowScripts": {
+    "esbuild@0.18.20": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.1": true,
+    "sharp@0.34.5": true,
+    "unrs-resolver@1.12.2": true
   }
 }

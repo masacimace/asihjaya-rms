@@ -1,1 +1,0 @@
-ALTER TYPE "public"."approval_type" ADD VALUE 'refund_transaction' BEFORE 'stock_adjustment';

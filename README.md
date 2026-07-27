@@ -62,21 +62,21 @@ Konfigurasi operasional saat ini:
 
 ## Modul Utama
 
-| Modul | Fungsi | Status |
-|---|---|---|
-| Admin Dashboard | Ringkasan operasional dan monitoring | Aktif |
-| POS | Checkout, pembayaran, invoice, dan recovery | Aktif |
-| Produk Master | Data produk dan foto | Aktif |
-| Inventaris | Item fisik, barcode, availability, dan movement | Aktif |
-| Penjualan | Riwayat, detail, dan koreksi transaksi | Aktif |
-| Approval | Maker-checker untuk tindakan sensitif | Aktif |
-| Refund & Return | Refund finansial dan inspeksi barang fisik | Aktif |
-| Rekonsiliasi | Review settlement dan mismatch | Aktif |
-| Settlement Import | CSV import dan auto-matching | Aktif |
-| Notification Center | Event, recipient, filter, archive, auto-resolution | Aktif |
-| Hardware Hub | Device monitoring dan print-job foundation | Development |
-| Settings Center | Pengaturan terpusat | Planned |
-| Midtrans | QRIS payment gateway | On hold |
+| Modul               | Fungsi                                             | Status      |
+| ------------------- | -------------------------------------------------- | ----------- |
+| Admin Dashboard     | Ringkasan operasional dan monitoring               | Aktif       |
+| POS                 | Checkout, pembayaran, invoice, dan recovery        | Aktif       |
+| Produk Master       | Data produk dan foto                               | Aktif       |
+| Inventaris          | Item fisik, barcode, availability, dan movement    | Aktif       |
+| Penjualan           | Riwayat, detail, dan koreksi transaksi             | Aktif       |
+| Approval            | Maker-checker untuk tindakan sensitif              | Aktif       |
+| Refund & Return     | Refund finansial dan inspeksi barang fisik         | Aktif       |
+| Rekonsiliasi        | Review settlement dan mismatch                     | Aktif       |
+| Settlement Import   | CSV import dan auto-matching                       | Aktif       |
+| Notification Center | Event, recipient, filter, archive, auto-resolution | Aktif       |
+| Hardware Hub        | Device monitoring dan print-job foundation         | Development |
+| Settings Center     | Pengaturan terpusat                                | Planned     |
+| Midtrans            | QRIS payment gateway                               | On hold     |
 
 ## Arsitektur
 
@@ -131,13 +131,14 @@ Operasi finansial penting menggunakan database transaction, idempotency, constra
 - Playwright foundation
 - Local Hardware Hub
 
-## Persyaratan Development
+## Local Development
 
-- Windows 10/11, macOS, atau Linux
+- Windows 10
 - Node.js 22 atau 24 LTS
 - npm
 - Docker Desktop atau Docker Engine dengan Compose
 - Git
+- Vscode
 
 ## First-time Local Setup
 
@@ -221,24 +222,24 @@ Setelah `npm run dev`, buka:
 
 ## Route Utama
 
-| Route | Fungsi |
-|---|---|
-| `/login` | Login |
-| `/admin` | Admin Dashboard |
-| `/pos` | Point of Sale |
-| `/admin/produk` | Product master |
-| `/admin/inventaris` | Inventory items |
-| `/admin/penjualan` | Riwayat transaksi |
-| `/admin/pelanggan` | Daftar customer |
-| `/admin/operasional/shift` | Shift kasir |
-| `/admin/operasional/approval` | Riwayat approval |
-| `/admin/operasional/kas` | Pergerakan kas |
-| `/admin/operasional/hardware` | Hardware Hub |
-| `/admin/keuangan/rekonsiliasi` | Payment reconciliation |
-| `/admin/keuangan/rekonsiliasi/import` | Settlement import |
-| `/admin/notifikasi` | Notification Center |
-| `/admin/administrasi` | User, role, dan administrasi |
-| `/admin/pengaturan` | Settings Center |
+| Route                                 | Fungsi                       |
+| ------------------------------------- | ---------------------------- |
+| `/login`                              | Login                        |
+| `/admin`                              | Admin Dashboard              |
+| `/pos`                                | Point of Sale                |
+| `/admin/produk`                       | Product master               |
+| `/admin/inventaris`                   | Inventory items              |
+| `/admin/penjualan`                    | Riwayat transaksi            |
+| `/admin/pelanggan`                    | Daftar customer              |
+| `/admin/operasional/shift`            | Shift kasir                  |
+| `/admin/operasional/approval`         | Riwayat approval             |
+| `/admin/operasional/kas`              | Pergerakan kas               |
+| `/admin/operasional/hardware`         | Hardware Hub                 |
+| `/admin/keuangan/rekonsiliasi`        | Payment reconciliation       |
+| `/admin/keuangan/rekonsiliasi/import` | Settlement import            |
+| `/admin/notifikasi`                   | Notification Center          |
+| `/admin/administrasi`                 | User, role, dan administrasi |
+| `/admin/pengaturan`                   | Settings Center              |
 
 Route dan server action tetap dilindungi oleh backend authorization. Visibility menu pada navbar bukan pengganti pemeriksaan permission.
 
