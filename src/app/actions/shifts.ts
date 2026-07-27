@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission } from "@/lib/auth/session";
 import {
   closeShiftWithReconciliation,
@@ -23,13 +24,9 @@ function redirectWithMessage(type: "success" | "error", message: string): never 
 
 async function getRequestMetadata() {
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
 
   return {
-    ipAddress:
-      forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-      headerStore.get("x-real-ip")?.slice(0, 64) ??
-      null,
+    ipAddress: getClientIp(headerStore),
     userAgent: headerStore.get("user-agent"),
   };
 }

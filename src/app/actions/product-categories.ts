@@ -15,6 +15,7 @@ import {
   isUuid,
   type CategoryActionState,
 } from "@/features/products/category-contracts";
+import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission } from "@/lib/auth/session";
 
 const CATEGORY_CODE_PATTERN = /^[A-Z0-9][A-Z0-9_-]{1,31}$/;
@@ -63,12 +64,8 @@ function readDisplayOrder(formData: FormData): number | null {
 
 async function getRequestMetadata() {
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
 
-  const ipAddress =
-    forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-    headerStore.get("x-real-ip")?.slice(0, 64) ??
-    null;
+  const ipAddress = getClientIp(headerStore);
 
   return {
     ipAddress,

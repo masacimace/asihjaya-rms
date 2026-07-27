@@ -25,6 +25,7 @@ import {
   PAYMENT_REFUND_REQUEST_PERMISSION,
   SALE_VOID_REQUEST_PERMISSION,
 } from "@/features/approvals/authorization";
+import { getClientIp } from "@/lib/http/client-ip";
 import { requireAnyPermission, requirePermission } from "@/lib/auth/session";
 import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { buildReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
@@ -162,13 +163,9 @@ function getReprintQueuedMessage({
 
 async function getAdminRequestMetadata() {
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
 
   return {
-    ipAddress:
-      forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-      headerStore.get("x-real-ip")?.slice(0, 64) ??
-      null,
+    ipAddress: getClientIp(headerStore),
     userAgent: headerStore.get("user-agent"),
   };
 }

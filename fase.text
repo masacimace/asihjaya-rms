@@ -1,7 +1,7 @@
 Fase 2 — Hardening PDF Renderer (DONE)
 Fase 3 — Hardware Agent request signing (DONE)
 Fase 4 — Business timezone correctness (DONE)
-Fase 5 — Rate limiting dan HTTP security
+Fase 5 — Rate limiting dan HTTP security (DONE)
 Fase 6 — Quality gate dan CI
 
 ---- HOLD SAMPAI FITUR BARU SELESAI DI DEVELOP SEMUA ----

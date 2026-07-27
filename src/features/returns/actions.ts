@@ -14,6 +14,7 @@ import {
   receiveSaleReturnItem,
   ReturnWorkflowError,
 } from "@/features/returns/transaction-service";
+import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission } from "@/lib/auth/session";
 import {
   deleteReturnInspectionPhoto,
@@ -63,13 +64,9 @@ function redirectWithFeedback({
 
 async function getRequestMetadata() {
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
 
   return {
-    ipAddress:
-      forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-      headerStore.get("x-real-ip")?.slice(0, 64) ??
-      null,
+    ipAddress: getClientIp(headerStore),
     userAgent: headerStore.get("user-agent"),
   };
 }

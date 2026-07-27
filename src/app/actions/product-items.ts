@@ -21,6 +21,7 @@ import {
   type ProductItemActionState,
 } from "@/features/inventory/product-item-contracts";
 import { getNextProductItemIdentifiers } from "@/features/inventory/product-item-identifiers";
+import { getClientIp } from "@/lib/http/client-ip";
 import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 import { deleteImageFile, storeImageFile } from "@/lib/storage/image-storage";
 import { validateImageFile } from "@/lib/storage/image-validation";
@@ -150,13 +151,9 @@ function parseMoney(
 
 async function getRequestMetadata() {
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
 
   return {
-    ipAddress:
-      forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-      headerStore.get("x-real-ip")?.slice(0, 64) ??
-      null,
+    ipAddress: getClientIp(headerStore),
     userAgent: headerStore.get("user-agent"),
   };
 }

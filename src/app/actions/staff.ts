@@ -18,6 +18,7 @@ import {
   userSessions,
 } from "@/db/schema";
 import type { StaffActionState } from "@/features/administration/staff-contracts";
+import { getClientIp } from "@/lib/http/client-ip";
 import { hashPassword } from "@/lib/auth/password";
 import { requirePermission } from "@/lib/auth/session";
 
@@ -80,12 +81,7 @@ function normalizePhone(value: string): string | null {
 async function getRequestMetadata() {
   const headerStore = await headers();
 
-  const forwardedFor = headerStore.get("x-forwarded-for");
-
-  const ipAddress =
-    forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-    headerStore.get("x-real-ip")?.slice(0, 64) ??
-    null;
+  const ipAddress = getClientIp(headerStore);
 
   return {
     ipAddress,

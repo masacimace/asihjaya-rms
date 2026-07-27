@@ -1006,6 +1006,33 @@ export const customerHistoryIpRateLimits = pgTable(
   ],
 );
 
+export const securityRateLimits = pgTable(
+  "security_rate_limits",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    scope: varchar("scope", { length: 80 }).notNull(),
+    keyHash: varchar("key_hash", { length: 64 }).notNull(),
+    windowStartedAt: timestamp("window_started_at", {
+      withTimezone: true,
+    }).notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    blockedUntil: timestamp("blocked_until", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("security_rate_limits_scope_key_uq").on(
+      table.scope,
+      table.keyHash,
+    ),
+    index("security_rate_limits_blocked_idx").on(table.blockedUntil),
+    index("security_rate_limits_updated_idx").on(table.updatedAt),
+    check(
+      "security_rate_limits_attempt_count_ck",
+      sql`${table.attemptCount} >= 0`,
+    ),
+  ],
+);
+
 export const posHeldCarts = pgTable(
   "pos_held_carts",
   {

@@ -23,6 +23,7 @@ import {
   type ApprovalStatus,
 } from "@/features/approvals/contracts";
 import { publishApprovalResolutionNotificationInTransaction } from "@/features/notifications/approvals";
+import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission, type AuthContext } from "@/lib/auth/session";
 
 const APPROVAL_DASHBOARD_PATH = "/admin/operasional/approval";
@@ -77,13 +78,9 @@ function revalidateApprovalPages() {
 
 async function getRequestMetadata() {
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
 
   return {
-    ipAddress:
-      forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-      headerStore.get("x-real-ip")?.slice(0, 64) ??
-      null,
+    ipAddress: getClientIp(headerStore),
     userAgent: headerStore.get("user-agent"),
   };
 }

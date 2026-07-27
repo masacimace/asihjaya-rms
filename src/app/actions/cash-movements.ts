@@ -18,6 +18,7 @@ import {
   requirePermission,
   type AuthContext,
 } from "@/lib/auth/session";
+import { getClientIp } from "@/lib/http/client-ip";
 import { parseCashAmountInput } from "@/lib/shifts/cash-reconciliation";
 
 const CASH_DASHBOARD_PATH = "/admin/operasional/kas";
@@ -62,13 +63,9 @@ function formatMoney(value: number) {
 
 async function getRequestMetadata() {
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
 
   return {
-    ipAddress:
-      forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-      headerStore.get("x-real-ip")?.slice(0, 64) ??
-      null,
+    ipAddress: getClientIp(headerStore),
     userAgent: headerStore.get("user-agent"),
   };
 }

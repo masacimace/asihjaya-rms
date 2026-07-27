@@ -18,12 +18,13 @@
     "check:pdf-render-security": "tsx scripts/check-pdf-render-security.ts",
     "check:hardware-agent-signing": "tsx scripts/check-hardware-agent-request-signing.ts",
     "check:business-timezone": "tsx scripts/check-business-timezone.ts",
-    "check:stabilization": "npm run routes:check && npm run check:customer-history-pin && npm run check:receipt-token && npm run check:pdf-render-security && npm run check:hardware-agent-signing && npm run check:business-timezone",
+    "check:stabilization": "npm run routes:check && npm run check:customer-history-pin && npm run check:receipt-token && npm run check:pdf-render-security && npm run check:hardware-agent-signing && npm run check:business-timezone && npm run check:http-security",
     "hardware:agent:create": "tsx scripts/create-hardware-agent.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "check:http-security": "tsx scripts/check-http-security.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

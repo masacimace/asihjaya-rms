@@ -24,6 +24,7 @@ import {
   markHardwareJobSubmittedStaleResolved,
   markHardwareJobUnknownOutcomeResolved,
 } from "@/features/notifications/hardware";
+import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission } from "@/lib/auth/session";
 import { cleanupHardwareJobs } from "@/lib/hardware/job-cleanup";
 import { recoverStaleHardwareJobs } from "@/lib/hardware/job-recovery";
@@ -61,13 +62,9 @@ function isTestJobType(value: unknown): value is TestJobType {
 
 async function getActionRequestMetadata() {
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
 
   return {
-    ipAddress:
-      forwardedFor?.split(",")[0]?.trim() ||
-      headerStore.get("x-real-ip")?.trim() ||
-      null,
+    ipAddress: getClientIp(headerStore),
     userAgent: headerStore.get("user-agent")?.slice(0, 500) ?? null,
   };
 }

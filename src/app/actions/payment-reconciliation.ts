@@ -22,6 +22,7 @@ import {
   deleteReconciliationEvidenceFile,
   storeReconciliationEvidenceFile,
 } from "@/lib/storage/reconciliation-evidence-storage";
+import { getClientIp } from "@/lib/http/client-ip";
 import { getStartOfBusinessDateKey } from "@/lib/time/business-time";
 
 const UUID_PATTERN =
@@ -72,13 +73,9 @@ function redirectWithMessage(
 
 async function getRequestMetadata() {
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
 
   return {
-    ipAddress:
-      forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-      headerStore.get("x-real-ip")?.slice(0, 64) ??
-      null,
+    ipAddress: getClientIp(headerStore),
     userAgent: headerStore.get("user-agent")?.slice(0, 500) ?? null,
   };
 }

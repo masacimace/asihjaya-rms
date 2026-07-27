@@ -31,6 +31,7 @@ import {
 } from "@/features/customers/history-access";
 import { getPublicCustomerHistoryAccessContext } from "@/features/customers/public-history";
 import { requirePermission } from "@/lib/auth/session";
+import { getClientIp } from "@/lib/http/client-ip";
 
 function readText(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
@@ -42,14 +43,9 @@ function delay(durationMs: number) {
 
 async function getRequestMetadata() {
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
-  const ipAddress =
-    forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-    headerStore.get("x-real-ip")?.trim().slice(0, 64) ??
-    null;
 
   return {
-    ipAddress,
+    ipAddress: getClientIp(headerStore),
     userAgent: headerStore.get("user-agent")?.slice(0, 1000) ?? null,
   };
 }
@@ -161,7 +157,10 @@ export async function generateOrResetCustomerHistoryPinAction(
         .from(customerHistoryCredentials)
         .where(
           and(
-            eq(customerHistoryCredentials.organizationId, auth.organization.id),
+            eq(
+              customerHistoryCredentials.organizationId,
+              auth.organization.id,
+            ),
             eq(customerHistoryCredentials.customerId, customer.id),
           ),
         )
@@ -211,7 +210,10 @@ export async function generateOrResetCustomerHistoryPinAction(
         })
         .where(
           and(
-            eq(customerHistorySessions.organizationId, auth.organization.id),
+            eq(
+              customerHistorySessions.organizationId,
+              auth.organization.id,
+            ),
             eq(customerHistorySessions.customerId, customer.id),
             isNull(customerHistorySessions.revokedAt),
           ),
@@ -510,7 +512,10 @@ export async function changePublicCustomerHistoryPinAction(
   if (!validation.valid) {
     fieldErrors.newPin = validation.message;
   } else if (
-    await verifyCustomerHistoryPinHash(newPin, accessState.credential.pinHash)
+    await verifyCustomerHistoryPinHash(
+      newPin,
+      accessState.credential.pinHash,
+    )
   ) {
     fieldErrors.newPin = "PIN baru harus berbeda dari PIN sementara.";
   }
@@ -588,7 +593,10 @@ export async function changePublicCustomerHistoryPinAction(
         })
         .where(
           and(
-            eq(customerHistorySessions.organizationId, context.organizationId),
+            eq(
+              customerHistorySessions.organizationId,
+              context.organizationId,
+            ),
             eq(customerHistorySessions.customerId, context.customer.id),
             isNull(customerHistorySessions.revokedAt),
           ),

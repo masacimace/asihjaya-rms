@@ -15,6 +15,13 @@ import {
 } from "@/lib/auth/session";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { serverEnv } from "@/lib/env";
+import { getClientIp } from "@/lib/http/client-ip";
+import {
+  clearSecurityRateLimit,
+  inspectSecurityRateLimit,
+  recordSecurityRateLimitFailure,
+  type SecurityRateLimitPolicy,
+} from "@/lib/security/rate-limit";
 
 export type LoginActionState = {
   message?: string;
@@ -29,24 +36,100 @@ export type LoginActionState = {
   };
 };
 
-function getClientIp(headerStore: Headers): string | null {
-  const forwardedFor = headerStore.get("x-forwarded-for");
+const LOGIN_IDENTIFIER_SCOPE = "auth.login.identifier";
+const LOGIN_IP_SCOPE = "auth.login.ip";
+const LOGIN_LIMIT_MESSAGE =
+  "Terlalu banyak percobaan masuk. Tunggu beberapa saat lalu coba kembali.";
 
-  if (forwardedFor) {
-    return forwardedFor.split(",")[0]?.trim().slice(0, 64) ?? null;
+function positiveInteger(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
+function getIdentifierPolicy(): SecurityRateLimitPolicy {
+  return {
+    limit: positiveInteger("LOGIN_RATE_LIMIT_IDENTIFIER_FAILURES", 5),
+    windowMs: positiveInteger("LOGIN_RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
+    blockMs: positiveInteger("LOGIN_RATE_LIMIT_BLOCK_MS", 15 * 60 * 1000),
+  };
+}
+
+function getIpPolicy(): SecurityRateLimitPolicy {
+  return {
+    limit: positiveInteger("LOGIN_RATE_LIMIT_IP_FAILURES", 20),
+    windowMs: positiveInteger("LOGIN_RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
+    blockMs: positiveInteger("LOGIN_RATE_LIMIT_BLOCK_MS", 15 * 60 * 1000),
+  };
+}
+
+function getIdentifierRateLimitKey(identifier: string): string {
+  return `${serverEnv.DEFAULT_ORGANIZATION_SLUG}:${identifier}`;
+}
+
+async function isLoginRateLimited(identifier: string, ipAddress: string | null) {
+  const checks = [
+    inspectSecurityRateLimit({
+      scope: LOGIN_IDENTIFIER_SCOPE,
+      key: getIdentifierRateLimitKey(identifier),
+      policy: getIdentifierPolicy(),
+    }),
+  ];
+
+  if (ipAddress) {
+    checks.push(
+      inspectSecurityRateLimit({
+        scope: LOGIN_IP_SCOPE,
+        key: ipAddress,
+        policy: getIpPolicy(),
+      }),
+    );
   }
 
-  return headerStore.get("x-real-ip")?.slice(0, 64) ?? null;
+  const decisions = await Promise.all(checks);
+  return decisions.some((decision) => !decision.allowed);
+}
+
+async function recordLoginFailure(
+  identifier: string | null,
+  ipAddress: string | null,
+) {
+  const writes: Promise<unknown>[] = [];
+
+  if (identifier) {
+    writes.push(
+      recordSecurityRateLimitFailure({
+        scope: LOGIN_IDENTIFIER_SCOPE,
+        key: getIdentifierRateLimitKey(identifier),
+        policy: getIdentifierPolicy(),
+      }),
+    );
+  }
+
+  if (ipAddress) {
+    writes.push(
+      recordSecurityRateLimitFailure({
+        scope: LOGIN_IP_SCOPE,
+        key: ipAddress,
+        policy: getIpPolicy(),
+      }),
+    );
+  }
+
+  await Promise.all(writes);
 }
 
 export async function loginAction(
   _previousState: LoginActionState,
   formData: FormData,
 ): Promise<LoginActionState> {
+  void _previousState;
+
+  const headerStore = await headers();
+  const ipAddress = getClientIp(headerStore);
+  const userAgent = headerStore.get("user-agent")?.slice(0, 1000) ?? null;
   const identifier = String(formData.get("identifier") ?? "")
     .trim()
     .toLowerCase();
-
   const password = String(formData.get("password") ?? "");
 
   const errors: NonNullable<LoginActionState["errors"]> = {};
@@ -60,8 +143,19 @@ export async function loginAction(
   }
 
   if (Object.keys(errors).length > 0) {
+    await recordLoginFailure(null, ipAddress);
+
     return {
       errors,
+      values: {
+        identifier,
+      },
+    };
+  }
+
+  if (await isLoginRateLimited(identifier, ipAddress)) {
+    return {
+      message: LOGIN_LIMIT_MESSAGE,
       values: {
         identifier,
       },
@@ -116,6 +210,7 @@ export async function loginAction(
    */
   if (!user?.passwordHash) {
     await hashPassword(password);
+    await recordLoginFailure(identifier, ipAddress);
 
     return {
       message: "Username/email atau kata sandi tidak valid.",
@@ -128,6 +223,8 @@ export async function loginAction(
   const passwordValid = await verifyPassword(password, user.passwordHash);
 
   if (!passwordValid || user.status !== "active") {
+    await recordLoginFailure(identifier, ipAddress);
+
     return {
       message: "Username/email atau kata sandi tidak valid.",
       values: {
@@ -142,6 +239,11 @@ export async function loginAction(
     permissionCodes.includes("admin.access") ||
     permissionCodes.includes("pos.access");
 
+  await clearSecurityRateLimit({
+    scope: LOGIN_IDENTIFIER_SCOPE,
+    key: getIdentifierRateLimitKey(identifier),
+  });
+
   if (!hasApplicationAccess) {
     return {
       message: "Akun belum mempunyai akses ke aplikasi.",
@@ -150,12 +252,6 @@ export async function loginAction(
       },
     };
   }
-
-  const headerStore = await headers();
-
-  const ipAddress = getClientIp(headerStore);
-
-  const userAgent = headerStore.get("user-agent");
 
   await db.transaction(async (transaction) => {
     await transaction
@@ -202,7 +298,7 @@ export async function logoutAction(): Promise<void> {
       entityType: "user_session",
       entityId: auth.session.id,
       ipAddress: getClientIp(headerStore),
-      userAgent: headerStore.get("user-agent"),
+      userAgent: headerStore.get("user-agent")?.slice(0, 1000) ?? null,
     });
   }
 

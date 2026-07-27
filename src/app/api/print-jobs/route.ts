@@ -8,6 +8,12 @@ import {
   getDefaultPosRegisterCondition,
 } from "@/features/pos/context";
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
+import { getClientIp } from "@/lib/http/client-ip";
+import {
+  InvalidJsonBodyError,
+  readJsonBodyLimited,
+  RequestBodyTooLargeError,
+} from "@/lib/http/request-body";
 import { buildInventoryLabelPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
 
@@ -26,14 +32,6 @@ function readCopies(value: unknown) {
   return copies;
 }
 
-function getRequestIp(req: NextRequest) {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim().slice(0, 64) ??
-    req.headers.get("x-real-ip")?.slice(0, 64) ??
-    null
-  );
-}
-
 export async function POST(req: NextRequest) {
   try {
     const auth = await getCurrentAuth();
@@ -47,7 +45,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = (await req.json()) as Record<string, unknown>;
+    const body = await readJsonBodyLimited<Record<string, unknown>>(
+      req,
+      16 * 1024,
+    );
     const itemId = typeof body.itemId === "string" ? body.itemId.trim() : "";
     const requestId =
       typeof body.requestId === "string" ? body.requestId.trim() : "";
@@ -159,7 +160,7 @@ export async function POST(req: NextRequest) {
       audit: {
         source: "admin.inventory.item",
         requestId,
-        ipAddress: getRequestIp(req),
+        ipAddress: getClientIp(req),
         userAgent: req.headers.get("user-agent"),
       },
     });
@@ -175,6 +176,20 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json(
+        { error: "Request body terlalu besar." },
+        { status: 413 },
+      );
+    }
+
+    if (error instanceof InvalidJsonBodyError) {
+      return NextResponse.json(
+        { error: "Request body JSON tidak valid." },
+        { status: 400 },
+      );
+    }
+
     console.error("Failed to create secure hardware label job:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

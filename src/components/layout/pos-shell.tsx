@@ -245,7 +245,7 @@ function SidebarContent({
             alt="Asihjaya"
             width={128}
             height={128}
-            className="h-12 w-auto object-contain"
+            className="h-16 mb-2 w-auto object-contain"
             priority
           />
         </span>
@@ -581,7 +581,7 @@ export function PosShell({
                 alt="Asihjaya"
                 width={64}
                 height={64}
-                className="h-11 w-auto object-contain"
+                className="h-12 w-auto object-contain"
                 priority
               />
             </span>

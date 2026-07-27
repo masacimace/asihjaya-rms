@@ -85,6 +85,10 @@ export const serverEnv = {
     return secret("CUSTOMER_HISTORY_PIN_PEPPER");
   },
 
+  get SECURITY_RATE_LIMIT_SECRET() {
+    return secret("SECURITY_RATE_LIMIT_SECRET");
+  },
+
   get PDF_RENDER_TOKEN_SECRET() {
     return secret("PDF_RENDER_TOKEN_SECRET");
   },

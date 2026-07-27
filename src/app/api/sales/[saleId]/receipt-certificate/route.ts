@@ -19,6 +19,7 @@ import {
   resolveReceiptCertificateRenderMode,
 } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documents/receipt-overlay-calibration";
+import { enforcePdfRenderRateLimit } from "@/features/sales/documents/pdf-render-rate-limit";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgent } from "@/lib/hardware/agent-auth";
 
@@ -90,9 +91,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   let renderOrganizationId: string;
   let documentData: Awaited<ReturnType<typeof getReceiptCertificateData>>;
+  let rateLimitActor:
+    | { type: "user"; id: string }
+    | { type: "hardware-agent"; id: string };
 
   if (hardwareAuth) {
     renderOrganizationId = hardwareAuth.agent.organizationId;
+    rateLimitActor = { type: "hardware-agent", id: hardwareAuth.agent.id };
     documentData = await getReceiptCertificateData({
       saleId,
       organizationId: renderOrganizationId,
@@ -104,6 +109,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   } else {
     const auth = await requirePermission("sales.view");
     renderOrganizationId = auth.organization.id;
+    rateLimitActor = { type: "user", id: auth.user.id };
 
     documentData = await getReceiptCertificateData({
       saleId,
@@ -120,6 +126,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (!canAccessAllSales && !accessibleOutletIds.has(documentData.outlet.id)) {
       notFound();
     }
+  }
+
+  const rateLimitResponse = await enforcePdfRenderRateLimit({
+    request,
+    actor: rateLimitActor,
+  });
+  if (rateLimitResponse) {
+    return rateLimitResponse;
   }
 
   let pdf: Awaited<ReturnType<typeof generateReceiptCertificatePdf>>;

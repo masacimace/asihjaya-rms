@@ -158,7 +158,10 @@ function AdminBrandLink({
           alt="Asihjaya"
           width={isMobile ? 80 : 128}
           height={isMobile ? 80 : 128}
-          className={cn("w-auto object-contain", isMobile ? "h-12" : "h-12")}
+          className={cn(
+            "mb-2 w-auto object-contain",
+            isMobile ? "h-16" : "h-16",
+          )}
           priority
         />
       </span>
@@ -441,7 +444,7 @@ export function AdminShell({
   }, []);
 
   return (
-    <div className="grid h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[260px_minmax(0,1fr)]">
+    <div className="grid h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[280px_minmax(0,1fr)]">
       {/* Sidebar desktop */}
       <aside className="hidden h-dvh min-h-0 flex-col overflow-y-auto border-r border-[var(--border)] bg-white p-5 lg:flex">
         <SidebarContent
@@ -551,7 +554,7 @@ export function AdminShell({
                 alt="Asihjaya"
                 width={64}
                 height={64}
-                className="h-10 w-auto object-contain"
+                className="h-12 w-auto object-contain"
                 priority
               />
             </span>

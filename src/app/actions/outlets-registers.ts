@@ -15,6 +15,7 @@ import {
   userOutlets,
 } from "@/db/schema";
 import type { OperationsActionState } from "@/features/administration/outlet-register-contracts";
+import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission } from "@/lib/auth/session";
 
 const UUID_PATTERN =
@@ -89,12 +90,7 @@ function isValidGoogleMapsEmbedUrl(value: string): boolean {
 async function getRequestMetadata() {
   const headerStore = await headers();
 
-  const forwardedFor = headerStore.get("x-forwarded-for");
-
-  const ipAddress =
-    forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-    headerStore.get("x-real-ip")?.slice(0, 64) ??
-    null;
+  const ipAddress = getClientIp(headerStore);
 
   return {
     ipAddress,

@@ -13,6 +13,7 @@ import {
   isUuid,
   type AdminCustomerActionState,
 } from "@/features/customers/contracts";
+import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission } from "@/lib/auth/session";
 import { getBusinessCompactDate } from "@/lib/time/business-time";
 
@@ -55,12 +56,8 @@ function generateCustomerCode(date: Date, timeZone: string) {
 
 async function getRequestMetadata() {
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
 
-  const ipAddress =
-    forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-    headerStore.get("x-real-ip")?.slice(0, 64) ??
-    null;
+  const ipAddress = getClientIp(headerStore);
 
   return {
     ipAddress,

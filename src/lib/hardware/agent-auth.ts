@@ -15,6 +15,7 @@ import {
   HARDWARE_SIGNATURE_HEADER,
   verifySignedHardwareRequest,
 } from "@/lib/hardware/request-signing";
+import { getClientIp as resolveClientIp } from "@/lib/http/client-ip";
 
 export type HardwareAgentAuth = {
   authScheme: "signed-v2" | "legacy-secret";
@@ -176,11 +177,7 @@ function constantTimeEqualText(left: string, right: string): boolean {
 }
 
 export function getClientIp(req: Request | NextRequest): string | null {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    null
-  );
+  return resolveClientIp(req);
 }
 
 async function loadHardwareAgent(agentId: string) {

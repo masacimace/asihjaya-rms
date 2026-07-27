@@ -256,7 +256,7 @@ const styles = String.raw`
   }
 
   .aj-brand-main {
-    color: var(--maroon);
+    color: #e70101;
     font-size: 40pt;
     font-weight: 900;
     letter-spacing: 0.052em;
@@ -519,15 +519,15 @@ const styles = String.raw`
   }
 
   .aj-money-negative {
-    color: var(--maroon);
+    color: #e70101;
   }
 
   .aj-money-muted {
-    color: var(--maroon);
+    color: #e70101;
   }
 
   .aj-price {
-    color: #111;
+    color: #000;
     font-size: 6.5pt;
     font-weight: 900;
     text-align: center;
@@ -651,7 +651,7 @@ const styles = String.raw`
 
   .aj-total-row-deposit-in strong,
   .aj-total-row-external strong {
-    color: #166534;
+    color: #000;
   }
 
   .aj-total-row-paid strong {
@@ -709,7 +709,7 @@ const styles = String.raw`
     padding: 0.7mm 1.5mm;
     border-radius: 999px;
     color: #fffdf7;
-    background: var(--maroon);
+    background: #e70101;
     font-size: 4.5pt;
     font-weight: 900;
     text-transform: uppercase;
@@ -851,7 +851,7 @@ const styles = String.raw`
     flex: 0 0 auto;
     place-items: center;
     border-radius: 1.7mm;
-    color: var(--maroon);
+    color: #e70101;
     background: #fdf7df;
   }
 
@@ -1186,7 +1186,9 @@ function ProductThumbnail({
   renderMode: ReceiptCertificateRenderMode;
 }) {
   if (renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK) {
-    return <div className="aj-thumb aj-vendor-photo-frame" aria-hidden="true" />;
+    return (
+      <div className="aj-thumb aj-vendor-photo-frame" aria-hidden="true" />
+    );
   }
 
   const imageKey = getProductImageKey(item);
@@ -1464,7 +1466,9 @@ export function ReceiptCertificateHtmlDocument({
                   <section className="aj-info-strip">
                     <div className="aj-info-box">
                       <div>
-                        <div className="aj-info-label aj-static-artwork">Konsumen</div>
+                        <div className="aj-info-label aj-static-artwork">
+                          Konsumen
+                        </div>
                         <div className="aj-info-value aj-dynamic-print">
                           {customerName}
                         </div>
@@ -1472,7 +1476,9 @@ export function ReceiptCertificateHtmlDocument({
                     </div>
                     <div className="aj-info-box">
                       <div>
-                        <div className="aj-info-label aj-static-artwork">Telepon</div>
+                        <div className="aj-info-label aj-static-artwork">
+                          Telepon
+                        </div>
                         <div className="aj-info-value aj-dynamic-print">
                           {customerPhone}
                         </div>
@@ -1573,7 +1579,10 @@ export function ReceiptCertificateHtmlDocument({
 
                     <section className="aj-signature-card">
                       <div className="aj-signature-title aj-static-artwork"></div>
-                      <div className="aj-signature-space aj-static-artwork" aria-hidden="true" />
+                      <div
+                        className="aj-signature-space aj-static-artwork"
+                        aria-hidden="true"
+                      />
                       <div className="aj-signature-name aj-static-artwork">
                         Nama / Paraf Petugas
                       </div>
@@ -1604,7 +1613,9 @@ export function ReceiptCertificateHtmlDocument({
                         </div>
                         {itemDiscountAmount > 0 ? (
                           <div className="aj-total-detail-row aj-total-row-discount">
-                            <span className="aj-static-artwork">Diskon Item</span>
+                            <span className="aj-static-artwork">
+                              Diskon Item
+                            </span>
                             <strong className="aj-dynamic-print">
                               {formatNegativeAmount(itemDiscountAmount)}
                             </strong>
@@ -1612,14 +1623,18 @@ export function ReceiptCertificateHtmlDocument({
                         ) : null}
                         {pageCount > 1 ? (
                           <div className="aj-total-detail-row">
-                            <span className="aj-static-artwork">Total Order</span>
+                            <span className="aj-static-artwork">
+                              Total Order
+                            </span>
                             <strong className="aj-dynamic-print">
                               {formatAmount(data.sale.totalAmount)}
                             </strong>
                           </div>
                         ) : null}
                         <div className="aj-total-detail-row aj-total-row-external">
-                          <span className="aj-static-artwork">Total Pembayaran</span>
+                          <span className="aj-static-artwork">
+                            Total Pembayaran
+                          </span>
                           <strong className="aj-dynamic-print">
                             {formatAmount(
                               data.customerDeposit.externalPaymentDueAmount,
@@ -1628,7 +1643,9 @@ export function ReceiptCertificateHtmlDocument({
                         </div>
                       </div>
                       <div className="aj-total-box">
-                        <span className="aj-total-label aj-static-artwork">Total Item</span>
+                        <span className="aj-total-label aj-static-artwork">
+                          Total Item
+                        </span>
                         <strong className="aj-total-amount aj-dynamic-print">
                           {formatAmount(itemTotalAmount)}
                         </strong>
@@ -1650,7 +1667,9 @@ export function ReceiptCertificateHtmlDocument({
                           />
                         </div>
                       )}
-                      <div className="aj-qr-label aj-static-artwork">Riwayat Transaksi</div>
+                      <div className="aj-qr-label aj-static-artwork">
+                        Riwayat Transaksi
+                      </div>
                       <div className="aj-qr-note aj-static-artwork">
                         Scan untuk melihat riwayat pembelian
                       </div>
@@ -1663,128 +1682,131 @@ export function ReceiptCertificateHtmlDocument({
         })}
         {shouldRenderBackPage ? (
           <article
-          className="aj-receipt-page"
-          aria-label="Ketentuan transaksi dan informasi layanan"
-          data-aj-receipt-page="back"
-          data-aj-page-number={pageCount + 1}
-          data-aj-total-pages={totalPdfPages}
-        >
-          <div className="aj-receipt-design aj-receipt-back-design">
-            <div className="aj-watermark">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo/nota-logo.png" alt="" />
-            </div>
-
-            <div className="aj-back-content">
-              <header className="aj-back-header">
+            className="aj-receipt-page"
+            aria-label="Ketentuan transaksi dan informasi layanan"
+            data-aj-receipt-page="back"
+            data-aj-page-number={pageCount + 1}
+            data-aj-total-pages={totalPdfPages}
+          >
+            <div className="aj-receipt-design aj-receipt-back-design">
+              <div className="aj-watermark">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  className="aj-back-logo"
-                  src="/logo/nota-logo.png"
-                  alt="Asih Jaya"
-                />
+                <img src="/logo/nota-logo.png" alt="" />
+              </div>
 
-                <div>
-                  <div className="aj-back-title">Informasi & Ketentuan</div>
-                  <div className="aj-back-subtitle">
-                    Simpan nota ini sebagai bukti transaksi resmi dan referensi
-                    saat melakukan layanan lanjutan di outlet Asihjaya.
-                  </div>
-                </div>
+              <div className="aj-back-content">
+                <header className="aj-back-header">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="aj-back-logo"
+                    src="/logo/nota-logo.png"
+                    alt="Asih Jaya"
+                  />
 
-                <div className="aj-back-outlet-card">
-                  <div className="aj-back-outlet-label">Outlet</div>
-                  <div className="aj-back-outlet-name">
-                    {receiptOutletCopy.name}
-                  </div>
-                  <div className="aj-back-outlet-text">
-                    {receiptOutletCopy.address}
-                  </div>
-                </div>
-              </header>
-
-              <section className="aj-back-grid">
-                <article className="aj-back-card aj-back-card-terms">
-                  <BackSectionTitle icon="terms">
-                    Ketentuan Transaksi
-                  </BackSectionTitle>
-                  <ol className="aj-back-list">
-                    <li>
-                      Barang yang tercantum dalam nota telah diperiksa,
-                      disetujui, ditimbang, dan diterima oleh pembeli.
-                    </li>
-                    <li>
-                      Barang dapat dijual kembali mengikuti harga pasar, kondisi
-                      barang, dan kebijakan toko yang berlaku.
-                    </li>
-                    <li>
-                      Barang permata cacat, retak, atau pecah tidak dapat
-                      diterima kembali.
-                    </li>
-                    <li>
-                      Perhiasan batu dan sejenisnya hanya kami terima bagian
-                      emasnya saja.
-                    </li>
-                    <li>
-                      Nota wajib dibawa saat menjual kembali. Jika nota hilang,
-                      transaksi dapat ditolak atau perlu verifikasi tambahan.
-                    </li>
-                    <li>
-                      Selisih berat, kadar, kelengkapan, atau kondisi barang
-                      saat penjualan kembali dapat memengaruhi nilai transaksi.
-                    </li>
-                    <li>
-                      Dana Titip dan riwayat transaksi mengikuti catatan sistem
-                      pada outlet terkait.
-                    </li>
-                  </ol>
-                </article>
-
-                <article className="aj-back-card aj-back-card-compact">
-                  <BackSectionTitle icon="care">
-                    Perawatan Perhiasan
-                  </BackSectionTitle>
-                  <ul className="aj-back-list">
-                    <li>
-                      Hindari kontak langsung dengan parfum, sabun, cairan
-                      kimia, dan air laut.
-                    </li>
-                    <li>
-                      Simpan perhiasan secara terpisah agar tidak saling
-                      bergesekan.
-                    </li>
-                    <li>
-                      Bersihkan perhiasan menggunakan kain lembut dan kering.
-                    </li>
-                    <li>
-                      Lakukan pemeriksaan berkala ke outlet Asihjaya jika
-                      diperlukan.
-                    </li>
-                  </ul>
-                </article>
-
-                <article className="aj-back-card aj-back-card-compact">
-                  <BackSectionTitle icon="services">
-                    Layanan Asihjaya
-                  </BackSectionTitle>
-                  <div className="aj-back-service-grid">
-                    <div className="aj-back-service-pill">
-                      Pembelian emas dan perhiasan
-                    </div>
-                    <div className="aj-back-service-pill">
-                      Penjualan kembali
-                    </div>
-                    <div className="aj-back-service-pill">
-                      Cek nota dan riwayat transaksi
-                    </div>
-                    <div className="aj-back-service-pill">
-                      Konsultasi produk di outlet
+                  <div>
+                    <div className="aj-back-title">Informasi & Ketentuan</div>
+                    <div className="aj-back-subtitle">
+                      Simpan nota ini sebagai bukti transaksi resmi dan
+                      referensi saat melakukan layanan lanjutan di outlet
+                      Asihjaya.
                     </div>
                   </div>
-                </article>
-              </section>
+
+                  <div className="aj-back-outlet-card">
+                    <div className="aj-back-outlet-label">Outlet</div>
+                    <div className="aj-back-outlet-name">
+                      {receiptOutletCopy.name}
+                    </div>
+                    <div className="aj-back-outlet-text">
+                      {receiptOutletCopy.address}
+                    </div>
+                  </div>
+                </header>
+
+                <section className="aj-back-grid">
+                  <article className="aj-back-card aj-back-card-terms">
+                    <BackSectionTitle icon="terms">
+                      Ketentuan Transaksi
+                    </BackSectionTitle>
+                    <ol className="aj-back-list">
+                      <li>
+                        Barang yang tercantum dalam nota telah diperiksa,
+                        disetujui, ditimbang, dan diterima oleh pembeli.
+                      </li>
+                      <li>
+                        Barang dapat dijual kembali mengikuti harga pasar,
+                        kondisi barang, dan kebijakan toko yang berlaku.
+                      </li>
+                      <li>
+                        Barang permata cacat, retak, atau pecah tidak dapat
+                        diterima kembali.
+                      </li>
+                      <li>
+                        Perhiasan batu dan sejenisnya hanya kami terima bagian
+                        emasnya saja.
+                      </li>
+                      <li>
+                        Nota wajib dibawa saat menjual kembali. Jika nota
+                        hilang, transaksi dapat ditolak atau perlu verifikasi
+                        tambahan.
+                      </li>
+                      <li>
+                        Selisih berat, kadar, kelengkapan, atau kondisi barang
+                        saat penjualan kembali dapat memengaruhi nilai
+                        transaksi.
+                      </li>
+                      <li>
+                        Dana Titip dan riwayat transaksi mengikuti catatan
+                        sistem pada outlet terkait.
+                      </li>
+                    </ol>
+                  </article>
+
+                  <article className="aj-back-card aj-back-card-compact">
+                    <BackSectionTitle icon="care">
+                      Perawatan Perhiasan
+                    </BackSectionTitle>
+                    <ul className="aj-back-list">
+                      <li>
+                        Hindari kontak langsung dengan parfum, sabun, cairan
+                        kimia, dan air laut.
+                      </li>
+                      <li>
+                        Simpan perhiasan secara terpisah agar tidak saling
+                        bergesekan.
+                      </li>
+                      <li>
+                        Bersihkan perhiasan menggunakan kain lembut dan kering.
+                      </li>
+                      <li>
+                        Lakukan pemeriksaan berkala ke outlet Asihjaya jika
+                        diperlukan.
+                      </li>
+                    </ul>
+                  </article>
+
+                  <article className="aj-back-card aj-back-card-compact">
+                    <BackSectionTitle icon="services">
+                      Layanan Asihjaya
+                    </BackSectionTitle>
+                    <div className="aj-back-service-grid">
+                      <div className="aj-back-service-pill">
+                        Pembelian emas dan perhiasan
+                      </div>
+                      <div className="aj-back-service-pill">
+                        Penjualan kembali
+                      </div>
+                      <div className="aj-back-service-pill">
+                        Cek nota dan riwayat transaksi
+                      </div>
+                      <div className="aj-back-service-pill">
+                        Konsultasi produk di outlet
+                      </div>
+                    </div>
+                  </article>
+                </section>
+              </div>
             </div>
-          </div>
           </article>
         ) : null}
       </div>

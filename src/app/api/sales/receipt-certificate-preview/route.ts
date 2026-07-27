@@ -15,6 +15,7 @@ import {
   RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
 } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documents/receipt-overlay-calibration";
+import { enforcePdfRenderRateLimit } from "@/features/sales/documents/pdf-render-rate-limit";
 import { requirePermission } from "@/lib/auth/session";
 import { authenticateHardwareAgent } from "@/lib/hardware/agent-auth";
 
@@ -29,6 +30,16 @@ export async function GET(request: Request) {
 
   if (!renderOrganizationId) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  const rateLimitResponse = await enforcePdfRenderRateLimit({
+    request,
+    actor: hardwareAuth
+      ? { type: "hardware-agent", id: hardwareAuth.agent.id }
+      : { type: "user", id: userAuth!.user.id },
+  });
+  if (rateLimitResponse) {
+    return rateLimitResponse;
   }
 
   const requestUrl = new URL(request.url);

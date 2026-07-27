@@ -79,6 +79,7 @@ import {
   getDefaultPosRegisterCondition,
 } from "@/features/pos/context";
 import { lookupPosItemByScanValue } from "@/features/pos/queries";
+import { getClientIp } from "@/lib/http/client-ip";
 import { getBusinessCompactDate } from "@/lib/time/business-time";
 import {
   publishSaleCompletedNotificationInTransaction,
@@ -1102,12 +1103,7 @@ function mapHeldCartSummary(row: {
 async function getRequestMetadata() {
   const headerStore = await headers();
 
-  const forwardedFor = headerStore.get("x-forwarded-for");
-
-  const ipAddress =
-    forwardedFor?.split(",")[0]?.trim().slice(0, 64) ??
-    headerStore.get("x-real-ip")?.slice(0, 64) ??
-    null;
+  const ipAddress = getClientIp(headerStore);
 
   return {
     ipAddress,
