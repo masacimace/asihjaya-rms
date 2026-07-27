@@ -3,7 +3,7 @@ import {
   PDF_RENDER_TOKEN_HEADER,
 } from "@/features/sales/documents/pdf-render-access";
 import { getCurrentAuth } from "@/lib/auth/session";
-import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
+import { authenticateHardwareAgent } from "@/lib/hardware/agent-auth";
 import {
   imageKeyBelongsToOrganization,
   readImageFile,
@@ -33,7 +33,7 @@ export async function GET(
     const auth = await getCurrentAuth();
     const hardwareAuth = auth
       ? null
-      : await authenticateHardwareAgentHeaders(request.headers);
+      : await authenticateHardwareAgent(request);
     organizationId =
       auth?.organization.id ?? hardwareAuth?.agent.organizationId ?? null;
   }

@@ -227,6 +227,17 @@ function downloadFile(config, urlString, destination, options = {}) {
       );
       return;
     }
+    if (typeof config.createRequestHeaders !== "function") {
+      reject(
+        new HardwareAdapterError("Request signer document belum dikonfigurasi.", {
+          code: "DOCUMENT_REQUEST_SIGNER_REQUIRED",
+          retrySafe: false,
+          category: "configuration",
+        }),
+      );
+      return;
+    }
+
     const client = url.protocol === "https:" ? https : http;
     const file = fs.createWriteStream(destination, { flags: "wx" });
     const hash = crypto.createHash("sha256");
@@ -247,11 +258,11 @@ function downloadFile(config, urlString, destination, options = {}) {
     const req = client.get(
       url,
       {
-        headers: {
-          "x-hardware-agent-id": config.agentId,
-          "x-hardware-agent-secret": config.agentSecret,
-          "x-hardware-agent-version": config.agentVersion,
-        },
+        headers: config.createRequestHeaders({
+          method: "GET",
+          pathAndQuery: `${url.pathname}${url.search}`,
+          payload: null,
+        }),
       },
       (res) => {
         if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {

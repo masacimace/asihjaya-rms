@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node agent.js",
     "check": "node scripts/check-config.js",
+    "check:auth": "node scripts/check-request-signing.js",
     "check:dpapi": "node scripts/check-dpapi-hotfix.js",
     "install:startup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-startup-task.ps1 -RunNow",
     "uninstall:startup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall-startup-task.ps1",

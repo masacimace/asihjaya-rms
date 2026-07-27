@@ -6,6 +6,7 @@ const path = require("path");
 
 const { createFailureInjectionController } = require("../lib/failure-injection");
 const { createHardwareAdapterFactory } = require("../lib/hardware-adapters");
+const { createHardwareRequestHeaders } = require("../lib/request-signing");
 const {
   SATO_LABEL_TEMPLATES,
   SATO_PRINTER_PROFILES,
@@ -88,10 +89,21 @@ async function checkFakeArtifactMetadata() {
     defaultScenario: "success",
     logger: QUIET_LOGGER,
   });
+  const agentId = "00000000-0000-4000-8000-000000000099";
+  const agentSecret = `test-${"x".repeat(40)}`;
   const factory = createHardwareAdapterFactory({
     agentVersion: "sato-pr9-check",
-    agentId: "00000000-0000-4000-8000-000000000099",
-    agentSecret: `test-${"x".repeat(40)}`,
+    agentId,
+    createRequestHeaders: ({ method, pathAndQuery, payload = null }) =>
+      createHardwareRequestHeaders({
+        agentId,
+        agentSecret,
+        agentVersion: "sato-pr9-check",
+        authMode: "signed",
+        method,
+        pathAndQuery,
+        payload,
+      }),
     apiUrl: "http://127.0.0.1:3000",
     dryRun: false,
     dryRunOutputDir: outputDir,

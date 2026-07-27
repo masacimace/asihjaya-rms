@@ -17,7 +17,6 @@ import {
 } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documents/receipt-overlay-calibration";
 import { requirePermission } from "@/lib/auth/session";
-import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
 
 export const metadata = {
   title: "Preview Nota & Sertifikat",
@@ -63,11 +62,7 @@ export default async function ReceiptCertificatePreviewHtmlDocumentPage({
   }
 
   if (!pdfRenderAccess) {
-    const hardwareAuth = await authenticateHardwareAgentHeaders(requestHeaders);
-
-    if (!hardwareAuth) {
-      await requirePermission("sales.view");
-    }
+    await requirePermission("sales.view");
   }
 
   return (

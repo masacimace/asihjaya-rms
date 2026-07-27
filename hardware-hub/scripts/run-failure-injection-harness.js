@@ -10,11 +10,26 @@ const { hashCanonicalJson } = require("../lib/canonical-json");
 const { ExecutionJournal } = require("../lib/execution-journal");
 const { createFailureInjectionController } = require("../lib/failure-injection");
 const { createHardwareAdapterFactory } = require("../lib/hardware-adapters");
+const { createHardwareRequestHeaders } = require("../lib/request-signing");
 const { HardwareProtocolV2Runner } = require("../lib/protocol-v2-runner");
 const { createSecretProtector } = require("../lib/secret-protector");
 
 const KEEP_OUTPUT = process.argv.includes("--keep-output");
 const QUIET_LOGGER = { log() {}, warn() {}, error() {} };
+
+function createTestRequestSigner(agentId, agentSecret) {
+  return ({ method, pathAndQuery, payload = null }) =>
+    createHardwareRequestHeaders({
+      agentId,
+      agentSecret,
+      agentVersion: "simulation-agent",
+      authMode: "signed",
+      method,
+      pathAndQuery,
+      payload,
+    });
+}
+
 const PDF_BYTES = Buffer.from(
   "%PDF-1.4\n" +
     "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n" +
@@ -209,10 +224,11 @@ function createRuntime({ root, cloud, agentId, scenario, apiUrl, outputDir, dela
     delayMs,
     logger: QUIET_LOGGER,
   });
+  const agentSecret = `simulation-secret-${"x".repeat(40)}`;
   const adapterFactory = createHardwareAdapterFactory({
     agentVersion: "simulation-agent",
     agentId,
-    agentSecret: `simulation-secret-${"x".repeat(40)}`,
+    createRequestHeaders: createTestRequestSigner(agentId, agentSecret),
     apiUrl,
     dryRun: false,
     dryRunOutputDir: outputDir,
@@ -348,10 +364,15 @@ async function main() {
       defaultScenario: "success",
       logger: QUIET_LOGGER,
     });
+    const duplicateAgentId = "duplicate-agent";
+    const duplicateAgentSecret = `simulation-secret-${"x".repeat(40)}`;
     const duplicateFactory = createHardwareAdapterFactory({
       agentVersion: "simulation-agent",
-      agentId: "duplicate-agent",
-      agentSecret: `simulation-secret-${"x".repeat(40)}`,
+      agentId: duplicateAgentId,
+      createRequestHeaders: createTestRequestSigner(
+        duplicateAgentId,
+        duplicateAgentSecret,
+      ),
       apiUrl,
       dryRun: false,
       dryRunOutputDir: duplicateOutput,

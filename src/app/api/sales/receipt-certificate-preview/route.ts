@@ -16,13 +16,13 @@ import {
 } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documents/receipt-overlay-calibration";
 import { requirePermission } from "@/lib/auth/session";
-import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
+import { authenticateHardwareAgent } from "@/lib/hardware/agent-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const hardwareAuth = await authenticateHardwareAgentHeaders(request.headers);
+  const hardwareAuth = await authenticateHardwareAgent(request);
   const userAuth = hardwareAuth ? null : await requirePermission("sales.view");
   const renderOrganizationId =
     hardwareAuth?.agent.organizationId ?? userAuth?.organization.id;

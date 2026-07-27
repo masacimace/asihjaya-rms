@@ -1,10 +1,17 @@
 import "dotenv/config";
 
+import { randomUUID } from "node:crypto";
+
 import { and, eq } from "drizzle-orm";
 
 import { db } from "../src/db";
-import { hardwareAgents, organizations, outlets, registers } from "../src/db/schema";
-import { hashPassword } from "../src/lib/auth/password";
+import {
+  hardwareAgents,
+  organizations,
+  outlets,
+  registers,
+} from "../src/db/schema";
+import { encryptHardwareAgentSecret } from "../src/lib/hardware/agent-credential";
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
@@ -83,9 +90,6 @@ async function main() {
     throw new Error(`Register ${registerCode} tidak ditemukan.`);
   }
 
-  const secretHash = await hashPassword(agentSecret);
-  const now = new Date();
-
   const [existing] = await db
     .select({ id: hardwareAgents.id })
     .from(hardwareAgents)
@@ -97,6 +101,10 @@ async function main() {
     )
     .limit(1);
 
+  const agentId = existing?.id ?? randomUUID();
+  const encryptedCredential = encryptHardwareAgentSecret(agentId, agentSecret);
+  const now = new Date();
+
   const rows = existing
     ? await db
         .update(hardwareAgents)
@@ -104,7 +112,7 @@ async function main() {
           name: agentName,
           outletId: outlet.id,
           registerId: register.id,
-          secretHash,
+          secretHash: encryptedCredential,
           status: "offline",
           isActive: true,
           updatedAt: now,
@@ -114,12 +122,13 @@ async function main() {
     : await db
         .insert(hardwareAgents)
         .values({
+          id: agentId,
           organizationId: organization.id,
           outletId: outlet.id,
           registerId: register.id,
           code: agentCode,
           name: agentName,
-          secretHash,
+          secretHash: encryptedCredential,
           status: "offline",
           isActive: true,
         })
@@ -131,7 +140,7 @@ async function main() {
     throw new Error("Hardware agent gagal disimpan.");
   }
 
-  console.log("Hardware agent berhasil disiapkan.");
+  console.log("Hardware agent berhasil disiapkan dengan request signing v2.");
   console.log(`Agent ID     : ${agent.id}`);
   console.log(`Agent Code   : ${agent.code}`);
   console.log(`Agent Name   : ${agent.name}`);
@@ -142,6 +151,7 @@ async function main() {
   console.log("Masukkan ke hardware-hub/.env:");
   console.log(`HARDWARE_AGENT_ID=${agent.id}`);
   console.log(`HARDWARE_AGENT_SECRET=${agentSecret}`);
+  console.log("HARDWARE_AGENT_REQUEST_AUTH_MODE=signed");
 }
 
 main().catch((error: unknown) => {

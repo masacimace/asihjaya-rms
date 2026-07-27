@@ -88,6 +88,16 @@ const secret = getEnv("HARDWARE_AGENT_SECRET");
 if (!secret) errors.push("HARDWARE_AGENT_SECRET wajib diisi.");
 else if (secret.length < 32) errors.push("HARDWARE_AGENT_SECRET minimal 32 karakter.");
 
+const requestAuthMode = (getEnv("HARDWARE_AGENT_REQUEST_AUTH_MODE") || "signed").toLowerCase();
+if (!["signed", "dual", "legacy"].includes(requestAuthMode)) {
+  errors.push("HARDWARE_AGENT_REQUEST_AUTH_MODE harus signed, dual, atau legacy.");
+}
+if (requestAuthMode !== "signed") {
+  warnings.push(
+    `Hardware request auth masih ${requestAuthMode}; gunakan signed setelah rollout selesai.`,
+  );
+}
+
 const protocolMode = getEnv("HARDWARE_PROTOCOL_MODE") || "v2-preferred";
 if (!["v2-preferred", "v2-only", "v1-only"].includes(protocolMode)) {
   errors.push("HARDWARE_PROTOCOL_MODE harus v2-preferred, v2-only, atau v1-only.");

@@ -89,6 +89,10 @@ export const serverEnv = {
     return secret("PDF_RENDER_TOKEN_SECRET");
   },
 
+  get HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY() {
+    return secret("HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY");
+  },
+
   get DEFAULT_ORGANIZATION_SLUG() {
     return required("DEFAULT_ORGANIZATION_SLUG").toLowerCase();
   },

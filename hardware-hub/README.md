@@ -29,11 +29,19 @@ npm install --omit=dev
 copy .env.example .env
 ```
 
-Isi `ASIHJAYA_API_URL`, `HARDWARE_AGENT_ID`, dan `HARDWARE_AGENT_SECRET`. Credential agent dibuat dari root web app:
+Isi `ASIHJAYA_API_URL`, `HARDWARE_AGENT_ID`, dan `HARDWARE_AGENT_SECRET`. Credential agent dibuat atau diprovisikan ulang dari root web app:
 
 ```powershell
 npm run hardware:agent:create
 ```
+
+Aktifkan request signing agar secret agent tidak dikirim mentah pada setiap polling:
+
+```env
+HARDWARE_AGENT_REQUEST_AUTH_MODE=signed
+```
+
+Mode `dual` hanya dipakai sementara saat server sudah diperbarui tetapi credential agent lama belum diprovisikan ulang. Mode `legacy` hanya untuk emergency rollback.
 
 ### 2. Pilih mode protocol
 

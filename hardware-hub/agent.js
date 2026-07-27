@@ -11,7 +11,7 @@ try {
   // dotenv optional agar agent tetap bisa dijalankan lewat environment variable OS.
 }
 
-const AGENT_VERSION = "2.4.0-pr10-outlet-readiness";
+const AGENT_VERSION = "2.5.0-request-signing";
 const { createOperationalLogger } = require("./lib/operational-logger");
 const operationalLogger = createOperationalLogger({
   logDir: path.resolve(__dirname, process.env.HARDWARE_LOG_DIR?.trim() || "logs"),
@@ -28,6 +28,10 @@ operationalLogger.installConsoleBridge();
 
 const { ExecutionJournal } = require("./lib/execution-journal");
 const { createHardwareAdapterFactory } = require("./lib/hardware-adapters");
+const {
+  createHardwareRequestHeaders,
+  normalizeAuthMode,
+} = require("./lib/request-signing");
 const { HardwareProtocolV2Client } = require("./lib/protocol-v2-client");
 const { HardwareProtocolV2Runner } = require("./lib/protocol-v2-runner");
 const { createSecretProtector } = require("./lib/secret-protector");
@@ -90,6 +94,15 @@ try {
 }
 const HARDWARE_AGENT_ID = requiredEnv("HARDWARE_AGENT_ID");
 const HARDWARE_AGENT_SECRET = requiredEnv("HARDWARE_AGENT_SECRET");
+let HARDWARE_AGENT_REQUEST_AUTH_MODE;
+try {
+  HARDWARE_AGENT_REQUEST_AUTH_MODE = normalizeAuthMode(
+    process.env.HARDWARE_AGENT_REQUEST_AUTH_MODE || "signed",
+  );
+} catch (error) {
+  console.error(`[-] ${error.message}`);
+  process.exit(1);
+}
 const HARDWARE_PROTOCOL_MODE = process.env.HARDWARE_PROTOCOL_MODE?.trim() || "v2-preferred";
 const HARDWARE_DRY_RUN = optionalBoolean("HARDWARE_DRY_RUN", false);
 const HARDWARE_ADAPTER_MODE =
@@ -266,6 +279,7 @@ const operationalHealth = new OperationalHealth({
     version: AGENT_VERSION,
     hostname: os.hostname(),
     protocolMode: HARDWARE_PROTOCOL_MODE,
+    requestAuthMode: HARDWARE_AGENT_REQUEST_AUTH_MODE,
   },
 });
 
@@ -283,13 +297,34 @@ function getClientForUrl(url) {
   return url.startsWith("https") ? https : http;
 }
 
-function getBaseHeaders(payload, headers = {}) {
+function getHardwareRequestHeaders({
+  method,
+  pathAndQuery,
+  payload = null,
+  additionalHeaders = {},
+}) {
+  return createHardwareRequestHeaders({
+    agentId: HARDWARE_AGENT_ID,
+    agentSecret: HARDWARE_AGENT_SECRET,
+    agentVersion: AGENT_VERSION,
+    authMode: HARDWARE_AGENT_REQUEST_AUTH_MODE,
+    method,
+    pathAndQuery,
+    payload,
+    additionalHeaders,
+  });
+}
+
+function getBaseHeaders(payload, headers = {}, { method, pathAndQuery }) {
   return {
     "Content-Type": "application/json",
-    "x-hardware-agent-id": HARDWARE_AGENT_ID,
-    "x-hardware-agent-secret": HARDWARE_AGENT_SECRET,
-    "x-hardware-agent-version": AGENT_VERSION,
     ...headers,
+    ...getHardwareRequestHeaders({
+      method,
+      pathAndQuery,
+      payload,
+      additionalHeaders: headers,
+    }),
     ...(payload ? { "Content-Length": Buffer.byteLength(payload) } : {}),
   };
 }
@@ -317,7 +352,10 @@ function requestJson(
         port: url.port || undefined,
         path: `${url.pathname}${url.search}`,
         method,
-        headers: getBaseHeaders(payload, headers),
+        headers: getBaseHeaders(payload, headers, {
+          method,
+          pathAndQuery: `${url.pathname}${url.search}`,
+        }),
       },
       (res) => {
         let responseBody = "";
@@ -462,7 +500,7 @@ const failureController = createFailureInjectionController({
 const adapterFactory = createHardwareAdapterFactory({
   agentVersion: AGENT_VERSION,
   agentId: HARDWARE_AGENT_ID,
-  agentSecret: HARDWARE_AGENT_SECRET,
+  createRequestHeaders: getHardwareRequestHeaders,
   apiUrl: ASIHJAYA_API_URL,
   dryRun: HARDWARE_DRY_RUN,
   dryRunOutputDir: DRY_RUN_OUTPUT_DIR,

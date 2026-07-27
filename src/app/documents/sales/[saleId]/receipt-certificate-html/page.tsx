@@ -17,7 +17,6 @@ import {
 } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documents/receipt-overlay-calibration";
 import { requirePermission } from "@/lib/auth/session";
-import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
 
 export const metadata = {
   title: "Nota & Sertifikat Penjualan",
@@ -85,28 +84,6 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
     });
 
     if (!documentData) {
-      notFound();
-    }
-
-    return (
-      <ReceiptCertificateHtmlDocument
-        data={documentData}
-        documentProfileId={documentProfileId}
-        overlayCalibration={overlayCalibration}
-        renderMode={renderMode}
-      />
-    );
-  }
-
-  const hardwareAuth = await authenticateHardwareAgentHeaders(headerStore);
-
-  if (hardwareAuth) {
-    const documentData = await getReceiptCertificateData({
-      saleId,
-      organizationId: hardwareAuth.agent.organizationId,
-    });
-
-    if (!documentData || documentData.outlet.id !== hardwareAuth.agent.outletId) {
       notFound();
     }
 
