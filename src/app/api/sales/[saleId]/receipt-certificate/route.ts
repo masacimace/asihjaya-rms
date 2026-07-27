@@ -7,7 +7,10 @@ import {
   isReceiptDocumentProfileId,
   type ReceiptDocumentProfileId,
 } from "@/features/sales/documents/receipt-document-profiles";
-import { generateReceiptCertificatePdfFromUrl } from "@/features/sales/documents/receipt-certificate-pdf";
+import {
+  createPdfRenderFailureResponse,
+  generateReceiptCertificatePdf,
+} from "@/features/sales/documents/receipt-certificate-pdf";
 import {
   getReceiptCertificateRenderModeLabel,
   isReceiptCertificateRenderMode,
@@ -35,6 +38,22 @@ function sanitizeFilename(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 120);
 }
 
+function collectReceiptMediaKeys(
+  documentData: NonNullable<
+    Awaited<ReturnType<typeof getReceiptCertificateData>>
+  >,
+) {
+  return Array.from(
+    new Set(
+      documentData.items.flatMap((item) =>
+        [item.snapshot.imageKey, item.snapshot.productImageKey].filter(
+          (value): value is string => Boolean(value),
+        ),
+      ),
+    ),
+  );
+}
+
 export async function GET(request: NextRequest, context: RouteContext) {
   const { saleId } = await context.params;
 
@@ -52,7 +71,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
       { status: 422 },
     );
   }
-  if (requestedRenderMode && !isReceiptCertificateRenderMode(requestedRenderMode)) {
+  if (
+    requestedRenderMode &&
+    !isReceiptCertificateRenderMode(requestedRenderMode)
+  ) {
     return Response.json(
       { success: false, error: "Mode render nota tidak didukung." },
       { status: 422 },
@@ -66,31 +88,26 @@ export async function GET(request: NextRequest, context: RouteContext) {
     ? (requestedProfileId as ReceiptDocumentProfileId)
     : getConfiguredReceiptDocumentProfileId();
 
-  let cookieHeader: string | null = null;
-  let extraHeaders: Record<string, string> | undefined;
+  let renderOrganizationId: string;
   let documentData: Awaited<ReturnType<typeof getReceiptCertificateData>>;
 
   if (hardwareAuth) {
+    renderOrganizationId = hardwareAuth.agent.organizationId;
     documentData = await getReceiptCertificateData({
       saleId,
-      organizationId: hardwareAuth.agent.organizationId,
+      organizationId: renderOrganizationId,
     });
 
     if (!documentData || documentData.outlet.id !== hardwareAuth.agent.outletId) {
       notFound();
     }
-
-    extraHeaders = {
-      "x-hardware-agent-id": request.headers.get("x-hardware-agent-id") ?? "",
-      "x-hardware-agent-secret":
-        request.headers.get("x-hardware-agent-secret") ?? "",
-    };
   } else {
     const auth = await requirePermission("sales.view");
+    renderOrganizationId = auth.organization.id;
 
     documentData = await getReceiptCertificateData({
       saleId,
-      organizationId: auth.organization.id,
+      organizationId: renderOrganizationId,
     });
 
     if (!documentData) {
@@ -103,23 +120,28 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (!canAccessAllSales && !accessibleOutletIds.has(documentData.outlet.id)) {
       notFound();
     }
-
-    cookieHeader = request.headers.get("cookie");
   }
 
-  const htmlUrl = new URL(
-    `/documents/sales/${saleId}/receipt-certificate-html`,
-    request.url,
-  );
-  htmlUrl.searchParams.set("profile", documentProfileId);
-  htmlUrl.searchParams.set("mode", renderMode);
+  let pdf: Awaited<ReturnType<typeof generateReceiptCertificatePdf>>;
+  try {
+    pdf = await generateReceiptCertificatePdf({
+      documentProfileId,
+      renderMode,
+      access: {
+        scope: "receipt-sale",
+        organizationId: renderOrganizationId,
+        saleId,
+        allowedMediaKeys: collectReceiptMediaKeys(documentData),
+      },
+    });
+  } catch (error) {
+    const failureResponse = createPdfRenderFailureResponse(error);
+    if (failureResponse) {
+      return failureResponse;
+    }
+    throw error;
+  }
 
-  const pdf = await generateReceiptCertificatePdfFromUrl({
-    cookieHeader,
-    documentProfileId,
-    extraHeaders,
-    url: htmlUrl.toString(),
-  });
   const filenameMode =
     renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK
       ? "vendor-static-artwork"
@@ -144,7 +166,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
       "X-Receipt-Overlay-Offset-Y-MM": String(overlayCalibration.offsetYmm),
       "X-Receipt-Overlay-Scale": String(overlayCalibration.scale),
       "X-Receipt-Render-Mode": renderMode,
-      "X-Receipt-Render-Mode-Label": getReceiptCertificateRenderModeLabel(renderMode),
+      "X-Receipt-Render-Mode-Label":
+        getReceiptCertificateRenderModeLabel(renderMode),
     },
   });
 }

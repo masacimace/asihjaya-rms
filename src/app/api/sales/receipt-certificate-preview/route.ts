@@ -3,7 +3,10 @@ import {
   isReceiptDocumentProfileId,
   type ReceiptDocumentProfileId,
 } from "@/features/sales/documents/receipt-document-profiles";
-import { generateReceiptCertificatePdfFromUrl } from "@/features/sales/documents/receipt-certificate-pdf";
+import {
+  createPdfRenderFailureResponse,
+  generateReceiptCertificatePdf,
+} from "@/features/sales/documents/receipt-certificate-pdf";
 import {
   getReceiptCertificateRenderModeLabel,
   isReceiptCertificateRenderMode,
@@ -18,25 +21,14 @@ import { authenticateHardwareAgentHeaders } from "@/lib/hardware/agent-auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function getHardwareAgentHeaders(request: Request) {
-  const agentId = request.headers.get("x-hardware-agent-id");
-  const agentSecret = request.headers.get("x-hardware-agent-secret");
-
-  if (!agentId || !agentSecret) {
-    return undefined;
-  }
-
-  return {
-    "x-hardware-agent-id": agentId,
-    "x-hardware-agent-secret": agentSecret,
-  };
-}
-
 export async function GET(request: Request) {
   const hardwareAuth = await authenticateHardwareAgentHeaders(request.headers);
+  const userAuth = hardwareAuth ? null : await requirePermission("sales.view");
+  const renderOrganizationId =
+    hardwareAuth?.agent.organizationId ?? userAuth?.organization.id;
 
-  if (!hardwareAuth) {
-    await requirePermission("sales.view");
+  if (!renderOrganizationId) {
+    return new Response("Unauthorized", { status: 401 });
   }
 
   const requestUrl = new URL(request.url);
@@ -66,19 +58,23 @@ export async function GET(request: Request) {
     ? (requestedProfileId as ReceiptDocumentProfileId)
     : getConfiguredReceiptDocumentProfileId();
 
-  const htmlUrl = new URL(
-    "/documents/sales/receipt-certificate-preview-html",
-    request.url,
-  );
-  htmlUrl.searchParams.set("profile", documentProfileId);
-  htmlUrl.searchParams.set("mode", renderMode);
-
-  const pdf = await generateReceiptCertificatePdfFromUrl({
-    cookieHeader: hardwareAuth ? null : request.headers.get("cookie"),
-    documentProfileId,
-    extraHeaders: hardwareAuth ? getHardwareAgentHeaders(request) : undefined,
-    url: htmlUrl.toString(),
-  });
+  let pdf: Awaited<ReturnType<typeof generateReceiptCertificatePdf>>;
+  try {
+    pdf = await generateReceiptCertificatePdf({
+      documentProfileId,
+      renderMode,
+      access: {
+        scope: "receipt-preview",
+        organizationId: renderOrganizationId,
+      },
+    });
+  } catch (error) {
+    const failureResponse = createPdfRenderFailureResponse(error);
+    if (failureResponse) {
+      return failureResponse;
+    }
+    throw error;
+  }
 
   const filenameMode =
     renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK

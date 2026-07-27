@@ -15,11 +15,12 @@
     "routes:check": "tsx scripts/check-routes.ts",
     "check:customer-history-pin": "tsx scripts/check-customer-history-pin.ts",
     "check:receipt-token": "tsx scripts/check-receipt-token.ts",
-    "check:stabilization": "npm run routes:check && npm run check:customer-history-pin && npm run check:receipt-token",
+    "check:stabilization": "npm run routes:check && npm run check:customer-history-pin && npm run check:receipt-token && npm run check:pdf-render-security",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "check:pdf-render-security": "tsx scripts/check-pdf-render-security.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

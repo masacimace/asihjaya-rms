@@ -40,6 +40,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV INTERNAL_RENDER_ORIGIN=http://127.0.0.1:3000
 
 RUN groupadd --system nodejs \
     && useradd --system \

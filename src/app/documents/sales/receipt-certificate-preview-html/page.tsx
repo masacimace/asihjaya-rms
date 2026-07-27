@@ -1,6 +1,10 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
+import {
+  authorizePdfRenderDocument,
+  PDF_RENDER_TOKEN_HEADER,
+} from "@/features/sales/documents/pdf-render-access";
 import { ReceiptCertificateHtmlDocument } from "@/features/sales/documents/receipt-certificate-html";
 import {
   getConfiguredReceiptDocumentProfileId,
@@ -33,13 +37,9 @@ export default async function ReceiptCertificatePreviewHtmlDocumentPage({
   searchParams,
 }: PageProps) {
   const [requestHeaders, query] = await Promise.all([headers(), searchParams]);
-  const hardwareAuth = await authenticateHardwareAgentHeaders(requestHeaders);
 
-  if (!hardwareAuth) {
-    await requirePermission("sales.view");
-  }
-
-  const documentProfileId = query.profile ?? getConfiguredReceiptDocumentProfileId();
+  const documentProfileId =
+    query.profile ?? getConfiguredReceiptDocumentProfileId();
   if (!isReceiptDocumentProfileId(documentProfileId)) {
     notFound();
   }
@@ -50,6 +50,25 @@ export default async function ReceiptCertificatePreviewHtmlDocumentPage({
 
   const renderMode = resolveReceiptCertificateRenderMode(query.mode);
   const overlayCalibration = getConfiguredReceiptOverlayCalibration();
+  const pdfRenderToken = requestHeaders.get(PDF_RENDER_TOKEN_HEADER);
+  const pdfRenderAccess = authorizePdfRenderDocument({
+    token: pdfRenderToken,
+    scope: "receipt-preview",
+    documentProfileId,
+    renderMode,
+  });
+
+  if (pdfRenderToken && !pdfRenderAccess) {
+    notFound();
+  }
+
+  if (!pdfRenderAccess) {
+    const hardwareAuth = await authenticateHardwareAgentHeaders(requestHeaders);
+
+    if (!hardwareAuth) {
+      await requirePermission("sales.view");
+    }
+  }
 
   return (
     <ReceiptCertificateHtmlDocument

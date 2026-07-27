@@ -1,6 +1,10 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
+import {
+  authorizePdfRenderDocument,
+  PDF_RENDER_TOKEN_HEADER,
+} from "@/features/sales/documents/pdf-render-access";
 import { getReceiptCertificateData } from "@/features/sales/documents/receipt-certificate";
 import { ReceiptCertificateHtmlDocument } from "@/features/sales/documents/receipt-certificate-html";
 import {
@@ -39,13 +43,18 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
   params,
   searchParams,
 }: PageProps) {
-  const [{ saleId }, query] = await Promise.all([params, searchParams]);
+  const [{ saleId }, query, headerStore] = await Promise.all([
+    params,
+    searchParams,
+    headers(),
+  ]);
 
   if (!UUID_PATTERN.test(saleId)) {
     notFound();
   }
 
-  const documentProfileId = query.profile ?? getConfiguredReceiptDocumentProfileId();
+  const documentProfileId =
+    query.profile ?? getConfiguredReceiptDocumentProfileId();
   if (!isReceiptDocumentProfileId(documentProfileId)) {
     notFound();
   }
@@ -56,8 +65,39 @@ export default async function ReceiptCertificateSaleHtmlDocumentPage({
 
   const renderMode = resolveReceiptCertificateRenderMode(query.mode);
   const overlayCalibration = getConfiguredReceiptOverlayCalibration();
+  const pdfRenderToken = headerStore.get(PDF_RENDER_TOKEN_HEADER);
+  const pdfRenderAccess = authorizePdfRenderDocument({
+    token: pdfRenderToken,
+    scope: "receipt-sale",
+    saleId,
+    documentProfileId,
+    renderMode,
+  });
 
-  const headerStore = await headers();
+  if (pdfRenderToken && !pdfRenderAccess) {
+    notFound();
+  }
+
+  if (pdfRenderAccess) {
+    const documentData = await getReceiptCertificateData({
+      saleId,
+      organizationId: pdfRenderAccess.organizationId,
+    });
+
+    if (!documentData) {
+      notFound();
+    }
+
+    return (
+      <ReceiptCertificateHtmlDocument
+        data={documentData}
+        documentProfileId={documentProfileId}
+        overlayCalibration={overlayCalibration}
+        renderMode={renderMode}
+      />
+    );
+  }
+
   const hardwareAuth = await authenticateHardwareAgentHeaders(headerStore);
 
   if (hardwareAuth) {

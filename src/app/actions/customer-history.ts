@@ -106,6 +106,9 @@ export async function generateOrResetCustomerHistoryPinAction(
   _previousState: AdminCustomerHistoryPinActionState,
   _formData: FormData,
 ): Promise<AdminCustomerHistoryPinActionState> {
+  void _previousState;
+  void _formData;
+
   const auth = await requirePermission("customers.history_pin.manage");
 
   if (!isUuid(customerId)) {
@@ -158,10 +161,7 @@ export async function generateOrResetCustomerHistoryPinAction(
         .from(customerHistoryCredentials)
         .where(
           and(
-            eq(
-              customerHistoryCredentials.organizationId,
-              auth.organization.id,
-            ),
+            eq(customerHistoryCredentials.organizationId, auth.organization.id),
             eq(customerHistoryCredentials.customerId, customer.id),
           ),
         )
@@ -211,10 +211,7 @@ export async function generateOrResetCustomerHistoryPinAction(
         })
         .where(
           and(
-            eq(
-              customerHistorySessions.organizationId,
-              auth.organization.id,
-            ),
+            eq(customerHistorySessions.organizationId, auth.organization.id),
             eq(customerHistorySessions.customerId, customer.id),
             isNull(customerHistorySessions.revokedAt),
           ),
@@ -270,6 +267,9 @@ export async function revokeCustomerHistorySessionsAction(
   _previousState: AdminCustomerHistoryPinActionState,
   _formData: FormData,
 ): Promise<AdminCustomerHistoryPinActionState> {
+  void _previousState;
+  void _formData;
+
   const auth = await requirePermission("customers.history_pin.manage");
 
   if (!isUuid(customerId)) {
@@ -510,10 +510,7 @@ export async function changePublicCustomerHistoryPinAction(
   if (!validation.valid) {
     fieldErrors.newPin = validation.message;
   } else if (
-    await verifyCustomerHistoryPinHash(
-      newPin,
-      accessState.credential.pinHash,
-    )
+    await verifyCustomerHistoryPinHash(newPin, accessState.credential.pinHash)
   ) {
     fieldErrors.newPin = "PIN baru harus berbeda dari PIN sementara.";
   }
@@ -591,10 +588,7 @@ export async function changePublicCustomerHistoryPinAction(
         })
         .where(
           and(
-            eq(
-              customerHistorySessions.organizationId,
-              context.organizationId,
-            ),
+            eq(customerHistorySessions.organizationId, context.organizationId),
             eq(customerHistorySessions.customerId, context.customer.id),
             isNull(customerHistorySessions.revokedAt),
           ),
