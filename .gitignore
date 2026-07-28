@@ -56,3 +56,10 @@ next-env.d.ts
 /hardware-hub/outlet-fixtures/
 /hardware-hub/outlet-reports/
 /hardware-hub/data/env-backups/
+# quality gate output
+/coverage/
+/playwright-report/
+/test-results/
+/backup-*.sql
+/*.dump
+/*.backup

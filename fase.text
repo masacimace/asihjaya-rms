@@ -5,6 +5,6 @@ Fase 5 — Rate limiting dan HTTP security (DONE)
 Fase 6 — Quality gate dan CI
 
 ---- HOLD SAMPAI FITUR BARU SELESAI DI DEVELOP SEMUA ----
-Fase 7 — Financial/concurrency tests (butuh diskusi sebelum implementasikan)
+Fase 7 — Financial/concurrency tests (butuh diskusi sebelum implementasikan) (HOLD)
 Fase 8 — Production deployment readiness (butuh diskusi sebelum implementasikan)
-Fase 9 — Tenant integrity dan refactor bertahap (butuh diskusi sebelum implementasikan)
+Fase 9 — Tenant integrity dan refactor bertahap (butuh diskusi sebelum implementasikan) (HOLD)

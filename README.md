@@ -192,6 +192,28 @@ Tidak perlu menjalankan `npm run db:seed`, kecuali dokumentasi migration atau fi
 - Tidak perlu membuat database development baru setiap ada perubahan schema.
 - Gunakan database disposable terpisah untuk rehearsal dan automated test.
 
+## Quality Gate dan CI
+
+Sebelum perubahan digabungkan atau dideploy, jalankan quality gate lengkap:
+
+```bash
+npm ci
+npm run check:all
+```
+
+Kelompok check dapat dijalankan terpisah:
+
+```bash
+npm run check:quality
+npm run check:static
+npm run check:security
+npm run check:business
+npm run check:hardware
+npm run build
+```
+
+GitHub Actions menjalankan static quality, security/business contracts, rehearsal migration PostgreSQL 17, dan Hardware Hub checks pada push serta pull request. Dokumentasi lengkap tersedia di `docs/development/quality-gates.md`.
+
 ## Environment Configuration
 
 Lihat `.env.example` untuk daftar konfigurasi lengkap.
