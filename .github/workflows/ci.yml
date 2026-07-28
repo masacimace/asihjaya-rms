@@ -170,3 +170,47 @@ jobs:
 
       - name: Run Hardware Hub CI checks
         run: npm --prefix hardware-hub run check:ci
+
+  financial-concurrency:
+    name: Financial & Concurrency Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://asihjaya_financial_ci:asihjaya_financial_ci@127.0.0.1:5432/asihjaya_rms_financial_ci
+      TEST_DATABASE_URL: postgresql://asihjaya_financial_ci:asihjaya_financial_ci@127.0.0.1:5432/asihjaya_rms_financial_ci
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: asihjaya_financial_ci
+          POSTGRES_PASSWORD: asihjaya_financial_ci
+          POSTGRES_DB: asihjaya_rms_financial_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U asihjaya_financial_ci -d asihjaya_rms_financial_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          package-manager-cache: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate migration metadata
+        run: npm run check:database
+
+      - name: Apply all migrations
+        run: npm run db:migrate
+
+      - name: Run financial and concurrency integration suite
+        run: npm run test:financial

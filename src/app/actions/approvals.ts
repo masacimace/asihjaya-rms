@@ -22,6 +22,7 @@ import {
   type AdminApprovalActionState,
   type ApprovalStatus,
 } from "@/features/approvals/contracts";
+import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
 import { publishApprovalResolutionNotificationInTransaction } from "@/features/notifications/approvals";
 import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission, type AuthContext } from "@/lib/auth/session";
@@ -112,12 +113,6 @@ function parsePositiveInteger(value: unknown) {
   return null;
 }
 
-function parseLedgerAmount(value: string | null | undefined) {
-  const parsedValue = Number(value ?? 0);
-
-  return Number.isFinite(parsedValue) ? parsedValue : 0;
-}
-
 function readRequestString(
   requestData: CustomerDepositWithdrawalRequestData,
   key: keyof CustomerDepositWithdrawalRequestData,
@@ -125,18 +120,6 @@ function readRequestString(
   const value = requestData[key];
 
   return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function createCustomerDepositScopeLockKey({
-  customerId,
-  organizationId,
-  outletId,
-}: {
-  organizationId: string;
-  outletId: string;
-  customerId: string;
-}) {
-  return [organizationId, outletId, customerId].join(":");
 }
 
 async function executeCustomerDepositWithdrawalApproval({
@@ -195,13 +178,11 @@ async function executeCustomerDepositWithdrawalApproval({
     } as const;
   }
 
-  await transaction.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${createCustomerDepositScopeLockKey({
-      organizationId: approval.organizationId,
-      outletId,
-      customerId,
-    })}))`,
-  );
+  const currentBalance = await lockCustomerDepositBalance(transaction, {
+    organizationId: approval.organizationId,
+    outletId,
+    customerId,
+  });
 
   const [existingLedgerEntry] = await transaction
     .select({ id: customerDepositLedger.id })
@@ -223,27 +204,6 @@ async function executeCustomerDepositWithdrawalApproval({
         "Approval tarik tunai Dana Titip ini sudah pernah dieksekusi.",
     } as const;
   }
-
-  const [latestLedgerEntry] = await transaction
-    .select({
-      balanceAfter: customerDepositLedger.balanceAfter,
-    })
-    .from(customerDepositLedger)
-    .where(
-      and(
-        eq(customerDepositLedger.organizationId, approval.organizationId),
-        eq(customerDepositLedger.outletId, outletId),
-        eq(customerDepositLedger.customerId, customerId),
-      ),
-    )
-    .orderBy(
-      desc(customerDepositLedger.occurredAt),
-      desc(customerDepositLedger.createdAt),
-    )
-    .limit(1)
-    .for("update");
-
-  const currentBalance = parseLedgerAmount(latestLedgerEntry?.balanceAfter);
 
   if (currentBalance < amount) {
     return {

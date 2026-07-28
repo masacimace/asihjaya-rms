@@ -72,6 +72,9 @@ const requiredRootScripts = [
   "check:hardware",
   "check:static",
   "check:all",
+  "test:financial",
+  "test:financial:local",
+  "check:critical",
 ];
 
 for (const scriptName of requiredRootScripts) {
@@ -99,6 +102,7 @@ for (const jobId of [
   "static-quality",
   "security-business",
   "database-migrations",
+  "financial-concurrency",
   "hardware-hub",
 ]) {
   assert(
@@ -133,6 +137,7 @@ assert(
 
 for (const documentationPath of [
   "docs/development/quality-gates.md",
+  "docs/development/financial-concurrency-tests.md",
   "README.md",
 ]) {
   assert(existsSync(path.join(projectRoot, documentationPath)), `${documentationPath} wajib tersedia.`);

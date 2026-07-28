@@ -30,6 +30,14 @@ npm run check:hardware
 npm run build
 ```
 
+Financial/concurrency integration test menggunakan PostgreSQL disposable dan dijalankan terpisah:
+
+```bash
+npm run test:financial:local
+```
+
+Untuk database test yang sudah dimigrasikan, gunakan `npm run test:financial`. Dokumentasi lengkap tersedia di `docs/development/financial-concurrency-tests.md`.
+
 `check:quality` mencakup konfigurasi quality gate, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract.
 
 ## Rehearsal migration PostgreSQL 17
@@ -82,6 +90,7 @@ Status check utama:
 2. **Security & Business Checks** — quality config, source hygiene, migration metadata, security contracts, dan timezone/business contracts.
 3. **Database Migration** — PostgreSQL 17 disposable, migration dua kali, lalu schema verification.
 4. **Hardware Hub Checks** — request signing, DPAPI mock, Protocol v2, failure injection, operations, PDF profile, dan SATO golden files.
+5. **Financial & Concurrency Tests** — PostgreSQL 17 disposable, checkout race, Dana Titip, refund replay, settlement deduplication, hardware exactly-once, dan tenant isolation.
 
 CI tidak melakukan print fisik, tidak mengakses perangkat outlet, dan tidak memakai credential production.
 
@@ -104,6 +113,7 @@ Setelah workflow stabil pada beberapa pull request, lindungi branch utama dan wa
 - Security & Business Checks
 - Database Migration
 - Hardware Hub Checks
+- Financial & Concurrency Tests
 
 Nonaktifkan force push dan direct push ke branch production, lalu gunakan pull request untuk perubahan aplikasi.
 

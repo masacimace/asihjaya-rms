@@ -447,11 +447,28 @@ Topik yang tercakup antara lain:
 - Settlement import
 - Notification Center
 
+## Financial dan Concurrency Tests
+
+Invariant finansial kritis diuji otomatis terhadap PostgreSQL 17 disposable:
+
+```powershell
+npm run test:financial:local
+```
+
+Command tersebut menyalakan database test pada port `55433`, menjalankan migration, mengeksekusi checkout/idempotency/inventory/Dana Titip/refund/settlement/Hardware Job/tenant-isolation tests, lalu menghapus container dan volume sementara.
+
+Untuk database CI/test yang sudah tersedia:
+
+```powershell
+npm run test:financial
+```
+
+Lihat `docs/development/financial-concurrency-tests.md` untuk batas keselamatan dan daftar skenario.
+
 ## Saat Ini Ditahan
 
 Tahapan berikut sengaja belum dilanjutkan:
 
-- P1-D — Automated Payment & Concurrency Tests
 - P2-A — Midtrans QRIS Gateway Foundation
 - P2-B — Webhook, Expiry & Payment Recovery
 - P2-C — Gateway Refund & Reconciliation
@@ -467,8 +484,6 @@ Project belum dinyatakan production-ready.
 
 Sebelum go-live, minimal perlu diselesaikan:
 
-- Automated financial integration tests
-- Concurrency tests
 - Cloud storage configuration
 - Backup dan restore drill
 - Security dan session hardening

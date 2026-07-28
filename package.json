@@ -34,7 +34,12 @@
     "check:business": "npm run check:business-timezone",
     "check:hardware": "npm --prefix hardware-hub run check:ci",
     "check:static": "npm run lint && npm run typecheck && npm run routes:check",
-    "check:all": "npm run check:quality && npm run check:static && npm run check:security && npm run check:business && npm run check:hardware && npm run build"
+    "check:all": "npm run check:quality && npm run check:static && npm run check:security && npm run check:business && npm run check:hardware && npm run build",
+    "test:financial": "tsx scripts/run-financial-concurrency-tests.ts",
+    "test:concurrency": "npm run test:financial",
+    "test:integration": "npm run test:financial",
+    "test:financial:local": "tsx scripts/run-financial-concurrency-local.ts",
+    "check:critical": "npm run check:all && npm run test:financial"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

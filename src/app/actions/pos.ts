@@ -73,12 +73,15 @@ import {
   POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS,
 } from "@/features/pos/checkout-recovery";
 import { isValidPosCheckoutIdempotencyKey } from "@/features/pos/checkout-fingerprint";
+import { claimProductItemsForSale } from "@/features/pos/inventory-sale-claim";
+import { lockManualPaymentReference } from "@/features/pos/manual-payment-reference-lock";
 import {
   DEFAULT_POS_REGISTER_MISSING_MESSAGE,
   DEFAULT_POS_REGISTER_SHIFT_MESSAGE,
   getDefaultPosRegisterCondition,
 } from "@/features/pos/context";
 import { lookupPosItemByScanValue } from "@/features/pos/queries";
+import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
 import { getClientIp } from "@/lib/http/client-ip";
 import { getBusinessCompactDate } from "@/lib/time/business-time";
 import {
@@ -3609,37 +3612,13 @@ export async function completePosCheckoutAction(
           );
         }
 
-        const depositLockKey = [
-          auth.organization.id,
-          primaryOutlet.id,
-          selectedCustomer.id,
-        ].join(":");
-
-        await transaction.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${depositLockKey}))`,
-        );
-
-        const [latestDepositEntry] = await transaction
-          .select({
-            balanceAfter: customerDepositLedger.balanceAfter,
-          })
-          .from(customerDepositLedger)
-          .where(
-            and(
-              eq(customerDepositLedger.organizationId, auth.organization.id),
-              eq(customerDepositLedger.outletId, primaryOutlet.id),
-              eq(customerDepositLedger.customerId, selectedCustomer.id),
-            ),
-          )
-          .orderBy(
-            sql`${customerDepositLedger.occurredAt} desc`,
-            sql`${customerDepositLedger.createdAt} desc`,
-          )
-          .limit(1)
-          .for("update");
-
-        customerDepositRunningBalance = parseDbAmount(
-          latestDepositEntry?.balanceAfter ?? "0",
+        customerDepositRunningBalance = await lockCustomerDepositBalance(
+          transaction,
+          {
+            organizationId: auth.organization.id,
+            outletId: primaryOutlet.id,
+            customerId: selectedCustomer.id,
+          },
         );
 
         if (customerDepositUsedAmount > customerDepositRunningBalance) {
@@ -3907,17 +3886,13 @@ export async function completePosCheckoutAction(
           `${right.method}:${right.normalizedProvider}:${right.normalizedReference}`,
         ),
       )) {
-        const duplicateLockKey = [
-          auth.organization.id,
-          primaryOutlet.id,
-          payment.method,
-          payment.normalizedProvider,
-          payment.normalizedReference,
-        ].join(":");
-
-        await transaction.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended(${duplicateLockKey}, 0))`,
-        );
+        await lockManualPaymentReference(transaction, {
+          organizationId: auth.organization.id,
+          outletId: primaryOutlet.id,
+          method: payment.method,
+          normalizedProvider: payment.normalizedProvider!,
+          normalizedReference: payment.normalizedReference!,
+        });
 
         const policy =
           manualPaymentPolicyMap[payment.method as NonCashManualPaymentMethod];
@@ -4077,27 +4052,14 @@ export async function completePosCheckoutAction(
         }),
       );
 
-      const updatedRows = await transaction
-        .update(productItems)
-        .set({
-          availability: "sold",
-          locationState: "customer",
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(productItems.organizationId, auth.organization.id),
-            inArray(productItems.id, itemIds),
-            eq(productItems.currentOutletId, primaryOutlet.id),
-            eq(productItems.isActive, true),
-            eq(productItems.availability, "available"),
-            eq(productItems.condition, "good"),
-            eq(productItems.locationState, "outlet"),
-          ),
-        )
-        .returning({ id: productItems.id });
+      const itemClaim = await claimProductItemsForSale(transaction, {
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet.id,
+        itemIds,
+        now,
+      });
 
-      if (updatedRows.length !== itemIds.length) {
+      if (!itemClaim.allClaimed) {
         throw new CheckoutValidationError(
           "Sebagian item sudah berubah status saat checkout. Transaksi dibatalkan, refresh POS lalu coba ulang.",
         );
