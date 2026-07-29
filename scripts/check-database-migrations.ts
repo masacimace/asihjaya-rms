@@ -134,6 +134,9 @@ async function checkLiveDatabase(): Promise<void> {
       "customer_history_sessions",
       "customer_history_ip_rate_limits",
       "security_rate_limits",
+      "legacy_product_import_batches",
+      "legacy_product_rows",
+      "item_barcodes",
     ];
 
     const tableResult = await pool.query<{ table_name: string }>(
@@ -152,6 +155,9 @@ async function checkLiveDatabase(): Promise<void> {
       ["customer_history_credentials", ["pin_hash", "credential_version", "must_change_pin"]],
       ["customer_history_sessions", ["token_hash", "absolute_expires_at", "idle_expires_at"]],
       ["security_rate_limits", ["scope", "key_hash", "attempt_count", "blocked_until"]],
+      ["legacy_product_import_batches", ["file_hash", "validation_summary", "status"]],
+      ["legacy_product_rows", ["normalized_barcode", "validation_status", "row_fingerprint"]],
+      ["item_barcodes", ["barcode_value", "source", "is_primary", "is_active"]],
     ]);
 
     for (const [tableName, columns] of requiredColumns) {

@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
+  FileSpreadsheet,
   Gem,
   LayoutDashboard,
   Landmark,
@@ -47,6 +48,7 @@ type AdminShellUser = {
   canAccessAdministration: boolean;
   canAccessProducts: boolean;
   canAccessInventory: boolean;
+  canAccessMigration: boolean;
   canAccessApprovals: boolean;
   canAccessSettings: boolean;
   canAccessReconciliation: boolean;
@@ -61,6 +63,7 @@ type NavigationItem = {
     | "administration"
     | "products"
     | "inventory"
+    | "migration"
     | "settings"
     | "reconciliation";
   children?: { label: string; href: string }[];
@@ -83,6 +86,12 @@ const navigation: NavigationItem[] = [
     href: "/admin/inventaris",
     icon: Boxes,
     access: "inventory",
+  },
+  {
+    label: "Migrasi Produk",
+    href: "/admin/migrasi-produk",
+    icon: FileSpreadsheet,
+    access: "migration",
   },
   {
     label: "Riwayat Penjualan",
@@ -220,6 +229,7 @@ type SidebarContentProps = {
   canAccessAdministration: boolean;
   canAccessProducts: boolean;
   canAccessInventory: boolean;
+  canAccessMigration: boolean;
   canAccessApprovals: boolean;
   canAccessSettings: boolean;
   canAccessReconciliation: boolean;
@@ -241,6 +251,7 @@ function SidebarContent({
   canAccessAdministration,
   canAccessProducts,
   canAccessInventory,
+  canAccessMigration,
   canAccessApprovals,
   canAccessSettings,
   canAccessReconciliation,
@@ -260,6 +271,10 @@ function SidebarContent({
 
     if (item.access === "inventory") {
       return canAccessInventory;
+    }
+
+    if (item.access === "migration") {
+      return canAccessMigration;
     }
 
     if (item.access === "settings") {
@@ -453,6 +468,7 @@ export function AdminShell({
           canAccessAdministration={user.canAccessAdministration}
           canAccessProducts={user.canAccessProducts}
           canAccessInventory={user.canAccessInventory}
+          canAccessMigration={user.canAccessMigration}
           canAccessApprovals={user.canAccessApprovals}
           canAccessSettings={user.canAccessSettings}
           canAccessReconciliation={user.canAccessReconciliation}
@@ -494,6 +510,7 @@ export function AdminShell({
                 canAccessAdministration={user.canAccessAdministration}
                 canAccessProducts={user.canAccessProducts}
                 canAccessInventory={user.canAccessInventory}
+                canAccessMigration={user.canAccessMigration}
                 canAccessApprovals={user.canAccessApprovals}
                 canAccessSettings={user.canAccessSettings}
                 canAccessReconciliation={user.canAccessReconciliation}

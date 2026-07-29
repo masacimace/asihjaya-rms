@@ -503,3 +503,19 @@ Saat membuat perubahan:
 - Jangan menyimpan secret atau data customer sensitif ke log.
 - Tambahkan audit trail untuk tindakan administratif dan finansial sensitif.
 - Jalankan quality checks sebelum commit.
+
+## Migrasi Produk Legacy
+
+Fondasi staging XLSX tersedia pada:
+
+```text
+/admin/migrasi-produk
+```
+
+Workbook sistem lama dianalisis tanpa otomatis membuat stok aktif. Barcode enam digit, termasuk leading zero, dipertahankan sebagai string; harga lama hanya menjadi referensi sampai verifikasi fisik dan pricing baru selesai.
+
+```powershell
+npm run check:legacy-product-migration
+```
+
+Lihat `docs/development/legacy-product-migration.md` untuk scope dan guardrail milestone.

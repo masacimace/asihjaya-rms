@@ -31,6 +31,9 @@ export default async function AdminLayout({
         canAccessAdministration: administrationAccess.canAccessAdministration,
         canAccessProducts: productInventoryAccess.canAccessProducts,
         canAccessInventory: productInventoryAccess.canAccessInventory,
+        canAccessMigration:
+          hasPermission(auth, "migration.view") ||
+          hasPermission(auth, "migration.import"),
         canAccessApprovals: canAccessApprovalInbox(auth),
         canAccessSettings: hasPermission(auth, "settings.manage"),
         canAccessReconciliation: hasPermission(

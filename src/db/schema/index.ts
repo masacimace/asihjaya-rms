@@ -51,6 +51,24 @@ export const productItemNumberSequence = pgSequence(
   },
 );
 
+export const legacyProductImportStatusEnum = pgEnum(
+  "legacy_product_import_status",
+  ["processing", "ready", "failed", "archived"],
+);
+
+export const legacyProductRowValidationStatusEnum = pgEnum(
+  "legacy_product_row_validation_status",
+  ["valid", "warning", "invalid"],
+);
+
+export const itemBarcodeSourceEnum = pgEnum("item_barcode_source", [
+  "legacy_import",
+  "legacy_physical_label",
+  "system_generated",
+  "replacement",
+  "manual",
+]);
+
 export const itemAvailabilityEnum = pgEnum("item_availability", [
   "draft",
   "available",
@@ -715,6 +733,207 @@ export const productItems = pgTable(
     check(
       "product_items_deduction_nonnegative_ck",
       sql`${table.deductionPerGram} is null or ${table.deductionPerGram} >= 0`,
+    ),
+  ],
+);
+
+export const legacyProductImportBatches = pgTable(
+  "legacy_product_import_batches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    uploadedBy: uuid("uploaded_by")
+      .notNull()
+      .references(() => users.id),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    fileHash: varchar("file_hash", { length: 64 }).notNull(),
+    fileSizeBytes: integer("file_size_bytes").notNull(),
+    worksheetName: varchar("worksheet_name", { length: 160 }).notNull(),
+    barcodeLength: integer("barcode_length").default(6).notNull(),
+    status: legacyProductImportStatusEnum("status")
+      .default("processing")
+      .notNull(),
+    totalRows: integer("total_rows").default(0).notNull(),
+    validRows: integer("valid_rows").default(0).notNull(),
+    warningRows: integer("warning_rows").default(0).notNull(),
+    invalidRows: integer("invalid_rows").default(0).notNull(),
+    uniqueMasterCount: integer("unique_master_count").default(0).notNull(),
+    duplicateBarcodeCount: integer("duplicate_barcode_count")
+      .default(0)
+      .notNull(),
+    leadingZeroBarcodeCount: integer("leading_zero_barcode_count")
+      .default(0)
+      .notNull(),
+    imageUrlCount: integer("image_url_count").default(0).notNull(),
+    headers: jsonb("headers").$type<string[]>().default([]).notNull(),
+    validationSummary: jsonb("validation_summary")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    errorMessage: text("error_message"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_product_import_batches_org_outlet_hash_uq").on(
+      table.organizationId,
+      table.outletId,
+      table.fileHash,
+    ),
+    index("legacy_product_import_batches_org_status_idx").on(
+      table.organizationId,
+      table.status,
+      table.createdAt,
+    ),
+    index("legacy_product_import_batches_outlet_time_idx").on(
+      table.outletId,
+      table.createdAt,
+    ),
+    check(
+      "legacy_product_import_batches_file_size_ck",
+      sql`${table.fileSizeBytes} between 1 and 10485760`,
+    ),
+    check(
+      "legacy_product_import_batches_barcode_length_ck",
+      sql`${table.barcodeLength} between 1 and 120`,
+    ),
+    check(
+      "legacy_product_import_batches_counts_ck",
+      sql`${table.totalRows} >= 0
+        and ${table.validRows} >= 0
+        and ${table.warningRows} >= 0
+        and ${table.invalidRows} >= 0
+        and ${table.uniqueMasterCount} >= 0
+        and ${table.duplicateBarcodeCount} >= 0
+        and ${table.leadingZeroBarcodeCount} >= 0
+        and ${table.imageUrlCount} >= 0
+        and ${table.validRows} + ${table.warningRows} + ${table.invalidRows} = ${table.totalRows}`,
+    ),
+  ],
+);
+
+export const legacyProductRows = pgTable(
+  "legacy_product_rows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    rowNumber: integer("row_number").notNull(),
+    sourceSequence: integer("source_sequence"),
+    legacyBarcode: varchar("legacy_barcode", { length: 120 }),
+    normalizedBarcode: varchar("normalized_barcode", { length: 120 }),
+    legacyCategory: varchar("legacy_category", { length: 160 }),
+    legacyMasterCode: varchar("legacy_master_code", { length: 120 }),
+    legacyMasterName: varchar("legacy_master_name", { length: 220 }),
+    legacyItemName: varchar("legacy_item_name", { length: 240 }),
+    legacyPurity: numeric("legacy_purity", { precision: 10, scale: 3 }),
+    legacyExchangePurity: numeric("legacy_exchange_purity", {
+      precision: 10,
+      scale: 3,
+    }),
+    legacyPricePerGram: numeric("legacy_price_per_gram", {
+      precision: 18,
+      scale: 0,
+    }),
+    legacyDeductionPerGram: numeric("legacy_deduction_per_gram", {
+      precision: 18,
+      scale: 0,
+    }),
+    legacyWeightGram: numeric("legacy_weight_gram", {
+      precision: 12,
+      scale: 3,
+    }),
+    legacyColor: varchar("legacy_color", { length: 120 }),
+    legacyImageUrl: text("legacy_image_url"),
+    validationStatus: legacyProductRowValidationStatusEnum("validation_status")
+      .default("valid")
+      .notNull(),
+    validationIssues: jsonb("validation_issues")
+      .$type<Array<Record<string, unknown>>>()
+      .default([])
+      .notNull(),
+    rowFingerprint: varchar("row_fingerprint", { length: 64 }).notNull(),
+    rawData: jsonb("raw_data")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_product_rows_batch_row_uq").on(
+      table.batchId,
+      table.rowNumber,
+    ),
+    index("legacy_product_rows_batch_status_idx").on(
+      table.batchId,
+      table.validationStatus,
+      table.rowNumber,
+    ),
+    index("legacy_product_rows_batch_barcode_idx").on(
+      table.batchId,
+      table.normalizedBarcode,
+    ),
+    index("legacy_product_rows_org_outlet_barcode_idx").on(
+      table.organizationId,
+      table.outletId,
+      table.normalizedBarcode,
+    ),
+    index("legacy_product_rows_batch_master_idx").on(
+      table.batchId,
+      table.legacyMasterCode,
+    ),
+    check(
+      "legacy_product_rows_row_number_ck",
+      sql`${table.rowNumber} > 1`,
+    ),
+  ],
+);
+
+export const itemBarcodes = pgTable(
+  "item_barcodes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => productItems.id, { onDelete: "cascade" }),
+    barcodeValue: varchar("barcode_value", { length: 120 }).notNull(),
+    barcodeFormat: varchar("barcode_format", { length: 48 }),
+    source: itemBarcodeSourceEnum("source").notNull(),
+    isPrimary: boolean("is_primary").default(false).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdBy: uuid("created_by").references(() => users.id),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("item_barcodes_item_value_uq").on(
+      table.itemId,
+      table.barcodeValue,
+    ),
+    uniqueIndex("item_barcodes_org_active_value_uq")
+      .on(table.organizationId, table.barcodeValue)
+      .where(sql`${table.isActive} = true`),
+    uniqueIndex("item_barcodes_item_active_primary_uq")
+      .on(table.itemId)
+      .where(sql`${table.isActive} = true and ${table.isPrimary} = true`),
+    index("item_barcodes_item_primary_idx").on(
+      table.itemId,
+      table.isPrimary,
+      table.isActive,
     ),
   ],
 );

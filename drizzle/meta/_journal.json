@@ -29,6 +29,13 @@
       "when": 1785187936647,
       "tag": "0003_security_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785303000000,
+      "tag": "0004_legacy_product_migration_foundation",
+      "breakpoints": true
     }
   ]
 }

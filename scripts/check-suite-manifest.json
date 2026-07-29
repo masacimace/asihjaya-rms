@@ -5,6 +5,7 @@
     "check-customer-history-pin.ts",
     "check-hardware-agent-request-signing.ts",
     "check-http-security.ts",
+    "check-legacy-product-migration.ts",
     "check-pdf-render-security.ts",
     "check-receipt-token.ts",
     "check-routes.ts"
