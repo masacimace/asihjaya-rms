@@ -136,6 +136,9 @@ async function checkLiveDatabase(): Promise<void> {
       "security_rate_limits",
       "legacy_product_import_batches",
       "legacy_product_rows",
+      "legacy_product_master_mappings",
+      "legacy_migration_sessions",
+      "legacy_migration_session_assignments",
       "item_barcodes",
     ];
 
@@ -157,6 +160,18 @@ async function checkLiveDatabase(): Promise<void> {
       ["security_rate_limits", ["scope", "key_hash", "attempt_count", "blocked_until"]],
       ["legacy_product_import_batches", ["file_hash", "validation_summary", "status"]],
       ["legacy_product_rows", ["normalized_barcode", "validation_status", "row_fingerprint"]],
+      [
+        "legacy_product_master_mappings",
+        ["legacy_master_code", "item_count", "status", "target_product_master_id"],
+      ],
+      [
+        "legacy_migration_sessions",
+        ["batch_id", "name", "location_code", "status"],
+      ],
+      [
+        "legacy_migration_session_assignments",
+        ["session_id", "user_id", "assignment_role"],
+      ],
       ["item_barcodes", ["barcode_value", "source", "is_primary", "is_active"]],
     ]);
 

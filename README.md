@@ -519,3 +519,20 @@ npm run check:legacy-product-migration
 ```
 
 Lihat `docs/development/legacy-product-migration.md` untuk scope dan guardrail milestone.
+
+## Legacy Migration Milestone 2
+
+Master legacy dapat dipetakan sekali ke Product Master sistem baru melalui route:
+
+```text
+/admin/migrasi-produk/[batchId]/mapping
+```
+
+Manager juga dapat membagi pekerjaan per etalase dan menugaskan operator/lead melalui:
+
+```text
+/admin/migrasi-produk/[batchId]/sesi
+```
+
+Semua Product Master hasil otomatis tetap berstatus `draft`. Milestone ini belum mengaktifkan item, belum mengubah stok, dan belum mengubah lookup POS.
+

@@ -11,6 +11,7 @@ import { db } from "@/db";
 import {
   auditLogs,
   legacyProductImportBatches,
+  legacyProductMasterMappings,
   legacyProductRows,
 } from "@/db/schema";
 import {
@@ -18,6 +19,7 @@ import {
   type ParsedLegacyProductRow,
   type ParsedLegacyProductWorkbook,
 } from "@/features/legacy-migration/contracts";
+import { collectLegacyMasterMappingSeeds } from "@/features/legacy-migration/master-mapping";
 import { parseLegacyProductWorkbook } from "@/features/legacy-migration/xlsx-parser";
 import { requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
@@ -255,6 +257,16 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
           .map((row) => rowInsertValue(row, context));
 
         await transaction.insert(legacyProductRows).values(values);
+      }
+
+      const masterMappingSeeds = collectLegacyMasterMappingSeeds(parsed.rows);
+      if (masterMappingSeeds.length > 0) {
+        await transaction.insert(legacyProductMasterMappings).values(
+          masterMappingSeeds.map((mapping) => ({
+            ...context,
+            ...mapping,
+          })),
+        );
       }
 
       await transaction

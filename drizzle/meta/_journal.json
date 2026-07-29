@@ -36,6 +36,13 @@
       "when": 1785303000000,
       "tag": "0004_legacy_product_migration_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785315238132,
+      "tag": "0005_legacy_master_mapping_sessions",
+      "breakpoints": true
     }
   ]
 }

@@ -69,6 +69,26 @@ export const itemBarcodeSourceEnum = pgEnum("item_barcode_source", [
   "manual",
 ]);
 
+export const legacyMasterMappingStatusEnum = pgEnum(
+  "legacy_master_mapping_status",
+  ["pending", "mapped", "ignored"],
+);
+
+export const legacyMasterMappingSourceEnum = pgEnum(
+  "legacy_master_mapping_source",
+  ["existing", "created"],
+);
+
+export const legacyMigrationSessionStatusEnum = pgEnum(
+  "legacy_migration_session_status",
+  ["draft", "active", "locked", "completed", "cancelled"],
+);
+
+export const legacyMigrationAssignmentRoleEnum = pgEnum(
+  "legacy_migration_assignment_role",
+  ["operator", "lead"],
+);
+
 export const itemAvailabilityEnum = pgEnum("item_availability", [
   "draft",
   "available",
@@ -897,6 +917,168 @@ export const legacyProductRows = pgTable(
     check(
       "legacy_product_rows_row_number_ck",
       sql`${table.rowNumber} > 1`,
+    ),
+  ],
+);
+
+export const legacyProductMasterMappings = pgTable(
+  "legacy_product_master_mappings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    legacyMasterCode: varchar("legacy_master_code", { length: 120 }).notNull(),
+    legacyMasterName: varchar("legacy_master_name", { length: 220 }).notNull(),
+    legacyCategory: varchar("legacy_category", { length: 160 }),
+    normalizedCategoryName: varchar("normalized_category_name", { length: 160 }),
+    itemCount: integer("item_count").default(0).notNull(),
+    status: legacyMasterMappingStatusEnum("status")
+      .default("pending")
+      .notNull(),
+    mappingSource: legacyMasterMappingSourceEnum("mapping_source"),
+    targetCategoryId: uuid("target_category_id").references(
+      () => productCategories.id,
+    ),
+    targetProductMasterId: uuid("target_product_master_id").references(
+      () => productMasters.id,
+    ),
+    reviewNotes: text("review_notes"),
+    reviewedBy: uuid("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_product_master_mappings_batch_code_uq").on(
+      table.batchId,
+      table.legacyMasterCode,
+    ),
+    index("legacy_product_master_mappings_batch_status_idx").on(
+      table.batchId,
+      table.status,
+      table.legacyMasterCode,
+    ),
+    index("legacy_product_master_mappings_target_idx").on(
+      table.organizationId,
+      table.targetProductMasterId,
+    ),
+    check(
+      "legacy_product_master_mappings_item_count_ck",
+      sql`${table.itemCount} >= 0`,
+    ),
+    check(
+      "legacy_product_master_mappings_resolution_ck",
+      sql`(
+        ${table.status} = 'pending'
+        and ${table.targetCategoryId} is null
+        and ${table.targetProductMasterId} is null
+        and ${table.mappingSource} is null
+        and ${table.reviewedBy} is null
+        and ${table.reviewedAt} is null
+      ) or (
+        ${table.status} = 'mapped'
+        and ${table.targetCategoryId} is not null
+        and ${table.targetProductMasterId} is not null
+        and ${table.mappingSource} is not null
+        and ${table.reviewedBy} is not null
+        and ${table.reviewedAt} is not null
+      ) or (
+        ${table.status} = 'ignored'
+        and ${table.targetCategoryId} is null
+        and ${table.targetProductMasterId} is null
+        and ${table.mappingSource} is null
+        and ${table.reviewedBy} is not null
+        and ${table.reviewedAt} is not null
+        and nullif(btrim(${table.reviewNotes}), '') is not null
+      )`,
+    ),
+  ],
+);
+
+export const legacyMigrationSessions = pgTable(
+  "legacy_migration_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    name: varchar("name", { length: 160 }).notNull(),
+    locationCode: varchar("location_code", { length: 80 }),
+    expectedItemCount: integer("expected_item_count"),
+    notes: text("notes"),
+    status: legacyMigrationSessionStatusEnum("status")
+      .default("draft")
+      .notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_migration_sessions_batch_name_uq").on(
+      table.batchId,
+      table.name,
+    ),
+    index("legacy_migration_sessions_batch_status_idx").on(
+      table.batchId,
+      table.status,
+      table.createdAt,
+    ),
+    index("legacy_migration_sessions_outlet_status_idx").on(
+      table.outletId,
+      table.status,
+    ),
+    check(
+      "legacy_migration_sessions_expected_count_ck",
+      sql`${table.expectedItemCount} is null or ${table.expectedItemCount} > 0`,
+    ),
+  ],
+);
+
+export const legacyMigrationSessionAssignments = pgTable(
+  "legacy_migration_session_assignments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => legacyMigrationSessions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    assignmentRole: legacyMigrationAssignmentRoleEnum("assignment_role")
+      .default("operator")
+      .notNull(),
+    assignedBy: uuid("assigned_by")
+      .notNull()
+      .references(() => users.id),
+    assignedAt: timestamp("assigned_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("legacy_migration_session_assignments_session_user_uq").on(
+      table.sessionId,
+      table.userId,
+    ),
+    index("legacy_migration_session_assignments_user_idx").on(
+      table.userId,
+      table.assignedAt,
     ),
   ],
 );

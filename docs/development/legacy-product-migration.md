@@ -43,6 +43,16 @@ npm run lint
 npm run build
 ```
 
+## Milestone 2 — Master Mapping dan Session Management
+
+- Satu mapping berlaku untuk seluruh item dengan `legacy_master_code` yang sama.
+- Tombol auto-draft membuat Product Master berstatus `draft`, bukan `active`.
+- Alias kategori legacy: Cincin, Gelang, Kalung, Liontin, Anting/Giwang, dan Logam Mulia dinormalisasi ke kategori sistem baru.
+- Manager dapat memetakan ke Product Master existing, mengabaikan master dengan alasan, atau mereset mapping ke pending.
+- Sesi migrasi dibagi per etalase/lokasi dan memiliki operator serta satu Migration Lead opsional.
+- Status sesi: `draft`, `active`, `locked`, `completed`, dan `cancelled`. Milestone 2 belum menyediakan scan sehingga status `completed` belum ditransisikan dari UI.
+- Tidak ada item yang dibuat atau diaktifkan pada milestone ini.
+
 ## Milestone berikutnya
 
-Milestone 2 akan menambahkan review/mapping 54 master legacy, normalisasi kategori, pricing readiness, serta session migrasi per etalase. Belum ada item yang diaktifkan ke POS sampai verifikasi fisik, approval, dan cutover selesai.
+Milestone 3 akan menambahkan mobile scanner untuk operator, pencarian barcode staging, provisional item untuk barcode fisik yang tidak ada di export, verifikasi data fisik, serta submit ke antrean manager. Item belum aktif di POS sampai approval dan cutover.

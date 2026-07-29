@@ -188,6 +188,67 @@ for (const contract of [
   assert(migrationSource.includes(contract), `Migration wajib memiliki ${contract}.`);
 }
 
+const milestoneTwoMigrationSource = read(
+  "drizzle/0005_legacy_master_mapping_sessions.sql",
+);
+for (const contract of [
+  "legacy_product_master_mappings",
+  "legacy_migration_sessions",
+  "legacy_migration_session_assignments",
+  "legacy_master_mapping_status",
+  "legacy_migration_session_status",
+  "migration.mapping.manage",
+  "migration.session.manage",
+]) {
+  assert(
+    milestoneTwoMigrationSource.includes(contract),
+    `Migration Milestone 2 wajib memiliki ${contract}.`,
+  );
+}
+
+const mappingActionSource = read(
+  "src/app/actions/legacy-migration-management.ts",
+);
+for (const contract of [
+  "migration.mapping.manage",
+  "migration.session.manage",
+  "pg_advisory_xact_lock",
+  "status: \"draft\"",
+  "legacyMigrationSessionAssignments",
+]) {
+  assert(
+    mappingActionSource.includes(contract),
+    `Action Milestone 2 wajib memiliki ${contract}.`,
+  );
+}
+
+const importActionSource = read(
+  "src/app/actions/legacy-product-import.ts",
+);
+assert(
+  importActionSource.includes("collectLegacyMasterMappingSeeds"),
+  "Import XLSX baru harus menyiapkan mapping master secara otomatis.",
+);
+
+const mappingPageSource = read(
+  "src/app/(admin)/admin/migrasi-produk/[batchId]/mapping/page.tsx",
+);
+assert(
+  mappingPageSource.includes("Tidak mengatur harga per item"),
+  "Halaman mapping harus mempertahankan guardrail pricing per item.",
+);
+
+const sessionPageSource = read(
+  "src/app/(admin)/admin/migrasi-produk/[batchId]/sesi/page.tsx",
+);
+const normalizedSessionPageSource = sessionPageSource.replace(/\s+/g, " ");
+assert(
+  normalizedSessionPageSource.includes(
+    "Hak scan baru akan aktif pada Milestone 3",
+  ),
+  "Halaman sesi harus menjelaskan scanner belum aktif pada Milestone 2.",
+);
+
 const routeSource = read("src/app/(admin)/admin/migrasi-produk/page.tsx");
 assert(
   routeSource.includes("Tidak ada baris yang otomatis menjadi stok aktif"),
@@ -195,5 +256,5 @@ assert(
 );
 
 console.log(
-  "OK: parser XLSX, leading zero, hyperlink, duplicate guard, staging-only contract, permission, schema, dan route migrasi tervalidasi.",
+  "OK: parser XLSX, staging-only contract, master mapping, session per etalase, permission, schema, dan route migrasi tervalidasi.",
 );

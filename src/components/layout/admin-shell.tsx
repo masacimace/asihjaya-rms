@@ -82,16 +82,16 @@ const navigation: NavigationItem[] = [
     access: "products",
   },
   {
-    label: "Produk Inventaris",
-    href: "/admin/inventaris",
-    icon: Boxes,
-    access: "inventory",
-  },
-  {
     label: "Migrasi Produk",
     href: "/admin/migrasi-produk",
     icon: FileSpreadsheet,
     access: "migration",
+  },
+  {
+    label: "Produk Inventaris",
+    href: "/admin/inventaris",
+    icon: Boxes,
+    access: "inventory",
   },
   {
     label: "Riwayat Penjualan",
