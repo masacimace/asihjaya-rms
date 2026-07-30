@@ -21,6 +21,11 @@ import {
   getLegacyPhotoMigrationStatus,
 } from "../src/features/legacy-migration/reconciliation-rules";
 import {
+  getLegacyCutoverAliasSource,
+  getLegacyCutoverItemIssues,
+  isLegacyCutoverSessionClosed,
+} from "../src/features/legacy-migration/cutover-rules";
+import {
   isLegacyImageUrlAllowed,
 } from "../src/lib/storage/legacy-image-url-policy";
 
@@ -742,7 +747,100 @@ assert(
   "Foto legacy harus memakai pipeline image storage internal yang sama.",
 );
 
-console.log(
-  "OK: Legacy product migration Milestone 1-5B contracts tervalidasi.",
+assert(
+  isLegacyCutoverSessionClosed("locked") &&
+    isLegacyCutoverSessionClosed("completed") &&
+    !isLegacyCutoverSessionClosed("active"),
+  "Cutover hanya boleh dijalankan untuk sesi locked atau completed.",
+);
+assert(
+  getLegacyCutoverAliasSource("legacy_match") === "legacy_import" &&
+    getLegacyCutoverAliasSource("physical_unmatched") ===
+      "legacy_physical_label",
+  "Cutover harus mempertahankan sumber alias barcode legacy.",
+);
+assert(
+  getLegacyCutoverItemIssues({
+    source: "legacy_match",
+    barcodeValue: "003037",
+    batchOutletId: "outlet",
+    productItemId: "item",
+    itemAvailability: "migration_hold",
+    itemIsActive: true,
+    itemOutletId: "outlet",
+    itemLegacyId: "003037",
+    masterStatus: "active",
+    aliasId: "alias",
+    aliasSource: "legacy_import",
+    aliasIsPrimary: true,
+    aliasIsActive: true,
+    hasActiveSoldRecord: false,
+  }).length === 0,
+  "Item hold yang konsisten harus lolos preflight cutover.",
 );
 
+const milestoneFiveCMigrationSource = read(
+  "drizzle/0009_legacy_transactional_cutover.sql",
+);
+for (const contract of [
+  "migration_opening",
+  "legacy_migration_cutover_runs",
+  "legacy_migration_cutover_runs_session_uq",
+  "legacy_migration_cutover_runs_item_count_ck",
+  "migration.cutover.execute",
+]) {
+  assert(
+    milestoneFiveCMigrationSource.includes(contract),
+    `Migration Milestone 5C wajib memiliki ${contract}.`,
+  );
+}
+
+const cutoverActionSource = read(
+  "src/app/actions/legacy-migration-cutover.ts",
+);
+for (const contract of [
+  'requirePermission("migration.cutover.execute")',
+  "pg_advisory_xact_lock",
+  "legacy-barcode:",
+  'movementType: "migration_opening"',
+  'availability: "available"',
+  'status: "activated"',
+  "legacy_migration_cutover.execute",
+]) {
+  assert(
+    cutoverActionSource.includes(contract),
+    `Action Milestone 5C wajib memiliki ${contract}.`,
+  );
+}
+assert(
+  cutoverActionSource.includes("db.transaction") &&
+    cutoverActionSource.includes("legacyMigrationCutoverRuns"),
+  "Cutover wajib transactional dan memiliki run idempotency.",
+);
+
+const cutoverContractsSource = read(
+  "src/features/legacy-migration/cutover-contracts.ts",
+);
+assert(
+  cutoverContractsSource.includes('LEGACY_CUTOVER_CONFIRMATION = "AKTIFKAN STOK"'),
+  "Cutover wajib memakai konfirmasi eksplisit AKTIFKAN STOK.",
+);
+
+const cutoverPageSource = read(
+  "src/app/(admin)/admin/migrasi-produk/[batchId]/cutover/page.tsx",
+);
+for (const contract of [
+  "Aktivasi Stok Transactional",
+  "opening inventory movement",
+  "seluruh item sesi berhasil bersama",
+  "Milestone 5D",
+]) {
+  assert(
+    cutoverPageSource.includes(contract),
+    `Halaman Milestone 5C wajib memiliki ${contract}.`,
+  );
+}
+
+console.log(
+  "OK: Legacy product migration Milestone 1-5C contracts tervalidasi.",
+);

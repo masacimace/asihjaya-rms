@@ -92,3 +92,15 @@ export function buildLegacyPhotoMigrationMetadata(input:
     errorMessage: input.errorMessage.slice(0, 500),
   };
 }
+
+export function isLegacyPhotoMigrationItemEligible(input: {
+  verificationStatus: string;
+  itemAvailability: string;
+}) {
+  return (
+    (input.verificationStatus === "approved" &&
+      input.itemAvailability === "migration_hold") ||
+    (input.verificationStatus === "activated" &&
+      input.itemAvailability === "available")
+  );
+}

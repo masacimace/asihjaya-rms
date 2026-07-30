@@ -64,6 +64,13 @@
       "when": 1785380400000,
       "tag": "0008_legacy_sold_during_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785466800000,
+      "tag": "0009_legacy_transactional_cutover",
+      "breakpoints": true
     }
   ]
 }

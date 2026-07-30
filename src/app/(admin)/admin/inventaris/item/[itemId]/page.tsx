@@ -65,6 +65,7 @@ const locationStateLabels = {
 
 const movementLabels = {
   goods_receipt: "Penerimaan barang",
+  migration_opening: "Saldo awal migrasi",
   sale: "Penjualan",
   sale_return: "Retur penjualan",
   transfer_out: "Transfer keluar",

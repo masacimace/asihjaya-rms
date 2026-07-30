@@ -249,3 +249,55 @@ LEGACY_IMAGE_DOWNLOAD_MAX_MB=8
 ```
 
 Milestone 5B tidak membuat `inventory_movements`, tidak mengubah `migration_hold` menjadi `available`, dan tidak mengubah lookup checkout POS.
+
+## Milestone 5C — Transactional cutover dan aktivasi stok
+
+Route manager:
+
+```text
+/admin/migrasi-produk/[batchId]/cutover
+```
+
+Cutover dijalankan per sesi/etalase agar dampak tetap kecil dan mudah diverifikasi. Tidak ada approval tambahan. Manager hanya membuka halaman aktivasi, memastikan preflight bersih, mengetik `AKTIFKAN STOK`, lalu menjalankan satu sesi.
+
+Syarat utama:
+
+- seluruh sesi batch sudah `locked`, `completed`, atau `cancelled`;
+- tidak ada verification `submitted`, `needs_review`, atau `returned`;
+- target fisik yang diisi tidak mengalami shortfall;
+- verification approved memiliki Product Item aktif dengan `migration_hold`;
+- Product Master aktif;
+- alias barcode legacy aktif, primary, dan memiliki source yang benar;
+- barcode tidak memiliki sold record aktif.
+
+Flow transaction:
+
+```text
+batch advisory lock
+  -> session row lock
+  -> barcode advisory locks terurut
+  -> validasi ulang verification, Product Item, master, alias, dan sold record
+  -> insert legacy_migration_cutover_runs
+  -> insert inventory_movements (migration_opening)
+  -> product_items migration_hold -> available
+  -> verification approved -> activated
+  -> session -> completed
+  -> audit log
+  -> commit
+```
+
+Satu `legacy_migration_cutover_runs` hanya dapat dibuat untuk satu sesi. Retry setelah transaksi sukses tidak membuat movement atau item aktif kedua. Jika satu item gagal validasi, seluruh sesi rollback dan tidak ada aktivasi parsial.
+
+Opening movement memakai:
+
+```text
+movement_type  = migration_opening
+reference_type = legacy_migration_cutover
+reference_id   = cutover run id
+from_outlet    = null
+to_outlet      = outlet sesi
+```
+
+Foto legacy pending/gagal tidak memblokir cutover. Proses copy foto Milestone 5B tetap dapat dijalankan untuk verification `activated` dengan Product Item `available`, sehingga fallback Product Master/placeholder tidak menjadi ketergantungan permanen.
+
+Milestone 5C belum mengubah lookup checkout agar membaca `item_barcodes`. Item sudah `available`, tetapi scan label legacy pada checkout baru menjadi acceptance flow setelah Milestone 5D.

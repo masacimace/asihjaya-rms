@@ -216,7 +216,8 @@ export type ReportInventoryMovementType =
   | "lost"
   | "repair_out"
   | "repair_in"
-  | "reversal";
+  | "reversal"
+  | "migration_opening";
 
 export type ReportStockMovementFilter = "all" | ReportInventoryMovementType;
 
@@ -327,6 +328,7 @@ export const reportStockMovementOptions: Array<{
 }> = [
   { value: "all", label: "Semua movement" },
   { value: "goods_receipt", label: "Barang masuk" },
+  { value: "migration_opening", label: "Saldo awal migrasi" },
   { value: "sale", label: "Terjual" },
   { value: "sale_return", label: "Retur penjualan" },
   { value: "reversal", label: "Reversal/Void" },
@@ -447,4 +449,3 @@ export function parseReportStockFilters(
     movementType,
   };
 }
-

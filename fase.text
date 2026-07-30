@@ -14,24 +14,24 @@ Rekomendasi scope final Milestone 5
 
 Aku menyarankan Milestone 5 dibagi menjadi empat bagian internal:
 
-5A — Sold during migration
-Tandai barang yang terjual pada legacy.
-Import daftar barcode terjual bila tersedia.
-Audit siapa yang menandai.
-Cegah barang tersebut masuk cutover.
+5A — Sold during migration (DONE)
+- Tandai barang yang terjual pada legacy.
+- Import daftar barcode terjual bila tersedia.
+- Audit siapa yang menandai.
+- Cegah barang tersebut masuk cutover.
 
-5B — Reconciliation dan photo migration
-Rekonsiliasi status seluruh verification.
-Salin foto legacy ke storage internal.
-Deteksi pricing/master/barcode blocker.
-Laporan readiness per sesi.
+5B — Reconciliation dan photo migration (need fix)
+- Rekonsiliasi status seluruh verification.
+- Salin foto legacy ke storage internal.
+- Deteksi pricing/master/barcode blocker.
+- Laporan readiness per sesi.
 
-5C — Transactional cutover
-Lock sesi.
-Jalankan preflight.
-Buat inventory movement.
-Ubah migration_hold menjadi available.
-Simpan cutover report dan audit.
+5C — Transactional cutover (need fix)
+- Lock sesi.
+- Jalankan preflight.
+- Buat inventory movement.
+- Ubah migration_hold menjadi available.
+- Simpan cutover report dan audit.
 
 5D — POS legacy barcode lookup
 Lookup melalui item_barcodes.

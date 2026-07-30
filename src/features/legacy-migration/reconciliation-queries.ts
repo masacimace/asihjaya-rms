@@ -3,6 +3,7 @@ import {
   asc,
   count,
   eq,
+  inArray,
   isNull,
   sql,
 } from "drizzle-orm";
@@ -21,6 +22,7 @@ import { getAccessibleLegacyBatch } from "@/features/legacy-migration/management
 import {
   getLegacyPhotoMigrationMetadata,
   getLegacyPhotoMigrationStatus,
+  isLegacyPhotoMigrationItemEligible,
 } from "@/features/legacy-migration/reconciliation-rules";
 import type { AuthContext } from "@/lib/auth/session";
 
@@ -102,6 +104,7 @@ export async function getLegacyMigrationReconciliationData(
       db
         .select({
           verificationId: legacyMigrationVerifications.id,
+          verificationStatus: legacyMigrationVerifications.status,
           barcodeValue: legacyMigrationVerifications.barcodeValue,
           source: legacyMigrationVerifications.source,
           useLegacyImage: legacyMigrationVerifications.useLegacyImage,
@@ -152,7 +155,10 @@ export async function getLegacyMigrationReconciliationData(
               legacyMigrationVerifications.organizationId,
               auth.organization.id,
             ),
-            eq(legacyMigrationVerifications.status, "approved"),
+            inArray(legacyMigrationVerifications.status, [
+              "approved",
+              "activated",
+            ]),
           ),
         )
         .orderBy(asc(legacyMigrationVerifications.barcodeValue)),
@@ -240,7 +246,13 @@ export async function getLegacyMigrationReconciliationData(
       integrity.itemMissing += 1;
       continue;
     }
-    if (row.itemAvailability !== "migration_hold" || !row.itemIsActive) {
+    if (
+      !row.itemIsActive ||
+      !isLegacyPhotoMigrationItemEligible({
+        verificationStatus: row.verificationStatus,
+        itemAvailability: row.itemAvailability,
+      })
+    ) {
       integrity.holdStateInvalid += 1;
     }
     if (
@@ -432,10 +444,16 @@ export async function getLegacyPhotoMigrationCandidates(
           legacyMigrationVerifications.organizationId,
           auth.organization.id,
         ),
-        eq(legacyMigrationVerifications.status, "approved"),
+        inArray(legacyMigrationVerifications.status, [
+          "approved",
+          "activated",
+        ]),
         eq(legacyMigrationVerifications.useLegacyImage, true),
         sql`${legacyMigrationVerifications.legacyImageUrl} is not null`,
-        eq(productItems.availability, "migration_hold"),
+        inArray(productItems.availability, [
+          "migration_hold",
+          "available",
+        ]),
         eq(productItems.isActive, true),
         isNull(productItems.imageKey),
         isNull(legacyMigrationSoldRecords.id),

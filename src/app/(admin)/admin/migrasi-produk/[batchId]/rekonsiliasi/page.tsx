@@ -8,6 +8,7 @@ import {
   ImageOff,
   Images,
   PackageCheck,
+  PlayCircle,
   RefreshCw,
   ShieldCheck,
   Store,
@@ -228,6 +229,28 @@ export default async function LegacyMigrationReconciliationPage({
         )}
       </section>
 
+      {data.isReadyForCutover ? (
+        <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 lg:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="flex items-center gap-2 font-semibold text-emerald-950">
+                <CheckCircle2 className="size-4" /> Preflight rekonsiliasi bersih
+              </p>
+              <p className="mt-1 text-sm leading-6 text-emerald-900">
+                Lanjutkan aktivasi per sesi. Foto legacy pending atau gagal tetap
+                menjadi warning dan tidak memblokir stok.
+              </p>
+            </div>
+            <Link
+              href={`/admin/migrasi-produk/${data.batch.id}/cutover`}
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800"
+            >
+              <PlayCircle className="size-4" /> Buka aktivasi stok
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
         <div className="grid gap-5 lg:grid-cols-[1fr_360px] lg:items-start">
           <div>
@@ -235,7 +258,7 @@ export default async function LegacyMigrationReconciliationPage({
               <Images className="size-5 text-[var(--accent)]" /> Migrasi foto legacy
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Hanya foto milik item approved yang disalin. Foto aktual hasil upload
+              Foto milik item approved atau sudah activated dapat disalin. Foto aktual hasil upload
               sudah berada di storage internal dan tidak diproses ulang. Link asli
               tetap disimpan sebagai jejak sumber.
             </p>
@@ -309,7 +332,7 @@ export default async function LegacyMigrationReconciliationPage({
               item akan memakai placeholder sampai foto item ditambahkan.
             </p>
             <p className="mt-2 font-medium text-neutral-900">
-              Foto gagal tidak memblokir cutover.
+              Foto gagal tidak memblokir cutover dan tetap dapat diulang setelah aktivasi.
             </p>
           </div>
         </div>

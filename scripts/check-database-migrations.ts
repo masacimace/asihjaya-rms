@@ -141,6 +141,7 @@ async function checkLiveDatabase(): Promise<void> {
       "legacy_migration_session_assignments",
       "legacy_migration_verifications",
       "legacy_migration_sold_records",
+      "legacy_migration_cutover_runs",
       "item_barcodes",
     ];
 
@@ -203,6 +204,19 @@ async function checkLiveDatabase(): Promise<void> {
           "revert_reason",
         ],
       ],
+      [
+        "legacy_migration_cutover_runs",
+        [
+          "batch_id",
+          "session_id",
+          "organization_id",
+          "outlet_id",
+          "item_count",
+          "executed_by",
+          "executed_at",
+          "metadata",
+        ],
+      ],
       ["item_barcodes", ["barcode_value", "source", "is_primary", "is_active"]],
     ]);
 
@@ -229,6 +243,8 @@ async function checkLiveDatabase(): Promise<void> {
       "legacy_migration_sold_records_org_barcode_active_uq",
       "legacy_migration_sold_records_batch_sold_at_idx",
       "legacy_migration_sold_records_verification_idx",
+      "legacy_migration_cutover_runs_session_uq",
+      "legacy_migration_cutover_runs_batch_time_idx",
     ];
     const indexResult = await pool.query<{ indexname: string }>(
       `select indexname
@@ -302,6 +318,35 @@ async function checkLiveDatabase(): Promise<void> {
     assert(
       missingSoldConstraints.length === 0,
       `Constraint sold during migration belum lengkap: ${missingSoldConstraints.join(", ")}.`,
+    );
+
+    const cutoverConstraintResult = await pool.query<{ conname: string }>(
+      `select constraint_record.conname
+       from pg_constraint as constraint_record
+       inner join pg_class as table_record
+         on table_record.oid = constraint_record.conrelid
+       inner join pg_namespace as namespace_record
+         on namespace_record.oid = table_record.relnamespace
+       where namespace_record.nspname = 'public'
+         and table_record.relname = 'legacy_migration_cutover_runs'
+         and constraint_record.conname = 'legacy_migration_cutover_runs_item_count_ck'`,
+    );
+    assert(
+      cutoverConstraintResult.rows.length === 1,
+      "Constraint cutover item count belum tersedia.",
+    );
+
+    const movementEnumResult = await pool.query<{ enumlabel: string }>(
+      `select enum_value.enumlabel
+       from pg_enum as enum_value
+       inner join pg_type as enum_type on enum_type.oid = enum_value.enumtypid
+       where enum_type.typname = 'inventory_movement_type'`,
+    );
+    assert(
+      movementEnumResult.rows.some(
+        (row) => row.enumlabel === "migration_opening",
+      ),
+      "Enum inventory_movement_type harus memiliki migration_opening.",
     );
 
     const availabilityEnumResult = await pool.query<{ enumlabel: string }>(

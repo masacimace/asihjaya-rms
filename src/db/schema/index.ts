@@ -145,6 +145,7 @@ export const movementTypeEnum = pgEnum("inventory_movement_type", [
   "repair_out",
   "repair_in",
   "reversal",
+  "migration_opening",
 ]);
 
 export const shiftStatusEnum = pgEnum("shift_status", [
@@ -1311,6 +1312,50 @@ export const legacyMigrationSoldRecords = pgTable(
         and ${table.revertedAt} is not null
         and length(btrim(${table.revertReason})) >= 5
       )`,
+    ),
+  ],
+);
+
+export const legacyMigrationCutoverRuns = pgTable(
+  "legacy_migration_cutover_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "restrict" }),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => legacyMigrationSessions.id, { onDelete: "restrict" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    itemCount: integer("item_count").notNull(),
+    executedBy: uuid("executed_by")
+      .notNull()
+      .references(() => users.id),
+    executedAt: timestamp("executed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_migration_cutover_runs_session_uq").on(
+      table.sessionId,
+    ),
+    index("legacy_migration_cutover_runs_batch_time_idx").on(
+      table.batchId,
+      table.executedAt,
+    ),
+    check(
+      "legacy_migration_cutover_runs_item_count_ck",
+      sql`${table.itemCount} >= 0`,
     ),
   ],
 );
@@ -3525,4 +3570,3 @@ export const saleReturnItems = pgTable(
     ),
   ],
 );
-

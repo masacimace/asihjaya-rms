@@ -554,3 +554,9 @@ Manager dapat menandai satu atau banyak barcode yang terjual pada sistem legacy 
 Manager membuka `/admin/migrasi-produk/[batchId]/rekonsiliasi` untuk melihat blocker cutover dan memindahkan foto item legacy dari link XLSX ke private image storage. Readiness dihitung langsung dari sesi, verification, sold record, Product Item `migration_hold`, Product Master, dan alias barcode; tidak ada approval tambahan atau tabel workflow baru.
 
 Foto legacy diproses maksimal 100 item per klik dengan concurrency terbatas. Download hanya menerima HTTPS dari host `LEGACY_IMAGE_ALLOWED_HOSTS`, memvalidasi redirect/content type/ukuran, lalu mengubah gambar menjadi WebP melalui pipeline image storage yang sama dengan upload normal. Kegagalan foto menjadi warning dan UI memakai foto Product Master lalu placeholder; kegagalan tersebut tidak menghalangi cutover. Milestone 5B belum membuat inventory movement, belum mengubah item menjadi `available`, dan belum mengaktifkan barcode alias pada checkout POS.
+
+### Legacy product migration Milestone 5C — transactional cutover
+
+Manager membuka `/admin/migrasi-produk/[batchId]/cutover` setelah rekonsiliasi akhir bersih. Aktivasi dilakukan per sesi/etalase dalam satu transaction: cutover run dibuat, opening inventory movement `migration_opening` dicatat untuk setiap item, Product Item berubah dari `migration_hold` menjadi `available`, verification menjadi `activated`, dan sesi menjadi `completed`.
+
+Cutover memakai batch lock, barcode lock yang sama dengan scanner/approval/sold flow, unique run per sesi, serta konfirmasi `AKTIFKAN STOK`. Kegagalan satu item melakukan rollback seluruh sesi. Foto legacy gagal tetap dapat diulang setelah aktivasi. Lookup checkout melalui alias barcode legacy tetap ditahan sampai Milestone 5D.

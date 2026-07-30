@@ -14,7 +14,10 @@ import {
 } from "@/db/schema";
 import { LEGACY_PHOTO_MIGRATION_BATCH_SIZE } from "@/features/legacy-migration/reconciliation-contracts";
 import { getLegacyPhotoMigrationCandidates } from "@/features/legacy-migration/reconciliation-queries";
-import { buildLegacyPhotoMigrationMetadata } from "@/features/legacy-migration/reconciliation-rules";
+import {
+  buildLegacyPhotoMigrationMetadata,
+  isLegacyPhotoMigrationItemEligible,
+} from "@/features/legacy-migration/reconciliation-rules";
 import { requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
 import {
@@ -228,10 +231,12 @@ export async function migrateLegacyPhotosAction(formData: FormData) {
           if (
             !current ||
             soldRecord ||
-            current.verificationStatus !== "approved" ||
+            !isLegacyPhotoMigrationItemEligible({
+              verificationStatus: current.verificationStatus,
+              itemAvailability: current.itemAvailability,
+            }) ||
             !current.useLegacyImage ||
             current.legacyImageUrl !== sourceUrl ||
-            current.itemAvailability !== "migration_hold" ||
             !current.itemIsActive ||
             current.itemImageKey
           ) {
@@ -324,9 +329,11 @@ export async function migrateLegacyPhotosAction(formData: FormData) {
             if (
               !current ||
               current.imageKey ||
-              current.availability !== "migration_hold" ||
-              !current.isActive ||
-              current.verificationStatus !== "approved"
+              !isLegacyPhotoMigrationItemEligible({
+                verificationStatus: current.verificationStatus,
+                itemAvailability: current.availability,
+              }) ||
+              !current.isActive
             ) {
               return "skipped" as const;
             }

@@ -1389,7 +1389,7 @@ export async function getReportStockData(
     db
       .select({
         movementCount: count(),
-        stockInCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('goods_receipt', 'transfer_in', 'reservation_release', 'sale_return', 'repair_in', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
+        stockInCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('goods_receipt', 'migration_opening', 'transfer_in', 'reservation_release', 'sale_return', 'repair_in', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
         stockOutCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale', 'transfer_out', 'reservation', 'repair_out', 'damaged', 'lost') then 1 else 0 end), 0)`.mapWith(Number),
         saleCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} = 'sale' then 1 else 0 end), 0)`.mapWith(Number),
         returnCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale_return', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
@@ -1419,7 +1419,7 @@ export async function getReportStockData(
     db
       .select({
         bucket: movementBucketSql,
-        stockInCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('goods_receipt', 'transfer_in', 'reservation_release', 'sale_return', 'repair_in', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
+        stockInCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('goods_receipt', 'migration_opening', 'transfer_in', 'reservation_release', 'sale_return', 'repair_in', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
         stockOutCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale', 'transfer_out', 'reservation', 'repair_out', 'damaged', 'lost') then 1 else 0 end), 0)`.mapWith(Number),
         returnCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale_return', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
       })

@@ -49,6 +49,7 @@ const expectedRouteFiles = [
   "app/(admin)/admin/laporan/stok/export/route.ts",
   "app/(admin)/admin/laporan/stok/export/xlsx/route.ts",
   "app/(admin)/admin/laporan/stok/page.tsx",
+  "app/(admin)/admin/migrasi-produk/[batchId]/cutover/page.tsx",
   "app/(admin)/admin/migrasi-produk/[batchId]/mapping/page.tsx",
   "app/(admin)/admin/migrasi-produk/[batchId]/page.tsx",
   "app/(admin)/admin/migrasi-produk/[batchId]/review/page.tsx",

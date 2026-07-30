@@ -108,6 +108,11 @@ const permissionSeeds = [
     module: "migration",
   },
   {
+    code: "migration.cutover.execute",
+    name: "Menjalankan aktivasi stok hasil migrasi",
+    module: "migration",
+  },
+  {
     code: "inventory.view",
     name: "Melihat inventaris",
     module: "inventory",
@@ -383,6 +388,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "migration.verification.review",
     "migration.verification.approve",
     "migration.sold.manage",
+    "migration.cutover.execute",
     "inventory.view",
     "inventory.print_label",
     "inventory.receive",
@@ -442,6 +448,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "migration.verification.review",
     "migration.verification.approve",
     "migration.sold.manage",
+    "migration.cutover.execute",
     "inventory.view",
     "inventory.print_label",
     "inventory.receive",
