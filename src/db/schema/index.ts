@@ -1222,6 +1222,99 @@ export const legacyMigrationVerifications = pgTable(
   ],
 );
 
+export const legacyMigrationSoldRecords = pgTable(
+  "legacy_migration_sold_records",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    barcodeValue: varchar("barcode_value", { length: 120 }).notNull(),
+    verificationId: uuid("verification_id").references(
+      () => legacyMigrationVerifications.id,
+      { onDelete: "restrict" },
+    ),
+    productItemId: uuid("product_item_id").references(() => productItems.id, {
+      onDelete: "restrict",
+    }),
+    previousVerificationStatus: legacyMigrationVerificationStatusEnum(
+      "previous_verification_status",
+    ),
+    previousItemAvailability: itemAvailabilityEnum(
+      "previous_item_availability",
+    ),
+    soldAt: timestamp("sold_at", { withTimezone: true }).notNull(),
+    legacyReference: varchar("legacy_reference", { length: 160 }),
+    notes: text("notes"),
+    reportedBy: uuid("reported_by")
+      .notNull()
+      .references(() => users.id),
+    reportedAt: timestamp("reported_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    revertedBy: uuid("reverted_by").references(() => users.id),
+    revertedAt: timestamp("reverted_at", { withTimezone: true }),
+    revertReason: text("revert_reason"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_migration_sold_records_org_barcode_active_uq")
+      .on(table.organizationId, table.barcodeValue)
+      .where(sql`${table.revertedAt} is null`),
+    index("legacy_migration_sold_records_batch_sold_at_idx").on(
+      table.batchId,
+      table.soldAt,
+    ),
+    index("legacy_migration_sold_records_verification_idx").on(
+      table.verificationId,
+    ),
+    check(
+      "legacy_migration_sold_records_link_ck",
+      sql`(
+        ${table.verificationId} is null
+        and ${table.productItemId} is null
+        and ${table.previousVerificationStatus} is null
+        and ${table.previousItemAvailability} is null
+      ) or (
+        ${table.verificationId} is not null
+        and ${table.previousVerificationStatus} in (
+          'submitted',
+          'needs_review',
+          'returned',
+          'approved',
+          'rejected'
+        )
+        and (
+          (${table.productItemId} is null and ${table.previousItemAvailability} is null)
+          or (
+            ${table.productItemId} is not null
+            and ${table.previousItemAvailability} = 'migration_hold'
+            and ${table.previousVerificationStatus} = 'approved'
+          )
+        )
+      )`,
+    ),
+    check(
+      "legacy_migration_sold_records_revert_ck",
+      sql`(
+        ${table.revertedBy} is null
+        and ${table.revertedAt} is null
+        and ${table.revertReason} is null
+      ) or (
+        ${table.revertedBy} is not null
+        and ${table.revertedAt} is not null
+        and length(btrim(${table.revertReason})) >= 5
+      )`,
+    ),
+  ],
+);
+
 export const itemBarcodes = pgTable(
   "item_barcodes",
   {

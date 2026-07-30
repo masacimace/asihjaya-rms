@@ -10,6 +10,7 @@ import { db } from "@/db";
 import {
   auditLogs,
   itemBarcodes,
+  legacyMigrationSoldRecords,
   legacyMigrationSessionAssignments,
   legacyMigrationSessions,
   legacyMigrationVerifications,
@@ -208,6 +209,26 @@ export async function lookupLegacyMigrationBarcodeAction(input: {
       ok: false,
       code: "INVALID_BARCODE",
       message: "Barcode kosong atau memiliki format yang tidak didukung.",
+    };
+  }
+
+  const [soldRecord] = await db
+    .select({ id: legacyMigrationSoldRecords.id })
+    .from(legacyMigrationSoldRecords)
+    .where(
+      and(
+        eq(legacyMigrationSoldRecords.organizationId, auth.organization.id),
+        eq(legacyMigrationSoldRecords.barcodeValue, barcode),
+        sql`${legacyMigrationSoldRecords.revertedAt} is null`,
+      ),
+    )
+    .limit(1);
+  if (soldRecord) {
+    return {
+      ok: false,
+      code: "SOLD_DURING_MIGRATION",
+      message:
+        "Barcode sudah ditandai terjual di sistem lama dan dikecualikan dari migrasi.",
     };
   }
 
@@ -725,8 +746,26 @@ export async function submitLegacyMigrationVerificationAction(
 
     await db.transaction(async (transaction) => {
       await transaction.execute(
-        sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-verification:${auth.organization.id}:${barcode}`}, 0))`,
+        sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-barcode:${auth.organization.id}:${barcode}`}, 0))`,
       );
+
+      const [freshSoldRecord] = await transaction
+        .select({ id: legacyMigrationSoldRecords.id })
+        .from(legacyMigrationSoldRecords)
+        .where(
+          and(
+            eq(
+              legacyMigrationSoldRecords.organizationId,
+              auth.organization.id,
+            ),
+            eq(legacyMigrationSoldRecords.barcodeValue, barcode!),
+            sql`${legacyMigrationSoldRecords.revertedAt} is null`,
+          ),
+        )
+        .limit(1);
+      if (freshSoldRecord) {
+        throw new Error("BARCODE_SOLD_DURING_MIGRATION");
+      }
 
       const managerOverride = hasPermission(
         auth,
@@ -973,6 +1012,13 @@ export async function submitLegacyMigrationVerificationAction(
       return {
         ok: false,
         message: "Product Master berubah atau tidak lagi dapat digunakan.",
+      };
+    }
+    if (message === "BARCODE_SOLD_DURING_MIGRATION") {
+      return {
+        ok: false,
+        message:
+          "Barcode sudah ditandai terjual di sistem lama dan dikecualikan dari migrasi.",
       };
     }
     if (message === "BARCODE_ALREADY_REGISTERED") {

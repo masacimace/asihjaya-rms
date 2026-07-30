@@ -544,3 +544,7 @@ Staff yang ditugaskan pada sesi aktif dapat membuka `/pos/migrasi-barang`, memin
 ### Legacy migration Milestone 4
 
 Manager review tersedia pada halaman batch migrasi. Approval bersifat transactional dan hanya membuat Product Item berstatus `migration_hold` beserta alias barcode legacy. Item belum tersedia di POS sampai proses cutover pada milestone berikutnya.
+
+### Legacy product migration Milestone 5A — sold during migration
+
+Manager dapat menandai satu atau banyak barcode yang terjual pada sistem legacy selama proses migrasi melalui `/admin/migrasi-produk/[batchId]/sold`. Barcode aktif langsung dikecualikan dari scanner, manager approval, dan cutover. Barcode staging yang belum pernah discan tetap dapat ditandai. Product Item yang sudah berstatus `migration_hold` akan dipindahkan ke `sold`, dinonaktifkan, dan alias barcode legacy-nya ikut dinonaktifkan tanpa membuat inventory movement. Salah penandaan dapat dibatalkan dengan alasan wajib untuk memulihkan status sebelumnya secara transactional.

@@ -57,6 +57,13 @@
       "when": 1785324000000,
       "tag": "0007_legacy_manager_review_inventory_hold",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785380400000,
+      "tag": "0008_legacy_sold_during_migration",
+      "breakpoints": true
     }
   ]
 }

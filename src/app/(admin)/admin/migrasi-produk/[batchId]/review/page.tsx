@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   PackageCheck,
+  PackageX,
   RotateCcw,
   Search,
   ShieldCheck,
@@ -96,6 +97,7 @@ export default async function LegacyMigrationReviewQueuePage({
   const data = await getLegacyMigrationReviewQueue(auth, batchId, filters);
   if (!data) notFound();
   const canApprove = hasPermission(auth, "migration.verification.approve");
+  const canManageSold = hasPermission(auth, "migration.sold.manage");
 
   const filterItems: Array<{
     label: string;
@@ -136,8 +138,7 @@ export default async function LegacyMigrationReviewQueuePage({
         <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-              <ClipboardCheck className="size-3.5" /> Milestone 4 · Manager
-              Review
+              <ClipboardCheck className="size-3.5" /> Milestone 4 · Manager Review
             </p>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Antrean review migrasi
@@ -148,24 +149,30 @@ export default async function LegacyMigrationReviewQueuePage({
               dijual di POS sampai cutover.
             </p>
           </div>
-          <Link
-            href={`/admin/migrasi-produk/${data.batch.id}/sesi`}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-900"
-          >
-            Lihat sesi etalase
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/admin/migrasi-produk/${data.batch.id}/sesi`}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-900"
+            >
+              Lihat sesi etalase
+            </Link>
+            {canManageSold ? (
+              <Link
+                href={`/admin/migrasi-produk/${data.batch.id}/sold`}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-800"
+              >
+                <PackageX className="size-4" /> Terjual di sistem lama
+              </Link>
+            ) : null}
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <div className="rounded-2xl border border-neutral-200 bg-white p-4">
           <PackageCheck className="size-5 text-neutral-600" />
-          <p className="mt-3 text-2xl font-semibold">
-            {data.summary.submitted}
-          </p>
-          <p className="text-xs text-[var(--muted)]">
-            Clean, siap bulk approve
-          </p>
+          <p className="mt-3 text-2xl font-semibold">{data.summary.submitted}</p>
+          <p className="text-xs text-[var(--muted)]">Clean, siap bulk approve</p>
         </div>
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
           <AlertTriangle className="size-5 text-amber-700" />
@@ -194,6 +201,13 @@ export default async function LegacyMigrationReviewQueuePage({
             {data.summary.rejected}
           </p>
           <p className="text-xs text-red-800">Ditolak</p>
+        </div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+          <PackageX className="size-5 text-red-700" />
+          <p className="mt-3 text-2xl font-semibold text-red-900">
+            {data.summary.soldDuringMigration}
+          </p>
+          <p className="text-xs text-red-800">Terjual di legacy</p>
         </div>
       </section>
 
@@ -240,7 +254,7 @@ export default async function LegacyMigrationReviewQueuePage({
               className={cn(
                 "rounded-full border px-3 py-1.5 text-xs font-semibold",
                 filters.status === item.value
-                  ? "border-neutral-950 bg-neutral-950 !text-white"
+                  ? "border-neutral-950 bg-neutral-950 text-white"
                   : "border-[var(--border)] bg-white text-neutral-700",
               )}
             >
@@ -256,12 +270,9 @@ export default async function LegacyMigrationReviewQueuePage({
         <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
           <div className="flex flex-col gap-3 border-b border-[var(--border)] p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="font-semibold text-neutral-950">
-                Daftar verification
-              </h2>
+              <h2 className="font-semibold text-neutral-950">Daftar verification</h2>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Centang hanya item clean. Approval individual tersedia pada
-                detail.
+                Centang hanya item clean. Approval individual tersedia pada detail.
               </p>
             </div>
             {canApprove ? (
@@ -301,12 +312,7 @@ export default async function LegacyMigrationReviewQueuePage({
                         <span className="font-mono text-sm font-semibold text-neutral-950">
                           {row.barcodeValue}
                         </span>
-                        <span
-                          className={cn(
-                            "rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                            statusClass(row.status),
-                          )}
-                        >
+                        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", statusClass(row.status))}>
                           {statusLabel(row.status)}
                         </span>
                         {row.source === "physical_unmatched" ? (
@@ -319,8 +325,7 @@ export default async function LegacyMigrationReviewQueuePage({
                         {row.verifiedItemName}
                       </h3>
                       <p className="mt-1 text-xs text-[var(--muted)]">
-                        {row.productMasterCode} · {row.productMasterName} ·{" "}
-                        {row.verifiedWeightGram} g · kadar {row.verifiedPurity}
+                        {row.productMasterCode} · {row.productMasterName} · {row.verifiedWeightGram} g · kadar {row.verifiedPurity}
                       </p>
                       <p className="mt-1 text-xs text-[var(--muted)]">
                         {row.sessionName} · {row.submittedByName}
@@ -363,17 +368,13 @@ export default async function LegacyMigrationReviewQueuePage({
           Sebelumnya
         </Link>
         <span className="text-sm text-[var(--muted)]">
-          Halaman {data.pagination.page} dari {data.pagination.totalPages} ·{" "}
-          {data.pagination.total} item
+          Halaman {data.pagination.page} dari {data.pagination.totalPages} · {data.pagination.total} item
         </span>
         <Link
           aria-disabled={data.pagination.page >= data.pagination.totalPages}
           href={pageHref({
             batchId: data.batch.id,
-            page: Math.min(
-              data.pagination.totalPages,
-              data.pagination.page + 1,
-            ),
+            page: Math.min(data.pagination.totalPages, data.pagination.page + 1),
             status: filters.status,
             search: filters.search,
             sessionId: filters.sessionId,

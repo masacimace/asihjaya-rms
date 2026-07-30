@@ -162,3 +162,20 @@ manager return + reason
 ```
 
 Milestone 4 belum mencakup cutover, aktivasi massal menjadi `available`, pencatatan barang yang terjual di sistem lama, atau lookup alias barcode pada checkout POS. Bagian tersebut masuk Milestone 5.
+
+## Milestone 5A — Sold during migration
+
+Flow operasional dibuat satu langkah: manager membuka halaman **Terjual di Sistem Lama**, menempel satu barcode atau satu kolom barcode dari Excel, memilih tanggal penjualan, lalu menyimpan. Referensi transaksi dan catatan bersifat opsional.
+
+Guardrail:
+
+- barcode staging dapat ditandai meskipun belum pernah discan;
+- barcode dengan sold record aktif ditolak oleh scanner, resubmit, return/reject, dan approval;
+- semua jalur memakai advisory lock `legacy-barcode:<organization>:<barcode>`;
+- verification yang sudah ada berubah menjadi `sold_during_migration`;
+- Product Item `migration_hold` berubah menjadi `sold`, `is_active=false`, dan alias legacy dinonaktifkan;
+- tidak ada inventory movement dan tidak ada item yang menjadi `available`;
+- pembatalan mengembalikan status verification, Product Item, dan alias barcode dalam satu transaction;
+- permission pengelolaan adalah `migration.sold.manage`.
+
+Tabel `legacy_migration_sold_records` diperlukan agar barang yang terjual sebelum scan tetap tercatat dan dapat dikecualikan dari cutover. Hanya satu record aktif yang diizinkan per organization dan barcode; record lama tetap tersimpan sebagai audit history setelah dibatalkan.

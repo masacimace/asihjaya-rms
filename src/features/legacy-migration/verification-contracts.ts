@@ -20,6 +20,7 @@ export type LegacyMigrationLookupResult =
         | "INVALID_BARCODE"
         | "SESSION_UNAVAILABLE"
         | "DUPLICATE_LEGACY_ROW"
+        | "SOLD_DURING_MIGRATION"
         | "ALREADY_REGISTERED"
         | "ALREADY_VERIFIED"
         | "NOT_AUTHORIZED";

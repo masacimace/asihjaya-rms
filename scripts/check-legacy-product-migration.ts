@@ -13,6 +13,10 @@ import {
   canBulkApproveLegacyVerification,
   getLegacyBarcodeAliasSource,
 } from "../src/features/legacy-migration/review-rules";
+import {
+  isSoldDuringMigrationEligibleStatus,
+  parseSoldDuringMigrationBarcodes,
+} from "../src/features/legacy-migration/sold-rules";
 
 const projectRoot = process.cwd();
 
@@ -536,7 +540,97 @@ for (const contract of [
   );
 }
 
+const soldBarcodeParse = parseSoldDuringMigrationBarcodes(
+  "3037\n003037, 918161;918161 invalid*",
+  6,
+);
+assert(
+  JSON.stringify(soldBarcodeParse.barcodes) ===
+    JSON.stringify(["003037", "918161"]),
+  "Parser sold during migration harus mempertahankan leading zero dan urutan barcode.",
+);
+assert(
+  soldBarcodeParse.duplicateCount === 2 &&
+    soldBarcodeParse.invalidBarcodes[0] === "invalid*",
+  "Parser sold during migration harus menghitung duplikat dan input invalid.",
+);
+assert(
+  isSoldDuringMigrationEligibleStatus("approved") &&
+    !isSoldDuringMigrationEligibleStatus("sold_during_migration") &&
+    !isSoldDuringMigrationEligibleStatus("activated"),
+  "Status sold during migration harus membatasi transisi yang aman.",
+);
+
+const milestoneFiveAMigrationSource = read(
+  "drizzle/0008_legacy_sold_during_migration.sql",
+);
+for (const contract of [
+  "legacy_migration_sold_records",
+  "legacy_migration_sold_records_org_barcode_active_uq",
+  "legacy_migration_sold_records_link_ck",
+  "legacy_migration_sold_records_revert_ck",
+  "migration.sold.manage",
+]) {
+  assert(
+    milestoneFiveAMigrationSource.includes(contract),
+    `Migration Milestone 5A wajib memiliki ${contract}.`,
+  );
+}
+
+const soldActionSource = read("src/app/actions/legacy-migration-sold.ts");
+for (const contract of [
+  'requirePermission("migration.sold.manage")',
+  "legacy-barcode:",
+  'status: "sold_during_migration"',
+  'availability: "sold"',
+  "isActive: false",
+  "legacy_migration_sold.mark",
+  "legacy_migration_sold.revert",
+  'availability: "migration_hold"',
+]) {
+  assert(
+    soldActionSource.includes(contract),
+    `Action Milestone 5A wajib memiliki ${contract}.`,
+  );
+}
+assert(
+  !soldActionSource.includes("inventoryMovements"),
+  "Milestone 5A tidak boleh membuat inventory movement.",
+);
+assert(
+  !soldActionSource.includes('availability: "available"'),
+  "Milestone 5A tidak boleh mengaktifkan item menjadi available.",
+);
+
+for (const source of [verificationActionSource, reviewActionSource]) {
+  assert(
+    source.includes("legacyMigrationSoldRecords") &&
+      source.includes("legacy-barcode:"),
+    "Scanner dan approval harus memakai sold guard serta barcode lock yang sama.",
+  );
+}
+assert(
+  verificationActionSource.includes("BARCODE_SOLD_DURING_MIGRATION") &&
+    reviewActionSource.includes("VERIFICATION_SOLD_DURING_MIGRATION"),
+  "Scanner dan manager review harus menolak barcode yang ditandai terjual.",
+);
+
+const soldPageSource = read(
+  "src/app/(admin)/admin/migrasi-produk/[batchId]/sold/page.tsx",
+);
+for (const contract of [
+  "Terjual di Sistem Lama",
+  "tempel satu kolom dari Excel",
+  "Tandai terjual dan kecualikan",
+  "Alasan pembatalan",
+]) {
+  assert(
+    soldPageSource.includes(contract),
+    `Halaman Milestone 5A wajib memiliki ${contract}.`,
+  );
+}
+
 console.log(
-  "OK: Legacy product migration Milestone 1-4 contracts tervalidasi.",
+  "OK: Legacy product migration Milestone 1-5A contracts tervalidasi.",
 );
 

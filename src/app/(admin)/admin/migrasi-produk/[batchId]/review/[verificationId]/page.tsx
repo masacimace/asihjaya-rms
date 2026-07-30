@@ -5,6 +5,7 @@ import {
   ExternalLink,
   ImageIcon,
   PackageCheck,
+  PackageX,
   RotateCcw,
   ShieldAlert,
   XCircle,
@@ -49,6 +50,16 @@ function formatDecimal(value: string | null) {
   return Number.isFinite(number)
     ? new Intl.NumberFormat("id-ID", { maximumFractionDigits: 3 }).format(number)
     : value;
+}
+
+function formatDate(value: Date | null, timeZone: string) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone,
+  }).format(value);
 }
 
 function statusLabel(status: string) {
@@ -100,6 +111,7 @@ export default async function LegacyMigrationReviewDetailPage({
   const verification = data.verification;
   const canReview = hasPermission(auth, "migration.verification.review");
   const canApprove = hasPermission(auth, "migration.verification.approve");
+  const canManageSold = hasPermission(auth, "migration.sold.manage");
   const reviewable = ["submitted", "needs_review"].includes(
     verification.status,
   );
@@ -138,7 +150,34 @@ export default async function LegacyMigrationReviewDetailPage({
         </div>
       </section>
 
-      {verification.productItemId ? (
+      {verification.status === "sold_during_migration" ? (
+        <section className="rounded-3xl border border-red-200 bg-red-50 p-5 text-red-900">
+          <div className="flex gap-3">
+            <PackageX className="mt-0.5 size-5 shrink-0" />
+            <div>
+              <h2 className="font-semibold">Dikecualikan dari cutover</h2>
+              <p className="mt-1 text-sm leading-6">
+                Barcode ditandai terjual di sistem lama pada {" "}
+                {formatDate(verification.soldAt, auth.organization.timezone)}.
+                {verification.soldLegacyReference
+                  ? ` Referensi: ${verification.soldLegacyReference}.`
+                  : ""}
+                {verification.productItemId
+                  ? " Product Item hold sudah ditandai sold dan alias barcode dinonaktifkan."
+                  : " Verification tidak dapat direview atau disetujui selama penandaan aktif."}
+              </p>
+              {canManageSold ? (
+                <Link
+                  href={`/admin/migrasi-produk/${data.batch.id}/sold`}
+                  className="mt-3 inline-flex text-sm font-semibold underline"
+                >
+                  Buka daftar terjual di sistem lama
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : verification.productItemId ? (
         <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
           <div className="flex gap-3">
             <PackageCheck className="mt-0.5 size-5 shrink-0" />

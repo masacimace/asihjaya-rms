@@ -44,6 +44,7 @@ export async function getAccessibleLegacyBatch(
       status: legacyProductImportBatches.status,
       totalRows: legacyProductImportBatches.totalRows,
       uniqueMasterCount: legacyProductImportBatches.uniqueMasterCount,
+      barcodeLength: legacyProductImportBatches.barcodeLength,
       outletCode: outlets.code,
       outletName: outlets.name,
     })

@@ -140,6 +140,7 @@ async function checkLiveDatabase(): Promise<void> {
       "legacy_migration_sessions",
       "legacy_migration_session_assignments",
       "legacy_migration_verifications",
+      "legacy_migration_sold_records",
       "item_barcodes",
     ];
 
@@ -187,6 +188,21 @@ async function checkLiveDatabase(): Promise<void> {
           "revision",
         ],
       ],
+      [
+        "legacy_migration_sold_records",
+        [
+          "batch_id",
+          "barcode_value",
+          "verification_id",
+          "product_item_id",
+          "previous_verification_status",
+          "previous_item_availability",
+          "sold_at",
+          "reported_by",
+          "reverted_at",
+          "revert_reason",
+        ],
+      ],
       ["item_barcodes", ["barcode_value", "source", "is_primary", "is_active"]],
     ]);
 
@@ -210,6 +226,9 @@ async function checkLiveDatabase(): Promise<void> {
       "legacy_migration_verifications_legacy_row_uq",
       "legacy_migration_verifications_session_status_idx",
       "legacy_migration_verifications_product_item_uq",
+      "legacy_migration_sold_records_org_barcode_active_uq",
+      "legacy_migration_sold_records_batch_sold_at_idx",
+      "legacy_migration_sold_records_verification_idx",
     ];
     const indexResult = await pool.query<{ indexname: string }>(
       `select indexname
@@ -256,6 +275,33 @@ async function checkLiveDatabase(): Promise<void> {
     assert(
       missingConstraints.length === 0,
       `Constraint migration verification belum lengkap: ${missingConstraints.join(", ")}.`,
+    );
+
+    const soldConstraints = [
+      "legacy_migration_sold_records_link_ck",
+      "legacy_migration_sold_records_revert_ck",
+    ];
+    const soldConstraintResult = await pool.query<{ conname: string }>(
+      `select constraint_record.conname
+       from pg_constraint as constraint_record
+       inner join pg_class as table_record
+         on table_record.oid = constraint_record.conrelid
+       inner join pg_namespace as namespace_record
+         on namespace_record.oid = table_record.relnamespace
+       where namespace_record.nspname = 'public'
+         and table_record.relname = 'legacy_migration_sold_records'
+         and constraint_record.conname = any($1::text[])`,
+      [soldConstraints],
+    );
+    const existingSoldConstraints = new Set(
+      soldConstraintResult.rows.map((row) => row.conname),
+    );
+    const missingSoldConstraints = soldConstraints.filter(
+      (constraintName) => !existingSoldConstraints.has(constraintName),
+    );
+    assert(
+      missingSoldConstraints.length === 0,
+      `Constraint sold during migration belum lengkap: ${missingSoldConstraints.join(", ")}.`,
     );
 
     const availabilityEnumResult = await pool.query<{ enumlabel: string }>(

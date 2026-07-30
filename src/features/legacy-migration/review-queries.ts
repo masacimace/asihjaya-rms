@@ -6,6 +6,7 @@ import {
   eq,
   ilike,
   inArray,
+  isNull,
   or,
   sql,
 } from "drizzle-orm";
@@ -13,6 +14,7 @@ import {
 import { db } from "@/db";
 import {
   legacyMigrationSessions,
+  legacyMigrationSoldRecords,
   legacyMigrationVerifications,
   legacyProductRows,
   productCategories,
@@ -75,7 +77,8 @@ export async function getLegacyMigrationReviewQueue(
     searchCondition,
   );
 
-  const [rows, totalRows, summaryRows, sessions] = await Promise.all([
+  const [rows, totalRows, summaryRows, soldSummaryRows, sessions] =
+    await Promise.all([
     db
       .select({
         id: legacyMigrationVerifications.id,
@@ -154,6 +157,20 @@ export async function getLegacyMigrationReviewQueue(
       .groupBy(legacyMigrationVerifications.status),
 
     db
+      .select({ total: count() })
+      .from(legacyMigrationSoldRecords)
+      .where(
+        and(
+          eq(legacyMigrationSoldRecords.batchId, batch.id),
+          eq(
+            legacyMigrationSoldRecords.organizationId,
+            auth.organization.id,
+          ),
+          isNull(legacyMigrationSoldRecords.revertedAt),
+        ),
+      ),
+
+    db
       .select({
         id: legacyMigrationSessions.id,
         name: legacyMigrationSessions.name,
@@ -180,11 +197,9 @@ export async function getLegacyMigrationReviewQueue(
     if (row.status === "returned") summary.returned = total;
     if (row.status === "approved") summary.approved = total;
     if (row.status === "rejected") summary.rejected = total;
-    if (row.status === "sold_during_migration") {
-      summary.soldDuringMigration = total;
-    }
     if (row.status === "activated") summary.activated = total;
   }
+  summary.soldDuringMigration = Number(soldSummaryRows[0]?.total ?? 0);
 
   const total = Number(totalRows[0]?.total ?? 0);
   return {
@@ -258,6 +273,10 @@ export async function getLegacyMigrationReviewDetail(
       legacyValidationIssues: legacyProductRows.validationIssues,
       itemSku: productItems.sku,
       itemAvailability: productItems.availability,
+      soldRecordId: legacyMigrationSoldRecords.id,
+      soldAt: legacyMigrationSoldRecords.soldAt,
+      soldLegacyReference: legacyMigrationSoldRecords.legacyReference,
+      soldNotes: legacyMigrationSoldRecords.notes,
     })
     .from(legacyMigrationVerifications)
     .innerJoin(
@@ -283,6 +302,16 @@ export async function getLegacyMigrationReviewDetail(
     .leftJoin(
       productItems,
       eq(legacyMigrationVerifications.productItemId, productItems.id),
+    )
+    .leftJoin(
+      legacyMigrationSoldRecords,
+      and(
+        eq(
+          legacyMigrationSoldRecords.verificationId,
+          legacyMigrationVerifications.id,
+        ),
+        isNull(legacyMigrationSoldRecords.revertedAt),
+      ),
     )
     .where(
       and(

@@ -7,6 +7,7 @@ import {
   ImageIcon,
   MapPinned,
   PackageSearch,
+  PackageX,
   Search,
   ShieldAlert,
 } from "lucide-react";
@@ -17,7 +18,7 @@ import {
   getLegacyMigrationBatchDetail,
   type LegacyRowStatusFilter,
 } from "@/features/legacy-migration/queries";
-import { requireAnyPermission } from "@/lib/auth/session";
+import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -86,11 +87,7 @@ function flashMessage(type?: string, message?: string) {
   );
 }
 
-function RowStatusBadge({
-  status,
-}: {
-  status: "valid" | "warning" | "invalid";
-}) {
+function RowStatusBadge({ status }: { status: "valid" | "warning" | "invalid" }) {
   const config = {
     valid: {
       label: "Valid",
@@ -162,16 +159,11 @@ export default async function LegacyProductBatchPage({
     message?: string;
   }>;
 }) {
-  const auth = await requireAnyPermission([
-    "migration.view",
-    "migration.import",
-  ]);
+  const auth = await requireAnyPermission(["migration.view", "migration.import"]);
   const [routeParams, query] = await Promise.all([params, searchParams]);
   const status = readStatus(query.status);
   const requestedPage = Number(query.page ?? "1");
-  const search = String(query.search ?? "")
-    .trim()
-    .slice(0, 120);
+  const search = String(query.search ?? "").trim().slice(0, 120);
 
   const data = await getLegacyMigrationBatchDetail(auth, {
     batchId: routeParams.batchId,
@@ -181,6 +173,7 @@ export default async function LegacyProductBatchPage({
   });
 
   if (!data) notFound();
+  const canManageSold = hasPermission(auth, "migration.sold.manage");
 
   const validationCodeCounts = getValidationCodeCounts(
     data.batch.validationSummary,
@@ -225,9 +218,8 @@ export default async function LegacyProductBatchPage({
               Belum menjadi inventaris
             </p>
             <p className="mt-1">
-              Semua baris pada halaman ini hanya referensi staging. Aktivasi
-              stok baru dilakukan setelah scan dan approval pada milestone
-              berikutnya.
+              Semua baris pada halaman ini hanya referensi staging. Aktivasi stok
+              baru dilakukan setelah scan dan approval pada milestone berikutnya.
             </p>
           </div>
         </div>
@@ -235,7 +227,7 @@ export default async function LegacyProductBatchPage({
         <div className="mt-6 flex flex-wrap gap-3 border-t border-[var(--border)] pt-5">
           <Link
             href={`/admin/migrasi-produk/${data.batch.id}/mapping`}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800"
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
           >
             <FolderTree className="size-4" />
             Mapping master produk
@@ -253,6 +245,14 @@ export default async function LegacyProductBatchPage({
           >
             Review verification
           </Link>
+          {canManageSold ? (
+            <Link
+              href={`/admin/migrasi-produk/${data.batch.id}/sold`}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-800 transition hover:bg-red-100"
+            >
+              <PackageX className="size-4" /> Terjual di sistem lama
+            </Link>
+          ) : null}
         </div>
       </section>
 
@@ -296,9 +296,7 @@ export default async function LegacyProductBatchPage({
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
         <div className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
-          <h2 className="font-semibold text-neutral-950">
-            Kualitas sumber data
-          </h2>
+          <h2 className="font-semibold text-neutral-950">Kualitas sumber data</h2>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {[
               ["Barcode nol di depan", data.batch.leadingZeroBarcodeCount],
@@ -306,10 +304,7 @@ export default async function LegacyProductBatchPage({
               ["Barcode duplikat", data.batch.duplicateBarcodeCount],
               ["Ukuran file", Math.round(data.batch.fileSizeBytes / 1024)],
             ].map(([label, value]) => (
-              <div
-                key={String(label)}
-                className="rounded-2xl bg-neutral-50 p-4"
-              >
+              <div key={String(label)} className="rounded-2xl bg-neutral-50 p-4">
                 <p className="text-xs font-medium text-[var(--muted)]">
                   {String(label)}
                 </p>
@@ -334,9 +329,7 @@ export default async function LegacyProductBatchPage({
         </div>
 
         <div className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
-          <h2 className="font-semibold text-neutral-950">
-            Peringatan terbanyak
-          </h2>
+          <h2 className="font-semibold text-neutral-950">Peringatan terbanyak</h2>
           {validationCodeCounts.length === 0 ? (
             <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
               Tidak ada warning atau error yang tercatat.
@@ -391,9 +384,7 @@ export default async function LegacyProductBatchPage({
               <option value="warning">
                 Warning ({data.statusCounts.warning})
               </option>
-              <option value="invalid">
-                Invalid ({data.statusCounts.invalid})
-              </option>
+              <option value="invalid">Invalid ({data.statusCounts.invalid})</option>
             </select>
             <button
               type="submit"
@@ -415,9 +406,7 @@ export default async function LegacyProductBatchPage({
                 <tr>
                   <th className="px-3 py-3 font-semibold">Baris / Barcode</th>
                   <th className="px-3 py-3 font-semibold">Master dan SKU</th>
-                  <th className="px-3 py-3 font-semibold">
-                    Spesifikasi legacy
-                  </th>
+                  <th className="px-3 py-3 font-semibold">Spesifikasi legacy</th>
                   <th className="px-3 py-3 font-semibold">Harga legacy</th>
                   <th className="px-3 py-3 font-semibold">Validasi</th>
                 </tr>
@@ -431,15 +420,11 @@ export default async function LegacyProductBatchPage({
                       </p>
                       <p className="mt-1 text-xs text-[var(--muted)]">
                         Excel baris {row.rowNumber}
-                        {row.sourceSequence
-                          ? ` · No ${row.sourceSequence}`
-                          : ""}
+                        {row.sourceSequence ? ` · No ${row.sourceSequence}` : ""}
                       </p>
                       <p className="mt-2 flex items-center gap-1.5 text-xs text-[var(--muted)]">
                         <ImageIcon className="size-3.5" />
-                        {row.legacyImageUrl
-                          ? "URL foto tersedia"
-                          : "Tanpa foto"}
+                        {row.legacyImageUrl ? "URL foto tersedia" : "Tanpa foto"}
                       </p>
                     </td>
                     <td className="max-w-sm px-3 py-4">
@@ -464,7 +449,9 @@ export default async function LegacyProductBatchPage({
                     </td>
                     <td className="px-3 py-4 text-xs leading-5 text-neutral-700">
                       <p>{formatMoney(row.legacyPricePerGram)} / gram</p>
-                      <p>Potongan: {formatMoney(row.legacyDeductionPerGram)}</p>
+                      <p>
+                        Potongan: {formatMoney(row.legacyDeductionPerGram)}
+                      </p>
                       <p className="mt-1 font-medium text-amber-700">
                         Referensi saja
                       </p>
@@ -473,18 +460,11 @@ export default async function LegacyProductBatchPage({
                       <RowStatusBadge status={row.validationStatus} />
                       {row.validationIssues.length > 0 ? (
                         <ul className="mt-2 space-y-1 text-xs leading-5 text-neutral-600">
-                          {row.validationIssues
-                            .slice(0, 4)
-                            .map((issue, index) => (
-                              <li
-                                key={`${row.id}-${String(issue.code)}-${index}`}
-                              >
-                                •{" "}
-                                {String(
-                                  issue.message ?? issue.code ?? "Perlu review",
-                                )}
-                              </li>
-                            ))}
+                          {row.validationIssues.slice(0, 4).map((issue, index) => (
+                            <li key={`${row.id}-${String(issue.code)}-${index}`}>
+                              • {String(issue.message ?? issue.code ?? "Perlu review")}
+                            </li>
+                          ))}
                           {row.validationIssues.length > 4 ? (
                             <li className="font-medium text-neutral-800">
                               +{row.validationIssues.length - 4} peringatan lain
@@ -528,9 +508,7 @@ export default async function LegacyProductBatchPage({
                 Sebelumnya
               </Link>
               <Link
-                aria-disabled={
-                  data.pagination.page >= data.pagination.pageCount
-                }
+                aria-disabled={data.pagination.page >= data.pagination.pageCount}
                 href={pageHref({
                   batchId: data.batch.id,
                   page: Math.min(

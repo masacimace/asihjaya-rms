@@ -12,6 +12,7 @@ import {
   auditLogs,
   itemBarcodes,
   legacyMigrationSessions,
+  legacyMigrationSoldRecords,
   legacyMigrationVerifications,
   productItems,
   productMasters,
@@ -182,6 +183,25 @@ async function approveOne(
     sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-barcode:${input.auth.organization.id}:${verification.barcodeValue}`}, 0))`,
   );
 
+  const [soldRecord] = await transaction
+    .select({ id: legacyMigrationSoldRecords.id })
+    .from(legacyMigrationSoldRecords)
+    .where(
+      and(
+        eq(
+          legacyMigrationSoldRecords.organizationId,
+          input.auth.organization.id,
+        ),
+        eq(
+          legacyMigrationSoldRecords.barcodeValue,
+          verification.barcodeValue,
+        ),
+        sql`${legacyMigrationSoldRecords.revertedAt} is null`,
+      ),
+    )
+    .limit(1);
+  if (soldRecord) throw new Error("VERIFICATION_SOLD_DURING_MIGRATION");
+
   const [existingItem, existingAlias] = await Promise.all([
     transaction
       .select({ id: productItems.id })
@@ -315,6 +335,9 @@ function explainApprovalError(error: unknown) {
   if (message === "BARCODE_ALREADY_REGISTERED") {
     return "Barcode sudah terhubung ke item lain pada sistem baru.";
   }
+  if (message === "VERIFICATION_SOLD_DURING_MIGRATION") {
+    return "Barcode sudah ditandai terjual di sistem lama dan tidak dapat direview atau disetujui.";
+  }
   return "Approval gagal diproses. Tidak ada item parsial yang disimpan.";
 }
 
@@ -426,6 +449,7 @@ async function changeReviewStatus(input: {
       .select({
         id: legacyMigrationVerifications.id,
         outletId: legacyMigrationVerifications.outletId,
+        barcodeValue: legacyMigrationVerifications.barcodeValue,
         status: legacyMigrationVerifications.status,
         productItemId: legacyMigrationVerifications.productItemId,
       })
@@ -451,6 +475,28 @@ async function changeReviewStatus(input: {
     ) {
       throw new Error("VERIFICATION_NOT_REVIEWABLE");
     }
+
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-barcode:${input.auth.organization.id}:${verification.barcodeValue}`}, 0))`,
+    );
+    const [soldRecord] = await transaction
+      .select({ id: legacyMigrationSoldRecords.id })
+      .from(legacyMigrationSoldRecords)
+      .where(
+        and(
+          eq(
+            legacyMigrationSoldRecords.organizationId,
+            input.auth.organization.id,
+          ),
+          eq(
+            legacyMigrationSoldRecords.barcodeValue,
+            verification.barcodeValue,
+          ),
+          sql`${legacyMigrationSoldRecords.revertedAt} is null`,
+        ),
+      )
+      .limit(1);
+    if (soldRecord) throw new Error("VERIFICATION_SOLD_DURING_MIGRATION");
 
     const now = new Date();
     await transaction

@@ -8,3 +8,34 @@ Fase 7 — Financial/concurrency tests (DONE)
 ---- HOLD SAMPAI FITUR BARU SELESAI DI DEVELOP SEMUA ----
 Fase 8 — Production deployment readiness (HOLD)
 Fase 9 — Tenant integrity dan refactor bertahap (butuh diskusi sebelum implementasikan)
+
+---- FASE MIGRATION PRODUK FROM OLD DATABASE ----
+Rekomendasi scope final Milestone 5
+
+Aku menyarankan Milestone 5 dibagi menjadi empat bagian internal:
+
+5A — Sold during migration
+Tandai barang yang terjual pada legacy.
+Import daftar barcode terjual bila tersedia.
+Audit siapa yang menandai.
+Cegah barang tersebut masuk cutover.
+
+5B — Reconciliation dan photo migration
+Rekonsiliasi status seluruh verification.
+Salin foto legacy ke storage internal.
+Deteksi pricing/master/barcode blocker.
+Laporan readiness per sesi.
+
+5C — Transactional cutover
+Lock sesi.
+Jalankan preflight.
+Buat inventory movement.
+Ubah migration_hold menjadi available.
+Simpan cutover report dan audit.
+
+5D — POS legacy barcode lookup
+Lookup melalui item_barcodes.
+Hanya mengembalikan item available.
+Duplicate/conflict guard.
+Automated test barcode leading zero.
+Smoke test checkout menggunakan barcode lama.
