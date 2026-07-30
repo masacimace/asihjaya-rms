@@ -24,6 +24,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
+    "db:fresh:local": "tsx scripts/reset-local-database.ts",
     "check:http-security": "tsx scripts/check-http-security.ts",
     "check:quality-config": "tsx scripts/check-quality-config.ts",
     "check:source-hygiene": "tsx scripts/check-source-hygiene.ts",

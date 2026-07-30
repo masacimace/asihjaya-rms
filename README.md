@@ -351,6 +351,26 @@ npm run db:seed
 npm run db:studio
 ```
 
+### Reset Database Development Lokal
+
+Hentikan `npm run dev` terlebih dahulu. Untuk menghapus volume PostgreSQL lokal,
+menjalankan seluruh migration, seed, dan pemeriksaan database live:
+
+```powershell
+npm run db:fresh:local -- --confirm=RESET_LOCAL_DATABASE
+```
+
+Untuk reset penuh yang sekaligus menghapus file upload development di
+`.data/uploads`:
+
+```powershell
+npm run db:fresh:local -- --confirm=RESET_LOCAL_DATABASE --purge-local-storage
+```
+
+Command ini hanya menerima target PostgreSQL Compose lokal
+`asihjaya@localhost:5432/asihjaya_rms`. Target non-local, environment production,
+dan storage selain folder `.data` akan ditolak.
+
 ### Payment dan Production-readiness Checks
 
 ```powershell

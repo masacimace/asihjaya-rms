@@ -1,0 +1,37 @@
+MIGRATION-R5F1 — Safety Hotfix
+Perbaiki UUID cutover.
+Buat shared UUID helper.
+Sinkronkan session lock dengan scan/resubmit.
+Atomic session state transition.
+Larang cancel sesi yang sudah memiliki data.
+Tambahkan affected-row assertions.
+
+MIGRATION-R5F2 — Pricing & Session Readiness
+Tentukan sumber dan formula sellingAmount.
+Simpan pricing pada Product Item.
+Tambahkan pricing/category/condition/location blockers.
+Tambahkan sessionId pada sold record.
+Hitung readiness per sesi.
+Hilangkan global readiness dari cutover sesi.
+
+MIGRATION-R5F3 — Transactional Cutover Hardening
+Snapshot preflight ke cutover report.
+Guard jumlah row update.
+Concurrency test scan-versus-lock.
+Test sold-versus-cutover.
+Test double cutover.
+Test rollback satu item invalid.
+
+MIGRATION-R5D — Legacy Barcode POS
+Backfill barcode internal ke item_barcodes.
+Jadikan item_barcodes sumber lookup barcode.
+Duplicate/conflict detection.
+Leading-zero automated test.
+Full checkout smoke test.
+
+MIGRATION-R5UX — Simplified Control Center
+Satu dashboard workflow.
+Session cards dengan next action.
+Sold sebagai exception panel.
+Reconciliation dan cutover dalam satu halaman sesi.
+Photo migration sebagai warning/maintenance.
