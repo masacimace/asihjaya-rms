@@ -109,6 +109,7 @@ export const legacyMigrationVerificationStatusEnum = pgEnum(
 
 export const itemAvailabilityEnum = pgEnum("item_availability", [
   "draft",
+  "migration_hold",
   "available",
   "reserved",
   "inspection",
@@ -1160,6 +1161,8 @@ export const legacyMigrationVerifications = pgTable(
     reviewedBy: uuid("reviewed_by").references(() => users.id),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     reviewNotes: text("review_notes"),
+    productItemId: uuid("product_item_id").references(() => productItems.id),
+    revision: integer("revision").default(1).notNull(),
     ...timestamps,
   },
   (table) => [
@@ -1180,6 +1183,9 @@ export const legacyMigrationVerifications = pgTable(
       table.status,
       table.submittedAt,
     ),
+    uniqueIndex("legacy_migration_verifications_product_item_uq")
+      .on(table.productItemId)
+      .where(sql`${table.productItemId} is not null`),
     check(
       "legacy_migration_verifications_source_ck",
       sql`(
@@ -1197,6 +1203,10 @@ export const legacyMigrationVerifications = pgTable(
     check(
       "legacy_migration_verifications_purity_ck",
       sql`${table.verifiedPurity} > 0`,
+    ),
+    check(
+      "legacy_migration_verifications_revision_ck",
+      sql`${table.revision} > 0`,
     ),
     check(
       "legacy_migration_verifications_photo_ck",

@@ -114,6 +114,51 @@ Route:
 - Koneksi outlet saat beberapa staff scan bersamaan.
 - Pilot satu etalase sebelum migrasi massal.
 
-## Milestone berikutnya
+## Milestone 4 — Manager Review dan Inventory Hold
 
-Milestone 4 akan menambahkan antrean review manager, bulk approval clean item, review individual unmatched/conflict, pembuatan `product_items` dengan status hold/draft, dan pembuatan barcode alias legacy tanpa mengaktifkannya untuk checkout.
+Milestone 4 menambahkan antrean review manager pada:
+
+```text
+/admin/migrasi-produk/[batchId]/review
+```
+
+Aturan utama:
+
+- `submitted` tanpa review flag dan kondisi `good` dapat diproses melalui bulk approval.
+- `needs_review` dan item `physical_unmatched` wajib dibuka satu per satu.
+- Manager dapat mengembalikan verification ke staff dengan alasan wajib.
+- Staff dapat scan barcode yang sama dan mengirim ulang verification yang berstatus `returned` selama sesi masih aktif dan assignment masih berlaku.
+- Penolakan tidak membuat Product Item ataupun barcode alias.
+- Approval membuat Product Item dengan `availability = migration_hold`.
+- Approval membuat satu alias barcode aktif dan primary pada `item_barcodes`.
+- Barcode hasil sequence sistem tetap disimpan pada `product_items.barcode` sebagai identitas internal; barcode lama menjadi alias fisik utama.
+- Approval tidak membuat `inventory_movements` dan tidak pernah mengubah item menjadi `available`.
+- Verification ditautkan ke Product Item melalui `product_item_id` untuk idempotency dan audit.
+
+### Flow approval
+
+```text
+verification submitted / needs_review
+  -> manager review
+  -> transaction lock verification + barcode
+  -> generate SKU dan internal barcode
+  -> insert product_items (migration_hold)
+  -> insert item_barcodes (legacy primary alias)
+  -> update verification approved + product_item_id
+```
+
+Seluruh langkah berada dalam satu transaction. Kegagalan pada salah satu langkah melakukan rollback penuh.
+
+### Return dan resubmit
+
+```text
+manager return + reason
+  -> status returned
+  -> operator scan barcode yang sama
+  -> form terisi data sebelumnya + catatan manager
+  -> operator memperbaiki
+  -> resubmit meningkatkan revision
+  -> kembali ke submitted / needs_review
+```
+
+Milestone 4 belum mencakup cutover, aktivasi massal menjadi `available`, pencatatan barang yang terjual di sistem lama, atau lookup alias barcode pada checkout POS. Bagian tersebut masuk Milestone 5.

@@ -9,6 +9,10 @@ import {
   createVerificationFingerprint,
   normalizePhysicalBarcode,
 } from "../src/features/legacy-migration/verification-rules";
+import {
+  canBulkApproveLegacyVerification,
+  getLegacyBarcodeAliasSource,
+} from "../src/features/legacy-migration/review-rules";
 
 const projectRoot = process.cwd();
 
@@ -352,13 +356,27 @@ for (const contract of [
   "submissionFingerprint",
   "SESSION_ASSIGNMENT_REMOVED",
   "TARGET_MASTER_UNAVAILABLE",
-  "Gunakan foto legacy atau unggah foto aktual",
 ]) {
   assert(
     verificationActionSource.includes(contract),
     `Action verifikasi Milestone 3 wajib memiliki ${contract}.`,
   );
 }
+assert(
+  verificationActionSource.includes("existingReturnedVerification?.imageKey"),
+  "Action verifikasi harus mendukung mempertahankan foto aktual saat resubmit.",
+);
+assert(
+  verificationActionSource.includes(
+    'source === "physical_unmatched" && useLegacyImage',
+  ),
+  "Item physical_unmatched tidak boleh menggunakan foto legacy.",
+);
+assert(
+  verificationActionSource.includes("useLegacyImage && selectedImage"),
+  "Action verifikasi harus menolak foto legacy dan unggahan aktual secara bersamaan.",
+);
+
 assert(
   !verificationActionSource.includes("insert(productItems)"),
   "Milestone 3 tidak boleh membuat product_items.",
@@ -418,3 +436,107 @@ assert(
 console.log(
   "OK: parser XLSX, staging-only contract, master mapping, session per etalase, mobile scanner, unmatched item, concurrency guard, permission, schema, dan route migrasi tervalidasi.",
 );
+
+assert(
+  canBulkApproveLegacyVerification({
+    status: "submitted",
+    reviewFlags: [],
+    condition: "good",
+  }),
+  "Item clean harus eligible untuk bulk approval.",
+);
+assert(
+  !canBulkApproveLegacyVerification({
+    status: "needs_review",
+    reviewFlags: ["BARCODE_NOT_FOUND_IN_LEGACY_EXPORT"],
+    condition: "good",
+  }),
+  "Item needs review tidak boleh masuk bulk approval.",
+);
+assert(
+  getLegacyBarcodeAliasSource("legacy_match") === "legacy_import" &&
+    getLegacyBarcodeAliasSource("physical_unmatched") ===
+      "legacy_physical_label",
+  "Sumber alias barcode harus membedakan export dan label fisik unmatched.",
+);
+
+const milestoneFourMigrationSource = read(
+  "drizzle/0007_legacy_manager_review_inventory_hold.sql",
+);
+for (const contract of [
+  "migration_hold",
+  "product_item_id",
+  "legacy_migration_verifications_product_item_uq",
+  "migration.verification.review",
+  "migration.verification.approve",
+]) {
+  assert(
+    milestoneFourMigrationSource.includes(contract),
+    `Migration Milestone 4 wajib memiliki ${contract}.`,
+  );
+}
+
+const reviewActionSource = read(
+  "src/app/actions/legacy-migration-review.ts",
+);
+for (const contract of [
+  "pg_advisory_xact_lock",
+  "getNextProductItemIdentifiers",
+  'availability: "migration_hold"',
+  "transaction.insert(itemBarcodes)",
+  "isPrimary: true",
+  "migration.verification.approve",
+  "VERIFICATION_NOT_CLEAN",
+]) {
+  assert(
+    reviewActionSource.includes(contract),
+    `Manager review action wajib memiliki ${contract}.`,
+  );
+}
+assert(
+  !reviewActionSource.includes("inventoryMovements"),
+  "Approval migration hold tidak boleh membuat inventory movement.",
+);
+assert(
+  !reviewActionSource.includes('availability: "available"'),
+  "Milestone 4 tidak boleh mengaktifkan item menjadi available.",
+);
+
+const productMasterActionSource = read(
+  "src/app/actions/product-masters.ts",
+);
+assert(
+  productMasterActionSource.includes(
+    '"draft" | "migration_hold" | "available" | "reserved"',
+  ),
+  "Product Master tidak boleh dinonaktifkan ketika masih memiliki item migration hold.",
+);
+
+const reviewQueueSource = read(
+  "src/app/(admin)/admin/migrasi-produk/[batchId]/review/page.tsx",
+);
+assert(
+  reviewQueueSource.includes("Bulk approve clean") &&
+    reviewQueueSource.includes("migration hold"),
+  "Halaman antrean manager harus memiliki bulk approval dan guardrail hold.",
+);
+
+const resubmitActionSource = read(
+  "src/app/actions/legacy-migration-verification.ts",
+);
+for (const contract of [
+  'status === "returned"',
+  "existingVerificationId",
+  "legacy_migration_verification.resubmit",
+  "revision: sql",
+]) {
+  assert(
+    resubmitActionSource.includes(contract),
+    `Resubmit returned verification wajib memiliki ${contract}.`,
+  );
+}
+
+console.log(
+  "OK: Legacy product migration Milestone 1-4 contracts tervalidasi.",
+);
+

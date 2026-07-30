@@ -38,6 +38,7 @@ export const metadata = {
 
 const availabilityLabels: Record<ItemAvailability, string> = {
   draft: "Draft",
+  migration_hold: "Hold Migrasi",
   available: "Tersedia",
   reserved: "Reserved",
   inspection: "Inspeksi",
@@ -57,6 +58,7 @@ const quickAvailabilityFilters: Array<{
 }> = [
   { label: "Semua", value: null },
   { label: "Tersedia", value: "available" },
+  { label: "Hold Migrasi", value: "migration_hold" },
   { label: "Reserved", value: "reserved" },
   { label: "Terjual", value: "sold" },
   { label: "Draft", value: "draft" },

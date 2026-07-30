@@ -51,6 +51,8 @@ const expectedRouteFiles = [
   "app/(admin)/admin/laporan/stok/page.tsx",
   "app/(admin)/admin/migrasi-produk/[batchId]/mapping/page.tsx",
   "app/(admin)/admin/migrasi-produk/[batchId]/page.tsx",
+  "app/(admin)/admin/migrasi-produk/[batchId]/review/page.tsx",
+  "app/(admin)/admin/migrasi-produk/[batchId]/review/[verificationId]/page.tsx",
   "app/(admin)/admin/migrasi-produk/[batchId]/sesi/page.tsx",
   "app/(admin)/admin/migrasi-produk/page.tsx",
   "app/(admin)/admin/layout.tsx",

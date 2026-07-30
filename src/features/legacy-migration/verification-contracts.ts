@@ -29,7 +29,21 @@ export type LegacyMigrationLookupResult =
       ok: true;
       barcode: string;
       source: LegacyVerificationSource;
-      existingVerification: null;
+      existingVerification: null | {
+        id: string;
+        targetProductMasterId: string;
+        verifiedItemName: string;
+        verifiedWeightGram: string;
+        verifiedPurity: string;
+        verifiedExchangePurity: string | null;
+        verifiedColor: string | null;
+        condition: LegacyVerificationCondition;
+        useLegacyImage: boolean;
+        hasActualImage: boolean;
+        staffNotes: string | null;
+        reviewNotes: string | null;
+        revision: number;
+      };
       legacy: null | {
         rowId: string;
         rowNumber: number;

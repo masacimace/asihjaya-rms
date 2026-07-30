@@ -35,7 +35,9 @@ export default async function AdminLayout({
           hasPermission(auth, "migration.view") ||
           hasPermission(auth, "migration.import") ||
           hasPermission(auth, "migration.mapping.manage") ||
-          hasPermission(auth, "migration.session.manage"),
+          hasPermission(auth, "migration.session.manage") ||
+          hasPermission(auth, "migration.verification.review") ||
+          hasPermission(auth, "migration.verification.approve"),
         canAccessApprovals: canAccessApprovalInbox(auth),
         canAccessSettings: hasPermission(auth, "settings.manage"),
         canAccessReconciliation: hasPermission(

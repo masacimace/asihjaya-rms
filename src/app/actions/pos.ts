@@ -1867,7 +1867,7 @@ type HeldCartActionItemRow = {
   outletId: string | null;
   outletCode: string | null;
   outletName: string | null;
-  availability: "draft" | "available" | "reserved" | "inspection" | "sold";
+  availability: "draft" | "migration_hold" | "available" | "reserved" | "inspection" | "sold";
   condition: "good" | "damaged" | "lost" | "returned";
   locationState: "outlet" | "warehouse" | "in_transit" | "customer" | "repair";
   isActive: boolean;

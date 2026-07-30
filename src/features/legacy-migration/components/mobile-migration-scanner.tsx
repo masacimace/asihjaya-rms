@@ -79,8 +79,12 @@ export function MobileMigrationScanner({
     useState<LegacyMigrationSubmissionResult | null>(null);
 
   const defaultProductMasterId = useMemo(() => {
-    if (!lookup?.ok || !lookup.legacy?.mappedProductMasterId) return "";
-    return lookup.legacy.mappedProductMasterId;
+    if (!lookup?.ok) return "";
+    return (
+      lookup.existingVerification?.targetProductMasterId ??
+      lookup.legacy?.mappedProductMasterId ??
+      ""
+    );
   }, [lookup]);
 
   function lookupBarcode(value: string) {
@@ -344,6 +348,11 @@ export function MobileMigrationScanner({
             <input type="hidden" name="source" value={lookup.source} />
             <input
               type="hidden"
+              name="existingVerificationId"
+              value={lookup.existingVerification?.id ?? ""}
+            />
+            <input
+              type="hidden"
               name="legacyRowId"
               value={lookup.legacy?.rowId ?? ""}
             />
@@ -372,7 +381,11 @@ export function MobileMigrationScanner({
                 required
                 minLength={2}
                 maxLength={240}
-                defaultValue={lookup.legacy?.itemName ?? ""}
+                defaultValue={
+                  lookup.existingVerification?.verifiedItemName ??
+                  lookup.legacy?.itemName ??
+                  ""
+                }
                 placeholder="Nama item fisik"
                 className="mt-2 h-12 w-full rounded-xl border border-[var(--border)] px-3 text-sm outline-none focus:border-[var(--accent)]"
               />
@@ -385,7 +398,11 @@ export function MobileMigrationScanner({
                   name="verifiedWeightGram"
                   required
                   inputMode="decimal"
-                  defaultValue={lookup.legacy?.weightGram ?? ""}
+                  defaultValue={
+                    lookup.existingVerification?.verifiedWeightGram ??
+                    lookup.legacy?.weightGram ??
+                    ""
+                  }
                   placeholder="0.000"
                   className="mt-2 h-12 w-full rounded-xl border border-[var(--border)] px-3 text-sm outline-none focus:border-[var(--accent)]"
                 />
@@ -397,7 +414,11 @@ export function MobileMigrationScanner({
                   name="verifiedPurity"
                   required
                   inputMode="decimal"
-                  defaultValue={lookup.legacy?.purity ?? ""}
+                  defaultValue={
+                    lookup.existingVerification?.verifiedPurity ??
+                    lookup.legacy?.purity ??
+                    ""
+                  }
                   placeholder="40"
                   className="mt-2 h-12 w-full rounded-xl border border-[var(--border)] px-3 text-sm outline-none focus:border-[var(--accent)]"
                 />
@@ -408,7 +429,11 @@ export function MobileMigrationScanner({
                 <input
                   name="verifiedExchangePurity"
                   inputMode="decimal"
-                  defaultValue={lookup.legacy?.exchangePurity ?? ""}
+                  defaultValue={
+                    lookup.existingVerification?.verifiedExchangePurity ??
+                    lookup.legacy?.exchangePurity ??
+                    ""
+                  }
                   placeholder="Opsional"
                   className="mt-2 h-12 w-full rounded-xl border border-[var(--border)] px-3 text-sm outline-none focus:border-[var(--accent)]"
                 />
@@ -419,7 +444,11 @@ export function MobileMigrationScanner({
                 <input
                   name="verifiedColor"
                   maxLength={120}
-                  defaultValue={lookup.legacy?.color ?? ""}
+                  defaultValue={
+                    lookup.existingVerification?.verifiedColor ??
+                    lookup.legacy?.color ??
+                    ""
+                  }
                   placeholder="Poles / Kuning / Kombinasi"
                   className="mt-2 h-12 w-full rounded-xl border border-[var(--border)] px-3 text-sm outline-none focus:border-[var(--accent)]"
                 />
@@ -430,7 +459,7 @@ export function MobileMigrationScanner({
               Kondisi fisik
               <select
                 name="condition"
-                defaultValue="good"
+                defaultValue={lookup.existingVerification?.condition ?? "good"}
                 className="mt-2 h-12 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
               >
                 <option value="good">Baik</option>
@@ -444,7 +473,9 @@ export function MobileMigrationScanner({
                   <input
                     type="checkbox"
                     name="useLegacyImage"
-                    defaultChecked
+                    defaultChecked={
+                      lookup.existingVerification?.useLegacyImage ?? true
+                    }
                     className="mt-1 size-4 accent-[var(--accent)]"
                   />
                   <span>
@@ -484,7 +515,10 @@ export function MobileMigrationScanner({
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 capture="environment"
-                required={!lookup.legacy?.imageUrl}
+                required={
+                  !lookup.legacy?.imageUrl &&
+                  !lookup.existingVerification?.hasActualImage
+                }
                 className="mt-3 block w-full text-xs text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-xs file:font-semibold"
               />
             </label>
@@ -495,6 +529,7 @@ export function MobileMigrationScanner({
                 name="staffNotes"
                 rows={3}
                 maxLength={2000}
+                defaultValue={lookup.existingVerification?.staffNotes ?? ""}
                 placeholder="Catat perbedaan fisik, label pudar, atau hal yang perlu diperiksa manager."
                 className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-3 text-sm outline-none focus:border-[var(--accent)]"
               />
@@ -524,7 +559,9 @@ export function MobileMigrationScanner({
                 ) : (
                   <CheckCircle2 className="size-5" />
                 )}
-                Ajukan ke manager
+                {lookup.existingVerification
+                  ? "Kirim ulang ke manager"
+                  : "Ajukan ke manager"}
               </button>
               <button
                 type="button"

@@ -41,6 +41,7 @@ export const metadata = {
 
 const availabilityLabels = {
   draft: "Draft",
+  migration_hold: "Hold Migrasi",
   available: "Tersedia",
   reserved: "Reserved",
   inspection: "Pemeriksaan Retur",
@@ -341,7 +342,9 @@ export default async function ProductItemDetailPage({
       ? "Item sudah terjual sehingga data operasionalnya dikunci."
       : item.availability === "reserved"
         ? "Item sedang direservasi. Lepaskan reservasi sebelum mengubah detail utama."
-        : null;
+        : item.availability === "migration_hold"
+          ? "Item masih dalam hold migrasi. Koreksi dilakukan melalui antrean review sampai proses cutover."
+          : null;
 
   return (
     <div className="w-full min-w-0 space-y-6 overflow-x-clip pb-6">

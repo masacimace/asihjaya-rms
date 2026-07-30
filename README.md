@@ -540,3 +540,7 @@ Semua Product Master hasil otomatis tetap berstatus `draft`. Milestone ini belum
 ### Legacy physical verification
 
 Staff yang ditugaskan pada sesi aktif dapat membuka `/pos/migrasi-barang`, memindai barcode lama, memverifikasi data fisik, dan mengirim hasil ke antrean manager. Barcode unmatched didukung dengan foto aktual wajib. Tahap ini tetap staging-only: tidak membuat stok aktif dan tidak mengubah checkout POS. Lihat `docs/development/legacy-product-migration.md`.
+
+### Legacy migration Milestone 4
+
+Manager review tersedia pada halaman batch migrasi. Approval bersifat transactional dan hanya membuat Product Item berstatus `migration_hold` beserta alias barcode legacy. Item belum tersedia di POS sampai proses cutover pada milestone berikutnya.

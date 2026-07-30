@@ -183,6 +183,8 @@ async function checkLiveDatabase(): Promise<void> {
           "target_product_master_id",
           "submission_fingerprint",
           "submitted_by",
+          "product_item_id",
+          "revision",
         ],
       ],
       ["item_barcodes", ["barcode_value", "source", "is_primary", "is_active"]],
@@ -207,6 +209,7 @@ async function checkLiveDatabase(): Promise<void> {
       "legacy_migration_verifications_org_barcode_uq",
       "legacy_migration_verifications_legacy_row_uq",
       "legacy_migration_verifications_session_status_idx",
+      "legacy_migration_verifications_product_item_uq",
     ];
     const indexResult = await pool.query<{ indexname: string }>(
       `select indexname
@@ -230,6 +233,7 @@ async function checkLiveDatabase(): Promise<void> {
       "legacy_migration_verifications_weight_ck",
       "legacy_migration_verifications_purity_ck",
       "legacy_migration_verifications_photo_ck",
+      "legacy_migration_verifications_revision_ck",
     ];
     const constraintResult = await pool.query<{ conname: string }>(
       `select constraint_record.conname
@@ -252,6 +256,19 @@ async function checkLiveDatabase(): Promise<void> {
     assert(
       missingConstraints.length === 0,
       `Constraint migration verification belum lengkap: ${missingConstraints.join(", ")}.`,
+    );
+
+    const availabilityEnumResult = await pool.query<{ enumlabel: string }>(
+      `select enum_value.enumlabel
+       from pg_enum as enum_value
+       inner join pg_type as enum_type on enum_type.oid = enum_value.enumtypid
+       where enum_type.typname = 'item_availability'`,
+    );
+    assert(
+      availabilityEnumResult.rows.some(
+        (row) => row.enumlabel === "migration_hold",
+      ),
+      "Enum item_availability harus memiliki migration_hold.",
     );
   } finally {
     await pool.end();

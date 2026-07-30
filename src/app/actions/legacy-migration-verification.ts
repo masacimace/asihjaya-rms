@@ -121,6 +121,23 @@ async function findExistingBarcodeRegistration(input: {
         sessionId: legacyMigrationVerifications.sessionId,
         submissionFingerprint:
           legacyMigrationVerifications.submissionFingerprint,
+        legacyRowId: legacyMigrationVerifications.legacyRowId,
+        source: legacyMigrationVerifications.source,
+        targetProductMasterId:
+          legacyMigrationVerifications.targetProductMasterId,
+        verifiedItemName: legacyMigrationVerifications.verifiedItemName,
+        verifiedWeightGram:
+          legacyMigrationVerifications.verifiedWeightGram,
+        verifiedPurity: legacyMigrationVerifications.verifiedPurity,
+        verifiedExchangePurity:
+          legacyMigrationVerifications.verifiedExchangePurity,
+        verifiedColor: legacyMigrationVerifications.verifiedColor,
+        condition: legacyMigrationVerifications.condition,
+        useLegacyImage: legacyMigrationVerifications.useLegacyImage,
+        imageKey: legacyMigrationVerifications.imageKey,
+        staffNotes: legacyMigrationVerifications.staffNotes,
+        reviewNotes: legacyMigrationVerifications.reviewNotes,
+        revision: legacyMigrationVerifications.revision,
       })
       .from(legacyMigrationVerifications)
       .where(
@@ -207,7 +224,13 @@ export async function lookupLegacyMigrationBarcodeAction(input: {
     };
   }
 
-  if (registration.verification) {
+  const returnedVerification =
+    registration.verification?.status === "returned" &&
+    registration.verification.sessionId === session.id
+      ? registration.verification
+      : null;
+
+  if (registration.verification && !returnedVerification) {
     return {
       ok: false,
       code: "ALREADY_VERIFIED",
@@ -280,13 +303,38 @@ export async function lookupLegacyMigrationBarcodeAction(input: {
     return {
       ok: true,
       barcode,
-      source: "physical_unmatched",
-      existingVerification: null,
+      source: returnedVerification?.source ?? "physical_unmatched",
+      existingVerification: returnedVerification
+        ? {
+            id: returnedVerification.id,
+            targetProductMasterId: returnedVerification.targetProductMasterId,
+            verifiedItemName: returnedVerification.verifiedItemName,
+            verifiedWeightGram: returnedVerification.verifiedWeightGram,
+            verifiedPurity: returnedVerification.verifiedPurity,
+            verifiedExchangePurity:
+              returnedVerification.verifiedExchangePurity,
+            verifiedColor: returnedVerification.verifiedColor,
+            condition:
+              returnedVerification.condition === "damaged"
+                ? "damaged"
+                : "good",
+            useLegacyImage: returnedVerification.useLegacyImage,
+            hasActualImage: Boolean(returnedVerification.imageKey),
+            staffNotes: returnedVerification.staffNotes,
+            reviewNotes: returnedVerification.reviewNotes,
+            revision: returnedVerification.revision,
+          }
+        : null,
       legacy: null,
-      messages: [
-        "Barcode tidak ditemukan di export legacy.",
-        "Isi data fisik dan unggah foto. Item otomatis masuk antrean needs review.",
-      ],
+      messages: returnedVerification
+        ? [
+            "Verification dikembalikan manager. Perbaiki data sesuai catatan dan kirim ulang.",
+            returnedVerification.reviewNotes ?? "Periksa kembali seluruh data fisik.",
+          ]
+        : [
+            "Barcode tidak ditemukan di export legacy.",
+            "Isi data fisik dan unggah foto. Item otomatis masuk antrean needs review.",
+          ],
     };
   }
 
@@ -302,11 +350,37 @@ export async function lookupLegacyMigrationBarcodeAction(input: {
     );
   }
 
+  if (returnedVerification) {
+    messages.unshift(
+      returnedVerification.reviewNotes ??
+        "Verification dikembalikan manager. Perbaiki dan kirim ulang.",
+    );
+  }
+
   return {
     ok: true,
     barcode,
-    source: "legacy_match",
-    existingVerification: null,
+    source: returnedVerification?.source ?? "legacy_match",
+    existingVerification: returnedVerification
+      ? {
+          id: returnedVerification.id,
+          targetProductMasterId: returnedVerification.targetProductMasterId,
+          verifiedItemName: returnedVerification.verifiedItemName,
+          verifiedWeightGram: returnedVerification.verifiedWeightGram,
+          verifiedPurity: returnedVerification.verifiedPurity,
+          verifiedExchangePurity: returnedVerification.verifiedExchangePurity,
+          verifiedColor: returnedVerification.verifiedColor,
+          condition:
+            returnedVerification.condition === "damaged"
+              ? "damaged"
+              : "good",
+          useLegacyImage: returnedVerification.useLegacyImage,
+          hasActualImage: Boolean(returnedVerification.imageKey),
+          staffNotes: returnedVerification.staffNotes,
+          reviewNotes: returnedVerification.reviewNotes,
+          revision: returnedVerification.revision,
+        }
+      : null,
     legacy: {
       rowId: legacy.id,
       rowNumber: legacy.rowNumber,
@@ -355,6 +429,11 @@ export async function submitLegacyMigrationVerificationAction(
   );
   const source = readText(formData, "source", 32);
   const legacyRowId = readText(formData, "legacyRowId", 36);
+  const existingVerificationId = readText(
+    formData,
+    "existingVerificationId",
+    36,
+  );
   const targetProductMasterId =
     readText(formData, "targetProductMasterId", 36) ?? "";
   const verifiedItemName = readText(formData, "verifiedItemName", 240);
@@ -408,14 +487,46 @@ export async function submitLegacyMigrationVerificationAction(
       "Kadar tukaran harus berupa angka lebih dari 0.";
   }
 
+  const existingReturnedVerification =
+    barcode && UUID_PATTERN.test(existingVerificationId ?? "")
+      ? (
+          await db
+            .select({
+              id: legacyMigrationVerifications.id,
+              status: legacyMigrationVerifications.status,
+              sessionId: legacyMigrationVerifications.sessionId,
+              imageKey: legacyMigrationVerifications.imageKey,
+              revision: legacyMigrationVerifications.revision,
+            })
+            .from(legacyMigrationVerifications)
+            .where(
+              and(
+                eq(legacyMigrationVerifications.id, existingVerificationId!),
+                eq(
+                  legacyMigrationVerifications.organizationId,
+                  auth.organization.id,
+                ),
+                eq(legacyMigrationVerifications.sessionId, session.id),
+                eq(legacyMigrationVerifications.barcodeValue, barcode),
+                eq(legacyMigrationVerifications.status, "returned"),
+              ),
+            )
+            .limit(1)
+        )[0] ?? null
+      : null;
+
   const selectedImage = image instanceof File && image.size > 0 ? image : null;
   if (selectedImage) {
     const validation = validateImageFile(selectedImage);
     if (!validation.valid) fieldErrors.image = validation.message;
   }
-  if (!useLegacyImage && !selectedImage) {
+  if (
+    !useLegacyImage &&
+    !selectedImage &&
+    !existingReturnedVerification?.imageKey
+  ) {
     fieldErrors.image =
-      "Gunakan foto legacy atau unggah foto aktual untuk verifikasi ini.";
+      "Gunakan foto legacy, pertahankan foto aktual sebelumnya, atau unggah foto baru.";
   }
   if (source === "physical_unmatched" && useLegacyImage) {
     fieldErrors.image = "Item unmatched tidak memiliki foto legacy.";
@@ -531,14 +642,18 @@ export async function submitLegacyMigrationVerificationAction(
     verifiedColor,
     condition,
     useLegacyImage,
-    hasUploadedImage: Boolean(selectedImage),
+    hasUploadedImage: Boolean(
+      selectedImage || existingReturnedVerification?.imageKey,
+    ),
   });
 
   const imageSha256 = selectedImage
     ? createHash("sha256")
         .update(Buffer.from(await selectedImage.arrayBuffer()))
         .digest("hex")
-    : null;
+    : existingReturnedVerification?.imageKey
+      ? `existing:${existingReturnedVerification.imageKey}`
+      : null;
   const fingerprint = createVerificationFingerprint({
     sessionId,
     barcode: barcode!,
@@ -565,7 +680,14 @@ export async function submitLegacyMigrationVerificationAction(
       message: "Barcode sudah terhubung ke item sistem baru.",
     };
   }
-  if (earlyRegistration.verification) {
+  if (
+    earlyRegistration.verification &&
+    !(
+      earlyRegistration.verification.status === "returned" &&
+      earlyRegistration.verification.id === existingReturnedVerification?.id &&
+      earlyRegistration.verification.sessionId === session.id
+    )
+  ) {
     if (earlyRegistration.verification.submissionFingerprint === fingerprint) {
       return {
         ok: true,
@@ -583,8 +705,10 @@ export async function submitLegacyMigrationVerificationAction(
     };
   }
 
-  const verificationId = randomUUID();
-  let imageKey: string | null = null;
+  const verificationId = existingReturnedVerification?.id ?? randomUUID();
+  const previousImageKey = existingReturnedVerification?.imageKey ?? null;
+  let imageKey: string | null = previousImageKey;
+  let storedNewImage = false;
   try {
     if (selectedImage) {
       imageKey = await storeImageFile({
@@ -593,6 +717,7 @@ export async function submitLegacyMigrationVerificationAction(
         entityType: "items",
         entityId: verificationId,
       });
+      storedNewImage = true;
     }
 
     const requestMetadata = await getRequestMetadata();
@@ -652,6 +777,10 @@ export async function submitLegacyMigrationVerificationAction(
           id: legacyMigrationVerifications.id,
           submissionFingerprint:
             legacyMigrationVerifications.submissionFingerprint,
+          status: legacyMigrationVerifications.status,
+          sessionId: legacyMigrationVerifications.sessionId,
+          imageKey: legacyMigrationVerifications.imageKey,
+          revision: legacyMigrationVerifications.revision,
         })
         .from(legacyMigrationVerifications)
         .where(
@@ -691,44 +820,83 @@ export async function submitLegacyMigrationVerificationAction(
       if (existingProductItem[0] || existingAlias[0]) {
         throw new Error("BARCODE_ALREADY_REGISTERED");
       }
-      if (existingVerification[0]) {
-        if (existingVerification[0].submissionFingerprint === fingerprint) {
-          throw new Error(`IDEMPOTENT:${existingVerification[0].id}`);
+      const existingRow = existingVerification[0] ?? null;
+      const isReturnedResubmission =
+        existingRow?.status === "returned" &&
+        existingRow.id === existingReturnedVerification?.id &&
+        existingRow.sessionId === session.id;
+
+      if (existingRow && !isReturnedResubmission) {
+        if (existingRow.submissionFingerprint === fingerprint) {
+          throw new Error(`IDEMPOTENT:${existingRow.id}`);
         }
         throw new Error("BARCODE_ALREADY_VERIFIED");
       }
 
-      await transaction.insert(legacyMigrationVerifications).values({
-        id: verificationId,
-        sessionId: session.id,
-        batchId: session.batchId,
-        organizationId: auth.organization.id,
-        outletId: session.outletId,
-        barcodeValue: barcode!,
-        legacyRowId: legacyRow?.id ?? null,
-        source: source as "legacy_match" | "physical_unmatched",
-        status,
-        targetProductMasterId,
-        verifiedItemName: verifiedItemName!,
-        verifiedWeightGram: weight.value!,
-        verifiedPurity: purity.value!,
-        verifiedExchangePurity: exchangePurity.value,
-        verifiedColor,
-        condition,
-        useLegacyImage,
-        legacyImageUrl: useLegacyImage ? safeLegacyImageUrl : null,
-        imageKey,
-        staffNotes,
-        reviewFlags,
-        submissionFingerprint: fingerprint,
-        submittedBy: auth.user.id,
-      });
+      if (isReturnedResubmission && existingRow) {
+        await transaction
+          .update(legacyMigrationVerifications)
+          .set({
+            legacyRowId: legacyRow?.id ?? null,
+            source: source as "legacy_match" | "physical_unmatched",
+            status,
+            targetProductMasterId,
+            verifiedItemName: verifiedItemName!,
+            verifiedWeightGram: weight.value!,
+            verifiedPurity: purity.value!,
+            verifiedExchangePurity: exchangePurity.value,
+            verifiedColor,
+            condition,
+            useLegacyImage,
+            legacyImageUrl: useLegacyImage ? safeLegacyImageUrl : null,
+            imageKey: useLegacyImage ? null : imageKey,
+            staffNotes,
+            reviewFlags,
+            submissionFingerprint: fingerprint,
+            submittedBy: auth.user.id,
+            submittedAt: new Date(),
+            reviewedBy: null,
+            reviewedAt: null,
+            reviewNotes: null,
+            revision: sql`${legacyMigrationVerifications.revision} + 1`,
+            updatedAt: new Date(),
+          })
+          .where(eq(legacyMigrationVerifications.id, existingRow.id));
+      } else {
+        await transaction.insert(legacyMigrationVerifications).values({
+          id: verificationId,
+          sessionId: session.id,
+          batchId: session.batchId,
+          organizationId: auth.organization.id,
+          outletId: session.outletId,
+          barcodeValue: barcode!,
+          legacyRowId: legacyRow?.id ?? null,
+          source: source as "legacy_match" | "physical_unmatched",
+          status,
+          targetProductMasterId,
+          verifiedItemName: verifiedItemName!,
+          verifiedWeightGram: weight.value!,
+          verifiedPurity: purity.value!,
+          verifiedExchangePurity: exchangePurity.value,
+          verifiedColor,
+          condition,
+          useLegacyImage,
+          legacyImageUrl: useLegacyImage ? safeLegacyImageUrl : null,
+          imageKey: useLegacyImage ? null : imageKey,
+          staffNotes,
+          reviewFlags,
+          submissionFingerprint: fingerprint,
+          submittedBy: auth.user.id,
+        });
+      }
 
       await transaction.insert(auditLogs).values({
         organizationId: auth.organization.id,
         outletId: session.outletId,
         actorUserId: auth.user.id,
-        action: "legacy_migration_verification.submit",
+        action: existingReturnedVerification
+          ? "legacy_migration_verification.resubmit"
+          : "legacy_migration_verification.submit",
         entityType: "legacy_migration_verification",
         entityId: verificationId,
         afterData: {
@@ -743,27 +911,42 @@ export async function submitLegacyMigrationVerificationAction(
           useLegacyImage,
           hasUploadedImage: Boolean(imageKey),
         },
-        reason:
-          "Verifikasi fisik dikirim ke antrean manager tanpa membuat inventory aktif.",
+        reason: existingReturnedVerification
+          ? "Verification yang dikembalikan manager diperbaiki dan dikirim ulang."
+          : "Verifikasi fisik dikirim ke antrean manager tanpa membuat inventory aktif.",
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
       });
     });
 
+    if (
+      previousImageKey &&
+      (useLegacyImage || (storedNewImage && previousImageKey !== imageKey))
+    ) {
+      await deleteImageFile(previousImageKey).catch(() => undefined);
+    }
+
     revalidatePath(`/pos/migrasi-barang/${session.id}`);
     revalidatePath(`/admin/migrasi-produk/${session.batchId}/sesi`);
+    revalidatePath(`/admin/migrasi-produk/${session.batchId}/review`);
+    revalidatePath(
+      `/admin/migrasi-produk/${session.batchId}/review/${verificationId}`,
+    );
 
     return {
       ok: true,
       verificationId,
       status: reviewFlags.length > 0 ? "needs_review" : "submitted",
-      message:
-        reviewFlags.length > 0
+      message: existingReturnedVerification
+        ? "Perbaikan tersimpan dan verification dikirim ulang ke manager."
+        : reviewFlags.length > 0
           ? "Verifikasi tersimpan dan masuk antrean needs review manager."
           : "Verifikasi tersimpan dan siap direview manager.",
     };
   } catch (error) {
-    if (imageKey) await deleteImageFile(imageKey).catch(() => undefined);
+    if (storedNewImage && imageKey) {
+      await deleteImageFile(imageKey).catch(() => undefined);
+    }
 
     const message = error instanceof Error ? error.message : "";
     if (message.startsWith("IDEMPOTENT:")) {

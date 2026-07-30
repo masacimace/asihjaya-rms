@@ -114,12 +114,20 @@ export default async function LegacyMigrationSessionsPage({
             </p>
           </div>
 
-          <Link
-            href={`/admin/migrasi-produk/${data.batch.id}/mapping`}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-900 transition hover:bg-neutral-50"
-          >
-            Review master mapping
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href={`/admin/migrasi-produk/${data.batch.id}/mapping`}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-900 transition hover:bg-neutral-50"
+            >
+              Review master mapping
+            </Link>
+            <Link
+              href={`/admin/migrasi-produk/${data.batch.id}/review`}
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
+            >
+              Antrean review manager
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -127,8 +135,8 @@ export default async function LegacyMigrationSessionsPage({
         <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
           <h2 className="font-semibold text-neutral-950">Buat sesi baru</h2>
           <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-            Contoh: Etalase Cincin A, Kalung Kanan, atau Logam Mulia. Hak scan
-            baru akan aktif pada Milestone 3.
+            Contoh: Etalase Cincin A, Kalung Kanan, atau Logam Mulia. Hasil scan
+            masuk antrean manager; approval membuat item migration hold, bukan stok tersedia.
           </p>
 
           <form

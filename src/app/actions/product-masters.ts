@@ -30,8 +30,8 @@ import { validateImageFile } from "@/lib/storage/image-validation";
 
 const PRODUCT_CODE_PATTERN = /^[A-Z0-9][A-Z0-9_-]{1,63}$/;
 const OPERATIONAL_ITEM_AVAILABILITIES: Array<
-  "draft" | "available" | "reserved"
-> = ["draft", "available", "reserved"];
+  "draft" | "migration_hold" | "available" | "reserved"
+> = ["draft", "migration_hold", "available", "reserved"];
 
 function failure(
   message: string,
