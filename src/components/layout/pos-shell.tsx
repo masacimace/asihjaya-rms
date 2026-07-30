@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   MoreHorizontal,
   Pause,
+  PackageSearch,
   Printer,
   ReceiptText,
   ScanBarcode,
@@ -30,6 +31,7 @@ type PosShellUser = {
   roleLabel: string;
   canAccessAdmin: boolean;
   outletName: string;
+  canAccessMigration: boolean;
 };
 
 type PosShellStatus = {
@@ -104,6 +106,12 @@ const navigation = [
   },
   { label: "Pelanggan", href: "/pos/pelanggan", icon: UsersRound },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
+  {
+    label: "Migrasi Barang",
+    href: "/pos/migrasi-barang",
+    icon: PackageSearch,
+    access: "migration",
+  },
 ] as const;
 
 const mobilePrimaryNavigation = [
@@ -115,11 +123,18 @@ const mobilePrimaryNavigation = [
 const mobileMoreNavigation = [
   { label: "Transaksi Tertahan", href: "/pos/ditahan", icon: Pause },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
+  {
+    label: "Migrasi Barang",
+    href: "/pos/migrasi-barang",
+    icon: PackageSearch,
+    access: "migration",
+  },
 ] as const;
 
 type SidebarContentProps = {
   pathname: string;
   canAccessAdmin: boolean;
+  canAccessMigration: boolean;
   onNavigate?: () => void;
 };
 
@@ -219,6 +234,7 @@ function NotificationIcon({
 function SidebarContent({
   pathname,
   canAccessAdmin,
+  canAccessMigration,
   onNavigate,
 }: SidebarContentProps) {
   const [openNavigationGroups, setOpenNavigationGroups] = useState<
@@ -265,7 +281,14 @@ function SidebarContent({
         </span>
       </Link>
       <nav className="space-y-1">
-        {navigation.map((item) => {
+        {navigation
+          .filter(
+            (item) =>
+              !("access" in item) ||
+              item.access !== "migration" ||
+              canAccessMigration,
+          )
+          .map((item) => {
           const Icon = item.icon;
           const hasChildren = "children" in item;
           const active = hasChildren
@@ -453,6 +476,7 @@ export function PosShell({
         <SidebarContent
           pathname={pathname}
           canAccessAdmin={user.canAccessAdmin}
+          canAccessMigration={user.canAccessMigration}
         />
       </aside>
 
@@ -481,6 +505,7 @@ export function PosShell({
             <SidebarContent
               pathname={pathname}
               canAccessAdmin={user.canAccessAdmin}
+              canAccessMigration={user.canAccessMigration}
               onNavigate={() => setIsNavigationOpen(false)}
             />
           </aside>
@@ -519,7 +544,14 @@ export function PosShell({
             </div>
 
             <div className="mt-5 grid gap-3">
-              {mobileMoreNavigation.map(({ label, href, icon: Icon }) => {
+              {mobileMoreNavigation
+                .filter(
+                  (item) =>
+                    !("access" in item) ||
+                    item.access !== "migration" ||
+                    user.canAccessMigration,
+                )
+                .map(({ label, href, icon: Icon }) => {
                 const active = isNavigationActive(pathname, href);
 
                 return (

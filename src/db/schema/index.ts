@@ -89,6 +89,24 @@ export const legacyMigrationAssignmentRoleEnum = pgEnum(
   ["operator", "lead"],
 );
 
+export const legacyMigrationVerificationSourceEnum = pgEnum(
+  "legacy_migration_verification_source",
+  ["legacy_match", "physical_unmatched"],
+);
+
+export const legacyMigrationVerificationStatusEnum = pgEnum(
+  "legacy_migration_verification_status",
+  [
+    "submitted",
+    "needs_review",
+    "returned",
+    "approved",
+    "rejected",
+    "sold_during_migration",
+    "activated",
+  ],
+);
+
 export const itemAvailabilityEnum = pgEnum("item_availability", [
   "draft",
   "available",
@@ -1079,6 +1097,117 @@ export const legacyMigrationSessionAssignments = pgTable(
     index("legacy_migration_session_assignments_user_idx").on(
       table.userId,
       table.assignedAt,
+    ),
+  ],
+);
+
+export const legacyMigrationVerifications = pgTable(
+  "legacy_migration_verifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => legacyMigrationSessions.id, { onDelete: "cascade" }),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    barcodeValue: varchar("barcode_value", { length: 120 }).notNull(),
+    legacyRowId: uuid("legacy_row_id").references(() => legacyProductRows.id, {
+      onDelete: "cascade",
+    }),
+    source: legacyMigrationVerificationSourceEnum("source").notNull(),
+    status: legacyMigrationVerificationStatusEnum("status")
+      .default("submitted")
+      .notNull(),
+    targetProductMasterId: uuid("target_product_master_id")
+      .notNull()
+      .references(() => productMasters.id),
+    verifiedItemName: varchar("verified_item_name", { length: 240 }).notNull(),
+    verifiedWeightGram: numeric("verified_weight_gram", {
+      precision: 12,
+      scale: 3,
+    }).notNull(),
+    verifiedPurity: numeric("verified_purity", {
+      precision: 10,
+      scale: 3,
+    }).notNull(),
+    verifiedExchangePurity: numeric("verified_exchange_purity", {
+      precision: 10,
+      scale: 3,
+    }),
+    verifiedColor: varchar("verified_color", { length: 120 }),
+    condition: itemConditionEnum("condition").default("good").notNull(),
+    useLegacyImage: boolean("use_legacy_image").default(false).notNull(),
+    legacyImageUrl: text("legacy_image_url"),
+    imageKey: text("image_key"),
+    staffNotes: text("staff_notes"),
+    reviewFlags: jsonb("review_flags").$type<string[]>().default([]).notNull(),
+    submissionFingerprint: varchar("submission_fingerprint", {
+      length: 64,
+    }).notNull(),
+    submittedBy: uuid("submitted_by")
+      .notNull()
+      .references(() => users.id),
+    submittedAt: timestamp("submitted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    reviewedBy: uuid("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewNotes: text("review_notes"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_migration_verifications_org_barcode_uq").on(
+      table.organizationId,
+      table.barcodeValue,
+    ),
+    uniqueIndex("legacy_migration_verifications_legacy_row_uq")
+      .on(table.legacyRowId)
+      .where(sql`${table.legacyRowId} is not null`),
+    index("legacy_migration_verifications_session_status_idx").on(
+      table.sessionId,
+      table.status,
+      table.submittedAt,
+    ),
+    index("legacy_migration_verifications_batch_status_idx").on(
+      table.batchId,
+      table.status,
+      table.submittedAt,
+    ),
+    check(
+      "legacy_migration_verifications_source_ck",
+      sql`(
+        ${table.source} = 'legacy_match'
+        and ${table.legacyRowId} is not null
+      ) or (
+        ${table.source} = 'physical_unmatched'
+        and ${table.legacyRowId} is null
+      )`,
+    ),
+    check(
+      "legacy_migration_verifications_weight_ck",
+      sql`${table.verifiedWeightGram} > 0`,
+    ),
+    check(
+      "legacy_migration_verifications_purity_ck",
+      sql`${table.verifiedPurity} > 0`,
+    ),
+    check(
+      "legacy_migration_verifications_photo_ck",
+      sql`(
+        ${table.useLegacyImage} = true
+        and ${table.legacyImageUrl} is not null
+        and ${table.imageKey} is null
+      ) or (
+        ${table.useLegacyImage} = false
+        and ${table.imageKey} is not null
+      )`,
     ),
   ],
 );

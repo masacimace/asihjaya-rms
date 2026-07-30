@@ -11,6 +11,7 @@ import { db } from "@/db";
 import {
   legacyMigrationSessionAssignments,
   legacyMigrationSessions,
+  legacyMigrationVerifications,
   legacyProductImportBatches,
   legacyProductMasterMappings,
   outlets,
@@ -259,6 +260,39 @@ export async function getLegacyMigrationSessionData(
             asc(users.fullName),
           );
 
+  const verificationSummaryRows =
+    sessionIds.length === 0
+      ? []
+      : await db
+          .select({
+            sessionId: legacyMigrationVerifications.sessionId,
+            status: legacyMigrationVerifications.status,
+            total: count(),
+          })
+          .from(legacyMigrationVerifications)
+          .where(inArray(legacyMigrationVerifications.sessionId, sessionIds))
+          .groupBy(
+            legacyMigrationVerifications.sessionId,
+            legacyMigrationVerifications.status,
+          );
+
+  const verificationSummaryBySession = new Map<
+    string,
+    { total: number; submitted: number; needsReview: number }
+  >();
+  for (const row of verificationSummaryRows) {
+    const summary = verificationSummaryBySession.get(row.sessionId) ?? {
+      total: 0,
+      submitted: 0,
+      needsReview: 0,
+    };
+    const total = Number(row.total);
+    summary.total += total;
+    if (row.status === "submitted") summary.submitted += total;
+    if (row.status === "needs_review") summary.needsReview += total;
+    verificationSummaryBySession.set(row.sessionId, summary);
+  }
+
   const assignmentsBySession = new Map<
     string,
     Array<(typeof assignmentRows)[number]>
@@ -278,6 +312,11 @@ export async function getLegacyMigrationSessionData(
     sessions: sessionRows.map((session) => ({
       ...session,
       assignments: assignmentsBySession.get(session.id) ?? [],
+      verificationSummary: verificationSummaryBySession.get(session.id) ?? {
+        total: 0,
+        submitted: 0,
+        needsReview: 0,
+      },
     })),
   };
 }

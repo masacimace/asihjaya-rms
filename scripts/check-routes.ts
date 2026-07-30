@@ -87,6 +87,8 @@ const expectedRouteFiles = [
   "app/(pos)/pos/[section]/page.tsx",
   "app/(pos)/pos/ditahan/page.tsx",
   "app/(pos)/pos/layout.tsx",
+  "app/(pos)/pos/migrasi-barang/[sessionId]/page.tsx",
+  "app/(pos)/pos/migrasi-barang/page.tsx",
   "app/(pos)/pos/page.tsx",
   "app/(pos)/pos/pelanggan/page.tsx",
   "app/(pos)/pos/shift/page.tsx",

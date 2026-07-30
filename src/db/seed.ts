@@ -83,6 +83,16 @@ const permissionSeeds = [
     module: "migration",
   },
   {
+    code: "migration.scan",
+    name: "Memindai barcode migrasi fisik",
+    module: "migration",
+  },
+  {
+    code: "migration.verification.submit",
+    name: "Mengirim verifikasi barang fisik",
+    module: "migration",
+  },
+  {
     code: "inventory.view",
     name: "Melihat inventaris",
     module: "inventory",
@@ -353,6 +363,8 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "migration.import",
     "migration.mapping.manage",
     "migration.session.manage",
+    "migration.scan",
+    "migration.verification.submit",
     "inventory.view",
     "inventory.print_label",
     "inventory.receive",
@@ -386,6 +398,8 @@ const rolePermissionMap: Record<string, readonly string[]> = {
   cashier: [
     "pos.access",
     "products.view",
+    "migration.scan",
+    "migration.verification.submit",
     "inventory.view",
     "sales.view",
     "sales.create",
@@ -405,6 +419,8 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "migration.import",
     "migration.mapping.manage",
     "migration.session.manage",
+    "migration.scan",
+    "migration.verification.submit",
     "inventory.view",
     "inventory.print_label",
     "inventory.receive",

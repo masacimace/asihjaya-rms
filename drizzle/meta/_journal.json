@@ -43,6 +43,13 @@
       "when": 1785315238132,
       "tag": "0005_legacy_master_mapping_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785319545463,
+      "tag": "0006_legacy_physical_verification",
+      "breakpoints": true
     }
   ]
 }

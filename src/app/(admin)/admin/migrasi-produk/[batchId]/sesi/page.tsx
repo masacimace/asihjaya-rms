@@ -247,8 +247,8 @@ export default async function LegacyMigrationSessionsPage({
         <div>
           <h2 className="font-semibold text-neutral-950">Sesi yang tersedia</h2>
           <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-            Sesi Draft dapat disiapkan sekarang. Status Aktif menandakan sesi siap
-            dipakai ketika mobile scanner Milestone 3 tersedia.
+            Status Aktif dapat dipakai staff melalui menu POS → Migrasi Barang.
+            Hasil scan hanya masuk antrean manager dan belum menjadi stok aktif.
           </p>
         </div>
 
@@ -294,6 +294,27 @@ export default async function LegacyMigrationSessionsPage({
                       {session.notes}
                     </p>
                   ) : null}
+
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <div className="rounded-xl bg-neutral-50 p-3">
+                      <p className="text-lg font-semibold text-neutral-950">
+                        {session.verificationSummary.total}
+                      </p>
+                      <p className="text-[11px] text-[var(--muted)]">Total scan</p>
+                    </div>
+                    <div className="rounded-xl bg-emerald-50 p-3">
+                      <p className="text-lg font-semibold text-emerald-700">
+                        {session.verificationSummary.submitted}
+                      </p>
+                      <p className="text-[11px] text-emerald-700/80">Terkirim</p>
+                    </div>
+                    <div className="rounded-xl bg-amber-50 p-3">
+                      <p className="text-lg font-semibold text-amber-700">
+                        {session.verificationSummary.needsReview}
+                      </p>
+                      <p className="text-[11px] text-amber-700/80">Perlu review</p>
+                    </div>
+                  </div>
 
                   <div className="mt-4 space-y-2">
                     {session.assignments.map((assignment) => (

@@ -4,6 +4,11 @@ import path from "node:path";
 import * as XLSX from "xlsx";
 
 import { parseLegacyProductWorkbook } from "../src/features/legacy-migration/xlsx-parser";
+import {
+  collectVerificationReviewFlags,
+  createVerificationFingerprint,
+  normalizePhysicalBarcode,
+} from "../src/features/legacy-migration/verification-rules";
 
 const projectRoot = process.cwd();
 
@@ -146,6 +151,73 @@ assert(
   "Summary wajib menegaskan bahwa status stok legacy tidak tersedia.",
 );
 
+
+assert(
+  normalizePhysicalBarcode("3037", 6) === "003037",
+  "Input manual barcode harus mempertahankan kontrak leading zero.",
+);
+assert(
+  normalizePhysicalBarcode(" 003037 ", 6) === "003037",
+  "Scanner harus menormalisasi whitespace barcode.",
+);
+const unmatchedFlags = collectVerificationReviewFlags({
+  source: "physical_unmatched",
+  legacyValidationStatus: null,
+  mappedProductMasterId: null,
+  selectedProductMasterId: "master-test",
+  legacyItemName: null,
+  verifiedItemName: "Item fisik test",
+  legacyWeightGram: null,
+  verifiedWeightGram: 2.5,
+  legacyPurity: null,
+  verifiedPurity: 40,
+  legacyExchangePurity: null,
+  verifiedExchangePurity: null,
+  legacyColor: null,
+  verifiedColor: "Poles",
+  condition: "good",
+  useLegacyImage: false,
+  hasUploadedImage: true,
+});
+assert(
+  unmatchedFlags.includes("BARCODE_NOT_FOUND_IN_LEGACY_EXPORT"),
+  "Barcode unmatched harus selalu masuk review manager.",
+);
+const fingerprintA = createVerificationFingerprint({
+  sessionId: "session",
+  barcode: "003037",
+  legacyRowId: "row",
+  targetProductMasterId: "master",
+  verifiedItemName: "Item",
+  verifiedWeightGram: "2.5",
+  verifiedPurity: "40",
+  verifiedExchangePurity: null,
+  verifiedColor: "Poles",
+  condition: "good",
+  useLegacyImage: true,
+  staffNotes: null,
+  imageSha256: null,
+});
+const fingerprintB = createVerificationFingerprint({
+  sessionId: "session",
+  barcode: "003037",
+  legacyRowId: "row",
+  targetProductMasterId: "master",
+  verifiedItemName: "Item",
+  verifiedWeightGram: "2.6",
+  verifiedPurity: "40",
+  verifiedExchangePurity: null,
+  verifiedColor: "Poles",
+  condition: "good",
+  useLegacyImage: true,
+  staffNotes: null,
+  imageSha256: null,
+});
+assert(
+  fingerprintA !== fingerprintB,
+  "Fingerprint harus berubah ketika intent verifikasi berubah.",
+);
+
 const actionSource = read("src/app/actions/legacy-product-import.ts");
 assert(
   actionSource.includes('requirePermission("migration.import")'),
@@ -244,9 +316,97 @@ const sessionPageSource = read(
 const normalizedSessionPageSource = sessionPageSource.replace(/\s+/g, " ");
 assert(
   normalizedSessionPageSource.includes(
-    "Hak scan baru akan aktif pada Milestone 3",
+    "Hasil scan hanya masuk antrean manager dan belum menjadi stok aktif",
   ),
-  "Halaman sesi harus menjelaskan scanner belum aktif pada Milestone 2.",
+  "Halaman sesi harus mempertahankan guardrail staging-only Milestone 3.",
+);
+
+const milestoneThreeMigrationSource = read(
+  "drizzle/0006_legacy_physical_verification.sql",
+);
+for (const contract of [
+  "legacy_migration_verifications",
+  "legacy_migration_verification_source",
+  "legacy_migration_verification_status",
+  "legacy_migration_verifications_org_barcode_uq",
+  "legacy_migration_verifications_photo_ck",
+  "migration.scan",
+  "migration.verification.submit",
+]) {
+  assert(
+    milestoneThreeMigrationSource.includes(contract),
+    `Migration Milestone 3 wajib memiliki ${contract}.`,
+  );
+}
+
+const verificationActionSource = read(
+  "src/app/actions/legacy-migration-verification.ts",
+);
+for (const contract of [
+  'requirePermission("migration.scan")',
+  'requirePermission("migration.verification.submit")',
+  "pg_advisory_xact_lock",
+  "legacyMigrationVerifications",
+  "physical_unmatched",
+  "needs_review",
+  "submissionFingerprint",
+  "SESSION_ASSIGNMENT_REMOVED",
+  "TARGET_MASTER_UNAVAILABLE",
+  "Gunakan foto legacy atau unggah foto aktual",
+]) {
+  assert(
+    verificationActionSource.includes(contract),
+    `Action verifikasi Milestone 3 wajib memiliki ${contract}.`,
+  );
+}
+assert(
+  !verificationActionSource.includes("insert(productItems)"),
+  "Milestone 3 tidak boleh membuat product_items.",
+);
+assert(
+  !verificationActionSource.includes("insert(itemBarcodes)"),
+  "Milestone 3 tidak boleh membuat item_barcodes aktif.",
+);
+
+const verificationRulesSource = read(
+  "src/features/legacy-migration/verification-rules.ts",
+);
+for (const contract of [
+  'padStart(expectedLength, \"0\")',
+  "BARCODE_NOT_FOUND_IN_LEGACY_EXPORT",
+  "WEIGHT_CHANGED",
+  "createVerificationFingerprint",
+]) {
+  assert(
+    verificationRulesSource.includes(contract),
+    `Verification rules wajib memiliki ${contract}.`,
+  );
+}
+
+const scannerPageSource = read(
+  "src/features/legacy-migration/components/mobile-migration-scanner.tsx",
+);
+for (const contract of [
+  "CameraScannerModal",
+  "Buka kamera / input manual",
+  "Ajukan ke manager",
+  "belum menjadi stok aktif",
+  'capture="environment"',
+]) {
+  assert(
+    scannerPageSource.includes(contract),
+    `Mobile scanner wajib memiliki ${contract}.`,
+  );
+}
+
+const posShellSource = read("src/components/layout/pos-shell.tsx");
+assert(
+  posShellSource.includes('href: "/pos/migrasi-barang"'),
+  "POS shell custom harus menampilkan menu Migrasi Barang.",
+);
+assert(
+  posShellSource.includes("canAccessMigration"),
+  "Menu Migrasi Barang harus dibatasi permission.",
 );
 
 const routeSource = read("src/app/(admin)/admin/migrasi-produk/page.tsx");
@@ -256,5 +416,5 @@ assert(
 );
 
 console.log(
-  "OK: parser XLSX, staging-only contract, master mapping, session per etalase, permission, schema, dan route migrasi tervalidasi.",
+  "OK: parser XLSX, staging-only contract, master mapping, session per etalase, mobile scanner, unmatched item, concurrency guard, permission, schema, dan route migrasi tervalidasi.",
 );

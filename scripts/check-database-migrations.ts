@@ -139,6 +139,7 @@ async function checkLiveDatabase(): Promise<void> {
       "legacy_product_master_mappings",
       "legacy_migration_sessions",
       "legacy_migration_session_assignments",
+      "legacy_migration_verifications",
       "item_barcodes",
     ];
 
@@ -172,6 +173,18 @@ async function checkLiveDatabase(): Promise<void> {
         "legacy_migration_session_assignments",
         ["session_id", "user_id", "assignment_role"],
       ],
+      [
+        "legacy_migration_verifications",
+        [
+          "session_id",
+          "barcode_value",
+          "source",
+          "status",
+          "target_product_master_id",
+          "submission_fingerprint",
+          "submitted_by",
+        ],
+      ],
       ["item_barcodes", ["barcode_value", "source", "is_primary", "is_active"]],
     ]);
 
@@ -189,6 +202,57 @@ async function checkLiveDatabase(): Promise<void> {
         `Kolom ${tableName} belum lengkap: ${missingColumns.join(", ")}.`,
       );
     }
+
+    const requiredIndexes = [
+      "legacy_migration_verifications_org_barcode_uq",
+      "legacy_migration_verifications_legacy_row_uq",
+      "legacy_migration_verifications_session_status_idx",
+    ];
+    const indexResult = await pool.query<{ indexname: string }>(
+      `select indexname
+       from pg_indexes
+       where schemaname = 'public' and indexname = any($1::text[])`,
+      [requiredIndexes],
+    );
+    const existingIndexes = new Set(
+      indexResult.rows.map((row) => row.indexname),
+    );
+    const missingIndexes = requiredIndexes.filter(
+      (indexName) => !existingIndexes.has(indexName),
+    );
+    assert(
+      missingIndexes.length === 0,
+      `Index migration verification belum lengkap: ${missingIndexes.join(", ")}.`,
+    );
+
+    const requiredConstraints = [
+      "legacy_migration_verifications_source_ck",
+      "legacy_migration_verifications_weight_ck",
+      "legacy_migration_verifications_purity_ck",
+      "legacy_migration_verifications_photo_ck",
+    ];
+    const constraintResult = await pool.query<{ conname: string }>(
+      `select constraint_record.conname
+       from pg_constraint as constraint_record
+       inner join pg_class as table_record
+         on table_record.oid = constraint_record.conrelid
+       inner join pg_namespace as namespace_record
+         on namespace_record.oid = table_record.relnamespace
+       where namespace_record.nspname = 'public'
+         and table_record.relname = 'legacy_migration_verifications'
+         and constraint_record.conname = any($1::text[])`,
+      [requiredConstraints],
+    );
+    const existingConstraints = new Set(
+      constraintResult.rows.map((row) => row.conname),
+    );
+    const missingConstraints = requiredConstraints.filter(
+      (constraintName) => !existingConstraints.has(constraintName),
+    );
+    assert(
+      missingConstraints.length === 0,
+      `Constraint migration verification belum lengkap: ${missingConstraints.join(", ")}.`,
+    );
   } finally {
     await pool.end();
   }

@@ -22,6 +22,7 @@ export default async function PosLayout({ children }: { children: ReactNode }) {
         roleLabel: auth.roles[0]?.name ?? "Pengguna",
         canAccessAdmin: hasPermission(auth, "admin.access"),
         outletName: primaryOutlet?.name ?? "Outlet belum dipilih",
+        canAccessMigration: hasPermission(auth, "migration.scan"),
       }}
       status={posShellStatus}
     >
