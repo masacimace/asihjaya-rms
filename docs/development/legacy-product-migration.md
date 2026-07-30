@@ -179,3 +179,73 @@ Guardrail:
 - permission pengelolaan adalah `migration.sold.manage`.
 
 Tabel `legacy_migration_sold_records` diperlukan agar barang yang terjual sebelum scan tetap tercatat dan dapat dikecualikan dari cutover. Hanya satu record aktif yang diizinkan per organization dan barcode; record lama tetap tersimpan sebagai audit history setelah dibatalkan.
+
+## Milestone 5B — Final reconciliation dan migrasi foto legacy
+
+Route manager:
+
+```text
+/admin/migrasi-produk/[batchId]/rekonsiliasi
+```
+
+Flow sengaja dibuat ringkas:
+
+```text
+lihat blocker live
+  -> perbaiki hanya blocker
+  -> salin foto legacy per batch maksimal 100
+  -> ulangi foto gagal bila diperlukan
+  -> lanjut ke preflight cutover Milestone 5C
+```
+
+Readiness tidak disimpan sebagai workflow baru. Query menghitung keadaan live dari sesi migrasi, verification, sold record aktif, Product Item `migration_hold`, Product Master, dan alias barcode legacy.
+
+Blocker yang ditampilkan:
+
+- belum ada sesi migrasi;
+- sesi masih `draft` atau `active`;
+- verification masih `submitted`, `needs_review`, atau `returned`;
+- jumlah barang fisik terproses masih di bawah total target sesi yang diisi;
+- verification approved kehilangan Product Item;
+- Product Item approved tidak lagi `migration_hold`/aktif;
+- Product Master belum `active`;
+- alias barcode legacy hilang, nonaktif, atau bukan primary.
+
+Target sesi yang tidak diisi hanya menjadi warning operasional. Staging XLSX berisi data historis sehingga seluruh 11.394 baris tidak pernah dianggap sebagai stok aktif yang wajib discan.
+
+### Migrasi foto
+
+Hanya verification `approved` yang memilih foto legacy dan masih memiliki Product Item `migration_hold` yang diproses. Foto aktual hasil upload sudah berada di private storage sehingga tidak disalin ulang.
+
+Download guard:
+
+- HTTPS wajib;
+- host dan seluruh redirect harus berada pada `LEGACY_IMAGE_ALLOWED_HOSTS`;
+- hostname IP/localhost, credential URL, dan port non-443 ditolak;
+- timeout dan batas byte diterapkan sebelum Sharp memproses gambar;
+- content type wajib JPG, PNG, atau WebP;
+- output selalu WebP melalui pipeline `image-storage` yang sama dengan upload normal;
+- update Product Item dan audit log dilakukan setelah validasi status ulang dengan advisory lock per item;
+- file hasil download dihapus bila item berubah atau proses database tidak dapat memakai file tersebut.
+
+Metadata hasil copy disimpan pada `product_items.attributes.legacyPhotoMigration`, tanpa tabel tambahan. Link asli pada `legacy_url` tetap dipertahankan sebagai jejak sumber.
+
+Urutan fallback tampilan tetap:
+
+```text
+Product Item imageKey internal
+  -> Product Master imageKey
+  -> placeholder sistem
+```
+
+Foto pending/gagal bukan blocker cutover. Item diberi warning dan dapat dilengkapi foto aktual setelah cutover. Item `physical_unmatched` tetap menggunakan foto aktual yang diwajibkan sejak Milestone 3.
+
+Environment opsional:
+
+```env
+LEGACY_IMAGE_ALLOWED_HOSTS=asihjaya.com
+LEGACY_IMAGE_DOWNLOAD_TIMEOUT_MS=12000
+LEGACY_IMAGE_DOWNLOAD_MAX_MB=8
+```
+
+Milestone 5B tidak membuat `inventory_movements`, tidak mengubah `migration_hold` menjadi `available`, dan tidak mengubah lookup checkout POS.

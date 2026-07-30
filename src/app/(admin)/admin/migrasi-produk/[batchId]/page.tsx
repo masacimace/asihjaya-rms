@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  ClipboardCheck,
   FileSpreadsheet,
   FolderTree,
   ImageIcon,
@@ -174,6 +175,10 @@ export default async function LegacyProductBatchPage({
 
   if (!data) notFound();
   const canManageSold = hasPermission(auth, "migration.sold.manage");
+  const canReconcile = hasPermission(
+    auth,
+    "migration.verification.approve",
+  );
 
   const validationCodeCounts = getValidationCodeCounts(
     data.batch.validationSummary,
@@ -251,6 +256,14 @@ export default async function LegacyProductBatchPage({
               className="inline-flex h-11 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-800 transition hover:bg-red-100"
             >
               <PackageX className="size-4" /> Terjual di sistem lama
+            </Link>
+          ) : null}
+          {canReconcile ? (
+            <Link
+              href={`/admin/migrasi-produk/${data.batch.id}/rekonsiliasi`}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-800 transition hover:bg-blue-100"
+            >
+              <ClipboardCheck className="size-4" /> Rekonsiliasi akhir
             </Link>
           ) : null}
         </div>

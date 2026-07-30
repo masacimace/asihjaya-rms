@@ -17,6 +17,12 @@ import {
   isSoldDuringMigrationEligibleStatus,
   parseSoldDuringMigrationBarcodes,
 } from "../src/features/legacy-migration/sold-rules";
+import {
+  getLegacyPhotoMigrationStatus,
+} from "../src/features/legacy-migration/reconciliation-rules";
+import {
+  isLegacyImageUrlAllowed,
+} from "../src/lib/storage/legacy-image-url-policy";
 
 const projectRoot = process.cwd();
 
@@ -630,7 +636,113 @@ for (const contract of [
   );
 }
 
+assert(
+  getLegacyPhotoMigrationStatus({
+    useLegacyImage: false,
+    itemImageKey: "organizations/org/items/item/photo.webp",
+    attributes: {},
+  }) === "not_required" &&
+    getLegacyPhotoMigrationStatus({
+      useLegacyImage: true,
+      itemImageKey: "organizations/org/items/item/photo.webp",
+      attributes: {},
+    }) === "copied" &&
+    getLegacyPhotoMigrationStatus({
+      useLegacyImage: true,
+      itemImageKey: null,
+      attributes: {
+        legacyPhotoMigration: {
+          status: "failed",
+          attemptedAt: new Date(0).toISOString(),
+          sourceUrl: "https://asihjaya.com/photo.jpg",
+        },
+      },
+    }) === "failed",
+  "Status foto legacy harus membedakan upload aktual, copied, pending, dan failed.",
+);
+assert(
+  isLegacyImageUrlAllowed(
+    "https://asihjaya.com/storage/item.jpeg",
+    ["asihjaya.com"],
+  ) &&
+    isLegacyImageUrlAllowed(
+      "https://cdn.asihjaya.com/storage/item.jpeg",
+      ["asihjaya.com"],
+    ) &&
+    !isLegacyImageUrlAllowed("http://asihjaya.com/item.jpeg", ["asihjaya.com"]) &&
+    !isLegacyImageUrlAllowed("https://127.0.0.1/item.jpeg", ["asihjaya.com"]),
+  "Download foto legacy harus membatasi HTTPS dan host allowlist tanpa IP lokal.",
+);
+
+const reconciliationActionSource = read(
+  "src/app/actions/legacy-migration-reconciliation.ts",
+);
+for (const contract of [
+  'requirePermission("migration.verification.approve")',
+  "LEGACY_PHOTO_MIGRATION_BATCH_SIZE",
+  "importLegacyImageToPrivateStorage",
+  "pg_advisory_xact_lock",
+  "legacy_migration_photo.copy",
+  "legacy_migration_photo.copy_failed",
+  "deleteImageFile",
+]) {
+  assert(
+    reconciliationActionSource.includes(contract),
+    `Action Milestone 5B wajib memiliki ${contract}.`,
+  );
+}
+assert(
+  !reconciliationActionSource.includes("inventoryMovements"),
+  "Milestone 5B tidak boleh membuat inventory movement.",
+);
+assert(
+  !reconciliationActionSource.includes('availability: "available"'),
+  "Milestone 5B tidak boleh mengaktifkan item menjadi available.",
+);
+
+const reconciliationQuerySource = read(
+  "src/features/legacy-migration/reconciliation-queries.ts",
+);
+for (const contract of [
+  "UNRESOLVED_VERIFICATION",
+  "TARGET_SHORTFALL",
+  "ITEM_LINK_INVALID",
+  "MASTER_NOT_ACTIVE",
+  "BARCODE_ALIAS_INVALID",
+  "masterFallback",
+  "noFallback",
+]) {
+  assert(
+    reconciliationQuerySource.includes(contract),
+    `Query rekonsiliasi Milestone 5B wajib memiliki ${contract}.`,
+  );
+}
+
+const reconciliationPageSource = read(
+  "src/app/(admin)/admin/migrasi-produk/[batchId]/rekonsiliasi/page.tsx",
+);
+for (const contract of [
+  "Rekonsiliasi Akhir & Foto Legacy",
+  "Blocker cutover",
+  "Salin hingga",
+  "Ulangi foto gagal",
+  "Foto gagal tidak memblokir cutover",
+  "tidak mengubah",
+]) {
+  assert(
+    reconciliationPageSource.includes(contract),
+    `Halaman Milestone 5B wajib memiliki ${contract}.`,
+  );
+}
+
+const imageStorageSource = read("src/lib/storage/image-storage.ts");
+assert(
+  imageStorageSource.includes("export async function storeImageBuffer") &&
+    imageStorageSource.includes("transformImageBuffer"),
+  "Foto legacy harus memakai pipeline image storage internal yang sama.",
+);
+
 console.log(
-  "OK: Legacy product migration Milestone 1-5A contracts tervalidasi.",
+  "OK: Legacy product migration Milestone 1-5B contracts tervalidasi.",
 );
 

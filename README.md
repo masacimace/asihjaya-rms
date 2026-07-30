@@ -548,3 +548,9 @@ Manager review tersedia pada halaman batch migrasi. Approval bersifat transactio
 ### Legacy product migration Milestone 5A — sold during migration
 
 Manager dapat menandai satu atau banyak barcode yang terjual pada sistem legacy selama proses migrasi melalui `/admin/migrasi-produk/[batchId]/sold`. Barcode aktif langsung dikecualikan dari scanner, manager approval, dan cutover. Barcode staging yang belum pernah discan tetap dapat ditandai. Product Item yang sudah berstatus `migration_hold` akan dipindahkan ke `sold`, dinonaktifkan, dan alias barcode legacy-nya ikut dinonaktifkan tanpa membuat inventory movement. Salah penandaan dapat dibatalkan dengan alasan wajib untuk memulihkan status sebelumnya secara transactional.
+
+### Legacy product migration Milestone 5B — final reconciliation dan foto legacy
+
+Manager membuka `/admin/migrasi-produk/[batchId]/rekonsiliasi` untuk melihat blocker cutover dan memindahkan foto item legacy dari link XLSX ke private image storage. Readiness dihitung langsung dari sesi, verification, sold record, Product Item `migration_hold`, Product Master, dan alias barcode; tidak ada approval tambahan atau tabel workflow baru.
+
+Foto legacy diproses maksimal 100 item per klik dengan concurrency terbatas. Download hanya menerima HTTPS dari host `LEGACY_IMAGE_ALLOWED_HOSTS`, memvalidasi redirect/content type/ukuran, lalu mengubah gambar menjadi WebP melalui pipeline image storage yang sama dengan upload normal. Kegagalan foto menjadi warning dan UI memakai foto Product Master lalu placeholder; kegagalan tersebut tidak menghalangi cutover. Milestone 5B belum membuat inventory movement, belum mengubah item menjadi `available`, dan belum mengaktifkan barcode alias pada checkout POS.
