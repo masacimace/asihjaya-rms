@@ -2,6 +2,8 @@ import type { LegacyVerificationStatus } from "@/features/legacy-migration/verif
 
 export type LegacySoldRecordItem = {
   id: string;
+  sessionId: string | null;
+  sessionName: string | null;
   barcodeValue: string;
   soldAt: Date;
   reportedAt: Date;
@@ -18,6 +20,7 @@ export type LegacySoldRecordItem = {
 export type LegacySoldSummary = {
   totalActive: number;
   beforeScan: number;
+  unassignedSession: number;
   verificationExcluded: number;
   holdMarkedSold: number;
 };

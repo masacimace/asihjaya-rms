@@ -1,4 +1,4 @@
-MIGRATION-R5F1 — Safety Hotfix
+MIGRATION-R5F1 — Safety Hotfix (DONE)
 Perbaiki UUID cutover.
 Buat shared UUID helper.
 Sinkronkan session lock dengan scan/resubmit.
@@ -6,7 +6,7 @@ Atomic session state transition.
 Larang cancel sesi yang sudah memiliki data.
 Tambahkan affected-row assertions.
 
-MIGRATION-R5F2 — Pricing & Session Readiness
+MIGRATION-R5F2 — Pricing & Session Readiness (DONE)
 Tentukan sumber dan formula sellingAmount.
 Simpan pricing pada Product Item.
 Tambahkan pricing/category/condition/location blockers.

@@ -16,15 +16,13 @@ import {
   legacyMigrationSessions,
   legacyMigrationSoldRecords,
   legacyMigrationVerifications,
+  productCategories,
   productItems,
   productMasters,
 } from "@/db/schema";
 import { LEGACY_CUTOVER_CONFIRMATION } from "@/features/legacy-migration/cutover-contracts";
 import { getLegacyMigrationCutoverData } from "@/features/legacy-migration/cutover-queries";
-import {
-  getLegacyCutoverItemIssues,
-  isLegacyCutoverSessionClosed,
-} from "@/features/legacy-migration/cutover-rules";
+import { getLegacyCutoverItemIssues } from "@/features/legacy-migration/cutover-rules";
 import {
   getLegacyMigrationSessionLockKey,
   parseLegacyMigrationUuid,
@@ -53,14 +51,14 @@ function explainCutoverError(error: unknown) {
   if (code === "CUTOVER_SESSION_NOT_FOUND") {
     return "Sesi migrasi tidak ditemukan atau tidak dapat diakses.";
   }
-  if (code === "CUTOVER_SESSION_NOT_CLOSED") {
-    return "Sesi harus dikunci atau diselesaikan sebelum cutover.";
+  if (code === "CUTOVER_SESSION_NOT_LOCKED") {
+    return "Sesi harus berstatus locked sebelum cutover.";
   }
-  if (code === "CUTOVER_GLOBAL_NOT_READY") {
-    return "Masih ada sesi terbuka atau verification yang belum selesai direview.";
+  if (code === "CUTOVER_SESSION_UNRESOLVED") {
+    return "Masih ada verification pada sesi ini yang belum selesai direview.";
   }
-  if (code === "CUTOVER_TARGET_SHORTFALL") {
-    return "Jumlah barang fisik terproses masih di bawah target sesi.";
+  if (code === "CUTOVER_SOLD_SESSION_UNASSIGNED") {
+    return "Masih ada barang terjual yang belum ditentukan sesi etalasenya.";
   }
   if (
     code === "CUTOVER_APPROVED_ITEM_MISSING" ||
@@ -168,6 +166,7 @@ export async function executeLegacyMigrationCutoverAction(
         batchId: legacyMigrationSessions.batchId,
         organizationId: legacyMigrationSessions.organizationId,
         outletId: legacyMigrationSessions.outletId,
+        expectedItemCount: legacyMigrationSessions.expectedItemCount,
       })
       .from(legacyMigrationSessions)
       .where(
@@ -181,347 +180,372 @@ export async function executeLegacyMigrationCutoverAction(
       .limit(1)
       .for("update");
 
-    if (!session) throw new Error("CUTOVER_SESSION_NOT_FOUND");
-    if (!isLegacyCutoverSessionClosed(session.status)) {
-      throw new Error("CUTOVER_SESSION_NOT_CLOSED");
-    }
+      if (!session) throw new Error("CUTOVER_SESSION_NOT_FOUND");
 
-    const [existingRun] = await transaction
-      .select({ id: legacyMigrationCutoverRuns.id })
-      .from(legacyMigrationCutoverRuns)
-      .where(eq(legacyMigrationCutoverRuns.sessionId, session.id))
-      .limit(1);
-    if (existingRun) {
-      return { itemCount: 0, alreadyExecuted: true, sessionName: session.name };
-    }
-
-    const [globalState] = await transaction
-      .select({
-        openSessions:
-          sql<number>`count(*) filter (where ${legacyMigrationSessions.status} in ('draft', 'active'))::int`.mapWith(
-            Number,
-          ),
-        expectedItems:
-          sql<number>`coalesce(sum(${legacyMigrationSessions.expectedItemCount}) filter (where ${legacyMigrationSessions.status} <> 'cancelled'), 0)::int`.mapWith(
-            Number,
-          ),
-      })
-      .from(legacyMigrationSessions)
-      .where(
-        and(
-          eq(legacyMigrationSessions.batchId, batchId),
-          eq(legacyMigrationSessions.organizationId, auth.organization.id),
-        ),
-      );
-
-    const [verificationState] = await transaction
-      .select({
-        total: count(),
-        unresolved:
-          sql<number>`count(*) filter (where ${legacyMigrationVerifications.status} in ('submitted', 'needs_review', 'returned'))::int`.mapWith(
-            Number,
-          ),
-      })
-      .from(legacyMigrationVerifications)
-      .where(
-        and(
-          eq(legacyMigrationVerifications.batchId, batchId),
-          eq(legacyMigrationVerifications.organizationId, auth.organization.id),
-        ),
-      );
-
-    const [soldBeforeScan] = await transaction
-      .select({ total: count() })
-      .from(legacyMigrationSoldRecords)
-      .where(
-        and(
-          eq(legacyMigrationSoldRecords.batchId, batchId),
-          eq(legacyMigrationSoldRecords.organizationId, auth.organization.id),
-          isNull(legacyMigrationSoldRecords.verificationId),
-          isNull(legacyMigrationSoldRecords.revertedAt),
-        ),
-      );
-
-    const openSessions = Number(globalState?.openSessions ?? 0);
-    const unresolved = Number(verificationState?.unresolved ?? 0);
-    const expectedItems = Number(globalState?.expectedItems ?? 0);
-    const processedItems =
-      Number(verificationState?.total ?? 0) + Number(soldBeforeScan?.total ?? 0);
-    if (openSessions > 0 || unresolved > 0) {
-      throw new Error("CUTOVER_GLOBAL_NOT_READY");
-    }
-    if (expectedItems > 0 && processedItems < expectedItems) {
-      throw new Error("CUTOVER_TARGET_SHORTFALL");
-    }
-
-    const initialRows = await transaction
-      .select({
-        verificationId: legacyMigrationVerifications.id,
-        barcodeValue: legacyMigrationVerifications.barcodeValue,
-      })
-      .from(legacyMigrationVerifications)
-      .where(
-        and(
-          eq(legacyMigrationVerifications.sessionId, session.id),
-          eq(legacyMigrationVerifications.batchId, batchId),
-          eq(legacyMigrationVerifications.organizationId, auth.organization.id),
-          eq(legacyMigrationVerifications.status, "approved"),
-        ),
-      );
-
-    const barcodeValues = initialRows
-      .map((row) => row.barcodeValue)
-      .sort((left, right) => left.localeCompare(right));
-    for (const barcodeValue of barcodeValues) {
-      await transaction.execute(
-        sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-barcode:${auth.organization.id}:${barcodeValue}`}, 0))`,
-      );
-    }
-
-    const approvedRows = await transaction
-      .select({
-        verificationId: legacyMigrationVerifications.id,
-        barcodeValue: legacyMigrationVerifications.barcodeValue,
-        source: legacyMigrationVerifications.source,
-        productItemId: productItems.id,
-        itemAvailability: productItems.availability,
-        itemIsActive: productItems.isActive,
-        itemOutletId: productItems.currentOutletId,
-        itemLegacyId: productItems.legacyId,
-        masterStatus: productMasters.status,
-      })
-      .from(legacyMigrationVerifications)
-      .innerJoin(
-        productItems,
-        eq(legacyMigrationVerifications.productItemId, productItems.id),
-      )
-      .innerJoin(
-        productMasters,
-        eq(
-          legacyMigrationVerifications.targetProductMasterId,
-          productMasters.id,
-        ),
-      )
-      .where(
-        and(
-          eq(legacyMigrationVerifications.sessionId, session.id),
-          eq(legacyMigrationVerifications.batchId, batchId),
-          eq(legacyMigrationVerifications.organizationId, auth.organization.id),
-          eq(legacyMigrationVerifications.status, "approved"),
-        ),
-      )
-      .orderBy(legacyMigrationVerifications.barcodeValue)
-      .for("update");
-
-    if (approvedRows.length !== initialRows.length) {
-      throw new Error("CUTOVER_APPROVED_ITEM_MISSING");
-    }
-
-    const itemIds = approvedRows.map((row) => row.productItemId);
-    const aliases = itemIds.length
-      ? await transaction
-          .select({
-            id: itemBarcodes.id,
-            itemId: itemBarcodes.itemId,
-            barcodeValue: itemBarcodes.barcodeValue,
-            source: itemBarcodes.source,
-            isPrimary: itemBarcodes.isPrimary,
-            isActive: itemBarcodes.isActive,
-          })
-          .from(itemBarcodes)
-          .where(
-            and(
-              eq(itemBarcodes.organizationId, auth.organization.id),
-              inArray(itemBarcodes.itemId, itemIds),
-              inArray(itemBarcodes.barcodeValue, barcodeValues),
-            ),
-          )
-          .for("update")
-      : [];
-    const aliasByItemAndBarcode = new Map(
-      aliases.map((alias) => [
-        `${alias.itemId}:${alias.barcodeValue}`,
-        alias,
-      ]),
-    );
-
-    const activeSoldRecords = barcodeValues.length
-      ? await transaction
-          .select({ barcodeValue: legacyMigrationSoldRecords.barcodeValue })
-          .from(legacyMigrationSoldRecords)
-          .where(
-            and(
-              eq(
-                legacyMigrationSoldRecords.organizationId,
-                auth.organization.id,
-              ),
-              inArray(legacyMigrationSoldRecords.barcodeValue, barcodeValues),
-              isNull(legacyMigrationSoldRecords.revertedAt),
-            ),
-          )
-          .for("update")
-      : [];
-    const soldBarcodeSet = new Set(
-      activeSoldRecords.map((record) => record.barcodeValue),
-    );
-
-    for (const row of approvedRows) {
-      const alias =
-        aliasByItemAndBarcode.get(
-          `${row.productItemId}:${row.barcodeValue}`,
-        ) ?? null;
-      const issues = getLegacyCutoverItemIssues({
-        source: row.source,
-        barcodeValue: row.barcodeValue,
-        batchOutletId: preflight.batch.outletId,
-        productItemId: row.productItemId,
-        itemAvailability: row.itemAvailability,
-        itemIsActive: row.itemIsActive,
-        itemOutletId: row.itemOutletId,
-        itemLegacyId: row.itemLegacyId,
-        masterStatus: row.masterStatus,
-        aliasId: alias?.id ?? null,
-        aliasSource: alias?.source ?? null,
-        aliasIsPrimary: alias?.isPrimary ?? null,
-        aliasIsActive: alias?.isActive ?? null,
-        hasActiveSoldRecord: soldBarcodeSet.has(row.barcodeValue),
-      });
-      if (issues.length > 0) throw new Error(`CUTOVER_ITEM_INVALID:${issues[0]}`);
-      if (alias?.barcodeValue !== row.barcodeValue) {
-        throw new Error("CUTOVER_ALIAS_BARCODE_MISMATCH");
+      const [existingRun] = await transaction
+        .select({ id: legacyMigrationCutoverRuns.id })
+        .from(legacyMigrationCutoverRuns)
+        .where(eq(legacyMigrationCutoverRuns.sessionId, session.id))
+        .limit(1);
+      if (existingRun) {
+        return {
+          itemCount: 0,
+          alreadyExecuted: true,
+          sessionName: session.name,
+        };
       }
-    }
 
-    const executedAt = new Date();
-    const runId = randomUUID();
-    await transaction.insert(legacyMigrationCutoverRuns).values({
-      id: runId,
-      batchId,
-      sessionId: session.id,
-      organizationId: auth.organization.id,
-      outletId: session.outletId,
-      itemCount: approvedRows.length,
-      executedBy: auth.user.id,
-      executedAt,
-      metadata: {
-        confirmation: LEGACY_CUTOVER_CONFIRMATION,
-        sessionName: session.name,
-        barcodeCount: approvedRows.length,
-      },
-    });
+      if (session.status !== "locked") {
+        throw new Error("CUTOVER_SESSION_NOT_LOCKED");
+      }
 
-    if (approvedRows.length > 0) {
-      await transaction.insert(inventoryMovements).values(
-        approvedRows.map((row) => ({
-          organizationId: auth.organization.id,
-          itemId: row.productItemId,
-          movementType: "migration_opening" as const,
-          fromOutletId: null,
-          toOutletId: session.outletId,
-          referenceType: "legacy_migration_cutover",
-          referenceId: runId,
-          reason: "Saldo awal stok dari cutover migrasi legacy.",
-          metadata: {
-            batchId,
-            sessionId: session.id,
-            verificationId: row.verificationId,
-            legacyBarcode: row.barcodeValue,
-          },
-          performedBy: auth.user.id,
-          approvedBy: auth.user.id,
-          occurredAt: executedAt,
-        })),
+      const [sessionState] = await transaction
+        .select({
+          total: count(),
+          unresolved:
+            sql<number>`count(*) filter (where ${legacyMigrationVerifications.status} in ('submitted', 'needs_review', 'returned'))::int`.mapWith(
+              Number,
+            ),
+        })
+        .from(legacyMigrationVerifications)
+        .where(
+          and(
+            eq(legacyMigrationVerifications.sessionId, session.id),
+            eq(legacyMigrationVerifications.batchId, batchId),
+            eq(legacyMigrationVerifications.organizationId, auth.organization.id),
+          ),
+        );
+
+      const [soldBeforeScan] = await transaction
+        .select({ total: count() })
+        .from(legacyMigrationSoldRecords)
+        .where(
+          and(
+            eq(legacyMigrationSoldRecords.sessionId, session.id),
+            eq(legacyMigrationSoldRecords.batchId, batchId),
+            eq(legacyMigrationSoldRecords.organizationId, auth.organization.id),
+            isNull(legacyMigrationSoldRecords.verificationId),
+            isNull(legacyMigrationSoldRecords.revertedAt),
+          ),
+        );
+
+      const [unassignedSold] = await transaction
+        .select({ total: count() })
+        .from(legacyMigrationSoldRecords)
+        .where(
+          and(
+            eq(legacyMigrationSoldRecords.batchId, batchId),
+            eq(legacyMigrationSoldRecords.organizationId, auth.organization.id),
+            isNull(legacyMigrationSoldRecords.sessionId),
+            isNull(legacyMigrationSoldRecords.revertedAt),
+          ),
+        );
+
+      const unresolved = Number(sessionState?.unresolved ?? 0);
+      const processedItems =
+        Number(sessionState?.total ?? 0) + Number(soldBeforeScan?.total ?? 0);
+      if (unresolved > 0) throw new Error("CUTOVER_SESSION_UNRESOLVED");
+      if (Number(unassignedSold?.total ?? 0) > 0) {
+        throw new Error("CUTOVER_SOLD_SESSION_UNASSIGNED");
+      }
+
+      const initialRows = await transaction
+        .select({
+          verificationId: legacyMigrationVerifications.id,
+          barcodeValue: legacyMigrationVerifications.barcodeValue,
+        })
+        .from(legacyMigrationVerifications)
+        .where(
+          and(
+            eq(legacyMigrationVerifications.sessionId, session.id),
+            eq(legacyMigrationVerifications.batchId, batchId),
+            eq(legacyMigrationVerifications.organizationId, auth.organization.id),
+            eq(legacyMigrationVerifications.status, "approved"),
+          ),
+        );
+
+      const barcodeValues = initialRows
+        .map((row) => row.barcodeValue)
+        .sort((left, right) => left.localeCompare(right));
+      for (const barcodeValue of barcodeValues) {
+        await transaction.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-barcode:${auth.organization.id}:${barcodeValue}`}, 0))`,
+        );
+      }
+
+      const approvedRows = await transaction
+        .select({
+          verificationId: legacyMigrationVerifications.id,
+          barcodeValue: legacyMigrationVerifications.barcodeValue,
+          source: legacyMigrationVerifications.source,
+          targetProductMasterId:
+            legacyMigrationVerifications.targetProductMasterId,
+          productItemId: productItems.id,
+          itemProductMasterId: productItems.productMasterId,
+          itemAvailability: productItems.availability,
+          itemIsActive: productItems.isActive,
+          itemOutletId: productItems.currentOutletId,
+          itemLegacyId: productItems.legacyId,
+          itemSellingAmount: productItems.sellingAmount,
+          itemPricePerGram: productItems.pricePerGram,
+          itemDeductionPerGram: productItems.deductionPerGram,
+          itemCondition: productItems.condition,
+          itemLocationState: productItems.locationState,
+          masterStatus: productMasters.status,
+          categoryName: productCategories.name,
+          categoryIsActive: productCategories.isActive,
+        })
+        .from(legacyMigrationVerifications)
+        .innerJoin(
+          productItems,
+          eq(legacyMigrationVerifications.productItemId, productItems.id),
+        )
+        .innerJoin(
+          productMasters,
+          eq(productItems.productMasterId, productMasters.id),
+        )
+        .innerJoin(
+          productCategories,
+          eq(productMasters.categoryId, productCategories.id),
+        )
+        .where(
+          and(
+            eq(legacyMigrationVerifications.sessionId, session.id),
+            eq(legacyMigrationVerifications.batchId, batchId),
+            eq(legacyMigrationVerifications.organizationId, auth.organization.id),
+            eq(legacyMigrationVerifications.status, "approved"),
+          ),
+        )
+        .orderBy(legacyMigrationVerifications.barcodeValue)
+        .for("update");
+
+      if (approvedRows.length !== initialRows.length) {
+        throw new Error("CUTOVER_APPROVED_ITEM_MISSING");
+      }
+
+      const itemIds = approvedRows.map((row) => row.productItemId);
+      const aliases = itemIds.length
+        ? await transaction
+            .select({
+              id: itemBarcodes.id,
+              itemId: itemBarcodes.itemId,
+              barcodeValue: itemBarcodes.barcodeValue,
+              source: itemBarcodes.source,
+              isPrimary: itemBarcodes.isPrimary,
+              isActive: itemBarcodes.isActive,
+            })
+            .from(itemBarcodes)
+            .where(
+              and(
+                eq(itemBarcodes.organizationId, auth.organization.id),
+                inArray(itemBarcodes.itemId, itemIds),
+                inArray(itemBarcodes.barcodeValue, barcodeValues),
+                eq(itemBarcodes.isActive, true),
+              ),
+            )
+            .for("update")
+        : [];
+      const aliasByItemAndBarcode = new Map(
+        aliases.map((alias) => [
+          `${alias.itemId}:${alias.barcodeValue}`,
+          alias,
+        ]),
       );
 
-      const cutoverMetadata = {
-        runId,
+      const activeSoldRecords = barcodeValues.length
+        ? await transaction
+            .select({ barcodeValue: legacyMigrationSoldRecords.barcodeValue })
+            .from(legacyMigrationSoldRecords)
+            .where(
+              and(
+                eq(
+                  legacyMigrationSoldRecords.organizationId,
+                  auth.organization.id,
+                ),
+                inArray(legacyMigrationSoldRecords.barcodeValue, barcodeValues),
+                isNull(legacyMigrationSoldRecords.revertedAt),
+              ),
+            )
+            .for("update")
+        : [];
+      const soldBarcodeSet = new Set(
+        activeSoldRecords.map((record) => record.barcodeValue),
+      );
+
+      for (const row of approvedRows) {
+        const alias =
+          aliasByItemAndBarcode.get(
+            `${row.productItemId}:${row.barcodeValue}`,
+          ) ?? null;
+        const issues = getLegacyCutoverItemIssues({
+          source: row.source,
+          barcodeValue: row.barcodeValue,
+          batchOutletId: preflight.batch.outletId,
+          targetProductMasterId: row.targetProductMasterId,
+          productItemId: row.productItemId,
+          itemProductMasterId: row.itemProductMasterId,
+          itemAvailability: row.itemAvailability,
+          itemIsActive: row.itemIsActive,
+          itemOutletId: row.itemOutletId,
+          itemLegacyId: row.itemLegacyId,
+          itemSellingAmount: row.itemSellingAmount,
+          itemPricePerGram: row.itemPricePerGram,
+          itemDeductionPerGram: row.itemDeductionPerGram,
+          itemCondition: row.itemCondition,
+          itemLocationState: row.itemLocationState,
+          masterStatus: row.masterStatus,
+          categoryName: row.categoryName,
+          categoryIsActive: row.categoryIsActive,
+          aliasId: alias?.id ?? null,
+          aliasSource: alias?.source ?? null,
+          aliasIsPrimary: alias?.isPrimary ?? null,
+          aliasIsActive: alias?.isActive ?? null,
+          hasActiveSoldRecord: soldBarcodeSet.has(row.barcodeValue),
+        });
+        if (issues.length > 0) throw new Error(`CUTOVER_ITEM_INVALID:${issues[0]}`);
+        if (alias?.barcodeValue !== row.barcodeValue) {
+          throw new Error("CUTOVER_ALIAS_BARCODE_MISMATCH");
+        }
+      }
+
+      const executedAt = new Date();
+      const runId = randomUUID();
+      await transaction.insert(legacyMigrationCutoverRuns).values({
+        id: runId,
         batchId,
         sessionId: session.id,
-        activatedAt: executedAt.toISOString(),
-        activatedBy: auth.user.id,
-      };
-      const updatedItems = await transaction
-        .update(productItems)
+        organizationId: auth.organization.id,
+        outletId: session.outletId,
+        itemCount: approvedRows.length,
+        executedBy: auth.user.id,
+        executedAt,
+        metadata: {
+          confirmation: LEGACY_CUTOVER_CONFIRMATION,
+          sessionName: session.name,
+          barcodeCount: approvedRows.length,
+          expectedItemCount: session.expectedItemCount,
+          processedItemCount: processedItems,
+          soldBeforeScanCount: Number(soldBeforeScan?.total ?? 0),
+          pricingValidated: true,
+          preflightBlockerCount: 0,
+        },
+      });
+
+      if (approvedRows.length > 0) {
+        await transaction.insert(inventoryMovements).values(
+          approvedRows.map((row) => ({
+            organizationId: auth.organization.id,
+            itemId: row.productItemId,
+            movementType: "migration_opening" as const,
+            fromOutletId: null,
+            toOutletId: session.outletId,
+            referenceType: "legacy_migration_cutover",
+            referenceId: runId,
+            reason: "Saldo awal stok dari cutover migrasi legacy.",
+            metadata: {
+              batchId,
+              sessionId: session.id,
+              verificationId: row.verificationId,
+              legacyBarcode: row.barcodeValue,
+            },
+            performedBy: auth.user.id,
+            approvedBy: auth.user.id,
+            occurredAt: executedAt,
+          })),
+        );
+
+        const cutoverMetadata = {
+          runId,
+          batchId,
+          sessionId: session.id,
+          activatedAt: executedAt.toISOString(),
+          activatedBy: auth.user.id,
+        };
+        const updatedItems = await transaction
+          .update(productItems)
+          .set({
+            availability: "available",
+            attributes: cutoverMetadataSql(cutoverMetadata),
+            updatedAt: executedAt,
+          })
+          .where(
+            and(
+              inArray(productItems.id, itemIds),
+              eq(productItems.organizationId, auth.organization.id),
+              eq(productItems.availability, "migration_hold"),
+            ),
+          )
+          .returning({ id: productItems.id });
+        if (updatedItems.length !== approvedRows.length) {
+          throw new Error("CUTOVER_ITEM_UPDATE_COUNT_MISMATCH");
+        }
+
+        const updatedVerifications = await transaction
+          .update(legacyMigrationVerifications)
+          .set({ status: "activated", updatedAt: executedAt })
+          .where(
+            and(
+              inArray(
+                legacyMigrationVerifications.id,
+                approvedRows.map((row) => row.verificationId),
+              ),
+              eq(legacyMigrationVerifications.sessionId, session.id),
+              eq(legacyMigrationVerifications.status, "approved"),
+            ),
+          )
+          .returning({ id: legacyMigrationVerifications.id });
+        if (updatedVerifications.length !== approvedRows.length) {
+          throw new Error("CUTOVER_VERIFICATION_UPDATE_COUNT_MISMATCH");
+        }
+      }
+
+      const completedSessions = await transaction
+        .update(legacyMigrationSessions)
         .set({
-          availability: "available",
-          attributes: cutoverMetadataSql(cutoverMetadata),
+          status: "completed",
+          completedAt: executedAt,
           updatedAt: executedAt,
         })
         .where(
           and(
-            inArray(productItems.id, itemIds),
-            eq(productItems.organizationId, auth.organization.id),
-            eq(productItems.availability, "migration_hold"),
+            eq(legacyMigrationSessions.id, session.id),
+            eq(legacyMigrationSessions.organizationId, auth.organization.id),
+            eq(legacyMigrationSessions.status, session.status),
           ),
         )
-        .returning({ id: productItems.id });
-      if (updatedItems.length !== approvedRows.length) {
-        throw new Error("CUTOVER_ITEM_UPDATE_COUNT_MISMATCH");
+        .returning({ id: legacyMigrationSessions.id });
+      if (completedSessions.length !== 1) {
+        throw new Error("CUTOVER_SESSION_UPDATE_COUNT_MISMATCH");
       }
 
-      const updatedVerifications = await transaction
-        .update(legacyMigrationVerifications)
-        .set({ status: "activated", updatedAt: executedAt })
-        .where(
-          and(
-            inArray(
-              legacyMigrationVerifications.id,
-              approvedRows.map((row) => row.verificationId),
-            ),
-            eq(legacyMigrationVerifications.sessionId, session.id),
-            eq(legacyMigrationVerifications.status, "approved"),
-          ),
-        )
-        .returning({ id: legacyMigrationVerifications.id });
-      if (updatedVerifications.length !== approvedRows.length) {
-        throw new Error("CUTOVER_VERIFICATION_UPDATE_COUNT_MISMATCH");
-      }
-    }
+      await transaction.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        outletId: session.outletId,
+        actorUserId: auth.user.id,
+        action: "legacy_migration_cutover.execute",
+        entityType: "legacy_migration_cutover_run",
+        entityId: runId,
+        afterData: {
+          batchId,
+          sessionId: session.id,
+          sessionName: session.name,
+          itemCount: approvedRows.length,
+          expectedItemCount: session.expectedItemCount,
+          processedItemCount: processedItems,
+          pricingValidated: true,
+          movementType: "migration_opening",
+          resultingAvailability: "available",
+        },
+        reason: "Mengaktifkan stok hasil migrasi secara transactional.",
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+      });
 
-    const completedSessions = await transaction
-      .update(legacyMigrationSessions)
-      .set({
-        status: "completed",
-        completedAt: executedAt,
-        updatedAt: executedAt,
-      })
-      .where(
-        and(
-          eq(legacyMigrationSessions.id, session.id),
-          eq(legacyMigrationSessions.organizationId, auth.organization.id),
-          eq(legacyMigrationSessions.status, session.status),
-        ),
-      )
-      .returning({ id: legacyMigrationSessions.id });
-    if (completedSessions.length !== 1) {
-      throw new Error("CUTOVER_SESSION_UPDATE_COUNT_MISMATCH");
-    }
-
-    await transaction.insert(auditLogs).values({
-      organizationId: auth.organization.id,
-      outletId: session.outletId,
-      actorUserId: auth.user.id,
-      action: "legacy_migration_cutover.execute",
-      entityType: "legacy_migration_cutover_run",
-      entityId: runId,
-      afterData: {
-        batchId,
-        sessionId: session.id,
-        sessionName: session.name,
+      return {
         itemCount: approvedRows.length,
-        movementType: "migration_opening",
-        resultingAvailability: "available",
-      },
-      reason: "Mengaktifkan stok hasil migrasi secara transactional.",
-      ipAddress: requestMetadata.ipAddress,
-      userAgent: requestMetadata.userAgent,
-    });
-
-    return {
-      itemCount: approvedRows.length,
-      alreadyExecuted: false,
-      sessionName: session.name,
-    };
+        alreadyExecuted: false,
+        sessionName: session.name,
+      };
     });
   } catch (error) {
     redirectWithMessage(

@@ -1,3 +1,8 @@
+import type {
+  LegacyCutoverBatchIssueCode,
+  LegacyCutoverIssueCode,
+} from "@/features/legacy-migration/cutover-contracts";
+
 export const LEGACY_PHOTO_MIGRATION_BATCH_SIZE = 100;
 
 export type LegacyPhotoMigrationStatus =
@@ -20,16 +25,7 @@ export type LegacyPhotoMigrationMetadata = {
 };
 
 export type LegacyReconciliationIssue = {
-  code:
-    | "NO_SESSION"
-    | "OPEN_SESSION"
-    | "UNRESOLVED_VERIFICATION"
-    | "TARGET_SHORTFALL"
-    | "APPROVED_ITEM_MISSING"
-    | "HOLD_STATE_INVALID"
-    | "ITEM_LINK_INVALID"
-    | "MASTER_NOT_ACTIVE"
-    | "BARCODE_ALIAS_INVALID";
+  code: LegacyCutoverIssueCode | LegacyCutoverBatchIssueCode;
   label: string;
   count: number;
   href: string;

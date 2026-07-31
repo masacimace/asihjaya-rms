@@ -1236,6 +1236,9 @@ export const legacyMigrationSoldRecords = pgTable(
     outletId: uuid("outlet_id")
       .notNull()
       .references(() => outlets.id),
+    sessionId: uuid("session_id").references(() => legacyMigrationSessions.id, {
+      onDelete: "restrict",
+    }),
     barcodeValue: varchar("barcode_value", { length: 120 }).notNull(),
     verificationId: uuid("verification_id").references(
       () => legacyMigrationVerifications.id,
@@ -1270,6 +1273,11 @@ export const legacyMigrationSoldRecords = pgTable(
       .where(sql`${table.revertedAt} is null`),
     index("legacy_migration_sold_records_batch_sold_at_idx").on(
       table.batchId,
+      table.soldAt,
+    ),
+    index("legacy_migration_sold_records_batch_session_sold_at_idx").on(
+      table.batchId,
+      table.sessionId,
       table.soldAt,
     ),
     index("legacy_migration_sold_records_verification_idx").on(

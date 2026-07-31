@@ -4,6 +4,7 @@ import path from "node:path";
 import * as XLSX from "xlsx";
 
 import { parseLegacyProductWorkbook } from "../src/features/legacy-migration/xlsx-parser";
+import type { LegacyCutoverIssueCode } from "../src/features/legacy-migration/cutover-contracts";
 import {
   collectVerificationReviewFlags,
   createVerificationFingerprint,
@@ -17,22 +18,23 @@ import {
   isSoldDuringMigrationEligibleStatus,
   parseSoldDuringMigrationBarcodes,
 } from "../src/features/legacy-migration/sold-rules";
-import {
-  getLegacyPhotoMigrationStatus,
-} from "../src/features/legacy-migration/reconciliation-rules";
+import { getLegacyPhotoMigrationStatus } from "../src/features/legacy-migration/reconciliation-rules";
 import {
   getLegacyCutoverAliasSource,
   getLegacyCutoverItemIssues,
   isLegacyCutoverSessionClosed,
+  summarizeLegacyCutoverIssueCounts,
 } from "../src/features/legacy-migration/cutover-rules";
+import {
+  calculateLegacyMigrationSellingAmount,
+  resolveLegacyMigrationPricing,
+} from "../src/features/legacy-migration/pricing-rules";
 import {
   getLegacyMigrationSessionLockKey,
   isLegacyMigrationUuid,
   parseLegacyMigrationUuid,
 } from "../src/features/legacy-migration/safety";
-import {
-  isLegacyImageUrlAllowed,
-} from "../src/lib/storage/legacy-image-url-policy";
+import { isLegacyImageUrlAllowed } from "../src/lib/storage/legacy-image-url-policy";
 
 const projectRoot = process.cwd();
 
@@ -173,6 +175,58 @@ assert(
     warning.includes("tidak memiliki status stok"),
   ),
   "Summary wajib menegaskan bahwa status stok legacy tidak tersedia.",
+);
+
+assert(
+  calculateLegacyMigrationSellingAmount({
+    weightGram: "2.125",
+    pricePerGram: "980000",
+  }) === "2082500",
+  "Harga label migrasi harus memakai berat aktual dikali harga per gram.",
+);
+assert(
+  calculateLegacyMigrationSellingAmount({
+    weightGram: "0.001",
+    pricePerGram: "500",
+  }) === "1",
+  "Harga label migrasi harus dibulatkan half-up ke Rupiah penuh.",
+);
+assert(
+  calculateLegacyMigrationSellingAmount({
+    weightGram: "999999999.999",
+    pricePerGram: "999999999999999999",
+  }) === null,
+  "Harga label yang melebihi numeric(18,0) harus menjadi blocker, bukan menggagalkan approval.",
+);
+const regularPricing = resolveLegacyMigrationPricing({
+  weightGram: "2.100",
+  legacyPricePerGram: "980000",
+  legacyDeductionPerGram: "25000",
+  categoryName: "Cincin",
+});
+assert(
+  regularPricing.sellingAmount === "2058000" &&
+    regularPricing.pricePerGram === "980000" &&
+    regularPricing.deductionPerGram === "25000",
+  "Pricing legacy valid harus disalin ke Product Item saat approval.",
+);
+assert(
+  resolveLegacyMigrationPricing({
+    weightGram: "1.000",
+    legacyPricePerGram: "1500000",
+    legacyDeductionPerGram: null,
+    categoryName: "Logam Mulia",
+  }).deductionPerGram === "0",
+  "Logam mulia boleh memakai potongan nol ketika XLSX tidak mengisinya.",
+);
+assert(
+  resolveLegacyMigrationPricing({
+    weightGram: "1.000",
+    legacyPricePerGram: "1500000",
+    legacyDeductionPerGram: null,
+    categoryName: "Gelang",
+  }).deductionPerGram === null,
+  "Kategori selain logam mulia harus tetap diblokir bila potongan tidak tersedia.",
 );
 
 
@@ -657,6 +711,9 @@ for (const contract of [
   "isActive: false",
   "legacy_migration_sold.mark",
   "legacy_migration_sold.revert",
+  "legacy_migration_sold.assign_session",
+  "getLegacyMigrationSessionLockKey",
+  "sessionId: selectedSession.id",
   'availability: "migration_hold"',
 ]) {
   assert(
@@ -693,6 +750,8 @@ for (const contract of [
   "Terjual di Sistem Lama",
   "tempel satu kolom dari Excel",
   "Tandai terjual dan kecualikan",
+  "Pilih sesi asal barang",
+  "Ada catatan lama tanpa sesi etalase",
   "Alasan pembatalan",
 ]) {
   assert(
@@ -769,17 +828,15 @@ const reconciliationQuerySource = read(
   "src/features/legacy-migration/reconciliation-queries.ts",
 );
 for (const contract of [
-  "UNRESOLVED_VERIFICATION",
-  "TARGET_SHORTFALL",
-  "ITEM_LINK_INVALID",
-  "MASTER_NOT_ACTIVE",
-  "BARCODE_ALIAS_INVALID",
+  "getLegacyMigrationCutoverData",
+  "readiness.sessions",
+  "executableSessionCount",
   "masterFallback",
   "noFallback",
 ]) {
   assert(
     reconciliationQuerySource.includes(contract),
-    `Query rekonsiliasi Milestone 5B wajib memiliki ${contract}.`,
+    `Query rekonsiliasi Milestone 5B/R5F2 wajib memiliki ${contract}.`,
   );
 }
 
@@ -788,7 +845,8 @@ const reconciliationPageSource = read(
 );
 for (const contract of [
   "Rekonsiliasi Akhir & Foto Legacy",
-  "Blocker cutover",
+  "Readiness per sesi",
+  "Sesi lain boleh tetap aktif",
   "Salin hingga",
   "Ulangi foto gagal",
   "Foto gagal tidak memblokir cutover",
@@ -811,7 +869,7 @@ assert(
   isLegacyCutoverSessionClosed("locked") &&
     isLegacyCutoverSessionClosed("completed") &&
     !isLegacyCutoverSessionClosed("active"),
-  "Cutover hanya boleh dijalankan untuk sesi locked atau completed.",
+  "Helper status tertutup harus mengenali sesi locked dan completed.",
 );
 assert(
   getLegacyCutoverAliasSource("legacy_match") === "legacy_import" &&
@@ -824,12 +882,21 @@ assert(
     source: "legacy_match",
     barcodeValue: "003037",
     batchOutletId: "outlet",
+    targetProductMasterId: "master",
     productItemId: "item",
+    itemProductMasterId: "master",
     itemAvailability: "migration_hold",
     itemIsActive: true,
     itemOutletId: "outlet",
     itemLegacyId: "003037",
+    itemSellingAmount: "2058000",
+    itemPricePerGram: "980000",
+    itemDeductionPerGram: "25000",
+    itemCondition: "good",
+    itemLocationState: "outlet",
     masterStatus: "active",
+    categoryName: "Cincin",
+    categoryIsActive: true,
     aliasId: "alias",
     aliasSource: "legacy_import",
     aliasIsPrimary: true,
@@ -838,6 +905,78 @@ assert(
   }).length === 0,
   "Item hold yang konsisten harus lolos preflight cutover.",
 );
+
+const invalidPricingIssues = getLegacyCutoverItemIssues({
+  source: "legacy_match",
+  barcodeValue: "003037",
+  batchOutletId: "outlet",
+  targetProductMasterId: "master-review",
+  productItemId: "item",
+  itemProductMasterId: "master-edited",
+  itemAvailability: "migration_hold",
+  itemIsActive: true,
+  itemOutletId: "outlet",
+  itemLegacyId: "003037",
+  itemSellingAmount: null,
+  itemPricePerGram: "0",
+  itemDeductionPerGram: null,
+  itemCondition: "repair",
+  itemLocationState: "warehouse",
+  masterStatus: "draft",
+  categoryName: "Gelang",
+  categoryIsActive: false,
+  aliasId: null,
+  aliasSource: null,
+  aliasIsPrimary: null,
+  aliasIsActive: null,
+  hasActiveSoldRecord: false,
+});
+for (const expectedIssue of [
+  "ITEM_MASTER_MISMATCH",
+  "MASTER_NOT_ACTIVE",
+  "CATEGORY_NOT_ACTIVE",
+  "SELLING_AMOUNT_INVALID",
+  "PRICE_PER_GRAM_INVALID",
+  "DEDUCTION_PER_GRAM_INVALID",
+  "ITEM_CONDITION_INVALID",
+  "ITEM_LOCATION_INVALID",
+  "BARCODE_ALIAS_INVALID",
+] as const) {
+  assert(
+    invalidPricingIssues.includes(expectedIssue),
+    `Preflight R5F2 wajib mendeteksi ${expectedIssue}.`,
+  );
+}
+const summarizedIssueCounts = summarizeLegacyCutoverIssueCounts(
+  new Map<LegacyCutoverIssueCode, number>([
+    ["SELLING_AMOUNT_INVALID", 125],
+    ["UNRESOLVED_VERIFICATION", 3],
+  ]),
+);
+assert(
+  summarizedIssueCounts.find(
+    (issue) => issue.code === "SELLING_AMOUNT_INVALID",
+  )?.count === 125,
+  "Readiness harus menyimpan jumlah blocker tanpa membuat array per item.",
+);
+
+const sessionReadinessMigrationSource = read(
+  "drizzle/0010_legacy_session_readiness.sql",
+);
+for (const contract of [
+  'ADD COLUMN "session_id" uuid',
+  "legacy_migration_sold_records_session_id_legacy_migration_sessions_id_fk",
+  "legacy_migration_sold_records_batch_session_sold_at_idx",
+  'SET "session_id" = verification."session_id"',
+  '"price_per_gram" = coalesce',
+  '"selling_amount" = coalesce',
+  "BETWEEN 1 AND 999999999999999999",
+]) {
+  assert(
+    sessionReadinessMigrationSource.includes(contract),
+    `Migration R5F2 wajib memiliki ${contract}.`,
+  );
+}
 
 const milestoneFiveCMigrationSource = read(
   "drizzle/0009_legacy_transactional_cutover.sql",
@@ -854,6 +993,80 @@ for (const contract of [
     `Migration Milestone 5C wajib memiliki ${contract}.`,
   );
 }
+
+const pricingRulesSource = read(
+  "src/features/legacy-migration/pricing-rules.ts",
+);
+for (const contract of [
+  "calculateLegacyMigrationSellingAmount",
+  "resolveLegacyMigrationPricing",
+  "Round half-up",
+]) {
+  assert(
+    pricingRulesSource.includes(contract),
+    `Pricing rules R5F2 wajib memiliki ${contract}.`,
+  );
+}
+assert(
+  !pricingRulesSource.includes("BigInt") && !/\d+n\b/.test(pricingRulesSource),
+  "Pricing rules harus kompatibel dengan target ES2017 tanpa BigInt.",
+);
+for (const contract of [
+  "resolveLegacyMigrationPricing",
+  "sellingAmount: pricing.sellingAmount",
+  "pricePerGram: pricing.pricePerGram",
+  "deductionPerGram: pricing.deductionPerGram",
+  'pricingSource: pricing.pricePerGram ? "legacy_xlsx" : "pending_manual"',
+  "getLegacyMigrationSessionLockKey",
+  "REVIEW_SESSION_NOT_ACTIVE",
+  'verification.sessionStatus !== "active"',
+]) {
+  assert(
+    reviewActionSource.includes(contract),
+    `Approval R5F2 wajib memiliki ${contract}.`,
+  );
+}
+
+const cutoverQuerySource = read(
+  "src/features/legacy-migration/cutover-queries.ts",
+);
+for (const contract of [
+  "soldBeforeScanBySession",
+  "processedItemCount",
+  "targetShortfall",
+  "targetSurplus",
+  "ITEM_MASTER_MISMATCH",
+  "SELLING_AMOUNT_INVALID",
+  "CATEGORY_NOT_ACTIVE",
+  "SOLD_SESSION_UNASSIGNED",
+  "executableSessionCount",
+]) {
+  assert(
+    cutoverQuerySource.includes(contract),
+    `Readiness per sesi R5F2 wajib memiliki ${contract}.`,
+  );
+}
+assert(
+  !cutoverQuerySource.includes("globalReady") &&
+    !cutoverQuerySource.includes("CUTOVER_GLOBAL_NOT_READY"),
+  "Cutover sesi tidak boleh lagi bergantung pada readiness global batch.",
+);
+for (const targetBlocker of [
+  "SESSION_TARGET_MISSING",
+  "TARGET_SHORTFALL",
+  "TARGET_SURPLUS",
+]) {
+  assert(
+    !cutoverQuerySource.includes(targetBlocker),
+    `Target opsional tidak boleh menghasilkan blocker ${targetBlocker}.`,
+  );
+}
+assert(
+  !cutoverQuerySource.includes("expected !== null &&") &&
+    !cutoverQuerySource.includes("targetShortfall === 0") &&
+    !cutoverQuerySource.includes("targetSurplus === 0"),
+  "Target opsional tidak boleh menjadi syarat canExecute cutover.",
+);
 
 const cutoverActionSource = read(
   "src/app/actions/legacy-migration-cutover.ts",
@@ -877,16 +1090,51 @@ assert(
     cutoverActionSource.includes("legacyMigrationCutoverRuns"),
   "Cutover wajib transactional dan memiliki run idempotency.",
 );
+const existingRunCheckIndex = cutoverActionSource.indexOf("const [existingRun]");
+const lockedStatusCheckIndex = cutoverActionSource.indexOf(
+  'session.status !== "locked"',
+);
+assert(
+  existingRunCheckIndex >= 0 &&
+    lockedStatusCheckIndex >= 0 &&
+    existingRunCheckIndex < lockedStatusCheckIndex,
+  "Cutover retry concurrent harus mengecek run idempotency sebelum menolak status completed.",
+);
+
 for (const contract of [
   "parseLegacyMigrationUuid",
   "getLegacyMigrationSessionLockKey",
   "CUTOVER_ITEM_UPDATE_COUNT_MISMATCH",
   "CUTOVER_VERIFICATION_UPDATE_COUNT_MISMATCH",
   "CUTOVER_SESSION_UPDATE_COUNT_MISMATCH",
+  'session.status !== "locked"',
+  "CUTOVER_SOLD_SESSION_UNASSIGNED",
+  "pricingValidated: true",
 ]) {
   assert(
     cutoverActionSource.includes(contract),
     `Safety hotfix cutover wajib memiliki ${contract}.`,
+  );
+}
+
+for (const targetGuard of [
+  "CUTOVER_SESSION_TARGET_MISSING",
+  "CUTOVER_TARGET_MISMATCH",
+  "processedItems !== session.expectedItemCount",
+]) {
+  assert(
+    !cutoverActionSource.includes(targetGuard),
+    `Transactional cutover tidak boleh diblokir oleh target opsional: ${targetGuard}.`,
+  );
+}
+
+for (const contract of [
+  "Target jumlah item (opsional)",
+  "Hanya sebagai pembanding progress",
+]) {
+  assert(
+    sessionPageSource.includes(contract),
+    `Form sesi wajib menjelaskan target opsional melalui ${contract}.`,
   );
 }
 
@@ -912,13 +1160,40 @@ assert(
   "Cutover wajib memakai konfirmasi eksplisit AKTIFKAN STOK.",
 );
 
+const reviewQueuePageSource = read(
+  "src/app/(admin)/admin/migrasi-produk/[batchId]/review/page.tsx",
+);
+const reviewDetailPageSource = read(
+  "src/app/(admin)/admin/migrasi-produk/[batchId]/review/[verificationId]/page.tsx",
+);
+for (const contract of [
+  'row.sessionStatus === "active"',
+  "Sesi {row.sessionStatus}",
+]) {
+  assert(
+    reviewQueuePageSource.includes(contract),
+    `Antrean review R5F2 wajib memiliki ${contract}.`,
+  );
+}
+for (const contract of [
+  'verification.sessionStatus === "active"',
+  "Sesi tidak sedang aktif",
+]) {
+  assert(
+    reviewDetailPageSource.includes(contract),
+    `Detail review R5F2 wajib memiliki ${contract}.`,
+  );
+}
+
 const cutoverPageSource = read(
   "src/app/(admin)/admin/migrasi-produk/[batchId]/cutover/page.tsx",
 );
 for (const contract of [
   "Aktivasi Stok Transactional",
   "opening inventory movement",
-  "seluruh item sesi berhasil bersama",
+  "Target hanya menjadi pembanding dan tidak memblokir proses.",
+  "Pricing, master, kondisi, lokasi, dan barcode tetap diperiksa",
+  "Blocker milik sesi lain tidak lagi menahan",
   "Milestone 5D",
 ]) {
   assert(
@@ -928,5 +1203,5 @@ for (const contract of [
 }
 
 console.log(
-  "OK: Legacy product migration Milestone 1-5C contracts tervalidasi.",
+  "OK: Legacy product migration Milestone 1-5C + R5F2 contracts tervalidasi.",
 );

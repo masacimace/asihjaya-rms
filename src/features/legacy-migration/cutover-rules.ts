@@ -3,7 +3,34 @@ import type {
   LegacyCutoverIssueCode,
   LegacyCutoverSessionStatus,
 } from "@/features/legacy-migration/cutover-contracts";
+import {
+  isFineGoldLegacyCategory,
+  isNonNegativeLegacyMigrationMoney,
+  isPositiveLegacyMigrationMoney,
+} from "@/features/legacy-migration/pricing-rules";
 import type { LegacyVerificationSource } from "@/features/legacy-migration/verification-contracts";
+
+const LEGACY_CUTOVER_ISSUE_LABELS: Record<
+  LegacyCutoverIssueCode,
+  string
+> = {
+  SESSION_NOT_LOCKED: "Sesi belum dikunci",
+  UNRESOLVED_VERIFICATION: "Verification belum selesai direview",
+  CANCELLED_SESSION_HAS_DATA: "Sesi dibatalkan masih memiliki data",
+  ITEM_MISSING: "Product Item hasil approval tidak ditemukan",
+  ITEM_NOT_ON_HOLD: "Product Item tidak lagi berstatus migration hold",
+  ITEM_LINK_INVALID: "Outlet atau barcode Product Item tidak konsisten",
+  ITEM_MASTER_MISMATCH: "Product Master item berbeda dari hasil review",
+  MASTER_NOT_ACTIVE: "Product Master belum aktif",
+  CATEGORY_NOT_ACTIVE: "Kategori Product Master belum aktif",
+  SELLING_AMOUNT_INVALID: "Harga label belum valid",
+  PRICE_PER_GRAM_INVALID: "Harga per gram belum valid",
+  DEDUCTION_PER_GRAM_INVALID: "Potongan per gram belum valid",
+  ITEM_CONDITION_INVALID: "Kondisi item belum siap dijual",
+  ITEM_LOCATION_INVALID: "Lokasi item bukan stok outlet",
+  BARCODE_ALIAS_INVALID: "Alias barcode legacy tidak valid",
+  SOLD_CONFLICT: "Barcode sudah ditandai terjual di sistem lama",
+};
 
 export function isLegacyCutoverSessionClosed(
   status: LegacyCutoverSessionStatus,
@@ -23,12 +50,21 @@ export function getLegacyCutoverItemIssues(input: {
   source: LegacyVerificationSource;
   barcodeValue: string;
   batchOutletId: string;
+  targetProductMasterId: string | null;
   productItemId: string | null;
+  itemProductMasterId: string | null;
   itemAvailability: string | null;
   itemIsActive: boolean | null;
   itemOutletId: string | null;
   itemLegacyId: string | null;
+  itemSellingAmount: string | null;
+  itemPricePerGram: string | null;
+  itemDeductionPerGram: string | null;
+  itemCondition: string | null;
+  itemLocationState: string | null;
   masterStatus: string | null;
+  categoryName: string | null;
+  categoryIsActive: boolean | null;
   aliasId: string | null;
   aliasSource: string | null;
   aliasIsPrimary: boolean | null;
@@ -53,8 +89,43 @@ export function getLegacyCutoverItemIssues(input: {
     issues.push("ITEM_LINK_INVALID");
   }
 
+  if (
+    !input.targetProductMasterId ||
+    input.itemProductMasterId !== input.targetProductMasterId
+  ) {
+    issues.push("ITEM_MASTER_MISMATCH");
+  }
+
   if (input.masterStatus !== "active") {
     issues.push("MASTER_NOT_ACTIVE");
+  }
+
+  if (!input.categoryIsActive) {
+    issues.push("CATEGORY_NOT_ACTIVE");
+  }
+
+  if (!isPositiveLegacyMigrationMoney(input.itemSellingAmount)) {
+    issues.push("SELLING_AMOUNT_INVALID");
+  }
+
+  if (!isPositiveLegacyMigrationMoney(input.itemPricePerGram)) {
+    issues.push("PRICE_PER_GRAM_INVALID");
+  }
+
+  const deductionIsValid = isFineGoldLegacyCategory(input.categoryName)
+    ? input.itemDeductionPerGram === null ||
+      isNonNegativeLegacyMigrationMoney(input.itemDeductionPerGram)
+    : isNonNegativeLegacyMigrationMoney(input.itemDeductionPerGram);
+  if (!deductionIsValid) {
+    issues.push("DEDUCTION_PER_GRAM_INVALID");
+  }
+
+  if (input.itemCondition !== "good") {
+    issues.push("ITEM_CONDITION_INVALID");
+  }
+
+  if (input.itemLocationState !== "outlet") {
+    issues.push("ITEM_LOCATION_INVALID");
   }
 
   if (
@@ -73,26 +144,27 @@ export function getLegacyCutoverItemIssues(input: {
   return issues;
 }
 
+export function summarizeLegacyCutoverIssueCounts(
+  counts: ReadonlyMap<LegacyCutoverIssueCode, number>,
+  hrefs: Partial<Record<LegacyCutoverIssueCode, string>> = {},
+): LegacyCutoverIssue[] {
+  return Array.from(counts.entries())
+    .filter(([, count]) => count > 0)
+    .map(([code, count]) => ({
+      code,
+      label: LEGACY_CUTOVER_ISSUE_LABELS[code],
+      count,
+      href: hrefs[code],
+    }));
+}
+
 export function summarizeLegacyCutoverIssues(
   codes: LegacyCutoverIssueCode[],
+  hrefs: Partial<Record<LegacyCutoverIssueCode, string>> = {},
 ): LegacyCutoverIssue[] {
-  const labels: Record<LegacyCutoverIssueCode, string> = {
-    SESSION_NOT_CLOSED: "Sesi belum dikunci atau diselesaikan",
-    UNRESOLVED_VERIFICATION: "Verification belum selesai direview",
-    ITEM_MISSING: "Product Item hasil approval tidak ditemukan",
-    ITEM_NOT_ON_HOLD: "Product Item tidak lagi berstatus migration hold",
-    ITEM_LINK_INVALID: "Outlet atau barcode Product Item tidak konsisten",
-    MASTER_NOT_ACTIVE: "Product Master belum aktif",
-    BARCODE_ALIAS_INVALID: "Alias barcode legacy tidak valid",
-    SOLD_CONFLICT: "Barcode sudah ditandai terjual di sistem lama",
-  };
-
   const counts = new Map<LegacyCutoverIssueCode, number>();
-  for (const code of codes) counts.set(code, (counts.get(code) ?? 0) + 1);
-
-  return Array.from(counts.entries()).map(([code, count]) => ({
-    code,
-    label: labels[code],
-    count,
-  }));
+  for (const code of codes) {
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  return summarizeLegacyCutoverIssueCounts(counts, hrefs);
 }

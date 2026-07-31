@@ -574,7 +574,7 @@ export async function createLegacyMigrationSessionAction(formData: FormData) {
     redirectWithMessage(
       sessionPath(batchId),
       "error",
-      "Target item harus berupa angka 1–50.000.",
+      "Jika diisi, target item harus berupa angka 1–50.000.",
     );
   }
   if (assignedUserIds.length === 0) {

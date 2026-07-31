@@ -297,11 +297,13 @@ export default async function LegacyMigrationReviewQueuePage({
           ) : (
             <div className="divide-y divide-[var(--border)]">
               {data.rows.map((row) => {
-                const clean = canBulkApproveLegacyVerification({
-                  status: row.status,
-                  reviewFlags: row.reviewFlags,
-                  condition: row.condition,
-                });
+                const clean =
+                  row.sessionStatus === "active" &&
+                  canBulkApproveLegacyVerification({
+                    status: row.status,
+                    reviewFlags: row.reviewFlags,
+                    condition: row.condition,
+                  });
                 return (
                   <article
                     key={row.id}
@@ -331,6 +333,11 @@ export default async function LegacyMigrationReviewQueuePage({
                         {row.source === "physical_unmatched" ? (
                           <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
                             Tidak ada di export
+                          </span>
+                        ) : null}
+                        {row.sessionStatus !== "active" ? (
+                          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-700">
+                            Sesi {row.sessionStatus}
                           </span>
                         ) : null}
                       </div>

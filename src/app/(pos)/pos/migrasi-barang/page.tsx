@@ -116,7 +116,7 @@ export default async function LegacyMigrationScannerSessionsPage() {
                     <p className="text-lg font-semibold text-neutral-950">
                       {session.expectedItemCount ?? "—"}
                     </p>
-                    <p className="text-[11px] text-[var(--muted)]">Target</p>
+                    <p className="text-[11px] text-[var(--muted)]">Target opsional</p>
                   </div>
                 </div>
 

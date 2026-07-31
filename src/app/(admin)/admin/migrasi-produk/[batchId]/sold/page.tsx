@@ -11,6 +11,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
+  assignLegacySoldRecordSessionAction,
   markLegacySoldDuringMigrationAction,
   revertLegacySoldDuringMigrationAction,
 } from "@/app/actions/legacy-migration-sold";
@@ -145,6 +146,16 @@ export default async function LegacySoldDuringMigrationPage({
         </div>
       </section>
 
+      {data.summary.unassignedSession > 0 ? (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
+          <p className="font-semibold">Ada catatan lama tanpa sesi etalase</p>
+          <p className="mt-1">
+            {data.summary.unassignedSession} catatan aktif belum memiliki sesi dan
+            akan memblokir seluruh cutover. Catatan baru selalu mewajibkan sesi.
+          </p>
+        </section>
+      ) : null}
+
       <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
         <div>
           <h2 className="font-semibold text-neutral-950">
@@ -159,6 +170,32 @@ export default async function LegacySoldDuringMigrationPage({
 
         <form action={markLegacySoldDuringMigrationAction} className="mt-5 space-y-4">
           <input type="hidden" name="batchId" value={data.batch.id} />
+          <label className="block">
+            <span className="text-sm font-semibold text-neutral-800">
+              Sesi / etalase
+            </span>
+            <select
+              name="sessionId"
+              required
+              defaultValue=""
+              className="mt-2 h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="" disabled>
+                Pilih sesi asal barang
+              </option>
+              {data.sessions.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {session.name}
+                  {session.locationCode ? ` · ${session.locationCode}` : ""}
+                  {` · ${session.status}`}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
+              Barcode yang sudah discan harus berasal dari sesi yang sama.
+            </span>
+          </label>
+
           <label className="block">
             <span className="text-sm font-semibold text-neutral-800">
               Barcode terjual
@@ -256,7 +293,7 @@ export default async function LegacySoldDuringMigrationPage({
                       {record.itemSku ? ` · ${record.itemSku}` : ""}
                     </p>
                     <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                      Terjual {formatDate(record.soldAt, auth.organization.timezone)} ·
+                      Sesi {record.sessionName ?? "belum ditentukan"} · terjual {formatDate(record.soldAt, auth.organization.timezone)} ·
                       dilaporkan {record.reportedByName} pada {" "}
                       {formatDateTime(record.reportedAt, auth.organization.timezone)}
                     </p>
@@ -269,24 +306,50 @@ export default async function LegacySoldDuringMigrationPage({
                     ) : null}
                   </div>
 
-                  <form
-                    action={revertLegacySoldDuringMigrationAction}
-                    className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto"
-                  >
-                    <input type="hidden" name="batchId" value={data.batch.id} />
-                    <input type="hidden" name="soldRecordId" value={record.id} />
-                    <input
-                      name="revertReason"
-                      required
-                      minLength={5}
-                      maxLength={2000}
-                      placeholder="Alasan pembatalan"
-                      className="h-10 min-w-0 flex-1 rounded-xl border border-[var(--border)] px-3 text-sm outline-none focus:border-[var(--accent)] xl:w-56"
-                    />
-                    <button className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50">
-                      <RotateCcw className="size-4" /> Batalkan
-                    </button>
-                  </form>
+                  {record.sessionId ? (
+                    <form
+                      action={revertLegacySoldDuringMigrationAction}
+                      className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto"
+                    >
+                      <input type="hidden" name="batchId" value={data.batch.id} />
+                      <input type="hidden" name="soldRecordId" value={record.id} />
+                      <input
+                        name="revertReason"
+                        required
+                        minLength={5}
+                        maxLength={2000}
+                        placeholder="Alasan pembatalan"
+                        className="h-10 min-w-0 flex-1 rounded-xl border border-[var(--border)] px-3 text-sm outline-none focus:border-[var(--accent)] xl:w-56"
+                      />
+                      <button className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50">
+                        <RotateCcw className="size-4" /> Batalkan
+                      </button>
+                    </form>
+                  ) : (
+                    <form
+                      action={assignLegacySoldRecordSessionAction}
+                      className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto"
+                    >
+                      <input type="hidden" name="batchId" value={data.batch.id} />
+                      <input type="hidden" name="soldRecordId" value={record.id} />
+                      <select
+                        name="sessionId"
+                        required
+                        defaultValue=""
+                        className="h-10 min-w-0 rounded-xl border border-amber-300 bg-white px-3 text-sm outline-none xl:w-60"
+                      >
+                        <option value="" disabled>Pilih sesi etalase</option>
+                        {data.sessions.map((session) => (
+                          <option key={session.id} value={session.id}>
+                            {session.name}{session.locationCode ? ` · ${session.locationCode}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button className="inline-flex h-10 items-center justify-center rounded-xl bg-amber-700 px-4 text-sm font-semibold text-white">
+                        Simpan sesi
+                      </button>
+                    </form>
+                  )}
                 </div>
               </article>
             ))}

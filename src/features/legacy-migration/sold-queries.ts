@@ -1,7 +1,8 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
+  legacyMigrationSessions,
   legacyMigrationSoldRecords,
   productItems,
   users,
@@ -26,12 +27,16 @@ export async function getLegacySoldDuringMigrationData(
     isNull(legacyMigrationSoldRecords.revertedAt),
   );
 
-  const [summaryRows, recentRows] = await Promise.all([
+  const [summaryRows, recentRows, sessions] = await Promise.all([
     db
       .select({
         totalActive: sql<number>`count(*)::int`.mapWith(Number),
         beforeScan:
           sql<number>`count(*) filter (where ${legacyMigrationSoldRecords.verificationId} is null)::int`.mapWith(
+            Number,
+          ),
+        unassignedSession:
+          sql<number>`count(*) filter (where ${legacyMigrationSoldRecords.sessionId} is null)::int`.mapWith(
             Number,
           ),
         verificationExcluded:
@@ -49,6 +54,8 @@ export async function getLegacySoldDuringMigrationData(
     db
       .select({
         id: legacyMigrationSoldRecords.id,
+        sessionId: legacyMigrationSoldRecords.sessionId,
+        sessionName: legacyMigrationSessions.name,
         barcodeValue: legacyMigrationSoldRecords.barcodeValue,
         soldAt: legacyMigrationSoldRecords.soldAt,
         reportedAt: legacyMigrationSoldRecords.reportedAt,
@@ -65,6 +72,10 @@ export async function getLegacySoldDuringMigrationData(
       .from(legacyMigrationSoldRecords)
       .innerJoin(users, eq(legacyMigrationSoldRecords.reportedBy, users.id))
       .leftJoin(
+        legacyMigrationSessions,
+        eq(legacyMigrationSoldRecords.sessionId, legacyMigrationSessions.id),
+      )
+      .leftJoin(
         productItems,
         eq(legacyMigrationSoldRecords.productItemId, productItems.id),
       )
@@ -74,11 +85,29 @@ export async function getLegacySoldDuringMigrationData(
         desc(legacyMigrationSoldRecords.reportedAt),
       )
       .limit(100),
+
+    db
+      .select({
+        id: legacyMigrationSessions.id,
+        name: legacyMigrationSessions.name,
+        locationCode: legacyMigrationSessions.locationCode,
+        status: legacyMigrationSessions.status,
+      })
+      .from(legacyMigrationSessions)
+      .where(
+        and(
+          eq(legacyMigrationSessions.batchId, batch.id),
+          eq(legacyMigrationSessions.organizationId, auth.organization.id),
+          inArray(legacyMigrationSessions.status, ["draft", "active", "locked"]),
+        ),
+      )
+      .orderBy(asc(legacyMigrationSessions.createdAt)),
   ]);
 
   const summary: LegacySoldSummary = summaryRows[0] ?? {
     totalActive: 0,
     beforeScan: 0,
+    unassignedSession: 0,
     verificationExcluded: 0,
     holdMarkedSold: 0,
   };
@@ -87,5 +116,6 @@ export async function getLegacySoldDuringMigrationData(
     batch,
     summary,
     records: recentRows satisfies LegacySoldRecordItem[],
+    sessions,
   };
 }

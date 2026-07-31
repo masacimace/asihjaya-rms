@@ -167,15 +167,20 @@ export default async function LegacyMigrationSessionsPage({
                   />
                 </label>
                 <label className="text-sm font-medium text-neutral-800">
-                  Target jumlah item
+                  Target jumlah item (opsional)
                   <input
                     name="expectedItemCount"
                     type="number"
                     min={1}
                     max={50000}
-                    placeholder="150"
+                    placeholder="Contoh: 150"
                     className="mt-2 h-11 w-full rounded-xl border border-[var(--border)] px-3 text-sm outline-none focus:border-[var(--accent)]"
                   />
+                  <span className="mt-1.5 block text-xs font-normal leading-5 text-[var(--muted)]">
+                    Hanya sebagai pembanding progress. Kurang, lebih, atau tidak
+                    diisi tetap dapat dikunci dan diaktifkan setelah blocker
+                    lain selesai.
+                  </span>
                 </label>
               </div>
               <label className="text-sm font-medium text-neutral-800">
@@ -288,8 +293,8 @@ export default async function LegacyMigrationSessionsPage({
                       <p className="mt-1 text-xs text-[var(--muted)]">
                         {session.locationCode || "Tanpa kode lokasi"}
                         {session.expectedItemCount
-                          ? ` · target ${session.expectedItemCount} item`
-                          : ""}
+                          ? ` · target opsional ${session.expectedItemCount} item`
+                          : " · tanpa target"}
                       </p>
                     </div>
                     <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">

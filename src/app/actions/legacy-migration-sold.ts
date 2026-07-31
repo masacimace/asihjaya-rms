@@ -9,6 +9,7 @@ import { db } from "@/db";
 import {
   auditLogs,
   itemBarcodes,
+  legacyMigrationSessions,
   legacyMigrationSoldRecords,
   legacyMigrationVerifications,
   legacyProductRows,
@@ -19,7 +20,10 @@ import {
   isSoldDuringMigrationEligibleStatus,
   parseSoldDuringMigrationBarcodes,
 } from "@/features/legacy-migration/sold-rules";
-import { parseLegacyMigrationUuid } from "@/features/legacy-migration/safety";
+import {
+  getLegacyMigrationSessionLockKey,
+  parseLegacyMigrationUuid,
+} from "@/features/legacy-migration/safety";
 import { requirePermission, type AuthContext } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
 import { getStartOfBusinessDateKey } from "@/lib/time/business-time";
@@ -78,6 +82,8 @@ function revalidateSoldPaths(batchId: string) {
   revalidatePath(`/admin/migrasi-produk/${batchId}/review`);
   revalidatePath(`/admin/migrasi-produk/${batchId}/sesi`);
   revalidatePath(soldPath(batchId));
+  revalidatePath(`/admin/migrasi-produk/${batchId}/rekonsiliasi`);
+  revalidatePath(`/admin/migrasi-produk/${batchId}/cutover`);
 }
 
 export async function markLegacySoldDuringMigrationAction(formData: FormData) {
@@ -92,6 +98,35 @@ export async function markLegacySoldDuringMigrationAction(formData: FormData) {
   }
 
   const batch = await requireAccessibleBatch(auth, batchId);
+  const sessionId = readUuid(formData, "sessionId");
+  if (!sessionId) {
+    redirectWithMessage(
+      soldPath(batch.id),
+      "error",
+      "Pilih sesi etalase untuk barcode yang terjual.",
+    );
+  }
+  const [selectedSession] = await db
+    .select({ id: legacyMigrationSessions.id, name: legacyMigrationSessions.name })
+    .from(legacyMigrationSessions)
+    .where(
+      and(
+        eq(legacyMigrationSessions.id, sessionId),
+        eq(legacyMigrationSessions.batchId, batch.id),
+        eq(legacyMigrationSessions.organizationId, auth.organization.id),
+        eq(legacyMigrationSessions.outletId, batch.outletId),
+        inArray(legacyMigrationSessions.status, ["draft", "active", "locked"]),
+      ),
+    )
+    .limit(1);
+  if (!selectedSession) {
+    redirectWithMessage(
+      soldPath(batch.id),
+      "error",
+      "Sesi etalase tidak tersedia atau sudah diselesaikan.",
+    );
+  }
+
   const parsed = parseSoldDuringMigrationBarcodes(
     formData.get("barcodes"),
     batch.barcodeLength,
@@ -136,13 +171,36 @@ export async function markLegacySoldDuringMigrationAction(formData: FormData) {
     ),
   );
 
-  const outcomes = await db.transaction(async (transaction) => {
+  let outcomes: Record<SoldOutcome, number>;
+  try {
+    outcomes = await db.transaction(async (transaction) => {
     const result: Record<SoldOutcome, number> = {
       marked: 0,
       already_marked: 0,
       not_found: 0,
       blocked: 0,
     };
+
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${getLegacyMigrationSessionLockKey({
+        organizationId: auth.organization.id,
+        sessionId: selectedSession.id,
+      })}, 0))`,
+    );
+    const [lockedSession] = await transaction
+      .select({ id: legacyMigrationSessions.id })
+      .from(legacyMigrationSessions)
+      .where(
+        and(
+          eq(legacyMigrationSessions.id, selectedSession.id),
+          eq(legacyMigrationSessions.batchId, batch.id),
+          eq(legacyMigrationSessions.organizationId, auth.organization.id),
+          inArray(legacyMigrationSessions.status, ["draft", "active", "locked"]),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!lockedSession) throw new Error("SOLD_SESSION_UNAVAILABLE");
 
     for (const barcode of barcodesForTransaction) {
       await transaction.execute(
@@ -172,6 +230,7 @@ export async function markLegacySoldDuringMigrationAction(formData: FormData) {
         .select({
           id: legacyMigrationVerifications.id,
           status: legacyMigrationVerifications.status,
+          sessionId: legacyMigrationVerifications.sessionId,
           outletId: legacyMigrationVerifications.outletId,
           productItemId: legacyMigrationVerifications.productItemId,
         })
@@ -190,6 +249,10 @@ export async function markLegacySoldDuringMigrationAction(formData: FormData) {
 
       if (!verification && !stagingBarcodes.has(barcode)) {
         result.not_found += 1;
+        continue;
+      }
+      if (verification && verification.sessionId !== selectedSession.id) {
+        result.blocked += 1;
         continue;
       }
       if (
@@ -229,6 +292,7 @@ export async function markLegacySoldDuringMigrationAction(formData: FormData) {
           batchId: batch.id,
           organizationId: auth.organization.id,
           outletId: verification?.outletId ?? batch.outletId,
+          sessionId: selectedSession.id,
           barcodeValue: barcode,
           verificationId: verification?.id ?? null,
           productItemId: verification?.productItemId ?? null,
@@ -307,6 +371,8 @@ export async function markLegacySoldDuringMigrationAction(formData: FormData) {
         entityId: soldRecord.id,
         afterData: {
           batchId: batch.id,
+          sessionId: selectedSession.id,
+          sessionName: selectedSession.name,
           barcode,
           verificationId: verification?.id ?? null,
           previousVerificationStatus: verification?.status ?? null,
@@ -324,8 +390,19 @@ export async function markLegacySoldDuringMigrationAction(formData: FormData) {
       result.marked += 1;
     }
 
-    return result;
-  });
+      return result;
+    });
+  } catch (error) {
+    console.error("legacy_migration_sold.mark_failed", error);
+    const code = error instanceof Error ? error.message : "";
+    redirectWithMessage(
+      soldPath(batch.id),
+      "error",
+      code === "SOLD_SESSION_UNAVAILABLE"
+        ? "Sesi etalase tidak tersedia atau sudah diselesaikan."
+        : "Daftar barang terjual gagal disimpan karena status data berubah. Tidak ada perubahan parsial yang disimpan.",
+    );
+  }
 
   revalidateSoldPaths(batch.id);
   const extras = [
@@ -358,6 +435,122 @@ export async function markLegacySoldDuringMigrationAction(formData: FormData) {
   );
 }
 
+export async function assignLegacySoldRecordSessionAction(formData: FormData) {
+  const auth = await requirePermission("migration.sold.manage");
+  const batchId = readUuid(formData, "batchId");
+  const soldRecordId = readUuid(formData, "soldRecordId");
+  const sessionId = readUuid(formData, "sessionId");
+  if (!batchId || !soldRecordId || !sessionId) {
+    redirectWithMessage(
+      batchId ? soldPath(batchId) : "/admin/migrasi-produk",
+      "error",
+      "Catatan terjual atau sesi etalase tidak valid.",
+    );
+  }
+
+  const batch = await requireAccessibleBatch(auth, batchId);
+  const metadata = await requestMetadata();
+
+  try {
+    await db.transaction(async (transaction) => {
+      const [initialRecord] = await transaction
+        .select({
+          barcodeValue: legacyMigrationSoldRecords.barcodeValue,
+          sessionId: legacyMigrationSoldRecords.sessionId,
+        })
+        .from(legacyMigrationSoldRecords)
+        .where(
+          and(
+            eq(legacyMigrationSoldRecords.id, soldRecordId),
+            eq(legacyMigrationSoldRecords.batchId, batch.id),
+            eq(
+              legacyMigrationSoldRecords.organizationId,
+              auth.organization.id,
+            ),
+            isNull(legacyMigrationSoldRecords.revertedAt),
+          ),
+        )
+        .limit(1);
+      if (!initialRecord) throw new Error("SOLD_RECORD_NOT_FOUND");
+      if (initialRecord.sessionId) return;
+
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${getLegacyMigrationSessionLockKey({
+          organizationId: auth.organization.id,
+          sessionId,
+        })}, 0))`,
+      );
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-barcode:${auth.organization.id}:${initialRecord.barcodeValue}`}, 0))`,
+      );
+
+      const [session] = await transaction
+        .select({
+          id: legacyMigrationSessions.id,
+          name: legacyMigrationSessions.name,
+          outletId: legacyMigrationSessions.outletId,
+        })
+        .from(legacyMigrationSessions)
+        .where(
+          and(
+            eq(legacyMigrationSessions.id, sessionId),
+            eq(legacyMigrationSessions.batchId, batch.id),
+            eq(legacyMigrationSessions.organizationId, auth.organization.id),
+            eq(legacyMigrationSessions.outletId, batch.outletId),
+            inArray(legacyMigrationSessions.status, ["draft", "active", "locked"]),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!session) throw new Error("SOLD_SESSION_UNAVAILABLE");
+
+      const assigned = await transaction
+        .update(legacyMigrationSoldRecords)
+        .set({ sessionId: session.id, updatedAt: new Date() })
+        .where(
+          and(
+            eq(legacyMigrationSoldRecords.id, soldRecordId),
+            isNull(legacyMigrationSoldRecords.sessionId),
+            isNull(legacyMigrationSoldRecords.revertedAt),
+          ),
+        )
+        .returning({ id: legacyMigrationSoldRecords.id });
+      if (assigned.length !== 1) throw new Error("SOLD_SESSION_ASSIGN_CONFLICT");
+
+      await transaction.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        outletId: session.outletId,
+        actorUserId: auth.user.id,
+        action: "legacy_migration_sold.assign_session",
+        entityType: "legacy_migration_sold_record",
+        entityId: soldRecordId,
+        beforeData: { sessionId: null },
+        afterData: { sessionId: session.id, sessionName: session.name },
+        reason: "Menentukan sesi etalase untuk catatan barang terjual sebelum scan.",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      });
+    });
+  } catch (error) {
+    console.error("legacy_migration_sold.assign_session_failed", error);
+    const code = error instanceof Error ? error.message : "";
+    redirectWithMessage(
+      soldPath(batch.id),
+      "error",
+      code === "SOLD_SESSION_UNAVAILABLE"
+        ? "Sesi etalase tidak tersedia atau sudah diselesaikan."
+        : "Sesi etalase gagal disimpan karena data sudah berubah.",
+    );
+  }
+
+  revalidateSoldPaths(batch.id);
+  redirectWithMessage(
+    soldPath(batch.id),
+    "success",
+    "Sesi etalase untuk catatan terjual berhasil ditentukan.",
+  );
+}
+
 export async function revertLegacySoldDuringMigrationAction(
   formData: FormData,
 ) {
@@ -379,7 +572,10 @@ export async function revertLegacySoldDuringMigrationAction(
   try {
     await db.transaction(async (transaction) => {
       const [initialRecord] = await transaction
-        .select({ barcodeValue: legacyMigrationSoldRecords.barcodeValue })
+        .select({
+          barcodeValue: legacyMigrationSoldRecords.barcodeValue,
+          sessionId: legacyMigrationSoldRecords.sessionId,
+        })
         .from(legacyMigrationSoldRecords)
         .where(
           and(
@@ -394,6 +590,29 @@ export async function revertLegacySoldDuringMigrationAction(
         )
         .limit(1);
       if (!initialRecord) throw new Error("SOLD_RECORD_NOT_FOUND");
+      if (!initialRecord.sessionId) throw new Error("SOLD_SESSION_UNASSIGNED");
+
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${getLegacyMigrationSessionLockKey({
+          organizationId: auth.organization.id,
+          sessionId: initialRecord.sessionId,
+        })}, 0))`,
+      );
+      const [session] = await transaction
+        .select({ status: legacyMigrationSessions.status })
+        .from(legacyMigrationSessions)
+        .where(
+          and(
+            eq(legacyMigrationSessions.id, initialRecord.sessionId),
+            eq(legacyMigrationSessions.batchId, batch.id),
+            eq(legacyMigrationSessions.organizationId, auth.organization.id),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!session || ["completed", "cancelled"].includes(session.status)) {
+        throw new Error("SOLD_SESSION_CLOSED");
+      }
 
       await transaction.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-barcode:${auth.organization.id}:${initialRecord.barcodeValue}`}, 0))`,
@@ -403,6 +622,7 @@ export async function revertLegacySoldDuringMigrationAction(
         .select({
           id: legacyMigrationSoldRecords.id,
           outletId: legacyMigrationSoldRecords.outletId,
+          sessionId: legacyMigrationSoldRecords.sessionId,
           barcodeValue: legacyMigrationSoldRecords.barcodeValue,
           verificationId: legacyMigrationSoldRecords.verificationId,
           productItemId: legacyMigrationSoldRecords.productItemId,
@@ -534,6 +754,7 @@ export async function revertLegacySoldDuringMigrationAction(
         entityType: "legacy_migration_sold_record",
         entityId: record.id,
         beforeData: {
+          sessionId: record.sessionId,
           barcode: record.barcodeValue,
           verificationStatus: "sold_during_migration",
           itemAvailability: record.productItemId ? "sold" : null,
@@ -553,9 +774,13 @@ export async function revertLegacySoldDuringMigrationAction(
     const message =
       code === "SOLD_RECORD_NOT_FOUND"
         ? "Penandaan sudah dibatalkan atau tidak ditemukan."
-        : code === "BARCODE_ALIAS_CONFLICT"
-          ? "Barcode sudah dipakai item aktif lain dan tidak dapat dipulihkan."
-          : "Pembatalan gagal karena status barang sudah berubah. Tidak ada data parsial yang disimpan.";
+        : code === "SOLD_SESSION_CLOSED"
+          ? "Penandaan tidak dapat dibatalkan setelah sesi diselesaikan atau dibatalkan."
+          : code === "SOLD_SESSION_UNASSIGNED"
+            ? "Catatan lama belum memiliki sesi etalase. Assign sesi terlebih dahulu sebelum membatalkan."
+            : code === "BARCODE_ALIAS_CONFLICT"
+              ? "Barcode sudah dipakai item aktif lain dan tidak dapat dipulihkan."
+              : "Pembatalan gagal karena status barang sudah berubah. Tidak ada data parsial yang disimpan.";
     redirectWithMessage(soldPath(batch.id), "error", message);
   }
 

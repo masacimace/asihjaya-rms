@@ -52,6 +52,18 @@ function formatDecimal(value: string | null) {
     : value;
 }
 
+function formatMoney(value: string | null) {
+  if (value === null) return "—";
+  const amount = Number(value);
+  return Number.isFinite(amount)
+    ? new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+        maximumFractionDigits: 0,
+      }).format(amount)
+    : value;
+}
+
 function formatDate(value: Date | null, timeZone: string) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("id-ID", {
@@ -112,9 +124,12 @@ export default async function LegacyMigrationReviewDetailPage({
   const canReview = hasPermission(auth, "migration.verification.review");
   const canApprove = hasPermission(auth, "migration.verification.approve");
   const canManageSold = hasPermission(auth, "migration.sold.manage");
-  const reviewable = ["submitted", "needs_review"].includes(
+  const canManagePricing = hasPermission(auth, "pricing.manage");
+  const hasReviewableStatus = ["submitted", "needs_review"].includes(
     verification.status,
   );
+  const reviewable =
+    hasReviewableStatus && verification.sessionStatus === "active";
   const actualImageUrl = getImageUrl(verification.imageKey);
 
   return (
@@ -185,14 +200,25 @@ export default async function LegacyMigrationReviewDetailPage({
               <h2 className="font-semibold">Product Item sudah dibuat</h2>
               <p className="mt-1 text-sm leading-6">
                 SKU {verification.itemSku ?? "—"} · status {verification.itemAvailability ?? "—"}.
+                Harga label {formatMoney(verification.itemSellingAmount)} · harga per gram {formatMoney(verification.itemPricePerGram)}.
                 Item belum tersedia di POS selama statusnya migration hold.
               </p>
-              <Link
-                href={`/admin/inventaris/item/${verification.productItemId}`}
-                className="mt-3 inline-flex text-sm font-semibold underline"
-              >
-                Buka detail item inventory
-              </Link>
+              <div className="mt-3 flex flex-wrap gap-4">
+                <Link
+                  href={`/admin/inventaris/item/${verification.productItemId}`}
+                  className="inline-flex text-sm font-semibold underline"
+                >
+                  Buka detail item inventory
+                </Link>
+                {canManagePricing && verification.itemAvailability === "migration_hold" ? (
+                  <Link
+                    href={`/admin/inventaris/item/${verification.productItemId}/edit`}
+                    className="inline-flex text-sm font-semibold underline"
+                  >
+                    Perbaiki pricing item
+                  </Link>
+                ) : null}
+              </div>
             </div>
           </div>
         </section>
@@ -252,6 +278,14 @@ export default async function LegacyMigrationReviewDetailPage({
                   verification.legacyWeightGram
                     ? `${formatDecimal(verification.legacyWeightGram)} gram`
                     : null,
+                )}
+                {valueRow(
+                  "Harga per gram legacy",
+                  formatMoney(verification.legacyPricePerGram),
+                )}
+                {valueRow(
+                  "Potongan per gram legacy",
+                  formatMoney(verification.legacyDeductionPerGram),
                 )}
                 {valueRow("Kadar lama", formatDecimal(verification.legacyPurity))}
                 {valueRow(
@@ -327,11 +361,27 @@ export default async function LegacyMigrationReviewDetailPage({
             </section>
           ) : null}
 
+          {hasReviewableStatus && verification.sessionStatus !== "active" ? (
+            <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
+              <div className="flex gap-3">
+                <ShieldAlert className="mt-0.5 size-5 shrink-0" />
+                <div>
+                  <h2 className="font-semibold">Sesi tidak sedang aktif</h2>
+                  <p className="mt-1 text-sm leading-6">
+                    Review tidak dapat diubah ketika sesi berstatus {verification.sessionStatus}.
+                    Buka kembali sesi terlebih dahulu agar approval, return, atau reject
+                    tetap tersinkronisasi dengan readiness.
+                  </p>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           {reviewable ? (
             <section className="rounded-3xl border border-[var(--border)] bg-white p-5">
               <h2 className="font-semibold text-neutral-950">Keputusan manager</h2>
               <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-                Approval membuat Product Item berstatus migration hold dan alias barcode lama. Tidak ada stok available atau inventory movement.
+                Approval membuat Product Item berstatus migration hold, menyalin pricing legacy yang valid, dan membuat alias barcode lama. Harga label dihitung dari berat aktual × harga per gram. Tidak ada stok available atau inventory movement.
               </p>
 
               {canApprove ? (

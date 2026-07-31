@@ -26,6 +26,30 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("id-ID").format(value);
 }
 
+function formatOptionalTargetProgress(input: {
+  processedItemCount: number;
+  expectedItemCount: number | null;
+  targetShortfall: number;
+  targetSurplus: number;
+}) {
+  const processed = `${formatNumber(input.processedItemCount)} terproses`;
+  if (input.expectedItemCount === null) {
+    return `${processed} · tanpa target`;
+  }
+  const target = `target ${formatNumber(input.expectedItemCount)}`;
+  if (input.targetShortfall > 0) {
+    return `${processed} · ${target} · kurang ${formatNumber(
+      input.targetShortfall,
+    )}`;
+  }
+  if (input.targetSurplus > 0) {
+    return `${processed} · ${target} · lebih ${formatNumber(
+      input.targetSurplus,
+    )}`;
+  }
+  return `${processed} · sesuai ${target}`;
+}
+
 function formatDateTime(value: Date, timeZone: string) {
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
@@ -74,9 +98,7 @@ export default async function LegacyMigrationCutoverPage({
   const data = await getLegacyMigrationCutoverData(auth, batchId);
   if (!data) notFound();
 
-  const executableCount = data.sessions.filter(
-    (session) => session.canExecute,
-  ).length;
+  const executableCount = data.executableSessionCount;
 
   return (
     <div className="space-y-6">
@@ -108,20 +130,20 @@ export default async function LegacyMigrationCutoverPage({
           <div
             className={cn(
               "rounded-2xl border p-4 text-sm leading-6",
-              data.reconciliation.isReadyForCutover
+              executableCount > 0
                 ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                 : "border-amber-200 bg-amber-50 text-amber-900",
             )}
           >
             <p className="flex items-center gap-2 font-semibold">
-              {data.reconciliation.isReadyForCutover ? (
+              {executableCount > 0 ? (
                 <CheckCircle2 className="size-4" />
               ) : (
                 <CircleAlert className="size-4" />
               )}
-              {data.reconciliation.isReadyForCutover
+              {executableCount > 0
                 ? `${executableCount} sesi siap dijalankan`
-                : `${formatNumber(data.reconciliation.blockerCount)} blocker masih aktif`}
+                : `${formatNumber(data.blockerCount)} blocker masih aktif`}
             </p>
             <p className="mt-1">
               Foto legacy pending atau gagal tetap hanya warning dan tidak
@@ -162,21 +184,28 @@ export default async function LegacyMigrationCutoverPage({
         </div>
       </section>
 
-      {!data.reconciliation.isReadyForCutover ? (
+      {data.batchIssues.length > 0 ? (
         <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
           <p className="flex items-center gap-2 font-semibold">
-            <AlertTriangle className="size-4" /> Aktivasi dikunci
+            <AlertTriangle className="size-4" /> Blocker batch
           </p>
           <p className="mt-1">
-            Bereskan blocker pada halaman rekonsiliasi akhir. Tombol aktivasi
-            otomatis tersedia setelah preflight kembali bersih.
+            Blocker berikut harus dibereskan sebelum sesi mana pun dapat
+            diaktifkan. Blocker milik sesi lain tidak lagi menahan sesi yang sudah
+            siap.
           </p>
-          <Link
-            href={`/admin/migrasi-produk/${data.batch.id}/rekonsiliasi`}
-            className="mt-3 inline-flex font-semibold text-amber-950 underline"
-          >
-            Buka rekonsiliasi akhir
-          </Link>
+          <div className="mt-3 space-y-2">
+            {data.batchIssues.map((issue) => (
+              <Link
+                key={issue.code}
+                href={issue.href}
+                className="flex items-center justify-between rounded-xl border border-amber-200 bg-white px-3 py-2 font-semibold"
+              >
+                <span>{issue.label}</span>
+                <span>{formatNumber(issue.count)}</span>
+              </Link>
+            ))}
+          </div>
         </section>
       ) : null}
 
@@ -202,10 +231,11 @@ export default async function LegacyMigrationCutoverPage({
                   ) : null}
                 </div>
                 <p className="mt-2 text-sm text-[var(--muted)]">
-                  {formatNumber(session.totalVerifications)} verification · {" "}
-                  {formatNumber(session.readyItemCount)} hold · {" "}
+                  {formatOptionalTargetProgress(session)} · {" "}
+                  {formatNumber(session.readyItemCount)} siap · {" "}
+                  {formatNumber(session.approvedCount)} hold · {" "}
                   {formatNumber(session.activatedCount)} aktif · {" "}
-                  {formatNumber(session.soldCount)} terjual legacy · {" "}
+                  {formatNumber(session.soldCount + session.soldBeforeScanCount)} terjual legacy · {" "}
                   {formatNumber(session.rejectedCount)} ditolak
                 </p>
               </div>
@@ -228,15 +258,16 @@ export default async function LegacyMigrationCutoverPage({
             {session.issues.length > 0 ? (
               <div className="mt-5 grid gap-2 md:grid-cols-2">
                 {session.issues.map((issue) => (
-                  <div
+                  <Link
                     key={issue.code}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                    href={issue.href ?? `/admin/migrasi-produk/${data.batch.id}/rekonsiliasi`}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 transition hover:bg-amber-100"
                   >
                     <span>{issue.label}</span>
                     <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold">
                       {formatNumber(issue.count)}
                     </span>
-                  </div>
+                  </Link>
                 ))}
               </div>
             ) : null}
@@ -256,8 +287,9 @@ export default async function LegacyMigrationCutoverPage({
                         : "Selesaikan sesi tanpa stok eligible"}
                     </p>
                     <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                      Proses bersifat atomic: seluruh item sesi berhasil bersama,
-                      atau semuanya rollback tanpa perubahan parsial.
+                      Target hanya menjadi pembanding dan tidak memblokir proses.
+                      Pricing, master, kondisi, lokasi, dan barcode tetap diperiksa
+                      untuk sesi ini secara atomic tanpa aktivasi parsial.
                     </p>
                   </div>
                   <label className="block text-xs font-semibold text-neutral-700">

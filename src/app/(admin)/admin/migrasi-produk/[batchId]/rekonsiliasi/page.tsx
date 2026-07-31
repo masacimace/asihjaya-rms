@@ -31,6 +31,30 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("id-ID").format(value);
 }
 
+function formatOptionalTargetProgress(input: {
+  processedItemCount: number;
+  expectedItemCount: number | null;
+  targetShortfall: number;
+  targetSurplus: number;
+}) {
+  const processed = `${formatNumber(input.processedItemCount)} terproses`;
+  if (input.expectedItemCount === null) {
+    return `${processed} · target tidak diisi (opsional)`;
+  }
+  const target = `target ${formatNumber(input.expectedItemCount)}`;
+  if (input.targetShortfall > 0) {
+    return `${processed} · ${target} · kurang ${formatNumber(
+      input.targetShortfall,
+    )}`;
+  }
+  if (input.targetSurplus > 0) {
+    return `${processed} · ${target} · lebih ${formatNumber(
+      input.targetSurplus,
+    )}`;
+  }
+  return `${processed} · sesuai ${target}`;
+}
+
 function formatDateTime(value: string, timeZone: string) {
   if (!value) return "-";
   const date = new Date(value);
@@ -105,19 +129,19 @@ export default async function LegacyMigrationReconciliationPage({
           <div
             className={cn(
               "rounded-2xl border p-4 text-sm leading-6",
-              data.isReadyForCutover
+              data.executableSessionCount > 0
                 ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                 : "border-amber-200 bg-amber-50 text-amber-900",
             )}
           >
             <p className="flex items-center gap-2 font-semibold">
-              {data.isReadyForCutover ? (
+              {data.executableSessionCount > 0 ? (
                 <CheckCircle2 className="size-4" />
               ) : (
                 <CircleAlert className="size-4" />
               )}
-              {data.isReadyForCutover
-                ? "Siap masuk preflight cutover"
+              {data.executableSessionCount > 0
+                ? `${formatNumber(data.executableSessionCount)} sesi siap cutover`
                 : `${formatNumber(data.blockerCount)} blocker perlu dibereskan`}
             </p>
             <p className="mt-1">
@@ -162,82 +186,109 @@ export default async function LegacyMigrationReconciliationPage({
       <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="font-semibold text-neutral-950">Blocker cutover</h2>
+            <h2 className="font-semibold text-neutral-950">Readiness per sesi</h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              Hanya daftar ini yang harus dibereskan sebelum Milestone 5C.
+              Setiap etalase dinilai mandiri. Target bersifat opsional dan hanya
+              menjadi pembanding progress; selisih target tidak memblokir cutover.
             </p>
           </div>
-          <span
-            className={cn(
-              "inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold",
-              data.issues.length === 0
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-amber-200 bg-amber-50 text-amber-800",
-            )}
-          >
-            {data.issues.length === 0
-              ? "Tidak ada blocker"
-              : `${data.issues.length} jenis blocker`}
+          <span className="inline-flex w-fit rounded-full border border-[var(--border)] bg-neutral-50 px-3 py-1 text-xs font-semibold text-neutral-700">
+            {formatNumber(data.sessions.length)} sesi
           </span>
         </div>
 
-        {data.sessionSummary.missingTarget > 0 ? (
-          <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
-            <p className="font-semibold">Warning target sesi</p>
-            <p className="mt-1">
-              {formatNumber(data.sessionSummary.missingTarget)} sesi belum memiliki
-              target jumlah item. Ini tidak menjadi blocker karena staging XLSX
-              berisi data historis; manager tetap perlu memastikan cakupan fisik
-              etalase sudah sesuai.
-            </p>
-          </div>
-        ) : null}
-
-        {data.issues.length === 0 ? (
-          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-900">
-            <p className="flex items-center gap-2 font-semibold">
-              <CheckCircle2 className="size-4" /> Data stok siap untuk preflight
-              cutover.
-            </p>
-            <p className="mt-1 leading-6">
-              Aktivasi tetap baru dilakukan pada Milestone 5C secara transactional.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            {data.issues.map((issue) => (
+        {data.batchIssues.length > 0 ? (
+          <div className="mt-5 space-y-2">
+            {data.batchIssues.map((issue) => (
               <Link
                 key={issue.code}
                 href={issue.href}
-                className="flex items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 transition hover:bg-amber-100"
+                className="flex items-center gap-4 rounded-2xl border border-red-200 bg-red-50 p-4 transition hover:bg-red-100"
               >
-                <CircleAlert className="size-5 shrink-0 text-amber-700" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-amber-950">
-                    {issue.label}
-                  </span>
-                  <span className="mt-1 block text-xs text-amber-800">
-                    Buka sumber masalah untuk diperbaiki.
-                  </span>
+                <CircleAlert className="size-5 shrink-0 text-red-700" />
+                <span className="min-w-0 flex-1 text-sm font-semibold text-red-950">
+                  {issue.label}
                 </span>
-                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-amber-900">
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-red-900">
                   {formatNumber(issue.count)}
                 </span>
               </Link>
             ))}
           </div>
-        )}
+        ) : null}
+
+        <div className="mt-5 space-y-4">
+          {data.sessions.map((session) => (
+            <article
+              key={session.id}
+              className="rounded-2xl border border-[var(--border)] p-4 lg:p-5"
+            >
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-semibold text-neutral-950">{session.name}</h3>
+                    {session.locationCode ? (
+                      <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 font-mono text-xs font-semibold text-[var(--accent)]">
+                        {session.locationCode}
+                      </span>
+                    ) : null}
+                    <span
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-xs font-semibold",
+                        session.canExecute
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-neutral-200 bg-neutral-50 text-neutral-700",
+                      )}
+                    >
+                      {session.canExecute ? "Siap cutover" : session.status}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-[var(--muted)]">
+                    {formatOptionalTargetProgress(session)} · {formatNumber(session.readyItemCount)} item siap · {formatNumber(session.pricingBlockerCount)} blocker pricing
+                  </p>
+                </div>
+                <Link
+                  href={`/admin/migrasi-produk/${data.batch.id}/cutover`}
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-xs font-semibold text-neutral-900"
+                >
+                  Lihat preflight sesi
+                </Link>
+              </div>
+
+              {session.issues.length > 0 ? (
+                <div className="mt-4 grid gap-2 md:grid-cols-2">
+                  {session.issues.map((issue) => (
+                    <Link
+                      key={issue.code}
+                      href={issue.href ?? `/admin/migrasi-produk/${data.batch.id}/review`}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 transition hover:bg-amber-100"
+                    >
+                      <span>{issue.label}</span>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold">
+                        {formatNumber(issue.count)}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 flex items-center gap-2 text-sm font-medium text-emerald-700">
+                  <CheckCircle2 className="size-4" /> Tidak ada blocker pada sesi ini.
+                </p>
+              )}
+            </article>
+          ))}
+        </div>
       </section>
 
-      {data.isReadyForCutover ? (
+      {data.executableSessionCount > 0 ? (
         <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 lg:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="flex items-center gap-2 font-semibold text-emerald-950">
-                <CheckCircle2 className="size-4" /> Preflight rekonsiliasi bersih
+                <CheckCircle2 className="size-4" /> Ada sesi yang siap diaktifkan
               </p>
               <p className="mt-1 text-sm leading-6 text-emerald-900">
-                Lanjutkan aktivasi per sesi. Foto legacy pending atau gagal tetap
+                Sesi lain boleh tetap aktif. Foto legacy pending atau gagal tetap
                 menjadi warning dan tidak memblokir stok.
               </p>
             </div>

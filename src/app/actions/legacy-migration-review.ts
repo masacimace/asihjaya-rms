@@ -14,17 +14,21 @@ import {
   legacyMigrationSessions,
   legacyMigrationSoldRecords,
   legacyMigrationVerifications,
+  legacyProductRows,
+  productCategories,
   productItems,
   productMasters,
 } from "@/db/schema";
 import { getNextProductItemIdentifiers } from "@/features/inventory/product-item-identifiers";
 import { getAccessibleLegacyBatch } from "@/features/legacy-migration/management-queries";
+import { resolveLegacyMigrationPricing } from "@/features/legacy-migration/pricing-rules";
 import {
   buildMigrationItemAttributes,
   canBulkApproveLegacyVerification,
   getLegacyBarcodeAliasSource,
 } from "@/features/legacy-migration/review-rules";
 import {
+  getLegacyMigrationSessionLockKey,
   isLegacyMigrationUuid,
   parseLegacyMigrationUuid,
 } from "@/features/legacy-migration/safety";
@@ -93,6 +97,28 @@ async function approveOne(
     metadata: Awaited<ReturnType<typeof requestMetadata>>;
   },
 ) {
+  const [verificationIdentity] = await transaction
+    .select({ sessionId: legacyMigrationVerifications.sessionId })
+    .from(legacyMigrationVerifications)
+    .where(
+      and(
+        eq(legacyMigrationVerifications.id, input.verificationId),
+        eq(legacyMigrationVerifications.batchId, input.batchId),
+        eq(
+          legacyMigrationVerifications.organizationId,
+          input.auth.organization.id,
+        ),
+      ),
+    )
+    .limit(1);
+  if (!verificationIdentity) throw new Error("VERIFICATION_NOT_FOUND");
+
+  await transaction.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${getLegacyMigrationSessionLockKey({
+      organizationId: input.auth.organization.id,
+      sessionId: verificationIdentity.sessionId,
+    })}, 0))`,
+  );
   await transaction.execute(
     sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-review:${input.auth.organization.id}:${input.verificationId}`}, 0))`,
   );
@@ -122,12 +148,20 @@ async function approveOne(
       staffNotes: legacyMigrationVerifications.staffNotes,
       reviewFlags: legacyMigrationVerifications.reviewFlags,
       productItemId: legacyMigrationVerifications.productItemId,
+      sessionStatus: legacyMigrationSessions.status,
       locationCode: legacyMigrationSessions.locationCode,
+      legacyPricePerGram: legacyProductRows.legacyPricePerGram,
+      legacyDeductionPerGram: legacyProductRows.legacyDeductionPerGram,
+      legacyCategory: legacyProductRows.legacyCategory,
     })
     .from(legacyMigrationVerifications)
     .innerJoin(
       legacyMigrationSessions,
       eq(legacyMigrationVerifications.sessionId, legacyMigrationSessions.id),
+    )
+    .leftJoin(
+      legacyProductRows,
+      eq(legacyMigrationVerifications.legacyRowId, legacyProductRows.id),
     )
     .where(
       and(
@@ -142,8 +176,14 @@ async function approveOne(
     .limit(1);
 
   if (!verification) throw new Error("VERIFICATION_NOT_FOUND");
+  if (verification.sessionId !== verificationIdentity.sessionId) {
+    throw new Error("REVIEW_SESSION_CHANGED");
+  }
   if (verification.status === "approved" && verification.productItemId) {
     return { itemId: verification.productItemId, idempotent: true };
+  }
+  if (verification.sessionStatus !== "active") {
+    throw new Error("REVIEW_SESSION_NOT_ACTIVE");
   }
   if (
     verification.status !== "submitted" &&
@@ -168,8 +208,13 @@ async function approveOne(
       code: productMasters.code,
       name: productMasters.name,
       status: productMasters.status,
+      categoryName: productCategories.name,
     })
     .from(productMasters)
+    .innerJoin(
+      productCategories,
+      eq(productMasters.categoryId, productCategories.id),
+    )
     .where(
       and(
         eq(productMasters.id, verification.targetProductMasterId),
@@ -230,6 +275,15 @@ async function approveOne(
     throw new Error("BARCODE_ALREADY_REGISTERED");
   }
 
+  const pricing = resolveLegacyMigrationPricing({
+    weightGram: verification.verifiedWeightGram,
+    legacyPricePerGram: verification.legacyPricePerGram,
+    legacyDeductionPerGram: verification.legacyDeductionPerGram,
+    categoryName: [targetMaster.categoryName, verification.legacyCategory]
+      .filter((value): value is string => Boolean(value))
+      .join(" "),
+  });
+
   const itemId = randomUUID();
   const identifiers = await getNextProductItemIdentifiers((query) =>
     transaction.execute(query),
@@ -250,6 +304,9 @@ async function approveOne(
     purityPercent: verification.verifiedPurity,
     exchangePurityPercent: verification.verifiedExchangePurity,
     color: verification.verifiedColor,
+    sellingAmount: pricing.sellingAmount,
+    pricePerGram: pricing.pricePerGram,
+    deductionPerGram: pricing.deductionPerGram,
     availability: "migration_hold",
     condition: verification.condition,
     locationState: "outlet",
@@ -305,6 +362,10 @@ async function approveOne(
       legacyBarcode: verification.barcodeValue,
       aliasSource: getLegacyBarcodeAliasSource(verification.source),
       availability: "migration_hold",
+      sellingAmount: pricing.sellingAmount,
+      pricePerGram: pricing.pricePerGram,
+      deductionPerGram: pricing.deductionPerGram,
+      pricingSource: pricing.pricePerGram ? "legacy_xlsx" : "pending_manual",
       productMasterId: targetMaster.id,
       productMasterCode: targetMaster.code,
     },
@@ -329,6 +390,12 @@ function explainApprovalError(error: unknown) {
   }
   if (message === "VERIFICATION_NOT_CLEAN") {
     return "Bulk approval hanya untuk item clean berstatus submitted dan kondisi baik.";
+  }
+  if (message === "REVIEW_SESSION_NOT_ACTIVE") {
+    return "Sesi harus berstatus aktif untuk memproses review. Buka kembali sesi jika perlu melakukan koreksi.";
+  }
+  if (message === "REVIEW_SESSION_CHANGED") {
+    return "Sesi verification berubah saat review diproses. Muat ulang halaman sebelum mencoba lagi.";
   }
   if (message === "TARGET_MASTER_UNAVAILABLE") {
     return "Product Master tidak tersedia atau sudah dinonaktifkan.";
@@ -443,12 +510,50 @@ async function changeReviewStatus(input: {
   metadata: Awaited<ReturnType<typeof requestMetadata>>;
 }) {
   await db.transaction(async (transaction) => {
+    const [verificationIdentity] = await transaction
+      .select({ sessionId: legacyMigrationVerifications.sessionId })
+      .from(legacyMigrationVerifications)
+      .where(
+        and(
+          eq(legacyMigrationVerifications.id, input.verificationId),
+          eq(legacyMigrationVerifications.batchId, input.batchId),
+          eq(
+            legacyMigrationVerifications.organizationId,
+            input.auth.organization.id,
+          ),
+        ),
+      )
+      .limit(1);
+    if (!verificationIdentity) throw new Error("VERIFICATION_NOT_FOUND");
+
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${getLegacyMigrationSessionLockKey({
+        organizationId: input.auth.organization.id,
+        sessionId: verificationIdentity.sessionId,
+      })}, 0))`,
+    );
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-review:${input.auth.organization.id}:${input.verificationId}`}, 0))`,
     );
+
+    const [session] = await transaction
+      .select({ status: legacyMigrationSessions.status })
+      .from(legacyMigrationSessions)
+      .where(
+        and(
+          eq(legacyMigrationSessions.id, verificationIdentity.sessionId),
+          eq(legacyMigrationSessions.batchId, input.batchId),
+          eq(
+            legacyMigrationSessions.organizationId,
+            input.auth.organization.id,
+          ),
+        ),
+      )
+      .limit(1);
     const [verification] = await transaction
       .select({
         id: legacyMigrationVerifications.id,
+        sessionId: legacyMigrationVerifications.sessionId,
         outletId: legacyMigrationVerifications.outletId,
         barcodeValue: legacyMigrationVerifications.barcodeValue,
         status: legacyMigrationVerifications.status,
@@ -466,7 +571,13 @@ async function changeReviewStatus(input: {
         ),
       )
       .limit(1);
+    if (!session || session.status !== "active") {
+      throw new Error("REVIEW_SESSION_NOT_ACTIVE");
+    }
     if (!verification) throw new Error("VERIFICATION_NOT_FOUND");
+    if (verification.sessionId !== verificationIdentity.sessionId) {
+      throw new Error("REVIEW_SESSION_CHANGED");
+    }
     if (verification.productItemId || verification.status === "approved") {
       throw new Error("VERIFICATION_ALREADY_APPROVED");
     }

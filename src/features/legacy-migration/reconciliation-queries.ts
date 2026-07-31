@@ -1,28 +1,18 @@
-import {
-  and,
-  asc,
-  count,
-  eq,
-  inArray,
-  isNull,
-  sql,
-} from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
-  itemBarcodes,
-  legacyMigrationSessions,
   legacyMigrationSoldRecords,
   legacyMigrationVerifications,
   productItems,
   productMasters,
 } from "@/db/schema";
+import { getLegacyMigrationCutoverData } from "@/features/legacy-migration/cutover-queries";
 import type { LegacyReconciliationIssue } from "@/features/legacy-migration/reconciliation-contracts";
 import { getAccessibleLegacyBatch } from "@/features/legacy-migration/management-queries";
 import {
   getLegacyPhotoMigrationMetadata,
   getLegacyPhotoMigrationStatus,
-  isLegacyPhotoMigrationItemEligible,
 } from "@/features/legacy-migration/reconciliation-rules";
 import type { AuthContext } from "@/lib/auth/session";
 
@@ -34,159 +24,99 @@ export async function getLegacyMigrationReconciliationData(
   auth: AuthContext,
   batchId: string,
 ) {
-  const batch = await getAccessibleLegacyBatch(auth, batchId);
-  if (!batch) return null;
+  const readiness = await getLegacyMigrationCutoverData(auth, batchId);
+  if (!readiness) return null;
 
-  const [sessionRows, verificationStatusRows, soldRows, approvedRows] =
-    await Promise.all([
-      db
-        .select({
-          status: legacyMigrationSessions.status,
-          total: count(),
-          expectedItemCount:
-            sql<number>`coalesce(sum(${legacyMigrationSessions.expectedItemCount}), 0)::int`.mapWith(
-              Number,
-            ),
-          missingTarget:
-            sql<number>`count(*) filter (where ${legacyMigrationSessions.expectedItemCount} is null)::int`.mapWith(
-              Number,
-            ),
-        })
-        .from(legacyMigrationSessions)
-        .where(
-          and(
-            eq(legacyMigrationSessions.batchId, batch.id),
-            eq(
-              legacyMigrationSessions.organizationId,
-              auth.organization.id,
-            ),
-          ),
-        )
-        .groupBy(legacyMigrationSessions.status),
-
-      db
-        .select({
-          status: legacyMigrationVerifications.status,
-          total: count(),
-        })
-        .from(legacyMigrationVerifications)
-        .where(
-          and(
-            eq(legacyMigrationVerifications.batchId, batch.id),
-            eq(
-              legacyMigrationVerifications.organizationId,
-              auth.organization.id,
-            ),
-          ),
-        )
-        .groupBy(legacyMigrationVerifications.status),
-
-      db
-        .select({
-          total: sql<number>`count(*)::int`.mapWith(Number),
-          beforeScan:
-            sql<number>`count(*) filter (where ${legacyMigrationSoldRecords.verificationId} is null)::int`.mapWith(
-              Number,
-            ),
-        })
-        .from(legacyMigrationSoldRecords)
-        .where(
-          and(
-            eq(legacyMigrationSoldRecords.batchId, batch.id),
-            eq(
-              legacyMigrationSoldRecords.organizationId,
-              auth.organization.id,
-            ),
-            isNull(legacyMigrationSoldRecords.revertedAt),
+  const [verificationStatusRows, soldRows, approvedRows] = await Promise.all([
+    db
+      .select({
+        status: legacyMigrationVerifications.status,
+        total: count(),
+      })
+      .from(legacyMigrationVerifications)
+      .where(
+        and(
+          eq(legacyMigrationVerifications.batchId, readiness.batch.id),
+          eq(
+            legacyMigrationVerifications.organizationId,
+            auth.organization.id,
           ),
         ),
+      )
+      .groupBy(legacyMigrationVerifications.status),
 
-      db
-        .select({
-          verificationId: legacyMigrationVerifications.id,
-          verificationStatus: legacyMigrationVerifications.status,
-          barcodeValue: legacyMigrationVerifications.barcodeValue,
-          source: legacyMigrationVerifications.source,
-          useLegacyImage: legacyMigrationVerifications.useLegacyImage,
-          legacyImageUrl: legacyMigrationVerifications.legacyImageUrl,
-          productItemId: legacyMigrationVerifications.productItemId,
-          itemAvailability: productItems.availability,
-          itemIsActive: productItems.isActive,
-          itemOutletId: productItems.currentOutletId,
-          itemLegacyId: productItems.legacyId,
-          itemImageKey: productItems.imageKey,
-          itemAttributes: productItems.attributes,
-          masterStatus: productMasters.status,
-          masterImageKey: productMasters.imageKey,
-          aliasId: itemBarcodes.id,
-          aliasSource: itemBarcodes.source,
-          aliasIsActive: itemBarcodes.isActive,
-          aliasIsPrimary: itemBarcodes.isPrimary,
-        })
-        .from(legacyMigrationVerifications)
-        .leftJoin(
-          productItems,
+    db
+      .select({
+        total: sql<number>`count(*)::int`.mapWith(Number),
+        beforeScan:
+          sql<number>`count(*) filter (where ${legacyMigrationSoldRecords.verificationId} is null)::int`.mapWith(
+            Number,
+          ),
+      })
+      .from(legacyMigrationSoldRecords)
+      .where(
+        and(
+          eq(legacyMigrationSoldRecords.batchId, readiness.batch.id),
           eq(
-            legacyMigrationVerifications.productItemId,
-            productItems.id,
+            legacyMigrationSoldRecords.organizationId,
+            auth.organization.id,
           ),
-        )
-        .leftJoin(
-          productMasters,
+          isNull(legacyMigrationSoldRecords.revertedAt),
+        ),
+      ),
+
+    db
+      .select({
+        verificationId: legacyMigrationVerifications.id,
+        verificationStatus: legacyMigrationVerifications.status,
+        barcodeValue: legacyMigrationVerifications.barcodeValue,
+        useLegacyImage: legacyMigrationVerifications.useLegacyImage,
+        legacyImageUrl: legacyMigrationVerifications.legacyImageUrl,
+        productItemId: legacyMigrationVerifications.productItemId,
+        itemImageKey: productItems.imageKey,
+        itemAttributes: productItems.attributes,
+        masterImageKey: productMasters.imageKey,
+      })
+      .from(legacyMigrationVerifications)
+      .leftJoin(
+        productItems,
+        eq(legacyMigrationVerifications.productItemId, productItems.id),
+      )
+      .leftJoin(
+        productMasters,
+        eq(
+          legacyMigrationVerifications.targetProductMasterId,
+          productMasters.id,
+        ),
+      )
+      .where(
+        and(
+          eq(legacyMigrationVerifications.batchId, readiness.batch.id),
           eq(
-            legacyMigrationVerifications.targetProductMasterId,
-            productMasters.id,
+            legacyMigrationVerifications.organizationId,
+            auth.organization.id,
           ),
-        )
-        .leftJoin(
-          itemBarcodes,
-          and(
-            eq(itemBarcodes.itemId, productItems.id),
-            eq(
-              itemBarcodes.barcodeValue,
-              legacyMigrationVerifications.barcodeValue,
-            ),
-          ),
-        )
-        .where(
-          and(
-            eq(legacyMigrationVerifications.batchId, batch.id),
-            eq(
-              legacyMigrationVerifications.organizationId,
-              auth.organization.id,
-            ),
-            inArray(legacyMigrationVerifications.status, [
-              "approved",
-              "activated",
-            ]),
-          ),
-        )
-        .orderBy(asc(legacyMigrationVerifications.barcodeValue)),
-    ]);
+          inArray(legacyMigrationVerifications.status, [
+            "approved",
+            "activated",
+          ]),
+        ),
+      )
+      .orderBy(asc(legacyMigrationVerifications.barcodeValue)),
+  ]);
 
   const sessionSummary = {
-    total: 0,
-    open: 0,
-    closed: 0,
-    cancelled: 0,
-    expectedItems: 0,
-    missingTarget: 0,
+    total: readiness.sessions.length,
+    open: readiness.sessions.filter((session) =>
+      ["draft", "active"].includes(session.status),
+    ).length,
+    closed: readiness.sessions.filter((session) =>
+      ["locked", "completed"].includes(session.status),
+    ).length,
+    cancelled: readiness.sessions.filter(
+      (session) => session.status === "cancelled",
+    ).length,
   };
-  for (const row of sessionRows) {
-    const total = Number(row.total);
-    sessionSummary.total += total;
-    if (row.status === "draft" || row.status === "active") {
-      sessionSummary.open += total;
-    } else if (row.status === "cancelled") {
-      sessionSummary.cancelled += total;
-    } else {
-      sessionSummary.closed += total;
-    }
-    if (row.status !== "cancelled") {
-      sessionSummary.expectedItems += Number(row.expectedItemCount);
-      sessionSummary.missingTarget += Number(row.missingTarget);
-    }
-  }
 
   const verificationSummary = {
     total: 0,
@@ -210,21 +140,6 @@ export async function getLegacyMigrationReconciliationData(
     if (row.status === "activated") verificationSummary.activated = total;
   }
 
-  const soldSummary = soldRows[0] ?? { total: 0, beforeScan: 0 };
-  const processedPhysicalCount =
-    verificationSummary.total + Number(soldSummary.beforeScan);
-  const unresolvedCount =
-    verificationSummary.submitted +
-    verificationSummary.needsReview +
-    verificationSummary.returned;
-
-  const integrity = {
-    itemMissing: 0,
-    holdStateInvalid: 0,
-    itemLinkInvalid: 0,
-    masterNotActive: 0,
-    aliasInvalid: 0,
-  };
   const photos = {
     totalApproved: approvedRows.length,
     actualUpload: 0,
@@ -242,41 +157,6 @@ export async function getLegacyMigrationReconciliationData(
   }> = [];
 
   for (const row of approvedRows) {
-    if (!row.productItemId || !row.itemAvailability) {
-      integrity.itemMissing += 1;
-      continue;
-    }
-    if (
-      !row.itemIsActive ||
-      !isLegacyPhotoMigrationItemEligible({
-        verificationStatus: row.verificationStatus,
-        itemAvailability: row.itemAvailability,
-      })
-    ) {
-      integrity.holdStateInvalid += 1;
-    }
-    if (
-      row.itemOutletId !== batch.outletId ||
-      row.itemLegacyId !== row.barcodeValue
-    ) {
-      integrity.itemLinkInvalid += 1;
-    }
-    if (row.masterStatus !== "active") {
-      integrity.masterNotActive += 1;
-    }
-    const expectedAliasSource =
-      row.source === "legacy_match"
-        ? "legacy_import"
-        : "legacy_physical_label";
-    if (
-      !row.aliasId ||
-      !row.aliasIsActive ||
-      !row.aliasIsPrimary ||
-      row.aliasSource !== expectedAliasSource
-    ) {
-      integrity.aliasInvalid += 1;
-    }
-
     const photoStatus = getLegacyPhotoMigrationStatus({
       useLegacyImage: row.useLegacyImage,
       itemImageKey: row.itemImageKey,
@@ -297,108 +177,61 @@ export async function getLegacyMigrationReconciliationData(
       failedPhotos.push({
         barcodeValue: row.barcodeValue,
         itemId: row.productItemId,
-        errorMessage:
-          metadata?.errorMessage ?? "Foto legacy gagal disalin.",
+        errorMessage: metadata?.errorMessage ?? "Foto legacy gagal disalin.",
         attemptedAt: metadata?.attemptedAt ?? "",
       });
     }
   }
 
-  const targetShortfall =
-    sessionSummary.expectedItems > 0
-      ? Math.max(0, sessionSummary.expectedItems - processedPhysicalCount)
-      : 0;
-  const issues: LegacyReconciliationIssue[] = [];
-  if (sessionSummary.total === 0) {
-    issues.push({
-      code: "NO_SESSION",
-      label: "Belum ada sesi migrasi",
-      count: 1,
-      href: `/admin/migrasi-produk/${batch.id}/sesi`,
-    });
+  const issueMap = new Map<string, LegacyReconciliationIssue>();
+  for (const issue of readiness.batchIssues) {
+    issueMap.set(issue.code, issue);
   }
-  if (sessionSummary.open > 0) {
-    issues.push({
-      code: "OPEN_SESSION",
-      label: "Sesi masih draft atau aktif",
-      count: sessionSummary.open,
-      href: `/admin/migrasi-produk/${batch.id}/sesi`,
-    });
-  }
-  if (unresolvedCount > 0) {
-    issues.push({
-      code: "UNRESOLVED_VERIFICATION",
-      label: "Verification belum selesai direview",
-      count: unresolvedCount,
-      href: `/admin/migrasi-produk/${batch.id}/review?status=pending`,
-    });
-  }
-  if (targetShortfall > 0) {
-    issues.push({
-      code: "TARGET_SHORTFALL",
-      label: "Jumlah proses masih di bawah target sesi",
-      count: targetShortfall,
-      href: `/admin/migrasi-produk/${batch.id}/sesi`,
-    });
-  }
-  if (integrity.itemMissing > 0) {
-    issues.push({
-      code: "APPROVED_ITEM_MISSING",
-      label: "Approval tidak memiliki Product Item",
-      count: integrity.itemMissing,
-      href: `/admin/migrasi-produk/${batch.id}/review?status=approved`,
-    });
-  }
-  if (integrity.holdStateInvalid > 0) {
-    issues.push({
-      code: "HOLD_STATE_INVALID",
-      label: "Status inventory hold tidak konsisten",
-      count: integrity.holdStateInvalid,
-      href: `/admin/migrasi-produk/${batch.id}/review?status=approved`,
-    });
-  }
-  if (integrity.itemLinkInvalid > 0) {
-    issues.push({
-      code: "ITEM_LINK_INVALID",
-      label: "Product Item tidak sesuai outlet atau barcode legacy",
-      count: integrity.itemLinkInvalid,
-      href: `/admin/migrasi-produk/${batch.id}/review?status=approved`,
-    });
-  }
-  if (integrity.masterNotActive > 0) {
-    issues.push({
-      code: "MASTER_NOT_ACTIVE",
-      label: "Product Master belum aktif",
-      count: integrity.masterNotActive,
-      href: `/admin/migrasi-produk/${batch.id}/mapping`,
-    });
-  }
-  if (integrity.aliasInvalid > 0) {
-    issues.push({
-      code: "BARCODE_ALIAS_INVALID",
-      label: "Alias barcode legacy tidak valid",
-      count: integrity.aliasInvalid,
-      href: `/admin/migrasi-produk/${batch.id}/review?status=approved`,
-    });
+  for (const session of readiness.sessions) {
+    for (const issue of session.issues) {
+      if (!issue.href) continue;
+      const existing = issueMap.get(issue.code);
+      issueMap.set(issue.code, {
+        code: issue.code,
+        label: issue.label,
+        count: (existing?.count ?? 0) + issue.count,
+        href: existing?.href ?? issue.href,
+      });
+    }
   }
 
+  const issues = Array.from(issueMap.values());
+  const soldSummaryRow = soldRows[0] ?? { total: 0, beforeScan: 0 };
+
   return {
-    batch,
+    batch: readiness.batch,
+    sessions: readiness.sessions,
+    batchIssues: readiness.batchIssues,
     sessionSummary,
     verificationSummary,
     soldSummary: {
-      total: Number(soldSummary.total),
-      beforeScan: Number(soldSummary.beforeScan),
+      total: Number(soldSummaryRow.total),
+      beforeScan: Number(soldSummaryRow.beforeScan),
     },
-    processedPhysicalCount,
-    targetShortfall,
-    integrity,
+    processedPhysicalCount: readiness.totalProcessedItems,
+    integrity: {
+      itemMissing: issues.find((issue) => issue.code === "ITEM_MISSING")?.count ?? 0,
+      holdStateInvalid:
+        issues.find((issue) => issue.code === "ITEM_NOT_ON_HOLD")?.count ?? 0,
+      itemLinkInvalid:
+        issues.find((issue) => issue.code === "ITEM_LINK_INVALID")?.count ?? 0,
+      masterNotActive:
+        issues.find((issue) => issue.code === "MASTER_NOT_ACTIVE")?.count ?? 0,
+      aliasInvalid:
+        issues.find((issue) => issue.code === "BARCODE_ALIAS_INVALID")?.count ?? 0,
+    },
     photos,
     failedPhotos: failedPhotos.slice(0, 20),
     issues,
-    blockerCount: issues.reduce((total, issue) => total + issue.count, 0),
-    isReadyForCutover: issues.length === 0,
-    path: reconciliationPath(batch.id),
+    blockerCount: readiness.blockerCount,
+    executableSessionCount: readiness.executableSessionCount,
+    isReadyForCutover: readiness.executableSessionCount > 0,
+    path: reconciliationPath(readiness.batch.id),
   };
 }
 
@@ -450,10 +283,7 @@ export async function getLegacyPhotoMigrationCandidates(
         ]),
         eq(legacyMigrationVerifications.useLegacyImage, true),
         sql`${legacyMigrationVerifications.legacyImageUrl} is not null`,
-        inArray(productItems.availability, [
-          "migration_hold",
-          "available",
-        ]),
+        inArray(productItems.availability, ["migration_hold", "available"]),
         eq(productItems.isActive, true),
         isNull(productItems.imageKey),
         isNull(legacyMigrationSoldRecords.id),
