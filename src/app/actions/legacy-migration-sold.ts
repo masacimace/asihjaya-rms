@@ -19,12 +19,10 @@ import {
   isSoldDuringMigrationEligibleStatus,
   parseSoldDuringMigrationBarcodes,
 } from "@/features/legacy-migration/sold-rules";
+import { parseLegacyMigrationUuid } from "@/features/legacy-migration/safety";
 import { requirePermission, type AuthContext } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
 import { getStartOfBusinessDateKey } from "@/lib/time/business-time";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type SoldOutcome =
   | "marked"
@@ -40,8 +38,7 @@ function readText(formData: FormData, name: string, maxLength: number) {
 }
 
 function readUuid(formData: FormData, name: string) {
-  const value = readText(formData, name, 36);
-  return UUID_PATTERN.test(value) ? value : null;
+  return parseLegacyMigrationUuid(readText(formData, name, 36));
 }
 
 function soldPath(batchId: string) {

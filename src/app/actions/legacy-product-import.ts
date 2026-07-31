@@ -20,13 +20,12 @@ import {
   type ParsedLegacyProductWorkbook,
 } from "@/features/legacy-migration/contracts";
 import { collectLegacyMasterMappingSeeds } from "@/features/legacy-migration/master-mapping";
+import { isLegacyMigrationUuid } from "@/features/legacy-migration/safety";
 import { parseLegacyProductWorkbook } from "@/features/legacy-migration/xlsx-parser";
 import { requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
 
 const IMPORT_PATH = "/admin/migrasi-produk";
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const INSERT_CHUNK_SIZE = 250;
 
 function readText(formData: FormData, name: string, maxLength: number): string {
@@ -126,7 +125,7 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
   const outletId = readText(formData, "outletId", 36);
   const file = formData.get("file");
 
-  if (!UUID_PATTERN.test(outletId)) {
+  if (!isLegacyMigrationUuid(outletId)) {
     redirectImport("error", "Pilih outlet tujuan migrasi yang valid.");
   }
 

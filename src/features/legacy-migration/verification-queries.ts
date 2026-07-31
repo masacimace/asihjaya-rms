@@ -22,11 +22,9 @@ import {
 import type {
   LegacyMigrationScannerSession,
 } from "@/features/legacy-migration/verification-contracts";
+import { isLegacyMigrationUuid } from "@/features/legacy-migration/safety";
 import type { AuthContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/session";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type ScannerAssignmentRole = LegacyMigrationScannerSession["assignmentRole"];
 
@@ -119,7 +117,7 @@ export async function getLegacyMigrationScannerSession(
   auth: AuthContext,
   sessionId: string,
 ) {
-  if (!UUID_PATTERN.test(sessionId)) return null;
+  if (!isLegacyMigrationUuid(sessionId)) return null;
   const outletIds = auth.outlets.map((outlet) => outlet.id);
   if (outletIds.length === 0) return null;
 

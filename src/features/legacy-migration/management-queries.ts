@@ -22,16 +22,14 @@ import {
   userRoles,
   users,
 } from "@/db/schema";
+import { isLegacyMigrationUuid } from "@/features/legacy-migration/safety";
 import type { AuthContext } from "@/lib/auth/session";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function getAccessibleLegacyBatch(
   auth: AuthContext,
   batchId: string,
 ) {
-  if (!UUID_PATTERN.test(batchId)) return null;
+  if (!isLegacyMigrationUuid(batchId)) return null;
   const outletIds = auth.outlets.map((outlet) => outlet.id);
   if (outletIds.length === 0) return null;
 

@@ -18,10 +18,8 @@ import {
   outlets,
   users,
 } from "@/db/schema";
+import { isLegacyMigrationUuid } from "@/features/legacy-migration/safety";
 import type { AuthContext } from "@/lib/auth/session";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type LegacyRowStatusFilter = "all" | "valid" | "warning" | "invalid";
 
@@ -132,7 +130,7 @@ export async function getLegacyMigrationBatchDetail(
     search: string;
   },
 ) {
-  if (!UUID_PATTERN.test(input.batchId)) return null;
+  if (!isLegacyMigrationUuid(input.batchId)) return null;
 
   const outletIds = auth.outlets.map((outlet) => outlet.id);
   if (outletIds.length === 0) return null;

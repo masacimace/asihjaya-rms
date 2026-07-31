@@ -18,6 +18,7 @@ import {
   buildLegacyPhotoMigrationMetadata,
   isLegacyPhotoMigrationItemEligible,
 } from "@/features/legacy-migration/reconciliation-rules";
+import { isLegacyMigrationUuid } from "@/features/legacy-migration/safety";
 import { requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
 import {
@@ -28,8 +29,6 @@ import {
   LegacyImageImportError,
 } from "@/lib/storage/legacy-image-import";
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PHOTO_IMPORT_CONCURRENCY = 5;
 
 type PhotoOutcome = "copied" | "failed" | "skipped";
@@ -114,7 +113,7 @@ export async function migrateLegacyPhotosAction(formData: FormData) {
   const batchId = readText(formData, "batchId", 36);
   const mode = readText(formData, "mode", 16) === "failed" ? "failed" : "pending";
 
-  if (!UUID_PATTERN.test(batchId)) {
+  if (!isLegacyMigrationUuid(batchId)) {
     redirectWithMessage(
       "/admin/migrasi-produk",
       "error",

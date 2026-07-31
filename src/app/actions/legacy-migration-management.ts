@@ -12,6 +12,7 @@ import {
   auditLogs,
   legacyMigrationSessionAssignments,
   legacyMigrationSessions,
+  legacyMigrationVerifications,
   legacyProductImportBatches,
   legacyProductMasterMappings,
   productCategories,
@@ -23,11 +24,13 @@ import {
   buildLegacyProductMasterCode,
   getSuggestedCategoryCode,
 } from "@/features/legacy-migration/master-mapping";
+import {
+  getLegacyMigrationSessionLockKey,
+  isLegacyMigrationUuid,
+  parseLegacyMigrationUuid,
+} from "@/features/legacy-migration/safety";
 import { requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function readText(formData: FormData, name: string, maxLength: number) {
   return String(formData.get(name) ?? "")
@@ -37,8 +40,7 @@ function readText(formData: FormData, name: string, maxLength: number) {
 }
 
 function readUuid(formData: FormData, name: string) {
-  const value = readText(formData, name, 36);
-  return UUID_PATTERN.test(value) ? value : null;
+  return parseLegacyMigrationUuid(readText(formData, name, 36));
 }
 
 function getMigrationAssignmentRole(
@@ -82,7 +84,7 @@ async function getAccessibleBatch(
   outletIds: string[],
   batchId: string,
 ) {
-  if (!UUID_PATTERN.test(batchId) || outletIds.length === 0) return null;
+  if (!isLegacyMigrationUuid(batchId) || outletIds.length === 0) return null;
 
   const [batch] = await db
     .select({
@@ -517,7 +519,7 @@ function readAssignedUserIds(formData: FormData) {
       formData
         .getAll("assignedUserIds")
         .map((value) => String(value).trim())
-        .filter((value) => UUID_PATTERN.test(value)),
+        .filter((value) => isLegacyMigrationUuid(value)),
     ),
   );
 }
@@ -694,7 +696,11 @@ export async function updateLegacyMigrationSessionAssignmentsAction(
     );
   }
   if (leadUserId && !assignedUserIds.includes(leadUserId)) {
-    redirectWithMessage(sessionPath(batchId), "error", "Migration Lead harus ikut ditugaskan.");
+    redirectWithMessage(
+      sessionPath(batchId),
+      "error",
+      "Migration Lead harus ikut ditugaskan.",
+    );
   }
 
   const batch = await getAccessibleBatch(
@@ -702,26 +708,8 @@ export async function updateLegacyMigrationSessionAssignmentsAction(
     auth.outlets.map((outlet) => outlet.id),
     batchId,
   );
-  if (!batch) redirectWithMessage(sessionPath(batchId), "error", "Batch tidak ditemukan.");
-
-  const [session] = await db
-    .select({ id: legacyMigrationSessions.id, status: legacyMigrationSessions.status })
-    .from(legacyMigrationSessions)
-    .where(
-      and(
-        eq(legacyMigrationSessions.id, sessionId),
-        eq(legacyMigrationSessions.batchId, batchId),
-        eq(legacyMigrationSessions.organizationId, auth.organization.id),
-      ),
-    )
-    .limit(1);
-
-  if (!session || !["draft", "active"].includes(session.status)) {
-    redirectWithMessage(
-      sessionPath(batchId),
-      "error",
-      "Penugasan hanya dapat diubah saat sesi Draft atau Aktif.",
-    );
+  if (!batch) {
+    redirectWithMessage(sessionPath(batchId), "error", "Batch tidak ditemukan.");
   }
 
   const validUsers = await validateAssignedUsers(
@@ -730,43 +718,122 @@ export async function updateLegacyMigrationSessionAssignmentsAction(
     assignedUserIds,
   );
   if (validUsers.length !== assignedUserIds.length) {
-    redirectWithMessage(sessionPath(batchId), "error", "Penugasan staff tidak valid.");
+    redirectWithMessage(
+      sessionPath(batchId),
+      "error",
+      "Penugasan staff tidak valid.",
+    );
   }
 
   const requestMetadata = await getRequestMetadata();
-  await db.transaction(async (transaction) => {
-    await transaction
-      .delete(legacyMigrationSessionAssignments)
-      .where(eq(legacyMigrationSessionAssignments.sessionId, sessionId));
-    await transaction.insert(legacyMigrationSessionAssignments).values(
-      assignedUserIds.map((userId) => ({
-        sessionId,
-        userId,
-        assignmentRole: getMigrationAssignmentRole(userId, leadUserId),
-        assignedBy: auth.user.id,
-      })),
-    );
-    await transaction
-      .update(legacyMigrationSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(legacyMigrationSessions.id, sessionId));
-    await transaction.insert(auditLogs).values({
-      organizationId: auth.organization.id,
-      outletId: batch.outletId,
-      actorUserId: auth.user.id,
-      action: "legacy_migration_session.assignments_update",
-      entityType: "legacy_migration_session",
-      entityId: sessionId,
-      afterData: { assignedUserIds, leadUserId },
-      reason: "Memperbarui operator dan Migration Lead sesi.",
-      ipAddress: requestMetadata.ipAddress,
-      userAgent: requestMetadata.userAgent,
+  try {
+    await db.transaction(async (transaction) => {
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${getLegacyMigrationSessionLockKey({
+          organizationId: auth.organization.id,
+          sessionId,
+        })}, 0))`,
+      );
+
+      const [session] = await transaction
+        .select({
+          id: legacyMigrationSessions.id,
+          status: legacyMigrationSessions.status,
+        })
+        .from(legacyMigrationSessions)
+        .where(
+          and(
+            eq(legacyMigrationSessions.id, sessionId),
+            eq(legacyMigrationSessions.batchId, batchId),
+            eq(legacyMigrationSessions.organizationId, auth.organization.id),
+            eq(legacyMigrationSessions.outletId, batch.outletId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+
+      if (!session) throw new Error("SESSION_NOT_FOUND");
+      if (session.status !== "draft" && session.status !== "active") {
+        throw new Error("SESSION_ASSIGNMENT_STATUS_INVALID");
+      }
+
+      await transaction
+        .delete(legacyMigrationSessionAssignments)
+        .where(eq(legacyMigrationSessionAssignments.sessionId, sessionId));
+      await transaction.insert(legacyMigrationSessionAssignments).values(
+        assignedUserIds.map((userId) => ({
+          sessionId,
+          userId,
+          assignmentRole: getMigrationAssignmentRole(userId, leadUserId),
+          assignedBy: auth.user.id,
+        })),
+      );
+
+      const updatedSessions = await transaction
+        .update(legacyMigrationSessions)
+        .set({ updatedAt: new Date() })
+        .where(
+          and(
+            eq(legacyMigrationSessions.id, sessionId),
+            eq(legacyMigrationSessions.organizationId, auth.organization.id),
+            eq(legacyMigrationSessions.status, session.status),
+          ),
+        )
+        .returning({ id: legacyMigrationSessions.id });
+      if (updatedSessions.length !== 1) {
+        throw new Error("SESSION_ASSIGNMENT_UPDATE_COUNT_MISMATCH");
+      }
+
+      await transaction.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        outletId: batch.outletId,
+        actorUserId: auth.user.id,
+        action: "legacy_migration_session.assignments_update",
+        entityType: "legacy_migration_session",
+        entityId: sessionId,
+        afterData: { assignedUserIds, leadUserId },
+        reason: "Memperbarui operator dan Migration Lead sesi.",
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+      });
     });
-  });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    if (code === "SESSION_NOT_FOUND") {
+      redirectWithMessage(sessionPath(batchId), "error", "Sesi tidak ditemukan.");
+    }
+    if (code === "SESSION_ASSIGNMENT_STATUS_INVALID") {
+      redirectWithMessage(
+        sessionPath(batchId),
+        "error",
+        "Penugasan hanya dapat diubah saat sesi Draft atau Aktif.",
+      );
+    }
+    if (code === "SESSION_ASSIGNMENT_UPDATE_COUNT_MISMATCH") {
+      redirectWithMessage(
+        sessionPath(batchId),
+        "error",
+        "Status sesi berubah saat penugasan diperbarui. Muat ulang halaman lalu coba kembali.",
+      );
+    }
+    throw error;
+  }
 
   revalidateMigrationBatch(batchId);
-  redirectWithMessage(sessionPath(batchId), "success", "Penugasan staff diperbarui.");
+  redirectWithMessage(
+    sessionPath(batchId),
+    "success",
+    "Penugasan staff diperbarui.",
+  );
 }
+
+type LegacySessionTransitionUpdate = {
+  status: "active" | "locked" | "cancelled";
+  startedAt?: Date;
+  lockedAt?: Date | null;
+  cancelledAt?: Date;
+  updatedAt: Date;
+};
 
 export async function transitionLegacyMigrationSessionAction(formData: FormData) {
   const auth = await requirePermission("migration.session.manage");
@@ -775,7 +842,11 @@ export async function transitionLegacyMigrationSessionAction(formData: FormData)
   const transition = readText(formData, "transition", 20);
 
   if (!batchId || !sessionId) {
-    redirectWithMessage("/admin/migrasi-produk", "error", "Sesi migrasi tidak valid.");
+    redirectWithMessage(
+      "/admin/migrasi-produk",
+      "error",
+      "Sesi migrasi tidak valid.",
+    );
   }
 
   const batch = await getAccessibleBatch(
@@ -783,81 +854,155 @@ export async function transitionLegacyMigrationSessionAction(formData: FormData)
     auth.outlets.map((outlet) => outlet.id),
     batchId,
   );
-  if (!batch) redirectWithMessage(sessionPath(batchId), "error", "Batch tidak ditemukan.");
-
-  const [session] = await db
-    .select({ id: legacyMigrationSessions.id, status: legacyMigrationSessions.status })
-    .from(legacyMigrationSessions)
-    .where(
-      and(
-        eq(legacyMigrationSessions.id, sessionId),
-        eq(legacyMigrationSessions.batchId, batchId),
-        eq(legacyMigrationSessions.organizationId, auth.organization.id),
-      ),
-    )
-    .limit(1);
-  if (!session) redirectWithMessage(sessionPath(batchId), "error", "Sesi tidak ditemukan.");
-
-  const now = new Date();
-  let update:
-    | {
-        status: "active" | "locked" | "cancelled";
-        startedAt?: Date;
-        lockedAt?: Date | null;
-        cancelledAt?: Date;
-        updatedAt: Date;
-      }
-    | null = null;
-
-  if (transition === "start" && session.status === "draft") {
-    const [assignmentCount] = await db
-      .select({ total: count() })
-      .from(legacyMigrationSessionAssignments)
-      .where(eq(legacyMigrationSessionAssignments.sessionId, sessionId));
-    if (Number(assignmentCount?.total ?? 0) === 0) {
-      redirectWithMessage(sessionPath(batchId), "error", "Tugaskan staff sebelum memulai sesi.");
-    }
-    update = { status: "active", startedAt: now, updatedAt: now };
-  } else if (transition === "lock" && session.status === "active") {
-    update = { status: "locked", lockedAt: now, updatedAt: now };
-  } else if (transition === "reopen" && session.status === "locked") {
-    update = { status: "active", lockedAt: null, updatedAt: now };
-  } else if (
-    transition === "cancel" &&
-    ["draft", "active", "locked"].includes(session.status)
-  ) {
-    update = { status: "cancelled", cancelledAt: now, updatedAt: now };
-  }
-
-  if (!update) {
-    redirectWithMessage(
-      sessionPath(batchId),
-      "error",
-      "Perubahan status tidak sesuai kondisi sesi saat ini.",
-    );
+  if (!batch) {
+    redirectWithMessage(sessionPath(batchId), "error", "Batch tidak ditemukan.");
   }
 
   const requestMetadata = await getRequestMetadata();
-  await db.transaction(async (transaction) => {
-    await transaction
-      .update(legacyMigrationSessions)
-      .set(update)
-      .where(eq(legacyMigrationSessions.id, sessionId));
-    await transaction.insert(auditLogs).values({
-      organizationId: auth.organization.id,
-      outletId: batch.outletId,
-      actorUserId: auth.user.id,
-      action: `legacy_migration_session.${transition}`,
-      entityType: "legacy_migration_session",
-      entityId: sessionId,
-      beforeData: { status: session.status },
-      afterData: { status: update.status },
-      reason: "Perubahan status sesi migrasi oleh manager.",
-      ipAddress: requestMetadata.ipAddress,
-      userAgent: requestMetadata.userAgent,
+  try {
+    await db.transaction(async (transaction) => {
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${getLegacyMigrationSessionLockKey({
+          organizationId: auth.organization.id,
+          sessionId,
+        })}, 0))`,
+      );
+
+      const [session] = await transaction
+        .select({
+          id: legacyMigrationSessions.id,
+          status: legacyMigrationSessions.status,
+        })
+        .from(legacyMigrationSessions)
+        .where(
+          and(
+            eq(legacyMigrationSessions.id, sessionId),
+            eq(legacyMigrationSessions.batchId, batchId),
+            eq(legacyMigrationSessions.organizationId, auth.organization.id),
+            eq(legacyMigrationSessions.outletId, batch.outletId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!session) throw new Error("SESSION_NOT_FOUND");
+
+      const now = new Date();
+      let update: LegacySessionTransitionUpdate | null = null;
+
+      if (transition === "start" && session.status === "draft") {
+        const [assignmentCount] = await transaction
+          .select({ total: count() })
+          .from(legacyMigrationSessionAssignments)
+          .where(eq(legacyMigrationSessionAssignments.sessionId, sessionId));
+        if (Number(assignmentCount?.total ?? 0) === 0) {
+          throw new Error("SESSION_ASSIGNMENT_REQUIRED");
+        }
+        update = { status: "active", startedAt: now, updatedAt: now };
+      } else if (transition === "lock" && session.status === "active") {
+        update = { status: "locked", lockedAt: now, updatedAt: now };
+      } else if (transition === "reopen" && session.status === "locked") {
+        update = { status: "active", lockedAt: null, updatedAt: now };
+      } else if (
+        transition === "cancel" &&
+        ["draft", "active", "locked"].includes(session.status)
+      ) {
+        const [sessionData] = await transaction
+          .select({
+            verificationCount: count(),
+            linkedItemCount:
+              sql<number>`count(*) filter (where ${legacyMigrationVerifications.productItemId} is not null)::int`.mapWith(
+                Number,
+              ),
+          })
+          .from(legacyMigrationVerifications)
+          .where(
+            and(
+              eq(legacyMigrationVerifications.sessionId, sessionId),
+              eq(
+                legacyMigrationVerifications.organizationId,
+                auth.organization.id,
+              ),
+            ),
+          );
+        const verificationCount = Number(sessionData?.verificationCount ?? 0);
+        const linkedItemCount = Number(sessionData?.linkedItemCount ?? 0);
+        if (verificationCount > 0 || linkedItemCount > 0) {
+          throw new Error("SESSION_CANCEL_HAS_DATA");
+        }
+        update = { status: "cancelled", cancelledAt: now, updatedAt: now };
+      }
+
+      if (!update) throw new Error("SESSION_TRANSITION_INVALID");
+
+      const updatedSessions = await transaction
+        .update(legacyMigrationSessions)
+        .set(update)
+        .where(
+          and(
+            eq(legacyMigrationSessions.id, sessionId),
+            eq(legacyMigrationSessions.organizationId, auth.organization.id),
+            eq(legacyMigrationSessions.status, session.status),
+          ),
+        )
+        .returning({ id: legacyMigrationSessions.id });
+      if (updatedSessions.length !== 1) {
+        throw new Error("SESSION_STATE_CHANGED");
+      }
+
+      await transaction.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        outletId: batch.outletId,
+        actorUserId: auth.user.id,
+        action: `legacy_migration_session.${transition}`,
+        entityType: "legacy_migration_session",
+        entityId: sessionId,
+        beforeData: { status: session.status },
+        afterData: { status: update.status },
+        reason: "Perubahan status sesi migrasi oleh manager.",
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+      });
     });
-  });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    if (code === "SESSION_NOT_FOUND") {
+      redirectWithMessage(sessionPath(batchId), "error", "Sesi tidak ditemukan.");
+    }
+    if (code === "SESSION_ASSIGNMENT_REQUIRED") {
+      redirectWithMessage(
+        sessionPath(batchId),
+        "error",
+        "Tugaskan staff sebelum memulai sesi.",
+      );
+    }
+    if (code === "SESSION_CANCEL_HAS_DATA") {
+      redirectWithMessage(
+        sessionPath(batchId),
+        "error",
+        "Sesi yang sudah memiliki verification atau item migration hold tidak dapat dibatalkan. Lanjutkan sesi sampai selesai agar data tidak tertinggal.",
+      );
+    }
+    if (code === "SESSION_TRANSITION_INVALID") {
+      redirectWithMessage(
+        sessionPath(batchId),
+        "error",
+        "Perubahan status tidak sesuai kondisi sesi saat ini.",
+      );
+    }
+    if (code === "SESSION_STATE_CHANGED") {
+      redirectWithMessage(
+        sessionPath(batchId),
+        "error",
+        "Status sesi berubah oleh proses lain. Muat ulang halaman lalu coba kembali.",
+      );
+    }
+    throw error;
+  }
 
   revalidateMigrationBatch(batchId);
-  redirectWithMessage(sessionPath(batchId), "success", "Status sesi migrasi diperbarui.");
+  redirectWithMessage(
+    sessionPath(batchId),
+    "success",
+    "Status sesi migrasi diperbarui.",
+  );
 }

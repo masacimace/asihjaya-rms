@@ -24,11 +24,13 @@ import {
   canBulkApproveLegacyVerification,
   getLegacyBarcodeAliasSource,
 } from "@/features/legacy-migration/review-rules";
+import {
+  isLegacyMigrationUuid,
+  parseLegacyMigrationUuid,
+} from "@/features/legacy-migration/safety";
 import { requirePermission, type AuthContext } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_BULK_APPROVAL = 100;
 
 type ReviewTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -41,8 +43,7 @@ function readText(formData: FormData, name: string, maxLength: number) {
 }
 
 function readUuid(formData: FormData, name: string) {
-  const value = readText(formData, name, 36);
-  return UUID_PATTERN.test(value) ? value : null;
+  return parseLegacyMigrationUuid(readText(formData, name, 36));
 }
 
 function reviewPath(batchId: string) {
@@ -395,7 +396,7 @@ export async function bulkApproveLegacyMigrationVerificationsAction(
       formData
         .getAll("verificationIds")
         .map((value) => String(value))
-        .filter((value) => UUID_PATTERN.test(value)),
+        .filter((value) => isLegacyMigrationUuid(value)),
     ),
   );
   if (!batchId || ids.length === 0 || ids.length > MAX_BULK_APPROVAL) {

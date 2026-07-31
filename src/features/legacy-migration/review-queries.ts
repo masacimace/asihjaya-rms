@@ -27,10 +27,8 @@ import {
   type LegacyReviewQueueFilters,
 } from "@/features/legacy-migration/review-contracts";
 import { getAccessibleLegacyBatch } from "@/features/legacy-migration/management-queries";
+import { isLegacyMigrationUuid } from "@/features/legacy-migration/safety";
 import type { AuthContext } from "@/lib/auth/session";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function statusCondition(status: LegacyReviewQueueFilters["status"]) {
   if (status === "all") return undefined;
@@ -221,7 +219,7 @@ export async function getLegacyMigrationReviewDetail(
   batchId: string,
   verificationId: string,
 ) {
-  if (!UUID_PATTERN.test(verificationId)) return null;
+  if (!isLegacyMigrationUuid(verificationId)) return null;
   const batch = await getAccessibleLegacyBatch(auth, batchId);
   if (!batch) return null;
 

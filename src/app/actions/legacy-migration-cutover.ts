@@ -25,11 +25,12 @@ import {
   getLegacyCutoverItemIssues,
   isLegacyCutoverSessionClosed,
 } from "@/features/legacy-migration/cutover-rules";
+import {
+  getLegacyMigrationSessionLockKey,
+  parseLegacyMigrationUuid,
+} from "@/features/legacy-migration/safety";
 import { requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 
 function readText(formData: FormData, name: string, maxLength: number) {
   return String(formData.get(name) ?? "").trim().slice(0, maxLength);
@@ -64,7 +65,10 @@ function explainCutoverError(error: unknown) {
   if (
     code === "CUTOVER_APPROVED_ITEM_MISSING" ||
     code.startsWith("CUTOVER_ITEM_INVALID:") ||
-    code === "CUTOVER_ALIAS_BARCODE_MISMATCH"
+    code === "CUTOVER_ALIAS_BARCODE_MISMATCH" ||
+    code === "CUTOVER_ITEM_UPDATE_COUNT_MISMATCH" ||
+    code === "CUTOVER_VERIFICATION_UPDATE_COUNT_MISMATCH" ||
+    code === "CUTOVER_SESSION_UPDATE_COUNT_MISMATCH"
   ) {
     return "Data item berubah setelah preflight. Muat ulang rekonsiliasi dan perbaiki blocker yang muncul.";
   }
@@ -84,11 +88,15 @@ export async function executeLegacyMigrationCutoverAction(
   formData: FormData,
 ) {
   const auth = await requirePermission("migration.cutover.execute");
-  const batchId = readText(formData, "batchId", 36);
-  const sessionId = readText(formData, "sessionId", 36);
+  const batchId = parseLegacyMigrationUuid(
+    readText(formData, "batchId", 36),
+  );
+  const sessionId = parseLegacyMigrationUuid(
+    readText(formData, "sessionId", 36),
+  );
   const confirmation = readText(formData, "confirmation", 40).toUpperCase();
 
-  if (!UUID_PATTERN.test(batchId) || !UUID_PATTERN.test(sessionId)) {
+  if (!batchId || !sessionId) {
     redirectWithMessage(
       "/admin/migrasi-produk",
       "error",
@@ -142,11 +150,17 @@ export async function executeLegacyMigrationCutoverAction(
   };
   try {
     result = await db.transaction(async (transaction) => {
-    await transaction.execute(
-      sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-cutover:${auth.organization.id}:${batchId}`}, 0))`,
-    );
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-cutover:${auth.organization.id}:${batchId}`}, 0))`,
+      );
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${getLegacyMigrationSessionLockKey({
+          organizationId: auth.organization.id,
+          sessionId,
+        })}, 0))`,
+      );
 
-    const [session] = await transaction
+      const [session] = await transaction
       .select({
         id: legacyMigrationSessions.id,
         name: legacyMigrationSessions.name,
@@ -426,34 +440,62 @@ export async function executeLegacyMigrationCutoverAction(
         activatedAt: executedAt.toISOString(),
         activatedBy: auth.user.id,
       };
-      await transaction
+      const updatedItems = await transaction
         .update(productItems)
         .set({
           availability: "available",
           attributes: cutoverMetadataSql(cutoverMetadata),
           updatedAt: executedAt,
         })
-        .where(inArray(productItems.id, itemIds));
+        .where(
+          and(
+            inArray(productItems.id, itemIds),
+            eq(productItems.organizationId, auth.organization.id),
+            eq(productItems.availability, "migration_hold"),
+          ),
+        )
+        .returning({ id: productItems.id });
+      if (updatedItems.length !== approvedRows.length) {
+        throw new Error("CUTOVER_ITEM_UPDATE_COUNT_MISMATCH");
+      }
 
-      await transaction
+      const updatedVerifications = await transaction
         .update(legacyMigrationVerifications)
         .set({ status: "activated", updatedAt: executedAt })
         .where(
-          inArray(
-            legacyMigrationVerifications.id,
-            approvedRows.map((row) => row.verificationId),
+          and(
+            inArray(
+              legacyMigrationVerifications.id,
+              approvedRows.map((row) => row.verificationId),
+            ),
+            eq(legacyMigrationVerifications.sessionId, session.id),
+            eq(legacyMigrationVerifications.status, "approved"),
           ),
-        );
+        )
+        .returning({ id: legacyMigrationVerifications.id });
+      if (updatedVerifications.length !== approvedRows.length) {
+        throw new Error("CUTOVER_VERIFICATION_UPDATE_COUNT_MISMATCH");
+      }
     }
 
-    await transaction
+    const completedSessions = await transaction
       .update(legacyMigrationSessions)
       .set({
         status: "completed",
         completedAt: executedAt,
         updatedAt: executedAt,
       })
-      .where(eq(legacyMigrationSessions.id, session.id));
+      .where(
+        and(
+          eq(legacyMigrationSessions.id, session.id),
+          eq(legacyMigrationSessions.organizationId, auth.organization.id),
+          eq(legacyMigrationSessions.status, session.status),
+        ),
+      )
+      .returning({ id: legacyMigrationSessions.id });
+    if (completedSessions.length !== 1) {
+      throw new Error("CUTOVER_SESSION_UPDATE_COUNT_MISMATCH");
+    }
 
     await transaction.insert(auditLogs).values({
       organizationId: auth.organization.id,

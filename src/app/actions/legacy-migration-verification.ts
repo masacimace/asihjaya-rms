@@ -32,6 +32,10 @@ import {
   parsePositiveDecimal,
 } from "@/features/legacy-migration/verification-rules";
 import {
+  getLegacyMigrationSessionLockKey,
+  isLegacyMigrationUuid,
+} from "@/features/legacy-migration/safety";
+import {
   hasPermission,
   requirePermission,
   type AuthContext,
@@ -42,9 +46,6 @@ import {
   storeImageFile,
 } from "@/lib/storage/image-storage";
 import { validateImageFile } from "@/lib/storage/image-validation";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function readText(formData: FormData, name: string, maxLength: number) {
   return normalizeVerificationText(formData.get(name), maxLength);
@@ -63,7 +64,7 @@ async function getAuthorizedSession(
   sessionId: string,
   options: { requireActive: boolean },
 ) {
-  if (!UUID_PATTERN.test(sessionId)) return null;
+  if (!isLegacyMigrationUuid(sessionId)) return null;
   const outletIds = auth.outlets.map((outlet) => outlet.id);
   if (outletIds.length === 0) return null;
 
@@ -485,13 +486,13 @@ export async function submitLegacyMigrationVerificationAction(
   if (!["legacy_match", "physical_unmatched"].includes(source ?? "")) {
     fieldErrors.source = "Sumber verifikasi tidak valid.";
   }
-  if (source === "legacy_match" && !UUID_PATTERN.test(legacyRowId ?? "")) {
+  if (source === "legacy_match" && !isLegacyMigrationUuid(legacyRowId ?? "")) {
     fieldErrors.legacyRowId = "Referensi baris legacy tidak valid.";
   }
   if (source === "physical_unmatched" && legacyRowId) {
     fieldErrors.legacyRowId = "Item unmatched tidak boleh memiliki baris legacy.";
   }
-  if (!UUID_PATTERN.test(targetProductMasterId)) {
+  if (!isLegacyMigrationUuid(targetProductMasterId)) {
     fieldErrors.targetProductMasterId = "Pilih Product Master yang valid.";
   }
   if (!verifiedItemName || verifiedItemName.length < 2) {
@@ -509,7 +510,7 @@ export async function submitLegacyMigrationVerificationAction(
   }
 
   const existingReturnedVerification =
-    barcode && UUID_PATTERN.test(existingVerificationId ?? "")
+    barcode && isLegacyMigrationUuid(existingVerificationId ?? "")
       ? (
           await db
             .select({
@@ -746,6 +747,12 @@ export async function submitLegacyMigrationVerificationAction(
 
     await db.transaction(async (transaction) => {
       await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${getLegacyMigrationSessionLockKey({
+          organizationId: auth.organization.id,
+          sessionId: session.id,
+        })}, 0))`,
+      );
+      await transaction.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-barcode:${auth.organization.id}:${barcode}`}, 0))`,
       );
 
@@ -772,28 +779,45 @@ export async function submitLegacyMigrationVerificationAction(
         "migration.session.manage",
       );
       const [freshSession] = await transaction
-        .select({
-          status: legacyMigrationSessions.status,
-          assignmentRole: legacyMigrationSessionAssignments.assignmentRole,
-        })
+        .select({ status: legacyMigrationSessions.status })
         .from(legacyMigrationSessions)
-        .leftJoin(
-          legacyMigrationSessionAssignments,
+        .where(
           and(
-            eq(
-              legacyMigrationSessionAssignments.sessionId,
-              legacyMigrationSessions.id,
-            ),
-            eq(legacyMigrationSessionAssignments.userId, auth.user.id),
+            eq(legacyMigrationSessions.id, session.id),
+            eq(legacyMigrationSessions.batchId, session.batchId),
+            eq(legacyMigrationSessions.organizationId, auth.organization.id),
+            eq(legacyMigrationSessions.outletId, session.outletId),
           ),
         )
-        .where(eq(legacyMigrationSessions.id, session.id))
-        .limit(1);
+        .limit(1)
+        .for("update");
       if (freshSession?.status !== "active") {
         throw new Error("SESSION_NOT_ACTIVE");
       }
-      if (!managerOverride && !freshSession.assignmentRole) {
-        throw new Error("SESSION_ASSIGNMENT_REMOVED");
+
+      if (!managerOverride) {
+        const [freshAssignment] = await transaction
+          .select({
+            assignmentRole:
+              legacyMigrationSessionAssignments.assignmentRole,
+          })
+          .from(legacyMigrationSessionAssignments)
+          .where(
+            and(
+              eq(
+                legacyMigrationSessionAssignments.sessionId,
+                session.id,
+              ),
+              eq(
+                legacyMigrationSessionAssignments.userId,
+                auth.user.id,
+              ),
+            ),
+          )
+          .limit(1);
+        if (!freshAssignment) {
+          throw new Error("SESSION_ASSIGNMENT_REMOVED");
+        }
       }
 
       const [freshTargetMaster] = await transaction
@@ -873,7 +897,7 @@ export async function submitLegacyMigrationVerificationAction(
       }
 
       if (isReturnedResubmission && existingRow) {
-        await transaction
+        const updatedVerifications = await transaction
           .update(legacyMigrationVerifications)
           .set({
             legacyRowId: legacyRow?.id ?? null,
@@ -900,7 +924,17 @@ export async function submitLegacyMigrationVerificationAction(
             revision: sql`${legacyMigrationVerifications.revision} + 1`,
             updatedAt: new Date(),
           })
-          .where(eq(legacyMigrationVerifications.id, existingRow.id));
+          .where(
+            and(
+              eq(legacyMigrationVerifications.id, existingRow.id),
+              eq(legacyMigrationVerifications.sessionId, session.id),
+              eq(legacyMigrationVerifications.status, "returned"),
+            ),
+          )
+          .returning({ id: legacyMigrationVerifications.id });
+        if (updatedVerifications.length !== 1) {
+          throw new Error("VERIFICATION_RESUBMIT_STATE_CHANGED");
+        }
       } else {
         await transaction.insert(legacyMigrationVerifications).values({
           id: verificationId,
@@ -1006,6 +1040,13 @@ export async function submitLegacyMigrationVerificationAction(
       return {
         ok: false,
         message: "Penugasanmu pada sesi ini sudah dicabut oleh manager.",
+      };
+    }
+    if (message === "VERIFICATION_RESUBMIT_STATE_CHANGED") {
+      return {
+        ok: false,
+        message:
+          "Status verification berubah saat dikirim ulang. Muat ulang form lalu coba kembali.",
       };
     }
     if (message === "TARGET_MASTER_UNAVAILABLE") {

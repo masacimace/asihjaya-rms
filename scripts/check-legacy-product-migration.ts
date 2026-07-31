@@ -26,6 +26,11 @@ import {
   isLegacyCutoverSessionClosed,
 } from "../src/features/legacy-migration/cutover-rules";
 import {
+  getLegacyMigrationSessionLockKey,
+  isLegacyMigrationUuid,
+  parseLegacyMigrationUuid,
+} from "../src/features/legacy-migration/safety";
+import {
   isLegacyImageUrlAllowed,
 } from "../src/lib/storage/legacy-image-url-policy";
 
@@ -179,6 +184,30 @@ assert(
   normalizePhysicalBarcode(" 003037 ", 6) === "003037",
   "Scanner harus menormalisasi whitespace barcode.",
 );
+assert(
+  isLegacyMigrationUuid("550e8400-e29b-41d4-a716-446655440000"),
+  "UUID standar harus diterima oleh shared migration UUID helper.",
+);
+assert(
+  !isLegacyMigrationUuid("550e8400-e29b-41d4-a716446655440000"),
+  "UUID dengan segmen atau hyphen yang hilang harus ditolak.",
+);
+assert(
+  parseLegacyMigrationUuid(" 550e8400-e29b-41d4-a716-446655440000 ") ===
+    "550e8400-e29b-41d4-a716-446655440000",
+  "Parser UUID harus menormalisasi whitespace sebelum validasi.",
+);
+assert(
+  getLegacyMigrationSessionLockKey({
+    organizationId: "organization",
+    sessionId: "session-a",
+  }) !==
+    getLegacyMigrationSessionLockKey({
+      organizationId: "organization",
+      sessionId: "session-b",
+    }),
+  "Advisory lock sesi harus unik per organisasi dan sesi.",
+);
 const unmatchedFlags = collectVerificationReviewFlags({
   source: "physical_unmatched",
   legacyValidationStatus: null,
@@ -251,6 +280,11 @@ assert(
   "Import harus memakai advisory lock untuk duplicate race.",
 );
 assert(
+  actionSource.includes("isLegacyMigrationUuid") &&
+    !actionSource.includes("const UUID_PATTERN"),
+  "Import migrasi harus memakai shared UUID helper.",
+);
+assert(
   actionSource.includes("INSERT_CHUNK_SIZE"),
   "11 ribu baris harus dimasukkan secara chunked.",
 );
@@ -310,6 +344,20 @@ for (const contract of [
   assert(
     mappingActionSource.includes(contract),
     `Action Milestone 2 wajib memiliki ${contract}.`,
+  );
+}
+
+for (const contract of [
+  "getLegacyMigrationSessionLockKey",
+  "SESSION_CANCEL_HAS_DATA",
+  "SESSION_STATE_CHANGED",
+  "SESSION_ASSIGNMENT_UPDATE_COUNT_MISMATCH",
+  '.for("update")',
+  '.returning({ id: legacyMigrationSessions.id })',
+]) {
+  assert(
+    mappingActionSource.includes(contract),
+    `Safety hotfix session management wajib memiliki ${contract}.`,
   );
 }
 
@@ -377,6 +425,18 @@ for (const contract of [
     `Action verifikasi Milestone 3 wajib memiliki ${contract}.`,
   );
 }
+for (const contract of [
+  "getLegacyMigrationSessionLockKey",
+  '.for("update")',
+  "VERIFICATION_RESUBMIT_STATE_CHANGED",
+  '.returning({ id: legacyMigrationVerifications.id })',
+]) {
+  assert(
+    verificationActionSource.includes(contract),
+    `Safety hotfix verification wajib memiliki ${contract}.`,
+  );
+}
+
 assert(
   verificationActionSource.includes("existingReturnedVerification?.imageKey"),
   "Action verifikasi harus mendukung mempertahankan foto aktual saat resubmit.",
@@ -817,6 +877,32 @@ assert(
     cutoverActionSource.includes("legacyMigrationCutoverRuns"),
   "Cutover wajib transactional dan memiliki run idempotency.",
 );
+for (const contract of [
+  "parseLegacyMigrationUuid",
+  "getLegacyMigrationSessionLockKey",
+  "CUTOVER_ITEM_UPDATE_COUNT_MISMATCH",
+  "CUTOVER_VERIFICATION_UPDATE_COUNT_MISMATCH",
+  "CUTOVER_SESSION_UPDATE_COUNT_MISMATCH",
+]) {
+  assert(
+    cutoverActionSource.includes(contract),
+    `Safety hotfix cutover wajib memiliki ${contract}.`,
+  );
+}
+
+for (const source of [
+  mappingActionSource,
+  verificationActionSource,
+  reviewActionSource,
+  soldActionSource,
+  reconciliationActionSource,
+  cutoverActionSource,
+]) {
+  assert(
+    !source.includes("const UUID_PATTERN"),
+    "Action migrasi harus memakai shared UUID helper tanpa regex lokal.",
+  );
+}
 
 const cutoverContractsSource = read(
   "src/features/legacy-migration/cutover-contracts.ts",
