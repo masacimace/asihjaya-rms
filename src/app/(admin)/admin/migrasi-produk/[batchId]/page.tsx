@@ -2,20 +2,17 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
-  ClipboardCheck,
   FileSpreadsheet,
-  FolderTree,
   ImageIcon,
-  MapPinned,
   PackageSearch,
-  PackageX,
-  PlayCircle,
   Search,
   ShieldAlert,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { MigrationControlCenter } from "@/features/legacy-migration/components/migration-control-center";
+import { getLegacyMigrationControlCenterData } from "@/features/legacy-migration/control-center-queries";
 import {
   getLegacyMigrationBatchDetail,
   type LegacyRowStatusFilter,
@@ -24,7 +21,7 @@ import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
-  title: "Analisis Import Produk Legacy",
+  title: "Pusat Kendali Migrasi Produk",
 };
 
 export const runtime = "nodejs";
@@ -176,14 +173,17 @@ export default async function LegacyProductBatchPage({
     .trim()
     .slice(0, 120);
 
-  const data = await getLegacyMigrationBatchDetail(auth, {
-    batchId: routeParams.batchId,
-    page: requestedPage,
-    status,
-    search,
-  });
+  const [data, controlCenter] = await Promise.all([
+    getLegacyMigrationBatchDetail(auth, {
+      batchId: routeParams.batchId,
+      page: requestedPage,
+      status,
+      search,
+    }),
+    getLegacyMigrationControlCenterData(auth, routeParams.batchId),
+  ]);
 
-  if (!data) notFound();
+  if (!data || !controlCenter) notFound();
   const canManageSold = hasPermission(auth, "migration.sold.manage");
   const canReconcile = hasPermission(auth, "migration.verification.approve");
   const canCutover = hasPermission(auth, "migration.cutover.execute");
@@ -210,7 +210,7 @@ export default async function LegacyProductBatchPage({
           <div>
             <p className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
               <FileSpreadsheet className="size-3.5" />
-              Staging · {data.batch.worksheetName}
+              Batch migrasi · {data.batch.worksheetName}
             </p>
             <h1 className="mt-4 break-words text-2xl font-semibold text-neutral-950 sm:text-3xl">
               {data.batch.fileName}
@@ -228,63 +228,23 @@ export default async function LegacyProductBatchPage({
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
             <p className="flex items-center gap-2 font-semibold">
               <ShieldAlert className="size-4" />
-              Referensi staging
+              Data sumber tetap terpisah
             </p>
             <p className="mt-1">
-              Baris export tidak otomatis menjadi inventaris. Hanya barang yang
-              melewati scan, approval, rekonsiliasi, dan cutover yang dapat
-              aktif.
+              Baris import tetap menjadi referensi. Stok hanya aktif setelah
+              verification selesai dan transactional cutover berhasil.
             </p>
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3 border-t border-[var(--border)] pt-5">
-          <Link
-            href={`/admin/migrasi-produk/${data.batch.id}/mapping`}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800"
-          >
-            <FolderTree className="size-4" />
-            Mapping master produk
-          </Link>
-          <Link
-            href={`/admin/migrasi-produk/${data.batch.id}/sesi`}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-900 transition hover:bg-neutral-50"
-          >
-            <MapPinned className="size-4" />
-            Sesi migrasi per etalase
-          </Link>
-          <Link
-            href={`/admin/migrasi-produk/${data.batch.id}/review`}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
-          >
-            Review verification
-          </Link>
-          {canManageSold ? (
-            <Link
-              href={`/admin/migrasi-produk/${data.batch.id}/sold`}
-              className="inline-flex h-11 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-800 transition hover:bg-red-100"
-            >
-              <PackageX className="size-4" /> Terjual di sistem lama
-            </Link>
-          ) : null}
-          {canReconcile ? (
-            <Link
-              href={`/admin/migrasi-produk/${data.batch.id}/rekonsiliasi`}
-              className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-800 transition hover:bg-blue-100"
-            >
-              <ClipboardCheck className="size-4" /> Rekonsiliasi akhir
-            </Link>
-          ) : null}
-          {canCutover ? (
-            <Link
-              href={`/admin/migrasi-produk/${data.batch.id}/cutover`}
-              className="inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
-            >
-              <PlayCircle className="size-4" /> Aktivasi stok
-            </Link>
-          ) : null}
-        </div>
       </section>
+      <MigrationControlCenter
+        data={controlCenter}
+        timeZone={auth.organization.timezone}
+        canManageSold={canManageSold}
+        canReconcile={canReconcile}
+        canCutover={canCutover}
+      />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-3xl border border-[var(--border)] bg-white p-5">
@@ -338,7 +298,7 @@ export default async function LegacyProductBatchPage({
             ].map(([label, value]) => (
               <div
                 key={String(label)}
-                className="rounded-2xl bg-neutral-50 p-4"
+                className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-4"
               >
                 <p className="text-xs font-medium text-[var(--muted)]">
                   {String(label)}
@@ -391,10 +351,10 @@ export default async function LegacyProductBatchPage({
         </div>
       </section>
 
-      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
+      <section id="staging-data" className="scroll-mt-24 rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="font-semibold text-neutral-950">Baris staging</h2>
+            <h2 className="font-semibold text-neutral-950">Data staging</h2>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
               Menampilkan {formatNumber(data.pagination.totalRows)} baris sesuai
               filter.
@@ -439,9 +399,9 @@ export default async function LegacyProductBatchPage({
             Tidak ada baris yang sesuai filter.
           </div>
         ) : (
-          <div className="mt-6 overflow-x-auto">
+          <div className="mt-6 max-h-[720px] overflow-auto rounded-2xl border border-[var(--border)]">
             <table className="min-w-[1100px] w-full text-left text-sm">
-              <thead className="border-b border-[var(--border)] text-xs uppercase tracking-wide text-[var(--muted)]">
+              <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-white text-xs uppercase text-[var(--muted)]">
                 <tr>
                   <th className="px-3 py-3 font-semibold">Baris / Barcode</th>
                   <th className="px-3 py-3 font-semibold">Master dan SKU</th>
@@ -473,7 +433,7 @@ export default async function LegacyProductBatchPage({
                       </p>
                     </td>
                     <td className="max-w-sm px-3 py-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      <p className="text-xs font-semibold uppercase text-[var(--muted)]">
                         {row.legacyCategory ?? "Tanpa kategori"} ·{" "}
                         {row.legacyMasterCode ?? "Tanpa kode"}
                       </p>

@@ -99,11 +99,11 @@ export default async function LegacyMigrationSessionsPage({
               className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:bg-neutral-50"
             >
               <ArrowLeft className="size-4" />
-              Kembali ke analisis batch
+              Kembali ke pusat migrasi
             </Link>
             <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
               <MapPinned className="size-3.5" />
-              Milestone 2 · Session Management
+              Pengaturan sesi dan staff
             </p>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Sesi migrasi per etalase
@@ -282,7 +282,8 @@ export default async function LegacyMigrationSessionsPage({
               return (
                 <article
                   key={session.id}
-                  className="rounded-2xl border border-[var(--border)] p-4 lg:p-5"
+                  id={`session-${session.id}`}
+                  className="scroll-mt-24 rounded-2xl border border-[var(--border)] p-4 lg:p-5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>

@@ -124,16 +124,16 @@ export default async function LegacyMigrationCutoverPage({
 
       <section className="rounded-3xl border border-[var(--border)] bg-white p-6 lg:p-7">
         <Link
-          href={`/admin/migrasi-produk/${data.batch.id}/rekonsiliasi`}
+          href={`/admin/migrasi-produk/${data.batch.id}`}
           className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-700 hover:text-neutral-950"
         >
-          <ArrowLeft className="size-4" /> Kembali ke rekonsiliasi akhir
+          <ArrowLeft className="size-4" /> Kembali ke pusat migrasi
         </Link>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_360px] lg:items-end">
           <div>
             <p className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-              <PlayCircle className="size-3.5" /> Milestone 5C
+              <PlayCircle className="size-3.5" /> Aktivasi stok
             </p>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Aktivasi Stok Transactional
@@ -231,7 +231,8 @@ export default async function LegacyMigrationCutoverPage({
         {data.sessions.map((session) => (
           <article
             key={session.id}
-            className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6"
+            id={`session-${session.id}`}
+            className="scroll-mt-24 rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6"
           >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -471,7 +472,7 @@ export default async function LegacyMigrationCutoverPage({
       </section>
 
       <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 text-sm leading-6 text-blue-950">
-        <p className="font-semibold">Integrasi Milestone 5D</p>
+        <p className="font-semibold">Barcode POS setelah aktivasi</p>
         <p className="mt-1">
           Setelah aktivasi, item berstatus available, tercatat sebagai saldo awal
           stok, dan dapat dicari di POS memakai barcode legacy maupun barcode

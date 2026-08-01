@@ -118,7 +118,7 @@ export default async function LegacyProductMigrationPage({
           <div>
             <p className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
               <PackageSearch className="size-3.5" />
-              Milestone 1 · staging legacy
+              Import produk legacy
             </p>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Migrasi Produk Legacy
@@ -246,7 +246,7 @@ export default async function LegacyProductMigrationPage({
             </div>
             <div>
               <h2 className="font-semibold text-neutral-950">
-                Batas aman Milestone 1
+                Batas aman import
               </h2>
               <p className="text-xs leading-5 text-[var(--muted)]">
                 Import ini belum mengubah operasional outlet.
@@ -293,7 +293,7 @@ export default async function LegacyProductMigrationPage({
             <History className="size-5" />
           </div>
           <div>
-            <h2 className="font-semibold text-neutral-950">Riwayat batch staging</h2>
+            <h2 className="font-semibold text-neutral-950">Batch migrasi terbaru</h2>
             <p className="text-xs leading-5 text-[var(--muted)]">
               Dua puluh batch terbaru yang dapat diakses akun ini.
             </p>
@@ -307,7 +307,7 @@ export default async function LegacyProductMigrationPage({
         ) : (
           <div className="mt-6 overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[var(--border)] text-xs uppercase tracking-wide text-[var(--muted)]">
+              <thead className="border-b border-[var(--border)] text-xs uppercase text-[var(--muted)]">
                 <tr>
                   <th className="px-3 py-3 font-semibold">File dan outlet</th>
                   <th className="px-3 py-3 font-semibold">Ringkasan</th>
@@ -351,7 +351,7 @@ export default async function LegacyProductMigrationPage({
                         href={`/admin/migrasi-produk/${batch.id}`}
                         className="inline-flex h-9 items-center rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-900 transition hover:bg-neutral-50"
                       >
-                        Lihat analisis
+                        Buka pusat kendali
                       </Link>
                     </td>
                   </tr>

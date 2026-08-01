@@ -85,13 +85,13 @@ export default async function LegacySoldDuringMigrationPage({
           href={`/admin/migrasi-produk/${data.batch.id}`}
           className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-700 hover:text-neutral-950"
         >
-          <ArrowLeft className="size-4" /> Kembali ke batch migrasi
+          <ArrowLeft className="size-4" /> Kembali ke pusat migrasi
         </Link>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_360px] lg:items-end">
           <div>
             <p className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-              <PackageX className="size-3.5" /> Milestone 5A
+              <PackageX className="size-3.5" /> Pengecualian barang terjual
             </p>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Terjual di Sistem Lama

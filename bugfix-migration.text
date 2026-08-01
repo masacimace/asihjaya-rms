@@ -22,7 +22,7 @@ Test sold-versus-cutover.
 Test double cutover.
 Test rollback satu item invalid.
 
-MIGRATION-R5D — Legacy Barcode POS
+MIGRATION-R5D — Legacy Barcode POS (DONE)
 Backfill barcode internal ke item_barcodes.
 Jadikan item_barcodes sumber lookup barcode.
 Duplicate/conflict detection.

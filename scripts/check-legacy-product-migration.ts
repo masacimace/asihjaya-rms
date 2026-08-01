@@ -34,6 +34,11 @@ import {
   isLegacyMigrationUuid,
   parseLegacyMigrationUuid,
 } from "../src/features/legacy-migration/safety";
+import {
+  getLegacyBatchControlAction,
+  getLegacySessionControlAction,
+  getLegacyWorkflowSteps,
+} from "../src/features/legacy-migration/control-center-rules";
 import { isLegacyImageUrlAllowed } from "../src/lib/storage/legacy-image-url-policy";
 
 const projectRoot = process.cwd();
@@ -1235,7 +1240,7 @@ for (const contract of [
   "Riwayat percobaan gagal",
   "di-rollback penuh",
   "CUTOVER_BARCODE_PREVIEW_LIMIT",
-  "Milestone 5D",
+  "Barcode POS setelah aktivasi",
 ]) {
   assert(
     cutoverPageSource.includes(contract),
@@ -1386,6 +1391,168 @@ for (const contract of [
   );
 }
 
+const r5uxSession = {
+  id: "11111111-1111-4111-8111-111111111111",
+  name: "Etalase A",
+  status: "active" as const,
+  totalVerifications: 12,
+  unresolvedCount: 0,
+  issueCount: 0,
+  issues: [],
+  canExecute: false,
+  cutoverRun: null,
+};
+assert(
+  getLegacySessionControlAction("batch-r5ux", r5uxSession).label ===
+    "Kunci saat scan selesai" &&
+    getLegacySessionControlAction("batch-r5ux", {
+      ...r5uxSession,
+      unresolvedCount: 3,
+    }).label === "Selesaikan 3 review" &&
+    getLegacySessionControlAction("batch-r5ux", {
+      ...r5uxSession,
+      status: "locked",
+      canExecute: true,
+    }).label === "Aktifkan stok transactional",
+  "Control Center R5UX harus memilih satu next action berdasarkan status sesi.",
+);
+assert(
+  getLegacyBatchControlAction({
+    batchId: "batch-r5ux",
+    mapping: { pending: 2, mapped: 0, ignored: 0 },
+    sessions: [],
+    batchIssues: [],
+  }).label === "Selesaikan 2 mapping master" &&
+    getLegacyBatchControlAction({
+      batchId: "batch-r5ux",
+      mapping: { pending: 0, mapped: 2, ignored: 0 },
+      sessions: [r5uxSession],
+      batchIssues: [
+        {
+          label: "Barang terjual belum ditentukan sesi etalasenya",
+          count: 2,
+          href: "/sold",
+        },
+      ],
+    }).label === "Selesaikan 2 blocker batch",
+  "Control Center R5UX harus memprioritaskan mapping dan blocker batch.",
+);
+const completedWorkflow = getLegacyWorkflowSteps({
+  mapping: { pending: 0, mapped: 2, ignored: 0 },
+  sessions: [{ ...r5uxSession, status: "completed" }],
+});
+assert(
+  completedWorkflow.at(-1)?.state === "complete",
+  "Workflow R5UX harus menandai laporan selesai setelah session completed.",
+);
+
+const migrationOverviewPageSource = read(
+  "src/app/(admin)/admin/migrasi-produk/page.tsx",
+);
+const batchPageSource = read(
+  "src/app/(admin)/admin/migrasi-produk/[batchId]/page.tsx",
+);
+const controlCenterQuerySource = read(
+  "src/features/legacy-migration/control-center-queries.ts",
+);
+for (const contract of [
+  "getLegacyMigrationReconciliationData",
+  "readiness.sessions",
+  "legacyMigrationSessionAssignments",
+  "legacyProductMasterMappings",
+]) {
+  assert(
+    controlCenterQuerySource.includes(contract),
+    `Control Center R5UX wajib memakai data readiness yang sama melalui ${contract}.`,
+  );
+}
+
+const controlCenterRulesSource = read(
+  "src/features/legacy-migration/control-center-rules.ts",
+);
+for (const contract of [
+  "getLegacyBatchControlAction",
+  "getLegacySessionControlAction",
+  "getLegacyWorkflowSteps",
+  "session.canExecute",
+  "session.issues[0]",
+]) {
+  assert(
+    controlCenterRulesSource.includes(contract),
+    `Control Center rules R5UX wajib memiliki ${contract}.`,
+  );
+}
+
+const controlCenterComponentSource = read(
+  "src/features/legacy-migration/components/migration-control-center.tsx",
+);
+for (const contract of [
+  "Pusat kendali migrasi",
+  "Tindakan utama",
+  "Alur migrasi batch",
+  "Langkah sesi berikutnya",
+  "OptionalTargetProgress",
+  "session.expectedItemCount",
+  "Target hanya pembanding dan tidak memblokir aktivasi.",
+  "Foto bersifat maintenance dan tidak memblokir aktivasi stok.",
+  "id={`session-${session.id}`}",
+]) {
+  assert(
+    controlCenterComponentSource.includes(contract),
+    `Komponen Control Center R5UX wajib memiliki ${contract}.`,
+  );
+}
+const migrationUxSources = [
+  migrationOverviewPageSource,
+  batchPageSource,
+  controlCenterComponentSource,
+  mappingPageSource,
+  sessionPageSource,
+  reviewQueuePageSource,
+  soldPageSource,
+  reconciliationPageSource,
+  cutoverPageSource,
+];
+for (const source of migrationUxSources) {
+  assert(
+    !source.includes("tracking-") && !source.includes("shadow-"),
+    "UI R5UX tidak boleh memakai text spacing/tracking atau card shadow.",
+  );
+}
+assert(
+  !migrationOverviewPageSource.includes("Milestone") &&
+    !batchPageSource.includes("Milestone") &&
+    !controlCenterComponentSource.includes("Milestone"),
+  "UI utama R5UX tidak boleh menampilkan label roadmap teknis.",
+);
+
+const migrationSubPageSources = [
+  mappingPageSource,
+  sessionPageSource,
+  reviewQueuePageSource,
+  soldPageSource,
+  reconciliationPageSource,
+  cutoverPageSource,
+];
+for (const source of migrationSubPageSources) {
+  assert(
+    source.includes("Kembali ke pusat migrasi"),
+    "Subhalaman R5UX wajib kembali ke pusat migrasi.",
+  );
+}
+
+for (const contract of [
+  "MigrationControlCenter",
+  "getLegacyMigrationControlCenterData",
+  'id="staging-data"',
+  "max-h-[720px]",
+]) {
+  assert(
+    batchPageSource.includes(contract),
+    `Halaman batch R5UX wajib memiliki ${contract}.`,
+  );
+}
+
 console.log(
-  "OK: Legacy product migration Milestone 1-5D + R5F1-R5F3 contracts tervalidasi.",
+  "OK: Legacy product migration Milestone 1-5D + R5F1-R5F3 + R5UX contracts tervalidasi.",
 );

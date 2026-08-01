@@ -108,11 +108,11 @@ export default async function LegacyMasterMappingPage({
               className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:bg-neutral-50"
             >
               <ArrowLeft className="size-4" />
-              Kembali ke analisis batch
+              Kembali ke pusat migrasi
             </Link>
             <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
               <FolderTree className="size-3.5" />
-              Milestone 2 · Master Mapping
+              Persiapan master produk
             </p>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Mapping master produk legacy

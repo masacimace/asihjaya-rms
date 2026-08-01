@@ -133,13 +133,12 @@ export default async function LegacyMigrationReviewQueuePage({
           href={`/admin/migrasi-produk/${data.batch.id}`}
           className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-700 hover:text-neutral-950"
         >
-          <ArrowLeft className="size-4" /> Kembali ke batch
+          <ArrowLeft className="size-4" /> Kembali ke pusat migrasi
         </Link>
         <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-              <ClipboardCheck className="size-3.5" /> Milestone 4 · Manager
-              Review
+              <ClipboardCheck className="size-3.5" /> Review verification manager
             </p>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Antrean review migrasi

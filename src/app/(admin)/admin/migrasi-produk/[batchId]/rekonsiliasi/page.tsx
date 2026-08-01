@@ -108,13 +108,13 @@ export default async function LegacyMigrationReconciliationPage({
           href={`/admin/migrasi-produk/${data.batch.id}`}
           className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-700 hover:text-neutral-950"
         >
-          <ArrowLeft className="size-4" /> Kembali ke batch migrasi
+          <ArrowLeft className="size-4" /> Kembali ke pusat migrasi
         </Link>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_360px] lg:items-end">
           <div>
             <p className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-              <ClipboardCheck className="size-3.5" /> Milestone 5B
+              <ClipboardCheck className="size-3.5" /> Kesiapan aktivasi stok
             </p>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Rekonsiliasi Akhir & Foto Legacy
@@ -221,7 +221,8 @@ export default async function LegacyMigrationReconciliationPage({
           {data.sessions.map((session) => (
             <article
               key={session.id}
-              className="rounded-2xl border border-[var(--border)] p-4 lg:p-5"
+              id={`session-${session.id}`}
+              className="scroll-mt-24 rounded-2xl border border-[var(--border)] p-4 lg:p-5"
             >
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
@@ -302,7 +303,7 @@ export default async function LegacyMigrationReconciliationPage({
         </section>
       ) : null}
 
-      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
+      <section id="photo-migration" className="scroll-mt-24 rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
         <div className="grid gap-5 lg:grid-cols-[1fr_360px] lg:items-start">
           <div>
             <h2 className="flex items-center gap-2 font-semibold text-neutral-950">
@@ -421,7 +422,7 @@ export default async function LegacyMigrationReconciliationPage({
       ) : null}
 
       <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 text-sm leading-6 text-blue-900">
-        <p className="font-semibold">Batas Milestone 5B</p>
+        <p className="font-semibold">Batas aman rekonsiliasi</p>
         <p className="mt-1">
           Halaman ini tidak membuat inventory movement, tidak mengubah
           `migration_hold` menjadi `available`, dan belum mengaktifkan lookup
