@@ -755,6 +755,10 @@ export const productItems = pgTable(
       table.availability,
     ),
     check(
+      "product_items_barcode_not_blank_ck",
+      sql`length(btrim(${table.barcode})) > 0 and ${table.barcode} = btrim(${table.barcode})`,
+    ),
+    check(
       "product_items_weight_positive_ck",
       sql`${table.weightGram} is null or ${table.weightGram} > 0`,
     ),
@@ -1401,6 +1405,10 @@ export const itemBarcodes = pgTable(
       table.itemId,
       table.isPrimary,
       table.isActive,
+    ),
+    check(
+      "item_barcodes_barcode_not_blank_ck",
+      sql`length(btrim(${table.barcodeValue})) > 0 and ${table.barcodeValue} = btrim(${table.barcodeValue})`,
     ),
   ],
 );

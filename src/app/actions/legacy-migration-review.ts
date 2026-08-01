@@ -325,15 +325,31 @@ async function approveOne(
     isActive: true,
   });
 
-  await transaction.insert(itemBarcodes).values({
-    organizationId: input.auth.organization.id,
-    itemId,
-    barcodeValue: verification.barcodeValue,
-    source: getLegacyBarcodeAliasSource(verification.source),
-    isPrimary: true,
-    isActive: true,
-    createdBy: input.auth.user.id,
-  });
+  const barcodeAliases: Array<typeof itemBarcodes.$inferInsert> = [
+    {
+      organizationId: input.auth.organization.id,
+      itemId,
+      barcodeValue: verification.barcodeValue,
+      source: getLegacyBarcodeAliasSource(verification.source),
+      isPrimary: true,
+      isActive: true,
+      createdBy: input.auth.user.id,
+    },
+  ];
+
+  if (identifiers.barcode !== verification.barcodeValue) {
+    barcodeAliases.push({
+      organizationId: input.auth.organization.id,
+      itemId,
+      barcodeValue: identifiers.barcode,
+      source: "system_generated",
+      isPrimary: false,
+      isActive: true,
+      createdBy: input.auth.user.id,
+    });
+  }
+
+  await transaction.insert(itemBarcodes).values(barcodeAliases);
 
   const now = new Date();
   await transaction
@@ -441,7 +457,7 @@ export async function approveLegacyMigrationVerificationAction(
       "success",
       result.idempotent
         ? "Verification sebelumnya sudah disetujui; retry aman."
-        : "Item dibuat sebagai migration hold dan barcode lama disimpan sebagai alias primary.",
+        : "Item dibuat sebagai migration hold; barcode lama menjadi alias primary dan barcode internal tetap aktif.",
     );
   } catch (error) {
     console.error("legacy_migration_verification.approve_failed", error);

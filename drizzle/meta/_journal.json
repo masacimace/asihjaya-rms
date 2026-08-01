@@ -85,6 +85,13 @@
       "when": 1785583800000,
       "tag": "0011_legacy_cutover_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785594600000,
+      "tag": "0012_legacy_barcode_pos",
+      "breakpoints": true
     }
   ]
 }

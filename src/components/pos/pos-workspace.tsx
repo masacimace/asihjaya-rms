@@ -1310,8 +1310,8 @@ function CartContent({
               Belum ada item di keranjang
             </h3>
             <p className="mt-2 max-w-64 text-xs leading-5 text-[var(--muted)]">
-              Pilih item dari katalog atau scan barcode. Satu barcode mewakili
-              satu item fisik jewelry.
+              Pilih item dari katalog atau scan barcode lama maupun internal.
+              Satu barcode mewakili satu item fisik jewelry.
             </p>
           </div>
         </div>
@@ -4804,7 +4804,8 @@ export function PosWorkspace({
           {totalAvailableItems >= POS_INITIAL_ITEM_LIMIT ? (
             <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Menampilkan {POS_INITIAL_ITEM_LIMIT} item terbaru. Gunakan search
-              atau scan barcode untuk menemukan item yang lebih spesifik.
+              atau scan barcode lama/internal untuk menemukan item yang lebih
+              spesifik.
             </p>
           ) : null}
 

@@ -1271,6 +1271,121 @@ for (const contract of [
   );
 }
 
+const posQuerySource = read("src/features/pos/queries.ts");
+const posLookupStart = posQuerySource.indexOf(
+  "export async function lookupPosItemByScanValue",
+);
+const posLookupEnd = posQuerySource.indexOf(
+  "const HARDWARE_ONLINE_WINDOW_MS",
+  posLookupStart,
+);
+assert(
+  posLookupStart >= 0 && posLookupEnd > posLookupStart,
+  "Milestone R5D wajib memiliki lookup POS yang dapat diperiksa.",
+);
+const posLookupSource = posQuerySource.slice(posLookupStart, posLookupEnd);
+for (const contract of [
+  "itemBarcodes.itemId",
+  "itemBarcodes.barcodeValue",
+  "itemBarcodes.isActive",
+  "candidateItemIds",
+  "new Set",
+  'status: "conflict"',
+  "candidateItemIds.length > 1",
+  'row.availability === "available"',
+  'row.condition === "good"',
+  'row.locationState === "outlet"',
+]) {
+  assert(
+    posLookupSource.includes(contract),
+    `POS legacy barcode lookup R5D wajib memiliki ${contract}.`,
+  );
+}
+assert(
+  !posLookupSource.includes("eq(productItems.barcode, normalizedScanValue)"),
+  "Lookup barcode POS harus melalui item_barcodes, bukan product_items.barcode langsung.",
+);
+assert(
+  !posLookupSource.includes("Number(normalizedScanValue)") &&
+    !posLookupSource.includes("parseInt(normalizedScanValue"),
+  "Lookup POS tidak boleh mengubah barcode leading-zero menjadi number.",
+);
+
+const posContractsSource = read("src/features/pos/contracts.ts");
+assert(
+  posContractsSource.includes('"conflict"'),
+  "Kontrak POS scan wajib memiliki status conflict.",
+);
+
+const productItemActionSource = read("src/app/actions/product-items.ts");
+for (const contract of [
+  "transaction.insert(itemBarcodes)",
+  'source: "system_generated"',
+  "barcodeValue: identifiers.barcode",
+  "isPrimary: true",
+]) {
+  assert(
+    productItemActionSource.includes(contract),
+    `Create Product Item R5D wajib menyinkronkan barcode namespace melalui ${contract}.`,
+  );
+}
+for (const contract of [
+  "barcodeAliases",
+  'source: "system_generated"',
+  "barcodeValue: identifiers.barcode",
+  "isPrimary: false",
+]) {
+  assert(
+    reviewActionSource.includes(contract),
+    `Approval migrasi R5D wajib mempertahankan barcode internal melalui ${contract}.`,
+  );
+}
+
+const legacyBarcodeMigrationSource = read(
+  "drizzle/0012_legacy_barcode_pos.sql",
+);
+for (const contract of [
+  "MIGRATION_R5D_INTERNAL_BARCODE_CONFLICT",
+  "MIGRATION_R5D_PRODUCT_ITEM_BARCODE_NOT_NORMALIZED",
+  "MIGRATION_R5D_ITEM_BARCODE_NOT_NORMALIZED",
+  "INSERT INTO item_barcodes",
+  "'system_generated'::item_barcode_source",
+  "MIGRATION_R5D_INTERNAL_BARCODE_BACKFILL_INCOMPLETE",
+  "product_items_barcode_not_blank_ck",
+  "item_barcodes_barcode_not_blank_ck",
+]) {
+  assert(
+    legacyBarcodeMigrationSource.includes(contract),
+    `Migration namespace barcode R5D wajib memiliki ${contract}.`,
+  );
+}
+
+const legacyBarcodeIntegrationSource = read(
+  "tests/integration/legacy-barcode-pos-suite.ts",
+);
+for (const contract of [
+  "leading-zero legacy barcode resolves exactly through item_barcodes",
+  "system-generated internal barcode remains available through the same namespace",
+  "inactive legacy alias is ignored",
+  "lookup returns conflict instead of choosing the first candidate",
+  "non-sellable items are found but never returned as POS-ready",
+  "legacy barcode lookup feeds a completed sale claim and movement smoke flow",
+]) {
+  assert(
+    legacyBarcodeIntegrationSource.includes(contract),
+    `Integration suite R5D wajib memiliki ${contract}.`,
+  );
+}
+for (const contract of [
+  '"test:migration:legacy-barcode"',
+  '"test:migration:legacy-barcode:local"',
+]) {
+  assert(
+    packageSource.includes(contract),
+    `Package scripts R5D wajib memiliki ${contract}.`,
+  );
+}
+
 console.log(
-  "OK: Legacy product migration Milestone 1-5C + R5F1-R5F3 contracts tervalidasi.",
+  "OK: Legacy product migration Milestone 1-5D + R5F1-R5F3 contracts tervalidasi.",
 );

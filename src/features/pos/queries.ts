@@ -19,6 +19,7 @@ import {
   customers,
   hardwareAgents,
   hardwareJobs,
+  itemBarcodes,
   manualPaymentPolicies,
   manualPaymentProfiles,
   outlets,
@@ -594,6 +595,53 @@ export async function lookupPosItemByScanValue({
     };
   }
 
+  const [barcodeMatches, identifierMatches] = await Promise.all([
+    db
+      .select({ itemId: itemBarcodes.itemId })
+      .from(itemBarcodes)
+      .where(
+        and(
+          eq(itemBarcodes.organizationId, organizationId),
+          eq(itemBarcodes.barcodeValue, normalizedScanValue),
+          eq(itemBarcodes.isActive, true),
+        ),
+      ),
+    db
+      .select({ itemId: productItems.id })
+      .from(productItems)
+      .where(
+        and(
+          eq(productItems.organizationId, organizationId),
+          or(
+            eq(productItems.sku, normalizedScanValue),
+            eq(productItems.qrValue, normalizedScanValue),
+            eq(productItems.serialNumber, normalizedScanValue),
+          ),
+        ),
+      ),
+  ]);
+
+  const candidateItemIds = Array.from(
+    new Set([
+      ...barcodeMatches.map((row) => row.itemId),
+      ...identifierMatches.map((row) => row.itemId),
+    ]),
+  );
+
+  if (candidateItemIds.length === 0) {
+    return {
+      status: "not_found",
+      message: `${normalizedScanValue} tidak ditemukan di inventory Asihjaya.`,
+    };
+  }
+
+  if (candidateItemIds.length > 1) {
+    return {
+      status: "conflict",
+      message: `Kode ${normalizedScanValue} terhubung ke lebih dari satu item. Transaksi diblokir; minta manager memperbaiki konflik barcode atau identifier.`,
+    };
+  }
+
   const rows = await db
     .select({
       id: productItems.id,
@@ -638,24 +686,18 @@ export async function lookupPosItemByScanValue({
     .where(
       and(
         eq(productItems.organizationId, organizationId),
-        or(
-          eq(productItems.barcode, normalizedScanValue),
-          eq(productItems.sku, normalizedScanValue),
-          eq(productItems.qrValue, normalizedScanValue),
-          eq(productItems.serialNumber, normalizedScanValue),
-        ),
+        inArray(productItems.id, candidateItemIds),
       ),
-    )
-    .limit(1);
+    );
 
-  const row = rows[0];
-
-  if (!row) {
+  if (rows.length !== 1) {
     return {
-      status: "not_found",
-      message: `${normalizedScanValue} tidak ditemukan di inventory Asihjaya.`,
+      status: "conflict",
+      message: `Kode ${normalizedScanValue} tidak dapat dipastikan ke satu item inventory. Transaksi diblokir untuk mencegah item yang salah masuk keranjang.`,
     };
   }
+
+  const row = rows[0]!;
 
   const [activeHold] = await db
     .select({

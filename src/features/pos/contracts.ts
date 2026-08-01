@@ -109,7 +109,7 @@ export type PosScanLookupResult =
       message: string;
     }
   | {
-      status: "not_found" | "unavailable" | "invalid";
+      status: "not_found" | "unavailable" | "invalid" | "conflict";
       message: string;
     };
 

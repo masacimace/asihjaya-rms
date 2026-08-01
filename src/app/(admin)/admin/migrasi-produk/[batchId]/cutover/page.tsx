@@ -471,12 +471,12 @@ export default async function LegacyMigrationCutoverPage({
       </section>
 
       <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 text-sm leading-6 text-blue-950">
-        <p className="font-semibold">Batas Milestone 5C</p>
+        <p className="font-semibold">Integrasi Milestone 5D</p>
         <p className="mt-1">
-          Setelah aktivasi, item berstatus available dan tercatat sebagai saldo
-          awal stok. Lookup checkout menggunakan alias barcode legacy baru
-          diaktifkan pada Milestone 5D; barcode internal tetap mengikuti perilaku
-          POS yang sudah ada.
+          Setelah aktivasi, item berstatus available, tercatat sebagai saldo awal
+          stok, dan dapat dicari di POS memakai barcode legacy maupun barcode
+          internal. Lookup tetap memblokir konflik identifier dan item yang tidak
+          lagi memenuhi syarat jual.
         </p>
       </section>
     </div>

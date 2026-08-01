@@ -38,12 +38,14 @@
     "check:all": "npm run check:quality && npm run check:static && npm run check:security && npm run check:business && npm run check:hardware && npm run build",
     "test:financial": "tsx scripts/run-financial-concurrency-tests.ts",
     "test:concurrency": "npm run test:financial && npm run test:migration:cutover",
-    "test:integration": "npm run test:concurrency",
+    "test:integration": "npm run test:concurrency && npm run test:migration:legacy-barcode",
     "test:financial:local": "tsx scripts/run-financial-concurrency-local.ts",
-    "check:critical": "npm run check:all && npm run test:concurrency",
+    "check:critical": "npm run check:all && npm run test:integration",
     "check:legacy-product-migration": "tsx scripts/check-legacy-product-migration.ts",
     "test:migration:cutover": "tsx scripts/run-legacy-migration-cutover-tests.ts",
-    "test:migration:cutover:local": "tsx scripts/run-legacy-migration-cutover-local.ts"
+    "test:migration:cutover:local": "tsx scripts/run-legacy-migration-cutover-local.ts",
+    "test:migration:legacy-barcode": "tsx scripts/run-legacy-barcode-pos-tests.ts",
+    "test:migration:legacy-barcode:local": "tsx scripts/run-legacy-barcode-pos-local.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

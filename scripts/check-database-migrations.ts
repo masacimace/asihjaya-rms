@@ -245,6 +245,10 @@ async function checkLiveDatabase(): Promise<void> {
       "legacy_migration_sold_records_verification_idx",
       "legacy_migration_cutover_runs_session_uq",
       "legacy_migration_cutover_runs_batch_time_idx",
+      "item_barcodes_item_value_uq",
+      "item_barcodes_org_active_value_uq",
+      "item_barcodes_item_active_primary_uq",
+      "inventory_movements_migration_opening_item_uq",
     ];
     const indexResult = await pool.query<{ indexname: string }>(
       `select indexname
@@ -334,6 +338,49 @@ async function checkLiveDatabase(): Promise<void> {
     assert(
       cutoverConstraintResult.rows.length === 1,
       "Constraint cutover item count belum tersedia.",
+    );
+
+    const barcodeNamespaceConstraints = [
+      "product_items_barcode_not_blank_ck",
+      "item_barcodes_barcode_not_blank_ck",
+    ];
+    const barcodeConstraintResult = await pool.query<{ conname: string }>(
+      `select constraint_record.conname
+       from pg_constraint as constraint_record
+       inner join pg_class as table_record
+         on table_record.oid = constraint_record.conrelid
+       inner join pg_namespace as namespace_record
+         on namespace_record.oid = table_record.relnamespace
+       where namespace_record.nspname = 'public'
+         and constraint_record.conname = any($1::text[])`,
+      [barcodeNamespaceConstraints],
+    );
+    const existingBarcodeConstraints = new Set(
+      barcodeConstraintResult.rows.map((row) => row.conname),
+    );
+    const missingBarcodeConstraints = barcodeNamespaceConstraints.filter(
+      (constraintName) => !existingBarcodeConstraints.has(constraintName),
+    );
+    assert(
+      missingBarcodeConstraints.length === 0,
+      `Constraint namespace barcode belum lengkap: ${missingBarcodeConstraints.join(", ")}.`,
+    );
+
+    const barcodeBackfillResult = await pool.query<{ missing_count: number }>(
+      `select count(*)::int as missing_count
+       from product_items as item
+       where not exists (
+         select 1
+         from item_barcodes as alias
+         where alias.organization_id = item.organization_id
+           and alias.item_id = item.id
+           and alias.barcode_value = item.barcode
+           and alias.is_active = true
+       )`,
+    );
+    assert(
+      barcodeBackfillResult.rows[0]?.missing_count === 0,
+      `Masih ada ${barcodeBackfillResult.rows[0]?.missing_count ?? 0} product item tanpa alias barcode internal aktif.`,
     );
 
     const movementEnumResult = await pool.query<{ enumlabel: string }>(
