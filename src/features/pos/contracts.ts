@@ -69,6 +69,32 @@ export type PosCustomerOption = {
   customerDepositLastLedgerEntryAt: Date | null;
 };
 
+export type PosQuickCustomerPayload = {
+  fullName: string;
+  phone: string;
+  email?: string | null;
+  notes?: string | null;
+};
+
+export type PosQuickCustomerActionResult =
+  | {
+      status: "success";
+      message: string;
+      customer: PosCustomerOption;
+    }
+  | {
+      status: "duplicate";
+      message: string;
+      customer: PosCustomerOption;
+    }
+  | {
+      status: "error";
+      message: string;
+      fieldErrors?: Partial<
+        Record<keyof PosQuickCustomerPayload, string>
+      >;
+    };
+
 export type PosManualPaymentProfileType = "edc";
 
 export type PosManualPaymentProfile = {

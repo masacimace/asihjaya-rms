@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import {
   and,
+  desc,
   eq,
   gt,
   gte,
@@ -58,6 +59,8 @@ import {
   type PosHeldCartSummary,
   type PosHoldCartPayload,
   type PosManualPaymentMethod,
+  type PosQuickCustomerActionResult,
+  type PosQuickCustomerPayload,
   type PosScanLookupResult,
   type PosShiftActionState,
 } from "@/features/pos/contracts";
@@ -1641,6 +1644,254 @@ export async function getPosDiscountApprovalStatusAction(
           : "Request diskon masih menunggu approval manager/owner.",
     approval: mappedApproval,
   };
+}
+
+function normalizePosQuickCustomerPhone(value: string) {
+  const digits = value.replace(/[^0-9]/g, "");
+
+  if (!digits) {
+    return null;
+  }
+
+  if (digits.startsWith("62")) {
+    return `0${digits.slice(2)}`;
+  }
+
+  if (digits.startsWith("8")) {
+    return `0${digits}`;
+  }
+
+  return digits;
+}
+
+function getPosCustomerPhoneVariants(phone: string) {
+  const variants = new Set([phone]);
+
+  if (phone.startsWith("0") && phone.length > 1) {
+    variants.add(phone.slice(1));
+    variants.add(`62${phone.slice(1)}`);
+  }
+
+  return Array.from(variants);
+}
+
+export async function createPosQuickCustomerAction(
+  payload: PosQuickCustomerPayload,
+): Promise<PosQuickCustomerActionResult> {
+  const auth = await requirePermission("pos.access");
+  const primaryOutlet =
+    auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
+  const fullName = normalizeRequiredText(payload.fullName, 180);
+  const rawPhone = normalizeRequiredText(payload.phone, 32);
+  const phone = normalizePosQuickCustomerPhone(rawPhone);
+  const email = normalizeEmail(payload.email);
+  const notes = normalizeNullableText(payload.notes, 500);
+  const fieldErrors: Partial<
+    Record<keyof PosQuickCustomerPayload, string>
+  > = {};
+
+  if (fullName.length < 2) {
+    fieldErrors.fullName = "Nama customer wajib diisi minimal 2 karakter.";
+  }
+
+  if (!phone) {
+    fieldErrors.phone = "Nomor telepon customer wajib diisi.";
+  } else if (phone.length < 8 || phone.length > 15) {
+    fieldErrors.phone = "Nomor telepon harus terdiri dari 8–15 digit.";
+  }
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    fieldErrors.email = "Format email customer belum valid.";
+  }
+
+  if (Object.keys(fieldErrors).length > 0 || !phone) {
+    return {
+      status: "error",
+      message: "Periksa kembali data customer.",
+      fieldErrors,
+    };
+  }
+
+  const requestMetadata = await getRequestMetadata();
+  const phoneVariants = getPosCustomerPhoneVariants(phone);
+
+  try {
+    const result = await db.transaction(async (transaction) => {
+      const lockKeys = [
+        `pos-customer-phone:${auth.organization.id}:${phone}`,
+        ...(email
+          ? [`pos-customer-email:${auth.organization.id}:${email}`]
+          : []),
+      ].sort();
+
+      for (const lockKey of lockKeys) {
+        await transaction.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+        );
+      }
+
+      const duplicateConditions: SQL[] = phoneVariants.map(
+        (phoneVariant) =>
+          sql`regexp_replace(coalesce(${customers.phone}, ''), '[^0-9]', '', 'g') = ${phoneVariant}`,
+      );
+
+      if (email) {
+        duplicateConditions.push(
+          sql`lower(coalesce(${customers.email}, '')) = ${email}`,
+        );
+      }
+
+      const duplicateMatch =
+        duplicateConditions.length === 1
+          ? duplicateConditions[0]
+          : or(...duplicateConditions);
+      const duplicateCustomerRows = duplicateMatch
+        ? await transaction
+            .select({
+              id: customers.id,
+              customerCode: customers.customerCode,
+              fullName: customers.fullName,
+              phone: customers.phone,
+              email: customers.email,
+            })
+            .from(customers)
+            .where(
+              and(
+                eq(customers.organizationId, auth.organization.id),
+                eq(customers.isActive, true),
+                duplicateMatch,
+              ),
+            )
+            .limit(1)
+        : [];
+      const duplicateCustomer = duplicateCustomerRows[0];
+
+      if (duplicateCustomer) {
+        const latestDepositRows = primaryOutlet
+          ? await transaction
+              .select({
+                balanceAfter: customerDepositLedger.balanceAfter,
+                occurredAt: customerDepositLedger.occurredAt,
+              })
+              .from(customerDepositLedger)
+              .where(
+                and(
+                  eq(
+                    customerDepositLedger.organizationId,
+                    auth.organization.id,
+                  ),
+                  eq(customerDepositLedger.outletId, primaryOutlet.id),
+                  eq(
+                    customerDepositLedger.customerId,
+                    duplicateCustomer.id,
+                  ),
+                ),
+              )
+              .orderBy(
+                desc(customerDepositLedger.occurredAt),
+                desc(customerDepositLedger.createdAt),
+              )
+              .limit(1)
+          : [];
+        const latestDeposit = latestDepositRows[0] ?? null;
+        const balanceAmount = latestDeposit?.balanceAfter ?? "0";
+
+        return {
+          status: "duplicate" as const,
+          message: `Nomor telepon atau email sudah terdaftar untuk ${duplicateCustomer.fullName}. Gunakan customer yang sudah ada agar data tidak dobel.`,
+          customer: {
+            ...duplicateCustomer,
+            customerDepositBalanceAmount: balanceAmount,
+            customerDepositBalance: parseDbAmount(balanceAmount),
+            customerDepositLastLedgerEntryAt:
+              latestDeposit?.occurredAt ?? null,
+          },
+        };
+      }
+
+      const now = new Date();
+      const customerCode = generateCustomerCode(
+        now,
+        auth.organization.timezone,
+      );
+      const createdCustomerRows = await transaction
+        .insert(customers)
+        .values({
+          organizationId: auth.organization.id,
+          customerCode,
+          fullName,
+          phone,
+          email,
+          address: null,
+          notes,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning({
+          id: customers.id,
+          customerCode: customers.customerCode,
+          fullName: customers.fullName,
+          phone: customers.phone,
+          email: customers.email,
+        });
+      const createdCustomer = createdCustomerRows[0];
+
+      if (!createdCustomer) {
+        throw new Error("POS_QUICK_CUSTOMER_INSERT_FAILED");
+      }
+
+      await transaction.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet?.id ?? null,
+        actorUserId: auth.user.id,
+        action: "customer.create",
+        entityType: "customer",
+        entityId: createdCustomer.id,
+        beforeData: null,
+        afterData: {
+          customerId: createdCustomer.id,
+          customerCode: createdCustomer.customerCode,
+          fullName,
+          phone,
+          email,
+          notes,
+        },
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+        metadata: {
+          source: "pos.customer.quick_create.inline",
+        },
+      });
+
+      return {
+        status: "success" as const,
+        message: `Customer ${createdCustomer.fullName} berhasil ditambahkan dan dipilih.`,
+        customer: {
+          ...createdCustomer,
+          customerDepositBalanceAmount: "0",
+          customerDepositBalance: 0,
+          customerDepositLastLedgerEntryAt: null,
+        },
+      };
+    });
+
+    if (result.status === "success") {
+      revalidatePath("/pos");
+      revalidatePath("/pos/pelanggan");
+      revalidatePath("/admin/pelanggan");
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Failed to create inline POS customer", error);
+
+    return {
+      status: "error",
+      message:
+        "Customer belum bisa disimpan karena terjadi kendala sistem. Coba ulang.",
+    };
+  }
 }
 
 export async function createPosCustomerAction(formData: FormData) {

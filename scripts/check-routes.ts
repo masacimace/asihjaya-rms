@@ -110,6 +110,7 @@ const expectedRouteFiles = [
   "app/api/health/database/route.ts",
   "app/api/health/route.ts",
   "app/api/pos/checkout-attempts/[idempotencyKey]/route.ts",
+  "app/api/pos/shell-status/route.ts",
   "app/api/print-jobs/route.ts",
   "app/api/sales/[saleId]/receipt-certificate/route.ts",
   "app/api/sales/receipt-certificate-preview/route.ts",
