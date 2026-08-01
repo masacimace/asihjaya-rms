@@ -994,6 +994,20 @@ for (const contract of [
   );
 }
 
+const cutoverHardeningMigrationSource = read(
+  "drizzle/0011_legacy_cutover_hardening.sql",
+);
+for (const contract of [
+  "inventory_movements_migration_opening_item_uq",
+  `"movement_type" = 'migration_opening'`,
+  "duplicate migration_opening rows exist",
+]) {
+  assert(
+    cutoverHardeningMigrationSource.includes(contract),
+    `Migration R5F3 wajib memiliki ${contract}.`,
+  );
+}
+
 const pricingRulesSource = read(
   "src/features/legacy-migration/pricing-rules.ts",
 );
@@ -1040,6 +1054,14 @@ for (const contract of [
   "CATEGORY_NOT_ACTIVE",
   "SOLD_SESSION_UNASSIGNED",
   "executableSessionCount",
+  "movementReportsByRun",
+  "failedAttemptsBySession",
+  "legacy_migration_cutover.failed",
+  "legacyBarcodes",
+  "startedAt",
+  "finishedAt",
+  "OPENING_MOVEMENT_EXISTS",
+  "existingOpeningRows",
 ]) {
   assert(
     cutoverQuerySource.includes(contract),
@@ -1073,25 +1095,54 @@ const cutoverActionSource = read(
 );
 for (const contract of [
   'requirePermission("migration.cutover.execute")',
-  "pg_advisory_xact_lock",
-  "legacy-barcode:",
-  'movementType: "migration_opening"',
-  'availability: "available"',
-  'status: "activated"',
-  "legacy_migration_cutover.execute",
+  "parseLegacyMigrationUuid",
+  "executeLegacyMigrationCutover",
+  "explainLegacyMigrationCutoverError",
 ]) {
   assert(
     cutoverActionSource.includes(contract),
     `Action Milestone 5C wajib memiliki ${contract}.`,
   );
 }
-assert(
-  cutoverActionSource.includes("db.transaction") &&
-    cutoverActionSource.includes("legacyMigrationCutoverRuns"),
-  "Cutover wajib transactional dan memiliki run idempotency.",
+
+const cutoverServiceSource = read(
+  "src/features/legacy-migration/cutover-service.ts",
 );
-const existingRunCheckIndex = cutoverActionSource.indexOf("const [existingRun]");
-const lockedStatusCheckIndex = cutoverActionSource.indexOf(
+for (const contract of [
+  "db.transaction",
+  "pg_advisory_xact_lock",
+  "getLegacyMigrationSessionLockKey",
+  "legacy-barcode:",
+  'movementType: "migration_opening"',
+  'availability: "available"',
+  'status: "activated"',
+  "legacy_migration_cutover.execute",
+  "legacy_migration_cutover.failed",
+  "legacy_migration_cutover.idempotent_retry",
+  "CUTOVER_OPENING_MOVEMENT_EXISTS",
+  "CUTOVER_MOVEMENT_INSERT_COUNT_MISMATCH",
+  "CUTOVER_ITEM_UPDATE_COUNT_MISMATCH",
+  "CUTOVER_VERIFICATION_UPDATE_COUNT_MISMATCH",
+  "CUTOVER_SESSION_UPDATE_COUNT_MISMATCH",
+  "barcodeDigest",
+  "rollbackGuaranteed: true",
+  "rollbackConfirmed: true",
+  "retryAllowed: true",
+  "legacy_migration_cutover.recovered_after_error",
+  "recoverCommittedCutoverAfterError",
+]) {
+  assert(
+    cutoverServiceSource.includes(contract),
+    `Transactional cutover service R5F3 wajib memiliki ${contract}.`,
+  );
+}
+assert(
+  cutoverServiceSource.includes("legacyMigrationCutoverRuns") &&
+    cutoverServiceSource.includes("const [existingRun]"),
+  "Cutover wajib memiliki run idempotency.",
+);
+const existingRunCheckIndex = cutoverServiceSource.indexOf("const [existingRun]");
+const lockedStatusCheckIndex = cutoverServiceSource.indexOf(
   'session.status !== "locked"',
 );
 assert(
@@ -1101,29 +1152,13 @@ assert(
   "Cutover retry concurrent harus mengecek run idempotency sebelum menolak status completed.",
 );
 
-for (const contract of [
-  "parseLegacyMigrationUuid",
-  "getLegacyMigrationSessionLockKey",
-  "CUTOVER_ITEM_UPDATE_COUNT_MISMATCH",
-  "CUTOVER_VERIFICATION_UPDATE_COUNT_MISMATCH",
-  "CUTOVER_SESSION_UPDATE_COUNT_MISMATCH",
-  'session.status !== "locked"',
-  "CUTOVER_SOLD_SESSION_UNASSIGNED",
-  "pricingValidated: true",
-]) {
-  assert(
-    cutoverActionSource.includes(contract),
-    `Safety hotfix cutover wajib memiliki ${contract}.`,
-  );
-}
-
 for (const targetGuard of [
   "CUTOVER_SESSION_TARGET_MISSING",
   "CUTOVER_TARGET_MISMATCH",
   "processedItems !== session.expectedItemCount",
 ]) {
   assert(
-    !cutoverActionSource.includes(targetGuard),
+    !cutoverServiceSource.includes(targetGuard),
     `Transactional cutover tidak boleh diblokir oleh target opsional: ${targetGuard}.`,
   );
 }
@@ -1194,6 +1229,12 @@ for (const contract of [
   "Target hanya menjadi pembanding dan tidak memblokir proses.",
   "Pricing, master, kondisi, lokasi, dan barcode tetap diperiksa",
   "Blocker milik sesi lain tidak lagi menahan",
+  "Laporan cutover tersimpan",
+  "Mulai",
+  "Selesai",
+  "Riwayat percobaan gagal",
+  "di-rollback penuh",
+  "CUTOVER_BARCODE_PREVIEW_LIMIT",
   "Milestone 5D",
 ]) {
   assert(
@@ -1202,6 +1243,34 @@ for (const contract of [
   );
 }
 
+const cutoverIntegrationSuiteSource = read(
+  "tests/integration/legacy-migration-cutover-suite.ts",
+);
+for (const contract of [
+  "two managers cutting over the same session produce one run only",
+  "rolls back the whole cutover and allows retry",
+  "stale preflight data is rejected inside the transaction",
+  "sold update holding the session lock completes before cutover",
+  "existing migration opening blocks cutover without partial activation",
+  "database unique index rejects a second migration opening",
+]) {
+  assert(
+    cutoverIntegrationSuiteSource.includes(contract),
+    `Integration suite R5F3 wajib memiliki ${contract}.`,
+  );
+}
+
+const packageSource = read("package.json");
+for (const contract of [
+  '"test:migration:cutover"',
+  '"test:migration:cutover:local"',
+]) {
+  assert(
+    packageSource.includes(contract),
+    `Package scripts R5F3 wajib memiliki ${contract}.`,
+  );
+}
+
 console.log(
-  "OK: Legacy product migration Milestone 1-5C + R5F2 contracts tervalidasi.",
+  "OK: Legacy product migration Milestone 1-5C + R5F1-R5F3 contracts tervalidasi.",
 );

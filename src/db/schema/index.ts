@@ -1452,6 +1452,9 @@ export const inventoryMovements = pgTable(
       .where(
         sql`${table.referenceType} is not null and ${table.referenceId} is not null`,
       ),
+    uniqueIndex("inventory_movements_migration_opening_item_uq")
+      .on(table.itemId)
+      .where(sql`${table.movementType} = 'migration_opening'`),
   ],
 );
 

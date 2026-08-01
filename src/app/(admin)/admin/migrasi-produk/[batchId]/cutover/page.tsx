@@ -4,8 +4,12 @@ import {
   CheckCircle2,
   CircleAlert,
   ClipboardCheck,
+  FileCheck2,
+  History,
   PackageCheck,
   PlayCircle,
+  RotateCcw,
+  ShieldAlert,
   ShieldCheck,
   Store,
 } from "lucide-react";
@@ -21,6 +25,8 @@ import { cn } from "@/lib/utils";
 export const metadata = { title: "Aktivasi Stok Migrasi" };
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const CUTOVER_BARCODE_PREVIEW_LIMIT = 200;
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("id-ID").format(value);
@@ -59,6 +65,18 @@ function formatDateTime(value: Date, timeZone: string) {
     minute: "2-digit",
     timeZone,
   }).format(value);
+}
+
+function formatDuration(value: number | null) {
+  if (value === null) return "—";
+  if (value < 1_000) return `${value} ms`;
+  return `${(value / 1_000).toLocaleString("id-ID", {
+    maximumFractionDigits: 2,
+  })} detik`;
+}
+
+function shortId(value: string | null) {
+  return value ? value.slice(0, 8) : "—";
 }
 
 function flashMessage(type?: string, message?: string) {
@@ -254,6 +272,143 @@ export default async function LegacyMigrationCutoverPage({
                 </div>
               ) : null}
             </div>
+
+            {session.cutoverRun ? (
+              <section className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 lg:p-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-semibold text-emerald-950">
+                      <FileCheck2 className="size-4" /> Laporan cutover tersimpan
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-emerald-800">
+                      Run #{shortId(session.cutoverRun.id)} · operasi #{shortId(
+                        session.cutoverRun.operationId,
+                      )} · digest {shortId(session.cutoverRun.barcodeDigest)}
+                    </p>
+                  </div>
+                  <p className="text-xs leading-5 text-emerald-800 lg:text-right">
+                    Mulai {session.cutoverRun.startedAt
+                      ? formatDateTime(
+                          session.cutoverRun.startedAt,
+                          auth.organization.timezone,
+                        )
+                      : "—"}
+                    <br />
+                    Selesai {formatDateTime(
+                      session.cutoverRun.finishedAt ??
+                        session.cutoverRun.executedAt,
+                      auth.organization.timezone,
+                    )}
+                    <br />oleh {session.cutoverRun.executedByName}
+                  </p>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-xl border border-emerald-200 bg-white p-3">
+                    <p className="text-xs text-emerald-700">Item diaktifkan</p>
+                    <p className="mt-1 font-semibold text-emerald-950">
+                      {formatNumber(session.cutoverRun.itemCount)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-white p-3">
+                    <p className="text-xs text-emerald-700">Opening movement</p>
+                    <p className="mt-1 font-semibold text-emerald-950">
+                      {formatNumber(session.cutoverRun.movementCount)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-white p-3">
+                    <p className="text-xs text-emerald-700">Durasi transaksi</p>
+                    <p className="mt-1 font-semibold text-emerald-950">
+                      {formatDuration(session.cutoverRun.durationMs)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-white p-3">
+                    <p className="text-xs text-emerald-700">Jumlah terproses</p>
+                    <p className="mt-1 font-semibold text-emerald-950">
+                      {session.cutoverRun.processedItemCount === null
+                        ? "—"
+                        : formatNumber(session.cutoverRun.processedItemCount)}
+                    </p>
+                  </div>
+                </div>
+
+                {session.cutoverRun.legacyBarcodes.length > 0 ? (
+                  <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-3">
+                    <p className="text-xs font-semibold text-emerald-900">
+                      Legacy barcode pada report
+                    </p>
+                    <div className="mt-2 flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pr-1">
+                      {session.cutoverRun.legacyBarcodes
+                        .slice(0, CUTOVER_BARCODE_PREVIEW_LIMIT)
+                        .map((barcode) => (
+                          <span
+                            key={barcode}
+                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 font-mono text-xs text-emerald-900"
+                          >
+                            {barcode}
+                          </span>
+                        ))}
+                    </div>
+                    {session.cutoverRun.legacyBarcodes.length >
+                    CUTOVER_BARCODE_PREVIEW_LIMIT ? (
+                      <p className="mt-2 text-xs text-emerald-700">
+                        Menampilkan {formatNumber(CUTOVER_BARCODE_PREVIEW_LIMIT)}
+                        dari {formatNumber(
+                          session.cutoverRun.legacyBarcodes.length,
+                        )} barcode. Seluruh daftar tetap tersimpan pada inventory
+                        movement.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
+            {session.failedAttempts.length > 0 ? (
+              <section className="mt-5 rounded-2xl border border-red-200 bg-red-50/70 p-4">
+                <p className="flex items-center gap-2 text-sm font-semibold text-red-950">
+                  <History className="size-4" /> Riwayat percobaan gagal
+                </p>
+                <p className="mt-1 text-xs leading-5 text-red-800">
+                  Setiap percobaan berikut telah di-rollback penuh. Setelah blocker
+                  diperbaiki, sesi locked tetap dapat dicoba kembali.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {session.failedAttempts.map((attempt) => (
+                    <article
+                      key={attempt.id}
+                      className="rounded-xl border border-red-200 bg-white p-3"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="flex items-center gap-2 text-xs font-semibold text-red-950">
+                            <ShieldAlert className="size-3.5" /> {attempt.errorCode}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-red-800">
+                            {attempt.message}
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-xs leading-5 text-red-700 sm:text-right">
+                          {formatDateTime(
+                            attempt.attemptedAt,
+                            auth.organization.timezone,
+                          )}
+                          <br />
+                          {attempt.attemptedByName ?? "User tidak tersedia"} · {formatDuration(
+                            attempt.durationMs,
+                          )}
+                        </p>
+                      </div>
+                      <p className="mt-2 flex items-center gap-1.5 font-mono text-[11px] text-red-600">
+                        <RotateCcw className="size-3" /> operasi #{shortId(
+                          attempt.operationId,
+                        )}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             {session.issues.length > 0 ? (
               <div className="mt-5 grid gap-2 md:grid-cols-2">

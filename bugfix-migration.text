@@ -14,7 +14,7 @@ Tambahkan sessionId pada sold record.
 Hitung readiness per sesi.
 Hilangkan global readiness dari cutover sesi.
 
-MIGRATION-R5F3 — Transactional Cutover Hardening
+MIGRATION-R5F3 — Transactional Cutover Hardening (DONE)
 Snapshot preflight ke cutover report.
 Guard jumlah row update.
 Concurrency test scan-versus-lock.

@@ -1,7 +1,9 @@
-import { and, asc, count, eq, isNull } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
+  auditLogs,
+  inventoryMovements,
   itemBarcodes,
   legacyMigrationCutoverRuns,
   legacyMigrationSessions,
@@ -37,6 +39,26 @@ function incrementIssueCount(
 ) {
   if (amount <= 0) return;
   counts.set(code, (counts.get(code) ?? 0) + amount);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readDate(value: unknown) {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export async function getLegacyMigrationCutoverData(
@@ -186,6 +208,7 @@ export async function getLegacyMigrationCutoverData(
           itemCount: legacyMigrationCutoverRuns.itemCount,
           executedAt: legacyMigrationCutoverRuns.executedAt,
           executedByName: users.fullName,
+          metadata: legacyMigrationCutoverRuns.metadata,
         })
         .from(legacyMigrationCutoverRuns)
         .innerJoin(users, eq(legacyMigrationCutoverRuns.executedBy, users.id))
@@ -215,6 +238,73 @@ export async function getLegacyMigrationCutoverData(
           ),
         ),
     ]);
+
+  const sessionIds = sessions.map((session) => session.id);
+  const runIds = runs.map((run) => run.id);
+  const approvedItemIds = Array.from(
+    new Set(
+      approvedRows
+        .map((row) => row.productItemId)
+        .filter((itemId): itemId is string => Boolean(itemId)),
+    ),
+  );
+
+  const movementRows = runIds.length
+    ? await db
+        .select({
+          runId: inventoryMovements.referenceId,
+          metadata: inventoryMovements.metadata,
+        })
+        .from(inventoryMovements)
+        .where(
+          and(
+            eq(inventoryMovements.organizationId, auth.organization.id),
+            eq(inventoryMovements.movementType, "migration_opening"),
+            eq(
+              inventoryMovements.referenceType,
+              "legacy_migration_cutover",
+            ),
+            inArray(inventoryMovements.referenceId, runIds),
+          ),
+        )
+    : [];
+
+  const failedAttemptRows = sessionIds.length
+    ? await db
+        .select({
+          id: auditLogs.id,
+          sessionId: auditLogs.entityId,
+          operationId: auditLogs.requestId,
+          attemptedAt: auditLogs.createdAt,
+          attemptedByName: users.fullName,
+          afterData: auditLogs.afterData,
+          reason: auditLogs.reason,
+        })
+        .from(auditLogs)
+        .leftJoin(users, eq(auditLogs.actorUserId, users.id))
+        .where(
+          and(
+            eq(auditLogs.organizationId, auth.organization.id),
+            eq(auditLogs.action, "legacy_migration_cutover.failed"),
+            eq(auditLogs.entityType, "legacy_migration_session"),
+            inArray(auditLogs.entityId, sessionIds),
+          ),
+        )
+        .orderBy(desc(auditLogs.createdAt))
+    : [];
+
+  const existingOpeningRows = approvedItemIds.length
+    ? await db
+        .select({ itemId: inventoryMovements.itemId })
+        .from(inventoryMovements)
+        .where(
+          and(
+            eq(inventoryMovements.organizationId, auth.organization.id),
+            eq(inventoryMovements.movementType, "migration_opening"),
+            inArray(inventoryMovements.itemId, approvedItemIds),
+          ),
+        )
+    : [];
 
   const verificationBySession = new Map<
     string,
@@ -260,6 +350,9 @@ export async function getLegacyMigrationCutoverData(
     Map<LegacyCutoverIssueCode, number>
   >();
   const readyItemsBySession = new Map<string, number>();
+  const openingMovementItemIds = new Set(
+    existingOpeningRows.map((row) => row.itemId),
+  );
   for (const row of approvedRows) {
     const itemIssues = getLegacyCutoverItemIssues({
       source: row.source,
@@ -286,6 +379,12 @@ export async function getLegacyMigrationCutoverData(
       aliasIsActive: row.aliasIsActive,
       hasActiveSoldRecord: Boolean(row.soldRecordId),
     });
+    if (
+      row.productItemId &&
+      openingMovementItemIds.has(row.productItemId)
+    ) {
+      itemIssues.push("OPENING_MOVEMENT_EXISTS");
+    }
     const issueCounts =
       issueCountsBySession.get(row.sessionId) ??
       new Map<LegacyCutoverIssueCode, number>();
@@ -299,7 +398,78 @@ export async function getLegacyMigrationCutoverData(
     }
   }
 
-  const runsBySession = new Map(runs.map((run) => [run.sessionId, run]));
+  const movementReportsByRun = new Map<
+    string,
+    { movementCount: number; legacyBarcodes: string[] }
+  >();
+  for (const movement of movementRows) {
+    if (!movement.runId) continue;
+    const report = movementReportsByRun.get(movement.runId) ?? {
+      movementCount: 0,
+      legacyBarcodes: [],
+    };
+    report.movementCount += 1;
+    const legacyBarcode = readString(
+      asRecord(movement.metadata).legacyBarcode,
+    );
+    if (legacyBarcode) report.legacyBarcodes.push(legacyBarcode);
+    movementReportsByRun.set(movement.runId, report);
+  }
+
+  const failedAttemptsBySession = new Map<
+    string,
+    LegacyCutoverSessionSummary["failedAttempts"]
+  >();
+  for (const attempt of failedAttemptRows) {
+    if (!attempt.sessionId) continue;
+    const afterData = asRecord(attempt.afterData);
+    const attempts = failedAttemptsBySession.get(attempt.sessionId) ?? [];
+    if (attempts.length >= 3) continue;
+    attempts.push({
+      id: attempt.id,
+      operationId:
+        readString(attempt.operationId) ?? readString(afterData.operationId),
+      attemptedAt: attempt.attemptedAt,
+      attemptedByName: attempt.attemptedByName,
+      errorCode:
+        readString(afterData.errorCode) ?? "CUTOVER_UNEXPECTED_ERROR",
+      message:
+        readString(attempt.reason) ??
+        "Cutover gagal dan seluruh transaksi telah di-rollback.",
+      durationMs: readNumber(afterData.durationMs),
+    });
+    failedAttemptsBySession.set(attempt.sessionId, attempts);
+  }
+
+  const runsBySession = new Map(
+    runs.map((run) => {
+      const metadata = asRecord(run.metadata);
+      const movementReport = movementReportsByRun.get(run.id) ?? {
+        movementCount: 0,
+        legacyBarcodes: [],
+      };
+      return [
+        run.sessionId,
+        {
+          id: run.id,
+          itemCount: run.itemCount,
+          movementCount: movementReport.movementCount,
+          executedAt: run.executedAt,
+          startedAt: readDate(metadata.startedAt),
+          finishedAt: readDate(metadata.finishedAt),
+          executedByName: run.executedByName,
+          operationId: readString(metadata.operationId),
+          barcodeDigest: readString(metadata.barcodeDigest),
+          durationMs: readNumber(metadata.durationMs),
+          expectedItemCount: readNumber(metadata.expectedItemCount),
+          processedItemCount: readNumber(metadata.processedItemCount),
+          legacyBarcodes: Array.from(
+            new Set(movementReport.legacyBarcodes),
+          ).sort((left, right) => left.localeCompare(right)),
+        },
+      ] as const;
+    }),
+  );
   const unassignedSoldCount = Number(unassignedRows[0]?.total ?? 0);
   const batchIssues: LegacyCutoverBatchIssue[] = unassignedSoldCount
     ? [
@@ -375,6 +545,7 @@ export async function getLegacyMigrationCutoverData(
         ITEM_LOCATION_INVALID: `${issueHrefBase}/review?status=approved&sessionId=${session.id}`,
         BARCODE_ALIAS_INVALID: `${issueHrefBase}/review?status=approved&sessionId=${session.id}`,
         SOLD_CONFLICT: `${issueHrefBase}/sold`,
+        OPENING_MOVEMENT_EXISTS: `${issueHrefBase}/rekonsiliasi`,
       });
       const cutoverRun = runsBySession.get(session.id) ?? null;
       const pricingBlockerCount = Array.from(issueCounts.entries()).reduce(
@@ -404,6 +575,7 @@ export async function getLegacyMigrationCutoverData(
         issueCount: issues.reduce((total, issue) => total + issue.count, 0),
         issues,
         cutoverRun,
+        failedAttempts: failedAttemptsBySession.get(session.id) ?? [],
         canExecute:
           unassignedSoldCount === 0 &&
           !cutoverRun &&

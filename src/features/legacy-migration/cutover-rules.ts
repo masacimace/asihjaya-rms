@@ -30,6 +30,7 @@ const LEGACY_CUTOVER_ISSUE_LABELS: Record<
   ITEM_LOCATION_INVALID: "Lokasi item bukan stok outlet",
   BARCODE_ALIAS_INVALID: "Alias barcode legacy tidak valid",
   SOLD_CONFLICT: "Barcode sudah ditandai terjual di sistem lama",
+  OPENING_MOVEMENT_EXISTS: "Opening inventory movement sudah pernah tercatat",
 };
 
 export function isLegacyCutoverSessionClosed(

@@ -16,7 +16,8 @@ export type LegacyCutoverIssueCode =
   | "ITEM_CONDITION_INVALID"
   | "ITEM_LOCATION_INVALID"
   | "BARCODE_ALIAS_INVALID"
-  | "SOLD_CONFLICT";
+  | "SOLD_CONFLICT"
+  | "OPENING_MOVEMENT_EXISTS";
 
 export type LegacyCutoverBatchIssueCode = "SOLD_SESSION_UNASSIGNED";
 
@@ -64,8 +65,26 @@ export type LegacyCutoverSessionSummary = {
   cutoverRun: {
     id: string;
     itemCount: number;
+    movementCount: number;
     executedAt: Date;
+    startedAt: Date | null;
+    finishedAt: Date | null;
     executedByName: string;
+    operationId: string | null;
+    barcodeDigest: string | null;
+    durationMs: number | null;
+    expectedItemCount: number | null;
+    processedItemCount: number | null;
+    legacyBarcodes: string[];
   } | null;
+  failedAttempts: Array<{
+    id: string;
+    operationId: string | null;
+    attemptedAt: Date;
+    attemptedByName: string | null;
+    errorCode: string;
+    message: string;
+    durationMs: number | null;
+  }>;
   canExecute: boolean;
 };
