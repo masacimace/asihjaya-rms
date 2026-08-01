@@ -20,9 +20,19 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { UserMenu } from "@/components/auth/user-menu";
 import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
+import {
+  POS_SHELL_STATUS_REFRESH_EVENT,
+  requestPosShellStatusRefresh,
+} from "@/features/pos/live-status";
 
 import { cn } from "@/lib/utils";
 
@@ -72,6 +82,7 @@ type PosWorkspaceCommand = {
 const POS_WORKSPACE_COMMAND_EVENT = "asihjaya:pos-workspace-command";
 const POS_PENDING_COMMAND_STORAGE_KEY =
   "asihjaya:pos-workspace-pending-command";
+const POS_SHELL_STATUS_POLL_INTERVAL_MS = 5_000;
 
 const fallbackStatus: PosShellStatus = {
   outletName: "Outlet belum dipilih",
@@ -186,6 +197,24 @@ function getShiftStatusClassName(status: PosShellStatus["shift"]["status"]) {
   }
 
   return "text-red-600";
+}
+
+function isPosShellStatus(value: unknown): value is PosShellStatus {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<PosShellStatus>;
+
+  return (
+    typeof candidate.outletName === "string" &&
+    (typeof candidate.registerName === "string" ||
+      candidate.registerName === null) &&
+    Boolean(candidate.shift && typeof candidate.shift === "object") &&
+    Boolean(candidate.hardware && typeof candidate.hardware === "object") &&
+    (candidate.notifications === undefined ||
+      Array.isArray(candidate.notifications))
+  );
 }
 
 function getHardwareStatusClassName(
@@ -425,7 +454,10 @@ export function PosShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const operationalStatus = status ?? fallbackStatus;
+  const [liveOperationalStatus, setLiveOperationalStatus] =
+    useState<PosShellStatus | null>(null);
+  const operationalStatus = liveOperationalStatus ?? status ?? fallbackStatus;
+  const statusRequestInFlightRef = useRef(false);
   const shiftLabel = getShiftStatusLabel(operationalStatus.shift);
   const notifications = operationalStatus.notifications ?? [];
   const notificationCount = notifications.length;
@@ -435,6 +467,83 @@ export function PosShell({
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [topbarQuery, setTopbarQuery] = useState("");
+
+  useEffect(() => {
+    let isDisposed = false;
+
+    const refreshStatus = async () => {
+      if (
+        isDisposed ||
+        statusRequestInFlightRef.current ||
+        document.visibilityState === "hidden"
+      ) {
+        return;
+      }
+
+      statusRequestInFlightRef.current = true;
+
+      try {
+        const response = await fetch("/api/pos/shell-status", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { status?: unknown };
+
+        if (!isDisposed && isPosShellStatus(payload.status)) {
+          setLiveOperationalStatus(payload.status);
+        }
+      } catch {
+        // Keep the POS usable during a temporary network interruption.
+      } finally {
+        statusRequestInFlightRef.current = false;
+      }
+    };
+
+    const handleWindowFocus = () => {
+      void refreshStatus();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshStatus();
+      }
+    };
+    const handleRefreshRequest = () => {
+      void refreshStatus();
+    };
+
+    const intervalId = window.setInterval(
+      () => void refreshStatus(),
+      POS_SHELL_STATUS_POLL_INTERVAL_MS,
+    );
+
+    window.addEventListener("focus", handleWindowFocus);
+    window.addEventListener(
+      POS_SHELL_STATUS_REFRESH_EVENT,
+      handleRefreshRequest,
+    );
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    void refreshStatus();
+
+    return () => {
+      isDisposed = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowFocus);
+      window.removeEventListener(
+        POS_SHELL_STATUS_REFRESH_EVENT,
+        handleRefreshRequest,
+      );
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange,
+      );
+    };
+  }, []);
 
   function sendPosWorkspaceCommand(command: PosWorkspaceCommand) {
     const normalizedValue = command.value.trim();
@@ -667,7 +776,17 @@ export function PosShell({
                 type="button"
                 aria-label="Notifikasi POS"
                 aria-expanded={isNotificationsOpen}
-                onClick={() => setIsNotificationsOpen((isOpen) => !isOpen)}
+                onClick={() => {
+                  setIsNotificationsOpen((isOpen) => {
+                    const nextIsOpen = !isOpen;
+
+                    if (nextIsOpen) {
+                      requestPosShellStatusRefresh();
+                    }
+
+                    return nextIsOpen;
+                  });
+                }}
                 className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
               >
                 <Bell className="size-5" />

@@ -2,11 +2,14 @@
 
 import {
   BadgePercent,
+  Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Clock3,
   FileText,
   Gem,
+  ListFilter,
   LoaderCircle,
   Pause,
   ScanBarcode,
@@ -3257,6 +3260,7 @@ export function PosWorkspace({
 }: PosWorkspaceProps) {
   const router = useRouter();
   const [activeCategoryId, setActiveCategoryId] = useState("all");
+  const [isCategoryPickerOpen, setIsCategoryPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -3550,6 +3554,12 @@ export function PosWorkspace({
     [payments],
   );
   const totalAvailableItems = items.length;
+  const activeCategory =
+    activeCategoryId === "all"
+      ? null
+      : (categories.find((category) => category.id === activeCategoryId) ??
+        null);
+  const activeCategoryLabel = activeCategory?.name ?? "Semua kategori";
   const canCheckout =
     cartItems.length > 0 &&
     Boolean(context.register) &&
@@ -4693,7 +4703,7 @@ export function PosWorkspace({
 
       <div className="lg:grid lg:h-[calc(100vh-7.5rem)] lg:grid-cols-[minmax(0,1fr)_380px] lg:overflow-hidden">
         {/* Katalog */}
-        <section className="min-w-0 p-4 pb-36 sm:p-5 sm:pb-36 lg:overflow-y-auto lg:border-r lg:border-[var(--border)] lg:p-6">
+        <section className="min-w-0 p-4 pb-24 sm:p-5 sm:pb-36 lg:overflow-y-auto lg:border-r lg:border-[var(--border)] lg:p-6">
           <PosContextNotice
             context={context}
             canManageShifts={canManageShifts}
@@ -4713,7 +4723,7 @@ export function PosWorkspace({
           ) : null}
 
           {/* Search mobile */}
-          <div className="mb-4 flex items-center gap-2 md:hidden">
+          <div className="mb-2 flex items-center gap-2 md:hidden">
             <label className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3">
               <Search className="size-4 shrink-0 text-neutral-400" />
 
@@ -4748,58 +4758,271 @@ export function PosWorkspace({
             />
           </label>
 
-          {/* Kategori */}
-          <div className="flex min-w-0 gap-1 overflow-x-auto rounded-xl border border-[var(--border)] bg-white p-1">
-            <button
-              type="button"
-              onClick={() => setActiveCategoryId("all")}
-              className={cn(
-                "h-9 shrink-0 rounded-lg px-4 text-xs font-medium transition-colors sm:text-sm",
-                activeCategoryId === "all"
-                  ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                  : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950",
-              )}
-            >
-              Semua
-            </button>
+          {/* Compact category dropdown / mobile sheet */}
+          <div className="-mx-4 bg-[var(--background)] px-4 py-2 sm:-mx-5 sm:px-5 lg:-mx-6 lg:px-6">
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="hidden shrink-0 sm:block">
+                <p className="text-xl font-semibold text-neutral-950">
+                  Pilih item produk
+                </p>
+                <p className="text-[11px] text-[var(--muted)]">
+                  Menampilkan stok item fisik yang tersedia di outlet
+                </p>
+              </div>
 
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => setActiveCategoryId(category.id)}
-                className={cn(
-                  "h-9 shrink-0 rounded-lg px-4 text-xs font-medium transition-colors sm:text-sm",
-                  activeCategoryId === category.id
-                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                    : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950",
-                )}
-              >
-                {category.name}
-                {category.totalAvailableItems > 0 ? (
-                  <span className="ml-2 rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] text-[var(--accent)]">
-                    {category.totalAvailableItems}
+              <div className="relative flex min-w-0 w-full items-center gap-2 sm:w-auto sm:justify-end">
+                <button
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-expanded={isCategoryPickerOpen}
+                  onClick={() => setIsCategoryPickerOpen((isOpen) => !isOpen)}
+                  className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-left transition-colors hover:border-neutral-300 sm:w-80 sm:flex-none lg:w-96"
+                >
+                  <ListFilter className="size-4 shrink-0 text-[var(--accent)]" />
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[10px] font-medium text-[var(--muted)]">
+                      Filter & Sort
+                    </span>
+                    <span className="block truncate text-sm font-semibold text-neutral-950">
+                      {activeCategoryLabel}
+                    </span>
                   </span>
+
+                  <span
+                    className="shrink-0 rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-semibold text-neutral-600 sm:hidden"
+                    title={`${filteredItems.length} dari ${totalAvailableItems} item tersedia`}
+                  >
+                    {filteredItems.length}/{totalAvailableItems}
+                  </span>
+
+                  <ChevronDown
+                    className={cn(
+                      "size-4 shrink-0 text-neutral-400 transition-transform",
+                      isCategoryPickerOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+
+                <span
+                  className="hidden shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--muted)] sm:inline-flex"
+                  title={`${filteredItems.length} dari ${totalAvailableItems} item tersedia`}
+                >
+                  {filteredItems.length} dari {totalAvailableItems} item
+                  tersedia
+                </span>
+
+                {isCategoryPickerOpen ? (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Tutup pilihan kategori"
+                      onClick={() => setIsCategoryPickerOpen(false)}
+                      className="fixed inset-0 z-30 hidden cursor-default md:block"
+                    />
+
+                    <div
+                      id="pos-category-picker"
+                      role="dialog"
+                      aria-label="Pilih kategori produk"
+                      className="absolute right-0 top-[calc(100%+0.5rem)] z-40 hidden rounded-2xl border border-[var(--border)] bg-white p-3 md:block"
+                    >
+                      <div className="mb-3 flex items-center justify-between gap-3 px-1">
+                        <div>
+                          <p className="text-sm font-semibold text-neutral-950">
+                            Pilih kategori
+                          </p>
+                          <p className="text-xs text-[var(--muted)]">
+                            Filter katalog tanpa mengurangi area daftar produk.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsCategoryPickerOpen(false)}
+                          aria-label="Tutup pilihan kategori"
+                          className="grid size-9 shrink-0 place-items-center rounded-xl border border-[var(--border)] text-neutral-500 transition hover:bg-neutral-50 hover:text-neutral-950"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          aria-pressed={activeCategoryId === "all"}
+                          onClick={() => {
+                            setActiveCategoryId("all");
+                            setIsCategoryPickerOpen(false);
+                          }}
+                          className={cn(
+                            "flex min-h-12 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors",
+                            activeCategoryId === "all"
+                              ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                              : "border-[var(--border)] text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50",
+                          )}
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold">
+                              Semua kategori
+                            </span>
+                            <span className="block text-[11px] opacity-75">
+                              {totalAvailableItems} item tersedia
+                            </span>
+                          </span>
+
+                          {activeCategoryId === "all" ? (
+                            <Check className="size-4 shrink-0" />
+                          ) : null}
+                        </button>
+
+                        {categories.map((category) => {
+                          const isActive = activeCategoryId === category.id;
+
+                          return (
+                            <button
+                              key={category.id}
+                              type="button"
+                              aria-pressed={isActive}
+                              onClick={() => {
+                                setActiveCategoryId(category.id);
+                                setIsCategoryPickerOpen(false);
+                              }}
+                              className={cn(
+                                "flex min-h-12 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors",
+                                isActive
+                                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                                  : "border-[var(--border)] text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50",
+                              )}
+                            >
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold">
+                                  {category.name}
+                                </span>
+                                <span className="block text-[11px] opacity-75">
+                                  {category.totalAvailableItems} item tersedia
+                                </span>
+                              </span>
+
+                              {isActive ? (
+                                <Check className="size-4 shrink-0" />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
                 ) : null}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-5 flex items-end justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-semibold text-neutral-950">
-                Pilih Item Produk
-              </h1>
-
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Menampilkan stok item fisik yang tersedia di outlet aktif.
-              </p>
+              </div>
             </div>
-
-            <span className="hidden text-xs text-[var(--muted)] sm:block">
-              {filteredItems.length} dari {totalAvailableItems} item tersedia
-            </span>
           </div>
+
+          {isCategoryPickerOpen ? (
+            <div
+              id="pos-category-picker-mobile"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Pilih kategori produk"
+              className="fixed inset-0 z-50 md:hidden"
+            >
+              <button
+                type="button"
+                aria-label="Tutup pilihan kategori"
+                onClick={() => setIsCategoryPickerOpen(false)}
+                className="absolute inset-0 bg-neutral-950/45"
+              />
+
+              <div className="absolute inset-x-0 bottom-0 max-h-[78vh] rounded-t-3xl border-t border-[var(--border)] bg-white">
+                <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300" />
+
+                <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-4">
+                  <div>
+                    <p className="text-base font-semibold text-neutral-950">
+                      Pilih kategori
+                    </p>
+                    <p className="text-xs text-[var(--muted)]">
+                      Kategori aktif: {activeCategoryLabel}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryPickerOpen(false)}
+                    aria-label="Tutup pilihan kategori"
+                    className="grid size-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] text-neutral-500"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+
+                <div className="scrollbar-clean max-h-[calc(78vh-5.5rem)] space-y-2 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                  <button
+                    type="button"
+                    aria-pressed={activeCategoryId === "all"}
+                    onClick={() => {
+                      setActiveCategoryId("all");
+                      setIsCategoryPickerOpen(false);
+                    }}
+                    className={cn(
+                      "flex min-h-14 w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left",
+                      activeCategoryId === "all"
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                        : "border-[var(--border)] text-neutral-700",
+                    )}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold">
+                        Semua kategori
+                      </span>
+                      <span className="block text-xs opacity-75">
+                        {totalAvailableItems} item tersedia
+                      </span>
+                    </span>
+
+                    {activeCategoryId === "all" ? (
+                      <Check className="size-5 shrink-0" />
+                    ) : null}
+                  </button>
+
+                  {categories.map((category) => {
+                    const isActive = activeCategoryId === category.id;
+
+                    return (
+                      <button
+                        key={category.id}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => {
+                          setActiveCategoryId(category.id);
+                          setIsCategoryPickerOpen(false);
+                        }}
+                        className={cn(
+                          "flex min-h-14 w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left",
+                          isActive
+                            ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                            : "border-[var(--border)] text-neutral-700",
+                        )}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold">
+                            {category.name}
+                          </span>
+                          <span className="block text-xs opacity-75">
+                            {category.totalAvailableItems} item tersedia
+                          </span>
+                        </span>
+
+                        {isActive ? (
+                          <Check className="size-5 shrink-0" />
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {totalAvailableItems >= POS_INITIAL_ITEM_LIMIT ? (
             <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -4811,7 +5034,7 @@ export function PosWorkspace({
 
           {/* Product grid */}
           {filteredItems.length > 0 ? (
-            <div className="mt-5 grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className="mt-2 grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredItems.map((item) => {
                 const isInCart = cartItemIds.has(item.id);
                 const hasSellingAmount = parseAmount(item.sellingAmount) > 0;

@@ -24,6 +24,7 @@ import type {
   PosHeldCartListItem,
   PosHeldCartSummary,
 } from "@/features/pos/contracts";
+import { requestPosShellStatusRefresh } from "@/features/pos/live-status";
 import { cn } from "@/lib/utils";
 
 const POS_ACTIVE_CART_STORAGE_KEY = "asihjaya:pos-workspace-active-cart";
@@ -432,6 +433,7 @@ export function HeldCartsClient({ data }: HeldCartsClientProps) {
       });
 
       window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
+      requestPosShellStatusRefresh();
       router.push("/pos");
     });
   }
@@ -462,6 +464,7 @@ export function HeldCartsClient({ data }: HeldCartsClientProps) {
       }
 
       setFeedback({ type: "success", message: result.message });
+      requestPosShellStatusRefresh();
       router.refresh();
     });
   }
