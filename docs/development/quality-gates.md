@@ -45,7 +45,7 @@ npm run test:financial:local
 
 Untuk database test yang sudah dimigrasikan, gunakan `npm run test:financial`. Dokumentasi lengkap tersedia di `docs/development/financial-concurrency-tests.md`.
 
-`check:quality` mencakup konfigurasi quality gate, reproducible build baseline, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract. `check:security` mencakup kontrak environment production dan pemisahan secret. `check:transactions` mencakup boundary service checkout, orchestration/recovery checkout frontend, domain payment draft, derived state panel pembayaran, state recovery, scanner, workspace command, cart state, katalog view-state, customer selection, held-cart state dan session recovery POS, fingerprint/recovery checkout, rekonsiliasi nominal cash/mixed payment/Dana Titip, manual payment, sale correction, reconciliation, dan settlement import.
+`check:quality` mencakup konfigurasi quality gate, reproducible build baseline, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract. `check:security` mencakup kontrak environment production dan pemisahan secret. `check:transactions` mencakup boundary service checkout, orchestration/recovery checkout frontend, domain payment draft, derived state panel pembayaran, dialog visual POS, hasil checkout/receipt dan shift visual, state recovery, scanner, workspace command, cart state, katalog view-state, customer selection, held-cart state dan session recovery POS, fingerprint/recovery checkout, rekonsiliasi nominal cash/mixed payment/Dana Titip, manual payment, sale correction, reconciliation, dan settlement import.
 
 Clean build menghapus output lama sebelum membuat production bundle:
 

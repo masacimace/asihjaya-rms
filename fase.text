@@ -13,8 +13,8 @@ Tahap 1 — Stabilkan fondasi
 7. Environment validation dan .env.example (DONE)
 8. Tambahkan critical-path test (DONE)
 
-1C.8C — ekstraksi dialog POS (PROGRESS)
-1C.8D — ekstraksi receipt dan checkout-result visuals
+1C.8C — ekstraksi dialog POS (DONE)
+1C.8D — ekstraksi receipt dan checkout-result visuals (DONE)
 1C.8E — final workspace composition cleanup
 1C.9  — full stabilization, review, dan satu PR ke main
 
@@ -25,5 +25,6 @@ Tahap 1 — Stabilkan fondasi
 1. PWA untuk bagian POS only
 2. Telegram Integration untuk report daily, weekly, monthly payment, opening shift, closing shift
 3. Membuat batch batch produk menggunakan format excel
-4. Redesign UI/UX Login page
-5. Redesign UI/UX Customer Transaction History page
+4. Fitur Backup & Restore fullsite database (untuk menghindari masalah Cloud VPS tidak ada fitur backup automation)
+5. Redesign UI/UX Login page (experiment background animated pakai library threejs atau semacam nya)
+6. Redesign UI/UX Customer Transaction History page
