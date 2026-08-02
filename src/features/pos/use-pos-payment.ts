@@ -61,8 +61,6 @@ export type UsePosPaymentResult = {
   setPaymentFeedback: Dispatch<SetStateAction<string | null>>;
   isAddingPayment: boolean;
   startAddingPaymentTransition: ReturnType<typeof useTransition>[1];
-  isManualApprovalChecking: boolean;
-  startManualApprovalTransition: ReturnType<typeof useTransition>[1];
   resetCustomerDepositDraft: () => void;
   resetPaymentForm: (nextMethod?: PosManualPaymentMethod) => void;
   resetPaymentState: () => void;
@@ -106,8 +104,6 @@ export function usePosPayment({
     useState<PosManualPaymentApproval | null>(null);
   const [paymentFeedback, setPaymentFeedback] = useState<string | null>(null);
   const [isAddingPayment, startAddingPaymentTransition] = useTransition();
-  const [isManualApprovalChecking, startManualApprovalTransition] =
-    useTransition();
 
   const resetCustomerDepositDraft = useCallback(() => {
     setCustomerDepositUsedInput("");
@@ -237,8 +233,6 @@ export function usePosPayment({
     setPaymentFeedback,
     isAddingPayment,
     startAddingPaymentTransition,
-    isManualApprovalChecking,
-    startManualApprovalTransition,
     resetCustomerDepositDraft,
     resetPaymentForm,
     resetPaymentState,

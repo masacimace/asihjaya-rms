@@ -25,9 +25,9 @@ import {
 } from "lucide-react";
 import {
   useActionState,
+  useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   useTransition,
 } from "react";
@@ -53,8 +53,6 @@ import {
   type PosAvailableItem,
   type PosCategoryOption,
   type PosCheckoutActionResult,
-  type PosCheckoutPayload,
-  type PosCheckoutRecoveryStatusResult,
   type PosCustomerOption,
   type PosDiscountApproval,
   type PosDiscountApprovalActionResult,
@@ -66,6 +64,11 @@ import {
   type PosQuickCustomerActionResult,
   type PosShiftActionState,
 } from "@/features/pos/contracts";
+import {
+  getCheckoutSubmissionValidationMessage,
+  type ActiveDiscountApproval,
+  type StoredCheckoutAttemptState,
+} from "@/features/pos/checkout-client-state";
 import {
   getPosCartAddIssue,
   removePosCartItem,
@@ -86,14 +89,12 @@ import {
   removePendingHeldCartResumeState,
 } from "@/features/pos/held-cart-state";
 import {
-  createCheckoutIdempotencyKey,
   createPaymentDraftId,
   formatCurrency,
   formatRupiahInput,
   getPaymentConfig,
   getPaymentDraftValidationMessage,
   getProfilesForMethod,
-  isStoredCheckoutPayment,
   parseAmount,
   parsePaymentAmountInput,
   paymentMethodConfigs,
@@ -102,6 +103,7 @@ import {
   type PosPaymentDraft,
 } from "@/features/pos/payment-draft";
 import { usePosCart } from "@/features/pos/use-pos-cart";
+import { usePosCheckout } from "@/features/pos/use-pos-checkout";
 import { usePosCustomer } from "@/features/pos/use-pos-customer";
 import { usePosHeldCart } from "@/features/pos/use-pos-held-cart";
 import { usePosPayment } from "@/features/pos/use-pos-payment";
@@ -150,10 +152,6 @@ type CartContentProps = {
   canHoldCart: boolean;
   holdCartDisabledReason: string;
   onOpenHoldDialog: () => void;
-};
-
-type ActiveDiscountApproval = PosDiscountApproval & {
-  appliedAtIso?: string | null;
 };
 
 type PaymentContentProps = {
@@ -212,16 +210,6 @@ type CheckoutSuccessContentProps = {
 
 type PosPanelMode = "cart" | "payment" | "success";
 
-type StoredCheckoutAttemptState = {
-  version: 2;
-  payload: PosCheckoutPayload;
-  payments: PosPaymentDraft[];
-  discountApproval: ActiveDiscountApproval | null;
-  manualPaymentApproval: PosManualPaymentApproval | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
 const itemBackgrounds = [
   "bg-amber-50",
   "bg-orange-50",
@@ -229,148 +217,6 @@ const itemBackgrounds = [
   "bg-rose-50",
   "bg-stone-100",
 ] as const;
-
-const POS_CHECKOUT_ATTEMPT_STORAGE_KEY =
-  "asihjaya:pos-workspace-checkout-attempt";
-const POS_CHECKOUT_RECOVERY_MAX_POLLS = 12;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object";
-}
-
-function isStoredCheckoutPayload(value: unknown): value is PosCheckoutPayload {
-  if (
-    !isRecord(value) ||
-    !Array.isArray(value.itemIds) ||
-    !Array.isArray(value.payments)
-  ) {
-    return false;
-  }
-
-  return (
-    value.itemIds.every((itemId) => typeof itemId === "string") &&
-    value.payments.every(
-      (payment) =>
-        isRecord(payment) &&
-        typeof payment.method === "string" &&
-        typeof payment.amount === "number",
-    ) &&
-    typeof value.idempotencyKey === "string" &&
-    value.idempotencyKey.startsWith("pos_")
-  );
-}
-
-function getStoredCheckoutAttemptState(): StoredCheckoutAttemptState | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const rawValue = window.sessionStorage.getItem(
-      POS_CHECKOUT_ATTEMPT_STORAGE_KEY,
-    );
-
-    if (!rawValue) {
-      return null;
-    }
-
-    const parsedValue = JSON.parse(rawValue) as unknown;
-
-    if (
-      !isRecord(parsedValue) ||
-      parsedValue.version !== 2 ||
-      !isStoredCheckoutPayload(parsedValue.payload) ||
-      !Array.isArray(parsedValue.payments)
-    ) {
-      window.sessionStorage.removeItem(POS_CHECKOUT_ATTEMPT_STORAGE_KEY);
-      return null;
-    }
-
-    const storedPayments = parsedValue.payments.filter(isStoredCheckoutPayment);
-
-    if (storedPayments.length !== parsedValue.payments.length) {
-      window.sessionStorage.removeItem(POS_CHECKOUT_ATTEMPT_STORAGE_KEY);
-      return null;
-    }
-
-    return {
-      version: 2,
-      payload: parsedValue.payload,
-      payments: storedPayments,
-      discountApproval: isRecord(parsedValue.discountApproval)
-        ? (parsedValue.discountApproval as ActiveDiscountApproval)
-        : null,
-      manualPaymentApproval: isRecord(parsedValue.manualPaymentApproval)
-        ? (parsedValue.manualPaymentApproval as PosManualPaymentApproval)
-        : null,
-      createdAt:
-        typeof parsedValue.createdAt === "string"
-          ? parsedValue.createdAt
-          : new Date().toISOString(),
-      updatedAt:
-        typeof parsedValue.updatedAt === "string"
-          ? parsedValue.updatedAt
-          : new Date().toISOString(),
-    };
-  } catch {
-    window.sessionStorage.removeItem(POS_CHECKOUT_ATTEMPT_STORAGE_KEY);
-    return null;
-  }
-}
-
-function saveStoredCheckoutAttemptState(state: StoredCheckoutAttemptState) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.sessionStorage.setItem(
-    POS_CHECKOUT_ATTEMPT_STORAGE_KEY,
-    JSON.stringify({
-      ...state,
-      updatedAt: new Date().toISOString(),
-    }),
-  );
-}
-
-function removeStoredCheckoutAttemptState() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.sessionStorage.removeItem(POS_CHECKOUT_ATTEMPT_STORAGE_KEY);
-}
-
-async function fetchCheckoutRecoveryStatus(
-  idempotencyKey: string,
-): Promise<PosCheckoutRecoveryStatusResult> {
-  const response = await fetch(
-    `/api/pos/checkout-attempts/${encodeURIComponent(idempotencyKey)}`,
-    {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    },
-  );
-
-  const payload = (await response.json()) as PosCheckoutRecoveryStatusResult;
-
-  if (
-    response.ok ||
-    (response.status === 404 && payload.status === "not_found")
-  ) {
-    return payload;
-  }
-
-  throw new Error("CHECKOUT_RECOVERY_REQUEST_FAILED");
-}
-
-function waitForCheckoutRecovery(delayMs: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, delayMs);
-  });
-}
 
 function getDiscountApprovalErrorMessage(
   result: Extract<PosDiscountApprovalActionResult, { status: "error" }>,
@@ -384,24 +230,6 @@ function getDiscountApprovalErrorMessage(
   }
 
   return `${result.message} ${fieldErrorMessages.join(" ")}`;
-}
-
-function getCheckoutErrorMessage(
-  result: Extract<PosCheckoutActionResult, { status: "error" }>,
-) {
-  const fieldErrorMessages = Object.values(result.fieldErrors ?? {}).filter(
-    Boolean,
-  );
-
-  if (fieldErrorMessages.length === 0) {
-    return result.message;
-  }
-
-  const detailMessage = fieldErrorMessages.join(" ");
-
-  return result.message.includes(detailMessage)
-    ? result.message
-    : `${result.message} ${detailMessage}`;
 }
 
 function formatVarianceAmount(amount: number) {
@@ -3058,8 +2886,6 @@ export function PosWorkspace({
     setPaymentFeedback,
     isAddingPayment,
     startAddingPaymentTransition,
-    isManualApprovalChecking,
-    startManualApprovalTransition,
     resetCustomerDepositDraft,
     resetPaymentForm,
     resetPaymentState,
@@ -3075,13 +2901,6 @@ export function PosWorkspace({
   const [discountAmountInput, setDiscountAmountInput] = useState("");
   const [discountReasonInput, setDiscountReasonInput] = useState("");
   const [isDiscountPending, startDiscountTransition] = useTransition();
-  const [checkoutResult, setCheckoutResult] = useState<
-    Extract<PosCheckoutActionResult, { status: "success" }>["sale"] | null
-  >(null);
-  const [isCheckoutPending, startCheckoutTransition] = useTransition();
-  const [checkoutAttempt, setCheckoutAttempt] =
-    useState<StoredCheckoutAttemptState | null>(null);
-  const [isCheckoutRecovering, setIsCheckoutRecovering] = useState(false);
   const {
     isHoldDialogOpen,
     holdTitleInput,
@@ -3094,10 +2913,44 @@ export function PosWorkspace({
     closeHoldDialog,
     holdCurrentCart: holdCurrentCartState,
   } = usePosHeldCart({ holdCart: holdPosCartAction });
-  const checkoutRecoverySequenceRef = useRef(0);
-  const checkoutRecoveryHandlerRef = useRef<
-    (attempt: StoredCheckoutAttemptState) => Promise<void>
-  >(async () => undefined);
+
+  const restoreCheckoutAttempt = useCallback(
+    (attempt: StoredCheckoutAttemptState) => {
+      setDiscountApproval(attempt.discountApproval);
+      restoreCheckoutPaymentState({
+        payments: attempt.payments,
+        customerDepositUsedAmount:
+          attempt.payload.customerDepositUsedAmount,
+        customerDepositInAmount: attempt.payload.customerDepositInAmount,
+        manualPaymentApproval: attempt.manualPaymentApproval,
+      });
+      setPanelMode("payment");
+      setIsMobileCartOpen(true);
+    },
+    [restoreCheckoutPaymentState],
+  );
+
+  const handleCheckoutSuccess = useCallback(() => {
+    setPaymentFeedback(null);
+    setCartFeedback(null);
+    resetCustomerDepositDraft();
+    setCartItems([]);
+    clearCustomerState();
+    resetPaymentState();
+    setDiscountApproval(null);
+    setDiscountFeedback(null);
+    setPanelMode("success");
+    setIsMobileCartOpen(true);
+    router.refresh();
+  }, [
+    clearCustomerState,
+    resetCustomerDepositDraft,
+    resetPaymentState,
+    router,
+    setCartFeedback,
+    setCartItems,
+    setPaymentFeedback,
+  ]);
 
   useEffect(() => {
     const pendingResumeState = getPendingHeldCartResumeState();
@@ -3113,7 +2966,6 @@ export function PosWorkspace({
         removeStoredPosCartState();
         setCartItems(pendingResumeState.items);
         restoreCustomer(pendingResumeState.heldCart.customer);
-        setCheckoutResult(null);
         setPayments([]);
         setPaymentFeedback(null);
         setPaymentAmountInput("");
@@ -3168,6 +3020,25 @@ export function PosWorkspace({
       customer: selectedCustomer,
     });
   }, [cartItems, panelMode, selectedCustomer]);
+
+  const {
+    checkoutResult,
+    isCheckoutPending,
+    isCheckoutRecovering,
+    isManualApprovalChecking,
+    clearCheckoutResult,
+    invalidateCheckoutAttempt,
+    processCheckout,
+    checkManualPaymentApproval: checkManualPaymentApprovalState,
+  } = usePosCheckout({
+    completeCheckout: completePosCheckoutAction,
+    getManualPaymentApprovalStatus:
+      getPosManualPaymentApprovalStatusAction,
+    restoreCheckoutAttempt,
+    onCheckoutSuccess: handleCheckoutSuccess,
+    setManualPaymentApproval,
+    setPaymentFeedback,
+  });
 
   const filteredItems = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -3291,17 +3162,10 @@ export function PosWorkspace({
     hasActiveShift: Boolean(context.activeShift),
   });
 
-  function invalidateCheckoutAttempt() {
-    checkoutRecoverySequenceRef.current += 1;
-    setCheckoutAttempt(null);
-    setIsCheckoutRecovering(false);
-    removeStoredCheckoutAttemptState();
-  }
-
   function resetPayments() {
     invalidateCheckoutAttempt();
     resetPaymentState();
-    setCheckoutResult(null);
+    clearCheckoutResult();
   }
 
   function resetPaymentFlow() {
@@ -3309,126 +3173,6 @@ export function PosWorkspace({
     resetPayments();
     resetCustomerDepositDraft();
   }
-
-  function applyCheckoutSuccess(
-    sale: Extract<PosCheckoutActionResult, { status: "success" }>["sale"],
-  ) {
-    invalidateCheckoutAttempt();
-    setCheckoutResult(sale);
-    setPaymentFeedback(null);
-    setCartFeedback(null);
-    resetCustomerDepositDraft();
-    setCartItems([]);
-    clearCustomerState();
-    resetPaymentState();
-    setDiscountApproval(null);
-    setDiscountFeedback(null);
-    setPanelMode("success");
-    setIsMobileCartOpen(true);
-    router.refresh();
-  }
-
-  async function recoverCheckoutAttempt(attempt: StoredCheckoutAttemptState) {
-    const recoverySequence = ++checkoutRecoverySequenceRef.current;
-    setIsCheckoutRecovering(true);
-    setPaymentFeedback(
-      "Status transaksi belum diketahui. Sedang memeriksa hasil transaksi...",
-    );
-
-    try {
-      for (
-        let pollIndex = 0;
-        pollIndex < POS_CHECKOUT_RECOVERY_MAX_POLLS;
-        pollIndex += 1
-      ) {
-        if (recoverySequence !== checkoutRecoverySequenceRef.current) {
-          return;
-        }
-
-        const recoveryStatus = await fetchCheckoutRecoveryStatus(
-          attempt.payload.idempotencyKey,
-        );
-
-        if (recoverySequence !== checkoutRecoverySequenceRef.current) {
-          return;
-        }
-
-        if (recoveryStatus.status === "completed") {
-          applyCheckoutSuccess(recoveryStatus.sale);
-          return;
-        }
-
-        if (recoveryStatus.status === "failed") {
-          setPaymentFeedback(
-            `${recoveryStatus.message} Tekan Proses Pembayaran lagi untuk retry dengan kode transaksi yang sama.`,
-          );
-          return;
-        }
-
-        if (recoveryStatus.status === "not_found" && pollIndex >= 2) {
-          setPaymentFeedback(
-            "Transaksi belum tercatat di server. Tekan Proses Pembayaran lagi; sistem akan memakai kode transaksi yang sama.",
-          );
-          return;
-        }
-
-        const retryAfterMs =
-          recoveryStatus.status === "processing"
-            ? recoveryStatus.retryAfterMs
-            : 1_500;
-
-        await waitForCheckoutRecovery(retryAfterMs);
-      }
-
-      setPaymentFeedback(
-        "Status transaksi masih belum pasti. Jangan membuat transaksi baru; tekan Proses Pembayaran lagi untuk melakukan pengecekan aman.",
-      );
-    } catch {
-      setPaymentFeedback(
-        "Status transaksi belum bisa diperiksa karena koneksi bermasalah. Jangan membuat transaksi baru; coba proses kembali dengan cart yang sama.",
-      );
-    } finally {
-      if (recoverySequence === checkoutRecoverySequenceRef.current) {
-        setIsCheckoutRecovering(false);
-      }
-    }
-  }
-
-  useEffect(() => {
-    checkoutRecoveryHandlerRef.current = recoverCheckoutAttempt;
-  });
-
-  useEffect(() => {
-    const storedAttempt = getStoredCheckoutAttemptState();
-
-    if (!storedAttempt) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setCheckoutAttempt(storedAttempt);
-      setDiscountApproval(storedAttempt.discountApproval);
-      restoreCheckoutPaymentState({
-        payments: storedAttempt.payments,
-        customerDepositUsedAmount:
-          storedAttempt.payload.customerDepositUsedAmount,
-        customerDepositInAmount: storedAttempt.payload.customerDepositInAmount,
-        manualPaymentApproval: storedAttempt.manualPaymentApproval,
-      });
-      setPanelMode("payment");
-      setIsMobileCartOpen(true);
-
-      if (storedAttempt.manualPaymentApproval) {
-        setPaymentFeedback(
-          "Checkout menunggu verifikasi pembayaran manual. Cek status approval sebelum memproses ulang.",
-        );
-      } else {
-        void checkoutRecoveryHandlerRef.current(storedAttempt);
-      }
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [restoreCheckoutPaymentState, setPaymentFeedback]);
 
   function clearDiscountApproval(message?: string) {
     setDiscountApproval(null);
@@ -3534,7 +3278,7 @@ export function PosWorkspace({
 
   function selectCustomer(customer: PosCustomerOption) {
     selectCustomerState(customer);
-    setCheckoutResult(null);
+    clearCheckoutResult();
     resetPaymentFlow();
     if (discountApproval) {
       setDiscountApproval(null);
@@ -3565,7 +3309,7 @@ export function PosWorkspace({
     const customerName = selectedCustomer?.fullName;
 
     clearCustomerState();
-    setCheckoutResult(null);
+    clearCheckoutResult();
     resetPaymentFlow();
     if (discountApproval) {
       setDiscountApproval(null);
@@ -3598,7 +3342,7 @@ export function PosWorkspace({
   function clearCart() {
     setCartItems([]);
     clearCustomerState();
-    setCheckoutResult(null);
+    clearCheckoutResult();
     resetPaymentFlow();
     if (discountApproval) {
       setDiscountApproval(null);
@@ -3625,7 +3369,7 @@ export function PosWorkspace({
       onSuccess: (result) => {
         setCartItems([]);
         clearCustomerState();
-        setCheckoutResult(null);
+        clearCheckoutResult();
         resetPaymentFlow();
         removeStoredPosCartState();
         setCartFeedback(result.message);
@@ -3643,7 +3387,7 @@ export function PosWorkspace({
     }
 
     setCartItems((currentItems) => [...currentItems, item]);
-    setCheckoutResult(null);
+    clearCheckoutResult();
     resetPaymentFlow();
     if (discountApproval) {
       setDiscountApproval(null);
@@ -3906,46 +3650,7 @@ export function PosWorkspace({
   }
 
   function checkManualPaymentApproval() {
-    if (!manualPaymentApproval) {
-      setPaymentFeedback("Request verifikasi pembayaran belum tersedia.");
-      return;
-    }
-
-    startManualApprovalTransition(async () => {
-      const result = await getPosManualPaymentApprovalStatusAction(
-        manualPaymentApproval.id,
-      );
-
-      if (result.status !== "found") {
-        setPaymentFeedback(result.message);
-        return;
-      }
-
-      const updatedPayload: PosCheckoutPayload | null = checkoutAttempt
-        ? {
-            ...checkoutAttempt.payload,
-            manualPaymentApprovalId: result.approval.id,
-          }
-        : null;
-      const updatedAttempt: StoredCheckoutAttemptState | null =
-        checkoutAttempt && updatedPayload
-          ? {
-              ...checkoutAttempt,
-              payload: updatedPayload,
-              manualPaymentApproval: result.approval,
-              updatedAt: new Date().toISOString(),
-            }
-          : null;
-
-      setManualPaymentApproval(result.approval);
-
-      if (updatedAttempt) {
-        setCheckoutAttempt(updatedAttempt);
-        saveStoredCheckoutAttemptState(updatedAttempt);
-      }
-
-      setPaymentFeedback(result.message);
-    });
+    checkManualPaymentApprovalState(manualPaymentApproval);
   }
 
   function finalizePayment() {
@@ -3953,115 +3658,27 @@ export function PosWorkspace({
       payments,
       totalAmount: externalPaymentDueAmount,
     });
+    const validationMessage = getCheckoutSubmissionValidationMessage({
+      rawCustomerDepositUsedAmount,
+      customerDepositUsedAmount,
+      canFinalizePayment,
+      paymentValidationMessage,
+    });
 
-    if (rawCustomerDepositUsedAmount !== customerDepositUsedAmount) {
-      setPaymentFeedback(
-        "Dana Titip digunakan tidak boleh melebihi saldo customer atau total belanja.",
-      );
+    if (validationMessage) {
+      setPaymentFeedback(validationMessage);
       return;
     }
 
-    if (!canFinalizePayment || paymentValidationMessage) {
-      setPaymentFeedback(
-        paymentValidationMessage ??
-          "Payment belum lunas atau transaksi belum siap diproses.",
-      );
-      return;
-    }
-
-    const idempotencyKey =
-      checkoutAttempt?.payload.idempotencyKey ?? createCheckoutIdempotencyKey();
-    const checkoutPayload: PosCheckoutPayload = {
+    processCheckout({
       itemIds: cartItems.map((item) => item.id),
-      payments: payments.map((payment) => ({
-        method: payment.method,
-        amount: payment.amount,
-        manualPaymentProfileId: payment.manualPaymentProfileId,
-        verificationConfirmed: payment.verificationConfirmed,
-        receivedAmount: payment.receivedAmount,
-        changeAmount: payment.changeAmount,
-        provider: payment.provider,
-        reference: payment.reference,
-        note: payment.note,
-        verificationSource: payment.verificationSource,
-        providerPaidAtIso: payment.providerPaidAtIso,
-        evidenceKey: payment.evidenceKey,
-        verificationDetails: payment.verificationDetails,
-      })),
-      idempotencyKey,
-      customerDepositUsedAmount:
-        customerDepositUsedAmount > 0 ? customerDepositUsedAmount : null,
-      customerDepositInAmount:
-        customerDepositInAmount > 0 ? customerDepositInAmount : null,
-      manualPaymentApprovalId: manualPaymentApproval?.id ?? null,
-      customerId: selectedCustomer?.id ?? null,
-      note: null,
-      discountApprovalId:
-        discountApproval?.status === "approved" ? discountApproval.id : null,
-      discountAmount:
-        approvedDiscountAmount > 0 ? approvedDiscountAmount : null,
-      discountReason:
-        discountApproval?.status === "approved"
-          ? discountApproval.reason
-          : null,
-    };
-    const nowIso = new Date().toISOString();
-    const nextAttempt: StoredCheckoutAttemptState = {
-      version: 2,
-      payload: checkoutPayload,
       payments,
-      discountApproval,
+      customerDepositUsedAmount,
+      customerDepositInAmount,
       manualPaymentApproval,
-      createdAt: checkoutAttempt?.createdAt ?? nowIso,
-      updatedAt: nowIso,
-    };
-
-    setCheckoutAttempt(nextAttempt);
-    saveStoredCheckoutAttemptState(nextAttempt);
-    setPaymentFeedback("Memproses transaksi POS...");
-
-    startCheckoutTransition(async () => {
-      try {
-        const result = await completePosCheckoutAction(checkoutPayload);
-
-        if (result.status === "processing") {
-          setPaymentFeedback(result.message);
-          await recoverCheckoutAttempt(nextAttempt);
-          return;
-        }
-
-        if (result.status === "error") {
-          if (result.code === "idempotency_conflict") {
-            invalidateCheckoutAttempt();
-          }
-
-          setPaymentFeedback(getCheckoutErrorMessage(result));
-          return;
-        }
-
-        if (result.status === "approval_required") {
-          const approvalPayload: PosCheckoutPayload = {
-            ...checkoutPayload,
-            manualPaymentApprovalId: result.approval.id,
-          };
-          const approvalAttempt: StoredCheckoutAttemptState = {
-            ...nextAttempt,
-            payload: approvalPayload,
-            manualPaymentApproval: result.approval,
-            updatedAt: new Date().toISOString(),
-          };
-
-          setManualPaymentApproval(result.approval);
-          setCheckoutAttempt(approvalAttempt);
-          saveStoredCheckoutAttemptState(approvalAttempt);
-          setPaymentFeedback(result.message);
-          return;
-        }
-
-        applyCheckoutSuccess(result.sale);
-      } catch {
-        await recoverCheckoutAttempt(nextAttempt);
-      }
+      customerId: selectedCustomer?.id ?? null,
+      discountApproval,
+      approvedDiscountAmount,
     });
   }
 
@@ -4178,7 +3795,7 @@ export function PosWorkspace({
       sale={checkoutResult}
       onStartNewTransaction={() => {
         invalidateCheckoutAttempt();
-        setCheckoutResult(null);
+        clearCheckoutResult();
         setCartFeedback(null);
         setPaymentFeedback(null);
         clearCustomerState();
