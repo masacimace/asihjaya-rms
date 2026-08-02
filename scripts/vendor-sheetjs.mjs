@@ -37,13 +37,16 @@ async function main() {
     packageLock.packages?.[""]?.dependencies,
     "Root dependency map tidak ditemukan pada package-lock.json.",
   );
+  assert(
+    lockEntry.version === sheetJsVersion,
+    `Versi SheetJS pada lockfile harus ${sheetJsVersion}.`,
+  );
 
   if (packageJson.dependencies?.xlsx !== vendoredDependency) {
     assert(
       packageJson.dependencies?.xlsx === officialUrl,
       `Dependency xlsx harus berasal dari ${officialUrl} sebelum vendoring.`,
     );
-    assert(lockEntry.resolved === officialUrl, "Resolved URL SheetJS pada lockfile tidak resmi.");
     assert(
       lockEntry.integrity === officialIntegrity,
       "Integrity SheetJS pada lockfile tidak cocok dengan release resmi yang disetujui.",
