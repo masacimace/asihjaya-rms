@@ -12,6 +12,7 @@ import {
   WalletCards,
 } from "lucide-react";
 
+import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
 import { ShiftClosePanel } from "@/components/pos/shift-close-panel";
 import type { PosShiftOverviewData } from "@/features/pos/contracts";
 import { getPosShiftOverviewData } from "@/features/pos/queries";
@@ -122,7 +123,7 @@ function SummaryCard({
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm text-[var(--muted)]">{title}</p>
-          <p className="mt-2 truncate text-xl font-semibold tracking-tight text-neutral-950">
+          <p className="mt-2 truncate text-xl font-semibold text-neutral-950">
             {value}
           </p>
           <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{helper}</p>
@@ -270,7 +271,7 @@ function OutletBadge({ data }: { data: PosShiftOverviewData }) {
 
 function EmptyShiftState({ data }: { data: PosShiftOverviewData }) {
   return (
-    <section className="mt-5 grid min-h-80 place-items-center rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
+    <section className="grid min-h-80 place-items-center rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
       <div>
         <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
           <PlayCircle className="size-7" />
@@ -309,27 +310,20 @@ export default async function PosShiftPage() {
     : "/pos/transaksi";
 
   return (
-    <main className="p-4 pb-32 sm:p-6 lg:pb-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm text-[var(--muted)]">Aplikasi POS</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950">
-              Ringkasan Shift
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Ringkasan shift berjalan untuk kasir: modal awal, expected cash,
-              payment, transaksi, dan closing shift.
-            </p>
-          </div>
-          <OutletBadge data={data} />
-        </div>
+    <PosPageContainer>
+      <PosPageHeader
+        eyebrow="Operasional POS"
+        title="Ringkasan Shift"
+        description="Pantau modal awal, expected cash, pembayaran, transaksi, dan proses closing pada shift kasir aktif."
+        icon={<Clock3 className="size-5 sm:size-6" />}
+        actions={<OutletBadge data={data} />}
+      />
 
         {!activeShift ? (
           <EmptyShiftState data={data} />
         ) : (
           <>
-            <section className="mt-5 overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+            <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
               <div className="flex flex-col gap-4 border-b border-[var(--border)] bg-neutral-50 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -341,7 +335,7 @@ export default async function PosShiftPage() {
                       {data.register?.name ?? "Register belum tersedia"}
                     </span>
                   </div>
-                  <h2 className="mt-3 text-xl font-semibold tracking-tight text-neutral-950">
+                  <h2 className="mt-3 text-xl font-semibold text-neutral-950">
                     Dibuka {formatDateTime(activeShift.openedAt)}
                   </h2>
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
@@ -699,7 +693,6 @@ export default async function PosShiftPage() {
             </div>
           </>
         )}
-      </div>
-    </main>
+    </PosPageContainer>
   );
 }

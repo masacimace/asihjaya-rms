@@ -105,6 +105,9 @@ jobs:
       - name: Business contracts
         run: npm run check:business
 
+      - name: Application hardware contracts
+        run: npm run check:hardware-app
+
   database-migrations:
     name: Database Migration
     runs-on: ubuntu-latest

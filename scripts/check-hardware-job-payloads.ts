@@ -1,0 +1,83 @@
+import assert from "node:assert/strict";
+
+import { RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1 } from "@/features/sales/documents/receipt-document-profiles";
+import {
+  assertHardwareJobPayloadV2,
+  buildHardwareTestPayloadV2,
+  buildInventoryLabelPayloadV2,
+  buildReceiptDocumentPayloadV2,
+  EPSON_L3251_PRINT_PROFILE_A4_V1,
+} from "@/lib/hardware/job-payload-contracts-v2";
+import { hashHardwareJobPayloadV2 } from "@/lib/hardware/job-payload-v2";
+
+const itemId = "11111111-1111-4111-8111-111111111111";
+const saleId = "22222222-2222-4222-8222-222222222222";
+const agentId = "33333333-3333-4333-8333-333333333333";
+
+const labelPayload = buildInventoryLabelPayloadV2({
+  itemId,
+  copies: 2,
+  sku: "AJ-0001",
+  barcode: "899000000001",
+  productName: "Cincin Emas",
+  weightGram: "2.350",
+  purityPercent: "75",
+  exchangePurityPercent: "70",
+  size: "12",
+  color: "Kuning",
+  gemstone: "Zircon",
+  sellingAmount: "3500000",
+});
+assert.equal(labelPayload.schemaVersion, 1);
+assert.equal(labelPayload.templateId, "jewelry_compact_v1");
+assert.equal(labelPayload.printerProfileId, "sato_cg408tt_jewelry_v1");
+assertHardwareJobPayloadV2("print_label_sato", labelPayload);
+
+const receiptPayload = buildReceiptDocumentPayloadV2({
+  saleId,
+  invoiceNumber: "INV-2026-0001",
+  requestSource: "check.hardware.job-payloads",
+  reprint: false,
+  requestedAt: new Date("2026-07-16T10:00:00.000Z"),
+});
+assert.equal(
+  receiptPayload.documentProfileId,
+  RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1,
+);
+assert.equal(receiptPayload.printProfileId, EPSON_L3251_PRINT_PROFILE_A4_V1);
+assert.equal(
+  receiptPayload.download.path,
+  `/api/sales/${saleId}/receipt-certificate?profile=receipt_a4_landscape_v1`,
+);
+assertHardwareJobPayloadV2("print_receipt_certificate", receiptPayload);
+
+const testDocumentPayload = buildHardwareTestPayloadV2({
+  jobType: "test_document_printer",
+  agentId,
+  requestedAt: new Date("2026-07-16T10:00:00.000Z"),
+});
+assertHardwareJobPayloadV2("test_document_printer", testDocumentPayload);
+
+assert.throws(
+  () =>
+    assertHardwareJobPayloadV2("print_receipt_certificate", {
+      ...receiptPayload,
+      download: {
+        ...receiptPayload.download,
+        path: "https://evil.example/receipt.pdf",
+      },
+    }),
+  /relative \/api\//,
+);
+
+const firstHash = hashHardwareJobPayloadV2({
+  schemaVersion: 1,
+  nested: { barcode: "899000000001", copies: 1 },
+});
+const reorderedHash = hashHardwareJobPayloadV2({
+  nested: { copies: 1, barcode: "899000000001" },
+  schemaVersion: 1,
+});
+assert.equal(firstHash, reorderedHash, "Canonical payload hash harus stabil.");
+
+console.log("Hardware job payload contract checks passed.");

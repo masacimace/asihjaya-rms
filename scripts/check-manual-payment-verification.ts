@@ -21,6 +21,22 @@ assert.deepEqual(Object.keys(DEFAULT_MANUAL_PAYMENT_POLICIES).sort(), [
 ]);
 assert.equal(getManualPaymentProfileType("debit_card"), "edc");
 assert.equal(getManualPaymentProfileType("credit_card"), "edc");
+assert.equal(
+  DEFAULT_MANUAL_PAYMENT_POLICIES.debit_card.evidenceThreshold,
+  20_000_000,
+);
+assert.equal(
+  DEFAULT_MANUAL_PAYMENT_POLICIES.debit_card.coVerificationThreshold,
+  30_000_000,
+);
+assert.equal(
+  DEFAULT_MANUAL_PAYMENT_POLICIES.credit_card.evidenceThreshold,
+  20_000_000,
+);
+assert.equal(
+  DEFAULT_MANUAL_PAYMENT_POLICIES.credit_card.coVerificationThreshold,
+  30_000_000,
+);
 
 const validDebitEdc: PosCheckoutPaymentInput = {
   method: "debit_card",
@@ -147,4 +163,4 @@ const fingerprintB = createManualPaymentVerificationFingerprint({
 });
 assert.equal(fingerprintA, fingerprintB);
 
-console.log("P1-A manual EDC payment verification checks passed.");
+console.log("Manual payment verification checks passed.");

@@ -32,11 +32,11 @@ assert.equal(getHardwareJobExpirySeconds("open_cash_drawer", "automatic"), 30);
 assert.equal(getHardwareJobExpirySeconds("test_label_printer", "test"), 120);
 assert.equal(
   getHardwareJobExpirySeconds("print_receipt_certificate", "automatic"),
-  600,
+  14_400,
 );
 assert.equal(
   getHardwareJobExpirySeconds("print_receipt_certificate", "manual"),
-  900,
+  28_800,
 );
 assert.equal(
   getHardwareJobExpirySeconds("print_label_sato", "manual"),
@@ -50,7 +50,7 @@ assert.equal(
     mode: "manual",
     now: baseTime,
   }).toISOString(),
-  "2026-07-16T10:15:00.000Z",
+  "2026-07-16T18:00:00.000Z",
 );
 
 assert.equal(isHardwareJobV2TransitionAllowed("pending", "claimed"), true);
@@ -137,4 +137,4 @@ assert.equal(isHardwareJobV2TerminalStatus("failed"), false);
 assert.equal(isHardwareJobAttemptTerminalStatus("acknowledged"), true);
 assert.equal(isHardwareJobAttemptTerminalStatus("submitted"), false);
 
-console.log("Hardware Job Protocol v2 database foundation checks berhasil.");
+console.log("Hardware job protocol transition checks passed.");

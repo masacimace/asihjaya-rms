@@ -371,39 +371,31 @@ Command ini hanya menerima target PostgreSQL Compose lokal
 `asihjaya@localhost:5432/asihjaya_rms`. Target non-local, environment production,
 dan storage selain folder `.data` akan ditolak.
 
-### Payment dan Production-readiness Checks
+### Domain dan Production-readiness Checks
+
+Gunakan kelompok check berdasarkan domain, tanpa command milestone historis:
 
 ```powershell
-npm run check:p0d
-npm run check:p1a
-npm run check:p1a1
-npm run check:p1b
-npm run check:p1b1
-npm run check:p1c1
-npm run check:p1c2
+npm run check:transactions
+npm run check:security
+npm run check:business
+npm run check:hardware-app
+npm run check:hardware
 ```
 
-### Notification Center Checks
+Contract PDF yang memerlukan Chromium dijalankan terpisah:
 
 ```powershell
-npm run check:notifications:v1a
-npm run check:notifications:v1b
-npm run check:notifications:v1c
-npm run check:notifications:v1d
-npm run check:notifications:v1e
-npm run check:notifications:v1f
+npm run check:manual
 ```
 
-### Database Preflight
-
-Feature tertentu memiliki command preflight, misalnya:
+Untuk pemeriksaan lengkap yang sesuai dengan quality gate CI:
 
 ```powershell
-npm run db:preflight:p1c2
-npm run db:preflight:notifications:v1a
+npm run check:all
 ```
 
-Periksa `package.json` dan dokumentasi fitur untuk command preflight yang tersedia.
+Script preflight dan repair sekali pakai sudah dipensiunkan. Validasi schema dilakukan melalui migration metadata checker dan rehearsal PostgreSQL disposable.
 
 ## Pemeriksaan Sebelum Commit
 
@@ -422,8 +414,9 @@ Jika ada perubahan schema:
 
 ```powershell
 npm run db:generate
-npm run db:preflight:<feature>
+npm run check:database
 npm run db:migrate
+npm run check:database:live
 ```
 
 Jangan menjalankan `db:seed` pada database yang sudah berisi data hanya karena migration baru diterapkan.
@@ -441,6 +434,20 @@ docker compose cp db:/tmp/asihjaya-rms.dump ./.local-backups/asihjaya-rms.dump
 ```
 
 Folder backup lokal harus tetap diabaikan oleh Git.
+
+## Script Operasional
+
+Pembersihan upload bukti pembayaran yang kedaluwarsa:
+
+```powershell
+npm run maintenance:payment-evidence-cleanup
+```
+
+Regenerasi panduan Hardware Hub dari source terstruktur:
+
+```powershell
+npm run docs:hardware:generate
+```
 
 ## Dokumentasi
 

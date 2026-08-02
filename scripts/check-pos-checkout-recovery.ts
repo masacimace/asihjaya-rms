@@ -82,4 +82,4 @@ assert.equal(
   false,
 );
 
-console.log("P0-D checkout fingerprint dan idempotency smoke test berhasil.");
+console.log("POS checkout fingerprint and idempotency checks passed.");

@@ -24,14 +24,14 @@ type CheckManifest = {
   version: number;
   blocking: string[];
   infrastructure: string[];
-  legacyNonBlocking: string[];
+  manual: string[];
 };
 
 const packageJson = readJson<PackageJson>("package.json");
 const hardwarePackageJson = readJson<PackageJson>("hardware-hub/package.json");
 const manifest = readJson<CheckManifest>("scripts/check-suite-manifest.json");
 
-assert(manifest.version === 1, "Versi check-suite manifest belum didukung.");
+assert(manifest.version === 2, "Versi check-suite manifest belum didukung.");
 
 const checkFiles = readdirSync(scriptsRoot)
   .filter((fileName) => /^check-.*\.(?:ts|tsx|js|mjs|cjs)$/.test(fileName))
@@ -40,7 +40,7 @@ const checkFiles = readdirSync(scriptsRoot)
 const classifiedFiles = [
   ...manifest.blocking,
   ...manifest.infrastructure,
-  ...manifest.legacyNonBlocking,
+  ...manifest.manual,
 ];
 const classifiedSet = new Set(classifiedFiles);
 
@@ -68,8 +68,11 @@ const requiredRootScripts = [
   "check:database:live",
   "check:quality",
   "check:security",
+  "check:transactions",
   "check:business",
+  "check:hardware-app",
   "check:hardware",
+  "check:manual",
   "check:static",
   "check:all",
   "test:financial",
@@ -93,6 +96,14 @@ for (const [scriptName, command] of Object.entries(packageJson.scripts ?? {})) {
   assert(
     !/(?:^|\s)npx(?:\s|$)/.test(command),
     `Script ${scriptName} tidak boleh memakai npx; gunakan binary dependency lokal melalui npm script.`,
+  );
+}
+
+const rootCommands = Object.values(packageJson.scripts ?? {}).join("\n");
+for (const fileName of classifiedFiles) {
+  assert(
+    rootCommands.includes(`scripts/${fileName}`),
+    `Check script ${fileName} wajib dapat dijalankan melalui package.json.`,
   );
 }
 
@@ -133,6 +144,10 @@ assert(
 assert(
   workflow.includes("npm run check:database:live"),
   `${workflowPath} wajib memeriksa schema hasil migration.`,
+);
+assert(
+  workflow.includes("npm run check:hardware-app"),
+  `${workflowPath} wajib menjalankan kontrak hardware sisi aplikasi.`,
 );
 
 for (const documentationPath of [

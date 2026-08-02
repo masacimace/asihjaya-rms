@@ -8,7 +8,7 @@ Dokumen ini menetapkan pemeriksaan minimum sebelum perubahan Asihjaya RMS digabu
 - Command lokal dan GitHub Actions menggunakan npm script yang sama.
 - Database CI selalu disposable dan tidak pernah memakai database development atau production.
 - Secret CI hanya nilai dummy dengan entropy/panjang yang memenuhi validator aplikasi.
-- Check historis tidak otomatis menjadi blocking sebelum kontraknya diaudit ulang.
+- Setiap check harus menguji perilaku atau kontrak aktif; check milestone berbasis pencarian teks dipensiunkan.
 
 ## Command lokal
 
@@ -25,6 +25,7 @@ Kelompok pemeriksaan:
 npm run check:quality
 npm run check:static
 npm run check:security
+npm run check:transactions
 npm run check:business
 npm run check:hardware
 npm run build
@@ -64,9 +65,9 @@ Semua `scripts/check-*` harus tercatat pada `scripts/check-suite-manifest.json`.
 
 - `blocking`: kontrak aktif yang wajib lulus pada pull request.
 - `infrastructure`: pemeriksaan CI, source hygiene, dan migration.
-- `legacyNonBlocking`: regression aid historis yang belum dijadikan blocking.
+- `manual`: kontrak aktif yang memerlukan runtime khusus, misalnya Chromium untuk rendering PDF.
 
-Check lama tidak dihapus hanya karena belum blocking. Check tersebut harus diaudit, diperbarui, atau dipensiunkan secara eksplisit ketika domain terkait disentuh.
+Check lama berbasis milestone atau pencarian potongan source harus diganti dengan assertion perilaku, dipindahkan ke suite aktif, atau dipensiunkan secara eksplisit.
 
 ## Source hygiene
 
@@ -87,7 +88,7 @@ Workflow `.github/workflows/ci.yml` berjalan pada push, pull request, dan manual
 Status check utama:
 
 1. **Static Quality** — install, lint, typecheck, route check, dan production build.
-2. **Security & Business Checks** — quality config, source hygiene, migration metadata, security contracts, dan timezone/business contracts.
+2. **Security & Business Checks** — quality config, source hygiene, migration metadata, security contracts, business contracts, dan kontrak hardware sisi aplikasi.
 3. **Database Migration** — PostgreSQL 17 disposable, migration dua kali, lalu schema verification.
 4. **Hardware Hub Checks** — request signing, DPAPI mock, Protocol v2, failure injection, operations, PDF profile, dan SATO golden files.
 5. **Financial & Concurrency Tests** — PostgreSQL 17 disposable, checkout race, Dana Titip, refund replay, settlement deduplication, hardware exactly-once, dan tenant isolation.
@@ -96,10 +97,16 @@ CI tidak melakukan print fisik, tidak mengakses perangkat outlet, dan tidak mema
 
 ## Pemeriksaan manual sebelum release
 
+Jalankan kontrak otomatis yang memerlukan Chromium melalui:
+
+```bash
+npm run check:manual
+```
+
 Pemeriksaan berikut tetap manual sampai workflow browser/hardware khusus tersedia:
 
 - Kamera scanner pada browser target.
-- PDF Playwright menggunakan Chromium production image.
+- PDF Playwright menggunakan Chromium production image dan hasil visualnya.
 - Print Epson A4 pada kertas nyata.
 - Alignment label SATO CG408TT.
 - Startup task dan DPAPI nyata pada Windows outlet.

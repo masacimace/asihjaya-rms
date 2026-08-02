@@ -540,7 +540,8 @@ const scannerPageSource = read(
 );
 for (const contract of [
   "CameraScannerModal",
-  "Buka kamera / input manual",
+  "Buka kamera scanner",
+  "Masukkan barcode fisik",
   "Ajukan ke manager",
   "belum menjadi stok aktif",
   'capture="environment"',

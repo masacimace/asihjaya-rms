@@ -221,12 +221,24 @@ export async function getLegacyMigrationScannerSession(
     total: 0,
     submitted: 0,
     needsReview: 0,
+    approved: 0,
+    returned: 0,
+    rejected: 0,
+    soldDuringMigration: 0,
+    activated: 0,
   };
   for (const row of summaryRows) {
     const total = Number(row.total);
     summary.total += total;
     if (row.status === "submitted") summary.submitted = total;
     if (row.status === "needs_review") summary.needsReview = total;
+    if (row.status === "approved") summary.approved = total;
+    if (row.status === "returned") summary.returned = total;
+    if (row.status === "rejected") summary.rejected = total;
+    if (row.status === "sold_during_migration") {
+      summary.soldDuringMigration = total;
+    }
+    if (row.status === "activated") summary.activated = total;
   }
 
   return {

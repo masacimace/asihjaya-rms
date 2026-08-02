@@ -2577,11 +2577,6 @@ function PaymentContent({
                   Dana Titip hanya berlaku untuk customer dan outlet ini.
                 </p>
               </div>
-              {payments.length > 0 ? (
-                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#815618] ring-1 ring-[#ead7ad]">
-                  Reset payment untuk ubah
-                </span>
-              ) : null}
             </div>
 
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -5108,7 +5103,7 @@ export function PosWorkspace({
 
       <div className="lg:grid lg:h-[calc(100vh-7.5rem)] lg:grid-cols-[minmax(0,1fr)_380px] lg:overflow-hidden">
         {/* Katalog */}
-        <section className="min-w-0 p-4 pb-36 sm:p-5 sm:pb-36 lg:overflow-y-auto lg:border-r lg:border-[var(--border)] lg:p-6">
+        <section className="min-w-0 p-4 pb-22 sm:p-5 sm:pb-36 lg:overflow-y-auto lg:border-r lg:border-[var(--border)] lg:p-6">
           <PosContextNotice
             context={context}
             canManageShifts={canManageShifts}
@@ -5128,7 +5123,7 @@ export function PosWorkspace({
           ) : null}
 
           {/* Search mobile */}
-          <div className="mb-4 flex items-center gap-2 md:hidden">
+          <div className="mb-2 flex items-center gap-2 md:hidden">
             <label className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3">
               <Search className="size-4 shrink-0 text-neutral-400" />
 
@@ -5166,7 +5161,7 @@ export function PosWorkspace({
           {/* Compact category dropdown / mobile sheet */}
           <div className="-mx-4 bg-[var(--background)] px-4 py-2 sm:-mx-5 sm:px-5 lg:-mx-6 lg:px-6">
             <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="shrink-0">
+              <div className="hidden shrink-0 sm:block">
                 <p className="text-xl font-semibold text-neutral-950">
                   Pilih item produk
                 </p>
@@ -5194,6 +5189,13 @@ export function PosWorkspace({
                     </span>
                   </span>
 
+                  <span
+                    className="shrink-0 rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-semibold text-neutral-600 sm:hidden"
+                    title={`${filteredItems.length} dari ${totalAvailableItems} item tersedia`}
+                  >
+                    {filteredItems.length}/{totalAvailableItems}
+                  </span>
+
                   <ChevronDown
                     className={cn(
                       "size-4 shrink-0 text-neutral-400 transition-transform",
@@ -5203,16 +5205,11 @@ export function PosWorkspace({
                 </button>
 
                 <span
-                  className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--muted)]"
+                  className="hidden shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--muted)] sm:inline-flex"
                   title={`${filteredItems.length} dari ${totalAvailableItems} item tersedia`}
                 >
-                  <span className="sm:hidden">
-                    {filteredItems.length}/{totalAvailableItems}
-                  </span>
-                  <span className="hidden sm:inline">
-                    {filteredItems.length} dari {totalAvailableItems} item
-                    tersedia
-                  </span>
+                  {filteredItems.length} dari {totalAvailableItems} item
+                  tersedia
                 </span>
 
                 {isCategoryPickerOpen ? (

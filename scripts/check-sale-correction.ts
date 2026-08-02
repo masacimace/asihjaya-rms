@@ -70,4 +70,4 @@ assert.equal(getCorrectionReasonLabel("void", "wrong_item"), "Salah memilih bara
 assert.equal(getCorrectionReasonLabel("refund", "product_issue"), "Barang bermasalah");
 assert.equal(getCorrectionReasonLabel("refund", "unknown"), null);
 
-console.log("P1-B.1 transaction correction eligibility checks passed.");
+console.log("Sale correction eligibility checks passed.");

@@ -1,7 +1,8 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ScanBarcode } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
 import { MobileMigrationScanner } from "@/features/legacy-migration/components/mobile-migration-scanner";
 import { getLegacyMigrationScannerSession } from "@/features/legacy-migration/verification-queries";
 import { requirePermission } from "@/lib/auth/session";
@@ -21,14 +22,22 @@ export default async function LegacyMigrationScannerPage({
   if (!data) notFound();
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-4 sm:p-6 lg:p-8">
-      <Link
-        href="/pos/migrasi-barang"
-        className="mb-4 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:bg-white"
-      >
-        <ArrowLeft className="size-4" />
-        Kembali ke daftar sesi
-      </Link>
+    <PosPageContainer>
+      <PosPageHeader
+        eyebrow="Scanner migrasi"
+        title="Verifikasi Fisik Barang"
+        description="Scan barcode, periksa kondisi fisik, lalu kirim verification ke manager tanpa keluar dari workspace sesi."
+        icon={<ScanBarcode className="size-5 sm:size-6" />}
+        actions={
+          <Link
+            href="/pos/migrasi-barang"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+          >
+            <ArrowLeft className="size-4" />
+            Kembali ke daftar sesi
+          </Link>
+        }
+      />
 
       <MobileMigrationScanner
         session={data.session}
@@ -36,6 +45,6 @@ export default async function LegacyMigrationScannerPage({
         recentVerifications={data.recentVerifications}
         summary={data.summary}
       />
-    </div>
+    </PosPageContainer>
   );
 }

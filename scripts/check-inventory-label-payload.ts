@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
 
 import {
   buildInventoryLabelPayloadV2,
@@ -40,25 +38,4 @@ assert.throws(
   /CODE39 uppercase/,
 );
 
-const root = process.cwd();
-const adapterSource = fs.readFileSync(
-  path.join(root, "hardware-hub/lib/hardware-adapters.js"),
-  "utf8",
-);
-const generatorSource = fs.readFileSync(
-  path.join(root, "hardware-hub/lib/sato-sbpl-generator.js"),
-  "utf8",
-);
-const fakeSource = fs.readFileSync(
-  path.join(root, "hardware-hub/lib/fake-hardware-adapters.js"),
-  "utf8",
-);
-
-assert.match(adapterSource, /generateSatoSbpl/);
-assert.doesNotMatch(adapterSource, /createSatoBuilder/);
-assert.match(generatorSource, /SATO_BARCODE_INVALID/);
-assert.match(generatorSource, /commandSha256/);
-assert.match(fakeSource, /printerProfile/);
-assert.match(fakeSource, /commandSha256/);
-
-console.log("OK: Protocol v2 secure SATO label payload and agent integration checks passed.");
+console.log("Inventory label payload checks passed.");

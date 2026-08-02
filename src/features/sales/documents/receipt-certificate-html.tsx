@@ -443,8 +443,8 @@ const styles = String.raw`
 
   .aj-thumb {
     display: grid;
-    width: 32mm;
-    height: 32mm;
+    width: 28mm;
+    height: 28mm;
     overflow: hidden;
     place-items: center;
     justify-self: center;
@@ -460,7 +460,6 @@ const styles = String.raw`
     display: block;
     width: 100%;
     height: 100%;
-    object-fit: contain;
   }
 
   .aj-thumb-fallback {
@@ -735,7 +734,7 @@ const styles = String.raw`
     position: relative;
     z-index: 1;
     display: grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto 1fr;
     gap: 2.8mm;
     height: 100%;
   }
@@ -812,9 +811,9 @@ const styles = String.raw`
 
   .aj-back-grid {
     display: grid;
-    grid-template-columns: 1.12fr 0.88fr;
-    grid-template-rows: 1fr 0.95fr;
-    gap: 3mm;
+    grid-template-columns: minmax(0, 1.18fr) minmax(50mm, 0.72fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 2.4mm;
     min-height: 0;
   }
 
@@ -831,6 +830,64 @@ const styles = String.raw`
 
   .aj-back-card-terms {
     grid-row: 1 / span 2;
+    height: 100%;
+    overflow: hidden;
+    gap: 1mm;
+    padding: 2.4mm 2.8mm;
+  }
+
+  .aj-back-policy-heading {
+    color: var(--ink);
+    font-size: 7.45pt;
+    font-weight: 900;
+    line-height: 1.16;
+    text-transform: uppercase;
+  }
+
+  .aj-back-policy-list {
+    display: grid;
+    margin: 0;
+    color: #2f2924;
+    font-size: 5.8pt;
+    line-height: 1.32;
+  }
+
+  .aj-back-policy-list > li {
+    padding-left: 0.45mm;
+    break-inside: avoid;
+  }
+
+  .aj-back-policy-sublist {
+    display: grid;
+    gap: 0.2mm;
+    margin: 0.35mm 0 0;
+    padding-left: 4.8mm;
+    list-style-type: lower-alpha;
+  }
+
+  .aj-back-policy-sublist > li {
+    padding-left: 0.45mm;
+  }
+
+  .aj-back-card-compact {
+    overflow: hidden;
+    gap: 1.15mm;
+  }
+
+  .aj-back-card-compact .aj-back-section-title {
+    gap: 1.2mm;
+    padding-bottom: 0.45mm;
+    font-size: 5.65pt;
+  }
+
+  .aj-back-card-compact .aj-back-section-icon {
+    width: 5.4mm;
+    height: 5.4mm;
+  }
+
+  .aj-back-card-compact .aj-back-section-icon svg {
+    width: 3.1mm;
+    height: 3.1mm;
   }
 
   .aj-back-section-title {
@@ -838,7 +895,7 @@ const styles = String.raw`
     align-items: center;
     gap: 1.7mm;
     color: var(--ink);
-    font-size: 6.4pt;
+    font-size: 5.6pt;
     font-weight: 900;
     text-transform: uppercase;
     padding-bottom: 1mm;
@@ -875,27 +932,28 @@ const styles = String.raw`
   }
 
   .aj-back-card-compact .aj-back-list {
-    gap: 1.1mm;
-    font-size: 5.8pt;
+    gap: 0.65mm;
+    font-size: 6.35pt;
+    line-height: 1.24;
   }
 
   .aj-back-service-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.5mm;
+    gap: 1.05mm;
   }
 
   .aj-back-service-pill {
     display: grid;
-    min-height: 8.4mm;
+    min-height: 7.2mm;
     align-items: center;
-    padding: 1.6mm 2mm;
-    border-radius: 2mm;
+    padding: 1.2mm 1.45mm;
+    border-radius: 1.7mm;
     color: #4b4037;
     background: rgba(245, 245, 245, 0.78);
-    font-size: 5.35pt;
+    font-size: 4.55pt;
     font-weight: 800;
-    line-height: 1.25;
+    line-height: 1.2;
   }
 
   .aj-back-contact-heading {
@@ -1728,36 +1786,104 @@ export function ReceiptCertificateHtmlDocument({
                     <BackSectionTitle icon="terms">
                       Ketentuan Transaksi
                     </BackSectionTitle>
-                    <ol className="aj-back-list">
+
+                    <div className="aj-back-policy-heading">
+                      Terima kasih telah memilih Asih Jaya
+                    </div>
+
+                    <ol className="aj-back-policy-list">
                       <li>
-                        Barang yang tercantum dalam nota telah diperiksa,
-                        disetujui, ditimbang, dan diterima oleh pembeli.
+                        1. Setiap permintaan untuk layanan lebih lanjut
+                        (Penukaran, Pembelian kembali produk, dan Keluhan) harus
+                        disertal invoice/kuitansi dan sertifikat asli.
+                      </li>
+                      <br />
+                      <li>
+                        2. Asih Jaya Bantar Gebang dapat menarik atau mengubah
+                        kebijakan penukaran/pembelian kembali produk Asih Jaya
+                        Bantar Gebang tanpa pemberitahuan sebelumnya pada waktu
+                        tertentu dan keputusan Asih Jaya Bantar Gebang bersifat
+                        mutlak
+                      </li>{" "}
+                      <br />
+                      <li>
+                        3. Perhiasan yang dijual oleh Asih Jaya Bantar Gebang
+                        dapat ditukar pada toko Asih Jaya Bantar Gebang untuk
+                        produk dengan nilai yang sama, jika perhiasan yang
+                        ditukar memenuhi kondisi berikut:
+                        <ol className="aj-back-policy-sublist" type="a">
+                          <li>Perhiasan belum pernah digunakan.</li>
+                          <li>
+                            Perhiasan dalam kondisi yang sama pada saat
+                            perhiasan dijual.
+                          </li>
+                          <li>
+                            Perhiasan dikembalikan dalam waktu maksimal 2 hari
+                            dari waktu pembelian.
+                          </li>
+                          <li>Produk tidak dirusak atau diubah.</li>
+                          <li>
+                            Jika pelanggan menukar produk dengan produk bernilai
+                            lebih rendah, tidak ada pengembalian uang atas
+                            jumlah perbedaan yang akan diberikan. Namun jika
+                            pelanggan menukar produk dengan produk bernilai
+                            lebih tinggi, maka selisih jumlah tersebut harus
+                            dibayar oleh pelanggan.
+                          </li>
+                        </ol>
                       </li>
                       <li>
-                        Barang dapat dijual kembali mengikuti harga pasar,
-                        kondisi barang, dan kebijakan toko yang berlaku.
-                      </li>
-                      <li>
-                        Barang permata cacat, retak, atau pecah tidak dapat
-                        diterima kembali.
-                      </li>
-                      <li>
-                        Perhiasan batu dan sejenisnya hanya kami terima bagian
-                        emasnya saja.
-                      </li>
-                      <li>
-                        Nota wajib dibawa saat menjual kembali. Jika nota
-                        hilang, transaksi dapat ditolak atau perlu verifikasi
-                        tambahan.
-                      </li>
-                      <li>
-                        Selisih berat, kadar, kelengkapan, atau kondisi barang
-                        saat penjualan kembali dapat memengaruhi nilai
-                        transaksi.
-                      </li>
-                      <li>
-                        Dana Titip dan riwayat transaksi mengikuti catatan
-                        sistem pada outlet terkait.
+                        {" "}
+                        <br />
+                        Kebijakan penukaran/pembelian kembali:
+                        <ol className="aj-back-policy-sublist" type="a">
+                          <li>
+                            Kami akan menerima produk Asih Jaya Bantar Gebang
+                            yang dijual melalui cabang kami sesuai dengan syarat
+                            dan ketentuan yang berlaku, dan kebijakan
+                            Exchange/Buyback kami, yang merupakan kebijakan Asih
+                            Jaya Bantar Gebang.
+                          </li>
+                          <li>
+                            Asih Jaya Bantar Gebang akan menerima perhiasan
+                            dibawah kebijakan penukaran/pembelian kembali
+                            setelah memeriksa dengan cermat bobot produk dan
+                            keasliannya sebagai produk Asih Jaya. Dengan
+                            melakukan identifikasi kerusakan atau cacat batu
+                            (Retakan, Penggantian dan Perubahan).
+                          </li>
+                          <li>
+                            Pada saat penukaran/pembelian kembali perhiasan yang
+                            dibeli dari toko kami, kami akan menghargai bagian
+                            dari syarat dan ketentuan Asih Jaya Bantar Gebang.
+                          </li>
+                          <li>
+                            Batu berwarna/mutiara/cincin
+                            pernikahan/hadiah/perhiasan yang dibuat khusus tidak
+                            dapat dibeli kembali atau ditukar.
+                          </li>
+                          <li>
+                            Berat emas akan menjadi bersih di luar berat
+                            mutiara, batu, lac, debu, kotoran dan bahan asing
+                            lainnya.
+                          </li>
+                          <li>
+                            Semua penilaian dan pembelian kembali tidak termasuk
+                            PPN/Pajak Penjualan/Ongko Pembuatan.
+                          </li>
+                          <li>
+                            Pengumpulan/desain khusus tidak tunduk pada
+                            kebijakan pertukaran dan pembelian kembali di atas,
+                            hal tersebut adalah kebijakan Asih Jaya Bantar
+                            Gebang.
+                          </li>
+                          <li>
+                            Simpan invoice pembelian/sertifikat asli sebagai
+                            bukti transaksi yang sah Asih Jaya Bantar Gebang
+                            berhak menolak pembelian kembali atau penukaran
+                            tanpa disertai invoice pembelian asli.
+                          </li>
+                        </ol>
                       </li>
                     </ol>
                   </article>
@@ -1768,18 +1894,19 @@ export function ReceiptCertificateHtmlDocument({
                     </BackSectionTitle>
                     <ul className="aj-back-list">
                       <li>
-                        Hindari kontak langsung dengan parfum, sabun, cairan
-                        kimia, dan air laut.
+                        - Hindari kontak langsung dengan parfum, sabun, cairan
+                        kimia.
                       </li>
                       <li>
-                        Simpan perhiasan secara terpisah agar tidak saling
+                        - Simpan perhiasan secara terpisah agar tidak saling
                         bergesekan.
                       </li>
                       <li>
-                        Bersihkan perhiasan menggunakan kain lembut dan kering.
+                        - Bersihkan perhiasan menggunakan kain lembut dan
+                        kering.
                       </li>
                       <li>
-                        Lakukan pemeriksaan berkala ke outlet Asihjaya jika
+                        - Lakukan pemeriksaan berkala ke outlet Asihjaya jika
                         diperlukan.
                       </li>
                     </ul>

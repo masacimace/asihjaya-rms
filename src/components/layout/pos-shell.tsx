@@ -105,7 +105,7 @@ const fallbackStatus: PosShellStatus = {
 };
 
 const navigation = [
-  { label: "Kasir", href: "/pos", icon: ShoppingBag },
+  { label: "Beranda", href: "/pos", icon: ShoppingBag },
   {
     label: "Transaksi",
     href: "/pos/transaksi",
@@ -318,101 +318,101 @@ function SidebarContent({
               canAccessMigration,
           )
           .map((item) => {
-          const Icon = item.icon;
-          const hasChildren = "children" in item;
-          const active = hasChildren
-            ? isTransactionNavigationActive(pathname)
-            : isNavigationActive(pathname, item.href);
-          const expanded = hasChildren
-            ? Boolean(openNavigationGroups[item.href])
-            : false;
+            const Icon = item.icon;
+            const hasChildren = "children" in item;
+            const active = hasChildren
+              ? isTransactionNavigationActive(pathname)
+              : isNavigationActive(pathname, item.href);
+            const expanded = hasChildren
+              ? Boolean(openNavigationGroups[item.href])
+              : false;
 
-          return (
-            <div key={item.href}>
-              {hasChildren ? (
-                <button
-                  type="button"
-                  onClick={() => toggleNavigationGroup(item.href)}
-                  aria-expanded={expanded}
-                  className={cn(
-                    "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left !text-sm !font-medium transition-colors",
-                    active
-                      ? "bg-[var(--accent-soft)] text-neutral-950"
-                      : "text-black hover:bg-neutral-100 hover:text-neutral-950",
-                  )}
-                >
-                  <Icon
+            return (
+              <div key={item.href}>
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleNavigationGroup(item.href)}
+                    aria-expanded={expanded}
                     className={cn(
-                      "size-[18px] shrink-0",
-                      active && "text-[var(--accent)]",
+                      "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left !text-sm !font-medium transition-colors",
+                      active
+                        ? "bg-[var(--accent-soft)] text-neutral-950"
+                        : "text-black hover:bg-neutral-100 hover:text-neutral-950",
                     )}
-                  />
+                  >
+                    <Icon
+                      className={cn(
+                        "size-[18px] shrink-0",
+                        active && "text-[var(--accent)]",
+                      )}
+                    />
 
-                  <span className="min-w-0 flex-1">{item.label}</span>
+                    <span className="min-w-0 flex-1">{item.label}</span>
 
-                  <ChevronRight
+                    <ChevronRight
+                      className={cn(
+                        "size-4 shrink-0 text-neutral-400 transition-transform",
+                        expanded && "rotate-90",
+                        active && "text-[var(--accent)]",
+                      )}
+                    />
+                  </button>
+                ) : (
+                  <Link
+                    href={item.href}
+                    onClick={onNavigate}
+                    aria-current={active ? "page" : undefined}
                     className={cn(
-                      "size-4 shrink-0 text-neutral-400 transition-transform",
-                      expanded && "rotate-90",
-                      active && "text-[var(--accent)]",
+                      "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
+                      active
+                        ? "bg-[var(--accent-soft)] text-neutral-950"
+                        : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
                     )}
-                  />
-                </button>
-              ) : (
-                <Link
-                  href={item.href}
-                  onClick={onNavigate}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-[var(--accent-soft)] text-neutral-950"
-                      : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "size-[18px] shrink-0",
-                      active && "text-[var(--accent)]",
-                    )}
-                  />
+                  >
+                    <Icon
+                      className={cn(
+                        "size-[18px] shrink-0",
+                        active && "text-[var(--accent)]",
+                      )}
+                    />
 
-                  <span className="min-w-0 flex-1">{item.label}</span>
-                </Link>
-              )}
+                    <span className="min-w-0 flex-1">{item.label}</span>
+                  </Link>
+                )}
 
-              {hasChildren && expanded ? (
-                <div className="ml-[22px] mt-1 space-y-1 border-l border-[var(--border)] pl-3">
-                  {item.children.map((child) => {
-                    const ChildIcon = child.icon;
-                    const childActive = isNavigationActive(
-                      pathname,
-                      child.href,
-                    );
+                {hasChildren && expanded ? (
+                  <div className="ml-[22px] mt-1 space-y-1 border-l border-[var(--border)] pl-3">
+                    {item.children.map((child) => {
+                      const ChildIcon = child.icon;
+                      const childActive = isNavigationActive(
+                        pathname,
+                        child.href,
+                      );
 
-                    return (
-                      <Link
-                        key={child.href}
-                        href={child.href}
-                        onClick={onNavigate}
-                        aria-current={childActive ? "page" : undefined}
-                        className={cn(
-                          "flex min-h-9 items-center gap-2.5 rounded-lg px-3 text-xs font-semibold transition-colors",
-                          childActive
-                            ? "bg-white text-[var(--accent)] shadow-sm ring-1 ring-[var(--border)]"
-                            : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900",
-                        )}
-                      >
-                        <ChildIcon className="size-4 shrink-0" />
-                        <span>{child.label}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={onNavigate}
+                          aria-current={childActive ? "page" : undefined}
+                          className={cn(
+                            "flex min-h-9 items-center gap-2.5 rounded-lg px-3 text-xs font-semibold transition-colors",
+                            childActive
+                              ? "bg-white text-[var(--accent)] shadow-sm ring-1 ring-[var(--border)]"
+                              : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900",
+                          )}
+                        >
+                          <ChildIcon className="size-4 shrink-0" />
+                          <span>{child.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
       </nav>
 
       {canAccessAdmin ? (
@@ -538,10 +538,7 @@ export function PosShell({
         POS_SHELL_STATUS_REFRESH_EVENT,
         handleRefreshRequest,
       );
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange,
-      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -661,25 +658,25 @@ export function PosShell({
                     user.canAccessMigration,
                 )
                 .map(({ label, href, icon: Icon }) => {
-                const active = isNavigationActive(pathname, href);
+                  const active = isNavigationActive(pathname, href);
 
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setIsMoreOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 rounded-2xl border p-4 transition",
-                      active
-                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                        : "border-[var(--border)] text-neutral-700 hover:bg-neutral-50",
-                    )}
-                  >
-                    <Icon className="size-5 shrink-0" />
-                    <span className="text-sm font-medium">{label}</span>
-                  </Link>
-                );
-              })}
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setIsMoreOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 rounded-2xl border p-4 transition",
+                        active
+                          ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                          : "border-[var(--border)] text-neutral-700 hover:bg-neutral-50",
+                      )}
+                    >
+                      <Icon className="size-5 shrink-0" />
+                      <span className="text-sm font-medium">{label}</span>
+                    </Link>
+                  );
+                })}
 
               <Link
                 href="/pos/shift"

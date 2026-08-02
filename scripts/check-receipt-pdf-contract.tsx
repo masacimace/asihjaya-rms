@@ -74,7 +74,7 @@ async function main() {
   const payload = buildReceiptDocumentPayloadV2({
     saleId: "8ad038f7-d346-4bd4-8f96-f3fd5c01af70",
     invoiceNumber: "AJ-TEST-0001",
-    requestSource: "check.receipt_a4",
+    requestSource: "check.receipt-pdf-contract",
     reprint: false,
     requestedAt: new Date("2026-07-17T00:00:00.000Z"),
   });
@@ -116,7 +116,7 @@ async function main() {
     assert.ok(a4Size > 10_000, "A4 PDF terlalu kecil.");
     assert.ok(a5Size > 10_000, "A5 PDF terlalu kecil.");
 
-    console.log("OK: receipt A4/A5 PDF contract dan secure payload valid.");
+    console.log("Receipt A4/A5 PDF contract checks passed.");
     if (KEEP_OUTPUT) console.log(`Output: ${tempDir}`);
   } finally {
     await browser.close();

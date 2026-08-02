@@ -21,6 +21,7 @@ import type {
   PosTransactionRange,
 } from "@/features/pos/contracts";
 import { reprintPosReceiptCertificateAction } from "@/app/actions/pos";
+import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
 import { PrintJobAutoRefresh } from "@/components/pos/print-job-auto-refresh";
 import {
   getPosTransactionDetailData,
@@ -835,19 +836,13 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
   const isOutletOnline = data.outlet?.hardwareStatus === "online";
 
   return (
-    <main className="p-4 pb-32 sm:p-6 lg:pb-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm text-[var(--muted)]">Aplikasi POS</p>
-            <h1 className="mt-1 text-2xl font-semibold text-neutral-950">
-              Daftar Transaksi
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Daftar transaksi real dari outlet aktif untuk cek invoice,
-              customer, item, payment, dan buka ulang dokumen A4 landscape.
-            </p>
-          </div>
+    <PosPageContainer>
+      <PosPageHeader
+        eyebrow="Riwayat POS"
+        title="Daftar Transaksi"
+        description="Periksa invoice, customer, item, pembayaran, dan buka ulang dokumen transaksi dari outlet aktif."
+        icon={<ReceiptText className="size-5 sm:size-6" />}
+        actions={
           <div className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm">
             <div className="flex items-center gap-3">
               <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
@@ -855,9 +850,7 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-                    Outlet
-                  </p>
+                  <p className="text-xs font-medium text-[var(--muted)]">Outlet</p>
                   <span
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold",
@@ -881,9 +874,10 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
               </div>
             </div>
           </div>
-        </div>
+        }
+      />
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3">
           <SummaryCard
             title="Transaksi"
             value={String(data.summary.totalTransactions)}
@@ -1146,7 +1140,6 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
             </section>
           </>
         )}
-      </div>
-    </main>
+    </PosPageContainer>
   );
 }
