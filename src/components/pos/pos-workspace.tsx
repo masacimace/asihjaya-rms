@@ -71,6 +71,16 @@ import {
   type PosShiftActionState,
 } from "@/features/pos/contracts";
 import {
+  getPosCartAddIssue,
+  removePosCartItem,
+} from "@/features/pos/cart-state";
+import {
+  getStoredPosCartState,
+  isStoredPosAvailableItem,
+  removeStoredPosCartState,
+  saveStoredPosCartState,
+} from "@/features/pos/cart-storage";
+import {
   createCheckoutIdempotencyKey,
   createPaymentDraftId,
   formatCurrency,
@@ -86,6 +96,7 @@ import {
   type PaymentVerificationFormState,
   type PosPaymentDraft,
 } from "@/features/pos/payment-draft";
+import { usePosCart } from "@/features/pos/use-pos-cart";
 import { usePosPayment } from "@/features/pos/use-pos-payment";
 import { usePosScanner } from "@/features/pos/use-pos-scanner";
 import { cn } from "@/lib/utils";
@@ -201,13 +212,6 @@ type QuickCustomerFormState = {
   notes: string;
 };
 
-type StoredPosCartState = {
-  version: 1;
-  items: PosAvailableItem[];
-  customer: PosCustomerOption | null;
-  updatedAt: string;
-};
-
 type PendingHeldCartResumeState = {
   version: 1;
   heldCart: PosHeldCartSummary;
@@ -233,8 +237,6 @@ const itemBackgrounds = [
   "bg-stone-100",
 ] as const;
 
-const CART_FEEDBACK_AUTO_CLOSE_MS = 3500;
-const POS_ACTIVE_CART_STORAGE_KEY = "asihjaya:pos-workspace-active-cart";
 const POS_PENDING_HELD_CART_RESUME_STORAGE_KEY =
   "asihjaya:pos-workspace-pending-held-cart-resume";
 const POS_CHECKOUT_ATTEMPT_STORAGE_KEY =
@@ -243,99 +245,6 @@ const POS_CHECKOUT_RECOVERY_MAX_POLLS = 12;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
-}
-
-function isStoredPosAvailableItem(value: unknown): value is PosAvailableItem {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.sku === "string" &&
-    typeof value.barcode === "string" &&
-    typeof value.productId === "string" &&
-    typeof value.productCode === "string" &&
-    typeof value.productName === "string" &&
-    typeof value.categoryId === "string" &&
-    typeof value.categoryName === "string"
-  );
-}
-
-function isStoredCustomer(value: unknown): value is PosCustomerOption {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.fullName === "string"
-  );
-}
-
-function getStoredPosCartState(): StoredPosCartState | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const rawValue = window.sessionStorage.getItem(POS_ACTIVE_CART_STORAGE_KEY);
-
-    if (!rawValue) {
-      return null;
-    }
-
-    const parsedValue = JSON.parse(rawValue) as unknown;
-
-    if (!isRecord(parsedValue) || !Array.isArray(parsedValue.items)) {
-      return null;
-    }
-
-    const items = parsedValue.items.filter(isStoredPosAvailableItem);
-    const customer = isStoredCustomer(parsedValue.customer)
-      ? parsedValue.customer
-      : null;
-
-    if (items.length === 0 && !customer) {
-      return null;
-    }
-
-    return {
-      version: 1,
-      items,
-      customer,
-      updatedAt:
-        typeof parsedValue.updatedAt === "string"
-          ? parsedValue.updatedAt
-          : new Date().toISOString(),
-    };
-  } catch {
-    window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
-    return null;
-  }
-}
-
-function saveStoredPosCartState({
-  items,
-  customer,
-}: {
-  items: PosAvailableItem[];
-  customer: PosCustomerOption | null;
-}) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  if (items.length === 0 && !customer) {
-    window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
-    return;
-  }
-
-  const state: StoredPosCartState = {
-    version: 1,
-    items,
-    customer,
-    updatedAt: new Date().toISOString(),
-  };
-
-  window.sessionStorage.setItem(
-    POS_ACTIVE_CART_STORAGE_KEY,
-    JSON.stringify(state),
-  );
 }
 
 function getPendingHeldCartResumeState(): PendingHeldCartResumeState | null {
@@ -384,14 +293,6 @@ function getPendingHeldCartResumeState(): PendingHeldCartResumeState | null {
     window.sessionStorage.removeItem(POS_PENDING_HELD_CART_RESUME_STORAGE_KEY);
     return null;
   }
-}
-
-function removeStoredPosCartState() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
 }
 
 function removePendingHeldCartResumeState() {
@@ -3201,9 +3102,15 @@ export function PosWorkspace({
   const [isCategoryPickerOpen, setIsCategoryPickerOpen] = useState(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [isCloseShiftPanelOpen, setIsCloseShiftPanelOpen] = useState(false);
-  const [cartItems, setCartItems] = useState<PosAvailableItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] =
     useState<PosCustomerOption | null>(null);
+  const {
+    cartItems,
+    setCartItems,
+    cartItemIds,
+    subtotalAmount,
+    setCartFeedback,
+  } = usePosCart();
   const [createdCustomerOptions, setCreatedCustomerOptions] = useState<
     PosCustomerOption[]
   >([]);
@@ -3217,7 +3124,6 @@ export function PosWorkspace({
     useState<PosQuickCustomerActionResult | null>(null);
   const [isQuickCustomerPending, startQuickCustomerTransition] =
     useTransition();
-  const [cartFeedback, setCartFeedback] = useState<string | null>(null);
   const {
     searchQuery,
     setSearchQuery,
@@ -3294,18 +3200,6 @@ export function PosWorkspace({
   >(async () => undefined);
 
   useEffect(() => {
-    if (!cartFeedback) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setCartFeedback(null);
-    }, CART_FEEDBACK_AUTO_CLOSE_MS);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [cartFeedback]);
-
-  useEffect(() => {
     const pendingResumeState = getPendingHeldCartResumeState();
     const storedCartState = pendingResumeState ? null : getStoredPosCartState();
 
@@ -3356,6 +3250,8 @@ export function PosWorkspace({
   }, [
     resetCustomerDepositDraft,
     router,
+    setCartFeedback,
+    setCartItems,
     setPaymentAmountInput,
     setPaymentFeedback,
     setPaymentNoteInput,
@@ -3428,20 +3324,6 @@ export function PosWorkspace({
 
     return matchedCustomers.slice(0, 8);
   }, [customerOptions, customerQuery]);
-
-  const cartItemIds = useMemo(
-    () => new Set(cartItems.map((item) => item.id)),
-    [cartItems],
-  );
-
-  const subtotalAmount = useMemo(
-    () =>
-      cartItems.reduce(
-        (total, item) => total + parseAmount(item.sellingAmount),
-        0,
-      ),
-    [cartItems],
-  );
 
   const approvedDiscountAmount =
     discountApproval?.status === "approved"
@@ -3985,17 +3867,10 @@ export function PosWorkspace({
   }
 
   function addItemToCart(item: PosAvailableItem) {
-    const sellingAmount = parseAmount(item.sellingAmount);
+    const addIssue = getPosCartAddIssue({ item, itemIds: cartItemIds });
 
-    if (sellingAmount <= 0) {
-      setCartFeedback(
-        `${item.sku} belum memiliki harga jual. Lengkapi harga sebelum transaksi.`,
-      );
-      return;
-    }
-
-    if (cartItemIds.has(item.id)) {
-      setCartFeedback(`${item.sku} sudah ada di keranjang.`);
+    if (addIssue) {
+      setCartFeedback(addIssue.message);
       return;
     }
 
@@ -4011,21 +3886,21 @@ export function PosWorkspace({
 
   function removeItemFromCart(itemId: string) {
     setCartItems((currentItems) => {
-      const removedItem = currentItems.find((item) => item.id === itemId);
-      const nextItems = currentItems.filter((item) => item.id !== itemId);
+      const result = removePosCartItem(currentItems, itemId);
 
-      if (removedItem) {
+      if (result.status === "removed") {
         resetPaymentFlow();
         if (discountApproval) {
           setDiscountApproval(null);
           setDiscountFeedback("Request diskon direset karena cart berubah.");
         }
-        setCartFeedback(`${removedItem.sku} dihapus dari keranjang.`);
+        setCartFeedback(`${result.removedItem.sku} dihapus dari keranjang.`);
       }
 
-      return nextItems;
+      return result.items;
     });
   }
+
   function continueToPayment() {
     if (!canCheckout) {
       setCartFeedback(checkoutDisabledReason);
@@ -4037,7 +3912,6 @@ export function PosWorkspace({
     setPaymentAmountInput(formatRupiahInput(remainingAmount || totalAmount));
     setCartFeedback(null);
   }
-
 
   function addPayment() {
     if (!canCheckout) {

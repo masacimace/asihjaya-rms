@@ -16,6 +16,7 @@
     "check-manual-payment-verification.ts",
     "check-payment-reconciliation.ts",
     "check-pdf-render-security.ts",
+    "check-pos-cart-state.ts",
     "check-pos-checkout-recovery.ts",
     "check-pos-checkout-services.ts",
     "check-pos-financial-invariants.ts",
