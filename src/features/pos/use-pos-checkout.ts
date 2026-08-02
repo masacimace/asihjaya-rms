@@ -267,7 +267,8 @@ export function usePosCheckout({
     },
     [
       applyCheckoutSuccess,
-        completeCheckout,
+      checkoutAttempt,
+      completeCheckout,
       invalidateCheckoutAttempt,
       recoverCheckoutAttempt,
       setManualPaymentApproval,

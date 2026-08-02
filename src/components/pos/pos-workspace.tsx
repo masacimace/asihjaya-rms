@@ -4,19 +4,14 @@ import {
   BadgePercent,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Clock3,
   FileText,
-  Gem,
-  ListFilter,
   LoaderCircle,
   Mail,
   Pause,
   Phone,
   Plus,
-  ScanBarcode,
-  Search,
   ShoppingBag,
   StopCircle,
   UserRound,
@@ -47,14 +42,14 @@ import {
   uploadPosPaymentEvidenceAction,
 } from "@/app/actions/pos";
 import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
+import { PosCartContent } from "@/components/pos/workspace/pos-cart-content";
+import { PosCatalogPanel } from "@/components/pos/workspace/pos-catalog-panel";
 import {
-  POS_INITIAL_ITEM_LIMIT,
   initialPosShiftActionState,
   type PosAvailableItem,
   type PosCategoryOption,
   type PosCheckoutActionResult,
   type PosCustomerOption,
-  type PosDiscountApproval,
   type PosDiscountApprovalActionResult,
   type PosManualPaymentApproval,
   type PosManualPaymentMethod,
@@ -120,40 +115,6 @@ type PosWorkspaceProps = {
   canManageShifts: boolean;
 };
 
-type CartContentProps = {
-  cartItems: PosAvailableItem[];
-  subtotalAmount: number;
-  discountAmount: number;
-  totalAmount: number;
-  discountApproval: PosDiscountApproval | null;
-  isDiscountPending: boolean;
-  discountFeedback: string | null;
-  canRequestDiscount: boolean;
-  discountDisabledReason: string;
-  canCheckout: boolean;
-  checkoutDisabledReason: string;
-  customers: PosCustomerOption[];
-  selectedCustomer: PosCustomerOption | null;
-  customerQuery: string;
-  customerSearchResults: PosCustomerOption[];
-  isCustomerSelectorOpen: boolean;
-  onCustomerQueryChange: (value: string) => void;
-  onCustomerInputFocus: () => void;
-  onCustomerInputBlur: () => void;
-  onOpenQuickCustomer: () => void;
-  onSelectCustomer: (customer: PosCustomerOption) => void;
-  onClearCustomer: () => void;
-  onRemoveItem: (itemId: string) => void;
-  onClearCart: () => void;
-  onOpenDiscountDialog: () => void;
-  onRefreshDiscountApproval: () => void;
-  onClearDiscountApproval: () => void;
-  onContinueToPayment: () => void;
-  canHoldCart: boolean;
-  holdCartDisabledReason: string;
-  onOpenHoldDialog: () => void;
-};
-
 type PaymentContentProps = {
   totalAmount: number;
   customerDepositUsedAmount: number;
@@ -209,14 +170,6 @@ type CheckoutSuccessContentProps = {
 };
 
 type PosPanelMode = "cart" | "payment" | "success";
-
-const itemBackgrounds = [
-  "bg-amber-50",
-  "bg-orange-50",
-  "bg-yellow-50",
-  "bg-rose-50",
-  "bg-stone-100",
-] as const;
 
 function getDiscountApprovalErrorMessage(
   result: Extract<PosDiscountApprovalActionResult, { status: "error" }>,
@@ -360,22 +313,6 @@ function CloseShiftSubmitButton() {
   );
 }
 
-function formatDecimal(value: string | null, suffix: string) {
-  if (!value) {
-    return null;
-  }
-
-  const parsedValue = Number(value);
-
-  if (!Number.isFinite(parsedValue)) {
-    return null;
-  }
-
-  return `${new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 3,
-  }).format(parsedValue)} ${suffix}`;
-}
-
 function formatOpenedAt(value: Date | string) {
   const openedAt = value instanceof Date ? value : new Date(value);
 
@@ -387,58 +324,6 @@ function formatOpenedAt(value: Date | string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(openedAt);
-}
-
-function getItemBackground(item: PosAvailableItem) {
-  const firstCharCode = item.sku.charCodeAt(0) || 0;
-
-  return itemBackgrounds[firstCharCode % itemBackgrounds.length];
-}
-
-function getItemDetail(item: PosAvailableItem) {
-  const details = [
-    formatDecimal(item.weightGram, "gr"),
-    item.exchangePurityPercent
-      ? `Kadar ${formatDecimal(item.exchangePurityPercent, "%")}`
-      : item.purityPercent
-        ? `Kadar ${formatDecimal(item.purityPercent, "%")}`
-        : null,
-  ].filter(Boolean);
-
-  return details.length > 0 ? details.join(" · ") : "Detail item belum lengkap";
-}
-
-function getItemSpecChips(item: PosAvailableItem) {
-  const primaryPurity = item.exchangePurityPercent ?? item.purityPercent;
-
-  return [
-    item.weightGram ? `${formatDecimal(item.weightGram, "gr")}` : null,
-    primaryPurity ? `Kadar ${formatDecimal(primaryPurity, "%")}` : null,
-    item.size ? `Uk. ${item.size}` : null,
-    item.color ? item.color : null,
-    item.gemstone ? item.gemstone : null,
-  ].filter(Boolean) as string[];
-}
-
-function getMediaUrl(imageKey: string | null) {
-  const normalizedKey = imageKey
-    ?.split("/")
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .join("/");
-
-  if (!normalizedKey) {
-    return null;
-  }
-
-  return `/media/${normalizedKey
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/")}`;
-}
-
-function getItemImageUrl(item: PosAvailableItem) {
-  return getMediaUrl(item.imageKey ?? item.productImageKey);
 }
 
 type QuickCustomerDialogProps = {
@@ -692,484 +577,6 @@ function QuickCustomerDialog({
           </footer>
         </form>
       </section>
-    </div>
-  );
-}
-
-function PosItemImage({
-  item,
-  alt,
-  className,
-  iconClassName,
-  showCatalogBadge = false,
-}: {
-  item: PosAvailableItem;
-  alt: string;
-  className?: string;
-  iconClassName?: string;
-  showCatalogBadge?: boolean;
-}) {
-  const [hasImageError, setHasImageError] = useState(false);
-  const imageUrl = getItemImageUrl(item);
-  const shouldShowImage = Boolean(imageUrl) && !hasImageError;
-  const usesCatalogPhoto =
-    shouldShowImage && !item.imageKey && Boolean(item.productImageKey);
-
-  return (
-    <div
-      className={cn(
-        "relative overflow-hidden",
-        shouldShowImage ? "bg-neutral-100" : getItemBackground(item),
-        className,
-      )}
-    >
-      {shouldShowImage ? (
-        // Foto produk disajikan melalui route media internal yang dilindungi sesi.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={imageUrl ?? undefined}
-          alt={alt}
-          onError={() => setHasImageError(true)}
-          className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-        />
-      ) : (
-        <div className="grid size-full place-items-center">
-          <Gem
-            className={cn(
-              "text-[var(--accent)] transition-transform group-hover:scale-105",
-              iconClassName,
-            )}
-            strokeWidth={1.25}
-          />
-        </div>
-      )}
-
-      {showCatalogBadge && usesCatalogPhoto ? (
-        <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-2 py-1 text-[10px] font-medium text-neutral-600 backdrop-blur">
-          Foto katalog
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function CartContent({
-  cartItems,
-  subtotalAmount,
-  discountAmount,
-  totalAmount,
-  discountApproval,
-  isDiscountPending,
-  discountFeedback,
-  canRequestDiscount,
-  discountDisabledReason,
-  canCheckout,
-  checkoutDisabledReason,
-  customers,
-  selectedCustomer,
-  customerQuery,
-  customerSearchResults,
-  isCustomerSelectorOpen,
-  onCustomerQueryChange,
-  onCustomerInputFocus,
-  onCustomerInputBlur,
-  onOpenQuickCustomer,
-  onSelectCustomer,
-  onClearCustomer,
-  onRemoveItem,
-  onClearCart,
-  onOpenDiscountDialog,
-  onRefreshDiscountApproval,
-  onClearDiscountApproval,
-  onContinueToPayment,
-  canHoldCart,
-  holdCartDisabledReason,
-  onOpenHoldDialog,
-}: CartContentProps) {
-  const hasCartItems = cartItems.length > 0;
-  const hasCustomers = customers.length > 0;
-  const hasCustomerSearchQuery = customerQuery.trim().length > 0;
-
-  return (
-    <div className="flex min-h-full flex-col bg-white p-4 sm:p-5">
-      {hasCartItems ? (
-        <div className="max-h-[38vh] space-y-3 overflow-y-auto pb-4 lg:max-h-none">
-          {cartItems.map((item, index) => (
-            <div
-              key={item.id}
-              className="rounded-2xl border border-[var(--border)] bg-white p-3"
-            >
-              <div className="flex gap-3">
-                <div className="relative shrink-0">
-                  <PosItemImage
-                    item={item}
-                    alt={`${item.productName} ${item.sku}`}
-                    className="size-14 rounded-xl"
-                    iconClassName="size-7"
-                  />
-                  <span className="absolute -left-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-[var(--accent)] text-[10px] font-semibold text-white">
-                    {index + 1}
-                  </span>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="line-clamp-2 text-sm font-semibold leading-5 text-neutral-950">
-                        {item.productName}
-                      </p>
-
-                      <p className="mt-1 truncate text-[11px] text-[var(--muted)]">
-                        {item.sku} · {item.barcode}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      aria-label={`Hapus ${item.productName}`}
-                      onClick={() => onRemoveItem(item.id)}
-                      className="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-
-                  <p className="mt-2 text-[11px] text-[var(--muted)]">
-                    {getItemDetail(item)}
-                  </p>
-
-                  <p className="mt-2 text-sm font-semibold text-neutral-950">
-                    {formatCurrency(item.sellingAmount)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid min-h-56 place-items-center border-b border-[var(--border)] py-8 text-center">
-          <div>
-            <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
-              <ShoppingBag className="size-7" />
-            </div>
-
-            <h3 className="mt-4 text-sm font-semibold text-neutral-950">
-              Belum ada item di keranjang
-            </h3>
-            <p className="mt-2 max-w-64 text-xs leading-5 text-[var(--muted)]">
-              Pilih item dari katalog atau scan barcode lama maupun internal.
-              Satu barcode mewakili satu item fisik jewelry.
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-auto border-t border-[var(--border)] pt-4">
-        <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-              Customer
-            </p>
-            <button
-              type="button"
-              onClick={onOpenQuickCustomer}
-              className="inline-flex items-center gap-1.5 !text-xs font-semibold text-[var(--accent)] transition hover:text-[var(--accent)]/80"
-            >
-              <Plus className="size-3.5" />
-              Tambah baru
-            </button>
-          </div>
-
-          {selectedCustomer ? (
-            <div className="mt-3 rounded-xl border border-[var(--accent-soft)] bg-white p-3">
-              <div className="flex items-start gap-3">
-                <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                  <UserRound className="size-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-neutral-950">
-                    {selectedCustomer.fullName}
-                  </p>
-                  <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                    {getCustomerCode(selectedCustomer)} ·{" "}
-                    {getCustomerContactLabel(selectedCustomer)}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onClearCustomer}
-                  className="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
-                  aria-label="Hapus customer dari transaksi"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="relative mt-3">
-              <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3 focus-within:border-[var(--accent)] focus-within:ring-4 focus-within:ring-[var(--accent-soft)]">
-                <Search className="size-4 shrink-0 text-neutral-400" />
-
-                <input
-                  type="search"
-                  value={customerQuery}
-                  onChange={(event) =>
-                    onCustomerQueryChange(event.target.value)
-                  }
-                  onFocus={onCustomerInputFocus}
-                  onBlur={onCustomerInputBlur}
-                  placeholder="Cari nama, kode, atau nomor telepon"
-                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
-                />
-
-                <UserRound className="size-4 text-neutral-400" />
-              </label>
-
-              {isCustomerSelectorOpen ? (
-                <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-xl">
-                  {customerSearchResults.length > 0 ? (
-                    <div className="max-h-72 overflow-y-auto p-1.5">
-                      {customerSearchResults.map((customer) => (
-                        <button
-                          key={customer.id}
-                          type="button"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => onSelectCustomer(customer)}
-                          className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-neutral-50"
-                        >
-                          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                            <UserRound className="size-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-neutral-950">
-                              {customer.fullName}
-                            </p>
-                            <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                              {getCustomerCode(customer)} ·{" "}
-                              {getCustomerContactLabel(customer)}
-                            </p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-3 text-sm text-neutral-700">
-                      <p className="font-medium text-neutral-950">
-                        Customer tidak ditemukan
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                        Tambahkan customer tanpa meninggalkan transaksi ini.
-                      </p>
-                      <button
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={onOpenQuickCustomer}
-                        className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent)] bg-[var(--accent-soft)] px-3 text-sm font-semibold text-[var(--accent)] transition hover:bg-[var(--accent-soft)]/70"
-                      >
-                        <Plus className="size-4" />
-                        Tambah customer baru
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </div>
-          )}
-
-          {!selectedCustomer ? (
-            <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-              {hasCustomers
-                ? hasCustomerSearchQuery
-                  ? "Pilih customer dari hasil pencarian, atau lanjutkan sebagai walk-in customer."
-                  : "Opsional. Kosongkan untuk walk-in customer."
-                : "Belum ada customer aktif. Transaksi tetap bisa dilanjutkan sebagai walk-in customer."}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="mt-5 space-y-3 text-sm">
-          <div className="flex items-center justify-between gap-3 text-[var(--muted)]">
-            <span>Jumlah item</span>
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-neutral-800">
-                {cartItems.length} item
-              </span>
-
-              {hasCartItems ? (
-                <button
-                  type="button"
-                  onClick={onClearCart}
-                  className="rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] font-medium text-neutral-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                >
-                  Reset
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between text-[var(--muted)]">
-            <span>Subtotal</span>
-            <span className="font-medium text-neutral-800">
-              {formatCurrency(subtotalAmount)}
-            </span>
-          </div>
-
-          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[var(--muted)]">Diskon</span>
-              <span
-                className={cn(
-                  "font-semibold",
-                  discountAmount > 0 ? "text-red-600" : "text-neutral-800",
-                )}
-              >
-                {discountAmount > 0
-                  ? `-${formatCurrency(discountAmount)}`
-                  : formatCurrency(0)}
-              </span>
-            </div>
-
-            {discountApproval ? (
-              <div className="mt-3 rounded-xl border border-[var(--border)] bg-white p-3 text-xs leading-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p
-                      className={cn(
-                        "font-semibold",
-                        discountApproval.status === "approved"
-                          ? "text-emerald-700"
-                          : discountApproval.status === "rejected"
-                            ? "text-red-700"
-                            : "text-amber-700",
-                      )}
-                    >
-                      {discountApproval.status === "approved"
-                        ? "Diskon disetujui"
-                        : discountApproval.status === "rejected"
-                          ? "Diskon ditolak"
-                          : "Menunggu approval"}
-                    </p>
-                    <p className="mt-1 text-[var(--muted)]">
-                      {discountApproval.reason || "Tidak ada alasan tambahan."}
-                    </p>
-                    {discountApproval.responseNotes ? (
-                      <p className="mt-1 text-neutral-700">
-                        Catatan manager: {discountApproval.responseNotes}
-                      </p>
-                    ) : null}
-                  </div>
-                  <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-1 font-semibold text-neutral-700">
-                    {discountApproval.id.slice(0, 8).toUpperCase()}
-                  </span>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {discountApproval.status === "pending" ? (
-                    <button
-                      type="button"
-                      onClick={onRefreshDiscountApproval}
-                      disabled={isDiscountPending}
-                      className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {isDiscountPending ? "Mengecek..." : "Cek Status"}
-                    </button>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    onClick={onClearDiscountApproval}
-                    className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                  >
-                    {discountApproval.status === "approved"
-                      ? "Hapus Diskon"
-                      : "Reset Request"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled={!canRequestDiscount}
-                onClick={onOpenDiscountDialog}
-                title={discountDisabledReason}
-                className={cn(
-                  "mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition",
-                  canRequestDiscount
-                    ? "border-[var(--accent)] bg-white text-[var(--accent)] hover:bg-[var(--accent-soft)]"
-                    : "cursor-not-allowed border-[var(--border)] bg-neutral-100 text-neutral-400",
-                )}
-              >
-                <BadgePercent className="size-4" />
-                Minta Diskon
-              </button>
-            )}
-
-            {discountFeedback ? (
-              <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-                {discountFeedback}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex items-center justify-between border-t border-[var(--border)] pt-4">
-            <span className="text-base font-semibold text-neutral-950">
-              Total
-            </span>
-
-            <span className="text-xl font-semibold text-neutral-950">
-              {formatCurrency(totalAmount)}
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-2">
-          <button
-            type="button"
-            disabled={!canCheckout}
-            onClick={onContinueToPayment}
-            className={cn(
-              "flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 font-semibold transition",
-              canCheckout
-                ? "bg-[var(--accent)] text-white hover:bg-[var(--accent)]/90"
-                : "cursor-not-allowed bg-neutral-200 text-neutral-500",
-            )}
-          >
-            Lanjut ke Pembayaran
-            <ChevronRight className="size-4" />
-          </button>
-
-          <button
-            type="button"
-            disabled={!canHoldCart}
-            onClick={onOpenHoldDialog}
-            className={cn(
-              "flex h-11 w-full items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition",
-              canHoldCart
-                ? "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300 hover:bg-amber-100"
-                : "cursor-not-allowed border-[var(--border)] bg-neutral-100 text-neutral-400",
-            )}
-          >
-            <Pause className="size-4" />
-            Tahan Transaksi
-          </button>
-        </div>
-
-        <p className="mt-3 text-center text-[11px] leading-5 text-[var(--muted)]">
-          {canCheckout
-            ? selectedCustomer
-              ? `Checkout untuk ${selectedCustomer.fullName}.`
-              : "Lanjutkan sebagai walk-in customer."
-            : checkoutDisabledReason}
-          {hasCartItems ? (
-            <>
-              <br />
-              {canHoldCart
-                ? "Atau tahan transaksi untuk dilanjutkan nanti."
-                : holdCartDisabledReason}
-            </>
-          ) : null}
-        </p>
-      </div>
     </div>
   );
 }
@@ -2817,7 +2224,6 @@ export function PosWorkspace({
     setCartItems,
     cartItemIds,
     subtotalAmount,
-    cartFeedback,
     setCartFeedback,
   } = usePosCart();
   const {
@@ -2927,7 +2333,12 @@ export function PosWorkspace({
       setPanelMode("payment");
       setIsMobileCartOpen(true);
     },
-    [restoreCheckoutPaymentState],
+    [
+      restoreCheckoutPaymentState,
+      setDiscountApproval,
+      setIsMobileCartOpen,
+      setPanelMode,
+    ],
   );
 
   const handleCheckoutSuccess = useCallback(() => {
@@ -2949,6 +2360,10 @@ export function PosWorkspace({
     router,
     setCartFeedback,
     setCartItems,
+    setDiscountApproval,
+    setDiscountFeedback,
+    setIsMobileCartOpen,
+    setPanelMode,
     setPaymentFeedback,
   ]);
 
@@ -3040,35 +2455,6 @@ export function PosWorkspace({
     setPaymentFeedback,
   });
 
-  const filteredItems = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-
-    return items.filter((item) => {
-      const matchesCategory =
-        activeCategoryId === "all" || item.categoryId === activeCategoryId;
-
-      if (!matchesCategory) {
-        return false;
-      }
-
-      if (!normalizedSearch) {
-        return true;
-      }
-
-      return [
-        item.sku,
-        item.barcode,
-        item.qrValue,
-        item.serialNumber,
-        item.productCode,
-        item.productName,
-        item.categoryName,
-      ]
-        .filter(Boolean)
-        .some((value) => value!.toLowerCase().includes(normalizedSearch));
-    });
-  }, [activeCategoryId, items, searchQuery]);
-
   const approvedDiscountAmount =
     discountApproval?.status === "approved"
       ? discountApproval.discountAmount
@@ -3124,13 +2510,6 @@ export function PosWorkspace({
     () => payments.reduce((total, payment) => total + payment.changeAmount, 0),
     [payments],
   );
-  const totalAvailableItems = items.length;
-  const activeCategory =
-    activeCategoryId === "all"
-      ? null
-      : (categories.find((category) => category.id === activeCategoryId) ??
-        null);
-  const activeCategoryLabel = activeCategory?.name ?? "Semua kategori";
   const canCheckout =
     cartItems.length > 0 &&
     Boolean(context.register) &&
@@ -3683,7 +3062,7 @@ export function PosWorkspace({
   }
 
   const cartContent = (
-    <CartContent
+    <PosCartContent
       cartItems={cartItems}
       subtotalAmount={subtotalAmount}
       discountAmount={approvedDiscountAmount}
@@ -3861,7 +3240,19 @@ export function PosWorkspace({
 
       <div className="lg:grid lg:h-[calc(100vh-7.5rem)] lg:grid-cols-[minmax(0,1fr)_380px] lg:overflow-hidden">
         {/* Katalog */}
-        <section className="min-w-0 p-4 pb-22 sm:p-5 sm:pb-36 lg:overflow-y-auto lg:border-r lg:border-[var(--border)] lg:p-6">
+        <PosCatalogPanel
+          categories={categories}
+          items={items}
+          cartItemIds={cartItemIds}
+          activeCategoryId={activeCategoryId}
+          isCategoryPickerOpen={isCategoryPickerOpen}
+          searchQuery={searchQuery}
+          onActiveCategoryChange={setActiveCategoryId}
+          onCategoryPickerOpenChange={setIsCategoryPickerOpen}
+          onSearchQueryChange={setSearchQuery}
+          onOpenScanner={() => setIsScannerOpen(true)}
+          onAddItem={addItemToCart}
+        >
           <PosContextNotice
             context={context}
             canManageShifts={canManageShifts}
@@ -3873,462 +3264,15 @@ export function PosWorkspace({
 
           {canManageShifts ? <OpenShiftCard context={context} /> : null}
 
-          {canManageShifts && isCloseShiftPanelOpen && context.activeShift ? (
+          {canManageShifts &&
+          isCloseShiftPanelOpen &&
+          context.activeShift ? (
             <CloseShiftCard
               context={context}
               onCancel={() => setIsCloseShiftPanelOpen(false)}
             />
           ) : null}
-
-          {/* Search mobile */}
-          <div className="mb-2 flex items-center gap-2 md:hidden">
-            <label className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3">
-              <Search className="size-4 shrink-0 text-neutral-400" />
-
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Scan atau cari barang..."
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
-              />
-            </label>
-
-            <button
-              type="button"
-              onClick={() => setIsScannerOpen(true)}
-              aria-label="Scan dengan kamera"
-              className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-white text-[var(--accent)]"
-            >
-              <ScanBarcode className="size-5" />
-            </button>
-          </div>
-
-          <label className="mb-4 hidden h-11 max-w-xl items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3 md:flex lg:hidden">
-            <Search className="size-4 shrink-0 text-neutral-400" />
-
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Cari SKU, barcode, nama produk..."
-              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
-            />
-          </label>
-
-          {/* Compact category dropdown / mobile sheet */}
-          <div className="-mx-4 bg-[var(--background)] px-4 py-2 sm:-mx-5 sm:px-5 lg:-mx-6 lg:px-6">
-            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="hidden shrink-0 sm:block">
-                <p className="text-xl font-semibold text-neutral-950">
-                  Pilih item produk
-                </p>
-                <p className="text-[11px] text-[var(--muted)]">
-                  Menampilkan stok item fisik yang tersedia di outlet
-                </p>
-              </div>
-
-              <div className="relative flex min-w-0 w-full items-center gap-2 sm:w-auto sm:justify-end">
-                <button
-                  type="button"
-                  aria-haspopup="dialog"
-                  aria-expanded={isCategoryPickerOpen}
-                  onClick={() => setIsCategoryPickerOpen((isOpen) => !isOpen)}
-                  className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-left transition-colors hover:border-neutral-300 sm:w-80 sm:flex-none lg:w-96"
-                >
-                  <ListFilter className="size-4 shrink-0 text-[var(--accent)]" />
-
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[10px] font-medium text-[var(--muted)]">
-                      Kategori
-                    </span>
-                    <span className="block truncate text-sm font-semibold text-neutral-950">
-                      {activeCategoryLabel}
-                    </span>
-                  </span>
-
-                  <span
-                    className="shrink-0 rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-semibold text-neutral-600 sm:hidden"
-                    title={`${filteredItems.length} dari ${totalAvailableItems} item tersedia`}
-                  >
-                    {filteredItems.length}/{totalAvailableItems}
-                  </span>
-
-                  <ChevronDown
-                    className={cn(
-                      "size-4 shrink-0 text-neutral-400 transition-transform",
-                      isCategoryPickerOpen && "rotate-180",
-                    )}
-                  />
-                </button>
-
-                <span
-                  className="hidden shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--muted)] sm:inline-flex"
-                  title={`${filteredItems.length} dari ${totalAvailableItems} item tersedia`}
-                >
-                  {filteredItems.length} dari {totalAvailableItems} item
-                  tersedia
-                </span>
-
-                {isCategoryPickerOpen ? (
-                  <>
-                    <button
-                      type="button"
-                      aria-label="Tutup pilihan kategori"
-                      onClick={() => setIsCategoryPickerOpen(false)}
-                      className="fixed inset-0 z-30 hidden cursor-default md:block"
-                    />
-
-                    <div
-                      id="pos-category-picker"
-                      role="dialog"
-                      aria-label="Pilih kategori produk"
-                      className="absolute right-0 top-[calc(100%+0.5rem)] z-40 hidden rounded-2xl border border-[var(--border)] bg-white p-3 md:block"
-                    >
-                      <div className="mb-3 flex items-center justify-between gap-3 px-1">
-                        <div>
-                          <p className="text-sm font-semibold text-neutral-950">
-                            Pilih kategori
-                          </p>
-                          <p className="text-xs text-[var(--muted)]">
-                            Filter katalog tanpa mengurangi area daftar produk.
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setIsCategoryPickerOpen(false)}
-                          aria-label="Tutup pilihan kategori"
-                          className="grid size-9 shrink-0 place-items-center rounded-xl border border-[var(--border)] text-neutral-500 transition hover:bg-neutral-50 hover:text-neutral-950"
-                        >
-                          <X className="size-4" />
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          aria-pressed={activeCategoryId === "all"}
-                          onClick={() => {
-                            setActiveCategoryId("all");
-                            setIsCategoryPickerOpen(false);
-                          }}
-                          className={cn(
-                            "flex min-h-12 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors",
-                            activeCategoryId === "all"
-                              ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                              : "border-[var(--border)] text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50",
-                          )}
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold">
-                              Semua kategori
-                            </span>
-                            <span className="block text-[11px] opacity-75">
-                              {totalAvailableItems} item tersedia
-                            </span>
-                          </span>
-
-                          {activeCategoryId === "all" ? (
-                            <Check className="size-4 shrink-0" />
-                          ) : null}
-                        </button>
-
-                        {categories.map((category) => {
-                          const isActive = activeCategoryId === category.id;
-
-                          return (
-                            <button
-                              key={category.id}
-                              type="button"
-                              aria-pressed={isActive}
-                              onClick={() => {
-                                setActiveCategoryId(category.id);
-                                setIsCategoryPickerOpen(false);
-                              }}
-                              className={cn(
-                                "flex min-h-12 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors",
-                                isActive
-                                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                                  : "border-[var(--border)] text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50",
-                              )}
-                            >
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-semibold">
-                                  {category.name}
-                                </span>
-                                <span className="block text-[11px] opacity-75">
-                                  {category.totalAvailableItems} item tersedia
-                                </span>
-                              </span>
-
-                              {isActive ? (
-                                <Check className="size-4 shrink-0" />
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          {isCategoryPickerOpen ? (
-            <div
-              id="pos-category-picker-mobile"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Pilih kategori produk"
-              className="fixed inset-0 z-50 md:hidden"
-            >
-              <button
-                type="button"
-                aria-label="Tutup pilihan kategori"
-                onClick={() => setIsCategoryPickerOpen(false)}
-                className="absolute inset-0 bg-neutral-950/45"
-              />
-
-              <div className="absolute inset-x-0 bottom-0 max-h-[78vh] rounded-t-3xl border-t border-[var(--border)] bg-white">
-                <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300" />
-
-                <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-4">
-                  <div>
-                    <p className="text-base font-semibold text-neutral-950">
-                      Pilih kategori
-                    </p>
-                    <p className="text-xs text-[var(--muted)]">
-                      Kategori aktif: {activeCategoryLabel}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsCategoryPickerOpen(false)}
-                    aria-label="Tutup pilihan kategori"
-                    className="grid size-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] text-neutral-500"
-                  >
-                    <X className="size-4" />
-                  </button>
-                </div>
-
-                <div className="scrollbar-clean max-h-[calc(78vh-5.5rem)] space-y-2 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-                  <button
-                    type="button"
-                    aria-pressed={activeCategoryId === "all"}
-                    onClick={() => {
-                      setActiveCategoryId("all");
-                      setIsCategoryPickerOpen(false);
-                    }}
-                    className={cn(
-                      "flex min-h-14 w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left",
-                      activeCategoryId === "all"
-                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                        : "border-[var(--border)] text-neutral-700",
-                    )}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold">
-                        Semua kategori
-                      </span>
-                      <span className="block text-xs opacity-75">
-                        {totalAvailableItems} item tersedia
-                      </span>
-                    </span>
-
-                    {activeCategoryId === "all" ? (
-                      <Check className="size-5 shrink-0" />
-                    ) : null}
-                  </button>
-
-                  {categories.map((category) => {
-                    const isActive = activeCategoryId === category.id;
-
-                    return (
-                      <button
-                        key={category.id}
-                        type="button"
-                        aria-pressed={isActive}
-                        onClick={() => {
-                          setActiveCategoryId(category.id);
-                          setIsCategoryPickerOpen(false);
-                        }}
-                        className={cn(
-                          "flex min-h-14 w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left",
-                          isActive
-                            ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                            : "border-[var(--border)] text-neutral-700",
-                        )}
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold">
-                            {category.name}
-                          </span>
-                          <span className="block text-xs opacity-75">
-                            {category.totalAvailableItems} item tersedia
-                          </span>
-                        </span>
-
-                        {isActive ? (
-                          <Check className="size-5 shrink-0" />
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {totalAvailableItems >= POS_INITIAL_ITEM_LIMIT ? (
-            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Menampilkan {POS_INITIAL_ITEM_LIMIT} item terbaru. Gunakan search
-              atau scan barcode lama/internal untuk menemukan item yang lebih
-              spesifik.
-            </p>
-          ) : null}
-
-          {/* Product grid */}
-          {filteredItems.length > 0 ? (
-            <div className="mt-2 grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-3 2xl:grid-cols-4">
-              {filteredItems.map((item) => {
-                const isInCart = cartItemIds.has(item.id);
-                const hasSellingAmount = parseAmount(item.sellingAmount) > 0;
-                const specChips = getItemSpecChips(item);
-
-                return (
-                  <article
-                    key={item.id}
-                    className={cn(
-                      "group overflow-hidden rounded-2xl border bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition hover:-translate-y-0.5 hover:shadow-md",
-                      isInCart
-                        ? "border-[var(--accent)] ring-2 ring-[var(--accent-soft)]"
-                        : "border-[var(--border)] hover:border-neutral-300",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => addItemToCart(item)}
-                      className="block w-full text-left"
-                    >
-                      <div className="relative">
-                        <PosItemImage
-                          item={item}
-                          alt={`${item.productName} ${item.sku}`}
-                          className="aspect-[5/4] sm:aspect-[4/3]"
-                          iconClassName="size-14 sm:size-16"
-                          showCatalogBadge
-                        />
-
-                        <span
-                          className={cn(
-                            "absolute left-3 top-3 rounded-full bg-white/30 px-2 py-1 text-[10px] font-medium backdrop-blur",
-                            isInCart
-                              ? "text-[var(--accent)]"
-                              : "text-neutral-600",
-                          )}
-                        >
-                          {isInCart ? "Di Keranjang" : "Tersedia"}
-                        </span>
-                      </div>
-                    </button>
-
-                    <div className="space-y-2.5 p-2.5 sm:space-y-3 sm:p-4">
-                      <div className="space-y-2">
-                        <p className="line-clamp-1 text-xs font-semibold leading-5 text-neutral-950 sm:line-clamp-2 sm:min-h-10 sm:text-[15px]">
-                          {item.productName}
-                        </p>
-
-                        <div className="flex gap-1.5">
-                          <span className="inline-flex items-center rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[8px] font-semibold uppercase text-[var(--accent)] sm:px-2.5 sm:py-1 sm:text-[10px]">
-                            {item.categoryName}
-                          </span>
-
-                          <span className="inline-flex max-w-full items-center rounded-full border border-[var(--border)] bg-white px-2 py-0.5 text-[8px] font-medium text-neutral-600 sm:px-2.5 sm:py-1 sm:text-[10px]">
-                            <span className="truncate">{item.sku}</span>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-[9px] font-semibold uppercase text-[var(--muted)] sm:text-[10px]">
-                          Spesifikasi
-                        </p>
-                        <div className="mt-1.5 flex flex-wrap gap-0.5 sm:mt-2 sm:gap-1">
-                          {specChips.length > 0 ? (
-                            <>
-                              {specChips.map((spec) => (
-                                <span
-                                  key={`${item.id}-${spec}`}
-                                  className="inline-flex items-center rounded-full border border-[var(--border)] bg-white px-2 py-0.5 text-[9px] font-medium text-neutral-700 sm:px-2.5 sm:py-1 sm:text-[10px]"
-                                >
-                                  {spec}
-                                </span>
-                              ))}
-                            </>
-                          ) : (
-                            <span className="text-[11px] text-[var(--muted)]">
-                              {getItemDetail(item)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--accent-soft)] bg-[var(--accent-soft)]/70 p-2.5 sm:items-end sm:gap-3 sm:rounded-2xl sm:p-3">
-                        <div className="min-w-0">
-                          <p className="hidden text-[10px] font-semibold uppercase text-[var(--muted)] sm:block">
-                            Harga jual
-                          </p>
-                          <p className="truncate text-xs font-semibold text-neutral-950 sm:mt-1 sm:text-[15px]">
-                            {formatCurrency(item.sellingAmount)}
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          aria-label={
-                            isInCart
-                              ? `${item.productName} sudah di keranjang`
-                              : `Tambahkan ${item.productName}`
-                          }
-                          onClick={() => addItemToCart(item)}
-                          disabled={isInCart || !hasSellingAmount}
-                          className={cn(
-                            "grid size-9 shrink-0 place-items-center rounded-xl border bg-white transition sm:size-10 sm:rounded-2xl",
-                            isInCart
-                              ? "cursor-not-allowed border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                              : hasSellingAmount
-                                ? "border-[var(--border)] text-[var(--accent)] hover:border-[var(--accent)] hover:bg-white"
-                                : "cursor-not-allowed border-neutral-200 text-neutral-300",
-                          )}
-                        >
-                          <ShoppingBag className="size-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="mt-5 grid min-h-72 place-items-center rounded-3xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
-              <div>
-                <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                  <Gem className="size-7" />
-                </div>
-                <h2 className="mt-4 font-semibold text-neutral-950">
-                  Tidak ada item tersedia
-                </h2>
-                <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--muted)]">
-                  Cek filter pencarian, kategori, atau pastikan item inventory
-                  sudah berstatus tersedia di outlet aktif.
-                </p>
-              </div>
-            </div>
-          )}
-        </section>
+        </PosCatalogPanel>
 
         {/* Cart desktop */}
         <aside className="hidden min-h-0 overflow-y-auto bg-white lg:block">
