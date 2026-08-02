@@ -19,17 +19,15 @@ import {
   resumePosHeldCartAction,
 } from "@/app/actions/pos";
 import type {
-  PosHeldCartItem,
   PosHeldCartListData,
   PosHeldCartListItem,
-  PosHeldCartSummary,
 } from "@/features/pos/contracts";
+import { POS_ACTIVE_CART_STORAGE_KEY } from "@/features/pos/cart-storage";
+import {
+  savePendingHeldCartResumeState,
+} from "@/features/pos/held-cart-state";
 import { requestPosShellStatusRefresh } from "@/features/pos/live-status";
 import { cn } from "@/lib/utils";
-
-const POS_ACTIVE_CART_STORAGE_KEY = "asihjaya:pos-workspace-active-cart";
-const POS_PENDING_HELD_CART_RESUME_STORAGE_KEY =
-  "asihjaya:pos-workspace-pending-held-cart-resume";
 
 type HeldCartsClientProps = {
   data: PosHeldCartListData;
@@ -40,13 +38,6 @@ type FeedbackState = {
   message: string;
   showPosLink?: boolean;
 } | null;
-
-type PendingResumeState = {
-  version: 1;
-  heldCart: PosHeldCartSummary;
-  items: PosHeldCartItem[];
-  updatedAt: string;
-};
 
 function formatMoney(value: string | number | null) {
   const parsedValue = typeof value === "number" ? value : Number(value ?? 0);
@@ -129,30 +120,6 @@ function getStoredActiveCartItemCount() {
     window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
     return 0;
   }
-}
-
-function savePendingResumeState({
-  heldCart,
-  items,
-}: {
-  heldCart: PosHeldCartSummary;
-  items: PosHeldCartItem[];
-}) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const state: PendingResumeState = {
-    version: 1,
-    heldCart,
-    items,
-    updatedAt: new Date().toISOString(),
-  };
-
-  window.sessionStorage.setItem(
-    POS_PENDING_HELD_CART_RESUME_STORAGE_KEY,
-    JSON.stringify(state),
-  );
 }
 
 function SummaryCard({
@@ -427,7 +394,7 @@ export function HeldCartsClient({ data }: HeldCartsClientProps) {
         return;
       }
 
-      savePendingResumeState({
+      savePendingHeldCartResumeState({
         heldCart: result.heldCart,
         items: result.items ?? [],
       });

@@ -70,6 +70,7 @@ const requiredRootScripts = [
   "check:quality",
   "check:security",
   "check:environment",
+  "check:pos-stage-1c",
   "check:transactions",
   "check:business",
   "check:hardware-app",
@@ -80,6 +81,8 @@ const requiredRootScripts = [
   "test:financial",
   "test:financial:local",
   "check:critical",
+  "verify:pos-stage-1c",
+  "verify:pos-stage-1c:local",
   "env:validate",
   "env:generate-secrets",
 ];
@@ -163,6 +166,8 @@ for (const documentationPath of [
   "docs/development/quality-gates.md",
   "docs/development/environment-configuration.md",
   "docs/development/financial-concurrency-tests.md",
+  "docs/development/pos-stage-1c-stabilization.md",
+  ".github/pull_request_template.md",
   "README.md",
 ]) {
   assert(existsSync(path.join(projectRoot, documentationPath)), `${documentationPath} wajib tersedia.`);

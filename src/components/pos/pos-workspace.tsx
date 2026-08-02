@@ -1,77 +1,59 @@
 "use client";
 
-import {
-  BadgePercent,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Clock3,
-  FileText,
-  Gem,
-  ListFilter,
-  LoaderCircle,
-  Mail,
-  Pause,
-  Phone,
-  Plus,
-  ScanBarcode,
-  Search,
-  ShoppingBag,
-  StopCircle,
-  UserRound,
-  WalletCards,
-  X,
-} from "lucide-react";
-import {
-  useActionState,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
-import { useFormStatus } from "react-dom";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
-  closePosShiftAction,
   completePosCheckoutAction,
   createPosQuickCustomerAction,
   getPosDiscountApprovalStatusAction,
   getPosManualPaymentApprovalStatusAction,
   holdPosCartAction,
   lookupPosScanValueAction,
-  openPosShiftAction,
   requestPosDiscountApprovalAction,
   uploadPosPaymentEvidenceAction,
 } from "@/app/actions/pos";
-import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
+import type { PosPanelMode } from "@/components/pos/workspace/pos-mobile-side-panel";
 import {
-  POS_INITIAL_ITEM_LIMIT,
-  initialPosShiftActionState,
+  PosWorkspaceView,
+  type PosWorkspaceViewProps,
+} from "@/components/pos/workspace/pos-workspace-view";
+import {
   type PosAvailableItem,
   type PosCategoryOption,
-  type PosCheckoutActionResult,
-  type PosCheckoutPayload,
-  type PosCheckoutRecoveryStatusResult,
   type PosCustomerOption,
-  type PosDiscountApproval,
-  type PosDiscountApprovalActionResult,
-  type PosHeldCartActionResult,
-  type PosHeldCartItem,
-  type PosHeldCartSummary,
-  type PosManualPaymentApproval,
-  type PosManualPaymentMethod,
   type PosManualPaymentPolicy,
   type PosManualPaymentProfile,
-  type PosManualPaymentVerificationSource,
   type PosOperationalContext,
-  type PosQuickCustomerActionResult,
-  type PosQuickCustomerPayload,
-  type PosShiftActionState,
 } from "@/features/pos/contracts";
-import { cn } from "@/lib/utils";
+import {
+  getCheckoutSubmissionValidationMessage,
+  type StoredCheckoutAttemptState,
+} from "@/features/pos/checkout-client-state";
+import {
+  getPosCartAddIssue,
+  removePosCartItem,
+} from "@/features/pos/cart-state";
+import { removeStoredPosCartState } from "@/features/pos/cart-storage";
+import { getHeldCartAvailability } from "@/features/pos/held-cart-state";
+import {
+  createPaymentDraftId,
+  formatCurrency,
+  formatRupiahInput,
+  getPaymentConfig,
+  getPaymentDraftValidationMessage,
+  parsePaymentAmountInput,
+  profileSupportsMethod,
+} from "@/features/pos/payment-draft";
+import { usePosCart } from "@/features/pos/use-pos-cart";
+import { usePosCartSession } from "@/features/pos/use-pos-cart-session";
+import { usePosCheckout } from "@/features/pos/use-pos-checkout";
+import { usePosCustomer } from "@/features/pos/use-pos-customer";
+import { usePosDiscount } from "@/features/pos/use-pos-discount";
+import { usePosHeldCart } from "@/features/pos/use-pos-held-cart";
+import { usePosPayment } from "@/features/pos/use-pos-payment";
+import { usePosScanner } from "@/features/pos/use-pos-scanner";
+import { getPosWorkspaceState } from "@/features/pos/workspace-state";
 
 type PosWorkspaceProps = {
   categories: PosCategoryOption[];
@@ -82,3456 +64,6 @@ type PosWorkspaceProps = {
   context: PosOperationalContext;
   canManageShifts: boolean;
 };
-
-type CartContentProps = {
-  cartItems: PosAvailableItem[];
-  subtotalAmount: number;
-  discountAmount: number;
-  totalAmount: number;
-  discountApproval: PosDiscountApproval | null;
-  isDiscountPending: boolean;
-  discountFeedback: string | null;
-  canRequestDiscount: boolean;
-  discountDisabledReason: string;
-  canCheckout: boolean;
-  checkoutDisabledReason: string;
-  customers: PosCustomerOption[];
-  selectedCustomer: PosCustomerOption | null;
-  customerQuery: string;
-  customerSearchResults: PosCustomerOption[];
-  isCustomerSelectorOpen: boolean;
-  onCustomerQueryChange: (value: string) => void;
-  onCustomerInputFocus: () => void;
-  onCustomerInputBlur: () => void;
-  onOpenQuickCustomer: () => void;
-  onSelectCustomer: (customer: PosCustomerOption) => void;
-  onClearCustomer: () => void;
-  onRemoveItem: (itemId: string) => void;
-  onClearCart: () => void;
-  onOpenDiscountDialog: () => void;
-  onRefreshDiscountApproval: () => void;
-  onClearDiscountApproval: () => void;
-  onContinueToPayment: () => void;
-  canHoldCart: boolean;
-  holdCartDisabledReason: string;
-  onOpenHoldDialog: () => void;
-};
-
-type ActiveDiscountApproval = PosDiscountApproval & {
-  appliedAtIso?: string | null;
-};
-
-type PosPaymentDraft = {
-  id: string;
-  method: PosManualPaymentMethod;
-  methodLabel: string;
-  amount: number;
-  manualPaymentProfileId: string | null;
-  manualPaymentProfileName: string | null;
-  verificationConfirmed: boolean;
-  receivedAmount: number | null;
-  changeAmount: number;
-  provider: string | null;
-  reference: string | null;
-  note: string | null;
-  verificationSource: PosManualPaymentVerificationSource | null;
-  providerPaidAtIso: string | null;
-  evidenceKey: string | null;
-  evidenceFileName: string | null;
-  verificationDetails: {
-    terminalId?: string | null;
-    merchantId?: string | null;
-    batchNumber?: string | null;
-    traceNumber?: string | null;
-    cardNetwork?: string | null;
-    cardLast4?: string | null;
-    senderName?: string | null;
-    destinationAccount?: string | null;
-  };
-};
-
-type PaymentVerificationFormState = {
-  verificationSource: PosManualPaymentVerificationSource;
-  providerPaidAtLocal: string;
-  merchantId: string;
-  terminalId: string;
-  batchNumber: string;
-  traceNumber: string;
-  cardNetwork: string;
-  cardLast4: string;
-  senderName: string;
-  destinationAccount: string;
-};
-
-type PaymentMethodConfig = {
-  method: PosManualPaymentMethod;
-  label: string;
-  shortLabel: string;
-  description: string;
-  amountLabel: string;
-  providerLabel: string | null;
-  providerPlaceholder: string | null;
-  referenceLabel: string | null;
-  referencePlaceholder: string | null;
-  requiresReference: boolean;
-  allowOverpayment: boolean;
-};
-
-type PaymentContentProps = {
-  totalAmount: number;
-  customerDepositUsedAmount: number;
-  customerDepositInAmount: number;
-  externalPaymentDueAmount: number;
-  paidAmount: number;
-  remainingAmount: number;
-  totalChangeAmount: number;
-  payments: PosPaymentDraft[];
-  selectedCustomer: PosCustomerOption | null;
-  customerDepositUsedInput: string;
-  customerDepositInInput: string;
-  paymentProfiles: PosManualPaymentProfile[];
-  paymentPolicies: PosManualPaymentPolicy[];
-  selectedMethod: PosManualPaymentMethod;
-  selectedProfileId: string;
-  verificationConfirmed: boolean;
-  amountInput: string;
-  referenceInput: string;
-  noteInput: string;
-  verificationForm: PaymentVerificationFormState;
-  evidenceFileName: string | null;
-  manualPaymentApproval: PosManualPaymentApproval | null;
-  paymentFeedback: string | null;
-  canFinalizePayment: boolean;
-  isCheckoutPending: boolean;
-  isAddingPayment: boolean;
-  isApprovalChecking: boolean;
-  onBackToCart: () => void;
-  onMethodChange: (method: PosManualPaymentMethod) => void;
-  onProfileChange: (profileId: string) => void;
-  onVerificationConfirmedChange: (confirmed: boolean) => void;
-  onAmountInputChange: (value: string) => void;
-  onCustomerDepositUsedInputChange: (value: string) => void;
-  onCustomerDepositInInputChange: (value: string) => void;
-  onReferenceInputChange: (value: string) => void;
-  onNoteInputChange: (value: string) => void;
-  onVerificationFormChange: (
-    field: keyof PaymentVerificationFormState,
-    value: string,
-  ) => void;
-  onEvidenceFileChange: (file: File | null) => void;
-  onCheckManualPaymentApproval: () => void;
-  onAddPayment: () => void;
-  onRemovePayment: (paymentId: string) => void;
-  onResetPayments: () => void;
-  onFinalizePayment: () => void;
-};
-
-type CheckoutSuccessContentProps = {
-  sale: Extract<PosCheckoutActionResult, { status: "success" }>["sale"];
-  onStartNewTransaction: () => void;
-};
-
-type PosPanelMode = "cart" | "payment" | "success";
-
-type QuickCustomerFormState = {
-  fullName: string;
-  phone: string;
-  email: string;
-  notes: string;
-};
-
-type StoredPosCartState = {
-  version: 1;
-  items: PosAvailableItem[];
-  customer: PosCustomerOption | null;
-  updatedAt: string;
-};
-
-type PendingHeldCartResumeState = {
-  version: 1;
-  heldCart: PosHeldCartSummary;
-  items: PosHeldCartItem[];
-  updatedAt: string;
-};
-
-type StoredCheckoutAttemptState = {
-  version: 2;
-  payload: PosCheckoutPayload;
-  payments: PosPaymentDraft[];
-  discountApproval: ActiveDiscountApproval | null;
-  manualPaymentApproval: PosManualPaymentApproval | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-const itemBackgrounds = [
-  "bg-amber-50",
-  "bg-orange-50",
-  "bg-yellow-50",
-  "bg-rose-50",
-  "bg-stone-100",
-] as const;
-
-const CART_FEEDBACK_AUTO_CLOSE_MS = 3500;
-const POS_WORKSPACE_COMMAND_EVENT = "asihjaya:pos-workspace-command";
-const POS_PENDING_COMMAND_STORAGE_KEY =
-  "asihjaya:pos-workspace-pending-command";
-const POS_ACTIVE_CART_STORAGE_KEY = "asihjaya:pos-workspace-active-cart";
-const POS_PENDING_HELD_CART_RESUME_STORAGE_KEY =
-  "asihjaya:pos-workspace-pending-held-cart-resume";
-const POS_CHECKOUT_ATTEMPT_STORAGE_KEY =
-  "asihjaya:pos-workspace-checkout-attempt";
-const POS_CHECKOUT_RECOVERY_MAX_POLLS = 12;
-
-type PosWorkspaceCommand = {
-  type: "search" | "scan";
-  value: string;
-};
-
-function normalizePosWorkspaceCommand(
-  value: unknown,
-): PosWorkspaceCommand | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const command = value as Partial<PosWorkspaceCommand>;
-
-  if (command.type !== "search" && command.type !== "scan") {
-    return null;
-  }
-
-  if (typeof command.value !== "string") {
-    return null;
-  }
-
-  const normalizedValue = command.value.trim();
-
-  if (command.type === "scan" && !normalizedValue) {
-    return null;
-  }
-
-  return {
-    type: command.type,
-    value: normalizedValue,
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object";
-}
-
-function isStoredPosAvailableItem(value: unknown): value is PosAvailableItem {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.sku === "string" &&
-    typeof value.barcode === "string" &&
-    typeof value.productId === "string" &&
-    typeof value.productCode === "string" &&
-    typeof value.productName === "string" &&
-    typeof value.categoryId === "string" &&
-    typeof value.categoryName === "string"
-  );
-}
-
-function isStoredCustomer(value: unknown): value is PosCustomerOption {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.fullName === "string"
-  );
-}
-
-function getStoredPosCartState(): StoredPosCartState | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const rawValue = window.sessionStorage.getItem(POS_ACTIVE_CART_STORAGE_KEY);
-
-    if (!rawValue) {
-      return null;
-    }
-
-    const parsedValue = JSON.parse(rawValue) as unknown;
-
-    if (!isRecord(parsedValue) || !Array.isArray(parsedValue.items)) {
-      return null;
-    }
-
-    const items = parsedValue.items.filter(isStoredPosAvailableItem);
-    const customer = isStoredCustomer(parsedValue.customer)
-      ? parsedValue.customer
-      : null;
-
-    if (items.length === 0 && !customer) {
-      return null;
-    }
-
-    return {
-      version: 1,
-      items,
-      customer,
-      updatedAt:
-        typeof parsedValue.updatedAt === "string"
-          ? parsedValue.updatedAt
-          : new Date().toISOString(),
-    };
-  } catch {
-    window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
-    return null;
-  }
-}
-
-function saveStoredPosCartState({
-  items,
-  customer,
-}: {
-  items: PosAvailableItem[];
-  customer: PosCustomerOption | null;
-}) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  if (items.length === 0 && !customer) {
-    window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
-    return;
-  }
-
-  const state: StoredPosCartState = {
-    version: 1,
-    items,
-    customer,
-    updatedAt: new Date().toISOString(),
-  };
-
-  window.sessionStorage.setItem(
-    POS_ACTIVE_CART_STORAGE_KEY,
-    JSON.stringify(state),
-  );
-}
-
-function getPendingHeldCartResumeState(): PendingHeldCartResumeState | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const rawValue = window.sessionStorage.getItem(
-      POS_PENDING_HELD_CART_RESUME_STORAGE_KEY,
-    );
-
-    if (!rawValue) {
-      return null;
-    }
-
-    const parsedValue = JSON.parse(rawValue) as unknown;
-
-    if (
-      !isRecord(parsedValue) ||
-      !isRecord(parsedValue.heldCart) ||
-      !Array.isArray(parsedValue.items)
-    ) {
-      return null;
-    }
-
-    const heldCart = parsedValue.heldCart as PosHeldCartSummary;
-    const items = parsedValue.items.filter(
-      isStoredPosAvailableItem,
-    ) as PosHeldCartItem[];
-
-    if (items.length === 0 || typeof heldCart.holdNumber !== "string") {
-      return null;
-    }
-
-    return {
-      version: 1,
-      heldCart,
-      items,
-      updatedAt:
-        typeof parsedValue.updatedAt === "string"
-          ? parsedValue.updatedAt
-          : new Date().toISOString(),
-    };
-  } catch {
-    window.sessionStorage.removeItem(POS_PENDING_HELD_CART_RESUME_STORAGE_KEY);
-    return null;
-  }
-}
-
-function removeStoredPosCartState() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
-}
-
-function removePendingHeldCartResumeState() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.sessionStorage.removeItem(POS_PENDING_HELD_CART_RESUME_STORAGE_KEY);
-}
-
-function isStoredCheckoutPayment(value: unknown): value is PosPaymentDraft {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    typeof value.id === "string" &&
-    typeof value.method === "string" &&
-    typeof value.methodLabel === "string" &&
-    typeof value.amount === "number" &&
-    (typeof value.receivedAmount === "number" ||
-      value.receivedAmount === null) &&
-    typeof value.changeAmount === "number" &&
-    (typeof value.verificationSource === "string" ||
-      value.verificationSource === null) &&
-    (typeof value.providerPaidAtIso === "string" ||
-      value.providerPaidAtIso === null) &&
-    (typeof value.evidenceKey === "string" || value.evidenceKey === null) &&
-    isRecord(value.verificationDetails)
-  );
-}
-
-function isStoredCheckoutPayload(value: unknown): value is PosCheckoutPayload {
-  if (
-    !isRecord(value) ||
-    !Array.isArray(value.itemIds) ||
-    !Array.isArray(value.payments)
-  ) {
-    return false;
-  }
-
-  return (
-    value.itemIds.every((itemId) => typeof itemId === "string") &&
-    value.payments.every(
-      (payment) =>
-        isRecord(payment) &&
-        typeof payment.method === "string" &&
-        typeof payment.amount === "number",
-    ) &&
-    typeof value.idempotencyKey === "string" &&
-    value.idempotencyKey.startsWith("pos_")
-  );
-}
-
-function getStoredCheckoutAttemptState(): StoredCheckoutAttemptState | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const rawValue = window.sessionStorage.getItem(
-      POS_CHECKOUT_ATTEMPT_STORAGE_KEY,
-    );
-
-    if (!rawValue) {
-      return null;
-    }
-
-    const parsedValue = JSON.parse(rawValue) as unknown;
-
-    if (
-      !isRecord(parsedValue) ||
-      parsedValue.version !== 2 ||
-      !isStoredCheckoutPayload(parsedValue.payload) ||
-      !Array.isArray(parsedValue.payments)
-    ) {
-      window.sessionStorage.removeItem(POS_CHECKOUT_ATTEMPT_STORAGE_KEY);
-      return null;
-    }
-
-    const storedPayments = parsedValue.payments.filter(isStoredCheckoutPayment);
-
-    if (storedPayments.length !== parsedValue.payments.length) {
-      window.sessionStorage.removeItem(POS_CHECKOUT_ATTEMPT_STORAGE_KEY);
-      return null;
-    }
-
-    return {
-      version: 2,
-      payload: parsedValue.payload,
-      payments: storedPayments,
-      discountApproval: isRecord(parsedValue.discountApproval)
-        ? (parsedValue.discountApproval as ActiveDiscountApproval)
-        : null,
-      manualPaymentApproval: isRecord(parsedValue.manualPaymentApproval)
-        ? (parsedValue.manualPaymentApproval as PosManualPaymentApproval)
-        : null,
-      createdAt:
-        typeof parsedValue.createdAt === "string"
-          ? parsedValue.createdAt
-          : new Date().toISOString(),
-      updatedAt:
-        typeof parsedValue.updatedAt === "string"
-          ? parsedValue.updatedAt
-          : new Date().toISOString(),
-    };
-  } catch {
-    window.sessionStorage.removeItem(POS_CHECKOUT_ATTEMPT_STORAGE_KEY);
-    return null;
-  }
-}
-
-function saveStoredCheckoutAttemptState(state: StoredCheckoutAttemptState) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.sessionStorage.setItem(
-    POS_CHECKOUT_ATTEMPT_STORAGE_KEY,
-    JSON.stringify({
-      ...state,
-      updatedAt: new Date().toISOString(),
-    }),
-  );
-}
-
-function removeStoredCheckoutAttemptState() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.sessionStorage.removeItem(POS_CHECKOUT_ATTEMPT_STORAGE_KEY);
-}
-
-async function fetchCheckoutRecoveryStatus(
-  idempotencyKey: string,
-): Promise<PosCheckoutRecoveryStatusResult> {
-  const response = await fetch(
-    `/api/pos/checkout-attempts/${encodeURIComponent(idempotencyKey)}`,
-    {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    },
-  );
-
-  const payload = (await response.json()) as PosCheckoutRecoveryStatusResult;
-
-  if (
-    response.ok ||
-    (response.status === 404 && payload.status === "not_found")
-  ) {
-    return payload;
-  }
-
-  throw new Error("CHECKOUT_RECOVERY_REQUEST_FAILED");
-}
-
-function waitForCheckoutRecovery(delayMs: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, delayMs);
-  });
-}
-
-function getHeldCartErrorMessage(
-  result: Extract<PosHeldCartActionResult, { status: "error" }>,
-) {
-  const fieldErrorMessages = Object.values(result.fieldErrors ?? {}).filter(
-    Boolean,
-  );
-
-  if (fieldErrorMessages.length === 0) {
-    return result.message;
-  }
-
-  return `${result.message} ${fieldErrorMessages.join(" ")}`;
-}
-
-function getDiscountApprovalErrorMessage(
-  result: Extract<PosDiscountApprovalActionResult, { status: "error" }>,
-) {
-  const fieldErrorMessages = Object.values(result.fieldErrors ?? {}).filter(
-    Boolean,
-  );
-
-  if (fieldErrorMessages.length === 0) {
-    return result.message;
-  }
-
-  return `${result.message} ${fieldErrorMessages.join(" ")}`;
-}
-
-function formatLocalDateTimeInput(date = new Date()) {
-  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
-}
-
-function getDefaultVerificationSource(): PosManualPaymentVerificationSource {
-  return "edc_terminal";
-}
-
-function profileSupportsMethod(
-  profile: PosManualPaymentProfile,
-  method: PosManualPaymentMethod,
-) {
-  return (
-    profile.profileType === "edc" &&
-    (method === "debit_card" || method === "credit_card")
-  );
-}
-
-function getProfilesForMethod(
-  profiles: PosManualPaymentProfile[],
-  method: PosManualPaymentMethod,
-) {
-  return profiles.filter((profile) => profileSupportsMethod(profile, method));
-}
-
-function createPaymentVerificationForm(
-  method: PosManualPaymentMethod,
-  profile?: PosManualPaymentProfile | null,
-): PaymentVerificationFormState {
-  return {
-    verificationSource:
-      profile?.verificationSource ?? getDefaultVerificationSource(),
-    providerPaidAtLocal: formatLocalDateTimeInput(),
-    merchantId: profile?.merchantId ?? "",
-    terminalId: profile?.terminalId ?? "",
-    batchNumber: "",
-    traceNumber: "",
-    cardNetwork: "",
-    cardLast4: "",
-    senderName: "",
-    destinationAccount: profile?.destinationAccount ?? "",
-  };
-}
-
-const paymentMethodConfigs: PaymentMethodConfig[] = [
-  {
-    method: "cash",
-    label: "Cash",
-    shortLabel: "Cash",
-    description: "Tunai, mendukung kembalian.",
-    amountLabel: "Uang diterima",
-    providerLabel: null,
-    providerPlaceholder: null,
-    referenceLabel: null,
-    referencePlaceholder: null,
-    requiresReference: false,
-    allowOverpayment: true,
-  },
-  {
-    method: "debit_card",
-    label: "Debit Card EDC",
-    shortLabel: "Debit",
-    description: "Pembayaran kartu debit melalui terminal EDC outlet.",
-    amountLabel: "Nominal debit",
-    providerLabel: "Bank/acquirer",
-    providerPlaceholder: "Contoh: BCA, Mandiri, BRI",
-    referenceLabel: "Approval code",
-    referencePlaceholder: "Kode approval dari mesin EDC",
-    requiresReference: true,
-    allowOverpayment: false,
-  },
-  {
-    method: "credit_card",
-    label: "Credit Card EDC",
-    shortLabel: "Credit",
-    description: "Pembayaran kartu kredit melalui terminal EDC outlet.",
-    amountLabel: "Nominal credit",
-    providerLabel: "Bank/acquirer",
-    providerPlaceholder: "Contoh: BCA, Mandiri, BNI",
-    referenceLabel: "Approval code",
-    referencePlaceholder: "Kode approval dari mesin EDC",
-    requiresReference: true,
-    allowOverpayment: false,
-  },
-];
-
-const defaultPaymentMethodConfig = paymentMethodConfigs[0]!;
-
-function getPaymentConfig(method: PosManualPaymentMethod): PaymentMethodConfig {
-  return (
-    paymentMethodConfigs.find((config) => config.method === method) ??
-    defaultPaymentMethodConfig
-  );
-}
-
-function getCheckoutErrorMessage(
-  result: Extract<PosCheckoutActionResult, { status: "error" }>,
-) {
-  const fieldErrorMessages = Object.values(result.fieldErrors ?? {}).filter(
-    Boolean,
-  );
-
-  if (fieldErrorMessages.length === 0) {
-    return result.message;
-  }
-
-  const detailMessage = fieldErrorMessages.join(" ");
-
-  return result.message.includes(detailMessage)
-    ? result.message
-    : `${result.message} ${detailMessage}`;
-}
-
-function parseAmount(amount: string | null) {
-  if (!amount) {
-    return 0;
-  }
-
-  const parsedAmount = Number(amount);
-
-  return Number.isFinite(parsedAmount) ? parsedAmount : 0;
-}
-
-function formatCurrency(amount: string | number | null) {
-  if (amount === null || amount === undefined || amount === "") {
-    return "Harga belum diset";
-  }
-
-  const parsedAmount = typeof amount === "number" ? amount : Number(amount);
-
-  if (!Number.isFinite(parsedAmount)) {
-    return "Harga belum diset";
-  }
-
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(parsedAmount);
-}
-
-function getPaymentDraftValidationMessage({
-  payments,
-  totalAmount,
-}: {
-  payments: PosPaymentDraft[];
-  totalAmount: number;
-}) {
-  if (payments.length === 0) {
-    return totalAmount > 0
-      ? "Tambahkan minimal satu pembayaran sebelum menyelesaikan transaksi."
-      : null;
-  }
-
-  let totalPaidAmount = 0;
-
-  for (const payment of payments) {
-    const config = getPaymentConfig(payment.method);
-
-    if (!Number.isSafeInteger(payment.amount) || payment.amount <= 0) {
-      return `${config.label} memiliki nominal pembayaran yang tidak valid.`;
-    }
-
-    totalPaidAmount += payment.amount;
-
-    if (payment.method === "cash") {
-      if (
-        payment.receivedAmount === null ||
-        !Number.isSafeInteger(payment.receivedAmount) ||
-        payment.receivedAmount < payment.amount
-      ) {
-        return "Nominal uang diterima cash tidak valid.";
-      }
-
-      const expectedChangeAmount = Math.max(
-        payment.receivedAmount - payment.amount,
-        0,
-      );
-
-      if (payment.changeAmount !== expectedChangeAmount) {
-        return "Nominal kembalian cash tidak sesuai dengan uang diterima.";
-      }
-
-      continue;
-    }
-
-    if (payment.receivedAmount !== null || payment.changeAmount > 0) {
-      return "Kembalian hanya boleh tercatat untuk pembayaran cash.";
-    }
-
-    if (!payment.manualPaymentProfileId || !payment.manualPaymentProfileName) {
-      return `Preset akun/terminal wajib dipilih untuk ${config.label}.`;
-    }
-
-    if (!payment.verificationConfirmed) {
-      return `Pembayaran ${config.label} belum dikonfirmasi berhasil.`;
-    }
-
-    if (!payment.provider?.trim()) {
-      return `Provider/bank wajib tersedia untuk ${config.label}.`;
-    }
-
-    if (config.requiresReference && !payment.reference?.trim()) {
-      return `${config.referenceLabel ?? "Reference"} wajib diisi untuk ${config.label}.`;
-    }
-
-    if (!payment.verificationSource || !payment.providerPaidAtIso) {
-      return `Sumber dan waktu verifikasi wajib tersedia untuk ${config.label}.`;
-    }
-
-    if (
-      (payment.method === "debit_card" || payment.method === "credit_card") &&
-      !payment.verificationDetails.terminalId
-    ) {
-      return "Terminal ID pada preset EDC belum lengkap.";
-    }
-  }
-
-  if (totalPaidAmount !== totalAmount) {
-    return `Total pembayaran eksternal harus sama dengan ${formatCurrency(totalAmount)} setelah Dana Titip.`;
-  }
-
-  return null;
-}
-
-function formatVarianceAmount(amount: number) {
-  if (amount > 0) {
-    return `+${formatCurrency(amount)}`;
-  }
-
-  if (amount < 0) {
-    return `-${formatCurrency(Math.abs(amount))}`;
-  }
-
-  return formatCurrency(0);
-}
-
-function formatRupiahInput(value: string | number | null) {
-  if (value === null || value === undefined) {
-    return "";
-  }
-
-  const numericValue = String(value)
-    .replace(/[^0-9]/g, "")
-    .replace(/^0+(?=\d)/, "");
-
-  if (!numericValue) {
-    return "";
-  }
-
-  return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-}
-
-function parsePaymentAmountInput(value: string) {
-  const numericValue = value.replace(/[^0-9]/g, "");
-
-  if (!numericValue) {
-    return 0;
-  }
-
-  const parsedAmount = Number(numericValue);
-
-  return Number.isSafeInteger(parsedAmount) ? parsedAmount : Number.NaN;
-}
-
-function createPaymentDraftId() {
-  return `pay_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function createCheckoutIdempotencyKey() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `pos_${crypto.randomUUID()}`;
-  }
-
-  return `pos_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
-}
-
-function ActionMessage({ state }: { state: PosShiftActionState }) {
-  if (state.status === "idle" || !state.message) {
-    return null;
-  }
-
-  return (
-    <div
-      role="alert"
-      className={cn(
-        "rounded-xl border px-4 py-3 text-sm",
-        state.status === "success"
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-          : "border-red-200 bg-red-50 text-red-700",
-      )}
-    >
-      {state.message}
-    </div>
-  );
-}
-
-function FieldError({ message }: { message?: string }) {
-  if (!message) {
-    return null;
-  }
-
-  return <p className="mt-1.5 text-xs text-red-600">{message}</p>;
-}
-
-function CurrencyFormInput({
-  name,
-  placeholder,
-  className,
-  onValueChange,
-}: {
-  name: string;
-  placeholder: string;
-  className?: string;
-  onValueChange?: (numericValue: number | null) => void;
-}) {
-  const [displayValue, setDisplayValue] = useState("");
-
-  function handleChange(value: string) {
-    const nextDisplayValue = formatRupiahInput(value);
-    const numericValue = nextDisplayValue.replace(/[^0-9]/g, "");
-
-    setDisplayValue(nextDisplayValue);
-    onValueChange?.(numericValue ? Number(numericValue) : null);
-  }
-
-  return (
-    <>
-      <input
-        type="hidden"
-        name={name}
-        value={displayValue.replace(/[^0-9]/g, "")}
-      />
-      <input
-        value={displayValue}
-        onChange={(event) => handleChange(event.target.value)}
-        inputMode="numeric"
-        autoComplete="off"
-        placeholder={placeholder}
-        className={className}
-      />
-    </>
-  );
-}
-
-function OpenShiftSubmitButton() {
-  const { pending } = useFormStatus();
-
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent)]/90 disabled:cursor-wait disabled:opacity-70 sm:w-auto"
-    >
-      {pending ? (
-        <>
-          <LoaderCircle className="size-4 animate-spin" />
-          Membuka shift...
-        </>
-      ) : (
-        <>
-          <Clock3 className="size-4" />
-          Buka Shift
-        </>
-      )}
-    </button>
-  );
-}
-
-function CloseShiftSubmitButton() {
-  const { pending } = useFormStatus();
-
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-70 sm:w-auto"
-    >
-      {pending ? (
-        <>
-          <LoaderCircle className="size-4 animate-spin" />
-          Menutup shift...
-        </>
-      ) : (
-        <>
-          <StopCircle className="size-4" />
-          Closing Shift
-        </>
-      )}
-    </button>
-  );
-}
-
-function formatDecimal(value: string | null, suffix: string) {
-  if (!value) {
-    return null;
-  }
-
-  const parsedValue = Number(value);
-
-  if (!Number.isFinite(parsedValue)) {
-    return null;
-  }
-
-  return `${new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 3,
-  }).format(parsedValue)} ${suffix}`;
-}
-
-function formatOpenedAt(value: Date | string) {
-  const openedAt = value instanceof Date ? value : new Date(value);
-
-  if (Number.isNaN(openedAt.getTime())) {
-    return "waktu tidak diketahui";
-  }
-
-  return new Intl.DateTimeFormat("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(openedAt);
-}
-
-function getItemBackground(item: PosAvailableItem) {
-  const firstCharCode = item.sku.charCodeAt(0) || 0;
-
-  return itemBackgrounds[firstCharCode % itemBackgrounds.length];
-}
-
-function getItemDetail(item: PosAvailableItem) {
-  const details = [
-    formatDecimal(item.weightGram, "gr"),
-    item.exchangePurityPercent
-      ? `Kadar ${formatDecimal(item.exchangePurityPercent, "%")}`
-      : item.purityPercent
-        ? `Kadar ${formatDecimal(item.purityPercent, "%")}`
-        : null,
-  ].filter(Boolean);
-
-  return details.length > 0 ? details.join(" · ") : "Detail item belum lengkap";
-}
-
-function getItemSpecChips(item: PosAvailableItem) {
-  const primaryPurity = item.exchangePurityPercent ?? item.purityPercent;
-
-  return [
-    item.weightGram ? `${formatDecimal(item.weightGram, "gr")}` : null,
-    primaryPurity ? `Kadar ${formatDecimal(primaryPurity, "%")}` : null,
-    item.size ? `Uk. ${item.size}` : null,
-    item.color ? item.color : null,
-    item.gemstone ? item.gemstone : null,
-  ].filter(Boolean) as string[];
-}
-
-function getMediaUrl(imageKey: string | null) {
-  const normalizedKey = imageKey
-    ?.split("/")
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .join("/");
-
-  if (!normalizedKey) {
-    return null;
-  }
-
-  return `/media/${normalizedKey
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/")}`;
-}
-
-function getItemImageUrl(item: PosAvailableItem) {
-  return getMediaUrl(item.imageKey ?? item.productImageKey);
-}
-
-function getCustomerCode(customer: PosCustomerOption) {
-  return customer.customerCode?.trim() || "Tanpa kode";
-}
-
-function getCustomerContactLabel(customer: PosCustomerOption) {
-  return customer.phone || customer.email || "Kontak belum dilengkapi";
-}
-
-function getCustomerSearchText(customer: PosCustomerOption) {
-  return [
-    customer.customerCode,
-    customer.fullName,
-    customer.phone,
-    customer.email,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-}
-
-function createQuickCustomerFormState(query: string): QuickCustomerFormState {
-  const normalizedQuery = query.trim();
-  const phoneMatch = normalizedQuery.match(/(?:\+?62|0|8)[0-9\s().-]{7,}$/);
-  const matchedPhone = phoneMatch?.[0]?.trim() ?? "";
-  const fullName = matchedPhone
-    ? normalizedQuery.slice(0, phoneMatch?.index ?? 0).trim()
-    : /[a-zA-Z]/.test(normalizedQuery)
-      ? normalizedQuery
-      : "";
-  const phone = matchedPhone || (!fullName ? normalizedQuery : "");
-
-  return {
-    fullName,
-    phone,
-    email: "",
-    notes: "",
-  };
-}
-
-type QuickCustomerDialogProps = {
-  form: QuickCustomerFormState;
-  result: PosQuickCustomerActionResult | null;
-  isPending: boolean;
-  onChange: (field: keyof QuickCustomerFormState, value: string) => void;
-  onCancel: () => void;
-  onSubmit: () => void;
-  onUseDuplicate: (customer: PosCustomerOption) => void;
-};
-
-function QuickCustomerDialog({
-  form,
-  result,
-  isPending,
-  onChange,
-  onCancel,
-  onSubmit,
-  onUseDuplicate,
-}: QuickCustomerDialogProps) {
-  const fieldErrors = result?.status === "error" ? result.fieldErrors : null;
-  const duplicateCustomer =
-    result?.status === "duplicate" ? result.customer : null;
-
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-stretch sm:justify-end">
-      <button
-        type="button"
-        aria-label="Tutup form tambah customer"
-        onClick={onCancel}
-        className="absolute inset-0 bg-black/35 backdrop-blur-[1px]"
-      />
-
-      <section className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-[var(--border)] bg-white sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none sm:border-y-0 sm:border-r-0">
-        <header className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-4 py-4 sm:px-5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                <UserRound className="size-5" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-base font-semibold text-neutral-950">
-                  Tambah customer cepat
-                </h2>
-                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                  Customer langsung dipilih tanpa meninggalkan transaksi.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            aria-label="Tutup form tambah customer"
-            onClick={onCancel}
-            disabled={isPending}
-            className="grid size-9 shrink-0 place-items-center rounded-xl border border-[var(--border)] text-neutral-500 transition hover:bg-neutral-50 disabled:cursor-wait disabled:opacity-50"
-          >
-            <X className="size-4" />
-          </button>
-        </header>
-
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSubmit();
-          }}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-5">
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-neutral-800">
-                Nama lengkap <span className="text-red-600">*</span>
-              </span>
-              <div
-                className={cn(
-                  "flex h-11 items-center gap-3 rounded-xl border bg-white px-3 focus-within:ring-4",
-                  fieldErrors?.fullName
-                    ? "border-red-300 focus-within:border-red-400 focus-within:ring-red-50"
-                    : "border-[var(--border)] focus-within:border-[var(--accent)] focus-within:ring-[var(--accent-soft)]",
-                )}
-              >
-                <UserRound className="size-4 shrink-0 text-neutral-400" />
-                <input
-                  autoFocus
-                  value={form.fullName}
-                  onChange={(event) => onChange("fullName", event.target.value)}
-                  maxLength={180}
-                  autoComplete="name"
-                  placeholder="Contoh: Rosalia Manda"
-                  className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
-                />
-              </div>
-              {fieldErrors?.fullName ? (
-                <p className="mt-1.5 text-xs text-red-600">
-                  {fieldErrors.fullName}
-                </p>
-              ) : null}
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-neutral-800">
-                Nomor telepon <span className="text-red-600">*</span>
-              </span>
-              <div
-                className={cn(
-                  "flex h-11 items-center gap-3 rounded-xl border bg-white px-3 focus-within:ring-4",
-                  fieldErrors?.phone
-                    ? "border-red-300 focus-within:border-red-400 focus-within:ring-red-50"
-                    : "border-[var(--border)] focus-within:border-[var(--accent)] focus-within:ring-[var(--accent-soft)]",
-                )}
-              >
-                <Phone className="size-4 shrink-0 text-neutral-400" />
-                <input
-                  value={form.phone}
-                  onChange={(event) => onChange("phone", event.target.value)}
-                  maxLength={32}
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="Contoh: 081234567890"
-                  className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
-                />
-              </div>
-              <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
-                Dipakai untuk mencegah customer tercatat dua kali.
-              </p>
-              {fieldErrors?.phone ? (
-                <p className="mt-1.5 text-xs text-red-600">
-                  {fieldErrors.phone}
-                </p>
-              ) : null}
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-neutral-800">
-                Email <span className="text-[var(--muted)]">(opsional)</span>
-              </span>
-              <div
-                className={cn(
-                  "flex h-11 items-center gap-3 rounded-xl border bg-white px-3 focus-within:ring-4",
-                  fieldErrors?.email
-                    ? "border-red-300 focus-within:border-red-400 focus-within:ring-red-50"
-                    : "border-[var(--border)] focus-within:border-[var(--accent)] focus-within:ring-[var(--accent-soft)]",
-                )}
-              >
-                <Mail className="size-4 shrink-0 text-neutral-400" />
-                <input
-                  value={form.email}
-                  onChange={(event) => onChange("email", event.target.value)}
-                  maxLength={254}
-                  inputMode="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="nama@email.com"
-                  className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
-                />
-              </div>
-              {fieldErrors?.email ? (
-                <p className="mt-1.5 text-xs text-red-600">
-                  {fieldErrors.email}
-                </p>
-              ) : null}
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-neutral-800">
-                Catatan singkat{" "}
-                <span className="text-[var(--muted)]">(opsional)</span>
-              </span>
-              <textarea
-                value={form.notes}
-                onChange={(event) => onChange("notes", event.target.value)}
-                maxLength={500}
-                rows={3}
-                placeholder="Contoh: Customer baru dari kunjungan outlet."
-                className="w-full resize-none rounded-xl border border-[var(--border)] bg-white px-3 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-              />
-            </label>
-
-            {result ? (
-              <div
-                role="status"
-                className={cn(
-                  "rounded-2xl border p-3 text-sm leading-6",
-                  result.status === "error"
-                    ? "border-red-200 bg-red-50 text-red-700"
-                    : result.status === "duplicate"
-                      ? "border-amber-200 bg-amber-50 text-amber-800"
-                      : "border-emerald-200 bg-emerald-50 text-emerald-700",
-                )}
-              >
-                <p className="font-medium">{result.message}</p>
-
-                {duplicateCustomer ? (
-                  <div className="mt-3 rounded-xl border border-amber-200 bg-white p-3">
-                    <div className="flex items-start gap-3">
-                      <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                        <UserRound className="size-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-neutral-950">
-                          {duplicateCustomer.fullName}
-                        </p>
-                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                          {getCustomerCode(duplicateCustomer)} ·{" "}
-                          {getCustomerContactLabel(duplicateCustomer)}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onUseDuplicate(duplicateCustomer)}
-                      className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-3 text-sm font-semibold text-white transition hover:bg-[var(--accent)]/90"
-                    >
-                      <Check className="size-4" />
-                      Gunakan customer ini
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-
-          <footer className="grid gap-2 border-t border-[var(--border)] bg-white p-4 sm:p-5">
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={isPending}
-              className="flex h-11 items-center justify-center bg-black rounded-xl px-4 !text-sm font-semibold text-white transition hover:bg-black disabled:cursor-wait disabled:opacity-50"
-            >
-              Batalkan
-            </button>
-            <button
-              type="submit"
-              disabled={isPending}
-              className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 !text-sm font-semibold text-white transition hover:bg-[var(--accent)]/90 disabled:cursor-wait disabled:opacity-70"
-            >
-              {isPending ? (
-                <>
-                  <LoaderCircle className="size-4 animate-spin" />
-                  Menyimpan...
-                </>
-              ) : (
-                <>
-                  <Plus className="size-4" />
-                  Tambahkan customer
-                </>
-              )}
-            </button>
-          </footer>
-        </form>
-      </section>
-    </div>
-  );
-}
-
-function PosItemImage({
-  item,
-  alt,
-  className,
-  iconClassName,
-  showCatalogBadge = false,
-}: {
-  item: PosAvailableItem;
-  alt: string;
-  className?: string;
-  iconClassName?: string;
-  showCatalogBadge?: boolean;
-}) {
-  const [hasImageError, setHasImageError] = useState(false);
-  const imageUrl = getItemImageUrl(item);
-  const shouldShowImage = Boolean(imageUrl) && !hasImageError;
-  const usesCatalogPhoto =
-    shouldShowImage && !item.imageKey && Boolean(item.productImageKey);
-
-  return (
-    <div
-      className={cn(
-        "relative overflow-hidden",
-        shouldShowImage ? "bg-neutral-100" : getItemBackground(item),
-        className,
-      )}
-    >
-      {shouldShowImage ? (
-        // Foto produk disajikan melalui route media internal yang dilindungi sesi.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={imageUrl ?? undefined}
-          alt={alt}
-          onError={() => setHasImageError(true)}
-          className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-        />
-      ) : (
-        <div className="grid size-full place-items-center">
-          <Gem
-            className={cn(
-              "text-[var(--accent)] transition-transform group-hover:scale-105",
-              iconClassName,
-            )}
-            strokeWidth={1.25}
-          />
-        </div>
-      )}
-
-      {showCatalogBadge && usesCatalogPhoto ? (
-        <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-2 py-1 text-[10px] font-medium text-neutral-600 backdrop-blur">
-          Foto katalog
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function CartContent({
-  cartItems,
-  subtotalAmount,
-  discountAmount,
-  totalAmount,
-  discountApproval,
-  isDiscountPending,
-  discountFeedback,
-  canRequestDiscount,
-  discountDisabledReason,
-  canCheckout,
-  checkoutDisabledReason,
-  customers,
-  selectedCustomer,
-  customerQuery,
-  customerSearchResults,
-  isCustomerSelectorOpen,
-  onCustomerQueryChange,
-  onCustomerInputFocus,
-  onCustomerInputBlur,
-  onOpenQuickCustomer,
-  onSelectCustomer,
-  onClearCustomer,
-  onRemoveItem,
-  onClearCart,
-  onOpenDiscountDialog,
-  onRefreshDiscountApproval,
-  onClearDiscountApproval,
-  onContinueToPayment,
-  canHoldCart,
-  holdCartDisabledReason,
-  onOpenHoldDialog,
-}: CartContentProps) {
-  const hasCartItems = cartItems.length > 0;
-  const hasCustomers = customers.length > 0;
-  const hasCustomerSearchQuery = customerQuery.trim().length > 0;
-
-  return (
-    <div className="flex min-h-full flex-col bg-white p-4 sm:p-5">
-      {hasCartItems ? (
-        <div className="max-h-[38vh] space-y-3 overflow-y-auto pb-4 lg:max-h-none">
-          {cartItems.map((item, index) => (
-            <div
-              key={item.id}
-              className="rounded-2xl border border-[var(--border)] bg-white p-3"
-            >
-              <div className="flex gap-3">
-                <div className="relative shrink-0">
-                  <PosItemImage
-                    item={item}
-                    alt={`${item.productName} ${item.sku}`}
-                    className="size-14 rounded-xl"
-                    iconClassName="size-7"
-                  />
-                  <span className="absolute -left-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-[var(--accent)] text-[10px] font-semibold text-white">
-                    {index + 1}
-                  </span>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="line-clamp-2 text-sm font-semibold leading-5 text-neutral-950">
-                        {item.productName}
-                      </p>
-
-                      <p className="mt-1 truncate text-[11px] text-[var(--muted)]">
-                        {item.sku} · {item.barcode}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      aria-label={`Hapus ${item.productName}`}
-                      onClick={() => onRemoveItem(item.id)}
-                      className="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-
-                  <p className="mt-2 text-[11px] text-[var(--muted)]">
-                    {getItemDetail(item)}
-                  </p>
-
-                  <p className="mt-2 text-sm font-semibold text-neutral-950">
-                    {formatCurrency(item.sellingAmount)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid min-h-56 place-items-center border-b border-[var(--border)] py-8 text-center">
-          <div>
-            <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
-              <ShoppingBag className="size-7" />
-            </div>
-
-            <h3 className="mt-4 text-sm font-semibold text-neutral-950">
-              Belum ada item di keranjang
-            </h3>
-            <p className="mt-2 max-w-64 text-xs leading-5 text-[var(--muted)]">
-              Pilih item dari katalog atau scan barcode lama maupun internal.
-              Satu barcode mewakili satu item fisik jewelry.
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-auto border-t border-[var(--border)] pt-4">
-        <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-              Customer
-            </p>
-            <button
-              type="button"
-              onClick={onOpenQuickCustomer}
-              className="inline-flex items-center gap-1.5 !text-xs font-semibold text-[var(--accent)] transition hover:text-[var(--accent)]/80"
-            >
-              <Plus className="size-3.5" />
-              Tambah baru
-            </button>
-          </div>
-
-          {selectedCustomer ? (
-            <div className="mt-3 rounded-xl border border-[var(--accent-soft)] bg-white p-3">
-              <div className="flex items-start gap-3">
-                <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                  <UserRound className="size-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-neutral-950">
-                    {selectedCustomer.fullName}
-                  </p>
-                  <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                    {getCustomerCode(selectedCustomer)} ·{" "}
-                    {getCustomerContactLabel(selectedCustomer)}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onClearCustomer}
-                  className="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
-                  aria-label="Hapus customer dari transaksi"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="relative mt-3">
-              <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3 focus-within:border-[var(--accent)] focus-within:ring-4 focus-within:ring-[var(--accent-soft)]">
-                <Search className="size-4 shrink-0 text-neutral-400" />
-
-                <input
-                  type="search"
-                  value={customerQuery}
-                  onChange={(event) =>
-                    onCustomerQueryChange(event.target.value)
-                  }
-                  onFocus={onCustomerInputFocus}
-                  onBlur={onCustomerInputBlur}
-                  placeholder="Cari nama, kode, atau nomor telepon"
-                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
-                />
-
-                <UserRound className="size-4 text-neutral-400" />
-              </label>
-
-              {isCustomerSelectorOpen ? (
-                <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-xl">
-                  {customerSearchResults.length > 0 ? (
-                    <div className="max-h-72 overflow-y-auto p-1.5">
-                      {customerSearchResults.map((customer) => (
-                        <button
-                          key={customer.id}
-                          type="button"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => onSelectCustomer(customer)}
-                          className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-neutral-50"
-                        >
-                          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                            <UserRound className="size-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-neutral-950">
-                              {customer.fullName}
-                            </p>
-                            <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                              {getCustomerCode(customer)} ·{" "}
-                              {getCustomerContactLabel(customer)}
-                            </p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-3 text-sm text-neutral-700">
-                      <p className="font-medium text-neutral-950">
-                        Customer tidak ditemukan
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                        Tambahkan customer tanpa meninggalkan transaksi ini.
-                      </p>
-                      <button
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={onOpenQuickCustomer}
-                        className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent)] bg-[var(--accent-soft)] px-3 text-sm font-semibold text-[var(--accent)] transition hover:bg-[var(--accent-soft)]/70"
-                      >
-                        <Plus className="size-4" />
-                        Tambah customer baru
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </div>
-          )}
-
-          {!selectedCustomer ? (
-            <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-              {hasCustomers
-                ? hasCustomerSearchQuery
-                  ? "Pilih customer dari hasil pencarian, atau lanjutkan sebagai walk-in customer."
-                  : "Opsional. Kosongkan untuk walk-in customer."
-                : "Belum ada customer aktif. Transaksi tetap bisa dilanjutkan sebagai walk-in customer."}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="mt-5 space-y-3 text-sm">
-          <div className="flex items-center justify-between gap-3 text-[var(--muted)]">
-            <span>Jumlah item</span>
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-neutral-800">
-                {cartItems.length} item
-              </span>
-
-              {hasCartItems ? (
-                <button
-                  type="button"
-                  onClick={onClearCart}
-                  className="rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] font-medium text-neutral-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                >
-                  Reset
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between text-[var(--muted)]">
-            <span>Subtotal</span>
-            <span className="font-medium text-neutral-800">
-              {formatCurrency(subtotalAmount)}
-            </span>
-          </div>
-
-          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[var(--muted)]">Diskon</span>
-              <span
-                className={cn(
-                  "font-semibold",
-                  discountAmount > 0 ? "text-red-600" : "text-neutral-800",
-                )}
-              >
-                {discountAmount > 0
-                  ? `-${formatCurrency(discountAmount)}`
-                  : formatCurrency(0)}
-              </span>
-            </div>
-
-            {discountApproval ? (
-              <div className="mt-3 rounded-xl border border-[var(--border)] bg-white p-3 text-xs leading-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p
-                      className={cn(
-                        "font-semibold",
-                        discountApproval.status === "approved"
-                          ? "text-emerald-700"
-                          : discountApproval.status === "rejected"
-                            ? "text-red-700"
-                            : "text-amber-700",
-                      )}
-                    >
-                      {discountApproval.status === "approved"
-                        ? "Diskon disetujui"
-                        : discountApproval.status === "rejected"
-                          ? "Diskon ditolak"
-                          : "Menunggu approval"}
-                    </p>
-                    <p className="mt-1 text-[var(--muted)]">
-                      {discountApproval.reason || "Tidak ada alasan tambahan."}
-                    </p>
-                    {discountApproval.responseNotes ? (
-                      <p className="mt-1 text-neutral-700">
-                        Catatan manager: {discountApproval.responseNotes}
-                      </p>
-                    ) : null}
-                  </div>
-                  <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-1 font-semibold text-neutral-700">
-                    {discountApproval.id.slice(0, 8).toUpperCase()}
-                  </span>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {discountApproval.status === "pending" ? (
-                    <button
-                      type="button"
-                      onClick={onRefreshDiscountApproval}
-                      disabled={isDiscountPending}
-                      className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {isDiscountPending ? "Mengecek..." : "Cek Status"}
-                    </button>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    onClick={onClearDiscountApproval}
-                    className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                  >
-                    {discountApproval.status === "approved"
-                      ? "Hapus Diskon"
-                      : "Reset Request"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled={!canRequestDiscount}
-                onClick={onOpenDiscountDialog}
-                title={discountDisabledReason}
-                className={cn(
-                  "mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition",
-                  canRequestDiscount
-                    ? "border-[var(--accent)] bg-white text-[var(--accent)] hover:bg-[var(--accent-soft)]"
-                    : "cursor-not-allowed border-[var(--border)] bg-neutral-100 text-neutral-400",
-                )}
-              >
-                <BadgePercent className="size-4" />
-                Minta Diskon
-              </button>
-            )}
-
-            {discountFeedback ? (
-              <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-                {discountFeedback}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex items-center justify-between border-t border-[var(--border)] pt-4">
-            <span className="text-base font-semibold text-neutral-950">
-              Total
-            </span>
-
-            <span className="text-xl font-semibold text-neutral-950">
-              {formatCurrency(totalAmount)}
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-2">
-          <button
-            type="button"
-            disabled={!canCheckout}
-            onClick={onContinueToPayment}
-            className={cn(
-              "flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 font-semibold transition",
-              canCheckout
-                ? "bg-[var(--accent)] text-white hover:bg-[var(--accent)]/90"
-                : "cursor-not-allowed bg-neutral-200 text-neutral-500",
-            )}
-          >
-            Lanjut ke Pembayaran
-            <ChevronRight className="size-4" />
-          </button>
-
-          <button
-            type="button"
-            disabled={!canHoldCart}
-            onClick={onOpenHoldDialog}
-            className={cn(
-              "flex h-11 w-full items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition",
-              canHoldCart
-                ? "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300 hover:bg-amber-100"
-                : "cursor-not-allowed border-[var(--border)] bg-neutral-100 text-neutral-400",
-            )}
-          >
-            <Pause className="size-4" />
-            Tahan Transaksi
-          </button>
-        </div>
-
-        <p className="mt-3 text-center text-[11px] leading-5 text-[var(--muted)]">
-          {canCheckout
-            ? selectedCustomer
-              ? `Checkout untuk ${selectedCustomer.fullName}.`
-              : "Lanjutkan sebagai walk-in customer."
-            : checkoutDisabledReason}
-          {hasCartItems ? (
-            <>
-              <br />
-              {canHoldCart
-                ? "Atau tahan transaksi untuk dilanjutkan nanti."
-                : holdCartDisabledReason}
-            </>
-          ) : null}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-type DiscountApprovalDialogProps = {
-  cartItems: PosAvailableItem[];
-  subtotalAmount: number;
-  selectedCustomer: PosCustomerOption | null;
-  amountInput: string;
-  reasonInput: string;
-  feedback: string | null;
-  isPending: boolean;
-  onAmountInputChange: (value: string) => void;
-  onReasonInputChange: (value: string) => void;
-  onCancel: () => void;
-  onSubmit: () => void;
-};
-
-function DiscountApprovalDialog({
-  cartItems,
-  subtotalAmount,
-  selectedCustomer,
-  amountInput,
-  reasonInput,
-  feedback,
-  isPending,
-  onAmountInputChange,
-  onReasonInputChange,
-  onCancel,
-  onSubmit,
-}: DiscountApprovalDialogProps) {
-  const parsedDiscountAmount = parsePaymentAmountInput(amountInput);
-  const projectedTotalAmount = Math.max(
-    subtotalAmount - parsedDiscountAmount,
-    0,
-  );
-  const discountIsTooHigh =
-    parsedDiscountAmount >= subtotalAmount && subtotalAmount > 0;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-3 backdrop-blur-sm sm:items-center sm:p-6">
-      <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
-        <div className="border-b border-[var(--border)] p-4 sm:p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase text-[var(--accent)]">
-                Approval Diskon POS
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-neutral-950">
-                Minta diskon manager/owner
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                Request akan masuk ke Riwayat Approval. Diskon baru bisa dipakai
-                setelah status disetujui.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              aria-label="Tutup form request diskon"
-              onClick={onCancel}
-              disabled={isPending}
-              className="grid size-9 shrink-0 place-items-center rounded-xl text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-50"
-            >
-              <X className="size-5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="max-h-[70vh] overflow-y-auto p-4 sm:p-5">
-          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3 text-sm">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[var(--muted)]">Subtotal cart</span>
-              <span className="font-semibold text-neutral-950">
-                {formatCurrency(subtotalAmount)}
-              </span>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <span className="text-[var(--muted)]">Jumlah item</span>
-              <span className="font-semibold text-neutral-950">
-                {cartItems.length} item
-              </span>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <span className="text-[var(--muted)]">Customer</span>
-              <span className="truncate font-semibold text-neutral-950">
-                {selectedCustomer?.fullName ?? "Walk-in customer"}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-4">
-            <label className="block text-sm">
-              <span className="mb-2 block font-medium text-neutral-800">
-                Nominal diskon diminta
-              </span>
-              <input
-                value={amountInput}
-                onChange={(event) =>
-                  onAmountInputChange(formatRupiahInput(event.target.value))
-                }
-                inputMode="numeric"
-                autoComplete="off"
-                placeholder="Contoh: 100.000"
-                className={cn(
-                  "h-12 w-full rounded-2xl border bg-white px-4 text-base font-semibold text-neutral-950 outline-none transition placeholder:text-sm placeholder:font-normal placeholder:text-neutral-400 focus:ring-4",
-                  discountIsTooHigh
-                    ? "border-red-300 focus:border-red-400 focus:ring-red-50"
-                    : "border-[var(--border)] focus:border-[var(--accent)] focus:ring-[var(--accent-soft)]",
-                )}
-              />
-              <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
-                Total setelah diskon: {formatCurrency(projectedTotalAmount)}.
-              </p>
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-2 block font-medium text-neutral-800">
-                Alasan diskon
-              </span>
-              <textarea
-                value={reasonInput}
-                onChange={(event) => onReasonInputChange(event.target.value)}
-                maxLength={500}
-                rows={4}
-                placeholder="Contoh: Customer langganan, pembelian ulang, sudah disetujui negosiasi harga."
-                className="w-full resize-none rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-              />
-              <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
-                Minimal 5 karakter. Catatan ini akan terlihat di halaman
-                approval.
-              </p>
-            </label>
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white p-3">
-            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-              Item dalam request
-            </p>
-            <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
-              {cartItems.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="flex items-start justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2 text-sm"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-neutral-950">
-                      {index + 1}. {item.productName}
-                    </p>
-                    <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                      {item.sku} · {item.barcode}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-xs font-semibold text-neutral-950">
-                    {formatCurrency(item.sellingAmount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {feedback ? (
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-              {feedback}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="grid gap-2 border-t border-[var(--border)] p-4 sm:grid-cols-[1fr_1.4fr] sm:p-5">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isPending}
-            className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
-          >
-            Batal
-          </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={isPending || discountIsTooHigh}
-            className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent)]/90 disabled:cursor-wait disabled:opacity-70"
-          >
-            {isPending ? (
-              <>
-                <LoaderCircle className="size-4 animate-spin" />
-                Mengirim request...
-              </>
-            ) : (
-              <>
-                <BadgePercent className="size-4" />
-                Kirim Request Diskon
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type HoldCartDialogProps = {
-  cartItems: PosAvailableItem[];
-  totalAmount: number;
-  selectedCustomer: PosCustomerOption | null;
-  titleInput: string;
-  noteInput: string;
-  feedback: string | null;
-  isPending: boolean;
-  onTitleInputChange: (value: string) => void;
-  onNoteInputChange: (value: string) => void;
-  onCancel: () => void;
-  onSubmit: () => void;
-};
-
-function HoldCartDialog({
-  cartItems,
-  totalAmount,
-  selectedCustomer,
-  titleInput,
-  noteInput,
-  feedback,
-  isPending,
-  onTitleInputChange,
-  onNoteInputChange,
-  onCancel,
-  onSubmit,
-}: HoldCartDialogProps) {
-  return (
-    <div className="fixed inset-0 z-60 flex items-end justify-center p-3 backdrop-blur-xs sm:items-center sm:p-6">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="border-b border-[var(--border)] p-4 sm:p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase text-amber-700">
-                Hold Cart
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-neutral-950">
-                Tahan transaksi ini?
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                Item akan dikunci sementara dan tidak muncul di katalog POS
-                sampai hold di-resume atau dibatalkan.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              aria-label="Tutup form hold cart"
-              onClick={onCancel}
-              disabled={isPending}
-              className="grid size-9 shrink-0 place-items-center rounded-xl text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-50"
-            >
-              <X className="size-5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="max-h-[70vh] overflow-y-auto p-4 sm:p-5">
-          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3 text-sm">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[var(--muted)]">Total sementara</span>
-              <span className="font-semibold text-neutral-950">
-                {formatCurrency(totalAmount)}
-              </span>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <span className="text-[var(--muted)]">Jumlah item</span>
-              <span className="font-semibold text-neutral-950">
-                {cartItems.length} item
-              </span>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <span className="text-[var(--muted)]">Customer</span>
-              <span className="truncate font-semibold text-neutral-950">
-                {selectedCustomer?.fullName ?? "Walk-in customer"}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-4">
-            <label className="block text-sm">
-              <span className="mb-2 block font-medium text-neutral-800">
-                Nama hold / catatan singkat
-              </span>
-              <input
-                value={titleInput}
-                onChange={(event) => onTitleInputChange(event.target.value)}
-                maxLength={160}
-                placeholder="Contoh: Bu Sari tunggu suami"
-                className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-              />
-              <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
-                Opsional, tapi sangat membantu saat mencari transaksi ditahan.
-              </p>
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-2 block font-medium text-neutral-800">
-                Catatan internal
-              </span>
-              <textarea
-                value={noteInput}
-                onChange={(event) => onNoteInputChange(event.target.value)}
-                maxLength={500}
-                rows={3}
-                placeholder="Contoh: Customer cek saldo, item jangan dijual dulu."
-                className="w-full resize-none rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-              />
-            </label>
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white p-3">
-            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-              Item yang dikunci
-            </p>
-            <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
-              {cartItems.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="flex items-start justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2 text-sm"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-neutral-950">
-                      {index + 1}. {item.productName}
-                    </p>
-                    <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                      {item.sku} · {item.barcode}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-xs font-semibold text-neutral-950">
-                    {formatCurrency(item.sellingAmount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {feedback ? (
-            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
-              {feedback}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="grid gap-2 border-t border-[var(--border)] p-4 sm:grid-cols-[1fr_1.4fr] sm:p-5">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isPending}
-            className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
-          >
-            Batal
-          </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={isPending}
-            className="flex h-11 items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-wait disabled:opacity-70"
-          >
-            {isPending ? (
-              <>
-                <LoaderCircle className="size-4 animate-spin" />
-                Menahan transaksi...
-              </>
-            ) : (
-              <>
-                <Pause className="size-4" />
-                Simpan Hold
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CheckoutSuccessContent({
-  sale,
-  onStartNewTransaction,
-}: CheckoutSuccessContentProps) {
-  return (
-    <div className="flex min-h-full flex-col bg-white p-4 sm:p-5">
-      <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
-        <div className="grid size-14 place-items-center rounded-2xl bg-white text-emerald-600">
-          <CheckCircle2 className="size-8" />
-        </div>
-
-        <p className="mt-5 text-xs font-semibold uppercase text-emerald-700">
-          Transaksi Berhasil
-        </p>
-        <h2 className="mt-2 text-xl font-semibold text-neutral-950">
-          {sale.invoiceNumber}
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-emerald-800">
-          Transaksi POS sudah tersimpan, payment tercatat, dan item otomatis
-          berubah menjadi terjual.
-        </p>
-      </div>
-
-      <div className="mt-4 rounded-3xl border border-[var(--border)] bg-white p-4">
-        <div className="flex items-center justify-between gap-4 text-sm">
-          <span className="text-[var(--muted)]">Total transaksi</span>
-          <span className="text-lg font-semibold text-neutral-950">
-            {formatCurrency(sale.totalAmount)}
-          </span>
-        </div>
-
-        <div className="mt-4 grid gap-3 text-sm">
-          <div className="flex items-start gap-3 rounded-2xl bg-neutral-50 p-3 text-neutral-700">
-            <FileText className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
-            <div>
-              <p className="font-medium text-neutral-900">
-                Nota/certificate masuk antrean print
-              </p>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Dokumen A4 landscape sudah dibuat dari data transaksi real
-                {sale.receiptCertificateJobId
-                  ? " dan dikirim ke Hardware Hub untuk silent print."
-                  : ". PDF tetap bisa dibuka manual dari tombol di bawah."}
-              </p>
-              {sale.receiptCertificateJobId ? (
-                <p className="mt-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-800">
-                  Job print:{" "}
-                  {sale.receiptCertificateJobId.slice(0, 8).toUpperCase()}
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3 rounded-2xl bg-neutral-50 p-3 text-neutral-700">
-            <ShoppingBag className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
-            <div>
-              <p className="font-medium text-neutral-900">
-                Stok sudah diperbarui
-              </p>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Item yang terjual tidak akan muncul lagi sebagai stok available
-                di POS.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-auto border-t border-[var(--border)] pt-4">
-        <button
-          type="button"
-          onClick={onStartNewTransaction}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 font-semibold text-white transition hover:bg-[var(--accent)]/90"
-        >
-          Transaksi Baru
-          <ChevronRight className="size-4" />
-        </button>
-
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <a
-            href={`/api/sales/${sale.id}/receipt-certificate`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
-          >
-            Buka PDF A4
-          </a>
-          <a
-            href={`/api/sales/${sale.id}/receipt-certificate`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
-          >
-            Preview Cetak
-          </a>
-        </div>
-
-        <p className="mt-3 text-center text-[11px] leading-5 text-[var(--muted)]">
-          Jika Document Printer belum dikonfigurasi di Hardware Hub, job print
-          akan terlihat failed di dashboard hardware dan PDF tetap bisa dibuka
-          manual.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function PaymentContent({
-  totalAmount,
-  customerDepositUsedAmount,
-  customerDepositInAmount,
-  externalPaymentDueAmount,
-  paidAmount,
-  remainingAmount,
-  totalChangeAmount,
-  payments,
-  selectedCustomer,
-  customerDepositUsedInput,
-  customerDepositInInput,
-  paymentProfiles,
-  paymentPolicies,
-  selectedMethod,
-  selectedProfileId,
-  verificationConfirmed,
-  amountInput,
-  referenceInput,
-  noteInput,
-  verificationForm,
-  evidenceFileName,
-  manualPaymentApproval,
-  paymentFeedback,
-  canFinalizePayment,
-  isCheckoutPending,
-  isAddingPayment,
-  isApprovalChecking,
-  onBackToCart,
-  onMethodChange,
-  onProfileChange,
-  onVerificationConfirmedChange,
-  onAmountInputChange,
-  onCustomerDepositUsedInputChange,
-  onCustomerDepositInInputChange,
-  onReferenceInputChange,
-  onNoteInputChange,
-  onVerificationFormChange,
-  onEvidenceFileChange,
-  onCheckManualPaymentApproval,
-  onAddPayment,
-  onRemovePayment,
-  onResetPayments,
-  onFinalizePayment,
-}: PaymentContentProps) {
-  const selectedConfig = getPaymentConfig(selectedMethod);
-  const eligibleProfiles = getProfilesForMethod(
-    paymentProfiles,
-    selectedMethod,
-  );
-  const selectedProfile =
-    eligibleProfiles.find((profile) => profile.id === selectedProfileId) ??
-    null;
-  const selectedPolicy = paymentPolicies.find(
-    (policy) => policy.method === selectedMethod,
-  );
-  const parsedInputAmount = parsePaymentAmountInput(amountInput);
-  const evidenceRequired = Boolean(
-    selectedPolicy && parsedInputAmount >= selectedPolicy.evidenceThreshold,
-  );
-  const coVerificationRequired = Boolean(
-    selectedPolicy &&
-    parsedInputAmount >= selectedPolicy.coVerificationThreshold,
-  );
-  const recognizedCashAmount =
-    selectedMethod === "cash"
-      ? Math.min(Math.max(parsedInputAmount, 0), remainingAmount)
-      : parsedInputAmount;
-  const cashChangeAmount =
-    selectedMethod === "cash"
-      ? Math.max(parsedInputAmount - remainingAmount, 0)
-      : 0;
-  const hasPayments = payments.length > 0;
-  const paymentProgressPercentage =
-    externalPaymentDueAmount > 0
-      ? Math.min((paidAmount / externalPaymentDueAmount) * 100, 100)
-      : 100;
-  const customerDepositBalance = selectedCustomer?.customerDepositBalance ?? 0;
-  const customerDepositUsedIsTooHigh =
-    customerDepositUsedAmount > Math.min(totalAmount, customerDepositBalance);
-  const customerDepositControlsDisabled =
-    isCheckoutPending || isAddingPayment || payments.length > 0;
-  const nonCashAmountIsTooHigh =
-    !selectedConfig.allowOverpayment && parsedInputAmount > remainingAmount;
-
-  return (
-    <div className="flex min-h-full flex-col bg-white p-4 sm:p-5">
-      <div className="border-b border-[var(--border)] pb-4">
-        <button
-          type="button"
-          onClick={onBackToCart}
-          disabled={isCheckoutPending || isAddingPayment}
-          className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-black px-3 py-1.5 !text-xs font-semibold text-white transition hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          ← Keranjang
-        </button>
-
-        <div className="mt-4 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-              Pembayaran
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-neutral-950">
-              {remainingAmount > 0
-                ? "Selesaikan pembayaran"
-                : "Pembayaran lunas"}
-            </h2>
-          </div>
-
-          <span
-            className={cn(
-              "rounded-full px-3 py-1 text-xs font-semibold",
-              remainingAmount > 0
-                ? "bg-amber-50 text-amber-700"
-                : "bg-emerald-50 text-emerald-700",
-            )}
-          >
-            {remainingAmount > 0 ? "Belum lunas" : "Lunas"}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid gap-3 border-b border-[var(--border)] py-4">
-        <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
-          <div className="grid gap-3 text-sm">
-            <div className="flex items-center justify-between gap-3 text-[var(--muted)]">
-              <span>Total belanja</span>
-              <span className="font-semibold text-neutral-950">
-                {formatCurrency(totalAmount)}
-              </span>
-            </div>
-            {customerDepositInAmount > 0 ? (
-              <div className="flex items-center justify-between gap-3 text-[#9a681d]">
-                <span>Deposit Dana Titip</span>
-                <span className="font-semibold">
-                  +{formatCurrency(customerDepositInAmount)}
-                </span>
-              </div>
-            ) : null}
-            {customerDepositUsedAmount > 0 ? (
-              <div className="flex items-center justify-between gap-3 text-emerald-700">
-                <span>Gunakan Saldo</span>
-                <span className="font-semibold">
-                  -{formatCurrency(customerDepositUsedAmount)}
-                </span>
-              </div>
-            ) : null}
-            <div className="flex items-center justify-between gap-3 text-[var(--muted)]">
-              <span>Tagihan eksternal</span>
-              <span className="font-semibold text-neutral-950">
-                {formatCurrency(externalPaymentDueAmount)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-3 text-[var(--muted)]">
-              <span>Sudah dibayar</span>
-              <span className="font-semibold text-neutral-950">
-                {formatCurrency(paidAmount)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-3 text-[var(--accent)]">
-              <span className="font-semibold">Sisa bayar</span>
-              <span className="text-lg font-bold">
-                {formatCurrency(remainingAmount)}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-            <div
-              className="h-full rounded-full bg-[var(--accent)] transition-all"
-              style={{ width: `${paymentProgressPercentage}%` }}
-            />
-          </div>
-        </div>
-
-        {selectedCustomer ? (
-          <div className="rounded-2xl border border-[#ead7ad] bg-[#fffaf0] p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-neutral-950">
-                  Dana Titip {selectedCustomer.fullName}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-[#815618]">
-                  Saldo di outlet ini {formatCurrency(customerDepositBalance)}.
-                  Dana Titip hanya berlaku untuk customer dan outlet ini.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="block text-xs font-semibold text-neutral-700">
-                Deposit Dana Titip
-                <input
-                  value={customerDepositInInput}
-                  disabled={customerDepositControlsDisabled}
-                  onChange={(event) =>
-                    onCustomerDepositInInputChange(
-                      formatRupiahInput(event.target.value),
-                    )
-                  }
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="0"
-                  className="mt-2 h-11 w-full rounded-2xl border border-[#ead7ad] bg-white px-3 text-sm font-semibold text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                />
-              </label>
-
-              <label className="block text-xs font-semibold text-neutral-700">
-                Gunakan Saldo
-                <input
-                  value={customerDepositUsedInput}
-                  disabled={
-                    customerDepositControlsDisabled ||
-                    customerDepositBalance <= 0
-                  }
-                  onChange={(event) =>
-                    onCustomerDepositUsedInputChange(
-                      formatRupiahInput(event.target.value),
-                    )
-                  }
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="0"
-                  className={cn(
-                    "mt-2 h-11 w-full rounded-2xl border bg-white px-3 text-sm font-semibold text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:ring-4",
-                    customerDepositUsedIsTooHigh
-                      ? "border-red-300 focus:border-red-400 focus:ring-red-50"
-                      : "border-[#ead7ad] focus:border-[var(--accent)] focus:ring-[var(--accent-soft)]",
-                  )}
-                />
-              </label>
-            </div>
-
-            {customerDepositUsedIsTooHigh ? (
-              <p className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
-                Gunakan saldo tidak boleh melebihi saldo customer atau total
-                belanja.
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white px-3 py-3 text-xs leading-5 text-[var(--muted)]">
-            Pilih customer terdaftar untuk deposit atau menggunakan saldo.
-          </div>
-        )}
-
-        {totalChangeAmount > 0 ? (
-          <div className="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-emerald-700">
-            <span className="text-sm font-semibold">Total kembalian</span>
-            <span className="text-base font-bold">
-              {formatCurrency(totalChangeAmount)}
-            </span>
-          </div>
-        ) : null}
-      </div>
-
-      {paymentFeedback ? (
-        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-          {paymentFeedback}
-        </div>
-      ) : null}
-
-      {manualPaymentApproval ? (
-        <div
-          className={cn(
-            "mt-4 rounded-2xl border p-3 text-xs leading-5",
-            manualPaymentApproval.status === "approved"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-              : manualPaymentApproval.status === "rejected"
-                ? "border-red-200 bg-red-50 text-red-700"
-                : "border-amber-200 bg-amber-50 text-amber-800",
-          )}
-        >
-          <p className="font-semibold">
-            Co-verification:{" "}
-            {manualPaymentApproval.status === "approved"
-              ? "Disetujui"
-              : manualPaymentApproval.status === "rejected"
-                ? "Ditolak"
-                : "Menunggu"}
-          </p>
-          <p className="mt-1">{manualPaymentApproval.reason}</p>
-          {manualPaymentApproval.responseNotes ? (
-            <p className="mt-1">
-              Catatan: {manualPaymentApproval.responseNotes}
-            </p>
-          ) : null}
-          {manualPaymentApproval.status === "pending" ? (
-            <button
-              type="button"
-              onClick={onCheckManualPaymentApproval}
-              disabled={isApprovalChecking || isCheckoutPending}
-              className="mt-2 inline-flex h-9 items-center justify-center rounded-xl bg-neutral-950 px-3 font-semibold text-white disabled:opacity-50"
-            >
-              {isApprovalChecking ? "Mengecek..." : "Cek status verifikasi"}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-
-      {remainingAmount > 0 ? (
-        <>
-          <div className="border-b border-[var(--border)] py-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-neutral-950">
-                Metode pembayaran
-              </p>
-              <span className="text-xs font-medium text-[var(--muted)]">
-                {selectedConfig.shortLabel}
-              </span>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-1">
-              {paymentMethodConfigs.map((config) => (
-                <button
-                  key={config.method}
-                  type="button"
-                  onClick={() => onMethodChange(config.method)}
-                  disabled={isCheckoutPending || isAddingPayment}
-                  className={cn(
-                    "h-7 rounded-lg border px-3 !text-xs !font-semibold transition",
-                    selectedMethod === config.method
-                      ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                      : "border-[var(--border)] bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]",
-                  )}
-                >
-                  {config.shortLabel}
-                </button>
-              ))}
-            </div>
-
-            <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-              {selectedConfig.description}
-            </p>
-          </div>
-
-          <div className="border-b border-[var(--border)] py-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-neutral-950">
-                Tambah pembayaran
-              </p>
-              <p className="text-xs font-medium text-[var(--muted)]">
-                Sisa {formatCurrency(remainingAmount)}
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <label className="block text-sm">
-                <span className="mb-2 block font-medium text-neutral-800">
-                  {selectedConfig.amountLabel}
-                </span>
-                <input
-                  value={amountInput}
-                  disabled={isCheckoutPending || isAddingPayment}
-                  onChange={(event) =>
-                    onAmountInputChange(formatRupiahInput(event.target.value))
-                  }
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="Contoh: 1.350.000"
-                  className={cn(
-                    "h-12 w-full rounded-2xl border bg-white px-4 text-base font-semibold text-neutral-950 outline-none transition placeholder:text-sm placeholder:font-normal placeholder:text-neutral-400 focus:ring-4",
-                    nonCashAmountIsTooHigh
-                      ? "border-red-300 focus:border-red-400 focus:ring-red-50"
-                      : "border-[var(--border)] focus:border-[var(--accent)] focus:ring-[var(--accent-soft)]",
-                  )}
-                />
-              </label>
-
-              {selectedMethod === "cash" && parsedInputAmount > 0 ? (
-                <div className="rounded-2xl bg-neutral-50 p-3 text-xs leading-5 text-[var(--muted)]">
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Diakui sebagai pembayaran</span>
-                    <span className="font-semibold text-neutral-950">
-                      {formatCurrency(recognizedCashAmount)}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between gap-3">
-                    <span>Kembalian</span>
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        cashChangeAmount > 0
-                          ? "text-emerald-700"
-                          : "text-neutral-950",
-                      )}
-                    >
-                      {formatCurrency(cashChangeAmount)}
-                    </span>
-                  </div>
-                </div>
-              ) : null}
-
-              {nonCashAmountIsTooHigh ? (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
-                  {selectedConfig.label} tidak boleh lebih besar dari sisa
-                  bayar.
-                </div>
-              ) : null}
-
-              {selectedMethod !== "cash" ? (
-                <div>
-                  <label className="block text-sm">
-                    <span className="mb-2 flex items-center justify-between gap-3 font-medium text-neutral-800">
-                      Akun / terminal pembayaran
-                      <span className="text-xs font-semibold text-[var(--accent)]">
-                        Wajib
-                      </span>
-                    </span>
-                    <select
-                      value={selectedProfileId}
-                      disabled={isCheckoutPending || isAddingPayment}
-                      onChange={(event) => onProfileChange(event.target.value)}
-                      className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                    >
-                      <option value="">Pilih preset pembayaran</option>
-                      {eligibleProfiles.map((profile) => (
-                        <option key={profile.id} value={profile.id}>
-                          {profile.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {selectedProfile ? (
-                    <div className="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
-                      <p className="font-semibold text-neutral-950">
-                        {selectedProfile.provider}
-                      </p>
-                      <p>Terminal: {selectedProfile.terminalId ?? "-"}</p>
-                    </div>
-                  ) : eligibleProfiles.length === 0 ? (
-                    <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
-                      Belum ada preset aktif untuk metode ini. Manager perlu
-                      menambahkannya dari Pengaturan → Pembayaran Manual.
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {selectedConfig.referenceLabel ? (
-                <label className="block text-sm">
-                  <span className="mb-2 flex items-center justify-between gap-3 font-medium text-neutral-800">
-                    {selectedConfig.referenceLabel}
-                    {selectedConfig.requiresReference ? (
-                      <span className="text-xs font-semibold text-[var(--accent)]">
-                        Wajib
-                      </span>
-                    ) : null}
-                  </span>
-                  <input
-                    value={referenceInput}
-                    disabled={isCheckoutPending || isAddingPayment}
-                    onChange={(event) =>
-                      onReferenceInputChange(event.target.value)
-                    }
-                    maxLength={160}
-                    required={selectedConfig.requiresReference}
-                    placeholder={
-                      selectedConfig.referencePlaceholder ?? "Nomor referensi"
-                    }
-                    className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                  />
-                </label>
-              ) : null}
-
-              {selectedMethod !== "cash" ? (
-                <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/60 p-3">
-                  <div>
-                    <p className="text-sm font-semibold text-neutral-950">
-                      Konfirmasi pembayaran
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-amber-800">
-                      Pastikan status berhasil terlihat di terminal EDC outlet,
-                      bukan hanya dari screenshot customer.
-                    </p>
-                  </div>
-
-                  <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-white px-3 py-3 text-sm text-neutral-800">
-                    <input
-                      type="checkbox"
-                      checked={verificationConfirmed}
-                      disabled={isCheckoutPending || isAddingPayment}
-                      onChange={(event) =>
-                        onVerificationConfirmedChange(event.target.checked)
-                      }
-                      className="mt-0.5 size-4 accent-[var(--accent)]"
-                    />
-                    <span>
-                      <span className="block font-semibold text-neutral-950">
-                        Pembayaran sudah terlihat berhasil
-                      </span>
-                      <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
-                        Sumber verifikasi dan waktu transaksi diisi otomatis
-                        dari preset serta waktu perangkat POS.
-                      </span>
-                    </span>
-                  </label>
-
-                  {evidenceRequired || coVerificationRequired ? (
-                    <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
-                      {evidenceRequired ? (
-                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
-                          Bukti wajib
-                        </span>
-                      ) : null}
-                      {coVerificationRequired ? (
-                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">
-                          Approval manager/finance
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  <details className="rounded-xl border border-[var(--border)] bg-white p-3">
-                    <summary className="cursor-pointer text-xs font-semibold text-neutral-700 marker:content-none">
-                      Detail tambahan & bukti
-                    </summary>
-
-                    <div className="mt-3 space-y-3 border-t border-[var(--border)] pt-3">
-                      <label className="block text-sm">
-                        <span className="mb-2 block font-medium text-neutral-800">
-                          Waktu berhasil di provider
-                        </span>
-                        <input
-                          type="datetime-local"
-                          value={verificationForm.providerPaidAtLocal}
-                          disabled={isCheckoutPending || isAddingPayment}
-                          onChange={(event) =>
-                            onVerificationFormChange(
-                              "providerPaidAtLocal",
-                              event.target.value,
-                            )
-                          }
-                          className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                        />
-                      </label>
-
-                      {selectedMethod === "debit_card" ||
-                      selectedMethod === "credit_card" ? (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <label className="block text-sm">
-                            <span className="mb-2 block font-medium text-neutral-800">
-                              Trace / STAN
-                            </span>
-                            <input
-                              value={verificationForm.traceNumber}
-                              disabled={isCheckoutPending || isAddingPayment}
-                              onChange={(event) =>
-                                onVerificationFormChange(
-                                  "traceNumber",
-                                  event.target.value,
-                                )
-                              }
-                              maxLength={40}
-                              placeholder="Opsional"
-                              className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                            />
-                          </label>
-                          <label className="block text-sm">
-                            <span className="mb-2 block font-medium text-neutral-800">
-                              Batch number
-                            </span>
-                            <input
-                              value={verificationForm.batchNumber}
-                              disabled={isCheckoutPending || isAddingPayment}
-                              onChange={(event) =>
-                                onVerificationFormChange(
-                                  "batchNumber",
-                                  event.target.value,
-                                )
-                              }
-                              maxLength={40}
-                              placeholder="Opsional"
-                              className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                            />
-                          </label>
-                          <label className="block text-sm sm:col-span-2">
-                            <span className="mb-2 block font-medium text-neutral-800">
-                              Network & last 4 kartu
-                            </span>
-                            <div className="grid gap-3">
-                              <input
-                                value={verificationForm.cardNetwork}
-                                disabled={isCheckoutPending || isAddingPayment}
-                                onChange={(event) =>
-                                  onVerificationFormChange(
-                                    "cardNetwork",
-                                    event.target.value,
-                                  )
-                                }
-                                maxLength={40}
-                                placeholder="Visa / GPN (opsional)"
-                                className="h-11 rounded-2xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
-                              />
-                              <input
-                                value={verificationForm.cardLast4}
-                                disabled={isCheckoutPending || isAddingPayment}
-                                onChange={(event) =>
-                                  onVerificationFormChange(
-                                    "cardLast4",
-                                    event.target.value
-                                      .replace(/\D/g, "")
-                                      .slice(0, 4),
-                                  )
-                                }
-                                inputMode="numeric"
-                                maxLength={4}
-                                placeholder="1234"
-                                className="h-11 rounded-2xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
-                              />
-                            </div>
-                          </label>
-                        </div>
-                      ) : null}
-
-                      <label className="block text-sm">
-                        <span className="mb-2 block font-medium text-neutral-800">
-                          Foto bukti pembayaran
-                          {evidenceRequired ? (
-                            <span className="ml-1 text-xs font-semibold text-[var(--accent)]">
-                              Wajib
-                            </span>
-                          ) : (
-                            <span className="ml-1 text-xs text-[var(--muted)]">
-                              Opsional
-                            </span>
-                          )}
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          disabled={isCheckoutPending || isAddingPayment}
-                          onChange={(event) =>
-                            onEvidenceFileChange(
-                              event.target.files?.[0] ?? null,
-                            )
-                          }
-                          className="block w-full rounded-2xl border border-dashed border-amber-300 bg-white px-3 py-2 text-xs text-neutral-700 file:mr-3 file:rounded-xl file:border-0 file:bg-neutral-950 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                        />
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {evidenceFileName
-                            ? `Dipilih: ${evidenceFileName}`
-                            : evidenceRequired
-                              ? "Bukti diperlukan karena nominal melewati threshold."
-                              : "Gunakan hanya jika pembayaran perlu bukti tambahan."}
-                        </p>
-                      </label>
-                    </div>
-                  </details>
-                </div>
-              ) : null}
-
-              <label className="block text-sm">
-                <span className="mb-2 block font-medium text-neutral-800">
-                  Catatan / referensi tambahan
-                </span>
-                <input
-                  value={noteInput}
-                  disabled={isCheckoutPending || isAddingPayment}
-                  onChange={(event) => onNoteInputChange(event.target.value)}
-                  maxLength={160}
-                  placeholder="Opsional"
-                  className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={onAddPayment}
-                disabled={isCheckoutPending || isAddingPayment}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <WalletCards className="size-4" />
-                Tambahkan {selectedConfig.shortLabel}
-              </button>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="border-b border-[var(--border)] py-4">
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-emerald-800">
-            <div className="flex items-start gap-3">
-              <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-white text-emerald-600">
-                <CheckCircle2 className="size-5" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-neutral-950">
-                  Pembayaran sudah pas
-                </p>
-                <p className="mt-1 text-xs leading-5 text-emerald-700">
-                  Form tambah pembayaran disembunyikan. Periksa daftar
-                  pembayaran, lalu selesaikan transaksi.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="py-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-neutral-950">
-            Daftar pembayaran
-          </p>
-          {hasPayments ? (
-            <button
-              type="button"
-              onClick={onResetPayments}
-              disabled={isCheckoutPending || isAddingPayment}
-              className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Reset
-            </button>
-          ) : null}
-        </div>
-
-        {hasPayments ? (
-          <div className="space-y-2">
-            {payments.map((payment) => (
-              <div
-                key={payment.id}
-                className="rounded-2xl border border-[var(--border)] bg-white p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-neutral-950">
-                      {payment.methodLabel}
-                    </p>
-                    <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                      {payment.reference
-                        ? `Ref: ${payment.reference}`
-                        : payment.provider
-                          ? payment.provider
-                          : "Manual verified"}
-                    </p>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-neutral-950">
-                        {formatCurrency(payment.amount)}
-                      </p>
-                      {payment.changeAmount > 0 ? (
-                        <p className="mt-1 text-xs text-emerald-700">
-                          Kembali {formatCurrency(payment.changeAmount)}
-                        </p>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Hapus pembayaran ${payment.methodLabel}`}
-                      onClick={() => onRemovePayment(payment.id)}
-                      disabled={isCheckoutPending || isAddingPayment}
-                      className="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 px-4 py-5 text-center text-xs leading-5 text-[var(--muted)]">
-            Belum ada pembayaran masuk. Tambahkan minimal satu pembayaran untuk
-            menyelesaikan transaksi.
-          </div>
-        )}
-      </div>
-
-      <div className="mt-auto border-t border-[var(--border)] pt-4">
-        <button
-          type="button"
-          disabled={!canFinalizePayment || isCheckoutPending || isAddingPayment}
-          onClick={onFinalizePayment}
-          className={cn(
-            "flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 font-semibold transition",
-            canFinalizePayment && !isCheckoutPending && !isAddingPayment
-              ? "bg-[var(--accent)] text-white hover:bg-[var(--accent)]/90"
-              : "cursor-not-allowed bg-neutral-200 text-neutral-500",
-          )}
-        >
-          {isCheckoutPending ? (
-            <>
-              <LoaderCircle className="size-4 animate-spin" />
-              Memproses transaksi...
-            </>
-          ) : (
-            <>
-              Selesaikan Transaksi
-              <ChevronRight className="size-4" />
-            </>
-          )}
-        </button>
-
-        <p className="mt-3 text-center text-[11px] leading-5 text-[var(--muted)]">
-          {canFinalizePayment
-            ? "Payment sudah lunas. Transaksi siap disimpan dan stok akan otomatis terjual."
-            : remainingAmount > 0
-              ? "Tambahkan pembayaran sampai sisa bayar Rp0."
-              : "Payment belum siap divalidasi."}
-        </p>
-      </div>
-    </div>
-  );
-}
-function PosContextNotice({
-  context,
-  canManageShifts,
-  onCloseShiftClick,
-  isCloseShiftPanelOpen = false,
-}: {
-  context: PosOperationalContext;
-  canManageShifts: boolean;
-  onCloseShiftClick?: () => void;
-  isCloseShiftPanelOpen?: boolean;
-}) {
-  if (!context.outlet) {
-    return (
-      <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        Outlet aktif tidak ditemukan. Hubungi manager/admin untuk mengatur akses
-        outlet staff ini.
-      </div>
-    );
-  }
-
-  if (!context.register) {
-    return (
-      <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-        Register aktif untuk {context.outlet.name} belum tersedia. POS bisa
-        menampilkan katalog, tapi transaksi belum bisa diproses.
-      </div>
-    );
-  }
-
-  if (!context.activeShift) {
-    return (
-      <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-        Shift untuk register {context.register.name} belum aktif. Sales masih
-        bisa melihat katalog, tetapi checkout akan diblokir sampai shift dibuka.
-        {canManageShifts
-          ? " Buka shift terlebih dahulu sebelum menerima pembayaran."
-          : " Hubungi manager untuk membuka shift."}
-      </div>
-    );
-  }
-
-  const expectedCash =
-    context.activeShift.expectedCash ?? context.activeShift.openingCash;
-
-  return (
-    <div className="mb-3 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-3 py-2.5 text-sm text-emerald-900 sm:px-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-white text-emerald-600">
-            <Clock3 className="size-4" />
-          </div>
-
-          <div className="min-w-0">
-            <p className="truncate font-semibold text-neutral-950">
-              Shift aktif · {context.register.name}
-            </p>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-emerald-800">
-              <span>
-                Jam buka: {formatOpenedAt(context.activeShift.openedAt)}
-              </span>
-              <span>
-                Saldo Cash: {formatCurrency(context.activeShift.openingCash)}
-              </span>
-              <span>Expected: {formatCurrency(expectedCash)}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-          <span className="rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-            Katalog real-time
-          </span>
-
-          {canManageShifts ? (
-            <button
-              type="button"
-              onClick={onCloseShiftClick}
-              className={cn(
-                "inline-flex h-9 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition",
-                isCloseShiftPanelOpen
-                  ? "bg-black text-white hover:bg-black/80"
-                  : "bg-red-600 text-white hover:bg-red-700",
-              )}
-            >
-              <StopCircle className="size-3.5" />
-              {isCloseShiftPanelOpen ? "Sembunyikan" : "Menu Shift"}
-            </button>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function OpenShiftCard({ context }: { context: PosOperationalContext }) {
-  const router = useRouter();
-  const [state, formAction] = useActionState(
-    openPosShiftAction,
-    initialPosShiftActionState,
-  );
-
-  useEffect(() => {
-    if (state.status === "success") {
-      router.refresh();
-    }
-  }, [router, state.status]);
-
-  if (!context.outlet || !context.register || context.activeShift) {
-    return null;
-  }
-
-  return (
-    <section className="mb-4 rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-      <div className="flex items-start gap-3">
-        <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-          <WalletCards className="size-5" />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <h2 className="font-semibold text-neutral-950">Buka Shift POS</h2>
-          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Shift akan dibuka untuk {context.register.name} di{" "}
-            {context.outlet.name}. Semua transaksi sales HP dan Mini PC akan
-            masuk ke shift aktif ini.
-          </p>
-        </div>
-      </div>
-
-      <form action={formAction} className="mt-4 space-y-4">
-        <input type="hidden" name="registerId" value={context.register.id} />
-
-        <ActionMessage state={state} />
-
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Modal (Opening)
-            </span>
-            <CurrencyFormInput
-              name="openingCash"
-              placeholder="Contoh: 500.000"
-              className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-            />
-            <FieldError message={state.fieldErrors?.openingCash} />
-            <p className="mt-1.5 text-xs text-[var(--muted)]">
-              Kosongkan jika tidak ada modal awal.
-            </p>
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Catatan (Opsional)
-            </span>
-            <input
-              name="note"
-              maxLength={240}
-              placeholder="Contoh: Shift pagi outlet utama"
-              className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-            />
-            <FieldError message={state.fieldErrors?.note} />
-          </label>
-        </div>
-
-        <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs leading-5 text-[var(--muted)]">
-            Setelah shift aktif, cart bisa dilanjutkan ke payment pada phase
-            berikutnya.
-          </p>
-          <OpenShiftSubmitButton />
-        </div>
-      </form>
-    </section>
-  );
-}
-
-function CloseShiftCard({
-  context,
-  onCancel,
-}: {
-  context: PosOperationalContext;
-  onCancel?: () => void;
-}) {
-  const router = useRouter();
-  const [state, formAction] = useActionState(
-    closePosShiftAction,
-    initialPosShiftActionState,
-  );
-  const [actualCashAmount, setActualCashAmount] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (state.status === "success") {
-      onCancel?.();
-      router.refresh();
-    }
-  }, [onCancel, router, state.status]);
-
-  if (!context.outlet || !context.register || !context.activeShift) {
-    return null;
-  }
-
-  const expectedCash =
-    context.activeShift.expectedCash ?? context.activeShift.openingCash;
-  const expectedCashAmount = parseAmount(expectedCash);
-  const cashVarianceAmount =
-    actualCashAmount === null ? null : actualCashAmount - expectedCashAmount;
-  const cashVarianceLabel =
-    cashVarianceAmount === null
-      ? "Input nominal uang cash aktual untuk melihat selisih."
-      : formatVarianceAmount(cashVarianceAmount);
-
-  return (
-    <section className="mb-4 rounded-2xl border border-red-100 bg-white p-4 sm:p-5">
-      <div className="flex items-start gap-3">
-        <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-red-50 text-red-600">
-          <StopCircle className="size-5" />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="font-semibold text-neutral-950">
-                Closing Shift POS
-              </h2>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Rekonsiliasi kas untuk {context.register.name}. Expected cash
-                sistem saat ini {formatCurrency(expectedCash)}. Setelah ditutup,
-                checkout akan diblokir sampai shift baru dibuka.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <form action={formAction} className="mt-4 space-y-4">
-        <input type="hidden" name="shiftId" value={context.activeShift.id} />
-        <input type="hidden" name="registerId" value={context.register.id} />
-
-        <ActionMessage state={state} />
-
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Nominal Uang (Closing)
-            </span>
-            <CurrencyFormInput
-              name="actualCash"
-              placeholder="Contoh: 2.500.000"
-              onValueChange={setActualCashAmount}
-              className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-            />
-            <FieldError message={state.fieldErrors?.actualCash} />
-            <p className="mt-1.5 text-xs text-[var(--muted)]">
-              Hitung uang di laci (Cash Drawer), lalu input nominal aktual.
-            </p>
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">
-              Alasan / Catatan Selisih
-            </span>
-            <input
-              name="varianceReason"
-              maxLength={500}
-              placeholder="Berikan alasan jika total cash kurang / lebih dari expected cash"
-              className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-            />
-            <FieldError message={state.fieldErrors?.varianceReason} />
-          </label>
-        </div>
-
-        <div
-          className={cn(
-            "grid gap-3 rounded-2xl border p-3 text-sm sm:grid-cols-3",
-            cashVarianceAmount === null
-              ? "border-[var(--border)] bg-neutral-50 text-neutral-700"
-              : cashVarianceAmount === 0
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : cashVarianceAmount > 0
-                  ? "border-amber-200 bg-amber-50 text-amber-800"
-                  : "border-red-200 bg-red-50 text-red-700",
-          )}
-        >
-          <div>
-            <p className="text-[10px] !font-medium uppercase text-current/60">
-              Nominal Seharusnya
-            </p>
-            <p className="mt-1 !font-medium text-neutral-950">
-              {formatCurrency(expectedCashAmount)}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-[10px] font-semibold uppercase text-current/60">
-              Total Uang (Closing)
-            </p>
-            <p className="mt-1 !font-medium text-neutral-950">
-              {actualCashAmount === null
-                ? "-----"
-                : formatCurrency(actualCashAmount)}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-[10px] !font-medium uppercase text-current/60">
-              Selisih Uang
-            </p>
-            <p className="mt-1 !font-medium text-neutral-950">
-              {cashVarianceLabel}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs leading-5 text-[var(--muted)]">
-            Expected cash dihitung dari modal awal, cash sale, kas masuk/keluar,
-            dan refund cash.
-          </p>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {onCancel ? (
-              <button
-                type="button"
-                onClick={onCancel}
-                className="flex h-11 w-full items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 sm:w-auto"
-              >
-                Batal
-              </button>
-            ) : null}
-            <CloseShiftSubmitButton />
-          </div>
-        </div>
-      </form>
-    </section>
-  );
-}
 
 export function PosWorkspace({
   categories,
@@ -3545,403 +77,263 @@ export function PosWorkspace({
   const router = useRouter();
   const [activeCategoryId, setActiveCategoryId] = useState("all");
   const [isCategoryPickerOpen, setIsCategoryPickerOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isCloseShiftPanelOpen, setIsCloseShiftPanelOpen] = useState(false);
-  const [cartItems, setCartItems] = useState<PosAvailableItem[]>([]);
-  const [selectedCustomer, setSelectedCustomer] =
-    useState<PosCustomerOption | null>(null);
-  const [createdCustomerOptions, setCreatedCustomerOptions] = useState<
-    PosCustomerOption[]
-  >([]);
-  const [customerQuery, setCustomerQuery] = useState("");
-  const [isCustomerSelectorOpen, setIsCustomerSelectorOpen] = useState(false);
-  const [isQuickCustomerDialogOpen, setIsQuickCustomerDialogOpen] =
-    useState(false);
-  const [quickCustomerForm, setQuickCustomerForm] =
-    useState<QuickCustomerFormState>(() => createQuickCustomerFormState(""));
-  const [quickCustomerResult, setQuickCustomerResult] =
-    useState<PosQuickCustomerActionResult | null>(null);
-  const [isQuickCustomerPending, startQuickCustomerTransition] =
-    useTransition();
-  const [cartFeedback, setCartFeedback] = useState<string | null>(null);
-  const [isScanLookupPending, startScanLookupTransition] = useTransition();
+  const {
+    cartItems,
+    setCartItems,
+    cartItemIds,
+    subtotalAmount,
+    setCartFeedback,
+  } = usePosCart();
+  const {
+    selectedCustomer,
+    customerQuery,
+    customerOptions,
+    customerSearchResults,
+    isCustomerSelectorOpen,
+    isQuickCustomerDialogOpen,
+    quickCustomerForm,
+    quickCustomerResult,
+    isQuickCustomerPending,
+    restoreCustomer,
+    selectCustomerState,
+    clearCustomerState,
+    changeCustomerQuery,
+    openCustomerSelector,
+    closeCustomerSelectorAfterDelay,
+    openQuickCustomerDialog,
+    closeQuickCustomerDialog,
+    updateQuickCustomerForm,
+    submitQuickCustomer: submitQuickCustomerState,
+    useExistingQuickCustomer: useExistingQuickCustomerState,
+  } = usePosCustomer({
+    customers,
+    createQuickCustomer: createPosQuickCustomerAction,
+  });
+  const {
+    searchQuery,
+    setSearchQuery,
+    isScannerOpen,
+    setIsScannerOpen,
+    isScanLookupPending,
+    lookupScannedItem,
+  } = usePosScanner({
+    lookupScanValue: lookupPosScanValueAction,
+    onItemFound: addItemToCart,
+    onFeedback: setCartFeedback,
+  });
   const [panelMode, setPanelMode] = useState<PosPanelMode>("cart");
-  const [payments, setPayments] = useState<PosPaymentDraft[]>([]);
-  const [selectedMethod, setSelectedMethod] =
-    useState<PosManualPaymentMethod>("cash");
-  const [selectedPaymentProfileId, setSelectedPaymentProfileId] = useState("");
-  const [paymentVerificationConfirmed, setPaymentVerificationConfirmed] =
-    useState(false);
-  const [paymentAmountInput, setPaymentAmountInput] = useState("");
-  const [customerDepositUsedInput, setCustomerDepositUsedInput] = useState("");
-  const [customerDepositInInput, setCustomerDepositInInput] = useState("");
-  const [paymentProviderInput, setPaymentProviderInput] = useState("");
-  const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
-  const [paymentNoteInput, setPaymentNoteInput] = useState("");
-  const [paymentVerificationForm, setPaymentVerificationForm] =
-    useState<PaymentVerificationFormState>(() =>
-      createPaymentVerificationForm("cash"),
-    );
-  const [paymentEvidenceFile, setPaymentEvidenceFile] = useState<File | null>(
-    null,
-  );
-  const [manualPaymentApproval, setManualPaymentApproval] =
-    useState<PosManualPaymentApproval | null>(null);
-  const [isAddingPayment, startAddingPaymentTransition] = useTransition();
-  const [isManualApprovalChecking, startManualApprovalTransition] =
-    useTransition();
-  const [paymentFeedback, setPaymentFeedback] = useState<string | null>(null);
-  const [discountApproval, setDiscountApproval] =
-    useState<ActiveDiscountApproval | null>(null);
-  const [discountFeedback, setDiscountFeedback] = useState<string | null>(null);
-  const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
-  const [discountAmountInput, setDiscountAmountInput] = useState("");
-  const [discountReasonInput, setDiscountReasonInput] = useState("");
-  const [isDiscountPending, startDiscountTransition] = useTransition();
-  const [checkoutResult, setCheckoutResult] = useState<
-    Extract<PosCheckoutActionResult, { status: "success" }>["sale"] | null
-  >(null);
-  const [isCheckoutPending, startCheckoutTransition] = useTransition();
-  const [checkoutAttempt, setCheckoutAttempt] =
-    useState<StoredCheckoutAttemptState | null>(null);
-  const [isCheckoutRecovering, setIsCheckoutRecovering] = useState(false);
-  const [isHoldDialogOpen, setIsHoldDialogOpen] = useState(false);
-  const [holdTitleInput, setHoldTitleInput] = useState("");
-  const [holdNoteInput, setHoldNoteInput] = useState("");
-  const [holdFeedback, setHoldFeedback] = useState<string | null>(null);
-  const [isHoldPending, startHoldTransition] = useTransition();
-  const posWorkspaceCommandHandlerRef = useRef<
-    (command: PosWorkspaceCommand) => void
-  >(() => undefined);
-  const checkoutRecoverySequenceRef = useRef(0);
-  const checkoutRecoveryHandlerRef = useRef<
-    (attempt: StoredCheckoutAttemptState) => Promise<void>
-  >(async () => undefined);
-
-  useEffect(() => {
-    checkoutRecoveryHandlerRef.current = recoverCheckoutAttempt;
+  const {
+    payments,
+    setPayments,
+    selectedMethod,
+    selectedPaymentProfileId,
+    paymentVerificationConfirmed,
+    setPaymentVerificationConfirmed,
+    paymentAmountInput,
+    setPaymentAmountInput,
+    customerDepositUsedInput,
+    setCustomerDepositUsedInput,
+    customerDepositInInput,
+    setCustomerDepositInInput,
+    paymentProviderInput,
+    setPaymentProviderInput,
+    paymentReferenceInput,
+    setPaymentReferenceInput,
+    paymentNoteInput,
+    setPaymentNoteInput,
+    paymentVerificationForm,
+    paymentEvidenceFile,
+    setPaymentEvidenceFile,
+    manualPaymentApproval,
+    setManualPaymentApproval,
+    paymentFeedback,
+    setPaymentFeedback,
+    isAddingPayment,
+    startAddingPaymentTransition,
+    resetCustomerDepositDraft,
+    resetPaymentForm,
+    resetPaymentState,
+    restoreCheckoutPaymentState,
+    selectPaymentProfile,
+    changePaymentMethod,
+    updatePaymentVerificationForm,
+  } = usePosPayment({ paymentProfiles });
+  const {
+    isHoldDialogOpen,
+    holdTitleInput,
+    setHoldTitleInput,
+    holdNoteInput,
+    setHoldNoteInput,
+    holdFeedback,
+    isHoldPending,
+    openHoldDialog: openHoldDialogState,
+    closeHoldDialog,
+    holdCurrentCart: holdCurrentCartState,
+  } = usePosHeldCart({ holdCart: holdPosCartAction });
+  const {
+    discountApproval,
+    canRequestDiscount,
+    discountDisabledReason,
+    setDiscountApproval,
+    discountFeedback,
+    setDiscountFeedback,
+    isDiscountDialogOpen,
+    discountAmountInput,
+    setDiscountAmountInput,
+    discountReasonInput,
+    setDiscountReasonInput,
+    isDiscountPending,
+    clearDiscountApproval: clearDiscountApprovalState,
+    openDiscountDialog,
+    closeDiscountDialog,
+    submitDiscountApproval: submitDiscountApprovalState,
+    refreshDiscountApprovalStatus: refreshDiscountApprovalStatusState,
+  } = usePosDiscount({
+    cartItems,
+    subtotalAmount,
+    selectedCustomerId: selectedCustomer?.id ?? null,
+    panelMode,
+    paymentCount: payments.length,
+    hasRegister: Boolean(context.register),
+    hasActiveShift: Boolean(context.activeShift),
+    requestDiscountApproval: requestPosDiscountApprovalAction,
+    getDiscountApprovalStatus: getPosDiscountApprovalStatusAction,
   });
 
-  useEffect(() => {
-    if (!cartFeedback) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setCartFeedback(null);
-    }, CART_FEEDBACK_AUTO_CLOSE_MS);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [cartFeedback]);
-
-  useEffect(() => {
-    const pendingResumeState = getPendingHeldCartResumeState();
-    const storedCartState = pendingResumeState ? null : getStoredPosCartState();
-
-    if (!pendingResumeState && !storedCartState) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      if (pendingResumeState) {
-        removePendingHeldCartResumeState();
-        removeStoredPosCartState();
-        setCartItems(pendingResumeState.items);
-        setSelectedCustomer(pendingResumeState.heldCart.customer);
-        setCustomerQuery(pendingResumeState.heldCart.customer?.fullName ?? "");
-        setIsCustomerSelectorOpen(false);
-        setCheckoutResult(null);
-        setPayments([]);
-        setPaymentFeedback(null);
-        setPaymentAmountInput("");
-        resetCustomerDepositDraft();
-        setPaymentProviderInput("");
-        setPaymentReferenceInput("");
-        setPaymentNoteInput("");
-        setPanelMode("cart");
-        setIsMobileCartOpen(true);
-        setCartFeedback(
-          `Hold ${pendingResumeState.heldCart.holdNumber} berhasil dimasukkan kembali ke cart.`,
-        );
-        router.refresh();
-        return;
-      }
-
-      if (!storedCartState) {
-        return;
-      }
-
-      setCartItems(storedCartState.items);
-      setSelectedCustomer(storedCartState.customer);
-      setCustomerQuery(storedCartState.customer?.fullName ?? "");
-      setIsCustomerSelectorOpen(false);
-
-      if (storedCartState.items.length > 0) {
-        setCartFeedback("Cart POS terakhir dipulihkan dari sesi browser ini.");
-      }
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [router]);
-
-  useEffect(() => {
-    const storedAttempt = getStoredCheckoutAttemptState();
-
-    if (!storedAttempt) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setCheckoutAttempt(storedAttempt);
-      setPayments(storedAttempt.payments);
-      setDiscountApproval(storedAttempt.discountApproval);
-      setManualPaymentApproval(storedAttempt.manualPaymentApproval);
-      setSelectedMethod(storedAttempt.payments[0]?.method ?? "cash");
-      setSelectedPaymentProfileId(
-        storedAttempt.payments[0]?.manualPaymentProfileId ?? "",
-      );
-      setCustomerDepositUsedInput(
-        formatRupiahInput(storedAttempt.payload.customerDepositUsedAmount ?? 0),
-      );
-      setCustomerDepositInInput(
-        formatRupiahInput(storedAttempt.payload.customerDepositInAmount ?? 0),
-      );
-      setPaymentVerificationConfirmed(
-        storedAttempt.payments[0]?.verificationConfirmed ?? false,
-      );
+  const restoreCheckoutAttempt = useCallback(
+    (attempt: StoredCheckoutAttemptState) => {
+      setDiscountApproval(attempt.discountApproval);
+      restoreCheckoutPaymentState({
+        payments: attempt.payments,
+        customerDepositUsedAmount:
+          attempt.payload.customerDepositUsedAmount,
+        customerDepositInAmount: attempt.payload.customerDepositInAmount,
+        manualPaymentApproval: attempt.manualPaymentApproval,
+      });
       setPanelMode("payment");
       setIsMobileCartOpen(true);
-
-      if (storedAttempt.manualPaymentApproval) {
-        setPaymentFeedback(
-          "Checkout menunggu verifikasi pembayaran manual. Cek status approval sebelum memproses ulang.",
-        );
-      } else {
-        void checkoutRecoveryHandlerRef.current(storedAttempt);
-      }
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, []);
-
-  useEffect(() => {
-    if (panelMode === "success") {
-      removeStoredPosCartState();
-      return;
-    }
-
-    saveStoredPosCartState({
-      items: cartItems,
-      customer: selectedCustomer,
-    });
-  }, [cartItems, panelMode, selectedCustomer]);
-
-  const filteredItems = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-
-    return items.filter((item) => {
-      const matchesCategory =
-        activeCategoryId === "all" || item.categoryId === activeCategoryId;
-
-      if (!matchesCategory) {
-        return false;
-      }
-
-      if (!normalizedSearch) {
-        return true;
-      }
-
-      return [
-        item.sku,
-        item.barcode,
-        item.qrValue,
-        item.serialNumber,
-        item.productCode,
-        item.productName,
-        item.categoryName,
-      ]
-        .filter(Boolean)
-        .some((value) => value!.toLowerCase().includes(normalizedSearch));
-    });
-  }, [activeCategoryId, items, searchQuery]);
-
-  const customerOptions = useMemo(() => {
-    const customerById = new Map<string, PosCustomerOption>();
-
-    for (const customer of [...createdCustomerOptions, ...customers]) {
-      if (!customerById.has(customer.id)) {
-        customerById.set(customer.id, customer);
-      }
-    }
-
-    return Array.from(customerById.values());
-  }, [createdCustomerOptions, customers]);
-
-  const customerSearchResults = useMemo(() => {
-    const normalizedQuery = customerQuery.trim().toLowerCase();
-
-    const matchedCustomers = normalizedQuery
-      ? customerOptions.filter((customer) =>
-          getCustomerSearchText(customer).includes(normalizedQuery),
-        )
-      : customerOptions;
-
-    return matchedCustomers.slice(0, 8);
-  }, [customerOptions, customerQuery]);
-
-  const cartItemIds = useMemo(
-    () => new Set(cartItems.map((item) => item.id)),
-    [cartItems],
+    },
+    [
+      restoreCheckoutPaymentState,
+      setDiscountApproval,
+      setIsMobileCartOpen,
+      setPanelMode,
+    ],
   );
 
-  const subtotalAmount = useMemo(
-    () =>
-      cartItems.reduce(
-        (total, item) => total + parseAmount(item.sellingAmount),
-        0,
-      ),
-    [cartItems],
-  );
+  const handleCheckoutSuccess = useCallback(() => {
+    setPaymentFeedback(null);
+    setCartFeedback(null);
+    resetCustomerDepositDraft();
+    setCartItems([]);
+    clearCustomerState();
+    resetPaymentState();
+    setDiscountApproval(null);
+    setDiscountFeedback(null);
+    setPanelMode("success");
+    setIsMobileCartOpen(true);
+    router.refresh();
+  }, [
+    clearCustomerState,
+    resetCustomerDepositDraft,
+    resetPaymentState,
+    router,
+    setCartFeedback,
+    setCartItems,
+    setDiscountApproval,
+    setDiscountFeedback,
+    setIsMobileCartOpen,
+    setPanelMode,
+    setPaymentFeedback,
+  ]);
 
-  const approvedDiscountAmount =
-    discountApproval?.status === "approved"
-      ? discountApproval.discountAmount
-      : 0;
-  const totalAmount = Math.max(subtotalAmount - approvedDiscountAmount, 0);
-  const hasPendingDiscountApproval = discountApproval?.status === "pending";
-  const canRequestDiscount =
-    panelMode === "cart" &&
-    cartItems.length > 0 &&
-    payments.length === 0 &&
-    subtotalAmount > 0 &&
-    !discountApproval &&
-    Boolean(context.register) &&
-    Boolean(context.activeShift);
-  const discountDisabledReason = !cartItems.length
-    ? "Tambahkan item sebelum meminta diskon."
-    : payments.length > 0
-      ? "Diskon harus diajukan sebelum payment ditambahkan."
-      : !context.register
-        ? "Register aktif belum tersedia untuk outlet ini."
-        : !context.activeShift
-          ? "Shift aktif belum dibuka, request diskon belum bisa dibuat."
-          : discountApproval
-            ? "Selesaikan atau reset request diskon yang sedang aktif."
-            : "Minta approval diskon manager/owner.";
-  const customerDepositBalance = selectedCustomer?.customerDepositBalance ?? 0;
+  usePosCartSession({
+    cartItems,
+    selectedCustomer,
+    panelMode,
+    setCartItems,
+    restoreCustomer,
+    setPayments,
+    setPaymentFeedback,
+    setPaymentAmountInput,
+    resetCustomerDepositDraft,
+    setPaymentProviderInput,
+    setPaymentReferenceInput,
+    setPaymentNoteInput,
+    setPanelMode,
+    setIsMobileCartOpen,
+    setCartFeedback,
+  });
+
+  const {
+    checkoutResult,
+    isCheckoutPending,
+    isCheckoutRecovering,
+    isManualApprovalChecking,
+    clearCheckoutResult,
+    invalidateCheckoutAttempt,
+    processCheckout,
+    checkManualPaymentApproval: checkManualPaymentApprovalState,
+  } = usePosCheckout({
+    completeCheckout: completePosCheckoutAction,
+    getManualPaymentApprovalStatus:
+      getPosManualPaymentApprovalStatusAction,
+    restoreCheckoutAttempt,
+    onCheckoutSuccess: handleCheckoutSuccess,
+    setManualPaymentApproval,
+    setPaymentFeedback,
+  });
+
   const rawCustomerDepositUsedAmount = parsePaymentAmountInput(
     customerDepositUsedInput,
   );
   const rawCustomerDepositInAmount = parsePaymentAmountInput(
     customerDepositInInput,
   );
-  const customerDepositUsedAmount = selectedCustomer
-    ? Math.min(
-        rawCustomerDepositUsedAmount,
-        totalAmount,
-        customerDepositBalance,
-      )
-    : 0;
-  const customerDepositInAmount = selectedCustomer
-    ? rawCustomerDepositInAmount
-    : 0;
-  const externalPaymentDueAmount = Math.max(
-    totalAmount - customerDepositUsedAmount + customerDepositInAmount,
-    0,
-  );
-  const paidAmount = useMemo(
-    () => payments.reduce((total, payment) => total + payment.amount, 0),
-    [payments],
-  );
-  const remainingAmount = Math.max(externalPaymentDueAmount - paidAmount, 0);
-  const totalChangeAmount = useMemo(
-    () => payments.reduce((total, payment) => total + payment.changeAmount, 0),
-    [payments],
-  );
-  const totalAvailableItems = items.length;
-  const activeCategory =
-    activeCategoryId === "all"
-      ? null
-      : (categories.find((category) => category.id === activeCategoryId) ??
-        null);
-  const activeCategoryLabel = activeCategory?.name ?? "Semua kategori";
-  const canCheckout =
-    cartItems.length > 0 &&
-    Boolean(context.register) &&
-    Boolean(context.activeShift) &&
-    !hasPendingDiscountApproval;
-  const checkoutDisabledReason = !cartItems.length
-    ? "Tambahkan minimal satu item sebelum lanjut ke pembayaran."
-    : !context.register
-      ? "Register aktif belum tersedia untuk outlet ini."
-      : !context.activeShift
-        ? "Shift aktif belum dibuka, checkout belum bisa dilanjutkan."
-        : hasPendingDiscountApproval
-          ? "Request diskon masih pending. Cek status approval atau reset request."
-          : "Lanjutkan ke pembayaran manual.";
-  const canFinalizePayment =
-    canCheckout &&
-    remainingAmount === 0 &&
-    (payments.length > 0 || customerDepositUsedAmount > 0) &&
-    rawCustomerDepositUsedAmount === customerDepositUsedAmount;
-  const canHoldCart =
-    panelMode === "cart" &&
-    cartItems.length > 0 &&
-    payments.length === 0 &&
-    !discountApproval &&
-    Boolean(context.register) &&
-    Boolean(context.activeShift);
-  const holdCartDisabledReason = !cartItems.length
-    ? "Tambahkan minimal satu item sebelum transaksi bisa ditahan."
-    : payments.length > 0
-      ? "Transaksi yang sudah memiliki payment tidak bisa ditahan. Reset payment terlebih dahulu."
-      : discountApproval
-        ? "Transaksi dengan request diskon tidak bisa ditahan. Reset request diskon terlebih dahulu."
-        : !context.register
-          ? "Register aktif belum tersedia untuk outlet ini."
-          : !context.activeShift
-            ? "Shift aktif belum dibuka, hold cart belum bisa dibuat."
-            : "Transaksi bisa ditahan.";
-
-  function resetCustomerDepositDraft() {
-    setCustomerDepositUsedInput("");
-    setCustomerDepositInInput("");
-  }
-
-  function resetPaymentForm(
-    nextMethod: PosManualPaymentMethod = selectedMethod,
-  ) {
-    const defaultProfile = getProfilesForMethod(paymentProfiles, nextMethod)[0];
-
-    setSelectedMethod(nextMethod);
-    setSelectedPaymentProfileId(defaultProfile?.id ?? "");
-    setPaymentVerificationConfirmed(false);
-    setPaymentAmountInput("");
-    setPaymentProviderInput(defaultProfile?.provider ?? "");
-    setPaymentReferenceInput("");
-    setPaymentNoteInput("");
-    setPaymentVerificationForm(
-      createPaymentVerificationForm(nextMethod, defaultProfile),
-    );
-    setPaymentEvidenceFile(null);
-  }
-
-  function invalidateCheckoutAttempt() {
-    checkoutRecoverySequenceRef.current += 1;
-    setCheckoutAttempt(null);
-    setIsCheckoutRecovering(false);
-    removeStoredCheckoutAttemptState();
-  }
+  const {
+    approvedDiscountAmount,
+    totalAmount,
+    customerDepositUsedAmount,
+    customerDepositInAmount,
+    externalPaymentDueAmount,
+    paidAmount,
+    remainingAmount,
+    totalChangeAmount,
+    canCheckout,
+    checkoutDisabledReason,
+    canFinalizePayment,
+  } = getPosWorkspaceState({
+    panelMode,
+    itemCount: cartItems.length,
+    subtotalAmount,
+    payments,
+    discountApproval,
+    rawCustomerDepositUsedAmount,
+    rawCustomerDepositInAmount,
+    customerDepositBalance:
+      selectedCustomer?.customerDepositBalance ?? 0,
+    hasSelectedCustomer: Boolean(selectedCustomer),
+    hasRegister: Boolean(context.register),
+    hasActiveShift: Boolean(context.activeShift),
+  });
+  const {
+    canHoldCart,
+    disabledReason: holdCartDisabledReason,
+  } = getHeldCartAvailability({
+    panelMode,
+    itemCount: cartItems.length,
+    paymentCount: payments.length,
+    hasDiscountApproval: Boolean(discountApproval),
+    hasRegister: Boolean(context.register),
+    hasActiveShift: Boolean(context.activeShift),
+  });
 
   function resetPayments() {
     invalidateCheckoutAttempt();
-    setPayments([]);
-    setManualPaymentApproval(null);
-    setPaymentFeedback(null);
-    setCheckoutResult(null);
-    resetPaymentForm();
+    resetPaymentState();
+    clearCheckoutResult();
   }
 
   function resetPaymentFlow() {
@@ -3950,281 +342,27 @@ export function PosWorkspace({
     resetCustomerDepositDraft();
   }
 
-  function applyCheckoutSuccess(
-    sale: Extract<PosCheckoutActionResult, { status: "success" }>["sale"],
-  ) {
-    invalidateCheckoutAttempt();
-    setCheckoutResult(sale);
-    setPaymentFeedback(null);
-    setCartFeedback(null);
-    resetCustomerDepositDraft();
-    setCartItems([]);
-    setSelectedCustomer(null);
-    setCustomerQuery("");
-    setIsCustomerSelectorOpen(false);
-    setPayments([]);
-    setManualPaymentApproval(null);
-    setDiscountApproval(null);
-    setDiscountFeedback(null);
-    resetPaymentForm();
-    setPanelMode("success");
-    setIsMobileCartOpen(true);
-    router.refresh();
-  }
-
-  async function recoverCheckoutAttempt(attempt: StoredCheckoutAttemptState) {
-    const recoverySequence = ++checkoutRecoverySequenceRef.current;
-    setIsCheckoutRecovering(true);
-    setPaymentFeedback(
-      "Status transaksi belum diketahui. Sedang memeriksa hasil transaksi...",
-    );
-
-    try {
-      for (
-        let pollIndex = 0;
-        pollIndex < POS_CHECKOUT_RECOVERY_MAX_POLLS;
-        pollIndex += 1
-      ) {
-        if (recoverySequence !== checkoutRecoverySequenceRef.current) {
-          return;
-        }
-
-        const recoveryStatus = await fetchCheckoutRecoveryStatus(
-          attempt.payload.idempotencyKey,
-        );
-
-        if (recoverySequence !== checkoutRecoverySequenceRef.current) {
-          return;
-        }
-
-        if (recoveryStatus.status === "completed") {
-          applyCheckoutSuccess(recoveryStatus.sale);
-          return;
-        }
-
-        if (recoveryStatus.status === "failed") {
-          setPaymentFeedback(
-            `${recoveryStatus.message} Tekan Proses Pembayaran lagi untuk retry dengan kode transaksi yang sama.`,
-          );
-          return;
-        }
-
-        if (recoveryStatus.status === "not_found" && pollIndex >= 2) {
-          setPaymentFeedback(
-            "Transaksi belum tercatat di server. Tekan Proses Pembayaran lagi; sistem akan memakai kode transaksi yang sama.",
-          );
-          return;
-        }
-
-        const retryAfterMs =
-          recoveryStatus.status === "processing"
-            ? recoveryStatus.retryAfterMs
-            : 1_500;
-
-        await waitForCheckoutRecovery(retryAfterMs);
-      }
-
-      setPaymentFeedback(
-        "Status transaksi masih belum pasti. Jangan membuat transaksi baru; tekan Proses Pembayaran lagi untuk melakukan pengecekan aman.",
-      );
-    } catch {
-      setPaymentFeedback(
-        "Status transaksi belum bisa diperiksa karena koneksi bermasalah. Jangan membuat transaksi baru; coba proses kembali dengan cart yang sama.",
-      );
-    } finally {
-      if (recoverySequence === checkoutRecoverySequenceRef.current) {
-        setIsCheckoutRecovering(false);
-      }
-    }
-  }
-
   function clearDiscountApproval(message?: string) {
-    setDiscountApproval(null);
-    setDiscountAmountInput("");
-    setDiscountReasonInput("");
-    setDiscountFeedback(message ?? null);
-    resetPaymentFlow();
-  }
-
-  function openDiscountDialog() {
-    if (!canRequestDiscount) {
-      setDiscountFeedback(discountDisabledReason);
-      return;
-    }
-
-    setDiscountAmountInput("");
-    setDiscountReasonInput("");
-    setDiscountFeedback(null);
-    setIsDiscountDialogOpen(true);
-  }
-
-  function closeDiscountDialog() {
-    if (isDiscountPending) {
-      return;
-    }
-
-    setIsDiscountDialogOpen(false);
+    clearDiscountApprovalState(message, resetPaymentFlow);
   }
 
   function requestDiscountApproval() {
-    if (!canRequestDiscount) {
-      setDiscountFeedback(discountDisabledReason);
-      return;
-    }
-
-    const discountAmount = parsePaymentAmountInput(discountAmountInput);
-    const reason = discountReasonInput.trim();
-
-    if (!Number.isSafeInteger(discountAmount) || discountAmount <= 0) {
-      setDiscountFeedback("Nominal diskon harus lebih dari Rp0.");
-      return;
-    }
-
-    if (discountAmount >= subtotalAmount) {
-      setDiscountFeedback(
-        "Nominal diskon harus lebih kecil dari subtotal transaksi.",
-      );
-      return;
-    }
-
-    if (reason.length < 5) {
-      setDiscountFeedback("Alasan diskon minimal 5 karakter.");
-      return;
-    }
-
-    setDiscountFeedback("Mengirim request diskon...");
-
-    startDiscountTransition(async () => {
-      const result = await requestPosDiscountApprovalAction({
-        itemIds: cartItems.map((item) => item.id),
-        discountAmount,
-        reason,
-        customerId: selectedCustomer?.id ?? null,
-      });
-
-      if (result.status === "error") {
-        setDiscountFeedback(getDiscountApprovalErrorMessage(result));
-        return;
-      }
-
-      setDiscountApproval(result.approval);
-      setDiscountFeedback(result.message);
-      setIsDiscountDialogOpen(false);
-      resetPaymentFlow();
-      router.refresh();
+    submitDiscountApprovalState({
+      resetPaymentFlow,
+      refreshWorkspace: () => router.refresh(),
     });
   }
 
   function refreshDiscountApprovalStatus() {
-    if (!discountApproval) {
-      setDiscountFeedback("Belum ada approval diskon yang perlu dicek.");
-      return;
-    }
-
-    setDiscountFeedback("Mengecek status approval diskon...");
-
-    startDiscountTransition(async () => {
-      const result = await getPosDiscountApprovalStatusAction(
-        discountApproval.id,
-      );
-
-      if (result.status !== "found") {
-        setDiscountFeedback(result.message);
-        return;
-      }
-
-      setDiscountApproval(result.approval);
-      setDiscountFeedback(result.message);
-      resetPaymentFlow();
-      router.refresh();
+    refreshDiscountApprovalStatusState({
+      resetPaymentFlow,
+      refreshWorkspace: () => router.refresh(),
     });
-  }
-
-  function rememberCustomerOption(customer: PosCustomerOption) {
-    setCreatedCustomerOptions((currentCustomers) => [
-      customer,
-      ...currentCustomers.filter(
-        (currentCustomer) => currentCustomer.id !== customer.id,
-      ),
-    ]);
-  }
-
-  function openQuickCustomerDialog() {
-    setQuickCustomerForm(createQuickCustomerFormState(customerQuery));
-    setQuickCustomerResult(null);
-    setIsCustomerSelectorOpen(false);
-    setIsQuickCustomerDialogOpen(true);
-  }
-
-  function closeQuickCustomerDialog() {
-    if (isQuickCustomerPending) {
-      return;
-    }
-
-    setIsQuickCustomerDialogOpen(false);
-    setQuickCustomerResult(null);
-  }
-
-  function updateQuickCustomerForm(
-    field: keyof QuickCustomerFormState,
-    value: string,
-  ) {
-    setQuickCustomerForm((currentForm) => ({
-      ...currentForm,
-      [field]: value,
-    }));
-    setQuickCustomerResult(null);
-  }
-
-  function submitQuickCustomer() {
-    const payload: PosQuickCustomerPayload = {
-      fullName: quickCustomerForm.fullName,
-      phone: quickCustomerForm.phone,
-      email: quickCustomerForm.email || null,
-      notes: quickCustomerForm.notes || null,
-    };
-
-    setQuickCustomerResult(null);
-
-    startQuickCustomerTransition(async () => {
-      try {
-        const result = await createPosQuickCustomerAction(payload);
-
-        if (result.status !== "success") {
-          setQuickCustomerResult(result);
-          return;
-        }
-
-        rememberCustomerOption(result.customer);
-        setIsQuickCustomerDialogOpen(false);
-        setQuickCustomerResult(null);
-        selectCustomer(result.customer);
-        setCartFeedback(result.message);
-      } catch {
-        setQuickCustomerResult({
-          status: "error",
-          message:
-            "Customer belum bisa disimpan. Periksa koneksi lalu coba kembali.",
-        });
-      }
-    });
-  }
-
-  function useExistingQuickCustomer(customer: PosCustomerOption) {
-    rememberCustomerOption(customer);
-    setIsQuickCustomerDialogOpen(false);
-    setQuickCustomerResult(null);
-    selectCustomer(customer);
-    setCartFeedback(
-      `Customer ${customer.fullName} yang sudah terdaftar dipilih untuk transaksi ini.`,
-    );
   }
 
   function selectCustomer(customer: PosCustomerOption) {
-    setSelectedCustomer(customer);
-    setCustomerQuery(customer.fullName);
-    setIsCustomerSelectorOpen(false);
-    setCheckoutResult(null);
+    selectCustomerState(customer);
+    clearCheckoutResult();
     resetPaymentFlow();
     if (discountApproval) {
       setDiscountApproval(null);
@@ -4237,13 +375,25 @@ export function PosWorkspace({
     );
   }
 
+  function submitQuickCustomer() {
+    submitQuickCustomerState((customer, message) => {
+      selectCustomer(customer);
+      setCartFeedback(message);
+    });
+  }
+
+  function useExistingQuickCustomer(customer: PosCustomerOption) {
+    useExistingQuickCustomerState(customer, selectCustomer);
+    setCartFeedback(
+      `Customer ${customer.fullName} yang sudah terdaftar dipilih untuk transaksi ini.`,
+    );
+  }
+
   function clearSelectedCustomer() {
     const customerName = selectedCustomer?.fullName;
 
-    setSelectedCustomer(null);
-    setCustomerQuery("");
-    setIsCustomerSelectorOpen(false);
-    setCheckoutResult(null);
+    clearCustomerState();
+    clearCheckoutResult();
     resetPaymentFlow();
     if (discountApproval) {
       setDiscountApproval(null);
@@ -4257,12 +407,26 @@ export function PosWorkspace({
     }
   }
 
+  function handleCustomerQueryChange(value: string) {
+    const customerWasCleared = changeCustomerQuery(value);
+
+    if (!customerWasCleared) {
+      return;
+    }
+
+    resetPaymentFlow();
+    if (discountApproval) {
+      setDiscountApproval(null);
+      setDiscountFeedback(
+        "Request diskon direset karena customer transaksi berubah.",
+      );
+    }
+  }
+
   function clearCart() {
     setCartItems([]);
-    setSelectedCustomer(null);
-    setCustomerQuery("");
-    setIsCustomerSelectorOpen(false);
-    setCheckoutResult(null);
+    clearCustomerState();
+    clearCheckoutResult();
     resetPaymentFlow();
     if (discountApproval) {
       setDiscountApproval(null);
@@ -4272,89 +436,42 @@ export function PosWorkspace({
   }
 
   function openHoldDialog() {
-    if (!canHoldCart) {
-      setCartFeedback(holdCartDisabledReason);
-      return;
-    }
-
-    setHoldTitleInput(selectedCustomer?.fullName ?? "");
-    setHoldNoteInput("");
-    setHoldFeedback(null);
-    setIsHoldDialogOpen(true);
-  }
-
-  function closeHoldDialog() {
-    if (isHoldPending) {
-      return;
-    }
-
-    setIsHoldDialogOpen(false);
-    setHoldFeedback(null);
+    openHoldDialogState({
+      canHoldCart,
+      disabledReason: holdCartDisabledReason,
+      defaultTitle: selectedCustomer?.fullName ?? "",
+      onUnavailable: setCartFeedback,
+    });
   }
 
   function holdCurrentCart() {
-    if (!canHoldCart) {
-      setHoldFeedback(holdCartDisabledReason);
-      return;
-    }
-
-    if (holdTitleInput.trim().length > 160) {
-      setHoldFeedback("Nama hold maksimal 160 karakter.");
-      return;
-    }
-
-    if (holdNoteInput.trim().length > 500) {
-      setHoldFeedback("Catatan hold maksimal 500 karakter.");
-      return;
-    }
-
-    setHoldFeedback(null);
-
-    startHoldTransition(async () => {
-      const result = await holdPosCartAction({
-        itemIds: cartItems.map((item) => item.id),
-        customerId: selectedCustomer?.id ?? null,
-        title: holdTitleInput,
-        note: holdNoteInput,
-      });
-
-      if (result.status === "error") {
-        setHoldFeedback(getHeldCartErrorMessage(result));
-        return;
-      }
-
-      setCartItems([]);
-      setSelectedCustomer(null);
-      setCustomerQuery("");
-      setIsCustomerSelectorOpen(false);
-      setCheckoutResult(null);
-      resetPaymentFlow();
-      removeStoredPosCartState();
-      setIsHoldDialogOpen(false);
-      setHoldTitleInput("");
-      setHoldNoteInput("");
-      setCartFeedback(result.message);
-      router.refresh();
+    holdCurrentCartState({
+      canHoldCart,
+      disabledReason: holdCartDisabledReason,
+      itemIds: cartItems.map((item) => item.id),
+      customerId: selectedCustomer?.id ?? null,
+      onSuccess: (result) => {
+        setCartItems([]);
+        clearCustomerState();
+        clearCheckoutResult();
+        resetPaymentFlow();
+        removeStoredPosCartState();
+        setCartFeedback(result.message);
+        router.refresh();
+      },
     });
   }
 
   function addItemToCart(item: PosAvailableItem) {
-    const sellingAmount = parseAmount(item.sellingAmount);
+    const addIssue = getPosCartAddIssue({ item, itemIds: cartItemIds });
 
-    if (sellingAmount <= 0) {
-      setCartFeedback(
-        `${item.sku} belum memiliki harga jual. Lengkapi harga sebelum transaksi.`,
-      );
-      return;
-    }
-
-    if (cartItemIds.has(item.id)) {
-      setCartFeedback(`${item.sku} sudah ada di keranjang.`);
+    if (addIssue) {
+      setCartFeedback(addIssue.message);
       return;
     }
 
     setCartItems((currentItems) => [...currentItems, item]);
-    setCheckoutResult(null);
+    clearCheckoutResult();
     resetPaymentFlow();
     if (discountApproval) {
       setDiscountApproval(null);
@@ -4365,21 +482,21 @@ export function PosWorkspace({
 
   function removeItemFromCart(itemId: string) {
     setCartItems((currentItems) => {
-      const removedItem = currentItems.find((item) => item.id === itemId);
-      const nextItems = currentItems.filter((item) => item.id !== itemId);
+      const result = removePosCartItem(currentItems, itemId);
 
-      if (removedItem) {
+      if (result.status === "removed") {
         resetPaymentFlow();
         if (discountApproval) {
           setDiscountApproval(null);
           setDiscountFeedback("Request diskon direset karena cart berubah.");
         }
-        setCartFeedback(`${removedItem.sku} dihapus dari keranjang.`);
+        setCartFeedback(`${result.removedItem.sku} dihapus dari keranjang.`);
       }
 
-      return nextItems;
+      return result.items;
     });
   }
+
   function continueToPayment() {
     if (!canCheckout) {
       setCartFeedback(checkoutDisabledReason);
@@ -4390,129 +507,6 @@ export function PosWorkspace({
     setPaymentFeedback(null);
     setPaymentAmountInput(formatRupiahInput(remainingAmount || totalAmount));
     setCartFeedback(null);
-  }
-
-  function lookupScannedItem(scanValue: string) {
-    const normalizedScanValue = scanValue.trim();
-
-    if (!normalizedScanValue) {
-      setCartFeedback(
-        "Masukkan barcode, QR value, serial number, atau SKU item.",
-      );
-      return;
-    }
-
-    setIsScannerOpen(false);
-    setSearchQuery(normalizedScanValue);
-    setCartFeedback(`Mencari item ${normalizedScanValue}...`);
-
-    startScanLookupTransition(async () => {
-      const result = await lookupPosScanValueAction(normalizedScanValue);
-
-      if (result.status === "found") {
-        addItemToCart(result.item);
-        return;
-      }
-
-      setCartFeedback(result.message);
-    });
-  }
-
-  function handlePosShellCommand(command: PosWorkspaceCommand) {
-    const normalizedValue = command.value.trim();
-
-    if (!normalizedValue) {
-      if (command.type === "search") {
-        setIsScannerOpen(false);
-        setSearchQuery("");
-        setCartFeedback(null);
-      }
-
-      return;
-    }
-
-    if (command.type === "scan") {
-      lookupScannedItem(normalizedValue);
-      return;
-    }
-
-    setIsScannerOpen(false);
-    setSearchQuery(normalizedValue);
-    setCartFeedback(`Filter katalog: ${normalizedValue}`);
-  }
-
-  useEffect(() => {
-    posWorkspaceCommandHandlerRef.current = handlePosShellCommand;
-  });
-
-  useEffect(() => {
-    function handleCommandEvent(event: Event) {
-      const command = normalizePosWorkspaceCommand(
-        (event as CustomEvent<unknown>).detail,
-      );
-
-      if (command) {
-        posWorkspaceCommandHandlerRef.current(command);
-      }
-    }
-
-    window.addEventListener(POS_WORKSPACE_COMMAND_EVENT, handleCommandEvent);
-
-    try {
-      const pendingCommandValue = window.sessionStorage.getItem(
-        POS_PENDING_COMMAND_STORAGE_KEY,
-      );
-
-      if (pendingCommandValue) {
-        window.sessionStorage.removeItem(POS_PENDING_COMMAND_STORAGE_KEY);
-
-        const pendingCommand = normalizePosWorkspaceCommand(
-          JSON.parse(pendingCommandValue),
-        );
-
-        if (pendingCommand) {
-          posWorkspaceCommandHandlerRef.current(pendingCommand);
-        }
-      }
-    } catch {
-      window.sessionStorage.removeItem(POS_PENDING_COMMAND_STORAGE_KEY);
-    }
-
-    return () => {
-      window.removeEventListener(
-        POS_WORKSPACE_COMMAND_EVENT,
-        handleCommandEvent,
-      );
-    };
-  }, []);
-
-  function selectPaymentProfile(profileId: string) {
-    const profile = paymentProfiles.find(
-      (candidate) =>
-        candidate.id === profileId &&
-        profileSupportsMethod(candidate, selectedMethod),
-    );
-
-    setSelectedPaymentProfileId(profile?.id ?? "");
-    setPaymentProviderInput(profile?.provider ?? "");
-    setPaymentVerificationConfirmed(false);
-    setPaymentVerificationForm(
-      createPaymentVerificationForm(selectedMethod, profile),
-    );
-    setPaymentEvidenceFile(null);
-    setPaymentFeedback(
-      profile
-        ? `${profile.name} dipilih. Masukkan reference dan konfirmasi pembayaran.`
-        : "Pilih akun atau terminal pembayaran yang valid.",
-    );
-  }
-
-  function changePaymentMethod(method: PosManualPaymentMethod) {
-    resetPaymentForm(method);
-    setPaymentFeedback(null);
-    if (remainingAmount > 0) {
-      setPaymentAmountInput(formatRupiahInput(remainingAmount));
-    }
   }
 
   function addPayment() {
@@ -4740,46 +734,7 @@ export function PosWorkspace({
   }
 
   function checkManualPaymentApproval() {
-    if (!manualPaymentApproval) {
-      setPaymentFeedback("Request verifikasi pembayaran belum tersedia.");
-      return;
-    }
-
-    startManualApprovalTransition(async () => {
-      const result = await getPosManualPaymentApprovalStatusAction(
-        manualPaymentApproval.id,
-      );
-
-      if (result.status !== "found") {
-        setPaymentFeedback(result.message);
-        return;
-      }
-
-      const updatedPayload: PosCheckoutPayload | null = checkoutAttempt
-        ? {
-            ...checkoutAttempt.payload,
-            manualPaymentApprovalId: result.approval.id,
-          }
-        : null;
-      const updatedAttempt: StoredCheckoutAttemptState | null =
-        checkoutAttempt && updatedPayload
-          ? {
-              ...checkoutAttempt,
-              payload: updatedPayload,
-              manualPaymentApproval: result.approval,
-              updatedAt: new Date().toISOString(),
-            }
-          : null;
-
-      setManualPaymentApproval(result.approval);
-
-      if (updatedAttempt) {
-        setCheckoutAttempt(updatedAttempt);
-        saveStoredCheckoutAttemptState(updatedAttempt);
-      }
-
-      setPaymentFeedback(result.message);
-    });
+    checkManualPaymentApprovalState(manualPaymentApproval);
   }
 
   function finalizePayment() {
@@ -4787,868 +742,233 @@ export function PosWorkspace({
       payments,
       totalAmount: externalPaymentDueAmount,
     });
+    const validationMessage = getCheckoutSubmissionValidationMessage({
+      rawCustomerDepositUsedAmount,
+      customerDepositUsedAmount,
+      canFinalizePayment,
+      paymentValidationMessage,
+    });
 
-    if (rawCustomerDepositUsedAmount !== customerDepositUsedAmount) {
-      setPaymentFeedback(
-        "Dana Titip digunakan tidak boleh melebihi saldo customer atau total belanja.",
-      );
+    if (validationMessage) {
+      setPaymentFeedback(validationMessage);
       return;
     }
 
-    if (!canFinalizePayment || paymentValidationMessage) {
-      setPaymentFeedback(
-        paymentValidationMessage ??
-          "Payment belum lunas atau transaksi belum siap diproses.",
-      );
-      return;
-    }
-
-    const idempotencyKey =
-      checkoutAttempt?.payload.idempotencyKey ?? createCheckoutIdempotencyKey();
-    const checkoutPayload: PosCheckoutPayload = {
+    processCheckout({
       itemIds: cartItems.map((item) => item.id),
-      payments: payments.map((payment) => ({
-        method: payment.method,
-        amount: payment.amount,
-        manualPaymentProfileId: payment.manualPaymentProfileId,
-        verificationConfirmed: payment.verificationConfirmed,
-        receivedAmount: payment.receivedAmount,
-        changeAmount: payment.changeAmount,
-        provider: payment.provider,
-        reference: payment.reference,
-        note: payment.note,
-        verificationSource: payment.verificationSource,
-        providerPaidAtIso: payment.providerPaidAtIso,
-        evidenceKey: payment.evidenceKey,
-        verificationDetails: payment.verificationDetails,
-      })),
-      idempotencyKey,
-      customerDepositUsedAmount:
-        customerDepositUsedAmount > 0 ? customerDepositUsedAmount : null,
-      customerDepositInAmount:
-        customerDepositInAmount > 0 ? customerDepositInAmount : null,
-      manualPaymentApprovalId: manualPaymentApproval?.id ?? null,
-      customerId: selectedCustomer?.id ?? null,
-      note: null,
-      discountApprovalId:
-        discountApproval?.status === "approved" ? discountApproval.id : null,
-      discountAmount:
-        approvedDiscountAmount > 0 ? approvedDiscountAmount : null,
-      discountReason:
-        discountApproval?.status === "approved"
-          ? discountApproval.reason
-          : null,
-    };
-    const nowIso = new Date().toISOString();
-    const nextAttempt: StoredCheckoutAttemptState = {
-      version: 2,
-      payload: checkoutPayload,
       payments,
-      discountApproval,
+      customerDepositUsedAmount,
+      customerDepositInAmount,
       manualPaymentApproval,
-      createdAt: checkoutAttempt?.createdAt ?? nowIso,
-      updatedAt: nowIso,
-    };
-
-    setCheckoutAttempt(nextAttempt);
-    saveStoredCheckoutAttemptState(nextAttempt);
-    setPaymentFeedback("Memproses transaksi POS...");
-
-    startCheckoutTransition(async () => {
-      try {
-        const result = await completePosCheckoutAction(checkoutPayload);
-
-        if (result.status === "processing") {
-          setPaymentFeedback(result.message);
-          await recoverCheckoutAttempt(nextAttempt);
-          return;
-        }
-
-        if (result.status === "error") {
-          if (result.code === "idempotency_conflict") {
-            invalidateCheckoutAttempt();
-          }
-
-          setPaymentFeedback(getCheckoutErrorMessage(result));
-          return;
-        }
-
-        if (result.status === "approval_required") {
-          const approvalPayload: PosCheckoutPayload = {
-            ...checkoutPayload,
-            manualPaymentApprovalId: result.approval.id,
-          };
-          const approvalAttempt: StoredCheckoutAttemptState = {
-            ...nextAttempt,
-            payload: approvalPayload,
-            manualPaymentApproval: result.approval,
-            updatedAt: new Date().toISOString(),
-          };
-
-          setManualPaymentApproval(result.approval);
-          setCheckoutAttempt(approvalAttempt);
-          saveStoredCheckoutAttemptState(approvalAttempt);
-          setPaymentFeedback(result.message);
-          return;
-        }
-
-        applyCheckoutSuccess(result.sale);
-      } catch {
-        await recoverCheckoutAttempt(nextAttempt);
-      }
+      customerId: selectedCustomer?.id ?? null,
+      discountApproval,
+      approvedDiscountAmount,
     });
   }
 
-  const cartContent = (
-    <CartContent
-      cartItems={cartItems}
-      subtotalAmount={subtotalAmount}
-      discountAmount={approvedDiscountAmount}
-      totalAmount={totalAmount}
-      discountApproval={discountApproval}
-      isDiscountPending={isDiscountPending}
-      discountFeedback={discountFeedback}
-      canRequestDiscount={canRequestDiscount}
-      discountDisabledReason={discountDisabledReason}
-      canCheckout={canCheckout}
-      checkoutDisabledReason={checkoutDisabledReason}
-      customers={customerOptions}
-      selectedCustomer={selectedCustomer}
-      customerQuery={customerQuery}
-      customerSearchResults={customerSearchResults}
-      isCustomerSelectorOpen={isCustomerSelectorOpen}
-      onCustomerQueryChange={(value) => {
-        setCustomerQuery(value);
-        setIsCustomerSelectorOpen(true);
-        if (selectedCustomer) {
-          setSelectedCustomer(null);
-          resetPaymentFlow();
-          if (discountApproval) {
-            setDiscountApproval(null);
-            setDiscountFeedback(
-              "Request diskon direset karena customer transaksi berubah.",
-            );
+  function changeCustomerDepositUsed(value: string) {
+    if (payments.length > 0) {
+      setPaymentFeedback(
+        "Reset daftar pembayaran sebelum mengubah Dana Titip.",
+      );
+      return;
+    }
+
+    invalidateCheckoutAttempt();
+    setCustomerDepositUsedInput(value);
+    setPaymentAmountInput("");
+  }
+
+  function changeCustomerDepositIn(value: string) {
+    if (payments.length > 0) {
+      setPaymentFeedback(
+        "Reset daftar pembayaran sebelum mengubah Dana Titip.",
+      );
+      return;
+    }
+
+    invalidateCheckoutAttempt();
+    setCustomerDepositInInput(value);
+    setPaymentAmountInput("");
+  }
+
+  function startNewTransaction() {
+    invalidateCheckoutAttempt();
+    clearCheckoutResult();
+    setCartFeedback(null);
+    setPaymentFeedback(null);
+    clearCustomerState();
+    resetCustomerDepositDraft();
+    setPanelMode("cart");
+    setIsMobileCartOpen(false);
+  }
+
+  const workspaceViewProps = {
+    dialogs: {
+      quickCustomer: isQuickCustomerDialogOpen
+        ? {
+            form: quickCustomerForm,
+            result: quickCustomerResult,
+            isPending: isQuickCustomerPending,
+            onChange: updateQuickCustomerForm,
+            onCancel: closeQuickCustomerDialog,
+            onSubmit: submitQuickCustomer,
+            onUseDuplicate: useExistingQuickCustomer,
           }
-        }
-      }}
-      onCustomerInputFocus={() => setIsCustomerSelectorOpen(true)}
-      onCustomerInputBlur={() => {
-        window.setTimeout(() => setIsCustomerSelectorOpen(false), 120);
-      }}
-      onOpenQuickCustomer={openQuickCustomerDialog}
-      onSelectCustomer={selectCustomer}
-      onClearCustomer={clearSelectedCustomer}
-      onRemoveItem={removeItemFromCart}
-      onClearCart={clearCart}
-      onOpenDiscountDialog={openDiscountDialog}
-      onRefreshDiscountApproval={refreshDiscountApprovalStatus}
-      onClearDiscountApproval={() =>
-        clearDiscountApproval("Request diskon direset dari cart.")
-      }
-      onContinueToPayment={continueToPayment}
-      canHoldCart={canHoldCart}
-      holdCartDisabledReason={holdCartDisabledReason}
-      onOpenHoldDialog={openHoldDialog}
-    />
-  );
+        : null,
+      discountApproval: isDiscountDialogOpen
+        ? {
+            cartItems,
+            subtotalAmount,
+            selectedCustomer,
+            amountInput: discountAmountInput,
+            reasonInput: discountReasonInput,
+            feedback: discountFeedback,
+            isPending: isDiscountPending,
+            onAmountInputChange: setDiscountAmountInput,
+            onReasonInputChange: setDiscountReasonInput,
+            onCancel: closeDiscountDialog,
+            onSubmit: requestDiscountApproval,
+          }
+        : null,
+      holdCart: isHoldDialogOpen
+        ? {
+            cartItems,
+            totalAmount,
+            selectedCustomer,
+            titleInput: holdTitleInput,
+            noteInput: holdNoteInput,
+            feedback: holdFeedback,
+            isPending: isHoldPending,
+            onTitleInputChange: setHoldTitleInput,
+            onNoteInputChange: setHoldNoteInput,
+            onCancel: closeHoldDialog,
+            onSubmit: holdCurrentCart,
+          }
+        : null,
+    },
+    catalog: {
+      categories,
+      items,
+      cartItemIds,
+      activeCategoryId,
+      isCategoryPickerOpen,
+      searchQuery,
+      onActiveCategoryChange: setActiveCategoryId,
+      onCategoryPickerOpenChange: setIsCategoryPickerOpen,
+      onSearchQueryChange: setSearchQuery,
+      onOpenScanner: () => setIsScannerOpen(true),
+      onAddItem: addItemToCart,
+    },
+    shifts: {
+      context,
+      canManageShifts,
+      isCloseShiftPanelOpen,
+      onToggleCloseShiftPanel: () =>
+        setIsCloseShiftPanelOpen((isOpen) => !isOpen),
+      onCloseShiftPanel: () => setIsCloseShiftPanelOpen(false),
+    },
+    sidePanel: {
+      isMobileOpen: isMobileCartOpen,
+      mode: panelMode,
+      itemCount: cartItems.length,
+      totalAmount,
+      cart: {
+        cartItems,
+        subtotalAmount,
+        discountAmount: approvedDiscountAmount,
+        totalAmount,
+        discountApproval,
+        isDiscountPending,
+        discountFeedback,
+        canRequestDiscount,
+        discountDisabledReason,
+        canCheckout,
+        checkoutDisabledReason,
+        customers: customerOptions,
+        selectedCustomer,
+        customerQuery,
+        customerSearchResults,
+        isCustomerSelectorOpen,
+        onCustomerQueryChange: handleCustomerQueryChange,
+        onCustomerInputFocus: openCustomerSelector,
+        onCustomerInputBlur: closeCustomerSelectorAfterDelay,
+        onOpenQuickCustomer: openQuickCustomerDialog,
+        onSelectCustomer: selectCustomer,
+        onClearCustomer: clearSelectedCustomer,
+        onRemoveItem: removeItemFromCart,
+        onClearCart: clearCart,
+        onOpenDiscountDialog: openDiscountDialog,
+        onRefreshDiscountApproval: refreshDiscountApprovalStatus,
+        onClearDiscountApproval: () =>
+          clearDiscountApproval("Request diskon direset dari cart."),
+        onContinueToPayment: continueToPayment,
+        canHoldCart,
+        holdCartDisabledReason,
+        onOpenHoldDialog: openHoldDialog,
+      },
+      payment: {
+        totalAmount,
+        customerDepositUsedAmount,
+        customerDepositInAmount,
+        externalPaymentDueAmount,
+        paidAmount,
+        remainingAmount,
+        totalChangeAmount,
+        payments,
+        selectedCustomer,
+        customerDepositUsedInput,
+        customerDepositInInput,
+        paymentProfiles,
+        paymentPolicies,
+        selectedMethod,
+        selectedProfileId: selectedPaymentProfileId,
+        verificationConfirmed: paymentVerificationConfirmed,
+        amountInput: paymentAmountInput,
+        referenceInput: paymentReferenceInput,
+        noteInput: paymentNoteInput,
+        verificationForm: paymentVerificationForm,
+        evidenceFileName: paymentEvidenceFile?.name ?? null,
+        manualPaymentApproval,
+        paymentFeedback,
+        canFinalizePayment,
+        isCheckoutPending: isCheckoutPending || isCheckoutRecovering,
+        isAddingPayment,
+        isApprovalChecking: isManualApprovalChecking,
+        onBackToCart: () => setPanelMode("cart"),
+        onMethodChange: (method) =>
+          changePaymentMethod(method, remainingAmount),
+        onProfileChange: selectPaymentProfile,
+        onVerificationConfirmedChange: setPaymentVerificationConfirmed,
+        onAmountInputChange: setPaymentAmountInput,
+        onCustomerDepositUsedInputChange: changeCustomerDepositUsed,
+        onCustomerDepositInInputChange: changeCustomerDepositIn,
+        onReferenceInputChange: setPaymentReferenceInput,
+        onNoteInputChange: setPaymentNoteInput,
+        onVerificationFormChange: updatePaymentVerificationForm,
+        onEvidenceFileChange: setPaymentEvidenceFile,
+        onCheckManualPaymentApproval: checkManualPaymentApproval,
+        onAddPayment: addPayment,
+        onRemovePayment: removePayment,
+        onResetPayments: resetPayments,
+        onFinalizePayment: finalizePayment,
+      },
+      success: checkoutResult
+        ? {
+            sale: checkoutResult,
+            onStartNewTransaction: startNewTransaction,
+          }
+        : null,
+      onOpenMobile: () => setIsMobileCartOpen(true),
+      onCloseMobile: () => setIsMobileCartOpen(false),
+    },
+    scanner: {
+      isOpen: isScannerOpen,
+      isProcessing: isScanLookupPending,
+      onClose: () => setIsScannerOpen(false),
+      onScan: lookupScannedItem,
+    },
+  } satisfies PosWorkspaceViewProps;
 
-  const paymentContent = (
-    <PaymentContent
-      totalAmount={totalAmount}
-      customerDepositUsedAmount={customerDepositUsedAmount}
-      customerDepositInAmount={customerDepositInAmount}
-      externalPaymentDueAmount={externalPaymentDueAmount}
-      paidAmount={paidAmount}
-      remainingAmount={remainingAmount}
-      totalChangeAmount={totalChangeAmount}
-      payments={payments}
-      selectedCustomer={selectedCustomer}
-      customerDepositUsedInput={customerDepositUsedInput}
-      customerDepositInInput={customerDepositInInput}
-      paymentProfiles={paymentProfiles}
-      paymentPolicies={paymentPolicies}
-      selectedMethod={selectedMethod}
-      selectedProfileId={selectedPaymentProfileId}
-      verificationConfirmed={paymentVerificationConfirmed}
-      amountInput={paymentAmountInput}
-      referenceInput={paymentReferenceInput}
-      noteInput={paymentNoteInput}
-      verificationForm={paymentVerificationForm}
-      evidenceFileName={paymentEvidenceFile?.name ?? null}
-      manualPaymentApproval={manualPaymentApproval}
-      paymentFeedback={paymentFeedback}
-      canFinalizePayment={canFinalizePayment}
-      isCheckoutPending={isCheckoutPending || isCheckoutRecovering}
-      isAddingPayment={isAddingPayment}
-      isApprovalChecking={isManualApprovalChecking}
-      onBackToCart={() => setPanelMode("cart")}
-      onMethodChange={changePaymentMethod}
-      onProfileChange={selectPaymentProfile}
-      onVerificationConfirmedChange={setPaymentVerificationConfirmed}
-      onAmountInputChange={setPaymentAmountInput}
-      onCustomerDepositUsedInputChange={(value) => {
-        if (payments.length > 0) {
-          setPaymentFeedback(
-            "Reset daftar pembayaran sebelum mengubah Dana Titip.",
-          );
-          return;
-        }
-
-        invalidateCheckoutAttempt();
-        setCustomerDepositUsedInput(value);
-        setPaymentAmountInput("");
-      }}
-      onCustomerDepositInInputChange={(value) => {
-        if (payments.length > 0) {
-          setPaymentFeedback(
-            "Reset daftar pembayaran sebelum mengubah Dana Titip.",
-          );
-          return;
-        }
-
-        invalidateCheckoutAttempt();
-        setCustomerDepositInInput(value);
-        setPaymentAmountInput("");
-      }}
-      onReferenceInputChange={setPaymentReferenceInput}
-      onNoteInputChange={setPaymentNoteInput}
-      onVerificationFormChange={(field, value) => {
-        setPaymentVerificationForm((current) => ({
-          ...current,
-          [field]:
-            field === "verificationSource"
-              ? (value as PosManualPaymentVerificationSource)
-              : value,
-        }));
-      }}
-      onEvidenceFileChange={setPaymentEvidenceFile}
-      onCheckManualPaymentApproval={checkManualPaymentApproval}
-      onAddPayment={addPayment}
-      onRemovePayment={removePayment}
-      onResetPayments={resetPayments}
-      onFinalizePayment={finalizePayment}
-    />
-  );
-
-  const successContent = checkoutResult ? (
-    <CheckoutSuccessContent
-      sale={checkoutResult}
-      onStartNewTransaction={() => {
-        invalidateCheckoutAttempt();
-        setCheckoutResult(null);
-        setCartFeedback(null);
-        setPaymentFeedback(null);
-        setSelectedCustomer(null);
-        resetCustomerDepositDraft();
-        setCustomerQuery("");
-        setIsCustomerSelectorOpen(false);
-        setPanelMode("cart");
-        setIsMobileCartOpen(false);
-      }}
-    />
-  ) : null;
-
-  const sidePanelContent =
-    panelMode === "success" && successContent
-      ? successContent
-      : panelMode === "payment"
-        ? paymentContent
-        : cartContent;
-
-  return (
-    <>
-      {isQuickCustomerDialogOpen ? (
-        <QuickCustomerDialog
-          form={quickCustomerForm}
-          result={quickCustomerResult}
-          isPending={isQuickCustomerPending}
-          onChange={updateQuickCustomerForm}
-          onCancel={closeQuickCustomerDialog}
-          onSubmit={submitQuickCustomer}
-          onUseDuplicate={useExistingQuickCustomer}
-        />
-      ) : null}
-
-      {isDiscountDialogOpen ? (
-        <DiscountApprovalDialog
-          cartItems={cartItems}
-          subtotalAmount={subtotalAmount}
-          selectedCustomer={selectedCustomer}
-          amountInput={discountAmountInput}
-          reasonInput={discountReasonInput}
-          feedback={discountFeedback}
-          isPending={isDiscountPending}
-          onAmountInputChange={setDiscountAmountInput}
-          onReasonInputChange={setDiscountReasonInput}
-          onCancel={closeDiscountDialog}
-          onSubmit={requestDiscountApproval}
-        />
-      ) : null}
-
-      {isHoldDialogOpen ? (
-        <HoldCartDialog
-          cartItems={cartItems}
-          totalAmount={totalAmount}
-          selectedCustomer={selectedCustomer}
-          titleInput={holdTitleInput}
-          noteInput={holdNoteInput}
-          feedback={holdFeedback}
-          isPending={isHoldPending}
-          onTitleInputChange={setHoldTitleInput}
-          onNoteInputChange={setHoldNoteInput}
-          onCancel={closeHoldDialog}
-          onSubmit={holdCurrentCart}
-        />
-      ) : null}
-
-      <div className="lg:grid lg:h-[calc(100vh-7.5rem)] lg:grid-cols-[minmax(0,1fr)_380px] lg:overflow-hidden">
-        {/* Katalog */}
-        <section className="min-w-0 p-4 pb-22 sm:p-5 sm:pb-36 lg:overflow-y-auto lg:border-r lg:border-[var(--border)] lg:p-6">
-          <PosContextNotice
-            context={context}
-            canManageShifts={canManageShifts}
-            isCloseShiftPanelOpen={isCloseShiftPanelOpen}
-            onCloseShiftClick={() =>
-              setIsCloseShiftPanelOpen((isOpen) => !isOpen)
-            }
-          />
-
-          {canManageShifts ? <OpenShiftCard context={context} /> : null}
-
-          {canManageShifts && isCloseShiftPanelOpen && context.activeShift ? (
-            <CloseShiftCard
-              context={context}
-              onCancel={() => setIsCloseShiftPanelOpen(false)}
-            />
-          ) : null}
-
-          {/* Search mobile */}
-          <div className="mb-2 flex items-center gap-2 md:hidden">
-            <label className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3">
-              <Search className="size-4 shrink-0 text-neutral-400" />
-
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Scan atau cari barang..."
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
-              />
-            </label>
-
-            <button
-              type="button"
-              onClick={() => setIsScannerOpen(true)}
-              aria-label="Scan dengan kamera"
-              className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-white text-[var(--accent)]"
-            >
-              <ScanBarcode className="size-5" />
-            </button>
-          </div>
-
-          <label className="mb-4 hidden h-11 max-w-xl items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3 md:flex lg:hidden">
-            <Search className="size-4 shrink-0 text-neutral-400" />
-
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Cari SKU, barcode, nama produk..."
-              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
-            />
-          </label>
-
-          {/* Compact category dropdown / mobile sheet */}
-          <div className="-mx-4 bg-[var(--background)] px-4 py-2 sm:-mx-5 sm:px-5 lg:-mx-6 lg:px-6">
-            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="hidden shrink-0 sm:block">
-                <p className="text-xl font-semibold text-neutral-950">
-                  Pilih item produk
-                </p>
-                <p className="text-[11px] text-[var(--muted)]">
-                  Menampilkan stok item fisik yang tersedia di outlet
-                </p>
-              </div>
-
-              <div className="relative flex min-w-0 w-full items-center gap-2 sm:w-auto sm:justify-end">
-                <button
-                  type="button"
-                  aria-haspopup="dialog"
-                  aria-expanded={isCategoryPickerOpen}
-                  onClick={() => setIsCategoryPickerOpen((isOpen) => !isOpen)}
-                  className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-left transition-colors hover:border-neutral-300 sm:w-80 sm:flex-none lg:w-96"
-                >
-                  <ListFilter className="size-4 shrink-0 text-[var(--accent)]" />
-
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[10px] font-medium text-[var(--muted)]">
-                      Kategori
-                    </span>
-                    <span className="block truncate text-sm font-semibold text-neutral-950">
-                      {activeCategoryLabel}
-                    </span>
-                  </span>
-
-                  <span
-                    className="shrink-0 rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-semibold text-neutral-600 sm:hidden"
-                    title={`${filteredItems.length} dari ${totalAvailableItems} item tersedia`}
-                  >
-                    {filteredItems.length}/{totalAvailableItems}
-                  </span>
-
-                  <ChevronDown
-                    className={cn(
-                      "size-4 shrink-0 text-neutral-400 transition-transform",
-                      isCategoryPickerOpen && "rotate-180",
-                    )}
-                  />
-                </button>
-
-                <span
-                  className="hidden shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--muted)] sm:inline-flex"
-                  title={`${filteredItems.length} dari ${totalAvailableItems} item tersedia`}
-                >
-                  {filteredItems.length} dari {totalAvailableItems} item
-                  tersedia
-                </span>
-
-                {isCategoryPickerOpen ? (
-                  <>
-                    <button
-                      type="button"
-                      aria-label="Tutup pilihan kategori"
-                      onClick={() => setIsCategoryPickerOpen(false)}
-                      className="fixed inset-0 z-30 hidden cursor-default md:block"
-                    />
-
-                    <div
-                      id="pos-category-picker"
-                      role="dialog"
-                      aria-label="Pilih kategori produk"
-                      className="absolute right-0 top-[calc(100%+0.5rem)] z-40 hidden rounded-2xl border border-[var(--border)] bg-white p-3 md:block"
-                    >
-                      <div className="mb-3 flex items-center justify-between gap-3 px-1">
-                        <div>
-                          <p className="text-sm font-semibold text-neutral-950">
-                            Pilih kategori
-                          </p>
-                          <p className="text-xs text-[var(--muted)]">
-                            Filter katalog tanpa mengurangi area daftar produk.
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setIsCategoryPickerOpen(false)}
-                          aria-label="Tutup pilihan kategori"
-                          className="grid size-9 shrink-0 place-items-center rounded-xl border border-[var(--border)] text-neutral-500 transition hover:bg-neutral-50 hover:text-neutral-950"
-                        >
-                          <X className="size-4" />
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          aria-pressed={activeCategoryId === "all"}
-                          onClick={() => {
-                            setActiveCategoryId("all");
-                            setIsCategoryPickerOpen(false);
-                          }}
-                          className={cn(
-                            "flex min-h-12 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors",
-                            activeCategoryId === "all"
-                              ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                              : "border-[var(--border)] text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50",
-                          )}
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold">
-                              Semua kategori
-                            </span>
-                            <span className="block text-[11px] opacity-75">
-                              {totalAvailableItems} item tersedia
-                            </span>
-                          </span>
-
-                          {activeCategoryId === "all" ? (
-                            <Check className="size-4 shrink-0" />
-                          ) : null}
-                        </button>
-
-                        {categories.map((category) => {
-                          const isActive = activeCategoryId === category.id;
-
-                          return (
-                            <button
-                              key={category.id}
-                              type="button"
-                              aria-pressed={isActive}
-                              onClick={() => {
-                                setActiveCategoryId(category.id);
-                                setIsCategoryPickerOpen(false);
-                              }}
-                              className={cn(
-                                "flex min-h-12 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors",
-                                isActive
-                                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                                  : "border-[var(--border)] text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50",
-                              )}
-                            >
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-semibold">
-                                  {category.name}
-                                </span>
-                                <span className="block text-[11px] opacity-75">
-                                  {category.totalAvailableItems} item tersedia
-                                </span>
-                              </span>
-
-                              {isActive ? (
-                                <Check className="size-4 shrink-0" />
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          {isCategoryPickerOpen ? (
-            <div
-              id="pos-category-picker-mobile"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Pilih kategori produk"
-              className="fixed inset-0 z-50 md:hidden"
-            >
-              <button
-                type="button"
-                aria-label="Tutup pilihan kategori"
-                onClick={() => setIsCategoryPickerOpen(false)}
-                className="absolute inset-0 bg-neutral-950/45"
-              />
-
-              <div className="absolute inset-x-0 bottom-0 max-h-[78vh] rounded-t-3xl border-t border-[var(--border)] bg-white">
-                <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300" />
-
-                <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-4">
-                  <div>
-                    <p className="text-base font-semibold text-neutral-950">
-                      Pilih kategori
-                    </p>
-                    <p className="text-xs text-[var(--muted)]">
-                      Kategori aktif: {activeCategoryLabel}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsCategoryPickerOpen(false)}
-                    aria-label="Tutup pilihan kategori"
-                    className="grid size-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] text-neutral-500"
-                  >
-                    <X className="size-4" />
-                  </button>
-                </div>
-
-                <div className="scrollbar-clean max-h-[calc(78vh-5.5rem)] space-y-2 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-                  <button
-                    type="button"
-                    aria-pressed={activeCategoryId === "all"}
-                    onClick={() => {
-                      setActiveCategoryId("all");
-                      setIsCategoryPickerOpen(false);
-                    }}
-                    className={cn(
-                      "flex min-h-14 w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left",
-                      activeCategoryId === "all"
-                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                        : "border-[var(--border)] text-neutral-700",
-                    )}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold">
-                        Semua kategori
-                      </span>
-                      <span className="block text-xs opacity-75">
-                        {totalAvailableItems} item tersedia
-                      </span>
-                    </span>
-
-                    {activeCategoryId === "all" ? (
-                      <Check className="size-5 shrink-0" />
-                    ) : null}
-                  </button>
-
-                  {categories.map((category) => {
-                    const isActive = activeCategoryId === category.id;
-
-                    return (
-                      <button
-                        key={category.id}
-                        type="button"
-                        aria-pressed={isActive}
-                        onClick={() => {
-                          setActiveCategoryId(category.id);
-                          setIsCategoryPickerOpen(false);
-                        }}
-                        className={cn(
-                          "flex min-h-14 w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left",
-                          isActive
-                            ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                            : "border-[var(--border)] text-neutral-700",
-                        )}
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold">
-                            {category.name}
-                          </span>
-                          <span className="block text-xs opacity-75">
-                            {category.totalAvailableItems} item tersedia
-                          </span>
-                        </span>
-
-                        {isActive ? (
-                          <Check className="size-5 shrink-0" />
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {totalAvailableItems >= POS_INITIAL_ITEM_LIMIT ? (
-            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Menampilkan {POS_INITIAL_ITEM_LIMIT} item terbaru. Gunakan search
-              atau scan barcode lama/internal untuk menemukan item yang lebih
-              spesifik.
-            </p>
-          ) : null}
-
-          {/* Product grid */}
-          {filteredItems.length > 0 ? (
-            <div className="mt-2 grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-3 2xl:grid-cols-4">
-              {filteredItems.map((item) => {
-                const isInCart = cartItemIds.has(item.id);
-                const hasSellingAmount = parseAmount(item.sellingAmount) > 0;
-                const specChips = getItemSpecChips(item);
-
-                return (
-                  <article
-                    key={item.id}
-                    className={cn(
-                      "group overflow-hidden rounded-2xl border bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition hover:-translate-y-0.5 hover:shadow-md",
-                      isInCart
-                        ? "border-[var(--accent)] ring-2 ring-[var(--accent-soft)]"
-                        : "border-[var(--border)] hover:border-neutral-300",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => addItemToCart(item)}
-                      className="block w-full text-left"
-                    >
-                      <div className="relative">
-                        <PosItemImage
-                          item={item}
-                          alt={`${item.productName} ${item.sku}`}
-                          className="aspect-[5/4] sm:aspect-[4/3]"
-                          iconClassName="size-14 sm:size-16"
-                          showCatalogBadge
-                        />
-
-                        <span
-                          className={cn(
-                            "absolute left-3 top-3 rounded-full bg-white/30 px-2 py-1 text-[10px] font-medium backdrop-blur",
-                            isInCart
-                              ? "text-[var(--accent)]"
-                              : "text-neutral-600",
-                          )}
-                        >
-                          {isInCart ? "Di Keranjang" : "Tersedia"}
-                        </span>
-                      </div>
-                    </button>
-
-                    <div className="space-y-2.5 p-2.5 sm:space-y-3 sm:p-4">
-                      <div className="space-y-2">
-                        <p className="line-clamp-1 text-xs font-semibold leading-5 text-neutral-950 sm:line-clamp-2 sm:min-h-10 sm:text-[15px]">
-                          {item.productName}
-                        </p>
-
-                        <div className="flex gap-1.5">
-                          <span className="inline-flex items-center rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[8px] font-semibold uppercase text-[var(--accent)] sm:px-2.5 sm:py-1 sm:text-[10px]">
-                            {item.categoryName}
-                          </span>
-
-                          <span className="inline-flex max-w-full items-center rounded-full border border-[var(--border)] bg-white px-2 py-0.5 text-[8px] font-medium text-neutral-600 sm:px-2.5 sm:py-1 sm:text-[10px]">
-                            <span className="truncate">{item.sku}</span>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-[9px] font-semibold uppercase text-[var(--muted)] sm:text-[10px]">
-                          Spesifikasi
-                        </p>
-                        <div className="mt-1.5 flex flex-wrap gap-0.5 sm:mt-2 sm:gap-1">
-                          {specChips.length > 0 ? (
-                            <>
-                              {specChips.map((spec) => (
-                                <span
-                                  key={`${item.id}-${spec}`}
-                                  className="inline-flex items-center rounded-full border border-[var(--border)] bg-white px-2 py-0.5 text-[9px] font-medium text-neutral-700 sm:px-2.5 sm:py-1 sm:text-[10px]"
-                                >
-                                  {spec}
-                                </span>
-                              ))}
-                            </>
-                          ) : (
-                            <span className="text-[11px] text-[var(--muted)]">
-                              {getItemDetail(item)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--accent-soft)] bg-[var(--accent-soft)]/70 p-2.5 sm:items-end sm:gap-3 sm:rounded-2xl sm:p-3">
-                        <div className="min-w-0">
-                          <p className="hidden text-[10px] font-semibold uppercase text-[var(--muted)] sm:block">
-                            Harga jual
-                          </p>
-                          <p className="truncate text-xs font-semibold text-neutral-950 sm:mt-1 sm:text-[15px]">
-                            {formatCurrency(item.sellingAmount)}
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          aria-label={
-                            isInCart
-                              ? `${item.productName} sudah di keranjang`
-                              : `Tambahkan ${item.productName}`
-                          }
-                          onClick={() => addItemToCart(item)}
-                          disabled={isInCart || !hasSellingAmount}
-                          className={cn(
-                            "grid size-9 shrink-0 place-items-center rounded-xl border bg-white transition sm:size-10 sm:rounded-2xl",
-                            isInCart
-                              ? "cursor-not-allowed border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                              : hasSellingAmount
-                                ? "border-[var(--border)] text-[var(--accent)] hover:border-[var(--accent)] hover:bg-white"
-                                : "cursor-not-allowed border-neutral-200 text-neutral-300",
-                          )}
-                        >
-                          <ShoppingBag className="size-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="mt-5 grid min-h-72 place-items-center rounded-3xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
-              <div>
-                <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                  <Gem className="size-7" />
-                </div>
-                <h2 className="mt-4 font-semibold text-neutral-950">
-                  Tidak ada item tersedia
-                </h2>
-                <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--muted)]">
-                  Cek filter pencarian, kategori, atau pastikan item inventory
-                  sudah berstatus tersedia di outlet aktif.
-                </p>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* Cart desktop */}
-        <aside className="hidden min-h-0 overflow-y-auto bg-white lg:block">
-          {sidePanelContent}
-        </aside>
-      </div>
-
-      {/* Sticky cart mobile/tablet */}
-      <button
-        type="button"
-        onClick={() => setIsMobileCartOpen(true)}
-        className="fixed bottom-[124px] left-4 right-4 z-30 flex h-16 items-center gap-3 rounded-2xl border border-[var(--border)] bg-white px-4 text-left shadow-[0_12px_32px_rgba(0,0,0,0.14)] lg:hidden"
-      >
-        <div className="relative grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-          <ShoppingBag className="size-5" />
-
-          <span className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-[var(--accent)] text-[10px] font-semibold text-white">
-            {cartItems.length}
-          </span>
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <p className="text-xs text-[var(--muted)]">
-            {cartItems.length > 0
-              ? `${cartItems.length} item di keranjang`
-              : "Penjualan Saat Ini"}
-          </p>
-
-          <p className="mt-0.5 truncate text-sm font-semibold text-neutral-950">
-            {formatCurrency(totalAmount)}
-          </p>
-        </div>
-
-        <ChevronRight className="size-5 shrink-0 text-neutral-400" />
-      </button>
-
-      {/* Cart fullscreen mobile/tablet */}
-      {isMobileCartOpen ? (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-white lg:hidden">
-          <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur">
-            <div>
-              <p className="font-semibold text-neutral-950">
-                {panelMode === "success"
-                  ? "Transaksi Berhasil"
-                  : panelMode === "payment"
-                    ? "Pembayaran Manual"
-                    : "Keranjang Penjualan"}
-              </p>
-
-              <p className="text-xs text-[var(--muted)]">
-                {panelMode === "success"
-                  ? "Transaksi sudah tersimpan."
-                  : panelMode === "payment"
-                    ? "Selesaikan payment dan simpan transaksi."
-                    : "Periksa item sebelum pembayaran."}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              aria-label="Tutup keranjang"
-              onClick={() => setIsMobileCartOpen(false)}
-              className="grid size-10 place-items-center rounded-xl text-neutral-500 hover:bg-neutral-100"
-            >
-              <X className="size-5" />
-            </button>
-          </header>
-
-          {sidePanelContent}
-        </div>
-      ) : null}
-
-      <CameraScannerModal
-        isOpen={isScannerOpen}
-        isProcessing={isScanLookupPending}
-        onClose={() => setIsScannerOpen(false)}
-        onScan={lookupScannedItem}
-      />
-    </>
-  );
+  return <PosWorkspaceView {...workspaceViewProps} />;
 }

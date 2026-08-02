@@ -31,6 +31,7 @@ npm run check:quality
 npm run check:static
 npm run check:security
 npm run check:environment
+npm run check:pos-stage-1c
 npm run check:transactions
 npm run check:business
 npm run check:hardware
@@ -45,7 +46,7 @@ npm run test:financial:local
 
 Untuk database test yang sudah dimigrasikan, gunakan `npm run test:financial`. Dokumentasi lengkap tersedia di `docs/development/financial-concurrency-tests.md`.
 
-`check:quality` mencakup konfigurasi quality gate, reproducible build baseline, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract. `check:security` mencakup kontrak environment production dan pemisahan secret. `check:transactions` mencakup boundary service checkout, fingerprint/recovery checkout, rekonsiliasi nominal cash/mixed payment/Dana Titip, manual payment, sale correction, reconciliation, dan settlement import.
+`check:quality` mencakup konfigurasi quality gate, reproducible build baseline, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract. `check:security` mencakup kontrak environment production dan pemisahan secret. `check:pos-stage-1c` menggabungkan seluruh kontrak hasil modularisasi checkout, payment, scanner, cart, customer, held cart, katalog, dialog, result/shift, dan workspace composition. `check:transactions` menambahkan fingerprint/recovery checkout, rekonsiliasi nominal cash/mixed payment/Dana Titip, manual payment, sale correction, reconciliation, dan settlement import.
 
 Clean build menghapus output lama sebelum membuat production bundle:
 
@@ -58,6 +59,22 @@ Production image harus dapat dibangun dari fresh Docker context:
 ```bash
 docker build --pull --tag asihjaya-rms:local .
 ```
+
+## Finalisasi POS Stage 1C
+
+Gunakan runner berikut untuk gate final refactor POS:
+
+```bash
+npm run verify:pos-stage-1c
+```
+
+Untuk validasi lokal lengkap dengan PostgreSQL disposable dan financial/concurrency suite:
+
+```bash
+npm run verify:pos-stage-1c:local
+```
+
+Checklist smoke test, review, merge, dan rollback tersedia di `docs/development/pos-stage-1c-stabilization.md`.
 
 ## Rehearsal migration PostgreSQL 17
 
