@@ -1,0 +1,738 @@
+"use server";
+
+import { randomUUID } from "node:crypto";
+
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
+import { db } from "@/db";
+import {
+  auditLogs,
+  itemBarcodes,
+  legacyMigrationSessions,
+  legacyMigrationSoldRecords,
+  legacyMigrationVerifications,
+  legacyProductRows,
+  productCategories,
+  productItems,
+  productMasters,
+} from "@/db/schema";
+import { getNextProductItemIdentifiers } from "@/features/inventory/product-item-identifiers";
+import { getAccessibleLegacyBatch } from "@/features/legacy-migration/management-queries";
+import { resolveLegacyMigrationPricing } from "@/features/legacy-migration/pricing-rules";
+import {
+  buildMigrationItemAttributes,
+  canBulkApproveLegacyVerification,
+  getLegacyBarcodeAliasSource,
+} from "@/features/legacy-migration/review-rules";
+import {
+  getLegacyMigrationSessionLockKey,
+  isLegacyMigrationUuid,
+  parseLegacyMigrationUuid,
+} from "@/features/legacy-migration/safety";
+import { requirePermission, type AuthContext } from "@/lib/auth/session";
+import { getClientIp } from "@/lib/http/client-ip";
+
+const MAX_BULK_APPROVAL = 100;
+
+type ReviewTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+function readText(formData: FormData, name: string, maxLength: number) {
+  return String(formData.get(name) ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, maxLength);
+}
+
+function readUuid(formData: FormData, name: string) {
+  return parseLegacyMigrationUuid(readText(formData, name, 36));
+}
+
+function reviewPath(batchId: string) {
+  return `/admin/migrasi-produk/${batchId}/review`;
+}
+
+function detailPath(batchId: string, verificationId: string) {
+  return `${reviewPath(batchId)}/${verificationId}`;
+}
+
+function redirectWithMessage(
+  path: string,
+  type: "success" | "error",
+  message: string,
+): never {
+  redirect(`${path}?${new URLSearchParams({ type, message }).toString()}`);
+}
+
+async function requestMetadata() {
+  const headerStore = await headers();
+  return {
+    ipAddress: getClientIp(headerStore),
+    userAgent: headerStore.get("user-agent")?.slice(0, 500) ?? null,
+  };
+}
+
+async function requireAccessibleBatch(auth: AuthContext, batchId: string) {
+  const batch = await getAccessibleLegacyBatch(auth, batchId);
+  if (!batch) {
+    redirectWithMessage(
+      "/admin/migrasi-produk",
+      "error",
+      "Batch migrasi tidak ditemukan atau tidak dapat diakses.",
+    );
+  }
+  return batch;
+}
+
+async function approveOne(
+  transaction: ReviewTransaction,
+  input: {
+    auth: AuthContext;
+    batchId: string;
+    verificationId: string;
+    reviewNotes: string | null;
+    onlyClean: boolean;
+    metadata: Awaited<ReturnType<typeof requestMetadata>>;
+  },
+) {
+  const [verificationIdentity] = await transaction
+    .select({ sessionId: legacyMigrationVerifications.sessionId })
+    .from(legacyMigrationVerifications)
+    .where(
+      and(
+        eq(legacyMigrationVerifications.id, input.verificationId),
+        eq(legacyMigrationVerifications.batchId, input.batchId),
+        eq(
+          legacyMigrationVerifications.organizationId,
+          input.auth.organization.id,
+        ),
+      ),
+    )
+    .limit(1);
+  if (!verificationIdentity) throw new Error("VERIFICATION_NOT_FOUND");
+
+  await transaction.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${getLegacyMigrationSessionLockKey({
+      organizationId: input.auth.organization.id,
+      sessionId: verificationIdentity.sessionId,
+    })}, 0))`,
+  );
+  await transaction.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-review:${input.auth.organization.id}:${input.verificationId}`}, 0))`,
+  );
+
+  const [verification] = await transaction
+    .select({
+      id: legacyMigrationVerifications.id,
+      batchId: legacyMigrationVerifications.batchId,
+      sessionId: legacyMigrationVerifications.sessionId,
+      organizationId: legacyMigrationVerifications.organizationId,
+      outletId: legacyMigrationVerifications.outletId,
+      barcodeValue: legacyMigrationVerifications.barcodeValue,
+      legacyRowId: legacyMigrationVerifications.legacyRowId,
+      source: legacyMigrationVerifications.source,
+      status: legacyMigrationVerifications.status,
+      targetProductMasterId:
+        legacyMigrationVerifications.targetProductMasterId,
+      verifiedItemName: legacyMigrationVerifications.verifiedItemName,
+      verifiedWeightGram: legacyMigrationVerifications.verifiedWeightGram,
+      verifiedPurity: legacyMigrationVerifications.verifiedPurity,
+      verifiedExchangePurity:
+        legacyMigrationVerifications.verifiedExchangePurity,
+      verifiedColor: legacyMigrationVerifications.verifiedColor,
+      condition: legacyMigrationVerifications.condition,
+      legacyImageUrl: legacyMigrationVerifications.legacyImageUrl,
+      imageKey: legacyMigrationVerifications.imageKey,
+      staffNotes: legacyMigrationVerifications.staffNotes,
+      reviewFlags: legacyMigrationVerifications.reviewFlags,
+      productItemId: legacyMigrationVerifications.productItemId,
+      sessionStatus: legacyMigrationSessions.status,
+      locationCode: legacyMigrationSessions.locationCode,
+      legacyPricePerGram: legacyProductRows.legacyPricePerGram,
+      legacyDeductionPerGram: legacyProductRows.legacyDeductionPerGram,
+      legacyCategory: legacyProductRows.legacyCategory,
+    })
+    .from(legacyMigrationVerifications)
+    .innerJoin(
+      legacyMigrationSessions,
+      eq(legacyMigrationVerifications.sessionId, legacyMigrationSessions.id),
+    )
+    .leftJoin(
+      legacyProductRows,
+      eq(legacyMigrationVerifications.legacyRowId, legacyProductRows.id),
+    )
+    .where(
+      and(
+        eq(legacyMigrationVerifications.id, input.verificationId),
+        eq(legacyMigrationVerifications.batchId, input.batchId),
+        eq(
+          legacyMigrationVerifications.organizationId,
+          input.auth.organization.id,
+        ),
+      ),
+    )
+    .limit(1);
+
+  if (!verification) throw new Error("VERIFICATION_NOT_FOUND");
+  if (verification.sessionId !== verificationIdentity.sessionId) {
+    throw new Error("REVIEW_SESSION_CHANGED");
+  }
+  if (verification.status === "approved" && verification.productItemId) {
+    return { itemId: verification.productItemId, idempotent: true };
+  }
+  if (verification.sessionStatus !== "active") {
+    throw new Error("REVIEW_SESSION_NOT_ACTIVE");
+  }
+  if (
+    verification.status !== "submitted" &&
+    verification.status !== "needs_review"
+  ) {
+    throw new Error("VERIFICATION_NOT_REVIEWABLE");
+  }
+  if (
+    input.onlyClean &&
+    !canBulkApproveLegacyVerification({
+      status: verification.status,
+      reviewFlags: verification.reviewFlags,
+      condition: verification.condition,
+    })
+  ) {
+    throw new Error("VERIFICATION_NOT_CLEAN");
+  }
+
+  const [targetMaster] = await transaction
+    .select({
+      id: productMasters.id,
+      code: productMasters.code,
+      name: productMasters.name,
+      status: productMasters.status,
+      categoryName: productCategories.name,
+    })
+    .from(productMasters)
+    .innerJoin(
+      productCategories,
+      eq(productMasters.categoryId, productCategories.id),
+    )
+    .where(
+      and(
+        eq(productMasters.id, verification.targetProductMasterId),
+        eq(productMasters.organizationId, input.auth.organization.id),
+        inArray(productMasters.status, ["draft", "active"]),
+      ),
+    )
+    .limit(1);
+  if (!targetMaster) throw new Error("TARGET_MASTER_UNAVAILABLE");
+
+  await transaction.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-barcode:${input.auth.organization.id}:${verification.barcodeValue}`}, 0))`,
+  );
+
+  const [soldRecord] = await transaction
+    .select({ id: legacyMigrationSoldRecords.id })
+    .from(legacyMigrationSoldRecords)
+    .where(
+      and(
+        eq(
+          legacyMigrationSoldRecords.organizationId,
+          input.auth.organization.id,
+        ),
+        eq(
+          legacyMigrationSoldRecords.barcodeValue,
+          verification.barcodeValue,
+        ),
+        sql`${legacyMigrationSoldRecords.revertedAt} is null`,
+      ),
+    )
+    .limit(1);
+  if (soldRecord) throw new Error("VERIFICATION_SOLD_DURING_MIGRATION");
+
+  const [existingItem, existingAlias] = await Promise.all([
+    transaction
+      .select({ id: productItems.id })
+      .from(productItems)
+      .where(
+        and(
+          eq(productItems.organizationId, input.auth.organization.id),
+          eq(productItems.barcode, verification.barcodeValue),
+        ),
+      )
+      .limit(1),
+    transaction
+      .select({ id: itemBarcodes.id })
+      .from(itemBarcodes)
+      .where(
+        and(
+          eq(itemBarcodes.organizationId, input.auth.organization.id),
+          eq(itemBarcodes.barcodeValue, verification.barcodeValue),
+          eq(itemBarcodes.isActive, true),
+        ),
+      )
+      .limit(1),
+  ]);
+  if (existingItem[0] || existingAlias[0]) {
+    throw new Error("BARCODE_ALREADY_REGISTERED");
+  }
+
+  const pricing = resolveLegacyMigrationPricing({
+    weightGram: verification.verifiedWeightGram,
+    legacyPricePerGram: verification.legacyPricePerGram,
+    legacyDeductionPerGram: verification.legacyDeductionPerGram,
+    categoryName: [targetMaster.categoryName, verification.legacyCategory]
+      .filter((value): value is string => Boolean(value))
+      .join(" "),
+  });
+
+  const itemId = randomUUID();
+  const identifiers = await getNextProductItemIdentifiers((query) =>
+    transaction.execute(query),
+  );
+
+  await transaction.insert(productItems).values({
+    id: itemId,
+    organizationId: input.auth.organization.id,
+    productMasterId: verification.targetProductMasterId,
+    displayName: verification.verifiedItemName,
+    currentOutletId: verification.outletId,
+    sku: identifiers.sku,
+    barcode: identifiers.barcode,
+    qrValue: identifiers.qrValue,
+    legacyId: verification.barcodeValue,
+    legacyUrl: verification.legacyImageUrl,
+    weightGram: verification.verifiedWeightGram,
+    purityPercent: verification.verifiedPurity,
+    exchangePurityPercent: verification.verifiedExchangePurity,
+    color: verification.verifiedColor,
+    sellingAmount: pricing.sellingAmount,
+    pricePerGram: pricing.pricePerGram,
+    deductionPerGram: pricing.deductionPerGram,
+    availability: "migration_hold",
+    condition: verification.condition,
+    locationState: "outlet",
+    locationCode: verification.locationCode,
+    imageKey: verification.imageKey,
+    attributes: buildMigrationItemAttributes({
+      verificationId: verification.id,
+      batchId: verification.batchId,
+      sessionId: verification.sessionId,
+      source: verification.source,
+      legacyRowId: verification.legacyRowId,
+      reviewFlags: verification.reviewFlags,
+      approvedBy: input.auth.user.id,
+    }),
+    internalNotes: verification.staffNotes,
+    isActive: true,
+  });
+
+  const barcodeAliases: Array<typeof itemBarcodes.$inferInsert> = [
+    {
+      organizationId: input.auth.organization.id,
+      itemId,
+      barcodeValue: verification.barcodeValue,
+      source: getLegacyBarcodeAliasSource(verification.source),
+      isPrimary: true,
+      isActive: true,
+      createdBy: input.auth.user.id,
+    },
+  ];
+
+  if (identifiers.barcode !== verification.barcodeValue) {
+    barcodeAliases.push({
+      organizationId: input.auth.organization.id,
+      itemId,
+      barcodeValue: identifiers.barcode,
+      source: "system_generated",
+      isPrimary: false,
+      isActive: true,
+      createdBy: input.auth.user.id,
+    });
+  }
+
+  await transaction.insert(itemBarcodes).values(barcodeAliases);
+
+  const now = new Date();
+  await transaction
+    .update(legacyMigrationVerifications)
+    .set({
+      status: "approved",
+      productItemId: itemId,
+      reviewedBy: input.auth.user.id,
+      reviewedAt: now,
+      reviewNotes: input.reviewNotes,
+      updatedAt: now,
+    })
+    .where(eq(legacyMigrationVerifications.id, verification.id));
+
+  await transaction.insert(auditLogs).values({
+    organizationId: input.auth.organization.id,
+    outletId: verification.outletId,
+    actorUserId: input.auth.user.id,
+    action: "legacy_migration_verification.approve",
+    entityType: "legacy_migration_verification",
+    entityId: verification.id,
+    afterData: {
+      productItemId: itemId,
+      sku: identifiers.sku,
+      internalBarcode: identifiers.barcode,
+      legacyBarcode: verification.barcodeValue,
+      aliasSource: getLegacyBarcodeAliasSource(verification.source),
+      availability: "migration_hold",
+      sellingAmount: pricing.sellingAmount,
+      pricePerGram: pricing.pricePerGram,
+      deductionPerGram: pricing.deductionPerGram,
+      pricingSource: pricing.pricePerGram ? "legacy_xlsx" : "pending_manual",
+      productMasterId: targetMaster.id,
+      productMasterCode: targetMaster.code,
+    },
+    reason:
+      input.reviewNotes ??
+      "Verification disetujui sebagai item migration hold; belum tersedia di POS.",
+    ipAddress: input.metadata.ipAddress,
+    userAgent: input.metadata.userAgent,
+  });
+
+  return { itemId, idempotent: false };
+}
+
+function explainApprovalError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (message === "VERIFICATION_NOT_FOUND") return "Verification tidak ditemukan.";
+  if (message === "VERIFICATION_NOT_REVIEWABLE") {
+    return "Status verification sudah berubah dan tidak dapat direview.";
+  }
+  if (message === "VERIFICATION_ALREADY_APPROVED") {
+    return "Verification sudah disetujui dan item inventory telah dibuat.";
+  }
+  if (message === "VERIFICATION_NOT_CLEAN") {
+    return "Bulk approval hanya untuk item clean berstatus submitted dan kondisi baik.";
+  }
+  if (message === "REVIEW_SESSION_NOT_ACTIVE") {
+    return "Sesi harus berstatus aktif untuk memproses review. Buka kembali sesi jika perlu melakukan koreksi.";
+  }
+  if (message === "REVIEW_SESSION_CHANGED") {
+    return "Sesi verification berubah saat review diproses. Muat ulang halaman sebelum mencoba lagi.";
+  }
+  if (message === "TARGET_MASTER_UNAVAILABLE") {
+    return "Product Master tidak tersedia atau sudah dinonaktifkan.";
+  }
+  if (message === "BARCODE_ALREADY_REGISTERED") {
+    return "Barcode sudah terhubung ke item lain pada sistem baru.";
+  }
+  if (message === "VERIFICATION_SOLD_DURING_MIGRATION") {
+    return "Barcode sudah ditandai terjual di sistem lama dan tidak dapat direview atau disetujui.";
+  }
+  return "Approval gagal diproses. Tidak ada item parsial yang disimpan.";
+}
+
+export async function approveLegacyMigrationVerificationAction(
+  formData: FormData,
+) {
+  const auth = await requirePermission("migration.verification.approve");
+  const batchId = readUuid(formData, "batchId");
+  const verificationId = readUuid(formData, "verificationId");
+  const notes = readText(formData, "reviewNotes", 2000) || null;
+  if (!batchId || !verificationId) {
+    redirectWithMessage("/admin/migrasi-produk", "error", "Data approval tidak valid.");
+  }
+  await requireAccessibleBatch(auth, batchId);
+  const metadata = await requestMetadata();
+
+  try {
+    const result = await db.transaction((transaction) =>
+      approveOne(transaction, {
+        auth,
+        batchId,
+        verificationId,
+        reviewNotes: notes,
+        onlyClean: false,
+        metadata,
+      }),
+    );
+    revalidatePath(reviewPath(batchId));
+    revalidatePath(detailPath(batchId, verificationId));
+    revalidatePath(`/admin/inventaris/item/${result.itemId}`);
+    redirectWithMessage(
+      detailPath(batchId, verificationId),
+      "success",
+      result.idempotent
+        ? "Verification sebelumnya sudah disetujui; retry aman."
+        : "Item dibuat sebagai migration hold; barcode lama menjadi alias primary dan barcode internal tetap aktif.",
+    );
+  } catch (error) {
+    console.error("legacy_migration_verification.approve_failed", error);
+    redirectWithMessage(
+      detailPath(batchId, verificationId),
+      "error",
+      explainApprovalError(error),
+    );
+  }
+}
+
+export async function bulkApproveLegacyMigrationVerificationsAction(
+  formData: FormData,
+) {
+  const auth = await requirePermission("migration.verification.approve");
+  const batchId = readUuid(formData, "batchId");
+  const ids = Array.from(
+    new Set(
+      formData
+        .getAll("verificationIds")
+        .map((value) => String(value))
+        .filter((value) => isLegacyMigrationUuid(value)),
+    ),
+  );
+  if (!batchId || ids.length === 0 || ids.length > MAX_BULK_APPROVAL) {
+    redirectWithMessage(
+      batchId ? reviewPath(batchId) : "/admin/migrasi-produk",
+      "error",
+      `Pilih 1-${MAX_BULK_APPROVAL} item clean untuk bulk approval.`,
+    );
+  }
+  await requireAccessibleBatch(auth, batchId);
+  const metadata = await requestMetadata();
+
+  try {
+    await db.transaction(async (transaction) => {
+      for (const verificationId of ids) {
+        await approveOne(transaction, {
+          auth,
+          batchId,
+          verificationId,
+          reviewNotes: "Bulk approval item clean",
+          onlyClean: true,
+          metadata,
+        });
+      }
+    });
+    revalidatePath(reviewPath(batchId));
+    redirectWithMessage(
+      reviewPath(batchId),
+      "success",
+      `${ids.length} item clean disetujui sebagai migration hold.`,
+    );
+  } catch (error) {
+    console.error("legacy_migration_verification.bulk_approve_failed", error);
+    redirectWithMessage(reviewPath(batchId), "error", explainApprovalError(error));
+  }
+}
+
+async function changeReviewStatus(input: {
+  auth: AuthContext;
+  batchId: string;
+  verificationId: string;
+  status: "returned" | "rejected";
+  notes: string;
+  metadata: Awaited<ReturnType<typeof requestMetadata>>;
+}) {
+  await db.transaction(async (transaction) => {
+    const [verificationIdentity] = await transaction
+      .select({ sessionId: legacyMigrationVerifications.sessionId })
+      .from(legacyMigrationVerifications)
+      .where(
+        and(
+          eq(legacyMigrationVerifications.id, input.verificationId),
+          eq(legacyMigrationVerifications.batchId, input.batchId),
+          eq(
+            legacyMigrationVerifications.organizationId,
+            input.auth.organization.id,
+          ),
+        ),
+      )
+      .limit(1);
+    if (!verificationIdentity) throw new Error("VERIFICATION_NOT_FOUND");
+
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${getLegacyMigrationSessionLockKey({
+        organizationId: input.auth.organization.id,
+        sessionId: verificationIdentity.sessionId,
+      })}, 0))`,
+    );
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-review:${input.auth.organization.id}:${input.verificationId}`}, 0))`,
+    );
+
+    const [session] = await transaction
+      .select({ status: legacyMigrationSessions.status })
+      .from(legacyMigrationSessions)
+      .where(
+        and(
+          eq(legacyMigrationSessions.id, verificationIdentity.sessionId),
+          eq(legacyMigrationSessions.batchId, input.batchId),
+          eq(
+            legacyMigrationSessions.organizationId,
+            input.auth.organization.id,
+          ),
+        ),
+      )
+      .limit(1);
+    const [verification] = await transaction
+      .select({
+        id: legacyMigrationVerifications.id,
+        sessionId: legacyMigrationVerifications.sessionId,
+        outletId: legacyMigrationVerifications.outletId,
+        barcodeValue: legacyMigrationVerifications.barcodeValue,
+        status: legacyMigrationVerifications.status,
+        productItemId: legacyMigrationVerifications.productItemId,
+      })
+      .from(legacyMigrationVerifications)
+      .where(
+        and(
+          eq(legacyMigrationVerifications.id, input.verificationId),
+          eq(legacyMigrationVerifications.batchId, input.batchId),
+          eq(
+            legacyMigrationVerifications.organizationId,
+            input.auth.organization.id,
+          ),
+        ),
+      )
+      .limit(1);
+    if (!session || session.status !== "active") {
+      throw new Error("REVIEW_SESSION_NOT_ACTIVE");
+    }
+    if (!verification) throw new Error("VERIFICATION_NOT_FOUND");
+    if (verification.sessionId !== verificationIdentity.sessionId) {
+      throw new Error("REVIEW_SESSION_CHANGED");
+    }
+    if (verification.productItemId || verification.status === "approved") {
+      throw new Error("VERIFICATION_ALREADY_APPROVED");
+    }
+    if (
+      verification.status !== "submitted" &&
+      verification.status !== "needs_review"
+    ) {
+      throw new Error("VERIFICATION_NOT_REVIEWABLE");
+    }
+
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`legacy-barcode:${input.auth.organization.id}:${verification.barcodeValue}`}, 0))`,
+    );
+    const [soldRecord] = await transaction
+      .select({ id: legacyMigrationSoldRecords.id })
+      .from(legacyMigrationSoldRecords)
+      .where(
+        and(
+          eq(
+            legacyMigrationSoldRecords.organizationId,
+            input.auth.organization.id,
+          ),
+          eq(
+            legacyMigrationSoldRecords.barcodeValue,
+            verification.barcodeValue,
+          ),
+          sql`${legacyMigrationSoldRecords.revertedAt} is null`,
+        ),
+      )
+      .limit(1);
+    if (soldRecord) throw new Error("VERIFICATION_SOLD_DURING_MIGRATION");
+
+    const now = new Date();
+    await transaction
+      .update(legacyMigrationVerifications)
+      .set({
+        status: input.status,
+        reviewedBy: input.auth.user.id,
+        reviewedAt: now,
+        reviewNotes: input.notes,
+        updatedAt: now,
+      })
+      .where(eq(legacyMigrationVerifications.id, verification.id));
+
+    await transaction.insert(auditLogs).values({
+      organizationId: input.auth.organization.id,
+      outletId: verification.outletId,
+      actorUserId: input.auth.user.id,
+      action: `legacy_migration_verification.${input.status}`,
+      entityType: "legacy_migration_verification",
+      entityId: verification.id,
+      afterData: { status: input.status },
+      reason: input.notes,
+      ipAddress: input.metadata.ipAddress,
+      userAgent: input.metadata.userAgent,
+    });
+  });
+}
+
+export async function returnLegacyMigrationVerificationAction(
+  formData: FormData,
+) {
+  const auth = await requirePermission("migration.verification.review");
+  const batchId = readUuid(formData, "batchId");
+  const verificationId = readUuid(formData, "verificationId");
+  const notes = readText(formData, "reviewNotes", 2000);
+  if (!batchId || !verificationId || notes.length < 5) {
+    redirectWithMessage(
+      batchId && verificationId
+        ? detailPath(batchId, verificationId)
+        : "/admin/migrasi-produk",
+      "error",
+      "Alasan pengembalian minimal 5 karakter.",
+    );
+  }
+  await requireAccessibleBatch(auth, batchId);
+  try {
+    await changeReviewStatus({
+      auth,
+      batchId,
+      verificationId,
+      status: "returned",
+      notes,
+      metadata: await requestMetadata(),
+    });
+    revalidatePath(reviewPath(batchId));
+    revalidatePath(detailPath(batchId, verificationId));
+    redirectWithMessage(
+      detailPath(batchId, verificationId),
+      "success",
+      "Verification dikembalikan ke operator untuk diperbaiki dan dikirim ulang.",
+    );
+  } catch (error) {
+    redirectWithMessage(
+      detailPath(batchId, verificationId),
+      "error",
+      explainApprovalError(error),
+    );
+  }
+}
+
+export async function rejectLegacyMigrationVerificationAction(
+  formData: FormData,
+) {
+  const auth = await requirePermission("migration.verification.review");
+  const batchId = readUuid(formData, "batchId");
+  const verificationId = readUuid(formData, "verificationId");
+  const notes = readText(formData, "reviewNotes", 2000);
+  if (!batchId || !verificationId || notes.length < 5) {
+    redirectWithMessage(
+      batchId && verificationId
+        ? detailPath(batchId, verificationId)
+        : "/admin/migrasi-produk",
+      "error",
+      "Alasan penolakan minimal 5 karakter.",
+    );
+  }
+  await requireAccessibleBatch(auth, batchId);
+  try {
+    await changeReviewStatus({
+      auth,
+      batchId,
+      verificationId,
+      status: "rejected",
+      notes,
+      metadata: await requestMetadata(),
+    });
+    revalidatePath(reviewPath(batchId));
+    revalidatePath(detailPath(batchId, verificationId));
+    redirectWithMessage(
+      detailPath(batchId, verificationId),
+      "success",
+      "Verification ditolak dan tidak membuat item inventory.",
+    );
+  } catch (error) {
+    redirectWithMessage(
+      detailPath(batchId, verificationId),
+      "error",
+      explainApprovalError(error),
+    );
+  }
+}

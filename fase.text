@@ -1,10 +1,16 @@
-Fase 2 — Hardening PDF Renderer (DONE)
-Fase 3 — Hardware Agent request signing (DONE)
-Fase 4 — Business timezone correctness (DONE)
-Fase 5 — Rate limiting dan HTTP security (DONE)
-Fase 6 — Quality gate dan CI
-
 ---- HOLD SAMPAI FITUR BARU SELESAI DI DEVELOP SEMUA ----
-Fase 7 — Financial/concurrency tests (butuh diskusi sebelum implementasikan)
-Fase 8 — Production deployment readiness (butuh diskusi sebelum implementasikan)
+Fase 8 — Production deployment readiness (HOLD)
 Fase 9 — Tenant integrity dan refactor bertahap (butuh diskusi sebelum implementasikan)
+--------------------------------------------------------------
+
+Tahap 1 — Stabilkan fondasi
+1. Upgrade dan vendor SheetJS 0.20.3 (DONE)
+2. Hardening parser XLSX (DONE)
+3. Tambahkan regression test XLSX (DONE)
+4. Clean npm install dan dependency review (DONE)
+5. Full typecheck, lint, quality, security, business checks (DONE)
+6. Production build dan Docker build (DONE)
+7. Environment validation dan .env.example (DONE)
+8. Tambahkan critical-path test (DONE)
+9. Refactor POS secara bertahap (perlu pembahasan)
+10. Final stabilization gate (perlu pembahasan)

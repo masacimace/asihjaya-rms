@@ -134,11 +134,38 @@ Operasi finansial penting menggunakan database transaction, idempotency, constra
 ## Local Development
 
 - Windows 10
-- Node.js 22 atau 24 LTS
-- npm
+- Node.js `24.14.0` sesuai `.nvmrc`
+- npm `11.9.0` sesuai `packageManager`
 - Docker Desktop atau Docker Engine dengan Compose
 - Git
 - Vscode
+
+## Reproducible Toolchain
+
+Project mengunci baseline development pada Node.js `24.14.0` dan npm `11.9.0`. Verifikasi sebelum install:
+
+```powershell
+node --version
+npm --version
+```
+
+Output yang diharapkan:
+
+```text
+v24.14.0
+11.9.0
+```
+
+`.npmrc` mengaktifkan `engine-strict`, sehingga install akan dihentikan ketika major toolchain tidak sesuai.
+
+SheetJS CE disimpan sebagai archive lokal agar fresh install, CI, dan Docker build tidak bergantung pada CDN. Setelah menerapkan perubahan ini untuk pertama kali, unduh dan verifikasi archive resmi satu kali melalui:
+
+```powershell
+npm run vendor:xlsx
+npm ci
+```
+
+Commit file `vendor/xlsx-0.20.3.tgz`, checksum, `package.json`, dan `package-lock.json` yang dihasilkan. Fresh clone berikutnya cukup menjalankan `npm ci`.
 
 ## First-time Local Setup
 
@@ -146,6 +173,8 @@ Operasi finansial penting menggunakan database transaction, idempotency, constra
 
 ```powershell
 Copy-Item .env.example .env
+npm run env:generate-secrets -- --write .env
+npm run env:validate
 
 docker compose up -d db
 
@@ -159,6 +188,8 @@ npm run dev
 
 ```bash
 cp .env.example .env
+npm run env:generate-secrets -- --write .env
+npm run env:validate
 
 docker compose up -d db
 
@@ -192,9 +223,50 @@ Tidak perlu menjalankan `npm run db:seed`, kecuali dokumentasi migration atau fi
 - Tidak perlu membuat database development baru setiap ada perubahan schema.
 - Gunakan database disposable terpisah untuk rehearsal dan automated test.
 
+## Quality Gate dan CI
+
+Sebelum perubahan digabungkan atau dideploy, jalankan quality gate lengkap:
+
+```bash
+npm ci
+npm run check:build-baseline
+npm run check:all
+```
+
+Kelompok check dapat dijalankan terpisah:
+
+```bash
+npm run check:build-baseline
+npm run check:quality
+npm run check:static
+npm run check:security
+npm run check:business
+npm run check:hardware
+npm run build
+```
+
+GitHub Actions menjalankan static quality, security/business contracts, rehearsal migration PostgreSQL 17, Hardware Hub checks, dan production container build pada push serta pull request. Dokumentasi lengkap tersedia di `docs/development/quality-gates.md`.
+
+Validasi clean build dan Docker image secara lokal:
+
+```powershell
+npm run build:clean
+docker build --pull --tag asihjaya-rms:local .
+```
+
 ## Environment Configuration
 
-Lihat `.env.example` untuk daftar konfigurasi lengkap.
+Lihat `.env.example` untuk template dan `docs/development/environment-configuration.md` untuk aturan production. Template tidak lagi membawa contoh secret yang dapat dipakai langsung.
+
+Command utama:
+
+```powershell
+npm run env:generate-secrets -- --write .env
+npm run env:validate
+npm run env:validate -- --mode production --env-file .env.production
+```
+
+Production server melakukan fail-fast validation sebelum menerima traffic. Secret inti wajib unik, minimal 32 karakter, dan tidak boleh menggunakan placeholder.
 
 Kelompok konfigurasi yang digunakan project:
 
@@ -310,6 +382,8 @@ Notification Center V1 mendukung:
 npm run dev
 npm run build
 npm run start
+npm run env:validate
+npm run env:generate-secrets -- --write .env
 ```
 
 ### Quality Checks
@@ -329,39 +403,51 @@ npm run db:seed
 npm run db:studio
 ```
 
-### Payment dan Production-readiness Checks
+### Reset Database Development Lokal
+
+Hentikan `npm run dev` terlebih dahulu. Untuk menghapus volume PostgreSQL lokal,
+menjalankan seluruh migration, seed, dan pemeriksaan database live:
 
 ```powershell
-npm run check:p0d
-npm run check:p1a
-npm run check:p1a1
-npm run check:p1b
-npm run check:p1b1
-npm run check:p1c1
-npm run check:p1c2
+npm run db:fresh:local -- --confirm=RESET_LOCAL_DATABASE
 ```
 
-### Notification Center Checks
+Untuk reset penuh yang sekaligus menghapus file upload development di
+`.data/uploads`:
 
 ```powershell
-npm run check:notifications:v1a
-npm run check:notifications:v1b
-npm run check:notifications:v1c
-npm run check:notifications:v1d
-npm run check:notifications:v1e
-npm run check:notifications:v1f
+npm run db:fresh:local -- --confirm=RESET_LOCAL_DATABASE --purge-local-storage
 ```
 
-### Database Preflight
+Command ini hanya menerima target PostgreSQL Compose lokal
+`asihjaya@localhost:5432/asihjaya_rms`. Target non-local, environment production,
+dan storage selain folder `.data` akan ditolak.
 
-Feature tertentu memiliki command preflight, misalnya:
+### Domain dan Production-readiness Checks
+
+Gunakan kelompok check berdasarkan domain, tanpa command milestone historis:
 
 ```powershell
-npm run db:preflight:p1c2
-npm run db:preflight:notifications:v1a
+npm run check:transactions
+npm run check:security
+npm run check:business
+npm run check:hardware-app
+npm run check:hardware
 ```
 
-Periksa `package.json` dan dokumentasi fitur untuk command preflight yang tersedia.
+Contract PDF yang memerlukan Chromium dijalankan terpisah:
+
+```powershell
+npm run check:manual
+```
+
+Untuk pemeriksaan lengkap yang sesuai dengan quality gate CI:
+
+```powershell
+npm run check:all
+```
+
+Script preflight dan repair sekali pakai sudah dipensiunkan. Validasi schema dilakukan melalui migration metadata checker dan rehearsal PostgreSQL disposable.
 
 ## Pemeriksaan Sebelum Commit
 
@@ -380,8 +466,9 @@ Jika ada perubahan schema:
 
 ```powershell
 npm run db:generate
-npm run db:preflight:<feature>
+npm run check:database
 npm run db:migrate
+npm run check:database:live
 ```
 
 Jangan menjalankan `db:seed` pada database yang sudah berisi data hanya karena migration baru diterapkan.
@@ -400,6 +487,20 @@ docker compose cp db:/tmp/asihjaya-rms.dump ./.local-backups/asihjaya-rms.dump
 
 Folder backup lokal harus tetap diabaikan oleh Git.
 
+## Script Operasional
+
+Pembersihan upload bukti pembayaran yang kedaluwarsa:
+
+```powershell
+npm run maintenance:payment-evidence-cleanup
+```
+
+Regenerasi panduan Hardware Hub dari source terstruktur:
+
+```powershell
+npm run docs:hardware:generate
+```
+
 ## Dokumentasi
 
 ### Roadmap
@@ -407,7 +508,9 @@ Folder backup lokal harus tetap diabaikan oleh Git.
 - `docs/roadmap/payment-production-roadmap.md`
 - `docs/roadmap/settings-center-roadmap.md`
 
-### Production-readiness Notes
+### Environment and Production-readiness Notes
+
+- `docs/development/environment-configuration.md`
 
 Dokumentasi implementasi detail berada di:
 
@@ -425,11 +528,28 @@ Topik yang tercakup antara lain:
 - Settlement import
 - Notification Center
 
+## Financial dan Concurrency Tests
+
+Invariant finansial kritis diuji otomatis terhadap PostgreSQL 17 disposable:
+
+```powershell
+npm run test:financial:local
+```
+
+Command tersebut menyalakan database test pada port `55433`, menjalankan migration, mengeksekusi checkout/idempotency/inventory/Dana Titip/refund/settlement/Hardware Job/tenant-isolation tests, lalu menghapus container dan volume sementara.
+
+Untuk database CI/test yang sudah tersedia:
+
+```powershell
+npm run test:financial
+```
+
+Lihat `docs/development/financial-concurrency-tests.md` untuk batas keselamatan dan daftar skenario.
+
 ## Saat Ini Ditahan
 
 Tahapan berikut sengaja belum dilanjutkan:
 
-- P1-D — Automated Payment & Concurrency Tests
 - P2-A — Midtrans QRIS Gateway Foundation
 - P2-B — Webhook, Expiry & Payment Recovery
 - P2-C — Gateway Refund & Reconciliation
@@ -445,8 +565,6 @@ Project belum dinyatakan production-ready.
 
 Sebelum go-live, minimal perlu diselesaikan:
 
-- Automated financial integration tests
-- Concurrency tests
 - Cloud storage configuration
 - Backup dan restore drill
 - Security dan session hardening
@@ -466,3 +584,60 @@ Saat membuat perubahan:
 - Jangan menyimpan secret atau data customer sensitif ke log.
 - Tambahkan audit trail untuk tindakan administratif dan finansial sensitif.
 - Jalankan quality checks sebelum commit.
+
+## Migrasi Produk Legacy
+
+Fondasi staging XLSX tersedia pada:
+
+```text
+/admin/migrasi-produk
+```
+
+Workbook sistem lama dianalisis tanpa otomatis membuat stok aktif. Barcode enam digit, termasuk leading zero, dipertahankan sebagai string; harga lama hanya menjadi referensi sampai verifikasi fisik dan pricing baru selesai.
+
+```powershell
+npm run check:legacy-product-migration
+```
+
+Lihat `docs/development/legacy-product-migration.md` untuk scope dan guardrail milestone.
+
+## Legacy Migration Milestone 2
+
+Master legacy dapat dipetakan sekali ke Product Master sistem baru melalui route:
+
+```text
+/admin/migrasi-produk/[batchId]/mapping
+```
+
+Manager juga dapat membagi pekerjaan per etalase dan menugaskan operator/lead melalui:
+
+```text
+/admin/migrasi-produk/[batchId]/sesi
+```
+
+Semua Product Master hasil otomatis tetap berstatus `draft`. Milestone ini belum mengaktifkan item, belum mengubah stok, dan belum mengubah lookup POS.
+
+
+### Legacy physical verification
+
+Staff yang ditugaskan pada sesi aktif dapat membuka `/pos/migrasi-barang`, memindai barcode lama, memverifikasi data fisik, dan mengirim hasil ke antrean manager. Barcode unmatched didukung dengan foto aktual wajib. Tahap ini tetap staging-only: tidak membuat stok aktif dan tidak mengubah checkout POS. Lihat `docs/development/legacy-product-migration.md`.
+
+### Legacy migration Milestone 4
+
+Manager review tersedia pada halaman batch migrasi. Approval bersifat transactional dan hanya membuat Product Item berstatus `migration_hold` beserta alias barcode legacy. Item belum tersedia di POS sampai proses cutover pada milestone berikutnya.
+
+### Legacy product migration Milestone 5A — sold during migration
+
+Manager dapat menandai satu atau banyak barcode yang terjual pada sistem legacy selama proses migrasi melalui `/admin/migrasi-produk/[batchId]/sold`. Barcode aktif langsung dikecualikan dari scanner, manager approval, dan cutover. Barcode staging yang belum pernah discan tetap dapat ditandai. Product Item yang sudah berstatus `migration_hold` akan dipindahkan ke `sold`, dinonaktifkan, dan alias barcode legacy-nya ikut dinonaktifkan tanpa membuat inventory movement. Salah penandaan dapat dibatalkan dengan alasan wajib untuk memulihkan status sebelumnya secara transactional.
+
+### Legacy product migration Milestone 5B — final reconciliation dan foto legacy
+
+Manager membuka `/admin/migrasi-produk/[batchId]/rekonsiliasi` untuk melihat blocker cutover dan memindahkan foto item legacy dari link XLSX ke private image storage. Readiness dihitung langsung dari sesi, verification, sold record, Product Item `migration_hold`, Product Master, dan alias barcode; tidak ada approval tambahan atau tabel workflow baru.
+
+Foto legacy diproses maksimal 100 item per klik dengan concurrency terbatas. Download hanya menerima HTTPS dari host `LEGACY_IMAGE_ALLOWED_HOSTS`, memvalidasi redirect/content type/ukuran, lalu mengubah gambar menjadi WebP melalui pipeline image storage yang sama dengan upload normal. Kegagalan foto menjadi warning dan UI memakai foto Product Master lalu placeholder; kegagalan tersebut tidak menghalangi cutover. Milestone 5B belum membuat inventory movement, belum mengubah item menjadi `available`, dan belum mengaktifkan barcode alias pada checkout POS.
+
+### Legacy product migration Milestone 5C — transactional cutover
+
+Manager membuka `/admin/migrasi-produk/[batchId]/cutover` setelah rekonsiliasi akhir bersih. Aktivasi dilakukan per sesi/etalase dalam satu transaction: cutover run dibuat, opening inventory movement `migration_opening` dicatat untuk setiap item, Product Item berubah dari `migration_hold` menjadi `available`, verification menjadi `activated`, dan sesi menjadi `completed`.
+
+Cutover memakai batch lock, barcode lock yang sama dengan scanner/approval/sold flow, unique run per sesi, serta konfirmasi `AKTIFKAN STOK`. Kegagalan satu item melakukan rollback seluruh sesi. Foto legacy gagal tetap dapat diulang setelah aktivasi. Lookup checkout melalui alias barcode legacy tetap ditahan sampai Milestone 5D.

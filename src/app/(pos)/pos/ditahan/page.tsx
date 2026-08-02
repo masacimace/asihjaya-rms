@@ -1,3 +1,7 @@
+import { ArrowLeft, Pause } from "lucide-react";
+import Link from "next/link";
+
+import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
 import { HeldCartsClient } from "@/components/pos/held-carts-client";
 import { getPosHeldCartListData } from "@/features/pos/queries";
 import { requirePermission } from "@/lib/auth/session";
@@ -35,5 +39,25 @@ export default async function PosHeldCartsPage({ searchParams }: PageProps) {
     query,
   });
 
-  return <HeldCartsClient data={data} />;
+  return (
+    <PosPageContainer>
+      <PosPageHeader
+        eyebrow="Transaksi POS"
+        title="Transaksi Ditahan"
+        description="Lanjutkan atau batalkan cart yang ditahan. Item pada hold aktif tetap terkunci sampai transaksi di-resume atau dibatalkan."
+        icon={<Pause className="size-5 sm:size-6" />}
+        actions={
+          <Link
+            href="/pos"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+          >
+            <ArrowLeft className="size-4" />
+            Kembali ke POS
+          </Link>
+        }
+      />
+
+      <HeldCartsClient data={data} />
+    </PosPageContainer>
+  );
 }

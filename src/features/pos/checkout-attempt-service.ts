@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, lte, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { posCheckoutAttempts } from "@/db/schema";
@@ -142,9 +142,10 @@ export async function claimPosCheckoutAttempt({
   }
 
   if (existing.status === "processing") {
-    const isStale =
-      now.getTime() - existing.updatedAt.getTime() >=
-      POS_CHECKOUT_STALE_PROCESSING_MS;
+    const staleBefore = new Date(
+      now.getTime() - POS_CHECKOUT_STALE_PROCESSING_MS,
+    );
+    const isStale = existing.updatedAt.getTime() <= staleBefore.getTime();
 
     if (!isStale) {
       return {
@@ -169,7 +170,8 @@ export async function claimPosCheckoutAttempt({
           eq(posCheckoutAttempts.id, existing.id),
           eq(posCheckoutAttempts.status, "processing"),
           eq(posCheckoutAttempts.requestFingerprint, fingerprint),
-          eq(posCheckoutAttempts.updatedAt, existing.updatedAt),
+          eq(posCheckoutAttempts.attemptCount, existing.attemptCount),
+          lte(posCheckoutAttempts.updatedAt, staleBefore),
         ),
       )
       .returning(attemptSelection);

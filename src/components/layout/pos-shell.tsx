@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   MoreHorizontal,
   Pause,
+  PackageSearch,
   Printer,
   ReceiptText,
   ScanBarcode,
@@ -19,9 +20,19 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { UserMenu } from "@/components/auth/user-menu";
 import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
+import {
+  POS_SHELL_STATUS_REFRESH_EVENT,
+  requestPosShellStatusRefresh,
+} from "@/features/pos/live-status";
 
 import { cn } from "@/lib/utils";
 
@@ -30,6 +41,7 @@ type PosShellUser = {
   roleLabel: string;
   canAccessAdmin: boolean;
   outletName: string;
+  canAccessMigration: boolean;
 };
 
 type PosShellStatus = {
@@ -70,6 +82,7 @@ type PosWorkspaceCommand = {
 const POS_WORKSPACE_COMMAND_EVENT = "asihjaya:pos-workspace-command";
 const POS_PENDING_COMMAND_STORAGE_KEY =
   "asihjaya:pos-workspace-pending-command";
+const POS_SHELL_STATUS_POLL_INTERVAL_MS = 5_000;
 
 const fallbackStatus: PosShellStatus = {
   outletName: "Outlet belum dipilih",
@@ -92,7 +105,7 @@ const fallbackStatus: PosShellStatus = {
 };
 
 const navigation = [
-  { label: "Kasir", href: "/pos", icon: ShoppingBag },
+  { label: "Beranda", href: "/pos", icon: ShoppingBag },
   {
     label: "Transaksi",
     href: "/pos/transaksi",
@@ -104,6 +117,12 @@ const navigation = [
   },
   { label: "Pelanggan", href: "/pos/pelanggan", icon: UsersRound },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
+  {
+    label: "Migrasi Barang",
+    href: "/pos/migrasi-barang",
+    icon: PackageSearch,
+    access: "migration",
+  },
 ] as const;
 
 const mobilePrimaryNavigation = [
@@ -115,11 +134,18 @@ const mobilePrimaryNavigation = [
 const mobileMoreNavigation = [
   { label: "Transaksi Tertahan", href: "/pos/ditahan", icon: Pause },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
+  {
+    label: "Migrasi Barang",
+    href: "/pos/migrasi-barang",
+    icon: PackageSearch,
+    access: "migration",
+  },
 ] as const;
 
 type SidebarContentProps = {
   pathname: string;
   canAccessAdmin: boolean;
+  canAccessMigration: boolean;
   onNavigate?: () => void;
 };
 
@@ -173,6 +199,24 @@ function getShiftStatusClassName(status: PosShellStatus["shift"]["status"]) {
   return "text-red-600";
 }
 
+function isPosShellStatus(value: unknown): value is PosShellStatus {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<PosShellStatus>;
+
+  return (
+    typeof candidate.outletName === "string" &&
+    (typeof candidate.registerName === "string" ||
+      candidate.registerName === null) &&
+    Boolean(candidate.shift && typeof candidate.shift === "object") &&
+    Boolean(candidate.hardware && typeof candidate.hardware === "object") &&
+    (candidate.notifications === undefined ||
+      Array.isArray(candidate.notifications))
+  );
+}
+
 function getHardwareStatusClassName(
   status: PosShellStatus["hardware"]["status"],
 ) {
@@ -219,6 +263,7 @@ function NotificationIcon({
 function SidebarContent({
   pathname,
   canAccessAdmin,
+  canAccessMigration,
   onNavigate,
 }: SidebarContentProps) {
   const [openNavigationGroups, setOpenNavigationGroups] = useState<
@@ -265,102 +310,109 @@ function SidebarContent({
         </span>
       </Link>
       <nav className="space-y-1">
-        {navigation.map((item) => {
-          const Icon = item.icon;
-          const hasChildren = "children" in item;
-          const active = hasChildren
-            ? isTransactionNavigationActive(pathname)
-            : isNavigationActive(pathname, item.href);
-          const expanded = hasChildren
-            ? Boolean(openNavigationGroups[item.href])
-            : false;
+        {navigation
+          .filter(
+            (item) =>
+              !("access" in item) ||
+              item.access !== "migration" ||
+              canAccessMigration,
+          )
+          .map((item) => {
+            const Icon = item.icon;
+            const hasChildren = "children" in item;
+            const active = hasChildren
+              ? isTransactionNavigationActive(pathname)
+              : isNavigationActive(pathname, item.href);
+            const expanded = hasChildren
+              ? Boolean(openNavigationGroups[item.href])
+              : false;
 
-          return (
-            <div key={item.href}>
-              {hasChildren ? (
-                <button
-                  type="button"
-                  onClick={() => toggleNavigationGroup(item.href)}
-                  aria-expanded={expanded}
-                  className={cn(
-                    "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left !text-sm !font-medium transition-colors",
-                    active
-                      ? "bg-[var(--accent-soft)] text-neutral-950"
-                      : "text-black hover:bg-neutral-100 hover:text-neutral-950",
-                  )}
-                >
-                  <Icon
+            return (
+              <div key={item.href}>
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleNavigationGroup(item.href)}
+                    aria-expanded={expanded}
                     className={cn(
-                      "size-[18px] shrink-0",
-                      active && "text-[var(--accent)]",
+                      "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left !text-sm !font-medium transition-colors",
+                      active
+                        ? "bg-[var(--accent-soft)] text-neutral-950"
+                        : "text-black hover:bg-neutral-100 hover:text-neutral-950",
                     )}
-                  />
+                  >
+                    <Icon
+                      className={cn(
+                        "size-[18px] shrink-0",
+                        active && "text-[var(--accent)]",
+                      )}
+                    />
 
-                  <span className="min-w-0 flex-1">{item.label}</span>
+                    <span className="min-w-0 flex-1">{item.label}</span>
 
-                  <ChevronRight
+                    <ChevronRight
+                      className={cn(
+                        "size-4 shrink-0 text-neutral-400 transition-transform",
+                        expanded && "rotate-90",
+                        active && "text-[var(--accent)]",
+                      )}
+                    />
+                  </button>
+                ) : (
+                  <Link
+                    href={item.href}
+                    onClick={onNavigate}
+                    aria-current={active ? "page" : undefined}
                     className={cn(
-                      "size-4 shrink-0 text-neutral-400 transition-transform",
-                      expanded && "rotate-90",
-                      active && "text-[var(--accent)]",
+                      "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
+                      active
+                        ? "bg-[var(--accent-soft)] text-neutral-950"
+                        : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
                     )}
-                  />
-                </button>
-              ) : (
-                <Link
-                  href={item.href}
-                  onClick={onNavigate}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-[var(--accent-soft)] text-neutral-950"
-                      : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "size-[18px] shrink-0",
-                      active && "text-[var(--accent)]",
-                    )}
-                  />
+                  >
+                    <Icon
+                      className={cn(
+                        "size-[18px] shrink-0",
+                        active && "text-[var(--accent)]",
+                      )}
+                    />
 
-                  <span className="min-w-0 flex-1">{item.label}</span>
-                </Link>
-              )}
+                    <span className="min-w-0 flex-1">{item.label}</span>
+                  </Link>
+                )}
 
-              {hasChildren && expanded ? (
-                <div className="ml-[22px] mt-1 space-y-1 border-l border-[var(--border)] pl-3">
-                  {item.children.map((child) => {
-                    const ChildIcon = child.icon;
-                    const childActive = isNavigationActive(
-                      pathname,
-                      child.href,
-                    );
+                {hasChildren && expanded ? (
+                  <div className="ml-[22px] mt-1 space-y-1 border-l border-[var(--border)] pl-3">
+                    {item.children.map((child) => {
+                      const ChildIcon = child.icon;
+                      const childActive = isNavigationActive(
+                        pathname,
+                        child.href,
+                      );
 
-                    return (
-                      <Link
-                        key={child.href}
-                        href={child.href}
-                        onClick={onNavigate}
-                        aria-current={childActive ? "page" : undefined}
-                        className={cn(
-                          "flex min-h-9 items-center gap-2.5 rounded-lg px-3 text-xs font-semibold transition-colors",
-                          childActive
-                            ? "bg-white text-[var(--accent)] shadow-sm ring-1 ring-[var(--border)]"
-                            : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900",
-                        )}
-                      >
-                        <ChildIcon className="size-4 shrink-0" />
-                        <span>{child.label}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={onNavigate}
+                          aria-current={childActive ? "page" : undefined}
+                          className={cn(
+                            "flex min-h-9 items-center gap-2.5 rounded-lg px-3 text-xs font-semibold transition-colors",
+                            childActive
+                              ? "bg-white text-[var(--accent)] shadow-sm ring-1 ring-[var(--border)]"
+                              : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900",
+                          )}
+                        >
+                          <ChildIcon className="size-4 shrink-0" />
+                          <span>{child.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
       </nav>
 
       {canAccessAdmin ? (
@@ -402,7 +454,10 @@ export function PosShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const operationalStatus = status ?? fallbackStatus;
+  const [liveOperationalStatus, setLiveOperationalStatus] =
+    useState<PosShellStatus | null>(null);
+  const operationalStatus = liveOperationalStatus ?? status ?? fallbackStatus;
+  const statusRequestInFlightRef = useRef(false);
   const shiftLabel = getShiftStatusLabel(operationalStatus.shift);
   const notifications = operationalStatus.notifications ?? [];
   const notificationCount = notifications.length;
@@ -412,6 +467,80 @@ export function PosShell({
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [topbarQuery, setTopbarQuery] = useState("");
+
+  useEffect(() => {
+    let isDisposed = false;
+
+    const refreshStatus = async () => {
+      if (
+        isDisposed ||
+        statusRequestInFlightRef.current ||
+        document.visibilityState === "hidden"
+      ) {
+        return;
+      }
+
+      statusRequestInFlightRef.current = true;
+
+      try {
+        const response = await fetch("/api/pos/shell-status", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { status?: unknown };
+
+        if (!isDisposed && isPosShellStatus(payload.status)) {
+          setLiveOperationalStatus(payload.status);
+        }
+      } catch {
+        // Keep the POS usable during a temporary network interruption.
+      } finally {
+        statusRequestInFlightRef.current = false;
+      }
+    };
+
+    const handleWindowFocus = () => {
+      void refreshStatus();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshStatus();
+      }
+    };
+    const handleRefreshRequest = () => {
+      void refreshStatus();
+    };
+
+    const intervalId = window.setInterval(
+      () => void refreshStatus(),
+      POS_SHELL_STATUS_POLL_INTERVAL_MS,
+    );
+
+    window.addEventListener("focus", handleWindowFocus);
+    window.addEventListener(
+      POS_SHELL_STATUS_REFRESH_EVENT,
+      handleRefreshRequest,
+    );
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    void refreshStatus();
+
+    return () => {
+      isDisposed = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowFocus);
+      window.removeEventListener(
+        POS_SHELL_STATUS_REFRESH_EVENT,
+        handleRefreshRequest,
+      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   function sendPosWorkspaceCommand(command: PosWorkspaceCommand) {
     const normalizedValue = command.value.trim();
@@ -453,6 +582,7 @@ export function PosShell({
         <SidebarContent
           pathname={pathname}
           canAccessAdmin={user.canAccessAdmin}
+          canAccessMigration={user.canAccessMigration}
         />
       </aside>
 
@@ -481,6 +611,7 @@ export function PosShell({
             <SidebarContent
               pathname={pathname}
               canAccessAdmin={user.canAccessAdmin}
+              canAccessMigration={user.canAccessMigration}
               onNavigate={() => setIsNavigationOpen(false)}
             />
           </aside>
@@ -519,26 +650,33 @@ export function PosShell({
             </div>
 
             <div className="mt-5 grid gap-3">
-              {mobileMoreNavigation.map(({ label, href, icon: Icon }) => {
-                const active = isNavigationActive(pathname, href);
+              {mobileMoreNavigation
+                .filter(
+                  (item) =>
+                    !("access" in item) ||
+                    item.access !== "migration" ||
+                    user.canAccessMigration,
+                )
+                .map(({ label, href, icon: Icon }) => {
+                  const active = isNavigationActive(pathname, href);
 
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setIsMoreOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 rounded-2xl border p-4 transition",
-                      active
-                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                        : "border-[var(--border)] text-neutral-700 hover:bg-neutral-50",
-                    )}
-                  >
-                    <Icon className="size-5 shrink-0" />
-                    <span className="text-sm font-medium">{label}</span>
-                  </Link>
-                );
-              })}
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setIsMoreOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 rounded-2xl border p-4 transition",
+                        active
+                          ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                          : "border-[var(--border)] text-neutral-700 hover:bg-neutral-50",
+                      )}
+                    >
+                      <Icon className="size-5 shrink-0" />
+                      <span className="text-sm font-medium">{label}</span>
+                    </Link>
+                  );
+                })}
 
               <Link
                 href="/pos/shift"
@@ -635,7 +773,17 @@ export function PosShell({
                 type="button"
                 aria-label="Notifikasi POS"
                 aria-expanded={isNotificationsOpen}
-                onClick={() => setIsNotificationsOpen((isOpen) => !isOpen)}
+                onClick={() => {
+                  setIsNotificationsOpen((isOpen) => {
+                    const nextIsOpen = !isOpen;
+
+                    if (nextIsOpen) {
+                      requestPosShellStatusRefresh();
+                    }
+
+                    return nextIsOpen;
+                  });
+                }}
                 className="relative grid size-10 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
               >
                 <Bell className="size-5" />

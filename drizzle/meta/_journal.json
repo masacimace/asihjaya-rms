@@ -29,6 +29,69 @@
       "when": 1785187936647,
       "tag": "0003_security_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785303000000,
+      "tag": "0004_legacy_product_migration_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785315238132,
+      "tag": "0005_legacy_master_mapping_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785319545463,
+      "tag": "0006_legacy_physical_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785324000000,
+      "tag": "0007_legacy_manager_review_inventory_hold",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785380400000,
+      "tag": "0008_legacy_sold_during_migration",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785466800000,
+      "tag": "0009_legacy_transactional_cutover",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785553200000,
+      "tag": "0010_legacy_session_readiness",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785583800000,
+      "tag": "0011_legacy_cutover_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785594600000,
+      "tag": "0012_legacy_barcode_pos",
+      "breakpoints": true
     }
   ]
 }

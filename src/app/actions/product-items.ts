@@ -11,6 +11,7 @@ import { db } from "@/db";
 import {
   auditLogs,
   inventoryMovements,
+  itemBarcodes,
   outlets,
   productItems,
   productMasters,
@@ -451,6 +452,16 @@ export async function createProductItemAction(
         imageKey,
         internalNotes: normalizeNullable(internalNotes),
         isActive: true,
+      });
+
+      await transaction.insert(itemBarcodes).values({
+        organizationId: auth.organization.id,
+        itemId,
+        barcodeValue: identifiers.barcode,
+        source: "system_generated",
+        isPrimary: true,
+        isActive: true,
+        createdBy: auth.user.id,
       });
 
       if (targetAvailability === "available" && validOutlet) {

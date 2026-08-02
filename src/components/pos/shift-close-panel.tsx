@@ -13,6 +13,7 @@ import {
 
 import { closePosShiftAction } from "@/app/actions/pos";
 import { initialPosShiftActionState } from "@/features/pos/contracts";
+import { requestPosShellStatusRefresh } from "@/features/pos/live-status";
 import { cn } from "@/lib/utils";
 
 type ShiftClosePanelProps = {
@@ -133,6 +134,7 @@ export function ShiftClosePanel({
 
   useEffect(() => {
     if (state.status === "success") {
+      requestPosShellStatusRefresh();
       router.refresh();
     }
   }, [router, state.status]);

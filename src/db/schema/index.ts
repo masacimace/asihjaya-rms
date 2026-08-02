@@ -51,8 +51,65 @@ export const productItemNumberSequence = pgSequence(
   },
 );
 
+export const legacyProductImportStatusEnum = pgEnum(
+  "legacy_product_import_status",
+  ["processing", "ready", "failed", "archived"],
+);
+
+export const legacyProductRowValidationStatusEnum = pgEnum(
+  "legacy_product_row_validation_status",
+  ["valid", "warning", "invalid"],
+);
+
+export const itemBarcodeSourceEnum = pgEnum("item_barcode_source", [
+  "legacy_import",
+  "legacy_physical_label",
+  "system_generated",
+  "replacement",
+  "manual",
+]);
+
+export const legacyMasterMappingStatusEnum = pgEnum(
+  "legacy_master_mapping_status",
+  ["pending", "mapped", "ignored"],
+);
+
+export const legacyMasterMappingSourceEnum = pgEnum(
+  "legacy_master_mapping_source",
+  ["existing", "created"],
+);
+
+export const legacyMigrationSessionStatusEnum = pgEnum(
+  "legacy_migration_session_status",
+  ["draft", "active", "locked", "completed", "cancelled"],
+);
+
+export const legacyMigrationAssignmentRoleEnum = pgEnum(
+  "legacy_migration_assignment_role",
+  ["operator", "lead"],
+);
+
+export const legacyMigrationVerificationSourceEnum = pgEnum(
+  "legacy_migration_verification_source",
+  ["legacy_match", "physical_unmatched"],
+);
+
+export const legacyMigrationVerificationStatusEnum = pgEnum(
+  "legacy_migration_verification_status",
+  [
+    "submitted",
+    "needs_review",
+    "returned",
+    "approved",
+    "rejected",
+    "sold_during_migration",
+    "activated",
+  ],
+);
+
 export const itemAvailabilityEnum = pgEnum("item_availability", [
   "draft",
+  "migration_hold",
   "available",
   "reserved",
   "inspection",
@@ -88,6 +145,7 @@ export const movementTypeEnum = pgEnum("inventory_movement_type", [
   "repair_out",
   "repair_in",
   "reversal",
+  "migration_opening",
 ]);
 
 export const shiftStatusEnum = pgEnum("shift_status", [
@@ -697,6 +755,10 @@ export const productItems = pgTable(
       table.availability,
     ),
     check(
+      "product_items_barcode_not_blank_ck",
+      sql`length(btrim(${table.barcode})) > 0 and ${table.barcode} = btrim(${table.barcode})`,
+    ),
+    check(
       "product_items_weight_positive_ck",
       sql`${table.weightGram} is null or ${table.weightGram} > 0`,
     ),
@@ -715,6 +777,638 @@ export const productItems = pgTable(
     check(
       "product_items_deduction_nonnegative_ck",
       sql`${table.deductionPerGram} is null or ${table.deductionPerGram} >= 0`,
+    ),
+  ],
+);
+
+export const legacyProductImportBatches = pgTable(
+  "legacy_product_import_batches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    uploadedBy: uuid("uploaded_by")
+      .notNull()
+      .references(() => users.id),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    fileHash: varchar("file_hash", { length: 64 }).notNull(),
+    fileSizeBytes: integer("file_size_bytes").notNull(),
+    worksheetName: varchar("worksheet_name", { length: 160 }).notNull(),
+    barcodeLength: integer("barcode_length").default(6).notNull(),
+    status: legacyProductImportStatusEnum("status")
+      .default("processing")
+      .notNull(),
+    totalRows: integer("total_rows").default(0).notNull(),
+    validRows: integer("valid_rows").default(0).notNull(),
+    warningRows: integer("warning_rows").default(0).notNull(),
+    invalidRows: integer("invalid_rows").default(0).notNull(),
+    uniqueMasterCount: integer("unique_master_count").default(0).notNull(),
+    duplicateBarcodeCount: integer("duplicate_barcode_count")
+      .default(0)
+      .notNull(),
+    leadingZeroBarcodeCount: integer("leading_zero_barcode_count")
+      .default(0)
+      .notNull(),
+    imageUrlCount: integer("image_url_count").default(0).notNull(),
+    headers: jsonb("headers").$type<string[]>().default([]).notNull(),
+    validationSummary: jsonb("validation_summary")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    errorMessage: text("error_message"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_product_import_batches_org_outlet_hash_uq").on(
+      table.organizationId,
+      table.outletId,
+      table.fileHash,
+    ),
+    index("legacy_product_import_batches_org_status_idx").on(
+      table.organizationId,
+      table.status,
+      table.createdAt,
+    ),
+    index("legacy_product_import_batches_outlet_time_idx").on(
+      table.outletId,
+      table.createdAt,
+    ),
+    check(
+      "legacy_product_import_batches_file_size_ck",
+      sql`${table.fileSizeBytes} between 1 and 10485760`,
+    ),
+    check(
+      "legacy_product_import_batches_barcode_length_ck",
+      sql`${table.barcodeLength} between 1 and 120`,
+    ),
+    check(
+      "legacy_product_import_batches_counts_ck",
+      sql`${table.totalRows} >= 0
+        and ${table.validRows} >= 0
+        and ${table.warningRows} >= 0
+        and ${table.invalidRows} >= 0
+        and ${table.uniqueMasterCount} >= 0
+        and ${table.duplicateBarcodeCount} >= 0
+        and ${table.leadingZeroBarcodeCount} >= 0
+        and ${table.imageUrlCount} >= 0
+        and ${table.validRows} + ${table.warningRows} + ${table.invalidRows} = ${table.totalRows}`,
+    ),
+  ],
+);
+
+export const legacyProductRows = pgTable(
+  "legacy_product_rows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    rowNumber: integer("row_number").notNull(),
+    sourceSequence: integer("source_sequence"),
+    legacyBarcode: varchar("legacy_barcode", { length: 120 }),
+    normalizedBarcode: varchar("normalized_barcode", { length: 120 }),
+    legacyCategory: varchar("legacy_category", { length: 160 }),
+    legacyMasterCode: varchar("legacy_master_code", { length: 120 }),
+    legacyMasterName: varchar("legacy_master_name", { length: 220 }),
+    legacyItemName: varchar("legacy_item_name", { length: 240 }),
+    legacyPurity: numeric("legacy_purity", { precision: 10, scale: 3 }),
+    legacyExchangePurity: numeric("legacy_exchange_purity", {
+      precision: 10,
+      scale: 3,
+    }),
+    legacyPricePerGram: numeric("legacy_price_per_gram", {
+      precision: 18,
+      scale: 0,
+    }),
+    legacyDeductionPerGram: numeric("legacy_deduction_per_gram", {
+      precision: 18,
+      scale: 0,
+    }),
+    legacyWeightGram: numeric("legacy_weight_gram", {
+      precision: 12,
+      scale: 3,
+    }),
+    legacyColor: varchar("legacy_color", { length: 120 }),
+    legacyImageUrl: text("legacy_image_url"),
+    validationStatus: legacyProductRowValidationStatusEnum("validation_status")
+      .default("valid")
+      .notNull(),
+    validationIssues: jsonb("validation_issues")
+      .$type<Array<Record<string, unknown>>>()
+      .default([])
+      .notNull(),
+    rowFingerprint: varchar("row_fingerprint", { length: 64 }).notNull(),
+    rawData: jsonb("raw_data")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_product_rows_batch_row_uq").on(
+      table.batchId,
+      table.rowNumber,
+    ),
+    index("legacy_product_rows_batch_status_idx").on(
+      table.batchId,
+      table.validationStatus,
+      table.rowNumber,
+    ),
+    index("legacy_product_rows_batch_barcode_idx").on(
+      table.batchId,
+      table.normalizedBarcode,
+    ),
+    index("legacy_product_rows_org_outlet_barcode_idx").on(
+      table.organizationId,
+      table.outletId,
+      table.normalizedBarcode,
+    ),
+    index("legacy_product_rows_batch_master_idx").on(
+      table.batchId,
+      table.legacyMasterCode,
+    ),
+    check(
+      "legacy_product_rows_row_number_ck",
+      sql`${table.rowNumber} > 1`,
+    ),
+  ],
+);
+
+export const legacyProductMasterMappings = pgTable(
+  "legacy_product_master_mappings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    legacyMasterCode: varchar("legacy_master_code", { length: 120 }).notNull(),
+    legacyMasterName: varchar("legacy_master_name", { length: 220 }).notNull(),
+    legacyCategory: varchar("legacy_category", { length: 160 }),
+    normalizedCategoryName: varchar("normalized_category_name", { length: 160 }),
+    itemCount: integer("item_count").default(0).notNull(),
+    status: legacyMasterMappingStatusEnum("status")
+      .default("pending")
+      .notNull(),
+    mappingSource: legacyMasterMappingSourceEnum("mapping_source"),
+    targetCategoryId: uuid("target_category_id").references(
+      () => productCategories.id,
+    ),
+    targetProductMasterId: uuid("target_product_master_id").references(
+      () => productMasters.id,
+    ),
+    reviewNotes: text("review_notes"),
+    reviewedBy: uuid("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_product_master_mappings_batch_code_uq").on(
+      table.batchId,
+      table.legacyMasterCode,
+    ),
+    index("legacy_product_master_mappings_batch_status_idx").on(
+      table.batchId,
+      table.status,
+      table.legacyMasterCode,
+    ),
+    index("legacy_product_master_mappings_target_idx").on(
+      table.organizationId,
+      table.targetProductMasterId,
+    ),
+    check(
+      "legacy_product_master_mappings_item_count_ck",
+      sql`${table.itemCount} >= 0`,
+    ),
+    check(
+      "legacy_product_master_mappings_resolution_ck",
+      sql`(
+        ${table.status} = 'pending'
+        and ${table.targetCategoryId} is null
+        and ${table.targetProductMasterId} is null
+        and ${table.mappingSource} is null
+        and ${table.reviewedBy} is null
+        and ${table.reviewedAt} is null
+      ) or (
+        ${table.status} = 'mapped'
+        and ${table.targetCategoryId} is not null
+        and ${table.targetProductMasterId} is not null
+        and ${table.mappingSource} is not null
+        and ${table.reviewedBy} is not null
+        and ${table.reviewedAt} is not null
+      ) or (
+        ${table.status} = 'ignored'
+        and ${table.targetCategoryId} is null
+        and ${table.targetProductMasterId} is null
+        and ${table.mappingSource} is null
+        and ${table.reviewedBy} is not null
+        and ${table.reviewedAt} is not null
+        and nullif(btrim(${table.reviewNotes}), '') is not null
+      )`,
+    ),
+  ],
+);
+
+export const legacyMigrationSessions = pgTable(
+  "legacy_migration_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    name: varchar("name", { length: 160 }).notNull(),
+    locationCode: varchar("location_code", { length: 80 }),
+    expectedItemCount: integer("expected_item_count"),
+    notes: text("notes"),
+    status: legacyMigrationSessionStatusEnum("status")
+      .default("draft")
+      .notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_migration_sessions_batch_name_uq").on(
+      table.batchId,
+      table.name,
+    ),
+    index("legacy_migration_sessions_batch_status_idx").on(
+      table.batchId,
+      table.status,
+      table.createdAt,
+    ),
+    index("legacy_migration_sessions_outlet_status_idx").on(
+      table.outletId,
+      table.status,
+    ),
+    check(
+      "legacy_migration_sessions_expected_count_ck",
+      sql`${table.expectedItemCount} is null or ${table.expectedItemCount} > 0`,
+    ),
+  ],
+);
+
+export const legacyMigrationSessionAssignments = pgTable(
+  "legacy_migration_session_assignments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => legacyMigrationSessions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    assignmentRole: legacyMigrationAssignmentRoleEnum("assignment_role")
+      .default("operator")
+      .notNull(),
+    assignedBy: uuid("assigned_by")
+      .notNull()
+      .references(() => users.id),
+    assignedAt: timestamp("assigned_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("legacy_migration_session_assignments_session_user_uq").on(
+      table.sessionId,
+      table.userId,
+    ),
+    index("legacy_migration_session_assignments_user_idx").on(
+      table.userId,
+      table.assignedAt,
+    ),
+  ],
+);
+
+export const legacyMigrationVerifications = pgTable(
+  "legacy_migration_verifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => legacyMigrationSessions.id, { onDelete: "cascade" }),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    barcodeValue: varchar("barcode_value", { length: 120 }).notNull(),
+    legacyRowId: uuid("legacy_row_id").references(() => legacyProductRows.id, {
+      onDelete: "cascade",
+    }),
+    source: legacyMigrationVerificationSourceEnum("source").notNull(),
+    status: legacyMigrationVerificationStatusEnum("status")
+      .default("submitted")
+      .notNull(),
+    targetProductMasterId: uuid("target_product_master_id")
+      .notNull()
+      .references(() => productMasters.id),
+    verifiedItemName: varchar("verified_item_name", { length: 240 }).notNull(),
+    verifiedWeightGram: numeric("verified_weight_gram", {
+      precision: 12,
+      scale: 3,
+    }).notNull(),
+    verifiedPurity: numeric("verified_purity", {
+      precision: 10,
+      scale: 3,
+    }).notNull(),
+    verifiedExchangePurity: numeric("verified_exchange_purity", {
+      precision: 10,
+      scale: 3,
+    }),
+    verifiedColor: varchar("verified_color", { length: 120 }),
+    condition: itemConditionEnum("condition").default("good").notNull(),
+    useLegacyImage: boolean("use_legacy_image").default(false).notNull(),
+    legacyImageUrl: text("legacy_image_url"),
+    imageKey: text("image_key"),
+    staffNotes: text("staff_notes"),
+    reviewFlags: jsonb("review_flags").$type<string[]>().default([]).notNull(),
+    submissionFingerprint: varchar("submission_fingerprint", {
+      length: 64,
+    }).notNull(),
+    submittedBy: uuid("submitted_by")
+      .notNull()
+      .references(() => users.id),
+    submittedAt: timestamp("submitted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    reviewedBy: uuid("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewNotes: text("review_notes"),
+    productItemId: uuid("product_item_id").references(() => productItems.id),
+    revision: integer("revision").default(1).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_migration_verifications_org_barcode_uq").on(
+      table.organizationId,
+      table.barcodeValue,
+    ),
+    uniqueIndex("legacy_migration_verifications_legacy_row_uq")
+      .on(table.legacyRowId)
+      .where(sql`${table.legacyRowId} is not null`),
+    index("legacy_migration_verifications_session_status_idx").on(
+      table.sessionId,
+      table.status,
+      table.submittedAt,
+    ),
+    index("legacy_migration_verifications_batch_status_idx").on(
+      table.batchId,
+      table.status,
+      table.submittedAt,
+    ),
+    uniqueIndex("legacy_migration_verifications_product_item_uq")
+      .on(table.productItemId)
+      .where(sql`${table.productItemId} is not null`),
+    check(
+      "legacy_migration_verifications_source_ck",
+      sql`(
+        ${table.source} = 'legacy_match'
+        and ${table.legacyRowId} is not null
+      ) or (
+        ${table.source} = 'physical_unmatched'
+        and ${table.legacyRowId} is null
+      )`,
+    ),
+    check(
+      "legacy_migration_verifications_weight_ck",
+      sql`${table.verifiedWeightGram} > 0`,
+    ),
+    check(
+      "legacy_migration_verifications_purity_ck",
+      sql`${table.verifiedPurity} > 0`,
+    ),
+    check(
+      "legacy_migration_verifications_revision_ck",
+      sql`${table.revision} > 0`,
+    ),
+    check(
+      "legacy_migration_verifications_photo_ck",
+      sql`(
+        ${table.useLegacyImage} = true
+        and ${table.legacyImageUrl} is not null
+        and ${table.imageKey} is null
+      ) or (
+        ${table.useLegacyImage} = false
+        and ${table.imageKey} is not null
+      )`,
+    ),
+  ],
+);
+
+export const legacyMigrationSoldRecords = pgTable(
+  "legacy_migration_sold_records",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    sessionId: uuid("session_id").references(() => legacyMigrationSessions.id, {
+      onDelete: "restrict",
+    }),
+    barcodeValue: varchar("barcode_value", { length: 120 }).notNull(),
+    verificationId: uuid("verification_id").references(
+      () => legacyMigrationVerifications.id,
+      { onDelete: "restrict" },
+    ),
+    productItemId: uuid("product_item_id").references(() => productItems.id, {
+      onDelete: "restrict",
+    }),
+    previousVerificationStatus: legacyMigrationVerificationStatusEnum(
+      "previous_verification_status",
+    ),
+    previousItemAvailability: itemAvailabilityEnum(
+      "previous_item_availability",
+    ),
+    soldAt: timestamp("sold_at", { withTimezone: true }).notNull(),
+    legacyReference: varchar("legacy_reference", { length: 160 }),
+    notes: text("notes"),
+    reportedBy: uuid("reported_by")
+      .notNull()
+      .references(() => users.id),
+    reportedAt: timestamp("reported_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    revertedBy: uuid("reverted_by").references(() => users.id),
+    revertedAt: timestamp("reverted_at", { withTimezone: true }),
+    revertReason: text("revert_reason"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_migration_sold_records_org_barcode_active_uq")
+      .on(table.organizationId, table.barcodeValue)
+      .where(sql`${table.revertedAt} is null`),
+    index("legacy_migration_sold_records_batch_sold_at_idx").on(
+      table.batchId,
+      table.soldAt,
+    ),
+    index("legacy_migration_sold_records_batch_session_sold_at_idx").on(
+      table.batchId,
+      table.sessionId,
+      table.soldAt,
+    ),
+    index("legacy_migration_sold_records_verification_idx").on(
+      table.verificationId,
+    ),
+    check(
+      "legacy_migration_sold_records_link_ck",
+      sql`(
+        ${table.verificationId} is null
+        and ${table.productItemId} is null
+        and ${table.previousVerificationStatus} is null
+        and ${table.previousItemAvailability} is null
+      ) or (
+        ${table.verificationId} is not null
+        and ${table.previousVerificationStatus} in (
+          'submitted',
+          'needs_review',
+          'returned',
+          'approved',
+          'rejected'
+        )
+        and (
+          (${table.productItemId} is null and ${table.previousItemAvailability} is null)
+          or (
+            ${table.productItemId} is not null
+            and ${table.previousItemAvailability} = 'migration_hold'
+            and ${table.previousVerificationStatus} = 'approved'
+          )
+        )
+      )`,
+    ),
+    check(
+      "legacy_migration_sold_records_revert_ck",
+      sql`(
+        ${table.revertedBy} is null
+        and ${table.revertedAt} is null
+        and ${table.revertReason} is null
+      ) or (
+        ${table.revertedBy} is not null
+        and ${table.revertedAt} is not null
+        and length(btrim(${table.revertReason})) >= 5
+      )`,
+    ),
+  ],
+);
+
+export const legacyMigrationCutoverRuns = pgTable(
+  "legacy_migration_cutover_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => legacyProductImportBatches.id, { onDelete: "restrict" }),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => legacyMigrationSessions.id, { onDelete: "restrict" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    itemCount: integer("item_count").notNull(),
+    executedBy: uuid("executed_by")
+      .notNull()
+      .references(() => users.id),
+    executedAt: timestamp("executed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("legacy_migration_cutover_runs_session_uq").on(
+      table.sessionId,
+    ),
+    index("legacy_migration_cutover_runs_batch_time_idx").on(
+      table.batchId,
+      table.executedAt,
+    ),
+    check(
+      "legacy_migration_cutover_runs_item_count_ck",
+      sql`${table.itemCount} >= 0`,
+    ),
+  ],
+);
+
+export const itemBarcodes = pgTable(
+  "item_barcodes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => productItems.id, { onDelete: "cascade" }),
+    barcodeValue: varchar("barcode_value", { length: 120 }).notNull(),
+    barcodeFormat: varchar("barcode_format", { length: 48 }),
+    source: itemBarcodeSourceEnum("source").notNull(),
+    isPrimary: boolean("is_primary").default(false).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdBy: uuid("created_by").references(() => users.id),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("item_barcodes_item_value_uq").on(
+      table.itemId,
+      table.barcodeValue,
+    ),
+    uniqueIndex("item_barcodes_org_active_value_uq")
+      .on(table.organizationId, table.barcodeValue)
+      .where(sql`${table.isActive} = true`),
+    uniqueIndex("item_barcodes_item_active_primary_uq")
+      .on(table.itemId)
+      .where(sql`${table.isActive} = true and ${table.isPrimary} = true`),
+    index("item_barcodes_item_primary_idx").on(
+      table.itemId,
+      table.isPrimary,
+      table.isActive,
+    ),
+    check(
+      "item_barcodes_barcode_not_blank_ck",
+      sql`length(btrim(${table.barcodeValue})) > 0 and ${table.barcodeValue} = btrim(${table.barcodeValue})`,
     ),
   ],
 );
@@ -766,6 +1460,9 @@ export const inventoryMovements = pgTable(
       .where(
         sql`${table.referenceType} is not null and ${table.referenceId} is not null`,
       ),
+    uniqueIndex("inventory_movements_migration_opening_item_uq")
+      .on(table.itemId)
+      .where(sql`${table.movementType} = 'migration_opening'`),
   ],
 );
 
@@ -2892,4 +3589,3 @@ export const saleReturnItems = pgTable(
     ),
   ],
 );
-

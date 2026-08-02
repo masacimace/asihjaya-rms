@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "blocking": [
+    "check-business-timezone.ts",
+    "check-customer-history-pin.ts",
+    "check-environment-validation.ts",
+    "check-hardware-agent-parity.ts",
+    "check-hardware-agent-request-signing.ts",
+    "check-hardware-job-lease.ts",
+    "check-hardware-job-payloads.ts",
+    "check-hardware-job-protocol.ts",
+    "check-http-security.ts",
+    "check-inventory-label-payload.ts",
+    "check-legacy-product-migration.ts",
+    "check-legacy-product-xlsx-security.ts",
+    "check-manual-payment-verification.ts",
+    "check-payment-reconciliation.ts",
+    "check-pdf-render-security.ts",
+    "check-pos-checkout-recovery.ts",
+    "check-pos-financial-invariants.ts",
+    "check-receipt-token.ts",
+    "check-routes.ts",
+    "check-sale-correction.ts",
+    "check-settlement-import.ts"
+  ],
+  "infrastructure": [
+    "check-build-baseline.ts",
+    "check-database-migrations.ts",
+    "check-quality-config.ts",
+    "check-source-hygiene.ts"
+  ],
+  "manual": [
+    "check-receipt-pdf-contract.tsx"
+  ],
+  "notes": {
+    "blocking": "Kontrak aktif yang wajib lulus melalui quality gate otomatis.",
+    "infrastructure": "Pemeriksaan konfigurasi quality gate, source hygiene, dan metadata migration.",
+    "manual": "Pemeriksaan yang memerlukan runtime khusus dan dijalankan sebelum release terkait."
+  }
+}

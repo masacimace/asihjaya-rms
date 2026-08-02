@@ -3,6 +3,7 @@ import "dotenv/config";
 import { and, eq, inArray, or } from "drizzle-orm";
 
 import { hashPassword } from "../lib/auth/password";
+import { getBootstrapEnvironment } from "../lib/env";
 import { db, pool } from "./index";
 import {
   metalPurities,
@@ -61,6 +62,56 @@ const permissionSeeds = [
     code: "products.manage",
     name: "Mengelola katalog produk",
     module: "products",
+  },
+  {
+    code: "migration.view",
+    name: "Melihat staging migrasi produk legacy",
+    module: "migration",
+  },
+  {
+    code: "migration.import",
+    name: "Mengimpor workbook produk legacy ke staging",
+    module: "migration",
+  },
+  {
+    code: "migration.mapping.manage",
+    name: "Memetakan master produk legacy ke katalog baru",
+    module: "migration",
+  },
+  {
+    code: "migration.session.manage",
+    name: "Mengelola sesi migrasi dan penugasan staff",
+    module: "migration",
+  },
+  {
+    code: "migration.scan",
+    name: "Memindai barcode migrasi fisik",
+    module: "migration",
+  },
+  {
+    code: "migration.verification.submit",
+    name: "Mengirim verifikasi barang fisik",
+    module: "migration",
+  },
+  {
+    code: "migration.verification.review",
+    name: "Mereview verifikasi migrasi fisik",
+    module: "migration",
+  },
+  {
+    code: "migration.verification.approve",
+    name: "Menyetujui verifikasi migrasi fisik",
+    module: "migration",
+  },
+  {
+    code: "migration.sold.manage",
+    name: "Menandai barang terjual selama migrasi legacy",
+    module: "migration",
+  },
+  {
+    code: "migration.cutover.execute",
+    name: "Menjalankan aktivasi stok hasil migrasi",
+    module: "migration",
   },
   {
     code: "inventory.view",
@@ -329,6 +380,16 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "outlets.manage",
     "products.view",
     "products.manage",
+    "migration.view",
+    "migration.import",
+    "migration.mapping.manage",
+    "migration.session.manage",
+    "migration.scan",
+    "migration.verification.submit",
+    "migration.verification.review",
+    "migration.verification.approve",
+    "migration.sold.manage",
+    "migration.cutover.execute",
     "inventory.view",
     "inventory.print_label",
     "inventory.receive",
@@ -362,6 +423,8 @@ const rolePermissionMap: Record<string, readonly string[]> = {
   cashier: [
     "pos.access",
     "products.view",
+    "migration.scan",
+    "migration.verification.submit",
     "inventory.view",
     "sales.view",
     "sales.create",
@@ -377,6 +440,16 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "admin.access",
     "products.view",
     "products.manage",
+    "migration.view",
+    "migration.import",
+    "migration.mapping.manage",
+    "migration.session.manage",
+    "migration.scan",
+    "migration.verification.submit",
+    "migration.verification.review",
+    "migration.verification.approve",
+    "migration.sold.manage",
+    "migration.cutover.execute",
     "inventory.view",
     "inventory.print_label",
     "inventory.receive",
@@ -408,16 +481,6 @@ const rolePermissionMap: Record<string, readonly string[]> = {
   ],
 };
 
-function requiredEnv(name: string): string {
-  const value = process.env[name]?.trim();
-
-  if (!value) {
-    throw new Error(`Environment variable ${name} belum diatur.`);
-  }
-
-  return value;
-}
-
 function getFirst<T>(rows: readonly T[], entityName: string): T {
   const row = rows[0];
 
@@ -429,33 +492,18 @@ function getFirst<T>(rows: readonly T[], entityName: string): T {
 }
 
 async function seed() {
-  const organizationName = requiredEnv("BOOTSTRAP_ORGANIZATION_NAME");
-
-  const organizationSlug = requiredEnv(
-    "BOOTSTRAP_ORGANIZATION_SLUG",
-  ).toLowerCase();
-
-  const outletCode = requiredEnv("BOOTSTRAP_OUTLET_CODE").toUpperCase();
-
-  const outletName = requiredEnv("BOOTSTRAP_OUTLET_NAME");
-
-  const registerCode = requiredEnv("BOOTSTRAP_REGISTER_CODE").toUpperCase();
-
-  const registerName = requiredEnv("BOOTSTRAP_REGISTER_NAME");
-
-  const adminName = requiredEnv("BOOTSTRAP_ADMIN_NAME");
-
-  const adminUsername = requiredEnv("BOOTSTRAP_ADMIN_USERNAME").toLowerCase();
-
-  const adminEmail = requiredEnv("BOOTSTRAP_ADMIN_EMAIL").toLowerCase();
-
-  const adminPassword = requiredEnv("BOOTSTRAP_ADMIN_PASSWORD");
-
-  if (adminPassword.length < 12) {
-    throw new Error(
-      "BOOTSTRAP_ADMIN_PASSWORD minimal harus terdiri dari 12 karakter.",
-    );
-  }
+  const {
+    organizationName,
+    organizationSlug,
+    outletCode,
+    outletName,
+    registerCode,
+    registerName,
+    adminName,
+    adminUsername,
+    adminEmail,
+    adminPassword,
+  } = getBootstrapEnvironment();
 
   await db.transaction(async (tx) => {
     const now = new Date();

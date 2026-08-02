@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import {
   and,
+  desc,
   eq,
   gt,
   gte,
@@ -58,6 +59,8 @@ import {
   type PosHeldCartSummary,
   type PosHoldCartPayload,
   type PosManualPaymentMethod,
+  type PosQuickCustomerActionResult,
+  type PosQuickCustomerPayload,
   type PosScanLookupResult,
   type PosShiftActionState,
 } from "@/features/pos/contracts";
@@ -73,12 +76,16 @@ import {
   POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS,
 } from "@/features/pos/checkout-recovery";
 import { isValidPosCheckoutIdempotencyKey } from "@/features/pos/checkout-fingerprint";
+import { reconcileCheckoutFinancials } from "@/features/pos/checkout-financials";
+import { claimProductItemsForSale } from "@/features/pos/inventory-sale-claim";
+import { lockManualPaymentReference } from "@/features/pos/manual-payment-reference-lock";
 import {
   DEFAULT_POS_REGISTER_MISSING_MESSAGE,
   DEFAULT_POS_REGISTER_SHIFT_MESSAGE,
   getDefaultPosRegisterCondition,
 } from "@/features/pos/context";
 import { lookupPosItemByScanValue } from "@/features/pos/queries";
+import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
 import { getClientIp } from "@/lib/http/client-ip";
 import { getBusinessCompactDate } from "@/lib/time/business-time";
 import {
@@ -1640,6 +1647,254 @@ export async function getPosDiscountApprovalStatusAction(
   };
 }
 
+function normalizePosQuickCustomerPhone(value: string) {
+  const digits = value.replace(/[^0-9]/g, "");
+
+  if (!digits) {
+    return null;
+  }
+
+  if (digits.startsWith("62")) {
+    return `0${digits.slice(2)}`;
+  }
+
+  if (digits.startsWith("8")) {
+    return `0${digits}`;
+  }
+
+  return digits;
+}
+
+function getPosCustomerPhoneVariants(phone: string) {
+  const variants = new Set([phone]);
+
+  if (phone.startsWith("0") && phone.length > 1) {
+    variants.add(phone.slice(1));
+    variants.add(`62${phone.slice(1)}`);
+  }
+
+  return Array.from(variants);
+}
+
+export async function createPosQuickCustomerAction(
+  payload: PosQuickCustomerPayload,
+): Promise<PosQuickCustomerActionResult> {
+  const auth = await requirePermission("pos.access");
+  const primaryOutlet =
+    auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
+  const fullName = normalizeRequiredText(payload.fullName, 180);
+  const rawPhone = normalizeRequiredText(payload.phone, 32);
+  const phone = normalizePosQuickCustomerPhone(rawPhone);
+  const email = normalizeEmail(payload.email);
+  const notes = normalizeNullableText(payload.notes, 500);
+  const fieldErrors: Partial<
+    Record<keyof PosQuickCustomerPayload, string>
+  > = {};
+
+  if (fullName.length < 2) {
+    fieldErrors.fullName = "Nama customer wajib diisi minimal 2 karakter.";
+  }
+
+  if (!phone) {
+    fieldErrors.phone = "Nomor telepon customer wajib diisi.";
+  } else if (phone.length < 8 || phone.length > 15) {
+    fieldErrors.phone = "Nomor telepon harus terdiri dari 8–15 digit.";
+  }
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    fieldErrors.email = "Format email customer belum valid.";
+  }
+
+  if (Object.keys(fieldErrors).length > 0 || !phone) {
+    return {
+      status: "error",
+      message: "Periksa kembali data customer.",
+      fieldErrors,
+    };
+  }
+
+  const requestMetadata = await getRequestMetadata();
+  const phoneVariants = getPosCustomerPhoneVariants(phone);
+
+  try {
+    const result = await db.transaction(async (transaction) => {
+      const lockKeys = [
+        `pos-customer-phone:${auth.organization.id}:${phone}`,
+        ...(email
+          ? [`pos-customer-email:${auth.organization.id}:${email}`]
+          : []),
+      ].sort();
+
+      for (const lockKey of lockKeys) {
+        await transaction.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+        );
+      }
+
+      const duplicateConditions: SQL[] = phoneVariants.map(
+        (phoneVariant) =>
+          sql`regexp_replace(coalesce(${customers.phone}, ''), '[^0-9]', '', 'g') = ${phoneVariant}`,
+      );
+
+      if (email) {
+        duplicateConditions.push(
+          sql`lower(coalesce(${customers.email}, '')) = ${email}`,
+        );
+      }
+
+      const duplicateMatch =
+        duplicateConditions.length === 1
+          ? duplicateConditions[0]
+          : or(...duplicateConditions);
+      const duplicateCustomerRows = duplicateMatch
+        ? await transaction
+            .select({
+              id: customers.id,
+              customerCode: customers.customerCode,
+              fullName: customers.fullName,
+              phone: customers.phone,
+              email: customers.email,
+            })
+            .from(customers)
+            .where(
+              and(
+                eq(customers.organizationId, auth.organization.id),
+                eq(customers.isActive, true),
+                duplicateMatch,
+              ),
+            )
+            .limit(1)
+        : [];
+      const duplicateCustomer = duplicateCustomerRows[0];
+
+      if (duplicateCustomer) {
+        const latestDepositRows = primaryOutlet
+          ? await transaction
+              .select({
+                balanceAfter: customerDepositLedger.balanceAfter,
+                occurredAt: customerDepositLedger.occurredAt,
+              })
+              .from(customerDepositLedger)
+              .where(
+                and(
+                  eq(
+                    customerDepositLedger.organizationId,
+                    auth.organization.id,
+                  ),
+                  eq(customerDepositLedger.outletId, primaryOutlet.id),
+                  eq(
+                    customerDepositLedger.customerId,
+                    duplicateCustomer.id,
+                  ),
+                ),
+              )
+              .orderBy(
+                desc(customerDepositLedger.occurredAt),
+                desc(customerDepositLedger.createdAt),
+              )
+              .limit(1)
+          : [];
+        const latestDeposit = latestDepositRows[0] ?? null;
+        const balanceAmount = latestDeposit?.balanceAfter ?? "0";
+
+        return {
+          status: "duplicate" as const,
+          message: `Nomor telepon atau email sudah terdaftar untuk ${duplicateCustomer.fullName}. Gunakan customer yang sudah ada agar data tidak dobel.`,
+          customer: {
+            ...duplicateCustomer,
+            customerDepositBalanceAmount: balanceAmount,
+            customerDepositBalance: parseDbAmount(balanceAmount),
+            customerDepositLastLedgerEntryAt:
+              latestDeposit?.occurredAt ?? null,
+          },
+        };
+      }
+
+      const now = new Date();
+      const customerCode = generateCustomerCode(
+        now,
+        auth.organization.timezone,
+      );
+      const createdCustomerRows = await transaction
+        .insert(customers)
+        .values({
+          organizationId: auth.organization.id,
+          customerCode,
+          fullName,
+          phone,
+          email,
+          address: null,
+          notes,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning({
+          id: customers.id,
+          customerCode: customers.customerCode,
+          fullName: customers.fullName,
+          phone: customers.phone,
+          email: customers.email,
+        });
+      const createdCustomer = createdCustomerRows[0];
+
+      if (!createdCustomer) {
+        throw new Error("POS_QUICK_CUSTOMER_INSERT_FAILED");
+      }
+
+      await transaction.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet?.id ?? null,
+        actorUserId: auth.user.id,
+        action: "customer.create",
+        entityType: "customer",
+        entityId: createdCustomer.id,
+        beforeData: null,
+        afterData: {
+          customerId: createdCustomer.id,
+          customerCode: createdCustomer.customerCode,
+          fullName,
+          phone,
+          email,
+          notes,
+        },
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+        metadata: {
+          source: "pos.customer.quick_create.inline",
+        },
+      });
+
+      return {
+        status: "success" as const,
+        message: `Customer ${createdCustomer.fullName} berhasil ditambahkan dan dipilih.`,
+        customer: {
+          ...createdCustomer,
+          customerDepositBalanceAmount: "0",
+          customerDepositBalance: 0,
+          customerDepositLastLedgerEntryAt: null,
+        },
+      };
+    });
+
+    if (result.status === "success") {
+      revalidatePath("/pos");
+      revalidatePath("/pos/pelanggan");
+      revalidatePath("/admin/pelanggan");
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Failed to create inline POS customer", error);
+
+    return {
+      status: "error",
+      message:
+        "Customer belum bisa disimpan karena terjadi kendala sistem. Coba ulang.",
+    };
+  }
+}
+
 export async function createPosCustomerAction(formData: FormData) {
   const auth = await requirePermission("pos.access");
   const returnTo = readText(formData, "returnTo") || POS_CUSTOMERS_PATH;
@@ -1864,7 +2119,7 @@ type HeldCartActionItemRow = {
   outletId: string | null;
   outletCode: string | null;
   outletName: string | null;
-  availability: "draft" | "available" | "reserved" | "inspection" | "sold";
+  availability: "draft" | "migration_hold" | "available" | "reserved" | "inspection" | "sold";
   condition: "good" | "damaged" | "lost" | "returned";
   locationState: "outlet" | "warehouse" | "in_transit" | "customer" | "repair";
   isActive: boolean;
@@ -3609,37 +3864,13 @@ export async function completePosCheckoutAction(
           );
         }
 
-        const depositLockKey = [
-          auth.organization.id,
-          primaryOutlet.id,
-          selectedCustomer.id,
-        ].join(":");
-
-        await transaction.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${depositLockKey}))`,
-        );
-
-        const [latestDepositEntry] = await transaction
-          .select({
-            balanceAfter: customerDepositLedger.balanceAfter,
-          })
-          .from(customerDepositLedger)
-          .where(
-            and(
-              eq(customerDepositLedger.organizationId, auth.organization.id),
-              eq(customerDepositLedger.outletId, primaryOutlet.id),
-              eq(customerDepositLedger.customerId, selectedCustomer.id),
-            ),
-          )
-          .orderBy(
-            sql`${customerDepositLedger.occurredAt} desc`,
-            sql`${customerDepositLedger.createdAt} desc`,
-          )
-          .limit(1)
-          .for("update");
-
-        customerDepositRunningBalance = parseDbAmount(
-          latestDepositEntry?.balanceAfter ?? "0",
+        customerDepositRunningBalance = await lockCustomerDepositBalance(
+          transaction,
+          {
+            organizationId: auth.organization.id,
+            outletId: primaryOutlet.id,
+            customerId: selectedCustomer.id,
+          },
         );
 
         if (customerDepositUsedAmount > customerDepositRunningBalance) {
@@ -3865,38 +4096,39 @@ export async function completePosCheckoutAction(
         itemAmounts,
         discountAmount: approvedDiscountAmount,
       });
-      const totalAmount = subtotalAmount - approvedDiscountAmount;
-      const totalPaidAmount = normalizedPayments.reduce(
-        (total, payment) => total + payment.amount,
-        0,
-      );
+      const financialReconciliation = reconcileCheckoutFinancials({
+        subtotalAmount,
+        discountAmount: approvedDiscountAmount,
+        customerDepositUsedAmount,
+        customerDepositInAmount,
+        paymentAmounts: normalizedPayments.map((payment) => payment.amount),
+      });
 
-      if (totalAmount <= 0) {
-        throw new CheckoutValidationError(
-          "Total transaksi tidak valid. Periksa harga jual item dan diskon.",
-        );
-      }
+      if (!financialReconciliation.ok) {
+        if (financialReconciliation.code === "non_positive_total") {
+          throw new CheckoutValidationError(
+            "Total transaksi tidak valid. Periksa harga jual item dan diskon.",
+          );
+        }
 
-      if (customerDepositUsedAmount > totalAmount) {
-        throw new CheckoutValidationError(
-          "Dana Titip digunakan tidak boleh lebih besar dari total transaksi.",
-        );
-      }
+        if (financialReconciliation.code === "deposit_exceeds_total") {
+          throw new CheckoutValidationError(
+            "Dana Titip digunakan tidak boleh lebih besar dari total transaksi.",
+          );
+        }
 
-      const externalPaymentDueAmount =
-        totalAmount - customerDepositUsedAmount + customerDepositInAmount;
+        if (financialReconciliation.code === "payment_mismatch") {
+          throw new CheckoutValidationError(
+            `Total pembayaran eksternal harus sama dengan ${formatServerCurrency(financialReconciliation.expectedAmount ?? 0)} setelah Dana Titip.`,
+          );
+        }
 
-      if (externalPaymentDueAmount < 0) {
         throw new CheckoutValidationError(
           "Total pembayaran eksternal tidak valid setelah Dana Titip.",
         );
       }
 
-      if (totalPaidAmount !== externalPaymentDueAmount) {
-        throw new CheckoutValidationError(
-          `Total pembayaran eksternal harus sama dengan ${formatServerCurrency(externalPaymentDueAmount)} setelah Dana Titip.`,
-        );
-      }
+      const { totalAmount, externalPaymentDueAmount } = financialReconciliation;
 
       const nonCashPayments = normalizedPayments.filter((payment) =>
         isNonCashManualPaymentMethod(payment.method),
@@ -3907,17 +4139,13 @@ export async function completePosCheckoutAction(
           `${right.method}:${right.normalizedProvider}:${right.normalizedReference}`,
         ),
       )) {
-        const duplicateLockKey = [
-          auth.organization.id,
-          primaryOutlet.id,
-          payment.method,
-          payment.normalizedProvider,
-          payment.normalizedReference,
-        ].join(":");
-
-        await transaction.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended(${duplicateLockKey}, 0))`,
-        );
+        await lockManualPaymentReference(transaction, {
+          organizationId: auth.organization.id,
+          outletId: primaryOutlet.id,
+          method: payment.method,
+          normalizedProvider: payment.normalizedProvider!,
+          normalizedReference: payment.normalizedReference!,
+        });
 
         const policy =
           manualPaymentPolicyMap[payment.method as NonCashManualPaymentMethod];
@@ -4077,27 +4305,14 @@ export async function completePosCheckoutAction(
         }),
       );
 
-      const updatedRows = await transaction
-        .update(productItems)
-        .set({
-          availability: "sold",
-          locationState: "customer",
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(productItems.organizationId, auth.organization.id),
-            inArray(productItems.id, itemIds),
-            eq(productItems.currentOutletId, primaryOutlet.id),
-            eq(productItems.isActive, true),
-            eq(productItems.availability, "available"),
-            eq(productItems.condition, "good"),
-            eq(productItems.locationState, "outlet"),
-          ),
-        )
-        .returning({ id: productItems.id });
+      const itemClaim = await claimProductItemsForSale(transaction, {
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet.id,
+        itemIds,
+        now,
+      });
 
-      if (updatedRows.length !== itemIds.length) {
+      if (!itemClaim.allClaimed) {
         throw new CheckoutValidationError(
           "Sebagian item sudah berubah status saat checkout. Transaksi dibatalkan, refresh POS lalu coba ulang.",
         );

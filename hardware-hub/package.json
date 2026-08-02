@@ -35,7 +35,8 @@
     "outlet:disable-real-hardware": "node scripts/outlet-adapter-switch.js --device all --mode fake",
     "outlet:rollback-to-fake": "node scripts/outlet-adapter-switch.js --device all --mode fake",
     "outlet:report": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-outlet-report.ps1",
-    "check:outlet": "node scripts/check-outlet-readiness-pack.js"
+    "check:outlet": "node scripts/check-outlet-readiness-pack.js",
+    "check:ci": "npm run check:auth && npm run check:dpapi && npm run check:v2 && npm run check:simulation && npm run check:operations && npm run check:print-profiles && npm run check:sato"
   },
   "dependencies": {
     "dotenv": "^17.4.2"

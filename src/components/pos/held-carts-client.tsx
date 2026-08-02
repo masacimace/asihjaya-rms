@@ -24,6 +24,7 @@ import type {
   PosHeldCartListItem,
   PosHeldCartSummary,
 } from "@/features/pos/contracts";
+import { requestPosShellStatusRefresh } from "@/features/pos/live-status";
 import { cn } from "@/lib/utils";
 
 const POS_ACTIVE_CART_STORAGE_KEY = "asihjaya:pos-workspace-active-cart";
@@ -170,7 +171,7 @@ function SummaryCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm text-[var(--muted)]">{title}</p>
-          <p className="mt-2 truncate text-xl font-semibold tracking-tight text-neutral-950">
+          <p className="mt-2 truncate text-xl font-semibold text-neutral-950">
             {value}
           </p>
           <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{helper}</p>
@@ -300,7 +301,7 @@ function HeldCartCard({
 
           <div className="shrink-0 text-left sm:text-right">
             <p className="text-xs text-[var(--muted)]">Total sementara</p>
-            <p className="mt-1 text-xl font-bold tracking-tight text-neutral-950">
+            <p className="mt-1 text-xl font-bold text-neutral-950">
               {formatMoney(heldCart.totalAmount)}
             </p>
           </div>
@@ -432,6 +433,7 @@ export function HeldCartsClient({ data }: HeldCartsClientProps) {
       });
 
       window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
+      requestPosShellStatusRefresh();
       router.push("/pos");
     });
   }
@@ -462,38 +464,16 @@ export function HeldCartsClient({ data }: HeldCartsClientProps) {
       }
 
       setFeedback({ type: "success", message: result.message });
+      requestPosShellStatusRefresh();
       router.refresh();
     });
   }
 
   return (
-    <main className="p-4 sm:p-6">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm text-[var(--muted)]">Aplikasi POS</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950">
-              Transaksi Ditahan
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Kelola cart yang ditahan. Item di hold aktif terkunci dan tidak
-              muncul di katalog POS sampai di-resume atau dibatalkan.
-            </p>
-          </div>
+    <div className="min-w-0">
+      <Feedback feedback={feedback} onClose={() => setFeedback(null)} />
 
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/pos"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-            >
-              Kembali ke POS
-            </Link>
-          </div>
-        </div>
-
-        <Feedback feedback={feedback} onClose={() => setFeedback(null)} />
-
-        <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
           <SummaryCard
             title="Hold aktif"
             value={`${data.summary.totalHeldCarts}`}
@@ -514,7 +494,7 @@ export function HeldCartsClient({ data }: HeldCartsClientProps) {
           />
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
           <form
             action="/pos/ditahan"
             className="rounded-2xl border border-[var(--border)] bg-white p-3"
@@ -542,7 +522,7 @@ export function HeldCartsClient({ data }: HeldCartsClientProps) {
           <OutletBadge data={data} />
         </div>
 
-        {!data.outlet || !data.register ? (
+      {!data.outlet || !data.register ? (
           <section className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-800">
             <h2 className="font-semibold text-neutral-950">
               Outlet/register belum siap
@@ -587,7 +567,6 @@ export function HeldCartsClient({ data }: HeldCartsClientProps) {
             ) : null}
           </section>
         )}
-      </div>
-    </main>
+    </div>
   );
 }

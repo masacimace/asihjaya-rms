@@ -219,7 +219,7 @@ type EditableItem = {
   sellingAmount: string | null;
   pricePerGram: string | null;
   deductionPerGram: string | null;
-  availability: "draft" | "available" | "reserved" | "inspection" | "sold";
+  availability: "draft" | "migration_hold" | "available" | "reserved" | "inspection" | "sold";
   condition: "good" | "damaged" | "lost" | "returned";
   currentOutletId: string | null;
   outletName: string | null;

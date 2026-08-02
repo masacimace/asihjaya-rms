@@ -23,7 +23,7 @@ Tindakan fisik diganti dengan artifact file per attempt.
 Dari root repository:
 
 ```bash
-npm run check:hardware:v2-simulation
+npm --prefix hardware-hub run check:simulation
 ```
 
 Atau dari folder agent:

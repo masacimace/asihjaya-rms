@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { createPosCustomerAction } from "@/app/actions/pos";
+import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
 import type {
   PosCustomerListData,
   PosCustomerListItem,
@@ -437,226 +438,205 @@ export default async function PosCustomersPage({ searchParams }: PageProps) {
   const currentHref = buildCustomersHref({ query: data.query });
 
   return (
-    <main className="p-4 pb-32 sm:p-6 lg:pb-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <PosPageContainer>
+      <PosPageHeader
+        eyebrow="Data POS"
+        title="Daftar Customer"
+        description="Cari dan kelola pelanggan untuk kebutuhan transaksi, kontak, histori pembelian, dan customer selector di checkout POS."
+        icon={<UsersRound className="size-5 sm:size-6" />}
+        actions={<OutletBadge data={data} />}
+      />
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <SummaryCard
+          title="Customer tampil"
+          value={String(data.summary.totalCustomers)}
+          helper={
+            data.query ? `Search: ${data.query}` : "Customer aktif organisasi."
+          }
+          icon={<UsersRound className="size-5" />}
+        />
+        <SummaryCard
+          title="Pernah transaksi"
+          value={String(data.summary.customersWithTransactions)}
+          helper="Customer dengan transaksi completed di outlet aktif."
+          icon={<ReceiptText className="size-5" />}
+        />
+        <SummaryCard
+          title="Total nilai"
+          value={formatMoney(data.summary.totalTransactionAmount)}
+          helper="Akumulasi transaksi customer yang sedang ditampilkan."
+          icon={<WalletCards className="size-5" />}
+        />
+      </div>
+
+      <QuickCreateCustomerForm returnTo={currentHref} />
+
+      <section className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-4">
+        <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <label className="flex h-11 min-w-0 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3">
+            <Search className="size-4 shrink-0 text-neutral-400" />
+            <input
+              type="search"
+              name="q"
+              defaultValue={data.query}
+              placeholder="Cari nama, kode customer, nomor HP, email..."
+              className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
+            />
+          </label>
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-black px-4 text-sm font-semibold text-white transition hover:bg-black/80"
+            >
+              <Search className="size-4" />
+              Cari
+            </button>
+            {data.query ? (
+              <Link
+                href="/pos/pelanggan"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+              >
+                Reset
+              </Link>
+            ) : null}
+          </div>
+        </form>
+
+        {data.query ? (
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Search aktif: <span className="font-semibold">{data.query}</span>.
+            Reset pencarian untuk kembali melihat customer aktif.
+          </p>
+        ) : null}
+      </section>
+
+      {feedbackMessage ? (
+        <CustomerFeedbackNotice type={feedbackType} message={feedbackMessage} />
+      ) : null}
+
+      {data.customers.length === 0 ? (
+        <section className="mt-5 grid min-h-72 place-items-center rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
           <div>
-            <p className="text-sm text-[var(--muted)]">Aplikasi POS</p>
-            <h1 className="mt-1 text-2xl font-semibold text-neutral-950">
-              Daftar Customer
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Data pelanggan real untuk cek kontak, histori transaksi outlet
-              aktif, dan persiapan customer selector di checkout POS.
+            <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+              <UsersRound className="size-7" />
+            </div>
+            <h2 className="mt-4 font-semibold text-neutral-950">
+              Customer belum ditemukan
+            </h2>
+            <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
+              Belum ada customer aktif untuk filter ini. Coba ubah kata kunci
+              pencarian atau gunakan form Tambah Customer Cepat di atas.
             </p>
           </div>
-          <OutletBadge data={data} />
-        </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <SummaryCard
-            title="Customer tampil"
-            value={String(data.summary.totalCustomers)}
-            helper={
-              data.query
-                ? `Search: ${data.query}`
-                : "Customer aktif organisasi."
-            }
-            icon={<UsersRound className="size-5" />}
-          />
-          <SummaryCard
-            title="Pernah transaksi"
-            value={String(data.summary.customersWithTransactions)}
-            helper="Customer dengan transaksi completed di outlet aktif."
-            icon={<ReceiptText className="size-5" />}
-          />
-          <SummaryCard
-            title="Total nilai"
-            value={formatMoney(data.summary.totalTransactionAmount)}
-            helper="Akumulasi transaksi customer yang sedang ditampilkan."
-            icon={<WalletCards className="size-5" />}
-          />
-        </div>
-
-        <QuickCreateCustomerForm returnTo={currentHref} />
-
-        <section className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-4">
-          <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-            <label className="flex h-11 min-w-0 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3">
-              <Search className="size-4 shrink-0 text-neutral-400" />
-              <input
-                type="search"
-                name="q"
-                defaultValue={data.query}
-                placeholder="Cari nama, kode customer, nomor HP, email..."
-                className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
-              />
-            </label>
-
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-black px-4 text-sm font-semibold text-white transition hover:bg-black/80"
-              >
-                <Search className="size-4" />
-                Cari
-              </button>
-              {data.query ? (
-                <Link
-                  href="/pos/pelanggan"
-                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                >
-                  Reset
-                </Link>
-              ) : null}
-            </div>
-          </form>
-
-          {data.query ? (
-            <p className="mt-3 text-xs text-[var(--muted)]">
-              Search aktif: <span className="font-semibold">{data.query}</span>.
-              Reset pencarian untuk kembali melihat customer aktif.
-            </p>
-          ) : null}
         </section>
+      ) : (
+        <>
+          <div className="mt-5 space-y-3 sm:hidden">
+            {data.customers.map((customer) => (
+              <CustomerCard key={customer.id} customer={customer} />
+            ))}
+          </div>
 
-        {feedbackMessage ? (
-          <CustomerFeedbackNotice
-            type={feedbackType}
-            message={feedbackMessage}
-          />
-        ) : null}
-
-        {data.customers.length === 0 ? (
-          <section className="mt-5 grid min-h-72 place-items-center rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
-            <div>
-              <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                <UsersRound className="size-7" />
-              </div>
-              <h2 className="mt-4 font-semibold text-neutral-950">
-                Customer belum ditemukan
-              </h2>
-              <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-                Belum ada customer aktif untuk filter ini. Coba ubah kata kunci
-                pencarian atau gunakan form Tambah Customer Cepat di atas.
-              </p>
+          <section className="mt-5 hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-white sm:block">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-[var(--border)] text-sm">
+                <thead className="bg-neutral-50 text-left text-xs uppercase text-[var(--muted)]">
+                  <tr>
+                    <th className="px-4 py-3 !font-medium">Customer</th>
+                    <th className="px-4 py-3 !font-medium">Kontak</th>
+                    <th className="px-4 py-3 !font-medium">
+                      Transaksi terakhir
+                    </th>
+                    <th className="px-4 py-3 text-right !font-medium">Total</th>
+                    <th className="px-4 py-3 text-right !font-medium">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {data.customers.map((customer) => (
+                    <tr key={customer.id} className="align-top">
+                      <td className="px-4 py-4">
+                        <div className="flex items-start gap-3">
+                          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                            <UserRound className="size-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-neutral-950">
+                              {customer.fullName}
+                            </p>
+                            <p className="mt-1 text-xs text-[var(--muted)]">
+                              {formatCustomerCode(customer)}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="max-w-[260px] px-4 py-4">
+                        <CustomerContactInfo customer={customer} />
+                      </td>
+                      <td className="px-4 py-4">
+                        {customer.lastTransaction ? (
+                          <div>
+                            <p className="font-semibold text-neutral-950">
+                              {customer.lastTransaction.invoiceNumber}
+                            </p>
+                            <p className="mt-1 text-xs text-[var(--muted)]">
+                              {formatDateTime(
+                                customer.lastTransaction.completedAt,
+                              )}
+                            </p>
+                            <p className="mt-1 text-xs font-medium text-neutral-800">
+                              {formatMoney(
+                                customer.lastTransaction.totalAmount,
+                              )}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-[var(--muted)]">
+                            Belum ada transaksi completed di outlet aktif.
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <p className="font-semibold text-neutral-950">
+                          {formatMoney(customer.totalAmount)}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">
+                          {customer.totalTransactions} transaksi
+                        </p>
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <div className="inline-flex flex-col gap-2">
+                          <Link
+                            href={
+                              customer.totalTransactions > 0
+                                ? buildTransactionsHref(customer)
+                                : "/pos/transaksi"
+                            }
+                            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                          >
+                            <ReceiptText className="size-3.5" />
+                            Transaksi
+                          </Link>
+                          <Link
+                            href="/pos"
+                            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                          >
+                            <ArrowRight className="size-3.5" />
+                            Ke POS
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
-        ) : (
-          <>
-            <div className="mt-5 space-y-3 sm:hidden">
-              {data.customers.map((customer) => (
-                <CustomerCard key={customer.id} customer={customer} />
-              ))}
-            </div>
-
-            <section className="mt-5 hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-white sm:block">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-                  <thead className="bg-neutral-50 text-left text-xs uppercase text-[var(--muted)]">
-                    <tr>
-                      <th className="px-4 py-3 !font-medium">Customer</th>
-                      <th className="px-4 py-3 !font-medium">Kontak</th>
-                      <th className="px-4 py-3 !font-medium">
-                        Transaksi terakhir
-                      </th>
-                      <th className="px-4 py-3 text-right !font-medium">
-                        Total
-                      </th>
-                      <th className="px-4 py-3 text-right !font-medium">
-                        Action
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border)]">
-                    {data.customers.map((customer) => (
-                      <tr key={customer.id} className="align-top">
-                        <td className="px-4 py-4">
-                          <div className="flex items-start gap-3">
-                            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                              <UserRound className="size-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-semibold text-neutral-950">
-                                {customer.fullName}
-                              </p>
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {formatCustomerCode(customer)}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="max-w-[260px] px-4 py-4">
-                          <CustomerContactInfo customer={customer} />
-                        </td>
-                        <td className="px-4 py-4">
-                          {customer.lastTransaction ? (
-                            <div>
-                              <p className="font-semibold text-neutral-950">
-                                {customer.lastTransaction.invoiceNumber}
-                              </p>
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {formatDateTime(
-                                  customer.lastTransaction.completedAt,
-                                )}
-                              </p>
-                              <p className="mt-1 text-xs font-medium text-neutral-800">
-                                {formatMoney(
-                                  customer.lastTransaction.totalAmount,
-                                )}
-                              </p>
-                            </div>
-                          ) : (
-                            <p className="text-sm text-[var(--muted)]">
-                              Belum ada transaksi completed di outlet aktif.
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <p className="font-semibold text-neutral-950">
-                            {formatMoney(customer.totalAmount)}
-                          </p>
-                          <p className="mt-1 text-xs text-[var(--muted)]">
-                            {customer.totalTransactions} transaksi
-                          </p>
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <div className="inline-flex flex-col gap-2">
-                            <Link
-                              href={
-                                customer.totalTransactions > 0
-                                  ? buildTransactionsHref(customer)
-                                  : "/pos/transaksi"
-                              }
-                              className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                            >
-                              <ReceiptText className="size-3.5" />
-                              Transaksi
-                            </Link>
-                            <Link
-                              href="/pos"
-                              className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                            >
-                              <ArrowRight className="size-3.5" />
-                              Ke POS
-                            </Link>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <p className="mt-4 text-xs leading-5 text-[var(--muted)]">
-              Tombol pilihan customer ke checkout akan diaktifkan pada POS-R5C.
-              Untuk sekarang halaman ini fokus pada data pelanggan real dan
-              histori transaksi outlet aktif.
-            </p>
-          </>
-        )}
-      </div>
-    </main>
+        </>
+      )}
+    </PosPageContainer>
   );
 }

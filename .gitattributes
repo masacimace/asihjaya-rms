@@ -1,0 +1,9 @@
+# Keep vendored package archives byte-for-byte identical across platforms.
+vendor/*.tgz binary
+vendor/*.sha512 text eol=lf
+
+# Generated patches and lock/config files must not receive platform line-ending rewrites.
+*.patch -text
+package-lock.json text eol=lf
+.npmrc text eol=lf
+.nvmrc text eol=lf

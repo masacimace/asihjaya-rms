@@ -103,13 +103,13 @@ Preview admin menyediakan A4 sebagai default serta tautan A5 legacy.
 Jalankan contract check:
 
 ```bash
-npm run check:hardware:v2-receipt-a4
+npm run check:receipt-pdf
 ```
 
 Untuk mempertahankan PDF hasil test:
 
 ```bash
-npx tsx scripts/check-hardware-receipt-a4.tsx --keep-output
+npm run check:receipt-pdf -- --keep-output
 ```
 
 Output lokal:

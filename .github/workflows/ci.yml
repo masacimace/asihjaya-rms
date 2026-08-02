@@ -1,0 +1,236 @@
+name: Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "feature/**"
+      - "feat/**"
+      - "fix/**"
+      - "chore/**"
+      - "test/**"
+      - "refactor/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: quality-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  NEXT_PUBLIC_APP_NAME: Asihjaya Retail Management System
+  NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+  APP_URL: http://127.0.0.1:3000
+  INTERNAL_RENDER_ORIGIN: http://127.0.0.1:3000
+  DEFAULT_ORGANIZATION_SLUG: asihjaya
+  DATABASE_URL: postgresql://asihjaya_ci:asihjaya_ci@127.0.0.1:5432/asihjaya_rms_ci
+  SESSION_SECRET: ci-session-secret-000000000000000000000000000000000000000000000000
+  RECEIPT_VERIFICATION_SECRET: ci-receipt-secret-0000000000000000000000000000000000000000000000
+  CUSTOMER_HISTORY_SESSION_SECRET: ci-history-session-secret-00000000000000000000000000000000000000000000
+  CUSTOMER_HISTORY_PIN_PEPPER: ci-history-pin-pepper-000000000000000000000000000000000000000000000
+  SECURITY_RATE_LIMIT_SECRET: ci-rate-limit-secret-000000000000000000000000000000000000000000000
+  PDF_RENDER_TOKEN_SECRET: ci-pdf-render-secret-000000000000000000000000000000000000000000000
+  HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY: ci-agent-encryption-key-0000000000000000000000000000000000000000000
+  IMAGE_STORAGE_DRIVER: local
+  IMAGE_STORAGE_ROOT: .data/ci-uploads
+  SERVER_ACTION_BODY_SIZE_LIMIT: 20mb
+  TRUST_PROXY: "false"
+
+jobs:
+  static-quality:
+    name: Static Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          package-manager-cache: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Route contract
+        run: npm run routes:check
+
+      - name: Production build
+        run: npm run build:clean
+
+  container-build:
+    name: Container Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Build production container
+        run: docker build --pull --tag asihjaya-rms:ci .
+
+  security-business:
+    name: Security & Business Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          package-manager-cache: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Quality configuration
+        run: npm run check:quality-config
+
+      - name: Reproducible build baseline
+        run: npm run check:build-baseline
+
+      - name: Source hygiene
+        run: npm run check:source-hygiene
+
+      - name: Migration metadata
+        run: npm run check:database
+
+      - name: Security contracts
+        run: npm run check:security
+
+      - name: Production environment validation
+        run: npm run env:validate -- --mode production
+
+      - name: Business contracts
+        run: npm run check:business
+
+      - name: Application hardware contracts
+        run: npm run check:hardware-app
+
+  database-migrations:
+    name: Database Migration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: asihjaya_ci
+          POSTGRES_PASSWORD: asihjaya_ci
+          POSTGRES_DB: asihjaya_rms_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U asihjaya_ci -d asihjaya_rms_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          package-manager-cache: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate migration metadata
+        run: npm run check:database
+
+      - name: Apply all migrations
+        run: npm run db:migrate
+
+      - name: Re-run migrations for idempotent no-op
+        run: npm run db:migrate
+
+      - name: Validate migrated PostgreSQL schema
+        run: npm run check:database:live
+
+  hardware-hub:
+    name: Hardware Hub Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: hardware-hub/package-lock.json
+          package-manager-cache: true
+
+      - name: Install Hardware Hub dependencies
+        run: npm ci --prefix hardware-hub
+
+      - name: Run Hardware Hub CI checks
+        run: npm --prefix hardware-hub run check:ci
+
+  financial-concurrency:
+    name: Financial & Concurrency Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://asihjaya_financial_ci:asihjaya_financial_ci@127.0.0.1:5432/asihjaya_rms_financial_ci
+      TEST_DATABASE_URL: postgresql://asihjaya_financial_ci:asihjaya_financial_ci@127.0.0.1:5432/asihjaya_rms_financial_ci
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: asihjaya_financial_ci
+          POSTGRES_PASSWORD: asihjaya_financial_ci
+          POSTGRES_DB: asihjaya_rms_financial_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U asihjaya_financial_ci -d asihjaya_rms_financial_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          package-manager-cache: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate migration metadata
+        run: npm run check:database
+
+      - name: Apply all migrations
+        run: npm run db:migrate
+
+      - name: Run financial and concurrency integration suite
+        run: npm run test:financial

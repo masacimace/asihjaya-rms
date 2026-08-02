@@ -202,6 +202,44 @@ export function imageKeyBelongsToOrganization(
   return normalized?.startsWith(`organizations/${organizationId}/`) ?? false;
 }
 
+async function transformImageBuffer(input: Buffer): Promise<Buffer> {
+  return sharp(input, {
+    failOn: "error",
+    limitInputPixels: 40_000_000,
+  })
+    .rotate()
+    .resize({
+      width: 1600,
+      height: 1600,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .webp({ quality: 84, effort: 4 })
+    .toBuffer();
+}
+
+export async function storeImageBuffer({
+  input,
+  organizationId,
+  entityType,
+  entityId,
+}: {
+  input: Buffer;
+  organizationId: string;
+  entityType: "products" | "items";
+  entityId: string;
+}): Promise<string> {
+  if (input.length === 0) {
+    throw new Error("Isi foto kosong.");
+  }
+
+  const key = `organizations/${organizationId}/${entityType}/${entityId}/${randomUUID()}.webp`;
+  const output = await transformImageBuffer(input);
+  await writeImageBuffer(key, output);
+
+  return key;
+}
+
 export async function storeImageFile({
   file,
   organizationId,
@@ -219,26 +257,12 @@ export async function storeImageFile({
     throw new Error(validation.message);
   }
 
-  const key = `organizations/${organizationId}/${entityType}/${entityId}/${randomUUID()}.webp`;
-  const input = Buffer.from(await file.arrayBuffer());
-
-  const output = await sharp(input, {
-    failOn: "error",
-    limitInputPixels: 40_000_000,
-  })
-    .rotate()
-    .resize({
-      width: 1600,
-      height: 1600,
-      fit: "inside",
-      withoutEnlargement: true,
-    })
-    .webp({ quality: 84, effort: 4 })
-    .toBuffer();
-
-  await writeImageBuffer(key, output);
-
-  return key;
+  return storeImageBuffer({
+    input: Buffer.from(await file.arrayBuffer()),
+    organizationId,
+    entityType,
+    entityId,
+  });
 }
 
 export async function readImageFile(imageKey: string): Promise<Buffer> {
