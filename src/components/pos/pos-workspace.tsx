@@ -58,16 +58,12 @@ import {
   type PosCustomerOption,
   type PosDiscountApproval,
   type PosDiscountApprovalActionResult,
-  type PosHeldCartActionResult,
-  type PosHeldCartItem,
-  type PosHeldCartSummary,
   type PosManualPaymentApproval,
   type PosManualPaymentMethod,
   type PosManualPaymentPolicy,
   type PosManualPaymentProfile,
   type PosOperationalContext,
   type PosQuickCustomerActionResult,
-  type PosQuickCustomerPayload,
   type PosShiftActionState,
 } from "@/features/pos/contracts";
 import {
@@ -76,10 +72,19 @@ import {
 } from "@/features/pos/cart-state";
 import {
   getStoredPosCartState,
-  isStoredPosAvailableItem,
   removeStoredPosCartState,
   saveStoredPosCartState,
 } from "@/features/pos/cart-storage";
+import {
+  getCustomerCode,
+  getCustomerContactLabel,
+  type QuickCustomerFormState,
+} from "@/features/pos/customer-state";
+import {
+  getHeldCartAvailability,
+  getPendingHeldCartResumeState,
+  removePendingHeldCartResumeState,
+} from "@/features/pos/held-cart-state";
 import {
   createCheckoutIdempotencyKey,
   createPaymentDraftId,
@@ -97,6 +102,8 @@ import {
   type PosPaymentDraft,
 } from "@/features/pos/payment-draft";
 import { usePosCart } from "@/features/pos/use-pos-cart";
+import { usePosCustomer } from "@/features/pos/use-pos-customer";
+import { usePosHeldCart } from "@/features/pos/use-pos-held-cart";
 import { usePosPayment } from "@/features/pos/use-pos-payment";
 import { usePosScanner } from "@/features/pos/use-pos-scanner";
 import { cn } from "@/lib/utils";
@@ -205,20 +212,6 @@ type CheckoutSuccessContentProps = {
 
 type PosPanelMode = "cart" | "payment" | "success";
 
-type QuickCustomerFormState = {
-  fullName: string;
-  phone: string;
-  email: string;
-  notes: string;
-};
-
-type PendingHeldCartResumeState = {
-  version: 1;
-  heldCart: PosHeldCartSummary;
-  items: PosHeldCartItem[];
-  updatedAt: string;
-};
-
 type StoredCheckoutAttemptState = {
   version: 2;
   payload: PosCheckoutPayload;
@@ -237,70 +230,12 @@ const itemBackgrounds = [
   "bg-stone-100",
 ] as const;
 
-const POS_PENDING_HELD_CART_RESUME_STORAGE_KEY =
-  "asihjaya:pos-workspace-pending-held-cart-resume";
 const POS_CHECKOUT_ATTEMPT_STORAGE_KEY =
   "asihjaya:pos-workspace-checkout-attempt";
 const POS_CHECKOUT_RECOVERY_MAX_POLLS = 12;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
-}
-
-function getPendingHeldCartResumeState(): PendingHeldCartResumeState | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const rawValue = window.sessionStorage.getItem(
-      POS_PENDING_HELD_CART_RESUME_STORAGE_KEY,
-    );
-
-    if (!rawValue) {
-      return null;
-    }
-
-    const parsedValue = JSON.parse(rawValue) as unknown;
-
-    if (
-      !isRecord(parsedValue) ||
-      !isRecord(parsedValue.heldCart) ||
-      !Array.isArray(parsedValue.items)
-    ) {
-      return null;
-    }
-
-    const heldCart = parsedValue.heldCart as PosHeldCartSummary;
-    const items = parsedValue.items.filter(
-      isStoredPosAvailableItem,
-    ) as PosHeldCartItem[];
-
-    if (items.length === 0 || typeof heldCart.holdNumber !== "string") {
-      return null;
-    }
-
-    return {
-      version: 1,
-      heldCart,
-      items,
-      updatedAt:
-        typeof parsedValue.updatedAt === "string"
-          ? parsedValue.updatedAt
-          : new Date().toISOString(),
-    };
-  } catch {
-    window.sessionStorage.removeItem(POS_PENDING_HELD_CART_RESUME_STORAGE_KEY);
-    return null;
-  }
-}
-
-function removePendingHeldCartResumeState() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.sessionStorage.removeItem(POS_PENDING_HELD_CART_RESUME_STORAGE_KEY);
 }
 
 function isStoredCheckoutPayload(value: unknown): value is PosCheckoutPayload {
@@ -435,20 +370,6 @@ function waitForCheckoutRecovery(delayMs: number) {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, delayMs);
   });
-}
-
-function getHeldCartErrorMessage(
-  result: Extract<PosHeldCartActionResult, { status: "error" }>,
-) {
-  const fieldErrorMessages = Object.values(result.fieldErrors ?? {}).filter(
-    Boolean,
-  );
-
-  if (fieldErrorMessages.length === 0) {
-    return result.message;
-  }
-
-  return `${result.message} ${fieldErrorMessages.join(" ")}`;
 }
 
 function getDiscountApprovalErrorMessage(
@@ -690,45 +611,6 @@ function getMediaUrl(imageKey: string | null) {
 
 function getItemImageUrl(item: PosAvailableItem) {
   return getMediaUrl(item.imageKey ?? item.productImageKey);
-}
-
-function getCustomerCode(customer: PosCustomerOption) {
-  return customer.customerCode?.trim() || "Tanpa kode";
-}
-
-function getCustomerContactLabel(customer: PosCustomerOption) {
-  return customer.phone || customer.email || "Kontak belum dilengkapi";
-}
-
-function getCustomerSearchText(customer: PosCustomerOption) {
-  return [
-    customer.customerCode,
-    customer.fullName,
-    customer.phone,
-    customer.email,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-}
-
-function createQuickCustomerFormState(query: string): QuickCustomerFormState {
-  const normalizedQuery = query.trim();
-  const phoneMatch = normalizedQuery.match(/(?:\+?62|0|8)[0-9\s().-]{7,}$/);
-  const matchedPhone = phoneMatch?.[0]?.trim() ?? "";
-  const fullName = matchedPhone
-    ? normalizedQuery.slice(0, phoneMatch?.index ?? 0).trim()
-    : /[a-zA-Z]/.test(normalizedQuery)
-      ? normalizedQuery
-      : "";
-  const phone = matchedPhone || (!fullName ? normalizedQuery : "");
-
-  return {
-    fullName,
-    phone,
-    email: "",
-    notes: "",
-  };
 }
 
 type QuickCustomerDialogProps = {
@@ -3102,28 +2984,39 @@ export function PosWorkspace({
   const [isCategoryPickerOpen, setIsCategoryPickerOpen] = useState(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [isCloseShiftPanelOpen, setIsCloseShiftPanelOpen] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] =
-    useState<PosCustomerOption | null>(null);
   const {
     cartItems,
     setCartItems,
     cartItemIds,
     subtotalAmount,
+    cartFeedback,
     setCartFeedback,
   } = usePosCart();
-  const [createdCustomerOptions, setCreatedCustomerOptions] = useState<
-    PosCustomerOption[]
-  >([]);
-  const [customerQuery, setCustomerQuery] = useState("");
-  const [isCustomerSelectorOpen, setIsCustomerSelectorOpen] = useState(false);
-  const [isQuickCustomerDialogOpen, setIsQuickCustomerDialogOpen] =
-    useState(false);
-  const [quickCustomerForm, setQuickCustomerForm] =
-    useState<QuickCustomerFormState>(() => createQuickCustomerFormState(""));
-  const [quickCustomerResult, setQuickCustomerResult] =
-    useState<PosQuickCustomerActionResult | null>(null);
-  const [isQuickCustomerPending, startQuickCustomerTransition] =
-    useTransition();
+  const {
+    selectedCustomer,
+    customerQuery,
+    customerOptions,
+    customerSearchResults,
+    isCustomerSelectorOpen,
+    isQuickCustomerDialogOpen,
+    quickCustomerForm,
+    quickCustomerResult,
+    isQuickCustomerPending,
+    restoreCustomer,
+    selectCustomerState,
+    clearCustomerState,
+    changeCustomerQuery,
+    openCustomerSelector,
+    closeCustomerSelectorAfterDelay,
+    openQuickCustomerDialog,
+    closeQuickCustomerDialog,
+    updateQuickCustomerForm,
+    submitQuickCustomer: submitQuickCustomerState,
+    useExistingQuickCustomer: useExistingQuickCustomerState,
+  } = usePosCustomer({
+    customers,
+    createQuickCustomer: createPosQuickCustomerAction,
+  });
   const {
     searchQuery,
     setSearchQuery,
@@ -3189,11 +3082,18 @@ export function PosWorkspace({
   const [checkoutAttempt, setCheckoutAttempt] =
     useState<StoredCheckoutAttemptState | null>(null);
   const [isCheckoutRecovering, setIsCheckoutRecovering] = useState(false);
-  const [isHoldDialogOpen, setIsHoldDialogOpen] = useState(false);
-  const [holdTitleInput, setHoldTitleInput] = useState("");
-  const [holdNoteInput, setHoldNoteInput] = useState("");
-  const [holdFeedback, setHoldFeedback] = useState<string | null>(null);
-  const [isHoldPending, startHoldTransition] = useTransition();
+  const {
+    isHoldDialogOpen,
+    holdTitleInput,
+    setHoldTitleInput,
+    holdNoteInput,
+    setHoldNoteInput,
+    holdFeedback,
+    isHoldPending,
+    openHoldDialog: openHoldDialogState,
+    closeHoldDialog,
+    holdCurrentCart: holdCurrentCartState,
+  } = usePosHeldCart({ holdCart: holdPosCartAction });
   const checkoutRecoverySequenceRef = useRef(0);
   const checkoutRecoveryHandlerRef = useRef<
     (attempt: StoredCheckoutAttemptState) => Promise<void>
@@ -3212,9 +3112,7 @@ export function PosWorkspace({
         removePendingHeldCartResumeState();
         removeStoredPosCartState();
         setCartItems(pendingResumeState.items);
-        setSelectedCustomer(pendingResumeState.heldCart.customer);
-        setCustomerQuery(pendingResumeState.heldCart.customer?.fullName ?? "");
-        setIsCustomerSelectorOpen(false);
+        restoreCustomer(pendingResumeState.heldCart.customer);
         setCheckoutResult(null);
         setPayments([]);
         setPaymentFeedback(null);
@@ -3237,9 +3135,7 @@ export function PosWorkspace({
       }
 
       setCartItems(storedCartState.items);
-      setSelectedCustomer(storedCartState.customer);
-      setCustomerQuery(storedCartState.customer?.fullName ?? "");
-      setIsCustomerSelectorOpen(false);
+      restoreCustomer(storedCartState.customer);
 
       if (storedCartState.items.length > 0) {
         setCartFeedback("Cart POS terakhir dipulihkan dari sesi browser ini.");
@@ -3249,6 +3145,7 @@ export function PosWorkspace({
     return () => window.clearTimeout(timeoutId);
   }, [
     resetCustomerDepositDraft,
+    restoreCustomer,
     router,
     setCartFeedback,
     setCartItems,
@@ -3300,30 +3197,6 @@ export function PosWorkspace({
         .some((value) => value!.toLowerCase().includes(normalizedSearch));
     });
   }, [activeCategoryId, items, searchQuery]);
-
-  const customerOptions = useMemo(() => {
-    const customerById = new Map<string, PosCustomerOption>();
-
-    for (const customer of [...createdCustomerOptions, ...customers]) {
-      if (!customerById.has(customer.id)) {
-        customerById.set(customer.id, customer);
-      }
-    }
-
-    return Array.from(customerById.values());
-  }, [createdCustomerOptions, customers]);
-
-  const customerSearchResults = useMemo(() => {
-    const normalizedQuery = customerQuery.trim().toLowerCase();
-
-    const matchedCustomers = normalizedQuery
-      ? customerOptions.filter((customer) =>
-          getCustomerSearchText(customer).includes(normalizedQuery),
-        )
-      : customerOptions;
-
-    return matchedCustomers.slice(0, 8);
-  }, [customerOptions, customerQuery]);
 
   const approvedDiscountAmount =
     discountApproval?.status === "approved"
@@ -3406,24 +3279,17 @@ export function PosWorkspace({
     remainingAmount === 0 &&
     (payments.length > 0 || customerDepositUsedAmount > 0) &&
     rawCustomerDepositUsedAmount === customerDepositUsedAmount;
-  const canHoldCart =
-    panelMode === "cart" &&
-    cartItems.length > 0 &&
-    payments.length === 0 &&
-    !discountApproval &&
-    Boolean(context.register) &&
-    Boolean(context.activeShift);
-  const holdCartDisabledReason = !cartItems.length
-    ? "Tambahkan minimal satu item sebelum transaksi bisa ditahan."
-    : payments.length > 0
-      ? "Transaksi yang sudah memiliki payment tidak bisa ditahan. Reset payment terlebih dahulu."
-      : discountApproval
-        ? "Transaksi dengan request diskon tidak bisa ditahan. Reset request diskon terlebih dahulu."
-        : !context.register
-          ? "Register aktif belum tersedia untuk outlet ini."
-          : !context.activeShift
-            ? "Shift aktif belum dibuka, hold cart belum bisa dibuat."
-            : "Transaksi bisa ditahan.";
+  const {
+    canHoldCart,
+    disabledReason: holdCartDisabledReason,
+  } = getHeldCartAvailability({
+    panelMode,
+    itemCount: cartItems.length,
+    paymentCount: payments.length,
+    hasDiscountApproval: Boolean(discountApproval),
+    hasRegister: Boolean(context.register),
+    hasActiveShift: Boolean(context.activeShift),
+  });
 
   function invalidateCheckoutAttempt() {
     checkoutRecoverySequenceRef.current += 1;
@@ -3453,9 +3319,7 @@ export function PosWorkspace({
     setCartFeedback(null);
     resetCustomerDepositDraft();
     setCartItems([]);
-    setSelectedCustomer(null);
-    setCustomerQuery("");
-    setIsCustomerSelectorOpen(false);
+    clearCustomerState();
     resetPaymentState();
     setDiscountApproval(null);
     setDiscountFeedback(null);
@@ -3668,90 +3532,8 @@ export function PosWorkspace({
     });
   }
 
-  function rememberCustomerOption(customer: PosCustomerOption) {
-    setCreatedCustomerOptions((currentCustomers) => [
-      customer,
-      ...currentCustomers.filter(
-        (currentCustomer) => currentCustomer.id !== customer.id,
-      ),
-    ]);
-  }
-
-  function openQuickCustomerDialog() {
-    setQuickCustomerForm(createQuickCustomerFormState(customerQuery));
-    setQuickCustomerResult(null);
-    setIsCustomerSelectorOpen(false);
-    setIsQuickCustomerDialogOpen(true);
-  }
-
-  function closeQuickCustomerDialog() {
-    if (isQuickCustomerPending) {
-      return;
-    }
-
-    setIsQuickCustomerDialogOpen(false);
-    setQuickCustomerResult(null);
-  }
-
-  function updateQuickCustomerForm(
-    field: keyof QuickCustomerFormState,
-    value: string,
-  ) {
-    setQuickCustomerForm((currentForm) => ({
-      ...currentForm,
-      [field]: value,
-    }));
-    setQuickCustomerResult(null);
-  }
-
-  function submitQuickCustomer() {
-    const payload: PosQuickCustomerPayload = {
-      fullName: quickCustomerForm.fullName,
-      phone: quickCustomerForm.phone,
-      email: quickCustomerForm.email || null,
-      notes: quickCustomerForm.notes || null,
-    };
-
-    setQuickCustomerResult(null);
-
-    startQuickCustomerTransition(async () => {
-      try {
-        const result = await createPosQuickCustomerAction(payload);
-
-        if (result.status !== "success") {
-          setQuickCustomerResult(result);
-          return;
-        }
-
-        rememberCustomerOption(result.customer);
-        setIsQuickCustomerDialogOpen(false);
-        setQuickCustomerResult(null);
-        selectCustomer(result.customer);
-        setCartFeedback(result.message);
-      } catch {
-        setQuickCustomerResult({
-          status: "error",
-          message:
-            "Customer belum bisa disimpan. Periksa koneksi lalu coba kembali.",
-        });
-      }
-    });
-  }
-
-  function useExistingQuickCustomer(customer: PosCustomerOption) {
-    rememberCustomerOption(customer);
-    setIsQuickCustomerDialogOpen(false);
-    setQuickCustomerResult(null);
-    selectCustomer(customer);
-    setCartFeedback(
-      `Customer ${customer.fullName} yang sudah terdaftar dipilih untuk transaksi ini.`,
-    );
-  }
-
   function selectCustomer(customer: PosCustomerOption) {
-    setSelectedCustomer(customer);
-    setCustomerQuery(customer.fullName);
-    setIsCustomerSelectorOpen(false);
+    selectCustomerState(customer);
     setCheckoutResult(null);
     resetPaymentFlow();
     if (discountApproval) {
@@ -3765,12 +3547,24 @@ export function PosWorkspace({
     );
   }
 
+  function submitQuickCustomer() {
+    submitQuickCustomerState((customer, message) => {
+      selectCustomer(customer);
+      setCartFeedback(message);
+    });
+  }
+
+  function useExistingQuickCustomer(customer: PosCustomerOption) {
+    useExistingQuickCustomerState(customer, selectCustomer);
+    setCartFeedback(
+      `Customer ${customer.fullName} yang sudah terdaftar dipilih untuk transaksi ini.`,
+    );
+  }
+
   function clearSelectedCustomer() {
     const customerName = selectedCustomer?.fullName;
 
-    setSelectedCustomer(null);
-    setCustomerQuery("");
-    setIsCustomerSelectorOpen(false);
+    clearCustomerState();
     setCheckoutResult(null);
     resetPaymentFlow();
     if (discountApproval) {
@@ -3785,11 +3579,25 @@ export function PosWorkspace({
     }
   }
 
+  function handleCustomerQueryChange(value: string) {
+    const customerWasCleared = changeCustomerQuery(value);
+
+    if (!customerWasCleared) {
+      return;
+    }
+
+    resetPaymentFlow();
+    if (discountApproval) {
+      setDiscountApproval(null);
+      setDiscountFeedback(
+        "Request diskon direset karena customer transaksi berubah.",
+      );
+    }
+  }
+
   function clearCart() {
     setCartItems([]);
-    setSelectedCustomer(null);
-    setCustomerQuery("");
-    setIsCustomerSelectorOpen(false);
+    clearCustomerState();
     setCheckoutResult(null);
     resetPaymentFlow();
     if (discountApproval) {
@@ -3800,69 +3608,29 @@ export function PosWorkspace({
   }
 
   function openHoldDialog() {
-    if (!canHoldCart) {
-      setCartFeedback(holdCartDisabledReason);
-      return;
-    }
-
-    setHoldTitleInput(selectedCustomer?.fullName ?? "");
-    setHoldNoteInput("");
-    setHoldFeedback(null);
-    setIsHoldDialogOpen(true);
-  }
-
-  function closeHoldDialog() {
-    if (isHoldPending) {
-      return;
-    }
-
-    setIsHoldDialogOpen(false);
-    setHoldFeedback(null);
+    openHoldDialogState({
+      canHoldCart,
+      disabledReason: holdCartDisabledReason,
+      defaultTitle: selectedCustomer?.fullName ?? "",
+      onUnavailable: setCartFeedback,
+    });
   }
 
   function holdCurrentCart() {
-    if (!canHoldCart) {
-      setHoldFeedback(holdCartDisabledReason);
-      return;
-    }
-
-    if (holdTitleInput.trim().length > 160) {
-      setHoldFeedback("Nama hold maksimal 160 karakter.");
-      return;
-    }
-
-    if (holdNoteInput.trim().length > 500) {
-      setHoldFeedback("Catatan hold maksimal 500 karakter.");
-      return;
-    }
-
-    setHoldFeedback(null);
-
-    startHoldTransition(async () => {
-      const result = await holdPosCartAction({
-        itemIds: cartItems.map((item) => item.id),
-        customerId: selectedCustomer?.id ?? null,
-        title: holdTitleInput,
-        note: holdNoteInput,
-      });
-
-      if (result.status === "error") {
-        setHoldFeedback(getHeldCartErrorMessage(result));
-        return;
-      }
-
-      setCartItems([]);
-      setSelectedCustomer(null);
-      setCustomerQuery("");
-      setIsCustomerSelectorOpen(false);
-      setCheckoutResult(null);
-      resetPaymentFlow();
-      removeStoredPosCartState();
-      setIsHoldDialogOpen(false);
-      setHoldTitleInput("");
-      setHoldNoteInput("");
-      setCartFeedback(result.message);
-      router.refresh();
+    holdCurrentCartState({
+      canHoldCart,
+      disabledReason: holdCartDisabledReason,
+      itemIds: cartItems.map((item) => item.id),
+      customerId: selectedCustomer?.id ?? null,
+      onSuccess: (result) => {
+        setCartItems([]);
+        clearCustomerState();
+        setCheckoutResult(null);
+        resetPaymentFlow();
+        removeStoredPosCartState();
+        setCartFeedback(result.message);
+        router.refresh();
+      },
     });
   }
 
@@ -4315,24 +4083,9 @@ export function PosWorkspace({
       customerQuery={customerQuery}
       customerSearchResults={customerSearchResults}
       isCustomerSelectorOpen={isCustomerSelectorOpen}
-      onCustomerQueryChange={(value) => {
-        setCustomerQuery(value);
-        setIsCustomerSelectorOpen(true);
-        if (selectedCustomer) {
-          setSelectedCustomer(null);
-          resetPaymentFlow();
-          if (discountApproval) {
-            setDiscountApproval(null);
-            setDiscountFeedback(
-              "Request diskon direset karena customer transaksi berubah.",
-            );
-          }
-        }
-      }}
-      onCustomerInputFocus={() => setIsCustomerSelectorOpen(true)}
-      onCustomerInputBlur={() => {
-        window.setTimeout(() => setIsCustomerSelectorOpen(false), 120);
-      }}
+      onCustomerQueryChange={handleCustomerQueryChange}
+      onCustomerInputFocus={openCustomerSelector}
+      onCustomerInputBlur={closeCustomerSelectorAfterDelay}
       onOpenQuickCustomer={openQuickCustomerDialog}
       onSelectCustomer={selectCustomer}
       onClearCustomer={clearSelectedCustomer}
@@ -4428,10 +4181,8 @@ export function PosWorkspace({
         setCheckoutResult(null);
         setCartFeedback(null);
         setPaymentFeedback(null);
-        setSelectedCustomer(null);
+        clearCustomerState();
         resetCustomerDepositDraft();
-        setCustomerQuery("");
-        setIsCustomerSelectorOpen(false);
         setPanelMode("cart");
         setIsMobileCartOpen(false);
       }}
