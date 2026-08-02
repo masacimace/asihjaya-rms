@@ -12,5 +12,5 @@ Tahap 1 — Stabilkan fondasi
 6. Production build dan Docker build (DONE)
 7. Environment validation dan .env.example (DONE)
 8. Tambahkan critical-path test (DONE)
-9. Refactor POS secara bertahap (perlu pembahasan)
+9. Refactor POS secara bertahap (progress)
 10. Final stabilization gate (perlu pembahasan)

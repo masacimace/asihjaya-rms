@@ -87,6 +87,7 @@ import {
   type PosPaymentDraft,
 } from "@/features/pos/payment-draft";
 import { usePosPayment } from "@/features/pos/use-pos-payment";
+import { usePosScanner } from "@/features/pos/use-pos-scanner";
 import { cn } from "@/lib/utils";
 
 type PosWorkspaceProps = {
@@ -233,49 +234,12 @@ const itemBackgrounds = [
 ] as const;
 
 const CART_FEEDBACK_AUTO_CLOSE_MS = 3500;
-const POS_WORKSPACE_COMMAND_EVENT = "asihjaya:pos-workspace-command";
-const POS_PENDING_COMMAND_STORAGE_KEY =
-  "asihjaya:pos-workspace-pending-command";
 const POS_ACTIVE_CART_STORAGE_KEY = "asihjaya:pos-workspace-active-cart";
 const POS_PENDING_HELD_CART_RESUME_STORAGE_KEY =
   "asihjaya:pos-workspace-pending-held-cart-resume";
 const POS_CHECKOUT_ATTEMPT_STORAGE_KEY =
   "asihjaya:pos-workspace-checkout-attempt";
 const POS_CHECKOUT_RECOVERY_MAX_POLLS = 12;
-
-type PosWorkspaceCommand = {
-  type: "search" | "scan";
-  value: string;
-};
-
-function normalizePosWorkspaceCommand(
-  value: unknown,
-): PosWorkspaceCommand | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const command = value as Partial<PosWorkspaceCommand>;
-
-  if (command.type !== "search" && command.type !== "scan") {
-    return null;
-  }
-
-  if (typeof command.value !== "string") {
-    return null;
-  }
-
-  const normalizedValue = command.value.trim();
-
-  if (command.type === "scan" && !normalizedValue) {
-    return null;
-  }
-
-  return {
-    type: command.type,
-    value: normalizedValue,
-  };
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
@@ -3235,9 +3199,7 @@ export function PosWorkspace({
   const router = useRouter();
   const [activeCategoryId, setActiveCategoryId] = useState("all");
   const [isCategoryPickerOpen, setIsCategoryPickerOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isCloseShiftPanelOpen, setIsCloseShiftPanelOpen] = useState(false);
   const [cartItems, setCartItems] = useState<PosAvailableItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] =
@@ -3256,7 +3218,18 @@ export function PosWorkspace({
   const [isQuickCustomerPending, startQuickCustomerTransition] =
     useTransition();
   const [cartFeedback, setCartFeedback] = useState<string | null>(null);
-  const [isScanLookupPending, startScanLookupTransition] = useTransition();
+  const {
+    searchQuery,
+    setSearchQuery,
+    isScannerOpen,
+    setIsScannerOpen,
+    isScanLookupPending,
+    lookupScannedItem,
+  } = usePosScanner({
+    lookupScanValue: lookupPosScanValueAction,
+    onItemFound: addItemToCart,
+    onFeedback: setCartFeedback,
+  });
   const [panelMode, setPanelMode] = useState<PosPanelMode>("cart");
   const {
     payments,
@@ -3315,17 +3288,10 @@ export function PosWorkspace({
   const [holdNoteInput, setHoldNoteInput] = useState("");
   const [holdFeedback, setHoldFeedback] = useState<string | null>(null);
   const [isHoldPending, startHoldTransition] = useTransition();
-  const posWorkspaceCommandHandlerRef = useRef<
-    (command: PosWorkspaceCommand) => void
-  >(() => undefined);
   const checkoutRecoverySequenceRef = useRef(0);
   const checkoutRecoveryHandlerRef = useRef<
     (attempt: StoredCheckoutAttemptState) => Promise<void>
   >(async () => undefined);
-
-  useEffect(() => {
-    checkoutRecoveryHandlerRef.current = recoverCheckoutAttempt;
-  });
 
   useEffect(() => {
     if (!cartFeedback) {
@@ -3397,38 +3363,6 @@ export function PosWorkspace({
     setPaymentReferenceInput,
     setPayments,
   ]);
-
-  useEffect(() => {
-    const storedAttempt = getStoredCheckoutAttemptState();
-
-    if (!storedAttempt) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setCheckoutAttempt(storedAttempt);
-      setDiscountApproval(storedAttempt.discountApproval);
-      restoreCheckoutPaymentState({
-        payments: storedAttempt.payments,
-        customerDepositUsedAmount:
-          storedAttempt.payload.customerDepositUsedAmount,
-        customerDepositInAmount: storedAttempt.payload.customerDepositInAmount,
-        manualPaymentApproval: storedAttempt.manualPaymentApproval,
-      });
-      setPanelMode("payment");
-      setIsMobileCartOpen(true);
-
-      if (storedAttempt.manualPaymentApproval) {
-        setPaymentFeedback(
-          "Checkout menunggu verifikasi pembayaran manual. Cek status approval sebelum memproses ulang.",
-        );
-      } else {
-        void checkoutRecoveryHandlerRef.current(storedAttempt);
-      }
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [restoreCheckoutPaymentState, setPaymentFeedback]);
 
   useEffect(() => {
     if (panelMode === "success") {
@@ -3713,6 +3647,42 @@ export function PosWorkspace({
       }
     }
   }
+
+  useEffect(() => {
+    checkoutRecoveryHandlerRef.current = recoverCheckoutAttempt;
+  });
+
+  useEffect(() => {
+    const storedAttempt = getStoredCheckoutAttemptState();
+
+    if (!storedAttempt) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setCheckoutAttempt(storedAttempt);
+      setDiscountApproval(storedAttempt.discountApproval);
+      restoreCheckoutPaymentState({
+        payments: storedAttempt.payments,
+        customerDepositUsedAmount:
+          storedAttempt.payload.customerDepositUsedAmount,
+        customerDepositInAmount: storedAttempt.payload.customerDepositInAmount,
+        manualPaymentApproval: storedAttempt.manualPaymentApproval,
+      });
+      setPanelMode("payment");
+      setIsMobileCartOpen(true);
+
+      if (storedAttempt.manualPaymentApproval) {
+        setPaymentFeedback(
+          "Checkout menunggu verifikasi pembayaran manual. Cek status approval sebelum memproses ulang.",
+        );
+      } else {
+        void checkoutRecoveryHandlerRef.current(storedAttempt);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [restoreCheckoutPaymentState, setPaymentFeedback]);
 
   function clearDiscountApproval(message?: string) {
     setDiscountApproval(null);
@@ -4068,99 +4038,6 @@ export function PosWorkspace({
     setCartFeedback(null);
   }
 
-  function lookupScannedItem(scanValue: string) {
-    const normalizedScanValue = scanValue.trim();
-
-    if (!normalizedScanValue) {
-      setCartFeedback(
-        "Masukkan barcode, QR value, serial number, atau SKU item.",
-      );
-      return;
-    }
-
-    setIsScannerOpen(false);
-    setSearchQuery(normalizedScanValue);
-    setCartFeedback(`Mencari item ${normalizedScanValue}...`);
-
-    startScanLookupTransition(async () => {
-      const result = await lookupPosScanValueAction(normalizedScanValue);
-
-      if (result.status === "found") {
-        addItemToCart(result.item);
-        return;
-      }
-
-      setCartFeedback(result.message);
-    });
-  }
-
-  function handlePosShellCommand(command: PosWorkspaceCommand) {
-    const normalizedValue = command.value.trim();
-
-    if (!normalizedValue) {
-      if (command.type === "search") {
-        setIsScannerOpen(false);
-        setSearchQuery("");
-        setCartFeedback(null);
-      }
-
-      return;
-    }
-
-    if (command.type === "scan") {
-      lookupScannedItem(normalizedValue);
-      return;
-    }
-
-    setIsScannerOpen(false);
-    setSearchQuery(normalizedValue);
-    setCartFeedback(`Filter katalog: ${normalizedValue}`);
-  }
-
-  useEffect(() => {
-    posWorkspaceCommandHandlerRef.current = handlePosShellCommand;
-  });
-
-  useEffect(() => {
-    function handleCommandEvent(event: Event) {
-      const command = normalizePosWorkspaceCommand(
-        (event as CustomEvent<unknown>).detail,
-      );
-
-      if (command) {
-        posWorkspaceCommandHandlerRef.current(command);
-      }
-    }
-
-    window.addEventListener(POS_WORKSPACE_COMMAND_EVENT, handleCommandEvent);
-
-    try {
-      const pendingCommandValue = window.sessionStorage.getItem(
-        POS_PENDING_COMMAND_STORAGE_KEY,
-      );
-
-      if (pendingCommandValue) {
-        window.sessionStorage.removeItem(POS_PENDING_COMMAND_STORAGE_KEY);
-
-        const pendingCommand = normalizePosWorkspaceCommand(
-          JSON.parse(pendingCommandValue),
-        );
-
-        if (pendingCommand) {
-          posWorkspaceCommandHandlerRef.current(pendingCommand);
-        }
-      }
-    } catch {
-      window.sessionStorage.removeItem(POS_PENDING_COMMAND_STORAGE_KEY);
-    }
-
-    return () => {
-      window.removeEventListener(
-        POS_WORKSPACE_COMMAND_EVENT,
-        handleCommandEvent,
-      );
-    };
-  }, []);
 
   function addPayment() {
     if (!canCheckout) {

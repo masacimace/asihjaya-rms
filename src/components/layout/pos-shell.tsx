@@ -33,6 +33,12 @@ import {
   POS_SHELL_STATUS_REFRESH_EVENT,
   requestPosShellStatusRefresh,
 } from "@/features/pos/live-status";
+import {
+  normalizePosWorkspaceCommand,
+  POS_PENDING_COMMAND_STORAGE_KEY,
+  POS_WORKSPACE_COMMAND_EVENT,
+  type PosWorkspaceCommand,
+} from "@/features/pos/workspace-command";
 
 import { cn } from "@/lib/utils";
 
@@ -74,14 +80,6 @@ type PosShellNotification = {
   icon: "held_cart" | "print" | "shift" | "hardware";
 };
 
-type PosWorkspaceCommand = {
-  type: "search" | "scan";
-  value: string;
-};
-
-const POS_WORKSPACE_COMMAND_EVENT = "asihjaya:pos-workspace-command";
-const POS_PENDING_COMMAND_STORAGE_KEY =
-  "asihjaya:pos-workspace-pending-command";
 const POS_SHELL_STATUS_POLL_INTERVAL_MS = 5_000;
 
 const fallbackStatus: PosShellStatus = {
@@ -543,18 +541,16 @@ export function PosShell({
   }, []);
 
   function sendPosWorkspaceCommand(command: PosWorkspaceCommand) {
-    const normalizedValue = command.value.trim();
+    const normalizedCommand = normalizePosWorkspaceCommand(command);
 
-    if (!normalizedValue && command.type === "scan") {
+    if (!normalizedCommand) {
       return;
     }
-
-    const nextCommand = { ...command, value: normalizedValue };
 
     if (typeof window !== "undefined" && pathname === "/pos") {
       window.dispatchEvent(
         new CustomEvent(POS_WORKSPACE_COMMAND_EVENT, {
-          detail: nextCommand,
+          detail: normalizedCommand,
         }),
       );
       return;
@@ -563,7 +559,7 @@ export function PosShell({
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem(
         POS_PENDING_COMMAND_STORAGE_KEY,
-        JSON.stringify(nextCommand),
+        JSON.stringify(normalizedCommand),
       );
     }
 
