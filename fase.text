@@ -12,11 +12,18 @@ Tahap 1 — Stabilkan fondasi
 6. Production build dan Docker build (DONE)
 7. Environment validation dan .env.example (DONE)
 8. Tambahkan critical-path test (DONE)
-9. Refactor POS secara bertahap (progress)
-10. Final stabilization gate (perlu pembahasan)
+
+1C.8C — ekstraksi dialog POS (PROGRESS)
+1C.8D — ekstraksi receipt dan checkout-result visuals
+1C.8E — final workspace composition cleanup
+1C.9  — full stabilization, review, dan satu PR ke main
+
+9. Final stabilization gate (perlu pembahasan)
 
 
 ---- NEXT FITUR LANJUTAN ----
 1. PWA untuk bagian POS only
 2. Telegram Integration untuk report daily, weekly, monthly payment, opening shift, closing shift
-3. 
+3. Membuat batch batch produk menggunakan format excel
+4. Redesign UI/UX Login page
+5. Redesign UI/UX Customer Transaction History page
