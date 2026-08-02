@@ -24,6 +24,7 @@
     "check:http-security": "tsx scripts/check-http-security.ts",
     "check:security": "npm run check:customer-history-pin && npm run check:receipt-token && npm run check:pdf-render-security && npm run check:http-security",
     "check:business-timezone": "tsx scripts/check-business-timezone.ts",
+    "check:xlsx-security": "tsx scripts/check-legacy-product-xlsx-security.ts",
     "check:legacy-product-migration": "tsx scripts/check-legacy-product-migration.ts",
     "check:pos-checkout": "tsx scripts/check-pos-checkout-recovery.ts",
     "check:manual-payment": "tsx scripts/check-manual-payment-verification.ts",
@@ -31,7 +32,7 @@
     "check:payment-reconciliation": "tsx scripts/check-payment-reconciliation.ts",
     "check:settlement-import": "tsx scripts/check-settlement-import.ts",
     "check:transactions": "npm run check:pos-checkout && npm run check:manual-payment && npm run check:sale-correction && npm run check:payment-reconciliation && npm run check:settlement-import",
-    "check:business": "npm run check:business-timezone && npm run check:legacy-product-migration && npm run check:transactions",
+    "check:business": "npm run check:business-timezone && npm run check:xlsx-security && npm run check:legacy-product-migration && npm run check:transactions",
     "check:hardware-agent-signing": "tsx scripts/check-hardware-agent-request-signing.ts",
     "check:hardware-agent-parity": "tsx scripts/check-hardware-agent-parity.ts",
     "check:hardware-job-protocol": "tsx scripts/check-hardware-job-protocol.ts",
@@ -78,7 +79,7 @@
     "react-zxing": "^3.0.0",
     "sharp": "^0.34.4",
     "tailwind-merge": "^3.3.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",

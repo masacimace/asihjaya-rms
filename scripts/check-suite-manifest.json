@@ -10,6 +10,7 @@
     "check-hardware-job-protocol.ts",
     "check-http-security.ts",
     "check-inventory-label-payload.ts",
+    "check-legacy-product-xlsx-security.ts",
     "check-legacy-product-migration.ts",
     "check-manual-payment-verification.ts",
     "check-payment-reconciliation.ts",

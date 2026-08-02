@@ -21,7 +21,10 @@ import {
 } from "@/features/legacy-migration/contracts";
 import { collectLegacyMasterMappingSeeds } from "@/features/legacy-migration/master-mapping";
 import { isLegacyMigrationUuid } from "@/features/legacy-migration/safety";
-import { parseLegacyProductWorkbook } from "@/features/legacy-migration/xlsx-parser";
+import {
+  LegacyProductWorkbookError,
+  parseLegacyProductWorkbook,
+} from "@/features/legacy-migration/xlsx-parser";
 import { requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
 
@@ -176,9 +179,16 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
   try {
     parsed = parseLegacyProductWorkbook(buffer);
   } catch (error) {
+    if (
+      !(error instanceof LegacyProductWorkbookError) ||
+      error.cause !== undefined
+    ) {
+      console.error("Legacy product workbook parsing failed.", error);
+    }
+
     redirectImport(
       "error",
-      error instanceof Error
+      error instanceof LegacyProductWorkbookError
         ? error.message
         : "Workbook legacy gagal dianalisis.",
     );

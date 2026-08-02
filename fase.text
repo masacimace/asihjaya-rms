@@ -1,3 +1,16 @@
 ---- HOLD SAMPAI FITUR BARU SELESAI DI DEVELOP SEMUA ----
 Fase 8 — Production deployment readiness (HOLD)
 Fase 9 — Tenant integrity dan refactor bertahap (butuh diskusi sebelum implementasikan)
+--------------------------------------------------------------
+
+Tahap 1 — Stabilkan fondasi
+1. Upgrade dan vendor SheetJS 0.20.3
+2. Hardening parser XLSX
+3. Tambahkan regression test XLSX
+4. Clean npm install dan dependency review
+5. Full typecheck, lint, quality, security, business checks
+6. Production build dan Docker build
+7. Environment validation dan .env.example
+8. Tambahkan critical-path test
+9. Refactor POS secara bertahap (perlu pembahasan)
+10. Final stabilization gate (perlu pembahasan)

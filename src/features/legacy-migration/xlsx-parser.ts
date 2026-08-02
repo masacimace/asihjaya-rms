@@ -4,7 +4,12 @@ import * as XLSX from "xlsx";
 
 import {
   LEGACY_PRODUCT_BARCODE_LENGTH,
+  LEGACY_PRODUCT_IMPORT_MAX_COLUMNS,
+  LEGACY_PRODUCT_IMPORT_MAX_FORMULA_LENGTH,
+  LEGACY_PRODUCT_IMPORT_MAX_HYPERLINK_LENGTH,
+  LEGACY_PRODUCT_IMPORT_MAX_RAW_CELL_LENGTH,
   LEGACY_PRODUCT_IMPORT_MAX_ROWS,
+  LEGACY_PRODUCT_IMPORT_MAX_WORKSHEETS,
   type LegacyProductRowValidationStatus,
   type LegacyProductValidationIssue,
   type ParsedLegacyProductRow,
@@ -31,6 +36,26 @@ type ColumnMap = Record<LegacyColumnKey, number>;
 type MutableParsedRow = Omit<ParsedLegacyProductRow, "rowFingerprint"> & {
   rowFingerprint?: string;
 };
+
+const XLSX_ZIP_SIGNATURE = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+const MAX_WORKSHEET_RANGE_TEXT_LENGTH = 64;
+
+export class LegacyProductWorkbookError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "LegacyProductWorkbookError";
+  }
+}
+
+function workbookError(
+  message: string,
+  cause?: unknown,
+): LegacyProductWorkbookError {
+  return new LegacyProductWorkbookError(
+    message,
+    cause === undefined ? undefined : { cause },
+  );
+}
 
 const columnMatchers: Record<LegacyColumnKey, (header: string) => boolean> = {
   sourceSequence: (header) => header === "no" || header === "nomor",
@@ -67,6 +92,69 @@ function compactText(value: unknown, maxLength: number): string | null {
     .slice(0, maxLength);
 
   return normalized || null;
+}
+
+function boundedText(value: unknown, maxLength: number): string | null {
+  const text = String(value ?? "");
+  if (!text || text.length > maxLength) return null;
+
+  const normalized = text.normalize("NFKC").trim();
+  if (!normalized || normalized.length > maxLength) return null;
+  return normalized;
+}
+
+function assertXlsxZipSignature(buffer: Buffer): void {
+  if (
+    buffer.length < XLSX_ZIP_SIGNATURE.length ||
+    !buffer.subarray(0, XLSX_ZIP_SIGNATURE.length).equals(XLSX_ZIP_SIGNATURE)
+  ) {
+    throw workbookError(
+      "Isi file tidak dikenali sebagai workbook XLSX yang valid.",
+    );
+  }
+}
+
+function decodeWorksheetRange(reference: string, label: string): XLSX.Range {
+  if (
+    !reference ||
+    reference.length > MAX_WORKSHEET_RANGE_TEXT_LENGTH ||
+    /[^A-Za-z0-9:$]/.test(reference)
+  ) {
+    throw workbookError(`${label} workbook tidak valid.`);
+  }
+
+  let range: XLSX.Range;
+  try {
+    range = XLSX.utils.decode_range(reference);
+  } catch {
+    throw workbookError(`${label} workbook tidak valid.`);
+  }
+
+  const coordinates = [range.s.r, range.s.c, range.e.r, range.e.c];
+  if (
+    coordinates.some((coordinate) => !Number.isSafeInteger(coordinate)) ||
+    coordinates.some((coordinate) => coordinate < 0) ||
+    range.e.r < range.s.r ||
+    range.e.c < range.s.c
+  ) {
+    throw workbookError(`${label} workbook tidak valid.`);
+  }
+
+  const columnCount = range.e.c - range.s.c + 1;
+  if (columnCount > LEGACY_PRODUCT_IMPORT_MAX_COLUMNS) {
+    throw workbookError(
+      `Worksheet melebihi batas ${LEGACY_PRODUCT_IMPORT_MAX_COLUMNS} kolom.`,
+    );
+  }
+
+  const rowCount = range.e.r - range.s.r + 1;
+  if (rowCount > LEGACY_PRODUCT_IMPORT_MAX_ROWS + 1) {
+    throw workbookError(
+      `Workbook melebihi batas ${LEGACY_PRODUCT_IMPORT_MAX_ROWS.toLocaleString("id-ID")} baris produk.`,
+    );
+  }
+
+  return range;
 }
 
 function getCell(
@@ -140,16 +228,31 @@ function normalizeBarcode(
 }
 
 function extractImageUrl(cell: XLSX.CellObject | undefined): string | null {
-  const hyperlinkTarget = cell?.l?.Target;
-  if (typeof hyperlinkTarget === "string" && hyperlinkTarget.trim()) {
-    return hyperlinkTarget.trim();
+  const hyperlinkTarget = boundedText(
+    cell?.l?.Target,
+    LEGACY_PRODUCT_IMPORT_MAX_HYPERLINK_LENGTH,
+  );
+  if (hyperlinkTarget) return hyperlinkTarget;
+
+  const formula = boundedText(
+    cell?.f,
+    LEGACY_PRODUCT_IMPORT_MAX_FORMULA_LENGTH,
+  );
+  if (formula) {
+    const formulaMatch = formula.match(
+      /HYPERLINK\s*\(\s*["']([^"']+)["']/i,
+    );
+    const formulaUrl = boundedText(
+      formulaMatch?.[1],
+      LEGACY_PRODUCT_IMPORT_MAX_HYPERLINK_LENGTH,
+    );
+    if (formulaUrl) return formulaUrl;
   }
 
-  const formula = typeof cell?.f === "string" ? cell.f : "";
-  const formulaMatch = formula.match(/HYPERLINK\s*\(\s*["']([^"']+)["']/i);
-  if (formulaMatch?.[1]) return formulaMatch[1].trim();
-
-  const value = compactText(cell?.v, 2_000);
+  const value = boundedText(
+    cell?.v,
+    LEGACY_PRODUCT_IMPORT_MAX_HYPERLINK_LENGTH,
+  );
   if (value && /^https?:\/\//i.test(value)) return value;
 
   return null;
@@ -199,7 +302,26 @@ function buildFingerprint(row: MutableParsedRow): string {
   return createHash("sha256").update(payload).digest("hex");
 }
 
+function assertUniqueHeaders(headers: unknown[]): void {
+  const seen = new Map<string, number>();
+
+  for (const [index, header] of headers.entries()) {
+    const normalized = normalizeHeader(header);
+    if (!normalized) continue;
+
+    const firstIndex = seen.get(normalized);
+    if (firstIndex !== undefined) {
+      throw workbookError(
+        `Header kolom terdeteksi lebih dari satu kali pada kolom ${firstIndex + 1} dan ${index + 1}.`,
+      );
+    }
+
+    seen.set(normalized, index);
+  }
+}
+
 function resolveColumns(headers: unknown[]): ColumnMap {
+  assertUniqueHeaders(headers);
   const normalizedHeaders = headers.map(normalizeHeader);
   const resolved = {} as Partial<ColumnMap>;
 
@@ -211,7 +333,7 @@ function resolveColumns(headers: unknown[]): ColumnMap {
       .filter((index) => index >= 0);
 
     if (matchingIndexes.length !== 1) {
-      throw new Error(
+      throw workbookError(
         matchingIndexes.length === 0
           ? `Kolom wajib tidak ditemukan: ${key}. Pastikan file berasal dari export master produk lama.`
           : `Kolom ${key} terdeteksi lebih dari satu kali. Rapikan header workbook terlebih dahulu.`,
@@ -359,18 +481,48 @@ function validateBaseRow(row: MutableParsedRow): void {
 
 function rawCellValue(cell: XLSX.CellObject | undefined): unknown {
   if (!cell) return null;
-  if (cell.l?.Target) return cell.l.Target;
-  if (cell.f) return `=${cell.f}`;
+
+  const hyperlinkTarget = boundedText(
+    cell.l?.Target,
+    LEGACY_PRODUCT_IMPORT_MAX_HYPERLINK_LENGTH,
+  );
+  if (hyperlinkTarget) return hyperlinkTarget;
+
+  const formula = boundedText(
+    cell.f,
+    LEGACY_PRODUCT_IMPORT_MAX_FORMULA_LENGTH,
+  );
+  if (formula) return `=${formula}`;
+
   if (cell.v instanceof Date) return cell.v.toISOString();
-  if (["string", "number", "boolean"].includes(typeof cell.v)) return cell.v;
-  return cell.w ?? null;
+  if (typeof cell.v === "string") {
+    return boundedText(cell.v, LEGACY_PRODUCT_IMPORT_MAX_RAW_CELL_LENGTH);
+  }
+  if (["number", "boolean"].includes(typeof cell.v)) return cell.v;
+
+  return boundedText(cell.w, LEGACY_PRODUCT_IMPORT_MAX_RAW_CELL_LENGTH);
 }
 
 export function parseLegacyProductWorkbook(
   buffer: Buffer,
 ): ParsedLegacyProductWorkbook {
+  assertXlsxZipSignature(buffer);
+
+  let worksheetNames: string[];
   let workbook: XLSX.WorkBook;
   try {
+    const workbookMetadata = XLSX.read(buffer, {
+      type: "buffer",
+      bookSheets: true,
+    });
+    worksheetNames = workbookMetadata.SheetNames;
+
+    if (worksheetNames.length > LEGACY_PRODUCT_IMPORT_MAX_WORKSHEETS) {
+      throw workbookError(
+        `Workbook melebihi batas ${LEGACY_PRODUCT_IMPORT_MAX_WORKSHEETS} worksheet.`,
+      );
+    }
+
     workbook = XLSX.read(buffer, {
       type: "buffer",
       cellFormula: true,
@@ -380,18 +532,28 @@ export function parseLegacyProductWorkbook(
       cellDates: false,
       dense: false,
       sheetRows: LEGACY_PRODUCT_IMPORT_MAX_ROWS + 2,
+      sheets: 0,
     });
-  } catch {
-    throw new Error("Workbook XLSX tidak dapat dibaca atau rusak.");
+  } catch (error) {
+    if (error instanceof LegacyProductWorkbookError) throw error;
+    throw workbookError("Workbook XLSX tidak dapat dibaca atau rusak.", error);
   }
 
-  const worksheetName = workbook.SheetNames[0];
-  if (!worksheetName) throw new Error("Workbook tidak memiliki worksheet.");
+  const worksheetName = worksheetNames[0] ?? workbook.SheetNames[0];
+  if (!worksheetName) throw workbookError("Workbook tidak memiliki worksheet.");
 
   const worksheet = workbook.Sheets[worksheetName];
-  if (!worksheet?.["!ref"]) throw new Error("Worksheet pertama kosong.");
+  if (!worksheet?.["!ref"]) throw workbookError("Worksheet pertama kosong.");
 
-  const range = XLSX.utils.decode_range(worksheet["!ref"]);
+  const worksheetWithFullReference = worksheet as XLSX.WorkSheet & {
+    "!fullref"?: unknown;
+  };
+  const fullReference = worksheetWithFullReference["!fullref"];
+  if (typeof fullReference === "string") {
+    decodeWorksheetRange(fullReference, "Rentang penuh worksheet");
+  }
+
+  const range = decodeWorksheetRange(worksheet["!ref"], "Rentang worksheet");
   const headerRowIndex = range.s.r;
   const headers = Array.from(
     { length: range.e.c - range.s.c + 1 },
@@ -416,7 +578,7 @@ export function parseLegacyProductWorkbook(
     if (isBlank) continue;
 
     if (rows.length >= LEGACY_PRODUCT_IMPORT_MAX_ROWS) {
-      throw new Error(
+      throw workbookError(
         `Workbook melebihi batas ${LEGACY_PRODUCT_IMPORT_MAX_ROWS.toLocaleString("id-ID")} baris.`,
       );
     }
@@ -485,7 +647,7 @@ export function parseLegacyProductWorkbook(
   }
 
   if (rows.length === 0) {
-    throw new Error("Workbook tidak memiliki baris produk.");
+    throw workbookError("Workbook tidak memiliki baris produk.");
   }
 
   const barcodeRows = new Map<string, MutableParsedRow[]>();
