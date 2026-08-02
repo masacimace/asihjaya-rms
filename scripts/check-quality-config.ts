@@ -69,6 +69,7 @@ const requiredRootScripts = [
   "check:database:live",
   "check:quality",
   "check:security",
+  "check:environment",
   "check:transactions",
   "check:business",
   "check:hardware-app",
@@ -79,6 +80,8 @@ const requiredRootScripts = [
   "test:financial",
   "test:financial:local",
   "check:critical",
+  "env:validate",
+  "env:generate-secrets",
 ];
 
 for (const scriptName of requiredRootScripts) {
@@ -151,9 +154,14 @@ assert(
   workflow.includes("npm run check:hardware-app"),
   `${workflowPath} wajib menjalankan kontrak hardware sisi aplikasi.`,
 );
+assert(
+  workflow.includes("npm run env:validate -- --mode production"),
+  `${workflowPath} wajib memvalidasi environment production.`,
+);
 
 for (const documentationPath of [
   "docs/development/quality-gates.md",
+  "docs/development/environment-configuration.md",
   "docs/development/financial-concurrency-tests.md",
   "README.md",
 ]) {

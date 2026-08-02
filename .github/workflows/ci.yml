@@ -116,6 +116,9 @@ jobs:
       - name: Security contracts
         run: npm run check:security
 
+      - name: Production environment validation
+        run: npm run env:validate -- --mode production
+
       - name: Business contracts
         run: npm run check:business
 

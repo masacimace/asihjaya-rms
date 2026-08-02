@@ -173,6 +173,8 @@ Commit file `vendor/xlsx-0.20.3.tgz`, checksum, `package.json`, dan `package-loc
 
 ```powershell
 Copy-Item .env.example .env
+npm run env:generate-secrets -- --write .env
+npm run env:validate
 
 docker compose up -d db
 
@@ -186,6 +188,8 @@ npm run dev
 
 ```bash
 cp .env.example .env
+npm run env:generate-secrets -- --write .env
+npm run env:validate
 
 docker compose up -d db
 
@@ -252,7 +256,17 @@ docker build --pull --tag asihjaya-rms:local .
 
 ## Environment Configuration
 
-Lihat `.env.example` untuk daftar konfigurasi lengkap.
+Lihat `.env.example` untuk template dan `docs/development/environment-configuration.md` untuk aturan production. Template tidak lagi membawa contoh secret yang dapat dipakai langsung.
+
+Command utama:
+
+```powershell
+npm run env:generate-secrets -- --write .env
+npm run env:validate
+npm run env:validate -- --mode production --env-file .env.production
+```
+
+Production server melakukan fail-fast validation sebelum menerima traffic. Secret inti wajib unik, minimal 32 karakter, dan tidak boleh menggunakan placeholder.
 
 Kelompok konfigurasi yang digunakan project:
 
@@ -368,6 +382,8 @@ Notification Center V1 mendukung:
 npm run dev
 npm run build
 npm run start
+npm run env:validate
+npm run env:generate-secrets -- --write .env
 ```
 
 ### Quality Checks
@@ -492,7 +508,9 @@ npm run docs:hardware:generate
 - `docs/roadmap/payment-production-roadmap.md`
 - `docs/roadmap/settings-center-roadmap.md`
 
-### Production-readiness Notes
+### Environment and Production-readiness Notes
+
+- `docs/development/environment-configuration.md`
 
 Dokumentasi implementasi detail berada di:
 

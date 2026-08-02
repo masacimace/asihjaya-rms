@@ -13,6 +13,8 @@
     "build": "next build",
     "build:clean": "npm run clean && npm run build",
     "start": "next start",
+    "env:validate": "tsx scripts/validate-environment.ts",
+    "env:generate-secrets": "node scripts/generate-environment-secrets.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "routes:check": "tsx scripts/check-routes.ts",
@@ -26,7 +28,8 @@
     "check:receipt-token": "tsx scripts/check-receipt-token.ts",
     "check:pdf-render-security": "tsx scripts/check-pdf-render-security.ts",
     "check:http-security": "tsx scripts/check-http-security.ts",
-    "check:security": "npm run check:customer-history-pin && npm run check:receipt-token && npm run check:pdf-render-security && npm run check:http-security",
+    "check:environment": "tsx scripts/check-environment-validation.ts",
+    "check:security": "npm run check:environment && npm run check:customer-history-pin && npm run check:receipt-token && npm run check:pdf-render-security && npm run check:http-security",
     "check:business-timezone": "tsx scripts/check-business-timezone.ts",
     "check:xlsx-security": "tsx scripts/check-legacy-product-xlsx-security.ts",
     "check:legacy-product-migration": "tsx scripts/check-legacy-product-migration.ts",
@@ -84,7 +87,7 @@
     "react-zxing": "^3.0.0",
     "sharp": "^0.34.4",
     "tailwind-merge": "^3.3.1",
-    "xlsx": "file:vendor/xlsx-0.20.3.tgz"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",

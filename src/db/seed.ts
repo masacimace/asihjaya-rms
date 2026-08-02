@@ -3,6 +3,7 @@ import "dotenv/config";
 import { and, eq, inArray, or } from "drizzle-orm";
 
 import { hashPassword } from "../lib/auth/password";
+import { getBootstrapEnvironment } from "../lib/env";
 import { db, pool } from "./index";
 import {
   metalPurities,
@@ -480,16 +481,6 @@ const rolePermissionMap: Record<string, readonly string[]> = {
   ],
 };
 
-function requiredEnv(name: string): string {
-  const value = process.env[name]?.trim();
-
-  if (!value) {
-    throw new Error(`Environment variable ${name} belum diatur.`);
-  }
-
-  return value;
-}
-
 function getFirst<T>(rows: readonly T[], entityName: string): T {
   const row = rows[0];
 
@@ -501,33 +492,18 @@ function getFirst<T>(rows: readonly T[], entityName: string): T {
 }
 
 async function seed() {
-  const organizationName = requiredEnv("BOOTSTRAP_ORGANIZATION_NAME");
-
-  const organizationSlug = requiredEnv(
-    "BOOTSTRAP_ORGANIZATION_SLUG",
-  ).toLowerCase();
-
-  const outletCode = requiredEnv("BOOTSTRAP_OUTLET_CODE").toUpperCase();
-
-  const outletName = requiredEnv("BOOTSTRAP_OUTLET_NAME");
-
-  const registerCode = requiredEnv("BOOTSTRAP_REGISTER_CODE").toUpperCase();
-
-  const registerName = requiredEnv("BOOTSTRAP_REGISTER_NAME");
-
-  const adminName = requiredEnv("BOOTSTRAP_ADMIN_NAME");
-
-  const adminUsername = requiredEnv("BOOTSTRAP_ADMIN_USERNAME").toLowerCase();
-
-  const adminEmail = requiredEnv("BOOTSTRAP_ADMIN_EMAIL").toLowerCase();
-
-  const adminPassword = requiredEnv("BOOTSTRAP_ADMIN_PASSWORD");
-
-  if (adminPassword.length < 12) {
-    throw new Error(
-      "BOOTSTRAP_ADMIN_PASSWORD minimal harus terdiri dari 12 karakter.",
-    );
-  }
+  const {
+    organizationName,
+    organizationSlug,
+    outletCode,
+    outletName,
+    registerCode,
+    registerName,
+    adminName,
+    adminUsername,
+    adminEmail,
+    adminPassword,
+  } = getBootstrapEnvironment();
 
   await db.transaction(async (tx) => {
     const now = new Date();

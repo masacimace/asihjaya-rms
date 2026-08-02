@@ -3,6 +3,7 @@
   "blocking": [
     "check-business-timezone.ts",
     "check-customer-history-pin.ts",
+    "check-environment-validation.ts",
     "check-hardware-agent-parity.ts",
     "check-hardware-agent-request-signing.ts",
     "check-hardware-job-lease.ts",
@@ -10,8 +11,8 @@
     "check-hardware-job-protocol.ts",
     "check-http-security.ts",
     "check-inventory-label-payload.ts",
-    "check-legacy-product-xlsx-security.ts",
     "check-legacy-product-migration.ts",
+    "check-legacy-product-xlsx-security.ts",
     "check-manual-payment-verification.ts",
     "check-payment-reconciliation.ts",
     "check-pdf-render-security.ts",

@@ -19,6 +19,7 @@ Pemeriksaan lengkap tanpa mengubah database:
 ```bash
 npm ci
 npm run check:build-baseline
+npm run check:environment
 npm run check:all
 ```
 
@@ -29,6 +30,7 @@ npm run check:build-baseline
 npm run check:quality
 npm run check:static
 npm run check:security
+npm run check:environment
 npm run check:transactions
 npm run check:business
 npm run check:hardware
@@ -43,7 +45,7 @@ npm run test:financial:local
 
 Untuk database test yang sudah dimigrasikan, gunakan `npm run test:financial`. Dokumentasi lengkap tersedia di `docs/development/financial-concurrency-tests.md`.
 
-`check:quality` mencakup konfigurasi quality gate, reproducible build baseline, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract.
+`check:quality` mencakup konfigurasi quality gate, reproducible build baseline, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract. `check:security` mencakup kontrak environment production dan pemisahan secret.
 
 Clean build menghapus output lama sebelum membuat production bundle:
 
