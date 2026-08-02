@@ -15,6 +15,7 @@ import {
   claimPosCheckoutAttempt,
   getPosCheckoutAttemptByKey,
   markPosCheckoutAttemptCompleted,
+  markPosCheckoutAttemptFailed,
 } from "@/features/pos/checkout-attempt-service";
 import { type PosCheckoutPayload } from "@/features/pos/contracts";
 import { getPosCheckoutRecoveryStatus } from "@/features/pos/checkout-recovery";
@@ -29,6 +30,10 @@ import {
 } from "@/features/sales/transaction-service";
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
 import { type AuthContext } from "@/lib/auth/session";
+import {
+  closeShiftWithReconciliation,
+  ShiftClosingError,
+} from "@/lib/shifts/shift-closing";
 
 type OrganizationFixture = {
   organizationId: string;
@@ -411,6 +416,78 @@ test("checkout idempotency claims once and rejects changed financial intent", as
   assert.equal(replay.attempt.saleId, sale.saleId);
 });
 
+test("checkout failed and stale attempts are reclaimed with attempt fencing", async ({
+  organizationA,
+}) => {
+  const idempotencyKey = key("pos_retry_fencing");
+  const context = checkoutContext(organizationA);
+  const payload = checkoutPayload(organizationA, idempotencyKey);
+
+  const firstClaim = await claimPosCheckoutAttempt({ context, payload });
+  assert.equal(firstClaim.status, "claimed");
+  if (firstClaim.status !== "claimed") {
+    throw new Error("Initial checkout attempt was not claimed.");
+  }
+
+  await markPosCheckoutAttemptFailed({
+    attemptId: firstClaim.attempt.id,
+    attemptCount: firstClaim.attempt.attemptCount,
+    errorCode: "TEST_TRANSIENT_FAILURE",
+    errorMessage: "Simulated transient checkout failure",
+  });
+
+  const failedAttempt = await getPosCheckoutAttemptByKey(idempotencyKey);
+  assert.equal(failedAttempt?.status, "failed");
+  assert.equal(failedAttempt?.attemptCount, 1);
+
+  const failedReplay = await claimPosCheckoutAttempt({ context, payload });
+  assert.equal(failedReplay.status, "claimed");
+  if (failedReplay.status !== "claimed") {
+    throw new Error("Failed checkout attempt was not reclaimed.");
+  }
+  assert.equal(failedReplay.replay, true);
+  assert.equal(failedReplay.attempt.attemptCount, 2);
+
+  await pool.query(
+    `update pos_checkout_attempts
+        set updated_at = now() - interval '10 minutes'
+      where id = $1`,
+    [failedReplay.attempt.id],
+  );
+
+  const staleReplay = await claimPosCheckoutAttempt({ context, payload });
+  assert.equal(staleReplay.status, "claimed");
+  if (staleReplay.status !== "claimed") {
+    throw new Error("Stale checkout attempt was not reclaimed.");
+  }
+  assert.equal(staleReplay.replay, true);
+  assert.equal(staleReplay.attempt.attemptCount, 3);
+
+  const staleOwnerSale = await createSale(organizationA);
+  await markPosCheckoutAttemptCompleted({
+    attemptId: failedReplay.attempt.id,
+    attemptCount: failedReplay.attempt.attemptCount,
+    saleId: staleOwnerSale.saleId,
+  });
+
+  const fencedAttempt = await getPosCheckoutAttemptByKey(idempotencyKey);
+  assert.equal(fencedAttempt?.status, "processing");
+  assert.equal(fencedAttempt?.attemptCount, 3);
+  assert.equal(fencedAttempt?.saleId, null);
+
+  const currentOwnerSale = await createSale(organizationA);
+  await markPosCheckoutAttemptCompleted({
+    attemptId: staleReplay.attempt.id,
+    attemptCount: staleReplay.attempt.attemptCount,
+    saleId: currentOwnerSale.saleId,
+  });
+
+  const completedAttempt = await getPosCheckoutAttemptByKey(idempotencyKey);
+  assert.equal(completedAttempt?.status, "completed");
+  assert.equal(completedAttempt?.attemptCount, 3);
+  assert.equal(completedAttempt?.saleId, currentOwnerSale.saleId);
+});
+
 test("inventory claim permits exactly one checkout and rolls back partial claims", async ({
   organizationA,
   organizationB,
@@ -778,6 +855,129 @@ test("approved refund is idempotent, maker-checker protected, and tenant scoped"
     (error: unknown) =>
       error instanceof SaleReversalTransactionError && error.code === "APPROVAL_NOT_READY",
   );
+});
+
+test("shift closing reconciles cash exactly once and requires variance notes", async ({
+  organizationA,
+  organizationB,
+}) => {
+  const sale = await createSale(organizationA);
+
+  await pool.query(`update shifts set opening_cash = 100000 where id = $1`, [
+    organizationA.shiftId,
+  ]);
+  await pool.query(
+    `insert into cash_movements
+       (id, shift_id, type, amount, reference_type, reference_id, reason, created_by, created_at)
+     values
+       ($1, $2, 'cash_sale', 1000000, 'sale', $3, 'Cash sale', $4, $9),
+       ($5, $2, 'cash_in', 200000, null, null, 'Petty cash return', $4, $9),
+       ($6, $2, 'cash_out', 50000, null, null, 'Operational expense', $4, $9),
+       ($7, $2, 'cash_refund', 100000, 'sale', $3, 'Cash refund', $4, $9),
+       ($8, $2, 'closing_adjustment', 25000, null, null, 'Approved adjustment', $4, $9)`,
+    [
+      id(),
+      organizationA.shiftId,
+      sale.saleId,
+      organizationA.makerId,
+      id(),
+      id(),
+      id(),
+      id(),
+      TEST_NOW,
+    ],
+  );
+
+  const expectedCash = 1_175_000;
+  const close = () =>
+    closeShiftWithReconciliation({
+      auth: authContext(organizationA),
+      shiftId: organizationA.shiftId,
+      actualCash: expectedCash,
+      varianceReason: null,
+      requestMetadata: {
+        ipAddress: "127.0.0.1",
+        userAgent: "financial-test",
+      },
+      source: "pos.close_shift",
+    });
+
+  const concurrent = await Promise.allSettled([close(), close()]);
+  const successful = concurrent.filter(
+    (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof close>>> =>
+      result.status === "fulfilled",
+  );
+  const rejected = concurrent.filter(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+
+  assert.equal(successful.length, 1);
+  assert.equal(rejected.length, 1);
+  assert.equal(rejected[0]?.reason instanceof ShiftClosingError, true);
+  assert.equal(successful[0]?.value.expectedCash, expectedCash);
+  assert.equal(successful[0]?.value.variance, 0);
+
+  const closedShift = await queryOne<{
+    status: string;
+    expected_cash: string;
+    actual_cash: string;
+    cash_variance: string;
+  }>(
+    `select status, expected_cash, actual_cash, cash_variance
+       from shifts
+      where id = $1`,
+    [organizationA.shiftId],
+  );
+  assert.deepEqual(closedShift, {
+    status: "closed",
+    expected_cash: String(expectedCash),
+    actual_cash: String(expectedCash),
+    cash_variance: "0",
+  });
+  assert.equal(
+    await queryCount(
+      "audit_logs",
+      "where entity_type = 'shift' and entity_id = $1 and action = 'shift.close'",
+      [organizationA.shiftId],
+    ),
+    1,
+  );
+
+  await pool.query(`update shifts set opening_cash = 100000 where id = $1`, [
+    organizationB.shiftId,
+  ]);
+
+  await assert.rejects(
+    closeShiftWithReconciliation({
+      auth: authContext(organizationB),
+      shiftId: organizationB.shiftId,
+      actualCash: 90_000,
+      varianceReason: null,
+      requestMetadata: { ipAddress: null, userAgent: null },
+      source: "admin.shift_dashboard",
+    }),
+    (error: unknown) =>
+      error instanceof ShiftClosingError &&
+      /Catatan selisih wajib diisi/.test(error.message),
+  );
+
+  const stillOpen = await queryOne<{ status: string }>(
+    `select status from shifts where id = $1`,
+    [organizationB.shiftId],
+  );
+  assert.equal(stillOpen.status, "open");
+
+  const varianceClose = await closeShiftWithReconciliation({
+    auth: authContext(organizationB),
+    shiftId: organizationB.shiftId,
+    actualCash: 90_000,
+    varianceReason: "Selisih kas hasil perhitungan ulang",
+    requestMetadata: { ipAddress: null, userAgent: null },
+    source: "admin.shift_dashboard",
+  });
+  assert.equal(varianceClose.expectedCash, 100_000);
+  assert.equal(varianceClose.variance, -10_000);
+  assert.equal(varianceClose.varianceReason, "Selisih kas hasil perhitungan ulang");
 });
 
 test("settlement file fingerprint is unique per organization", async ({

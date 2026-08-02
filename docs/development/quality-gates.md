@@ -45,7 +45,7 @@ npm run test:financial:local
 
 Untuk database test yang sudah dimigrasikan, gunakan `npm run test:financial`. Dokumentasi lengkap tersedia di `docs/development/financial-concurrency-tests.md`.
 
-`check:quality` mencakup konfigurasi quality gate, reproducible build baseline, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract. `check:security` mencakup kontrak environment production dan pemisahan secret.
+`check:quality` mencakup konfigurasi quality gate, reproducible build baseline, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract. `check:security` mencakup kontrak environment production dan pemisahan secret. `check:transactions` mencakup fingerprint/recovery checkout, rekonsiliasi nominal cash/mixed payment/Dana Titip, manual payment, sale correction, reconciliation, dan settlement import.
 
 Clean build menghapus output lama sebelum membuat production bundle:
 
@@ -110,7 +110,7 @@ Status check utama:
 3. **Security & Business Checks** — quality config, source hygiene, migration metadata, security contracts, business contracts, dan kontrak hardware sisi aplikasi.
 4. **Database Migration** — PostgreSQL 17 disposable, migration dua kali, lalu schema verification.
 5. **Hardware Hub Checks** — request signing, DPAPI mock, Protocol v2, failure injection, operations, PDF profile, dan SATO golden files.
-6. **Financial & Concurrency Tests** — PostgreSQL 17 disposable, checkout race, Dana Titip, refund replay, settlement deduplication, hardware exactly-once, dan tenant isolation.
+6. **Financial & Concurrency Tests** — PostgreSQL 17 disposable, checkout race/retry fencing, inventory race, Dana Titip, duplicate payment reference, refund replay, shift closing, settlement deduplication, hardware exactly-once, dan tenant isolation.
 
 CI tidak melakukan print fisik, tidak mengakses perangkat outlet, dan tidak memakai credential production.
 

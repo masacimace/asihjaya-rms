@@ -67,15 +67,19 @@ npm run test:integration
 Suite saat ini memeriksa:
 
 1. **Checkout idempotency** — dua claim bersamaan menghasilkan satu owner; replay memakai sale yang sama; perubahan nominal Dana Titip atau approval pembayaran manual dengan key yang sama menjadi conflict.
-2. **Atomic inventory claim** — hanya satu transaksi dapat menjual item yang sama; tenant lain tidak dapat mengklaim item; partial claim di-rollback penuh.
-3. **Dana Titip double spend** — dua debit bersamaan terhadap saldo yang sama tidak dapat membuat saldo negatif.
-4. **Manual payment reference race** — advisory lock menyatukan duplicate-reference check dan insertion sehingga reference hanya dipakai satu payment.
-5. **Refund replay dan maker-checker** — concurrent execution menghasilkan tepat satu refund, retry menjadi replay, requester tidak boleh menjadi approver, dan tenant lain mendapat not found.
-6. **Settlement import fingerprint** — file hash yang sama hanya dapat diimpor sekali per organization tetapi tetap terisolasi antar-tenant.
-7. **Hardware job exactly-once** — satu business intent menghasilkan satu job; retry mengembalikan job yang sama; key yang sama untuk intent berbeda ditolak.
-8. **Checkout recovery** — sale yang sudah commit memperbaiki checkout attempt menjadi completed tanpa terlihat oleh tenant lain.
+2. **Checkout retry fencing** — attempt gagal dapat direclaim, attempt processing yang stale dapat diambil alih, dan owner lama tidak dapat menandai attempt baru sebagai completed.
+3. **Atomic inventory claim** — hanya satu transaksi dapat menjual item yang sama; tenant lain tidak dapat mengklaim item; partial claim di-rollback penuh.
+4. **Dana Titip double spend** — dua debit bersamaan terhadap saldo yang sama tidak dapat membuat saldo negatif.
+5. **Manual payment reference race** — advisory lock menyatukan duplicate-reference check dan insertion sehingga reference hanya dipakai satu payment.
+6. **Refund replay dan maker-checker** — concurrent execution menghasilkan tepat satu refund, retry menjadi replay, requester tidak boleh menjadi approver, dan tenant lain mendapat not found.
+7. **Shift closing** — cash sale/in/out/refund/adjustment direkonsiliasi menjadi expected cash, hanya satu concurrent close yang berhasil, dan selisih kas wajib memiliki catatan.
+8. **Settlement import fingerprint** — file hash yang sama hanya dapat diimpor sekali per organization tetapi tetap terisolasi antar-tenant.
+9. **Hardware job exactly-once** — satu business intent menghasilkan satu job; retry mengembalikan job yang sama; key yang sama untuk intent berbeda ditolak.
+10. **Checkout recovery** — sale yang sudah commit memperbaiki checkout attempt menjadi completed tanpa terlihat oleh tenant lain.
 
-Setiap test membuat fixture organization, outlet, register, user, shift, customer, product, inventory item, dan payment profile sendiri.
+Kontrak tanpa database pada `npm run check:pos-financials` juga memeriksa cash payment, mixed payment, diskon, Dana Titip digunakan, Dana Titip baru, full-deposit checkout, mismatch pembayaran, dan overflow integer.
+
+Setiap test integration membuat fixture organization, outlet, register, user, shift, customer, product, inventory item, dan payment profile sendiri.
 
 ## GitHub Actions
 

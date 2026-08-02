@@ -76,6 +76,7 @@ import {
   POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS,
 } from "@/features/pos/checkout-recovery";
 import { isValidPosCheckoutIdempotencyKey } from "@/features/pos/checkout-fingerprint";
+import { reconcileCheckoutFinancials } from "@/features/pos/checkout-financials";
 import { claimProductItemsForSale } from "@/features/pos/inventory-sale-claim";
 import { lockManualPaymentReference } from "@/features/pos/manual-payment-reference-lock";
 import {
@@ -4095,38 +4096,39 @@ export async function completePosCheckoutAction(
         itemAmounts,
         discountAmount: approvedDiscountAmount,
       });
-      const totalAmount = subtotalAmount - approvedDiscountAmount;
-      const totalPaidAmount = normalizedPayments.reduce(
-        (total, payment) => total + payment.amount,
-        0,
-      );
+      const financialReconciliation = reconcileCheckoutFinancials({
+        subtotalAmount,
+        discountAmount: approvedDiscountAmount,
+        customerDepositUsedAmount,
+        customerDepositInAmount,
+        paymentAmounts: normalizedPayments.map((payment) => payment.amount),
+      });
 
-      if (totalAmount <= 0) {
-        throw new CheckoutValidationError(
-          "Total transaksi tidak valid. Periksa harga jual item dan diskon.",
-        );
-      }
+      if (!financialReconciliation.ok) {
+        if (financialReconciliation.code === "non_positive_total") {
+          throw new CheckoutValidationError(
+            "Total transaksi tidak valid. Periksa harga jual item dan diskon.",
+          );
+        }
 
-      if (customerDepositUsedAmount > totalAmount) {
-        throw new CheckoutValidationError(
-          "Dana Titip digunakan tidak boleh lebih besar dari total transaksi.",
-        );
-      }
+        if (financialReconciliation.code === "deposit_exceeds_total") {
+          throw new CheckoutValidationError(
+            "Dana Titip digunakan tidak boleh lebih besar dari total transaksi.",
+          );
+        }
 
-      const externalPaymentDueAmount =
-        totalAmount - customerDepositUsedAmount + customerDepositInAmount;
+        if (financialReconciliation.code === "payment_mismatch") {
+          throw new CheckoutValidationError(
+            `Total pembayaran eksternal harus sama dengan ${formatServerCurrency(financialReconciliation.expectedAmount ?? 0)} setelah Dana Titip.`,
+          );
+        }
 
-      if (externalPaymentDueAmount < 0) {
         throw new CheckoutValidationError(
           "Total pembayaran eksternal tidak valid setelah Dana Titip.",
         );
       }
 
-      if (totalPaidAmount !== externalPaymentDueAmount) {
-        throw new CheckoutValidationError(
-          `Total pembayaran eksternal harus sama dengan ${formatServerCurrency(externalPaymentDueAmount)} setelah Dana Titip.`,
-        );
-      }
+      const { totalAmount, externalPaymentDueAmount } = financialReconciliation;
 
       const nonCashPayments = normalizedPayments.filter((payment) =>
         isNonCashManualPaymentMethod(payment.method),

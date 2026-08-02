@@ -4,13 +4,13 @@ Fase 9 — Tenant integrity dan refactor bertahap (butuh diskusi sebelum impleme
 --------------------------------------------------------------
 
 Tahap 1 — Stabilkan fondasi
-1. Upgrade dan vendor SheetJS 0.20.3
-2. Hardening parser XLSX
-3. Tambahkan regression test XLSX
-4. Clean npm install dan dependency review
-5. Full typecheck, lint, quality, security, business checks
-6. Production build dan Docker build
-7. Environment validation dan .env.example
-8. Tambahkan critical-path test
+1. Upgrade dan vendor SheetJS 0.20.3 (DONE)
+2. Hardening parser XLSX (DONE)
+3. Tambahkan regression test XLSX (DONE)
+4. Clean npm install dan dependency review (DONE)
+5. Full typecheck, lint, quality, security, business checks (DONE)
+6. Production build dan Docker build (DONE)
+7. Environment validation dan .env.example (DONE)
+8. Tambahkan critical-path test (DONE)
 9. Refactor POS secara bertahap (perlu pembahasan)
 10. Final stabilization gate (perlu pembahasan)
