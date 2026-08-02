@@ -65,7 +65,6 @@ import {
   type PosManualPaymentMethod,
   type PosManualPaymentPolicy,
   type PosManualPaymentProfile,
-  type PosManualPaymentVerificationSource,
   type PosOperationalContext,
   type PosQuickCustomerActionResult,
   type PosQuickCustomerPayload,
@@ -74,7 +73,6 @@ import {
 import {
   createCheckoutIdempotencyKey,
   createPaymentDraftId,
-  createPaymentVerificationForm,
   formatCurrency,
   formatRupiahInput,
   getPaymentConfig,
@@ -88,6 +86,7 @@ import {
   type PaymentVerificationFormState,
   type PosPaymentDraft,
 } from "@/features/pos/payment-draft";
+import { usePosPayment } from "@/features/pos/use-pos-payment";
 import { cn } from "@/lib/utils";
 
 type PosWorkspaceProps = {
@@ -3259,31 +3258,44 @@ export function PosWorkspace({
   const [cartFeedback, setCartFeedback] = useState<string | null>(null);
   const [isScanLookupPending, startScanLookupTransition] = useTransition();
   const [panelMode, setPanelMode] = useState<PosPanelMode>("cart");
-  const [payments, setPayments] = useState<PosPaymentDraft[]>([]);
-  const [selectedMethod, setSelectedMethod] =
-    useState<PosManualPaymentMethod>("cash");
-  const [selectedPaymentProfileId, setSelectedPaymentProfileId] = useState("");
-  const [paymentVerificationConfirmed, setPaymentVerificationConfirmed] =
-    useState(false);
-  const [paymentAmountInput, setPaymentAmountInput] = useState("");
-  const [customerDepositUsedInput, setCustomerDepositUsedInput] = useState("");
-  const [customerDepositInInput, setCustomerDepositInInput] = useState("");
-  const [paymentProviderInput, setPaymentProviderInput] = useState("");
-  const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
-  const [paymentNoteInput, setPaymentNoteInput] = useState("");
-  const [paymentVerificationForm, setPaymentVerificationForm] =
-    useState<PaymentVerificationFormState>(() =>
-      createPaymentVerificationForm("cash"),
-    );
-  const [paymentEvidenceFile, setPaymentEvidenceFile] = useState<File | null>(
-    null,
-  );
-  const [manualPaymentApproval, setManualPaymentApproval] =
-    useState<PosManualPaymentApproval | null>(null);
-  const [isAddingPayment, startAddingPaymentTransition] = useTransition();
-  const [isManualApprovalChecking, startManualApprovalTransition] =
-    useTransition();
-  const [paymentFeedback, setPaymentFeedback] = useState<string | null>(null);
+  const {
+    payments,
+    setPayments,
+    selectedMethod,
+    selectedPaymentProfileId,
+    paymentVerificationConfirmed,
+    setPaymentVerificationConfirmed,
+    paymentAmountInput,
+    setPaymentAmountInput,
+    customerDepositUsedInput,
+    setCustomerDepositUsedInput,
+    customerDepositInInput,
+    setCustomerDepositInInput,
+    paymentProviderInput,
+    setPaymentProviderInput,
+    paymentReferenceInput,
+    setPaymentReferenceInput,
+    paymentNoteInput,
+    setPaymentNoteInput,
+    paymentVerificationForm,
+    paymentEvidenceFile,
+    setPaymentEvidenceFile,
+    manualPaymentApproval,
+    setManualPaymentApproval,
+    paymentFeedback,
+    setPaymentFeedback,
+    isAddingPayment,
+    startAddingPaymentTransition,
+    isManualApprovalChecking,
+    startManualApprovalTransition,
+    resetCustomerDepositDraft,
+    resetPaymentForm,
+    resetPaymentState,
+    restoreCheckoutPaymentState,
+    selectPaymentProfile,
+    changePaymentMethod,
+    updatePaymentVerificationForm,
+  } = usePosPayment({ paymentProfiles });
   const [discountApproval, setDiscountApproval] =
     useState<ActiveDiscountApproval | null>(null);
   const [discountFeedback, setDiscountFeedback] = useState<string | null>(null);
@@ -3375,7 +3387,16 @@ export function PosWorkspace({
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [router]);
+  }, [
+    resetCustomerDepositDraft,
+    router,
+    setPaymentAmountInput,
+    setPaymentFeedback,
+    setPaymentNoteInput,
+    setPaymentProviderInput,
+    setPaymentReferenceInput,
+    setPayments,
+  ]);
 
   useEffect(() => {
     const storedAttempt = getStoredCheckoutAttemptState();
@@ -3386,22 +3407,14 @@ export function PosWorkspace({
 
     const timeoutId = window.setTimeout(() => {
       setCheckoutAttempt(storedAttempt);
-      setPayments(storedAttempt.payments);
       setDiscountApproval(storedAttempt.discountApproval);
-      setManualPaymentApproval(storedAttempt.manualPaymentApproval);
-      setSelectedMethod(storedAttempt.payments[0]?.method ?? "cash");
-      setSelectedPaymentProfileId(
-        storedAttempt.payments[0]?.manualPaymentProfileId ?? "",
-      );
-      setCustomerDepositUsedInput(
-        formatRupiahInput(storedAttempt.payload.customerDepositUsedAmount ?? 0),
-      );
-      setCustomerDepositInInput(
-        formatRupiahInput(storedAttempt.payload.customerDepositInAmount ?? 0),
-      );
-      setPaymentVerificationConfirmed(
-        storedAttempt.payments[0]?.verificationConfirmed ?? false,
-      );
+      restoreCheckoutPaymentState({
+        payments: storedAttempt.payments,
+        customerDepositUsedAmount:
+          storedAttempt.payload.customerDepositUsedAmount,
+        customerDepositInAmount: storedAttempt.payload.customerDepositInAmount,
+        manualPaymentApproval: storedAttempt.manualPaymentApproval,
+      });
       setPanelMode("payment");
       setIsMobileCartOpen(true);
 
@@ -3415,7 +3428,7 @@ export function PosWorkspace({
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, []);
+  }, [restoreCheckoutPaymentState, setPaymentFeedback]);
 
   useEffect(() => {
     if (panelMode === "success") {
@@ -3596,29 +3609,6 @@ export function PosWorkspace({
             ? "Shift aktif belum dibuka, hold cart belum bisa dibuat."
             : "Transaksi bisa ditahan.";
 
-  function resetCustomerDepositDraft() {
-    setCustomerDepositUsedInput("");
-    setCustomerDepositInInput("");
-  }
-
-  function resetPaymentForm(
-    nextMethod: PosManualPaymentMethod = selectedMethod,
-  ) {
-    const defaultProfile = getProfilesForMethod(paymentProfiles, nextMethod)[0];
-
-    setSelectedMethod(nextMethod);
-    setSelectedPaymentProfileId(defaultProfile?.id ?? "");
-    setPaymentVerificationConfirmed(false);
-    setPaymentAmountInput("");
-    setPaymentProviderInput(defaultProfile?.provider ?? "");
-    setPaymentReferenceInput("");
-    setPaymentNoteInput("");
-    setPaymentVerificationForm(
-      createPaymentVerificationForm(nextMethod, defaultProfile),
-    );
-    setPaymentEvidenceFile(null);
-  }
-
   function invalidateCheckoutAttempt() {
     checkoutRecoverySequenceRef.current += 1;
     setCheckoutAttempt(null);
@@ -3628,11 +3618,8 @@ export function PosWorkspace({
 
   function resetPayments() {
     invalidateCheckoutAttempt();
-    setPayments([]);
-    setManualPaymentApproval(null);
-    setPaymentFeedback(null);
+    resetPaymentState();
     setCheckoutResult(null);
-    resetPaymentForm();
   }
 
   function resetPaymentFlow() {
@@ -3653,11 +3640,9 @@ export function PosWorkspace({
     setSelectedCustomer(null);
     setCustomerQuery("");
     setIsCustomerSelectorOpen(false);
-    setPayments([]);
-    setManualPaymentApproval(null);
+    resetPaymentState();
     setDiscountApproval(null);
     setDiscountFeedback(null);
-    resetPaymentForm();
     setPanelMode("success");
     setIsMobileCartOpen(true);
     router.refresh();
@@ -4177,35 +4162,6 @@ export function PosWorkspace({
     };
   }, []);
 
-  function selectPaymentProfile(profileId: string) {
-    const profile = paymentProfiles.find(
-      (candidate) =>
-        candidate.id === profileId &&
-        profileSupportsMethod(candidate, selectedMethod),
-    );
-
-    setSelectedPaymentProfileId(profile?.id ?? "");
-    setPaymentProviderInput(profile?.provider ?? "");
-    setPaymentVerificationConfirmed(false);
-    setPaymentVerificationForm(
-      createPaymentVerificationForm(selectedMethod, profile),
-    );
-    setPaymentEvidenceFile(null);
-    setPaymentFeedback(
-      profile
-        ? `${profile.name} dipilih. Masukkan reference dan konfirmasi pembayaran.`
-        : "Pilih akun atau terminal pembayaran yang valid.",
-    );
-  }
-
-  function changePaymentMethod(method: PosManualPaymentMethod) {
-    resetPaymentForm(method);
-    setPaymentFeedback(null);
-    if (remainingAmount > 0) {
-      setPaymentAmountInput(formatRupiahInput(remainingAmount));
-    }
-  }
-
   function addPayment() {
     if (!canCheckout) {
       setPaymentFeedback(checkoutDisabledReason);
@@ -4673,7 +4629,7 @@ export function PosWorkspace({
       isAddingPayment={isAddingPayment}
       isApprovalChecking={isManualApprovalChecking}
       onBackToCart={() => setPanelMode("cart")}
-      onMethodChange={changePaymentMethod}
+      onMethodChange={(method) => changePaymentMethod(method, remainingAmount)}
       onProfileChange={selectPaymentProfile}
       onVerificationConfirmedChange={setPaymentVerificationConfirmed}
       onAmountInputChange={setPaymentAmountInput}
@@ -4703,15 +4659,7 @@ export function PosWorkspace({
       }}
       onReferenceInputChange={setPaymentReferenceInput}
       onNoteInputChange={setPaymentNoteInput}
-      onVerificationFormChange={(field, value) => {
-        setPaymentVerificationForm((current) => ({
-          ...current,
-          [field]:
-            field === "verificationSource"
-              ? (value as PosManualPaymentVerificationSource)
-              : value,
-        }));
-      }}
+      onVerificationFormChange={updatePaymentVerificationForm}
       onEvidenceFileChange={setPaymentEvidenceFile}
       onCheckManualPaymentApproval={checkManualPaymentApproval}
       onAddPayment={addPayment}

@@ -20,6 +20,7 @@
     "check-pos-checkout-services.ts",
     "check-pos-financial-invariants.ts",
     "check-pos-payment-drafts.ts",
+    "check-pos-payment-state.ts",
     "check-receipt-token.ts",
     "check-routes.ts",
     "check-sale-correction.ts",
