@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 
 import * as XLSX from "xlsx";
 
@@ -13,8 +14,10 @@ import {
   parseLegacyProductWorkbook,
 } from "../src/features/legacy-migration/xlsx-parser";
 
+const SHEETJS_VERSION = "0.20.3";
 const SHEETJS_URL =
-  "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz";
+  `https://cdn.sheetjs.com/xlsx-${SHEETJS_VERSION}/xlsx-${SHEETJS_VERSION}.tgz`;
+const SHEETJS_VENDORED = `file:vendor/xlsx-${SHEETJS_VERSION}.tgz`;
 const SHEETJS_INTEGRITY =
   "sha512-oLDq3jw7AcLqKWH2AhCpVTZl8mf6X2YReP+Neh0SJUzV/BdZYjth94tG5toiMB1PPrYtxOCfaoUCkvtuH+3AJA==";
 
@@ -97,38 +100,78 @@ function expectWorkbookError(buffer: Buffer, messagePart: string): void {
   );
 }
 
-const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
+type PackageJson = {
   dependencies?: Record<string, string>;
 };
-const packageLock = JSON.parse(readFileSync("package-lock.json", "utf8")) as {
+
+type PackageLockEntry = {
+  version?: string;
+  resolved?: string;
+  integrity?: string;
+};
+
+type PackageLock = {
   packages?: Record<
     string,
-    {
-      version?: string;
-      resolved?: string;
-      integrity?: string;
+    PackageLockEntry & {
+      dependencies?: Record<string, string>;
     }
   >;
 };
 
-assert.equal(
-  packageJson.dependencies?.xlsx,
-  SHEETJS_URL,
-  "Dependency xlsx harus memakai distribusi resmi SheetJS CE 0.20.3.",
+const packageJson = JSON.parse(
+  readFileSync("package.json", "utf8"),
+) as PackageJson;
+const packageLock = JSON.parse(
+  readFileSync("package-lock.json", "utf8"),
+) as PackageLock;
+const configuredDependency = packageJson.dependencies?.xlsx;
+const lockEntry = packageLock.packages?.["node_modules/xlsx"];
+
+assert.ok(
+  configuredDependency === SHEETJS_URL ||
+    configuredDependency === SHEETJS_VENDORED,
+  "Dependency xlsx harus memakai distribusi resmi atau archive vendored SheetJS CE 0.20.3.",
 );
+assert.equal(
+  packageLock.packages?.[""]?.dependencies?.xlsx,
+  configuredDependency,
+  "Root package-lock.json harus selaras dengan dependency xlsx pada package.json.",
+);
+assert.equal(lockEntry?.version, SHEETJS_VERSION);
+assert.equal(
+  lockEntry?.resolved,
+  configuredDependency,
+  "Resolved xlsx pada lockfile harus selaras dengan dependency yang dikonfigurasi.",
+);
+
+if (configuredDependency === SHEETJS_VENDORED) {
+  const vendorArchive = `vendor/xlsx-${SHEETJS_VERSION}.tgz`;
+  assert.ok(
+    existsSync(vendorArchive),
+    `Archive ${vendorArchive} belum tersedia. Jalankan npm run vendor:xlsx.`,
+  );
+  const vendoredIntegrity = `sha512-${createHash("sha512")
+    .update(readFileSync(vendorArchive))
+    .digest("base64")}`;
+  assert.equal(
+    lockEntry?.integrity,
+    vendoredIntegrity,
+    "Integrity xlsx vendored pada lockfile tidak cocok dengan archive lokal.",
+  );
+} else {
+  assert.equal(
+    lockEntry?.integrity,
+    SHEETJS_INTEGRITY,
+    "Integrity SheetJS resmi pada lockfile tidak cocok.",
+  );
+}
+
 assert.equal(
   XLSX.version,
-  "0.20.3",
-  "Runtime SheetJS harus menggunakan versi 0.20.3.",
+  SHEETJS_VERSION,
+  `Runtime SheetJS harus menggunakan versi ${SHEETJS_VERSION}.`,
 );
-assert.deepEqual(packageLock.packages?.["node_modules/xlsx"], {
-  version: "0.20.3",
-  resolved: SHEETJS_URL,
-  integrity: SHEETJS_INTEGRITY,
-  license: "Apache-2.0",
-  bin: { xlsx: "bin/xlsx.njs" },
-  engines: { node: ">=0.8" },
-});
 
 const parsed = parseLegacyProductWorkbook(createWorkbookBuffer());
 assert.equal(parsed.rows.length, 1);

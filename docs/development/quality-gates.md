@@ -4,7 +4,9 @@ Dokumen ini menetapkan pemeriksaan minimum sebelum perubahan Asihjaya RMS digabu
 
 ## Prinsip
 
+- Toolchain development dikunci pada Node.js `24.14.0` dan npm `11.9.0`.
 - Dependency selalu dipasang dengan `npm ci` agar mengikuti `package-lock.json`.
+- SheetJS CE dipasang dari archive `vendor/`, bukan diambil dari CDN pada setiap build.
 - Command lokal dan GitHub Actions menggunakan npm script yang sama.
 - Database CI selalu disposable dan tidak pernah memakai database development atau production.
 - Secret CI hanya nilai dummy dengan entropy/panjang yang memenuhi validator aplikasi.
@@ -16,12 +18,14 @@ Pemeriksaan lengkap tanpa mengubah database:
 
 ```bash
 npm ci
+npm run check:build-baseline
 npm run check:all
 ```
 
 Kelompok pemeriksaan:
 
 ```bash
+npm run check:build-baseline
 npm run check:quality
 npm run check:static
 npm run check:security
@@ -39,7 +43,19 @@ npm run test:financial:local
 
 Untuk database test yang sudah dimigrasikan, gunakan `npm run test:financial`. Dokumentasi lengkap tersedia di `docs/development/financial-concurrency-tests.md`.
 
-`check:quality` mencakup konfigurasi quality gate, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract.
+`check:quality` mencakup konfigurasi quality gate, reproducible build baseline, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract.
+
+Clean build menghapus output lama sebelum membuat production bundle:
+
+```bash
+npm run build:clean
+```
+
+Production image harus dapat dibangun dari fresh Docker context:
+
+```bash
+docker build --pull --tag asihjaya-rms:local .
+```
 
 ## Rehearsal migration PostgreSQL 17
 
@@ -87,11 +103,12 @@ Workflow `.github/workflows/ci.yml` berjalan pada push, pull request, dan manual
 
 Status check utama:
 
-1. **Static Quality** — install, lint, typecheck, route check, dan production build.
-2. **Security & Business Checks** — quality config, source hygiene, migration metadata, security contracts, business contracts, dan kontrak hardware sisi aplikasi.
-3. **Database Migration** — PostgreSQL 17 disposable, migration dua kali, lalu schema verification.
-4. **Hardware Hub Checks** — request signing, DPAPI mock, Protocol v2, failure injection, operations, PDF profile, dan SATO golden files.
-5. **Financial & Concurrency Tests** — PostgreSQL 17 disposable, checkout race, Dana Titip, refund replay, settlement deduplication, hardware exactly-once, dan tenant isolation.
+1. **Static Quality** — install, lint, typecheck, route check, dan clean production build.
+2. **Container Build** — membangun production Docker image dari context bersih.
+3. **Security & Business Checks** — quality config, source hygiene, migration metadata, security contracts, business contracts, dan kontrak hardware sisi aplikasi.
+4. **Database Migration** — PostgreSQL 17 disposable, migration dua kali, lalu schema verification.
+5. **Hardware Hub Checks** — request signing, DPAPI mock, Protocol v2, failure injection, operations, PDF profile, dan SATO golden files.
+6. **Financial & Concurrency Tests** — PostgreSQL 17 disposable, checkout race, Dana Titip, refund replay, settlement deduplication, hardware exactly-once, dan tenant isolation.
 
 CI tidak melakukan print fisik, tidak mengakses perangkat outlet, dan tidak memakai credential production.
 
@@ -117,6 +134,7 @@ Pemeriksaan berikut tetap manual sampai workflow browser/hardware khusus tersedi
 Setelah workflow stabil pada beberapa pull request, lindungi branch utama dan wajibkan status:
 
 - Static Quality
+- Container Build
 - Security & Business Checks
 - Database Migration
 - Hardware Hub Checks
@@ -128,7 +146,7 @@ Nonaktifkan force push dan direct push ke branch production, lalu gunakan pull r
 
 ### CI lulus tetapi lokal gagal
 
-Pastikan versi Node mengikuti `.nvmrc`, hapus `.next`, lalu ulangi `npm ci`.
+Pastikan Node dan npm mengikuti `.nvmrc` serta `packageManager`, jalankan `npm run clean`, lalu ulangi `npm ci`.
 
 ### Migration rehearsal gagal
 

@@ -134,11 +134,38 @@ Operasi finansial penting menggunakan database transaction, idempotency, constra
 ## Local Development
 
 - Windows 10
-- Node.js 22 atau 24 LTS
-- npm
+- Node.js `24.14.0` sesuai `.nvmrc`
+- npm `11.9.0` sesuai `packageManager`
 - Docker Desktop atau Docker Engine dengan Compose
 - Git
 - Vscode
+
+## Reproducible Toolchain
+
+Project mengunci baseline development pada Node.js `24.14.0` dan npm `11.9.0`. Verifikasi sebelum install:
+
+```powershell
+node --version
+npm --version
+```
+
+Output yang diharapkan:
+
+```text
+v24.14.0
+11.9.0
+```
+
+`.npmrc` mengaktifkan `engine-strict`, sehingga install akan dihentikan ketika major toolchain tidak sesuai.
+
+SheetJS CE disimpan sebagai archive lokal agar fresh install, CI, dan Docker build tidak bergantung pada CDN. Setelah menerapkan perubahan ini untuk pertama kali, unduh dan verifikasi archive resmi satu kali melalui:
+
+```powershell
+npm run vendor:xlsx
+npm ci
+```
+
+Commit file `vendor/xlsx-0.20.3.tgz`, checksum, `package.json`, dan `package-lock.json` yang dihasilkan. Fresh clone berikutnya cukup menjalankan `npm ci`.
 
 ## First-time Local Setup
 
@@ -198,12 +225,14 @@ Sebelum perubahan digabungkan atau dideploy, jalankan quality gate lengkap:
 
 ```bash
 npm ci
+npm run check:build-baseline
 npm run check:all
 ```
 
 Kelompok check dapat dijalankan terpisah:
 
 ```bash
+npm run check:build-baseline
 npm run check:quality
 npm run check:static
 npm run check:security
@@ -212,7 +241,14 @@ npm run check:hardware
 npm run build
 ```
 
-GitHub Actions menjalankan static quality, security/business contracts, rehearsal migration PostgreSQL 17, dan Hardware Hub checks pada push serta pull request. Dokumentasi lengkap tersedia di `docs/development/quality-gates.md`.
+GitHub Actions menjalankan static quality, security/business contracts, rehearsal migration PostgreSQL 17, Hardware Hub checks, dan production container build pada push serta pull request. Dokumentasi lengkap tersedia di `docs/development/quality-gates.md`.
+
+Validasi clean build dan Docker image secara lokal:
+
+```powershell
+npm run build:clean
+docker build --pull --tag asihjaya-rms:local .
+```
 
 ## Environment Configuration
 

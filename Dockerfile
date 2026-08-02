@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# Keep this tag aligned with package-lock.json Playwright version.
-# Noble is Ubuntu 24.04 and already contains Chromium plus its runtime libraries.
+# Keep this tag aligned with the package-lock.json Playwright version.
+# Noble is Ubuntu 24.04 and the official Playwright image provides Node.js 24.
 FROM mcr.microsoft.com/playwright:v1.61.0-noble AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -15,26 +15,34 @@ RUN apt-get update \
       fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
-FROM base AS deps
+FROM base AS toolchain
 
 ARG NPM_REGISTRY=https://registry.npmjs.org/
-
-COPY package.json package-lock.json ./
+ARG NPM_VERSION=11.9.0
 
 RUN npm config set registry "${NPM_REGISTRY}" \
-    && npm ci \
+    && npm install --global "npm@${NPM_VERSION}" \
+    && node --version \
+    && npm --version
+
+FROM toolchain AS deps
+
+COPY package.json package-lock.json .npmrc ./
+COPY vendor ./vendor
+
+RUN npm ci \
       --fetch-retries=5 \
       --fetch-retry-factor=2 \
       --fetch-retry-mintimeout=20000 \
       --fetch-retry-maxtimeout=120000
 
-FROM base AS builder
+FROM toolchain AS builder
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build \
-    npm run build
+    npm run build:clean
 
 FROM base AS runner
 WORKDIR /app

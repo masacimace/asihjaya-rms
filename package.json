@@ -4,20 +4,24 @@
   "type": "module",
   "private": true,
   "engines": {
-    "node": ">=22 <25"
+    "node": ">=24.14.0 <25",
+    "npm": ">=11.9.0 <12"
   },
   "scripts": {
     "dev": "next dev",
+    "clean": "node scripts/clean-build-artifacts.mjs",
     "build": "next build",
+    "build:clean": "npm run clean && npm run build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "routes:check": "tsx scripts/check-routes.ts",
+    "check:build-baseline": "tsx scripts/check-build-baseline.ts",
     "check:quality-config": "tsx scripts/check-quality-config.ts",
     "check:source-hygiene": "tsx scripts/check-source-hygiene.ts",
     "check:database": "tsx scripts/check-database-migrations.ts",
     "check:database:live": "tsx scripts/check-database-migrations.ts --database",
-    "check:quality": "npm run check:quality-config && npm run check:source-hygiene && npm run check:database",
+    "check:quality": "npm run check:quality-config && npm run check:build-baseline && npm run check:source-hygiene && npm run check:database",
     "check:customer-history-pin": "tsx scripts/check-customer-history-pin.ts",
     "check:receipt-token": "tsx scripts/check-receipt-token.ts",
     "check:pdf-render-security": "tsx scripts/check-pdf-render-security.ts",
@@ -45,7 +49,7 @@
     "check:manual": "npm run check:receipt-pdf",
     "check:static": "npm run lint && npm run typecheck && npm run routes:check",
     "check:stabilization": "npm run check:quality && npm run check:static && npm run check:security && npm run check:business",
-    "check:all": "npm run check:stabilization && npm run check:hardware && npm run build",
+    "check:all": "npm run check:stabilization && npm run check:hardware && npm run build:clean",
     "test:financial": "tsx scripts/run-financial-concurrency-tests.ts",
     "test:financial:local": "tsx scripts/run-financial-concurrency-local.ts",
     "test:migration:cutover": "tsx scripts/run-legacy-migration-cutover-tests.ts",
@@ -59,6 +63,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
+    "vendor:xlsx": "node scripts/vendor-sheetjs.mjs",
     "db:fresh:local": "tsx scripts/reset-local-database.ts",
     "hardware:agent:create": "tsx scripts/create-hardware-agent.ts",
     "maintenance:payment-evidence-cleanup": "tsx scripts/cleanup-payment-evidence.ts",
@@ -79,7 +84,7 @@
     "react-zxing": "^3.0.0",
     "sharp": "^0.34.4",
     "tailwind-merge": "^3.3.1",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "file:vendor/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",
@@ -101,5 +106,6 @@
     "esbuild@0.28.1": true,
     "sharp@0.34.5": true,
     "unrs-resolver@1.12.2": true
-  }
+  },
+  "packageManager": "npm@11.9.0"
 }

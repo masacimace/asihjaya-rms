@@ -1,8 +1,36 @@
+# Dependency and build output
 node_modules
 .next
+out
+build
+dist
+coverage
+playwright-report
+test-results
+*.tsbuildinfo
+
+# Repository and CI metadata
 .git
-.env
-.env.*
+.gitignore
+.gitattributes
+.github
+
+# Local configuration and runtime data
+.env*
+.data
+*.log
 npm-debug.log*
-README.md
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Services and artifacts not required by the Next.js production image
+hardware-hub
 docs
+compose*.yaml
+README.md
+*.patch
+*.zip
+backup-*.sql
+*.dump
+*.backup

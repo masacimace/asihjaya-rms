@@ -22,6 +22,7 @@
     "check-settlement-import.ts"
   ],
   "infrastructure": [
+    "check-build-baseline.ts",
     "check-database-migrations.ts",
     "check-quality-config.ts",
     "check-source-hygiene.ts"

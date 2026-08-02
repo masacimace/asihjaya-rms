@@ -63,6 +63,7 @@ assert(
 
 const requiredRootScripts = [
   "check:quality-config",
+  "check:build-baseline",
   "check:source-hygiene",
   "check:database",
   "check:database:live",
@@ -115,6 +116,7 @@ for (const jobId of [
   "database-migrations",
   "financial-concurrency",
   "hardware-hub",
+  "container-build",
 ]) {
   assert(
     workflow.includes(`  ${jobId}:`),
