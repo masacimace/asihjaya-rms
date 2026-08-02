@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  useTransition,
-} from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -19,51 +13,29 @@ import {
   requestPosDiscountApprovalAction,
   uploadPosPaymentEvidenceAction,
 } from "@/app/actions/pos";
-import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
-import { PosCartContent } from "@/components/pos/workspace/pos-cart-content";
-import { PosCatalogPanel } from "@/components/pos/workspace/pos-catalog-panel";
-import { PosCheckoutSuccessContent } from "@/components/pos/workspace/pos-checkout-success-content";
+import type { PosPanelMode } from "@/components/pos/workspace/pos-mobile-side-panel";
 import {
-  PosCloseShiftCard,
-  PosContextNotice,
-  PosOpenShiftCard,
-} from "@/components/pos/workspace/pos-shift-controls";
-import { PosDiscountApprovalDialog } from "@/components/pos/workspace/pos-discount-approval-dialog";
-import { PosHoldCartDialog } from "@/components/pos/workspace/pos-hold-cart-dialog";
-import { PosQuickCustomerDialog } from "@/components/pos/workspace/pos-quick-customer-dialog";
-import {
-  PosMobileSidePanel,
-  type PosPanelMode,
-} from "@/components/pos/workspace/pos-mobile-side-panel";
-import { PosPaymentPanel } from "@/components/pos/workspace/pos-payment-panel";
+  PosWorkspaceView,
+  type PosWorkspaceViewProps,
+} from "@/components/pos/workspace/pos-workspace-view";
 import {
   type PosAvailableItem,
   type PosCategoryOption,
   type PosCustomerOption,
-  type PosDiscountApprovalActionResult,
   type PosManualPaymentPolicy,
   type PosManualPaymentProfile,
   type PosOperationalContext,
 } from "@/features/pos/contracts";
 import {
   getCheckoutSubmissionValidationMessage,
-  type ActiveDiscountApproval,
   type StoredCheckoutAttemptState,
 } from "@/features/pos/checkout-client-state";
 import {
   getPosCartAddIssue,
   removePosCartItem,
 } from "@/features/pos/cart-state";
-import {
-  getStoredPosCartState,
-  removeStoredPosCartState,
-  saveStoredPosCartState,
-} from "@/features/pos/cart-storage";
-import {
-  getHeldCartAvailability,
-  getPendingHeldCartResumeState,
-  removePendingHeldCartResumeState,
-} from "@/features/pos/held-cart-state";
+import { removeStoredPosCartState } from "@/features/pos/cart-storage";
+import { getHeldCartAvailability } from "@/features/pos/held-cart-state";
 import {
   createPaymentDraftId,
   formatCurrency,
@@ -74,11 +46,14 @@ import {
   profileSupportsMethod,
 } from "@/features/pos/payment-draft";
 import { usePosCart } from "@/features/pos/use-pos-cart";
+import { usePosCartSession } from "@/features/pos/use-pos-cart-session";
 import { usePosCheckout } from "@/features/pos/use-pos-checkout";
 import { usePosCustomer } from "@/features/pos/use-pos-customer";
+import { usePosDiscount } from "@/features/pos/use-pos-discount";
 import { usePosHeldCart } from "@/features/pos/use-pos-held-cart";
 import { usePosPayment } from "@/features/pos/use-pos-payment";
 import { usePosScanner } from "@/features/pos/use-pos-scanner";
+import { getPosWorkspaceState } from "@/features/pos/workspace-state";
 
 type PosWorkspaceProps = {
   categories: PosCategoryOption[];
@@ -89,20 +64,6 @@ type PosWorkspaceProps = {
   context: PosOperationalContext;
   canManageShifts: boolean;
 };
-
-function getDiscountApprovalErrorMessage(
-  result: Extract<PosDiscountApprovalActionResult, { status: "error" }>,
-) {
-  const fieldErrorMessages = Object.values(result.fieldErrors ?? {}).filter(
-    Boolean,
-  );
-
-  if (fieldErrorMessages.length === 0) {
-    return result.message;
-  }
-
-  return `${result.message} ${fieldErrorMessages.join(" ")}`;
-}
 
 export function PosWorkspace({
   categories,
@@ -199,13 +160,6 @@ export function PosWorkspace({
     changePaymentMethod,
     updatePaymentVerificationForm,
   } = usePosPayment({ paymentProfiles });
-  const [discountApproval, setDiscountApproval] =
-    useState<ActiveDiscountApproval | null>(null);
-  const [discountFeedback, setDiscountFeedback] = useState<string | null>(null);
-  const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
-  const [discountAmountInput, setDiscountAmountInput] = useState("");
-  const [discountReasonInput, setDiscountReasonInput] = useState("");
-  const [isDiscountPending, startDiscountTransition] = useTransition();
   const {
     isHoldDialogOpen,
     holdTitleInput,
@@ -218,6 +172,35 @@ export function PosWorkspace({
     closeHoldDialog,
     holdCurrentCart: holdCurrentCartState,
   } = usePosHeldCart({ holdCart: holdPosCartAction });
+  const {
+    discountApproval,
+    canRequestDiscount,
+    discountDisabledReason,
+    setDiscountApproval,
+    discountFeedback,
+    setDiscountFeedback,
+    isDiscountDialogOpen,
+    discountAmountInput,
+    setDiscountAmountInput,
+    discountReasonInput,
+    setDiscountReasonInput,
+    isDiscountPending,
+    clearDiscountApproval: clearDiscountApprovalState,
+    openDiscountDialog,
+    closeDiscountDialog,
+    submitDiscountApproval: submitDiscountApprovalState,
+    refreshDiscountApprovalStatus: refreshDiscountApprovalStatusState,
+  } = usePosDiscount({
+    cartItems,
+    subtotalAmount,
+    selectedCustomerId: selectedCustomer?.id ?? null,
+    panelMode,
+    paymentCount: payments.length,
+    hasRegister: Boolean(context.register),
+    hasActiveShift: Boolean(context.activeShift),
+    requestDiscountApproval: requestPosDiscountApprovalAction,
+    getDiscountApprovalStatus: getPosDiscountApprovalStatusAction,
+  });
 
   const restoreCheckoutAttempt = useCallback(
     (attempt: StoredCheckoutAttemptState) => {
@@ -266,74 +249,23 @@ export function PosWorkspace({
     setPaymentFeedback,
   ]);
 
-  useEffect(() => {
-    const pendingResumeState = getPendingHeldCartResumeState();
-    const storedCartState = pendingResumeState ? null : getStoredPosCartState();
-
-    if (!pendingResumeState && !storedCartState) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      if (pendingResumeState) {
-        removePendingHeldCartResumeState();
-        removeStoredPosCartState();
-        setCartItems(pendingResumeState.items);
-        restoreCustomer(pendingResumeState.heldCart.customer);
-        setPayments([]);
-        setPaymentFeedback(null);
-        setPaymentAmountInput("");
-        resetCustomerDepositDraft();
-        setPaymentProviderInput("");
-        setPaymentReferenceInput("");
-        setPaymentNoteInput("");
-        setPanelMode("cart");
-        setIsMobileCartOpen(true);
-        setCartFeedback(
-          `Hold ${pendingResumeState.heldCart.holdNumber} berhasil dimasukkan kembali ke cart.`,
-        );
-        router.refresh();
-        return;
-      }
-
-      if (!storedCartState) {
-        return;
-      }
-
-      setCartItems(storedCartState.items);
-      restoreCustomer(storedCartState.customer);
-
-      if (storedCartState.items.length > 0) {
-        setCartFeedback("Cart POS terakhir dipulihkan dari sesi browser ini.");
-      }
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [
-    resetCustomerDepositDraft,
-    restoreCustomer,
-    router,
-    setCartFeedback,
+  usePosCartSession({
+    cartItems,
+    selectedCustomer,
+    panelMode,
     setCartItems,
-    setPaymentAmountInput,
+    restoreCustomer,
+    setPayments,
     setPaymentFeedback,
-    setPaymentNoteInput,
+    setPaymentAmountInput,
+    resetCustomerDepositDraft,
     setPaymentProviderInput,
     setPaymentReferenceInput,
-    setPayments,
-  ]);
-
-  useEffect(() => {
-    if (panelMode === "success") {
-      removeStoredPosCartState();
-      return;
-    }
-
-    saveStoredPosCartState({
-      items: cartItems,
-      customer: selectedCustomer,
-    });
-  }, [cartItems, panelMode, selectedCustomer]);
+    setPaymentNoteInput,
+    setPanelMode,
+    setIsMobileCartOpen,
+    setCartFeedback,
+  });
 
   const {
     checkoutResult,
@@ -354,80 +286,38 @@ export function PosWorkspace({
     setPaymentFeedback,
   });
 
-  const approvedDiscountAmount =
-    discountApproval?.status === "approved"
-      ? discountApproval.discountAmount
-      : 0;
-  const totalAmount = Math.max(subtotalAmount - approvedDiscountAmount, 0);
-  const hasPendingDiscountApproval = discountApproval?.status === "pending";
-  const canRequestDiscount =
-    panelMode === "cart" &&
-    cartItems.length > 0 &&
-    payments.length === 0 &&
-    subtotalAmount > 0 &&
-    !discountApproval &&
-    Boolean(context.register) &&
-    Boolean(context.activeShift);
-  const discountDisabledReason = !cartItems.length
-    ? "Tambahkan item sebelum meminta diskon."
-    : payments.length > 0
-      ? "Diskon harus diajukan sebelum payment ditambahkan."
-      : !context.register
-        ? "Register aktif belum tersedia untuk outlet ini."
-        : !context.activeShift
-          ? "Shift aktif belum dibuka, request diskon belum bisa dibuat."
-          : discountApproval
-            ? "Selesaikan atau reset request diskon yang sedang aktif."
-            : "Minta approval diskon manager/owner.";
-  const customerDepositBalance = selectedCustomer?.customerDepositBalance ?? 0;
   const rawCustomerDepositUsedAmount = parsePaymentAmountInput(
     customerDepositUsedInput,
   );
   const rawCustomerDepositInAmount = parsePaymentAmountInput(
     customerDepositInInput,
   );
-  const customerDepositUsedAmount = selectedCustomer
-    ? Math.min(
-        rawCustomerDepositUsedAmount,
-        totalAmount,
-        customerDepositBalance,
-      )
-    : 0;
-  const customerDepositInAmount = selectedCustomer
-    ? rawCustomerDepositInAmount
-    : 0;
-  const externalPaymentDueAmount = Math.max(
-    totalAmount - customerDepositUsedAmount + customerDepositInAmount,
-    0,
-  );
-  const paidAmount = useMemo(
-    () => payments.reduce((total, payment) => total + payment.amount, 0),
-    [payments],
-  );
-  const remainingAmount = Math.max(externalPaymentDueAmount - paidAmount, 0);
-  const totalChangeAmount = useMemo(
-    () => payments.reduce((total, payment) => total + payment.changeAmount, 0),
-    [payments],
-  );
-  const canCheckout =
-    cartItems.length > 0 &&
-    Boolean(context.register) &&
-    Boolean(context.activeShift) &&
-    !hasPendingDiscountApproval;
-  const checkoutDisabledReason = !cartItems.length
-    ? "Tambahkan minimal satu item sebelum lanjut ke pembayaran."
-    : !context.register
-      ? "Register aktif belum tersedia untuk outlet ini."
-      : !context.activeShift
-        ? "Shift aktif belum dibuka, checkout belum bisa dilanjutkan."
-        : hasPendingDiscountApproval
-          ? "Request diskon masih pending. Cek status approval atau reset request."
-          : "Lanjutkan ke pembayaran manual.";
-  const canFinalizePayment =
-    canCheckout &&
-    remainingAmount === 0 &&
-    (payments.length > 0 || customerDepositUsedAmount > 0) &&
-    rawCustomerDepositUsedAmount === customerDepositUsedAmount;
+  const {
+    approvedDiscountAmount,
+    totalAmount,
+    customerDepositUsedAmount,
+    customerDepositInAmount,
+    externalPaymentDueAmount,
+    paidAmount,
+    remainingAmount,
+    totalChangeAmount,
+    canCheckout,
+    checkoutDisabledReason,
+    canFinalizePayment,
+  } = getPosWorkspaceState({
+    panelMode,
+    itemCount: cartItems.length,
+    subtotalAmount,
+    payments,
+    discountApproval,
+    rawCustomerDepositUsedAmount,
+    rawCustomerDepositInAmount,
+    customerDepositBalance:
+      selectedCustomer?.customerDepositBalance ?? 0,
+    hasSelectedCustomer: Boolean(selectedCustomer),
+    hasRegister: Boolean(context.register),
+    hasActiveShift: Boolean(context.activeShift),
+  });
   const {
     canHoldCart,
     disabledReason: holdCartDisabledReason,
@@ -453,104 +343,20 @@ export function PosWorkspace({
   }
 
   function clearDiscountApproval(message?: string) {
-    setDiscountApproval(null);
-    setDiscountAmountInput("");
-    setDiscountReasonInput("");
-    setDiscountFeedback(message ?? null);
-    resetPaymentFlow();
-  }
-
-  function openDiscountDialog() {
-    if (!canRequestDiscount) {
-      setDiscountFeedback(discountDisabledReason);
-      return;
-    }
-
-    setDiscountAmountInput("");
-    setDiscountReasonInput("");
-    setDiscountFeedback(null);
-    setIsDiscountDialogOpen(true);
-  }
-
-  function closeDiscountDialog() {
-    if (isDiscountPending) {
-      return;
-    }
-
-    setIsDiscountDialogOpen(false);
+    clearDiscountApprovalState(message, resetPaymentFlow);
   }
 
   function requestDiscountApproval() {
-    if (!canRequestDiscount) {
-      setDiscountFeedback(discountDisabledReason);
-      return;
-    }
-
-    const discountAmount = parsePaymentAmountInput(discountAmountInput);
-    const reason = discountReasonInput.trim();
-
-    if (!Number.isSafeInteger(discountAmount) || discountAmount <= 0) {
-      setDiscountFeedback("Nominal diskon harus lebih dari Rp0.");
-      return;
-    }
-
-    if (discountAmount >= subtotalAmount) {
-      setDiscountFeedback(
-        "Nominal diskon harus lebih kecil dari subtotal transaksi.",
-      );
-      return;
-    }
-
-    if (reason.length < 5) {
-      setDiscountFeedback("Alasan diskon minimal 5 karakter.");
-      return;
-    }
-
-    setDiscountFeedback("Mengirim request diskon...");
-
-    startDiscountTransition(async () => {
-      const result = await requestPosDiscountApprovalAction({
-        itemIds: cartItems.map((item) => item.id),
-        discountAmount,
-        reason,
-        customerId: selectedCustomer?.id ?? null,
-      });
-
-      if (result.status === "error") {
-        setDiscountFeedback(getDiscountApprovalErrorMessage(result));
-        return;
-      }
-
-      setDiscountApproval(result.approval);
-      setDiscountFeedback(result.message);
-      setIsDiscountDialogOpen(false);
-      resetPaymentFlow();
-      router.refresh();
+    submitDiscountApprovalState({
+      resetPaymentFlow,
+      refreshWorkspace: () => router.refresh(),
     });
   }
 
   function refreshDiscountApprovalStatus() {
-    if (!discountApproval) {
-      setDiscountFeedback("Belum ada approval diskon yang perlu dicek.");
-      return;
-    }
-
-    setDiscountFeedback("Mengecek status approval diskon...");
-
-    startDiscountTransition(async () => {
-      const result = await getPosDiscountApprovalStatusAction(
-        discountApproval.id,
-      );
-
-      if (result.status !== "found") {
-        setDiscountFeedback(result.message);
-        return;
-      }
-
-      setDiscountApproval(result.approval);
-      setDiscountFeedback(result.message);
-      resetPaymentFlow();
-      router.refresh();
+    refreshDiscountApprovalStatusState({
+      resetPaymentFlow,
+      refreshWorkspace: () => router.refresh(),
     });
   }
 
@@ -960,242 +766,209 @@ export function PosWorkspace({
     });
   }
 
-  const cartContent = (
-    <PosCartContent
-      cartItems={cartItems}
-      subtotalAmount={subtotalAmount}
-      discountAmount={approvedDiscountAmount}
-      totalAmount={totalAmount}
-      discountApproval={discountApproval}
-      isDiscountPending={isDiscountPending}
-      discountFeedback={discountFeedback}
-      canRequestDiscount={canRequestDiscount}
-      discountDisabledReason={discountDisabledReason}
-      canCheckout={canCheckout}
-      checkoutDisabledReason={checkoutDisabledReason}
-      customers={customerOptions}
-      selectedCustomer={selectedCustomer}
-      customerQuery={customerQuery}
-      customerSearchResults={customerSearchResults}
-      isCustomerSelectorOpen={isCustomerSelectorOpen}
-      onCustomerQueryChange={handleCustomerQueryChange}
-      onCustomerInputFocus={openCustomerSelector}
-      onCustomerInputBlur={closeCustomerSelectorAfterDelay}
-      onOpenQuickCustomer={openQuickCustomerDialog}
-      onSelectCustomer={selectCustomer}
-      onClearCustomer={clearSelectedCustomer}
-      onRemoveItem={removeItemFromCart}
-      onClearCart={clearCart}
-      onOpenDiscountDialog={openDiscountDialog}
-      onRefreshDiscountApproval={refreshDiscountApprovalStatus}
-      onClearDiscountApproval={() =>
-        clearDiscountApproval("Request diskon direset dari cart.")
-      }
-      onContinueToPayment={continueToPayment}
-      canHoldCart={canHoldCart}
-      holdCartDisabledReason={holdCartDisabledReason}
-      onOpenHoldDialog={openHoldDialog}
-    />
-  );
+  function changeCustomerDepositUsed(value: string) {
+    if (payments.length > 0) {
+      setPaymentFeedback(
+        "Reset daftar pembayaran sebelum mengubah Dana Titip.",
+      );
+      return;
+    }
 
-  const paymentContent = (
-    <PosPaymentPanel
-      totalAmount={totalAmount}
-      customerDepositUsedAmount={customerDepositUsedAmount}
-      customerDepositInAmount={customerDepositInAmount}
-      externalPaymentDueAmount={externalPaymentDueAmount}
-      paidAmount={paidAmount}
-      remainingAmount={remainingAmount}
-      totalChangeAmount={totalChangeAmount}
-      payments={payments}
-      selectedCustomer={selectedCustomer}
-      customerDepositUsedInput={customerDepositUsedInput}
-      customerDepositInInput={customerDepositInInput}
-      paymentProfiles={paymentProfiles}
-      paymentPolicies={paymentPolicies}
-      selectedMethod={selectedMethod}
-      selectedProfileId={selectedPaymentProfileId}
-      verificationConfirmed={paymentVerificationConfirmed}
-      amountInput={paymentAmountInput}
-      referenceInput={paymentReferenceInput}
-      noteInput={paymentNoteInput}
-      verificationForm={paymentVerificationForm}
-      evidenceFileName={paymentEvidenceFile?.name ?? null}
-      manualPaymentApproval={manualPaymentApproval}
-      paymentFeedback={paymentFeedback}
-      canFinalizePayment={canFinalizePayment}
-      isCheckoutPending={isCheckoutPending || isCheckoutRecovering}
-      isAddingPayment={isAddingPayment}
-      isApprovalChecking={isManualApprovalChecking}
-      onBackToCart={() => setPanelMode("cart")}
-      onMethodChange={(method) => changePaymentMethod(method, remainingAmount)}
-      onProfileChange={selectPaymentProfile}
-      onVerificationConfirmedChange={setPaymentVerificationConfirmed}
-      onAmountInputChange={setPaymentAmountInput}
-      onCustomerDepositUsedInputChange={(value) => {
-        if (payments.length > 0) {
-          setPaymentFeedback(
-            "Reset daftar pembayaran sebelum mengubah Dana Titip.",
-          );
-          return;
-        }
+    invalidateCheckoutAttempt();
+    setCustomerDepositUsedInput(value);
+    setPaymentAmountInput("");
+  }
 
-        invalidateCheckoutAttempt();
-        setCustomerDepositUsedInput(value);
-        setPaymentAmountInput("");
-      }}
-      onCustomerDepositInInputChange={(value) => {
-        if (payments.length > 0) {
-          setPaymentFeedback(
-            "Reset daftar pembayaran sebelum mengubah Dana Titip.",
-          );
-          return;
-        }
+  function changeCustomerDepositIn(value: string) {
+    if (payments.length > 0) {
+      setPaymentFeedback(
+        "Reset daftar pembayaran sebelum mengubah Dana Titip.",
+      );
+      return;
+    }
 
-        invalidateCheckoutAttempt();
-        setCustomerDepositInInput(value);
-        setPaymentAmountInput("");
-      }}
-      onReferenceInputChange={setPaymentReferenceInput}
-      onNoteInputChange={setPaymentNoteInput}
-      onVerificationFormChange={updatePaymentVerificationForm}
-      onEvidenceFileChange={setPaymentEvidenceFile}
-      onCheckManualPaymentApproval={checkManualPaymentApproval}
-      onAddPayment={addPayment}
-      onRemovePayment={removePayment}
-      onResetPayments={resetPayments}
-      onFinalizePayment={finalizePayment}
-    />
-  );
+    invalidateCheckoutAttempt();
+    setCustomerDepositInInput(value);
+    setPaymentAmountInput("");
+  }
 
-  const successContent = checkoutResult ? (
-    <PosCheckoutSuccessContent
-      sale={checkoutResult}
-      onStartNewTransaction={() => {
-        invalidateCheckoutAttempt();
-        clearCheckoutResult();
-        setCartFeedback(null);
-        setPaymentFeedback(null);
-        clearCustomerState();
-        resetCustomerDepositDraft();
-        setPanelMode("cart");
-        setIsMobileCartOpen(false);
-      }}
-    />
-  ) : null;
+  function startNewTransaction() {
+    invalidateCheckoutAttempt();
+    clearCheckoutResult();
+    setCartFeedback(null);
+    setPaymentFeedback(null);
+    clearCustomerState();
+    resetCustomerDepositDraft();
+    setPanelMode("cart");
+    setIsMobileCartOpen(false);
+  }
 
-  const sidePanelContent =
-    panelMode === "success" && successContent
-      ? successContent
-      : panelMode === "payment"
-        ? paymentContent
-        : cartContent;
+  const workspaceViewProps = {
+    dialogs: {
+      quickCustomer: isQuickCustomerDialogOpen
+        ? {
+            form: quickCustomerForm,
+            result: quickCustomerResult,
+            isPending: isQuickCustomerPending,
+            onChange: updateQuickCustomerForm,
+            onCancel: closeQuickCustomerDialog,
+            onSubmit: submitQuickCustomer,
+            onUseDuplicate: useExistingQuickCustomer,
+          }
+        : null,
+      discountApproval: isDiscountDialogOpen
+        ? {
+            cartItems,
+            subtotalAmount,
+            selectedCustomer,
+            amountInput: discountAmountInput,
+            reasonInput: discountReasonInput,
+            feedback: discountFeedback,
+            isPending: isDiscountPending,
+            onAmountInputChange: setDiscountAmountInput,
+            onReasonInputChange: setDiscountReasonInput,
+            onCancel: closeDiscountDialog,
+            onSubmit: requestDiscountApproval,
+          }
+        : null,
+      holdCart: isHoldDialogOpen
+        ? {
+            cartItems,
+            totalAmount,
+            selectedCustomer,
+            titleInput: holdTitleInput,
+            noteInput: holdNoteInput,
+            feedback: holdFeedback,
+            isPending: isHoldPending,
+            onTitleInputChange: setHoldTitleInput,
+            onNoteInputChange: setHoldNoteInput,
+            onCancel: closeHoldDialog,
+            onSubmit: holdCurrentCart,
+          }
+        : null,
+    },
+    catalog: {
+      categories,
+      items,
+      cartItemIds,
+      activeCategoryId,
+      isCategoryPickerOpen,
+      searchQuery,
+      onActiveCategoryChange: setActiveCategoryId,
+      onCategoryPickerOpenChange: setIsCategoryPickerOpen,
+      onSearchQueryChange: setSearchQuery,
+      onOpenScanner: () => setIsScannerOpen(true),
+      onAddItem: addItemToCart,
+    },
+    shifts: {
+      context,
+      canManageShifts,
+      isCloseShiftPanelOpen,
+      onToggleCloseShiftPanel: () =>
+        setIsCloseShiftPanelOpen((isOpen) => !isOpen),
+      onCloseShiftPanel: () => setIsCloseShiftPanelOpen(false),
+    },
+    sidePanel: {
+      isMobileOpen: isMobileCartOpen,
+      mode: panelMode,
+      itemCount: cartItems.length,
+      totalAmount,
+      cart: {
+        cartItems,
+        subtotalAmount,
+        discountAmount: approvedDiscountAmount,
+        totalAmount,
+        discountApproval,
+        isDiscountPending,
+        discountFeedback,
+        canRequestDiscount,
+        discountDisabledReason,
+        canCheckout,
+        checkoutDisabledReason,
+        customers: customerOptions,
+        selectedCustomer,
+        customerQuery,
+        customerSearchResults,
+        isCustomerSelectorOpen,
+        onCustomerQueryChange: handleCustomerQueryChange,
+        onCustomerInputFocus: openCustomerSelector,
+        onCustomerInputBlur: closeCustomerSelectorAfterDelay,
+        onOpenQuickCustomer: openQuickCustomerDialog,
+        onSelectCustomer: selectCustomer,
+        onClearCustomer: clearSelectedCustomer,
+        onRemoveItem: removeItemFromCart,
+        onClearCart: clearCart,
+        onOpenDiscountDialog: openDiscountDialog,
+        onRefreshDiscountApproval: refreshDiscountApprovalStatus,
+        onClearDiscountApproval: () =>
+          clearDiscountApproval("Request diskon direset dari cart."),
+        onContinueToPayment: continueToPayment,
+        canHoldCart,
+        holdCartDisabledReason,
+        onOpenHoldDialog: openHoldDialog,
+      },
+      payment: {
+        totalAmount,
+        customerDepositUsedAmount,
+        customerDepositInAmount,
+        externalPaymentDueAmount,
+        paidAmount,
+        remainingAmount,
+        totalChangeAmount,
+        payments,
+        selectedCustomer,
+        customerDepositUsedInput,
+        customerDepositInInput,
+        paymentProfiles,
+        paymentPolicies,
+        selectedMethod,
+        selectedProfileId: selectedPaymentProfileId,
+        verificationConfirmed: paymentVerificationConfirmed,
+        amountInput: paymentAmountInput,
+        referenceInput: paymentReferenceInput,
+        noteInput: paymentNoteInput,
+        verificationForm: paymentVerificationForm,
+        evidenceFileName: paymentEvidenceFile?.name ?? null,
+        manualPaymentApproval,
+        paymentFeedback,
+        canFinalizePayment,
+        isCheckoutPending: isCheckoutPending || isCheckoutRecovering,
+        isAddingPayment,
+        isApprovalChecking: isManualApprovalChecking,
+        onBackToCart: () => setPanelMode("cart"),
+        onMethodChange: (method) =>
+          changePaymentMethod(method, remainingAmount),
+        onProfileChange: selectPaymentProfile,
+        onVerificationConfirmedChange: setPaymentVerificationConfirmed,
+        onAmountInputChange: setPaymentAmountInput,
+        onCustomerDepositUsedInputChange: changeCustomerDepositUsed,
+        onCustomerDepositInInputChange: changeCustomerDepositIn,
+        onReferenceInputChange: setPaymentReferenceInput,
+        onNoteInputChange: setPaymentNoteInput,
+        onVerificationFormChange: updatePaymentVerificationForm,
+        onEvidenceFileChange: setPaymentEvidenceFile,
+        onCheckManualPaymentApproval: checkManualPaymentApproval,
+        onAddPayment: addPayment,
+        onRemovePayment: removePayment,
+        onResetPayments: resetPayments,
+        onFinalizePayment: finalizePayment,
+      },
+      success: checkoutResult
+        ? {
+            sale: checkoutResult,
+            onStartNewTransaction: startNewTransaction,
+          }
+        : null,
+      onOpenMobile: () => setIsMobileCartOpen(true),
+      onCloseMobile: () => setIsMobileCartOpen(false),
+    },
+    scanner: {
+      isOpen: isScannerOpen,
+      isProcessing: isScanLookupPending,
+      onClose: () => setIsScannerOpen(false),
+      onScan: lookupScannedItem,
+    },
+  } satisfies PosWorkspaceViewProps;
 
-  return (
-    <>
-      {isQuickCustomerDialogOpen ? (
-        <PosQuickCustomerDialog
-          form={quickCustomerForm}
-          result={quickCustomerResult}
-          isPending={isQuickCustomerPending}
-          onChange={updateQuickCustomerForm}
-          onCancel={closeQuickCustomerDialog}
-          onSubmit={submitQuickCustomer}
-          onUseDuplicate={useExistingQuickCustomer}
-        />
-      ) : null}
-
-      {isDiscountDialogOpen ? (
-        <PosDiscountApprovalDialog
-          cartItems={cartItems}
-          subtotalAmount={subtotalAmount}
-          selectedCustomer={selectedCustomer}
-          amountInput={discountAmountInput}
-          reasonInput={discountReasonInput}
-          feedback={discountFeedback}
-          isPending={isDiscountPending}
-          onAmountInputChange={setDiscountAmountInput}
-          onReasonInputChange={setDiscountReasonInput}
-          onCancel={closeDiscountDialog}
-          onSubmit={requestDiscountApproval}
-        />
-      ) : null}
-
-      {isHoldDialogOpen ? (
-        <PosHoldCartDialog
-          cartItems={cartItems}
-          totalAmount={totalAmount}
-          selectedCustomer={selectedCustomer}
-          titleInput={holdTitleInput}
-          noteInput={holdNoteInput}
-          feedback={holdFeedback}
-          isPending={isHoldPending}
-          onTitleInputChange={setHoldTitleInput}
-          onNoteInputChange={setHoldNoteInput}
-          onCancel={closeHoldDialog}
-          onSubmit={holdCurrentCart}
-        />
-      ) : null}
-
-      <div className="lg:grid lg:h-[calc(100vh-7.5rem)] lg:grid-cols-[minmax(0,1fr)_380px] lg:overflow-hidden">
-        {/* Katalog */}
-        <PosCatalogPanel
-          categories={categories}
-          items={items}
-          cartItemIds={cartItemIds}
-          activeCategoryId={activeCategoryId}
-          isCategoryPickerOpen={isCategoryPickerOpen}
-          searchQuery={searchQuery}
-          onActiveCategoryChange={setActiveCategoryId}
-          onCategoryPickerOpenChange={setIsCategoryPickerOpen}
-          onSearchQueryChange={setSearchQuery}
-          onOpenScanner={() => setIsScannerOpen(true)}
-          onAddItem={addItemToCart}
-        >
-          <PosContextNotice
-            context={context}
-            canManageShifts={canManageShifts}
-            isCloseShiftPanelOpen={isCloseShiftPanelOpen}
-            onCloseShiftClick={() =>
-              setIsCloseShiftPanelOpen((isOpen) => !isOpen)
-            }
-          />
-
-          {canManageShifts ? <PosOpenShiftCard context={context} /> : null}
-
-          {canManageShifts &&
-          isCloseShiftPanelOpen &&
-          context.activeShift ? (
-            <PosCloseShiftCard
-              context={context}
-              onCancel={() => setIsCloseShiftPanelOpen(false)}
-            />
-          ) : null}
-        </PosCatalogPanel>
-
-        {/* Cart desktop */}
-        <aside className="hidden min-h-0 overflow-y-auto bg-white lg:block">
-          {sidePanelContent}
-        </aside>
-      </div>
-
-      <PosMobileSidePanel
-        isOpen={isMobileCartOpen}
-        mode={panelMode}
-        itemCount={cartItems.length}
-        totalAmount={totalAmount}
-        onOpen={() => setIsMobileCartOpen(true)}
-        onClose={() => setIsMobileCartOpen(false)}
-      >
-        {sidePanelContent}
-      </PosMobileSidePanel>
-
-      <CameraScannerModal
-        isOpen={isScannerOpen}
-        isProcessing={isScanLookupPending}
-        onClose={() => setIsScannerOpen(false)}
-        onScan={lookupScannedItem}
-      />
-    </>
-  );
+  return <PosWorkspaceView {...workspaceViewProps} />;
 }

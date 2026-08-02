@@ -29,6 +29,7 @@
     "check-pos-payment-state.ts",
     "check-pos-result-shift-view.ts",
     "check-pos-workspace-commands.ts",
+    "check-pos-workspace-composition.ts",
     "check-receipt-token.ts",
     "check-routes.ts",
     "check-sale-correction.ts",
