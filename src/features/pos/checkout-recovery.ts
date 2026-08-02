@@ -13,9 +13,10 @@ import {
   type PosCheckoutSaleResult,
 } from "@/features/pos/contracts";
 import { isValidPosCheckoutIdempotencyKey } from "@/features/pos/checkout-fingerprint";
+import { POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS } from "@/features/pos/checkout/constants";
 import { type AuthContext } from "@/lib/auth/session";
 
-export const POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS = 1_500;
+export { POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS } from "@/features/pos/checkout/constants";
 
 type PosCheckoutSaleRecord = PosCheckoutSaleResult & {
   outletId: string;

@@ -1,6 +1,6 @@
 "use server";
 
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import {
   and,
@@ -28,7 +28,6 @@ import {
   customers,
   hardwareAgents,
   inventoryMovements,
-  manualPaymentPolicies,
   manualPaymentProfiles,
   paymentEvidenceUploads,
   outlets,
@@ -51,14 +50,12 @@ import {
   type PosDiscountApprovalActionResult,
   type PosDiscountApprovalPayload,
   type PosDiscountApprovalStatusResult,
-  type PosManualPaymentApproval,
   type PosManualPaymentApprovalStatusResult,
   type PosPaymentEvidenceUploadResult,
   type PosHeldCartActionResult,
   type PosHeldCartItem,
   type PosHeldCartSummary,
   type PosHoldCartPayload,
-  type PosManualPaymentMethod,
   type PosQuickCustomerActionResult,
   type PosQuickCustomerPayload,
   type PosScanLookupResult,
@@ -73,10 +70,38 @@ import {
 import {
   getPosCheckoutRecoveryStatus,
   getPosCheckoutSaleResult,
-  POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS,
 } from "@/features/pos/checkout-recovery";
 import { isValidPosCheckoutIdempotencyKey } from "@/features/pos/checkout-fingerprint";
 import { reconcileCheckoutFinancials } from "@/features/pos/checkout-financials";
+import {
+  checkoutApprovalRequired,
+  checkoutFailure,
+  checkoutProcessing,
+  checkoutSuccess,
+} from "@/features/pos/checkout/action-results";
+import {
+  allocateLineDiscounts,
+  createPosCartFingerprint,
+  formatServerCurrency,
+  generateInvoiceNumber,
+  getDiscountPercent,
+} from "@/features/pos/checkout/calculations";
+import { CheckoutValidationError } from "@/features/pos/checkout/errors";
+import {
+  assessManualPaymentReviewRequirement,
+  getManualPaymentPolicyMap,
+  getOrCreateManualPaymentApproval,
+  mapPosManualPaymentApproval,
+} from "@/features/pos/checkout/manual-payment-review-service";
+import {
+  getPaymentProvider,
+  manualPaymentMethodLabels,
+} from "@/features/pos/checkout/payment-methods";
+import {
+  normalizeCheckoutPayments,
+  type CheckoutPaymentProfile,
+} from "@/features/pos/checkout/payment-normalization";
+import type { NormalizedCheckoutPayment } from "@/features/pos/checkout/types";
 import { claimProductItemsForSale } from "@/features/pos/inventory-sale-claim";
 import { lockManualPaymentReference } from "@/features/pos/manual-payment-reference-lock";
 import {
@@ -94,15 +119,11 @@ import {
   publishSaleRecoveryNotificationInTransaction,
 } from "@/features/notifications/sales";
 import {
-  createManualPaymentVerificationFingerprint,
-  DEFAULT_MANUAL_PAYMENT_POLICIES,
-  getManualPaymentProfileType,
   isNonCashManualPaymentMethod,
-  normalizeAndValidateManualPaymentVerification,
-  type ManualPaymentPolicy,
   type NonCashManualPaymentMethod,
 } from "@/features/pos/manual-payment-verification";
 import { requirePermission } from "@/lib/auth/session";
+import { isPostgresUniqueViolation } from "@/lib/db/postgres-errors";
 import { buildReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import {
   createHardwareJobV2,
@@ -126,44 +147,6 @@ const POS_HELD_CARTS_PATH = "/pos/ditahan";
 const HARDWARE_AGENT_ONLINE_WINDOW_MS = 90 * 1000;
 const HARDWARE_AGENT_STALE_WINDOW_MS = 5 * 60 * 1000;
 
-const manualPaymentMethodLabels: Record<PosManualPaymentMethod, string> = {
-  cash: "Cash",
-  debit_card: "Debit Card EDC",
-  credit_card: "Credit Card EDC",
-};
-
-const manualPaymentMethods = Object.keys(
-  manualPaymentMethodLabels,
-) as PosManualPaymentMethod[];
-
-type NormalizedCheckoutPayment = {
-  method: PosManualPaymentMethod;
-  amount: number;
-  receivedAmount: number | null;
-  changeAmount: number;
-  provider: string | null;
-  reference: string | null;
-  note: string | null;
-  verificationSource: string | null;
-  providerPaidAt: Date | null;
-  providerPaidAtIso: string | null;
-  evidenceKey: string | null;
-  manualPaymentProfileId: string | null;
-  manualPaymentProfileName: string | null;
-  manualPaymentProfileCode: string | null;
-  manualPaymentProfileRegisterId: string | null;
-  verificationDetails: Record<string, string | null>;
-  normalizedProvider: string | null;
-  normalizedReference: string | null;
-};
-
-class CheckoutValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "CheckoutValidationError";
-  }
-}
-
 function failure(
   message: string,
   fieldErrors?: Record<string, string>,
@@ -179,20 +162,6 @@ function success(message: string): PosShiftActionState {
   return {
     status: "success",
     message,
-  };
-}
-
-function checkoutFailure(
-  message: string,
-  fieldErrors?: Record<string, string>,
-  code: Extract<PosCheckoutActionResult, { status: "error" }>["code"] =
-    "validation_error",
-): PosCheckoutActionResult {
-  return {
-    status: "error",
-    message,
-    code,
-    fieldErrors,
   };
 }
 
@@ -383,38 +352,6 @@ function getSystemErrorMessage(error: unknown) {
   return String(error);
 }
 
-function checkoutSuccess({
-  message,
-  sale,
-  recovery,
-}: {
-  message: string;
-  sale: Extract<PosCheckoutActionResult, { status: "success" }>["sale"];
-  recovery: Extract<
-    PosCheckoutActionResult,
-    { status: "success" }
-  >["recovery"];
-}): PosCheckoutActionResult {
-  return {
-    status: "success",
-    message,
-    sale,
-    recovery,
-  };
-}
-
-function checkoutProcessing(
-  idempotencyKey: string,
-  message = "Transaksi masih diproses. Jangan membuat transaksi baru.",
-): PosCheckoutActionResult {
-  return {
-    status: "processing",
-    message,
-    idempotencyKey,
-    retryAfterMs: POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS,
-  };
-}
-
 function posDiscountFailure(
   message: string,
   fieldErrors?: Record<string, string>,
@@ -454,432 +391,6 @@ function mapPosDiscountApproval(row: {
   };
 }
 
-function mapPosManualPaymentApproval(row: {
-  id: string;
-  status: "pending" | "approved" | "rejected";
-  requestData: Record<string, unknown>;
-  notes: string | null;
-  responseNotes: string | null;
-  createdAt: Date;
-  resolvedAt: Date | null;
-}): PosManualPaymentApproval {
-  return {
-    id: row.id,
-    status: row.status,
-    reason: String(
-      row.requestData.triggerReason ?? row.requestData.reason ?? row.notes ?? "",
-    ).slice(0, 500),
-    responseNotes: row.responseNotes,
-    createdAtIso: row.createdAt.toISOString(),
-    resolvedAtIso: row.resolvedAt?.toISOString() ?? null,
-  };
-}
-
-function checkoutApprovalRequired(
-  approval: PosManualPaymentApproval,
-  message: string,
-): PosCheckoutActionResult {
-  return {
-    status: "approval_required",
-    message,
-    approval,
-  };
-}
-
-async function getManualPaymentPolicyMap(
-  organizationId: string,
-): Promise<Record<NonCashManualPaymentMethod, ManualPaymentPolicy>> {
-  const rows = await db
-    .select({
-      method: manualPaymentPolicies.method,
-      coVerificationThreshold: manualPaymentPolicies.coVerificationThreshold,
-      evidenceThreshold: manualPaymentPolicies.evidenceThreshold,
-      duplicateLookbackDays: manualPaymentPolicies.duplicateLookbackDays,
-      isEnabled: manualPaymentPolicies.isEnabled,
-    })
-    .from(manualPaymentPolicies)
-    .where(eq(manualPaymentPolicies.organizationId, organizationId));
-
-  const policies = structuredClone(DEFAULT_MANUAL_PAYMENT_POLICIES);
-
-  for (const row of rows) {
-    if (!isNonCashManualPaymentMethod(row.method)) continue;
-
-    policies[row.method] = {
-      method: row.method,
-      coVerificationThreshold: Number(row.coVerificationThreshold),
-      evidenceThreshold: Number(row.evidenceThreshold),
-      duplicateLookbackDays: row.duplicateLookbackDays,
-      isEnabled: row.isEnabled,
-    };
-  }
-
-  return policies;
-}
-
-type ManualPaymentReviewAssessment = {
-  fingerprint: string;
-  requiresApproval: boolean;
-  triggerReason: string;
-  reviewAmount: number;
-  duplicatePayments: Array<{
-    paymentId: string;
-    invoiceNumber: string;
-    reference: string | null;
-  }>;
-};
-
-async function assessManualPaymentReviewRequirement({
-  organizationId,
-  outletId,
-  cashierId,
-  itemIds,
-  customerId,
-  discountApprovalId,
-  payments: normalizedPayments,
-  policies,
-}: {
-  organizationId: string;
-  outletId: string;
-  cashierId: string;
-  itemIds: string[];
-  customerId: string | null;
-  discountApprovalId: string | null;
-  payments: NormalizedCheckoutPayment[];
-  policies: Record<NonCashManualPaymentMethod, ManualPaymentPolicy>;
-}): Promise<ManualPaymentReviewAssessment> {
-  const nonCashPayments = normalizedPayments.filter((payment) =>
-    isNonCashManualPaymentMethod(payment.method),
-  );
-  const duplicatePayments: ManualPaymentReviewAssessment["duplicatePayments"] = [];
-  const thresholdMethods = new Set<string>();
-
-  for (const payment of nonCashPayments) {
-    const policy = policies[payment.method as NonCashManualPaymentMethod];
-
-    if (payment.amount >= policy.coVerificationThreshold) {
-      thresholdMethods.add(manualPaymentMethodLabels[payment.method]);
-    }
-
-    const lookbackDate = new Date(
-      Date.now() - policy.duplicateLookbackDays * 24 * 60 * 60 * 1000,
-    );
-    const duplicateRows = await db
-      .select({
-        paymentId: payments.id,
-        invoiceNumber: sales.invoiceNumber,
-        reference: payments.providerReference,
-      })
-      .from(payments)
-      .innerJoin(sales, eq(payments.saleId, sales.id))
-      .where(
-        and(
-          eq(sales.organizationId, organizationId),
-          eq(sales.outletId, outletId),
-          eq(payments.method, payment.method),
-          eq(payments.normalizedReference, payment.normalizedReference!),
-          eq(payments.status, "paid"),
-          gte(payments.createdAt, lookbackDate),
-          sql`upper(regexp_replace(${payments.provider}, '\\s+', ' ', 'g')) = ${payment.normalizedProvider}`,
-        ),
-      )
-      .limit(5);
-
-    duplicatePayments.push(...duplicateRows);
-  }
-
-  const reasons: string[] = [];
-
-  if (thresholdMethods.size > 0) {
-    reasons.push(
-      `Nominal ${Array.from(thresholdMethods).join(", ")} melewati threshold co-verification.`,
-    );
-  }
-
-  if (duplicatePayments.length > 0) {
-    reasons.push(
-      `${duplicatePayments.length} reference pembayaran sudah pernah digunakan.`,
-    );
-  }
-
-  const fingerprint = createManualPaymentVerificationFingerprint({
-    organizationId,
-    outletId,
-    cashierId,
-    itemIds,
-    customerId,
-    discountApprovalId,
-    payments: normalizedPayments.map((payment) => ({
-      method: payment.method,
-      amount: payment.amount,
-      receivedAmount: payment.receivedAmount,
-      changeAmount: payment.changeAmount,
-      provider: payment.provider,
-      reference: payment.reference,
-      note: payment.note,
-      verificationSource:
-        payment.verificationSource as PosCheckoutPayload["payments"][number]["verificationSource"],
-      providerPaidAtIso: payment.providerPaidAtIso,
-      evidenceKey: payment.evidenceKey,
-      verificationDetails: payment.verificationDetails,
-    })),
-  });
-
-  return {
-    fingerprint,
-    requiresApproval: reasons.length > 0,
-    triggerReason: reasons.join(" "),
-    reviewAmount: nonCashPayments.reduce(
-      (total, payment) => total + payment.amount,
-      0,
-    ),
-    duplicatePayments,
-  };
-}
-
-async function getOrCreateManualPaymentApproval({
-  auth,
-  outletId,
-  assessment,
-  normalizedPayments,
-  requestMetadata,
-}: {
-  auth: Awaited<ReturnType<typeof requirePermission>>;
-  outletId: string;
-  assessment: ManualPaymentReviewAssessment;
-  normalizedPayments: NormalizedCheckoutPayment[];
-  requestMetadata: Awaited<ReturnType<typeof getRequestMetadata>>;
-}) {
-  const existingRows = await db
-    .select({
-      id: approvals.id,
-      status: approvals.status,
-      requestData: approvals.requestData,
-      notes: approvals.notes,
-      responseNotes: approvals.responseNotes,
-      createdAt: approvals.createdAt,
-      resolvedAt: approvals.resolvedAt,
-    })
-    .from(approvals)
-    .where(
-      and(
-        eq(approvals.organizationId, auth.organization.id),
-        eq(approvals.outletId, outletId),
-        eq(approvals.requestedBy, auth.user.id),
-        eq(approvals.type, "manual_payment_verification"),
-        sql`${approvals.requestData}->>'verificationFingerprint' = ${assessment.fingerprint}`,
-      ),
-    )
-    .orderBy(sql`${approvals.createdAt} desc`)
-    .limit(1);
-
-  if (existingRows[0]) return mapPosManualPaymentApproval(existingRows[0]);
-
-  const now = new Date();
-  const paymentMethodsLabel = Array.from(
-    new Set(
-      normalizedPayments
-        .filter((payment) => payment.method !== "cash")
-        .map((payment) => manualPaymentMethodLabels[payment.method]),
-    ),
-  ).join(", ");
-  const requestData = {
-    source: "pos.manual_payment_verification",
-    verificationFingerprint: assessment.fingerprint,
-    triggerReason: assessment.triggerReason,
-    reviewAmount: assessment.reviewAmount,
-    totalNonCashAmount: assessment.reviewAmount,
-    paymentMethodsLabel,
-    duplicateCount: assessment.duplicatePayments.length,
-    duplicatePayments: assessment.duplicatePayments,
-    requesterName: auth.user.fullName,
-    payments: normalizedPayments
-      .filter((payment) => payment.method !== "cash")
-      .map((payment) => ({
-        method: payment.method,
-        methodLabel: manualPaymentMethodLabels[payment.method],
-        amount: payment.amount,
-        provider: payment.provider,
-        reference: payment.reference,
-        verificationSource: payment.verificationSource,
-        providerPaidAtIso: payment.providerPaidAtIso,
-        evidenceKey: payment.evidenceKey,
-        verificationDetails: payment.verificationDetails,
-      })),
-  };
-
-  let insertedApproval: {
-    id: string;
-    status: "pending" | "approved" | "rejected";
-    requestData: Record<string, unknown>;
-    notes: string | null;
-    responseNotes: string | null;
-    createdAt: Date;
-    resolvedAt: Date | null;
-  } | null = null;
-
-  try {
-    const insertedRows = await db
-      .insert(approvals)
-      .values({
-        organizationId: auth.organization.id,
-        outletId,
-        type: "manual_payment_verification",
-        status: "pending",
-        requestedBy: auth.user.id,
-        approvedBy: null,
-        referenceType: "pos_manual_payment",
-        referenceId: null,
-        requestData,
-        notes: assessment.triggerReason,
-        responseNotes: null,
-        createdAt: now,
-        resolvedAt: null,
-      })
-      .returning({
-        id: approvals.id,
-        status: approvals.status,
-        requestData: approvals.requestData,
-        notes: approvals.notes,
-        responseNotes: approvals.responseNotes,
-        createdAt: approvals.createdAt,
-        resolvedAt: approvals.resolvedAt,
-      });
-
-    insertedApproval = insertedRows[0] ?? null;
-  } catch (error) {
-    if (
-      !isPostgresUniqueViolation(
-        error,
-        "approvals_manual_payment_fingerprint_uq",
-      )
-    ) {
-      throw error;
-    }
-
-    const [concurrentApproval] = await db
-      .select({
-        id: approvals.id,
-        status: approvals.status,
-        requestData: approvals.requestData,
-        notes: approvals.notes,
-        responseNotes: approvals.responseNotes,
-        createdAt: approvals.createdAt,
-        resolvedAt: approvals.resolvedAt,
-      })
-      .from(approvals)
-      .where(
-        and(
-          eq(approvals.organizationId, auth.organization.id),
-          eq(approvals.outletId, outletId),
-          eq(approvals.requestedBy, auth.user.id),
-          eq(approvals.type, "manual_payment_verification"),
-          sql`${approvals.requestData}->>'verificationFingerprint' = ${assessment.fingerprint}`,
-        ),
-      )
-      .limit(1);
-
-    if (concurrentApproval) {
-      return mapPosManualPaymentApproval(concurrentApproval);
-    }
-
-    throw error;
-  }
-
-  if (!insertedApproval) throw new Error("MANUAL_PAYMENT_APPROVAL_INSERT_FAILED");
-
-  await db.insert(auditLogs).values({
-    organizationId: auth.organization.id,
-    outletId,
-    actorUserId: auth.user.id,
-    action: "approval.request_manual_payment_verification",
-    entityType: "approval",
-    entityId: insertedApproval.id,
-    beforeData: null,
-    afterData: {
-      status: "pending",
-      type: "manual_payment_verification",
-      requestData,
-    },
-    reason: assessment.triggerReason,
-    ipAddress: requestMetadata.ipAddress,
-    userAgent: requestMetadata.userAgent,
-    metadata: {
-      verificationFingerprint: assessment.fingerprint,
-      duplicateCount: assessment.duplicatePayments.length,
-      reviewAmount: assessment.reviewAmount,
-    },
-    createdAt: now,
-  });
-
-  revalidatePath("/admin/operasional/approval");
-  revalidatePath("/admin");
-
-  return mapPosManualPaymentApproval(insertedApproval);
-}
-
-function createPosCartFingerprint({
-  outletId,
-  itemIds,
-  subtotalAmount,
-  discountAmount,
-}: {
-  outletId: string;
-  itemIds: string[];
-  subtotalAmount: number;
-  discountAmount: number;
-}) {
-  const source = JSON.stringify({
-    outletId,
-    itemIds: [...itemIds].sort(),
-    subtotalAmount,
-    discountAmount,
-  });
-
-  return createHash("sha256").update(source).digest("hex");
-}
-
-function getDiscountPercent(discountAmount: number, subtotalAmount: number) {
-  if (subtotalAmount <= 0) return 0;
-
-  return Number(((discountAmount / subtotalAmount) * 100).toFixed(2));
-}
-
-function allocateLineDiscounts({
-  itemAmounts,
-  discountAmount,
-}: {
-  itemAmounts: number[];
-  discountAmount: number;
-}) {
-  if (discountAmount <= 0) {
-    return itemAmounts.map(() => 0);
-  }
-
-  const subtotalAmount = itemAmounts.reduce((total, amount) => total + amount, 0);
-
-  if (subtotalAmount <= 0) {
-    return itemAmounts.map(() => 0);
-  }
-
-  let allocatedAmount = 0;
-
-  return itemAmounts.map((amount, index) => {
-    if (index === itemAmounts.length - 1) {
-      return Math.max(0, discountAmount - allocatedAmount);
-    }
-
-    const lineDiscount = Math.min(
-      amount,
-      Math.floor((amount / subtotalAmount) * discountAmount),
-    );
-
-    allocatedAmount += lineDiscount;
-
-    return lineDiscount;
-  });
-}
-
 function readText(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
@@ -908,14 +419,6 @@ function parseDbAmount(amount: string | null) {
   const parsedAmount = Number(amount);
 
   return Number.isSafeInteger(parsedAmount) ? parsedAmount : 0;
-}
-
-function formatServerCurrency(amount: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(amount);
 }
 
 function normalizeNullableText(value: string | null | undefined, maxLength: number) {
@@ -947,41 +450,6 @@ function generateCustomerCode(date: Date, timeZone: string) {
   const randomSuffix = randomUUID().slice(0, 8).toUpperCase();
 
   return `CUST-${dateKey}-${randomSuffix}`;
-}
-
-function isManualPaymentMethod(
-  value: string,
-): value is PosManualPaymentMethod {
-  return manualPaymentMethods.includes(value as PosManualPaymentMethod);
-}
-
-function getPaymentProvider({
-  method,
-  provider,
-}: {
-  method: PosManualPaymentMethod;
-  provider: string | null;
-}) {
-  if (provider) {
-    return provider;
-  }
-
-  return method === "cash" ? "cash" : "manual";
-}
-
-function generateInvoiceNumber({
-  outletCode,
-  date,
-  timeZone,
-}: {
-  outletCode: string;
-  date: Date;
-  timeZone: string;
-}) {
-  const dateKey = getBusinessCompactDate(date, timeZone);
-  const randomSuffix = randomUUID().slice(0, 8).toUpperCase();
-
-  return `AJ-${outletCode}-${dateKey}-${randomSuffix}`.slice(0, 80);
 }
 
 function generateHoldNumber({
@@ -1025,31 +493,6 @@ function heldCartSuccess({
     heldCart,
     items,
   };
-}
-
-function isPostgresUniqueViolation(error: unknown, constraintName: string) {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-
-  const maybeDbError = error as Error & {
-    code?: string;
-    constraint?: string;
-    cause?: unknown;
-  };
-
-  if (maybeDbError.code === "23505" && maybeDbError.constraint === constraintName) {
-    return true;
-  }
-
-  const cause = maybeDbError.cause as
-    | {
-        code?: string;
-        constraint?: string;
-      }
-    | undefined;
-
-  return cause?.code === "23505" && cause.constraint === constraintName;
 }
 
 function mapHeldCartSummary(row: {
@@ -3187,167 +2630,18 @@ export async function completePosCheckoutAction(
           ),
         )
     : [];
-  const paymentProfilesById = new Map(profileRows.map((profile) => [profile.id, profile]));
+  const paymentProfilesById = new Map<string, CheckoutPaymentProfile>(
+    profileRows.map((profile: CheckoutPaymentProfile) => [profile.id, profile]),
+  );
   const verificationNowIso = new Date().toISOString();
 
   try {
-    normalizedPayments = submittedPayments.map((payment, index) => {
-      const method = String(payment.method ?? "");
-
-      if (!isManualPaymentMethod(method)) {
-        throw new CheckoutValidationError(
-          `Metode pembayaran baris ${index + 1} tidak valid.`,
-        );
-      }
-
-      const methodLabel = manualPaymentMethodLabels[method];
-      const amount = Number(payment.amount);
-      const receivedAmount =
-        payment.receivedAmount === null || payment.receivedAmount === undefined
-          ? null
-          : Number(payment.receivedAmount);
-      const changeAmount = Number(payment.changeAmount ?? 0);
-      const reference = normalizeNullableText(payment.reference, 160);
-      const note = normalizeNullableText(payment.note, 160);
-
-      if (!Number.isSafeInteger(amount) || amount <= 0) {
-        throw new CheckoutValidationError(
-          `Nominal pembayaran ${methodLabel} harus lebih dari Rp0.`,
-        );
-      }
-
-      if (!Number.isSafeInteger(changeAmount) || changeAmount < 0) {
-        throw new CheckoutValidationError("Nominal kembalian cash tidak valid.");
-      }
-
-      if (method === "cash") {
-        if (receivedAmount === null) {
-          throw new CheckoutValidationError(
-            "Nominal uang diterima cash wajib dikirim dari POS.",
-          );
-        }
-
-        if (!Number.isSafeInteger(receivedAmount) || receivedAmount < amount) {
-          throw new CheckoutValidationError(
-            "Nominal uang diterima cash tidak valid.",
-          );
-        }
-
-        const expectedChange = Math.max(receivedAmount - amount, 0);
-
-        if (changeAmount !== expectedChange) {
-          throw new CheckoutValidationError(
-            "Nominal kembalian cash tidak sesuai dengan uang diterima.",
-          );
-        }
-
-        return {
-          method,
-          amount,
-          receivedAmount,
-          changeAmount,
-          provider: null,
-          reference: null,
-          note,
-          verificationSource: null,
-          providerPaidAt: null,
-          providerPaidAtIso: null,
-          evidenceKey: null,
-          manualPaymentProfileId: null,
-          manualPaymentProfileName: null,
-          manualPaymentProfileCode: null,
-          manualPaymentProfileRegisterId: null,
-          verificationDetails: {},
-          normalizedProvider: null,
-          normalizedReference: null,
-        };
-      }
-
-      if (changeAmount > 0 || receivedAmount !== null) {
-        throw new CheckoutValidationError(
-          "Kembalian hanya boleh untuk pembayaran cash.",
-        );
-      }
-
-      try {
-        const profileId = String(payment.manualPaymentProfileId ?? "").trim();
-
-        if (!UUID_PATTERN.test(profileId)) {
-          throw new Error("Pilih akun/terminal pembayaran yang sudah dikonfigurasi.");
-        }
-
-        const profile = paymentProfilesById.get(profileId);
-
-        if (!profile) {
-          throw new Error(
-            "Akun/terminal pembayaran tidak aktif atau bukan milik outlet ini.",
-          );
-        }
-
-        if (profile.profileType !== getManualPaymentProfileType(method)) {
-          throw new Error("Akun/terminal tidak mendukung metode pembayaran ini.");
-        }
-
-        const profileVerificationSource =
-          profile.verificationSource === "merchant_app" ||
-          profile.verificationSource === "edc_terminal" ||
-          profile.verificationSource === "bank_app" ||
-          profile.verificationSource === "bank_statement"
-            ? profile.verificationSource
-            : null;
-
-        const verification = normalizeAndValidateManualPaymentVerification({
-          payment: {
-            ...payment,
-            method,
-            amount,
-            manualPaymentProfileId: profile.id,
-            verificationConfirmed: payment.verificationConfirmed === true,
-            provider: profile.provider,
-            reference,
-            verificationSource: profileVerificationSource,
-            providerPaidAtIso: payment.providerPaidAtIso ?? verificationNowIso,
-            verificationDetails: {
-              ...payment.verificationDetails,
-              merchantId: profile.merchantId,
-              terminalId: profile.terminalId,
-              destinationAccount: profile.destinationAccount,
-            },
-          },
-          organizationId: auth.organization.id,
-          policy: manualPaymentPolicyMap[method],
-        });
-
-        return {
-          method,
-          amount,
-          receivedAmount: null,
-          changeAmount: 0,
-          provider: profile.provider,
-          reference,
-          note,
-          verificationSource: verification.verificationSource,
-          providerPaidAt: verification.providerPaidAt,
-          providerPaidAtIso: verification.providerPaidAt.toISOString(),
-          evidenceKey: verification.evidenceKey,
-          manualPaymentProfileId: profile.id,
-          manualPaymentProfileName: profile.name,
-          manualPaymentProfileCode: profile.code,
-          manualPaymentProfileRegisterId: profile.registerId,
-          verificationDetails: verification.details as Record<
-            string,
-            string | null
-          >,
-          normalizedProvider: verification.normalizedProvider,
-          normalizedReference: verification.normalizedReference,
-        };
-      } catch (error) {
-        throw new CheckoutValidationError(
-          `${methodLabel}: ${
-            error instanceof Error ? error.message : "data verifikasi tidak valid"
-          }`,
-        );
-      }
+    normalizedPayments = normalizeCheckoutPayments({
+      submittedPayments,
+      paymentProfilesById,
+      organizationId: auth.organization.id,
+      policies: manualPaymentPolicyMap,
+      verificationNowIso,
     });
   } catch (error) {
     if (error instanceof CheckoutValidationError) {
