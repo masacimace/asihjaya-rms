@@ -82,6 +82,22 @@ export const PRODUCTION_ENVIRONMENT_TEMPLATE_NAMES = [
   "DATABASE_BACKUP_DAILY_RETENTION_DAYS",
   "DATABASE_BACKUP_WEEKLY_RETENTION_WEEKS",
   "DATABASE_BACKUP_PRE_DEPLOYMENT_RETENTION_COUNT",
+  "DATABASE_BACKUP_OFFSITE_ENABLED",
+  "DATABASE_BACKUP_OFFSITE_PROVIDER",
+  "DATABASE_BACKUP_OFFSITE_ENDPOINT",
+  "DATABASE_BACKUP_OFFSITE_REGION",
+  "DATABASE_BACKUP_OFFSITE_BUCKET",
+  "DATABASE_BACKUP_OFFSITE_PREFIX",
+  "DATABASE_BACKUP_OFFSITE_ACCESS_KEY_ID",
+  "DATABASE_BACKUP_OFFSITE_SECRET_ACCESS_KEY",
+  "DATABASE_BACKUP_OFFSITE_OBJECT_LOCK_MODE",
+  "DATABASE_BACKUP_OFFSITE_OBJECT_LOCK_DAYS",
+  "DATABASE_BACKUP_OFFSITE_FULL_VERIFY",
+  "DATABASE_BACKUP_OFFSITE_MAX_ARCHIVE_BYTES",
+  "DATABASE_BACKUP_OFFSITE_STATUS_PATH",
+  "DATABASE_BACKUP_OFFSITE_DAILY_RETENTION_DAYS",
+  "DATABASE_BACKUP_OFFSITE_WEEKLY_RETENTION_WEEKS",
+  "DATABASE_BACKUP_OFFSITE_PRE_DEPLOYMENT_RETENTION_COUNT",
   "DATABASE_RESTORE_ALLOW_PRODUCTION",
   "DATABASE_RESTORE_APPROVAL_REFERENCE",
   ...CORE_SECRET_NAMES,
@@ -825,6 +841,99 @@ function validateProductionDeployment(
   if (backupKind && !["daily", "weekly", "pre-deployment", "manual"].includes(backupKind)) {
     pushIssue(issues, "DATABASE_BACKUP_KIND", "harus daily, weekly, pre-deployment, atau manual.");
   }
+  validateOptionalBoolean(source, issues, "DATABASE_BACKUP_OFFSITE_ENABLED");
+  validateOptionalBoolean(source, issues, "DATABASE_BACKUP_OFFSITE_FULL_VERIFY");
+  validateOptionalInteger(source, issues, "DATABASE_BACKUP_OFFSITE_OBJECT_LOCK_DAYS", 1, 3000);
+  validateOptionalInteger(
+    source,
+    issues,
+    "DATABASE_BACKUP_OFFSITE_MAX_ARCHIVE_BYTES",
+    1,
+    5_368_709_120,
+  );
+  validateOptionalInteger(source, issues, "DATABASE_BACKUP_OFFSITE_DAILY_RETENTION_DAYS", 1, 3650);
+  validateOptionalInteger(source, issues, "DATABASE_BACKUP_OFFSITE_WEEKLY_RETENTION_WEEKS", 1, 520);
+  validateOptionalInteger(
+    source,
+    issues,
+    "DATABASE_BACKUP_OFFSITE_PRE_DEPLOYMENT_RETENTION_COUNT",
+    1,
+    100,
+  );
+
+  const offsiteEnabled = ["true", "1", "yes", "on"].includes(
+    optional(source, "DATABASE_BACKUP_OFFSITE_ENABLED")?.toLowerCase() ?? "",
+  );
+  if (offsiteEnabled) {
+    const provider = optional(source, "DATABASE_BACKUP_OFFSITE_PROVIDER");
+    if (provider !== "backblaze-b2") {
+      pushIssue(issues, "DATABASE_BACKUP_OFFSITE_PROVIDER", "harus backblaze-b2.");
+    }
+    const region = optional(source, "DATABASE_BACKUP_OFFSITE_REGION");
+    if (!region || !/^[a-z0-9-]{3,40}$/.test(region) || isPlaceholder(region)) {
+      pushIssue(issues, "DATABASE_BACKUP_OFFSITE_REGION", "wajib berupa region Backblaze B2 yang valid.");
+    }
+    const endpoint = optional(source, "DATABASE_BACKUP_OFFSITE_ENDPOINT");
+    if (!endpoint || isPlaceholder(endpoint)) {
+      pushIssue(issues, "DATABASE_BACKUP_OFFSITE_ENDPOINT", "wajib diatur saat off-site backup aktif.");
+    } else {
+      try {
+        const url = new URL(endpoint);
+        if (
+          url.protocol !== "https:" ||
+          !region ||
+          url.hostname !== `s3.${region}.backblazeb2.com`
+        ) {
+          pushIssue(
+            issues,
+            "DATABASE_BACKUP_OFFSITE_ENDPOINT",
+            "wajib HTTPS dan cocok dengan region dalam format s3.<region>.backblazeb2.com.",
+          );
+        }
+      } catch {
+        pushIssue(issues, "DATABASE_BACKUP_OFFSITE_ENDPOINT", "harus berupa URL HTTPS yang valid.");
+      }
+    }
+    const bucket = optional(source, "DATABASE_BACKUP_OFFSITE_BUCKET");
+    if (!bucket || !/^[a-z0-9][a-z0-9.-]{4,61}[a-z0-9]$/.test(bucket) || isPlaceholder(bucket)) {
+      pushIssue(issues, "DATABASE_BACKUP_OFFSITE_BUCKET", "wajib berupa nama bucket Backblaze B2 yang valid.");
+    }
+    const prefix = optional(source, "DATABASE_BACKUP_OFFSITE_PREFIX");
+    if (
+      !prefix ||
+      prefix.startsWith("/") ||
+      prefix.endsWith("/") ||
+      prefix.split("/").some((segment) => !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(segment))
+    ) {
+      pushIssue(issues, "DATABASE_BACKUP_OFFSITE_PREFIX", "wajib berupa prefix object key yang aman.");
+    }
+    for (const name of [
+      "DATABASE_BACKUP_OFFSITE_ACCESS_KEY_ID",
+      "DATABASE_BACKUP_OFFSITE_SECRET_ACCESS_KEY",
+    ]) {
+      const value = optional(source, name);
+      if (!value || isPlaceholder(value) || value.length < 12) {
+        pushIssue(issues, name, "wajib diatur dengan application key Backblaze B2 non-placeholder.");
+      }
+    }
+    const lockMode = optional(source, "DATABASE_BACKUP_OFFSITE_OBJECT_LOCK_MODE");
+    if (!["COMPLIANCE", "GOVERNANCE"].includes(lockMode ?? "")) {
+      pushIssue(
+        issues,
+        "DATABASE_BACKUP_OFFSITE_OBJECT_LOCK_MODE",
+        "harus COMPLIANCE atau GOVERNANCE.",
+      );
+    }
+    const statusPath = optional(source, "DATABASE_BACKUP_OFFSITE_STATUS_PATH");
+    if (!statusPath || [".", "/", "\\"].includes(statusPath)) {
+      pushIssue(
+        issues,
+        "DATABASE_BACKUP_OFFSITE_STATUS_PATH",
+        "harus menunjuk file status khusus, bukan root filesystem atau project root.",
+      );
+    }
+  }
+
   const restoreProduction = optional(source, "DATABASE_RESTORE_ALLOW_PRODUCTION")?.toLowerCase();
   const restoreApproval = optional(source, "DATABASE_RESTORE_APPROVAL_REFERENCE");
   if (["true", "1", "yes", "on"].includes(restoreProduction ?? "")) {

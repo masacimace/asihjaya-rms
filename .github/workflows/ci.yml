@@ -211,6 +211,9 @@ jobs:
       - name: Run disposable backup and restore rehearsal
         run: npm run test:database-backup:local
 
+      - name: Run off-site backup orchestration rehearsal
+        run: npm run test:database-backup-offsite:local
+
   hardware-hub:
     name: Hardware Hub Checks
     runs-on: ubuntu-latest

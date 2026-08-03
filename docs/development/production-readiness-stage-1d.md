@@ -45,7 +45,7 @@ Tahap 1D menyiapkan aplikasi agar aman dan dapat dioperasikan di lingkungan prod
 | 1D.1  | Production container foundation | Lokal                  | Image dan Compose production                | (DONE) |
 | 1D.2  | Environment dan secrets         | Lokal                  | Template, validator, dan secret policy      | (DONE) |
 | 1D.3  | Migration safety                | Lokal                  | Migration runner yang aman                  | (DONE) |
-| 1D.4  | Backup dan restore              | Lokal                  | Backup, retention, dan restore rehearsal    |
+| 1D.4  | Backup dan restore              | Lokal                  | Backup, retention, dan restore rehearsal    | (DONE) |
 | 1D.5  | Reverse proxy dan Cloudflare    | VPS                    | HTTPS, proxy, firewall, origin protection   |
 | 1D.6  | Logging dan monitoring          | Lokal + VPS            | Log rotation, health, dan monitoring ringan |
 | 1D.7  | Deployment dan rollback         | VPS                    | Script deploy dan rollback teruji           |
@@ -171,7 +171,7 @@ infra: harden production environment and secrets
 
 ---
 
-# 1D.3 — Database Deployment & Migration Safety
+# 1D.3 — Database Deployment & Migration Safety (DONE)
 
 ## Tujuan
 
@@ -224,7 +224,7 @@ infra: add safe production migration workflow
 
 ---
 
-# 1D.4 — PostgreSQL Backup, Retention & Restore
+# 1D.4 — PostgreSQL Backup, Retention & Restore (DONE)
 
 ## Tujuan
 
@@ -609,7 +609,7 @@ chore: finalize production readiness rehearsal and runbook
   ↓
 1D.3 Migration safety                           [Lokal] (DONE)
   ↓
-1D.4 Backup dan restore                         [Lokal]
+1D.4 Backup dan restore                         [Lokal] (DONE)
   ↓
 Siapkan Cloud VPS Ubuntu 24.04
   ↓
@@ -660,16 +660,16 @@ Satu Pull Request ke main
 - [+] Pre-migration backup terhubung.
 - [+] Migration policy terdokumentasi.
 
-## 1D.4 — Backup & Restore
+## 1D.4 — Backup & Restore (DONE)
 
-- [ ] Backup script tersedia.
-- [ ] Compression dan checksum aktif.
-- [ ] Retention policy aktif.
-- [ ] Restore script tersedia.
-- [ ] Disposable restore rehearsal berhasil.
-- [ ] Backup rusak ditolak.
-- [ ] Off-site backup plan tersedia.
-- [ ] Disaster-recovery runbook tersedia.
+- [+] Backup script tersedia.
+- [+] Compression dan checksum aktif.
+- [+] Retention policy aktif.
+- [+] Restore script tersedia.
+- [+] Disposable restore rehearsal berhasil.
+- [+] Backup rusak ditolak.
+- [+] Off-site backup plan tersedia.
+- [+] Disaster-recovery runbook tersedia.
 
 ## 1D.5 — Reverse Proxy & Cloudflare
 

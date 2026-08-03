@@ -68,6 +68,40 @@ function setEnvironmentValue(content, name, value) {
   return `${content.replace(/\s*$/, "")}\n${name}=${value}\n`;
 }
 
+function environmentVariableNames(content) {
+  const names = new Set();
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const separatorIndex = line.indexOf("=");
+    if (separatorIndex <= 0) continue;
+    names.add(line.slice(0, separatorIndex).trim());
+  }
+  return names;
+}
+
+function appendMissingTemplateVariables(content, templateContent) {
+  const existingNames = environmentVariableNames(content);
+  const missingLines = [];
+  const missingNames = [];
+  for (const rawLine of templateContent.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const separatorIndex = line.indexOf("=");
+    if (separatorIndex <= 0) continue;
+    const name = line.slice(0, separatorIndex).trim();
+    if (existingNames.has(name)) continue;
+    missingLines.push(line);
+    missingNames.push(name);
+    existingNames.add(name);
+  }
+  if (missingLines.length === 0) return { content, missingNames };
+  return {
+    content: `${content.replace(/\s*$/, "")}\n\n# Variable baru dari template environment saat ini.\n${missingLines.join("\n")}\n`,
+    missingNames,
+  };
+}
+
 function isPlaceholder(value) {
   return value === undefined || placeholderPattern.test(value.trim());
 }
@@ -178,6 +212,12 @@ if (!targetExisted) {
 }
 
 let content = readFileSync(targetPath, "utf8");
+let addedTemplateVariables = [];
+if (existsSync(templatePath)) {
+  const merged = appendMissingTemplateVariables(content, readFileSync(templatePath, "utf8"));
+  content = merged.content;
+  addedTemplateVariables = merged.missingNames;
+}
 const updated = [];
 const preserved = [];
 let generatedDatabasePassword;
@@ -216,6 +256,9 @@ writePrivateFile(targetPath, `${content.replace(/\s*$/, "")}\n`);
 
 console.log(`Environment private diperbarui di ${path.resolve(targetPath)}.`);
 console.log(`Variable diperbarui: ${updated.join(", ") || "tidak ada"}.`);
+if (addedTemplateVariables.length > 0) {
+  console.log(`Variable template baru ditambahkan: ${addedTemplateVariables.join(", ")}.`);
+}
 if (preserved.length > 0) {
   console.log(`Variable existing dipertahankan: ${preserved.join(", ")}.`);
 }

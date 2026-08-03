@@ -107,6 +107,13 @@ assert.equal(templateEnvironment.DATABASE_BACKUP_KIND, "daily");
 assert.equal(templateEnvironment.DATABASE_BACKUP_COMPRESSION_LEVEL, "6");
 assert.equal(templateEnvironment.DATABASE_BACKUP_DAILY_RETENTION_DAYS, "7");
 assert.equal(templateEnvironment.DATABASE_BACKUP_WEEKLY_RETENTION_WEEKS, "4");
+assert.equal(templateEnvironment.DATABASE_BACKUP_OFFSITE_ENABLED, "false");
+assert.equal(templateEnvironment.DATABASE_BACKUP_OFFSITE_PROVIDER, "backblaze-b2");
+assert.equal(templateEnvironment.DATABASE_BACKUP_OFFSITE_ACCESS_KEY_ID, "CHANGE_ME");
+assert.equal(templateEnvironment.DATABASE_BACKUP_OFFSITE_SECRET_ACCESS_KEY, "CHANGE_ME");
+assert.equal(templateEnvironment.DATABASE_BACKUP_OFFSITE_OBJECT_LOCK_MODE, "COMPLIANCE");
+assert.equal(templateEnvironment.DATABASE_BACKUP_OFFSITE_OBJECT_LOCK_DAYS, "14");
+assert.equal(templateEnvironment.DATABASE_BACKUP_OFFSITE_FULL_VERIFY, "true");
 assert.equal(templateEnvironment.DATABASE_RESTORE_ALLOW_PRODUCTION, "false");
 assert.equal(templateEnvironment.DATABASE_RESTORE_APPROVAL_REFERENCE, "");
 assert.equal(templateEnvironment.TRUST_PROXY, "true");
@@ -136,7 +143,12 @@ assert.doesNotMatch(dockerIgnore, /^!\.env\.production/m);
 
 const dockerfile = readFileSync(path.join(projectRoot, "Dockerfile"), "utf8");
 assert.doesNotMatch(dockerfile, /COPY\s+.*\.env/i);
-for (const name of [...CORE_SECRET_NAMES, "POSTGRES_PASSWORD"]) {
+for (const name of [
+  ...CORE_SECRET_NAMES,
+  "POSTGRES_PASSWORD",
+  "DATABASE_BACKUP_OFFSITE_ACCESS_KEY_ID",
+  "DATABASE_BACKUP_OFFSITE_SECRET_ACCESS_KEY",
+]) {
   assert(
     !dockerfile.includes(name),
     `Dockerfile tidak boleh menerima atau menyimpan ${name}.`,
@@ -304,6 +316,47 @@ const unsafeRestoreIssues = collectServerEnvironmentIssues(unsafeRestoreEnvironm
 assert(
   unsafeRestoreIssues.some((issue) => issue.name === "DATABASE_RESTORE_APPROVAL_REFERENCE"),
   "Restore database aktif tanpa approval reference wajib ditolak validator production.",
+);
+
+const invalidOffsiteEnvironment = {
+  ...templateEnvironment,
+  DATABASE_BACKUP_OFFSITE_ENABLED: "true",
+};
+const invalidOffsiteIssues = collectServerEnvironmentIssues(invalidOffsiteEnvironment, {
+  mode: "production",
+  requireCore: true,
+  requireDeployment: true,
+});
+for (const name of [
+  "DATABASE_BACKUP_OFFSITE_ENDPOINT",
+  "DATABASE_BACKUP_OFFSITE_REGION",
+  "DATABASE_BACKUP_OFFSITE_BUCKET",
+  "DATABASE_BACKUP_OFFSITE_ACCESS_KEY_ID",
+  "DATABASE_BACKUP_OFFSITE_SECRET_ACCESS_KEY",
+]) {
+  assert(
+    invalidOffsiteIssues.some((issue) => issue.name === name),
+    `${name} wajib ditolak saat off-site backup aktif tetapi masih placeholder.`,
+  );
+}
+
+const validOffsiteEnvironment = {
+  ...templateEnvironment,
+  DATABASE_BACKUP_OFFSITE_ENABLED: "true",
+  DATABASE_BACKUP_OFFSITE_ENDPOINT: "https://s3.us-east-005.backblazeb2.com",
+  DATABASE_BACKUP_OFFSITE_REGION: "us-east-005",
+  DATABASE_BACKUP_OFFSITE_BUCKET: "asihjaya-rms-postgres-backups",
+  DATABASE_BACKUP_OFFSITE_ACCESS_KEY_ID: "0050000000000000000000000",
+  DATABASE_BACKUP_OFFSITE_SECRET_ACCESS_KEY: "example-only-non-secret-application-key",
+};
+const validOffsiteIssues = collectServerEnvironmentIssues(validOffsiteEnvironment, {
+  mode: "production",
+  requireCore: true,
+  requireDeployment: true,
+});
+assert(
+  !validOffsiteIssues.some((issue) => issue.name.startsWith("DATABASE_BACKUP_OFFSITE_")),
+  "Konfigurasi Backblaze B2 yang lengkap tidak boleh menghasilkan issue off-site.",
 );
 
 const placeholderIssues = collectServerEnvironmentIssues(templateEnvironment, {

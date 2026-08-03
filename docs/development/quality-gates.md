@@ -231,3 +231,19 @@ npm run test:database-backup:local
 Check static memvalidasi custom-format archive, metadata, SHA-256, disk guard, retention, guarded production restore, package scripts, environment template, dan dokumentasi. Rehearsal membuktikan archive dapat dipulihkan, transaksi dummy tetap terbaca, backup rusak ditolak, serta retention tidak menghapus backup terbaru, manual, atau protected.
 
 GitHub Actions menjalankan job **Database Backup & Restore Rehearsal** secara terpisah.
+
+## Automated off-site backup
+
+Kontrak Backblaze B2:
+
+```bash
+npm run check:database-backup-offsite
+```
+
+Rehearsal tanpa credential production memakai object store in-memory:
+
+```bash
+npm run test:database-backup-offsite:local
+```
+
+Rehearsal membuktikan upload empat-object, idempotency, Object Lock boundary, full SHA-256 verification, corruption rejection, download, dan remote retention. GitHub Actions menjalankannya pada job **Database Backup & Restore Rehearsal** tanpa mengakses bucket production.

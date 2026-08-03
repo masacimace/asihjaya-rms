@@ -119,7 +119,7 @@ npm run db:backup:prune
 - `protected=true`: tidak dihapus otomatis.
 - Metadata rusak atau pasangan artifact tidak lengkap: tidak dihapus otomatis dan dilaporkan sebagai `SKIP` agar operator memeriksanya.
 
-Retention bukan pengganti off-site replication. Salin backup verified ke storage terpisah dengan enkripsi dan akses minimum. Automation off-site serta alert umur backup akan dilanjutkan pada Tahap 1D.6 dan 1D.7.
+Retention bukan pengganti off-site replication. Automation Backblaze B2 tersedia melalui Tahap 1D.4B dan didokumentasikan pada `database-backup-offsite.md`. Alert umur backup akan memakai status off-site pada Tahap 1D.6.
 
 ## Restore ke database baru
 
@@ -221,6 +221,8 @@ chmod 600 .data/backups/postgres/*
 ```
 
 ## Off-site copy minimum
+
+Implementasi resmi memakai Backblaze B2 S3-Compatible API, Object Lock, full SHA-256 read-back verification, receipt remote, retention terpisah, dan download untuk restore rehearsal. Ikuti `docs/development/database-backup-offsite.md`.
 
 Sebelum go-live, gunakan satu lokasi terpisah dari VPS, misalnya object storage private atau server backup. Syarat minimum:
 

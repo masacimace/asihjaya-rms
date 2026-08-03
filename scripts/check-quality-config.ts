@@ -68,6 +68,7 @@ const requiredRootScripts = [
   "check:production-environment",
   "check:database-deployment",
   "check:database-backup",
+  "check:database-backup-offsite",
   "check:source-hygiene",
   "check:database",
   "check:database:live",
@@ -94,6 +95,7 @@ const requiredRootScripts = [
   "test:container:production:local",
   "test:database-deployment:local",
   "test:database-backup:local",
+  "test:database-backup-offsite:local",
   "db:deploy",
   "db:deploy:production",
   "db:backup",
@@ -102,6 +104,13 @@ const requiredRootScripts = [
   "db:backup:pre-deployment",
   "db:backup:verify",
   "db:backup:prune",
+  "db:backup:offsite",
+  "db:backup:offsite:verify",
+  "db:backup:offsite:prune",
+  "db:backup:offsite:download",
+  "db:backup:production:offsite",
+  "db:backup:weekly:offsite",
+  "db:backup:pre-deployment:offsite",
   "db:restore",
   "db:restore:production",
   "env:validate",
@@ -191,6 +200,10 @@ assert(
   `${workflowPath} wajib menjalankan disposable backup/restore rehearsal.`,
 );
 assert(
+  workflow.includes("npm run test:database-backup-offsite:local"),
+  `${workflowPath} wajib menjalankan off-site backup rehearsal tanpa credential production.`,
+);
+assert(
   workflow.includes("npm run check:database:live"),
   `${workflowPath} wajib memeriksa schema hasil migration.`,
 );
@@ -216,6 +229,7 @@ for (const documentationPath of [
   "docs/development/production-environment.md",
   "docs/development/database-deployment.md",
   "docs/development/database-backup-restore.md",
+  "docs/development/database-backup-offsite.md",
   ".github/pull_request_template.md",
   "README.md",
 ]) {

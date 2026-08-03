@@ -323,7 +323,9 @@ async function verifyArchive(
 function readArtifacts(outputDirectory: string): DatabaseBackupArtifact[] {
   if (!existsSync(outputDirectory)) return [];
   const artifacts: DatabaseBackupArtifact[] = [];
-  for (const fileName of readdirSync(outputDirectory).filter((name) => name.endsWith(".json")).sort()) {
+  for (const fileName of readdirSync(outputDirectory)
+    .filter((name) => name.endsWith(".json") && !name.endsWith(".offsite.json"))
+    .sort()) {
     const metadataPath = path.join(outputDirectory, fileName);
     try {
       const artifact = readBackupArtifact(metadataPath);
@@ -356,8 +358,9 @@ function pruneBackups(outputDirectory: string): number {
       decision.artifact.archivePath,
       decision.artifact.checksumPath,
       decision.artifact.metadataPath,
+      decision.artifact.metadataPath.replace(/\.json$/, ".offsite.json"),
     ]) {
-      unlinkSync(filePath);
+      if (existsSync(filePath)) unlinkSync(filePath);
     }
     deleted += 1;
     console.log(`Retention menghapus ${decision.artifact.metadata.fileName}: ${decision.reason}.`);
