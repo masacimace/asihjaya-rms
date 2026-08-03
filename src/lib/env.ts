@@ -12,9 +12,10 @@ export type EnvironmentValidationIssue = {
 export type ValidateEnvironmentOptions = {
   mode?: EnvironmentMode;
   requireCore?: boolean;
+  requireDeployment?: boolean;
 };
 
-const CORE_SECRET_NAMES = [
+export const CORE_SECRET_NAMES = [
   "SESSION_SECRET",
   "RECEIPT_VERIFICATION_SECRET",
   "CUSTOMER_HISTORY_SESSION_SECRET",
@@ -24,15 +25,129 @@ const CORE_SECRET_NAMES = [
   "HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY",
 ] as const;
 
-const CORE_REQUIRED_NAMES = [
+export const CORE_REQUIRED_NAMES = [
   "APP_URL",
   "DATABASE_URL",
   "DEFAULT_ORGANIZATION_SLUG",
   ...CORE_SECRET_NAMES,
 ] as const;
 
+export const PRODUCTION_DEPLOYMENT_REQUIRED_NAMES = [
+  "NODE_ENV",
+  "POSTGRES_DB",
+  "POSTGRES_USER",
+  "POSTGRES_PASSWORD",
+] as const;
+
+export const GENERATED_PRODUCTION_SECRET_NAMES = [
+  "POSTGRES_PASSWORD",
+  ...CORE_SECRET_NAMES,
+  "BOOTSTRAP_ADMIN_PASSWORD",
+  "HARDWARE_AGENT_SECRET",
+] as const;
+
+export const PRODUCTION_ENVIRONMENT_TEMPLATE_NAMES = [
+  "NODE_ENV",
+  "ASIHJAYA_IMAGE",
+  "ASIHJAYA_ENV_FILE",
+  "ASIHJAYA_BIND_ADDRESS",
+  "ASIHJAYA_APP_PORT",
+  "APP_REVISION",
+  "APP_BUILD_DATE",
+  "NEXT_PUBLIC_APP_NAME",
+  "NEXT_PUBLIC_APP_URL",
+  "APP_URL",
+  "INTERNAL_RENDER_ORIGIN",
+  "DEFAULT_ORGANIZATION_SLUG",
+  "SERVER_ACTION_BODY_SIZE_LIMIT",
+  "PORT",
+  "POSTGRES_DB",
+  "POSTGRES_USER",
+  "POSTGRES_PASSWORD",
+  "DATABASE_URL",
+  ...CORE_SECRET_NAMES,
+  "TRUST_PROXY",
+  "TRUST_PROXY_HOPS",
+  "LOGIN_RATE_LIMIT_IDENTIFIER_FAILURES",
+  "LOGIN_RATE_LIMIT_IP_FAILURES",
+  "LOGIN_RATE_LIMIT_WINDOW_MS",
+  "LOGIN_RATE_LIMIT_BLOCK_MS",
+  "SECURITY_RATE_LIMIT_RETENTION_HOURS",
+  "PDF_RATE_LIMIT_ACTOR_REQUESTS",
+  "PDF_RATE_LIMIT_IP_REQUESTS",
+  "PDF_RATE_LIMIT_WINDOW_MS",
+  "PDF_RATE_LIMIT_BLOCK_MS",
+  "BOOTSTRAP_ORGANIZATION_NAME",
+  "BOOTSTRAP_ORGANIZATION_SLUG",
+  "BOOTSTRAP_OUTLET_CODE",
+  "BOOTSTRAP_OUTLET_NAME",
+  "BOOTSTRAP_REGISTER_CODE",
+  "BOOTSTRAP_REGISTER_NAME",
+  "BOOTSTRAP_ADMIN_NAME",
+  "BOOTSTRAP_ADMIN_USERNAME",
+  "BOOTSTRAP_ADMIN_EMAIL",
+  "BOOTSTRAP_ADMIN_PASSWORD",
+  "HARDWARE_JOB_COMPLETED_RETENTION_DAYS",
+  "HARDWARE_JOB_CANCELLED_RETENTION_DAYS",
+  "HARDWARE_JOB_FAILED_RETENTION_DAYS",
+  "HARDWARE_JOB_STALE_MINUTES",
+  "HARDWARE_AGENT_STALE_MINUTES",
+  "HARDWARE_AGENT_AUTH_MODE",
+  "HARDWARE_AGENT_SIGNATURE_TOLERANCE_MS",
+  "HARDWARE_AGENT_NONCE_TTL_MS",
+  "HARDWARE_AGENT_SIGNED_BODY_MAX_BYTES",
+  "HARDWARE_AGENT_AUTH_FAILURE_WINDOW_MS",
+  "HARDWARE_AGENT_AUTH_FAILURE_LIMIT_PER_AGENT",
+  "HARDWARE_AGENT_AUTH_FAILURE_LIMIT_PER_IP",
+  "HARDWARE_AGENT_ORGANIZATION_SLUG",
+  "HARDWARE_AGENT_OUTLET_CODE",
+  "HARDWARE_AGENT_REGISTER_CODE",
+  "HARDWARE_AGENT_CODE",
+  "HARDWARE_AGENT_NAME",
+  "HARDWARE_AGENT_SECRET",
+  "SHIFT_CASH_VARIANCE_CRITICAL_AMOUNT",
+  "LARGE_CASH_OUT_NOTIFICATION_AMOUNT",
+  "NOTIFICATION_SUCCESS_AUTO_RESOLVE_DAYS",
+  "NOTIFICATION_INFO_AUTO_RESOLVE_DAYS",
+  "NOTIFICATION_WARNING_AUTO_RESOLVE_DAYS",
+  "NOTIFICATION_RESOLVED_AUTO_ARCHIVE_DAYS",
+  "NOTIFICATION_MAINTENANCE_INTERVAL_MINUTES",
+  "NOTIFICATION_ANTI_SPAM_WINDOW_MINUTES",
+  "HARDWARE_PENDING_WARNING_SECONDS",
+  "HARDWARE_SUBMITTED_WARNING_SECONDS",
+  "HARDWARE_FAILURE_RATE_WARNING_PERCENT",
+  "IMAGE_STORAGE_DRIVER",
+  "IMAGE_STORAGE_ROOT",
+  "IMAGE_MAX_UPLOAD_MB",
+  "IMAGE_STORAGE_BUCKET",
+  "IMAGE_STORAGE_ENDPOINT",
+  "IMAGE_STORAGE_REGION",
+  "IMAGE_STORAGE_ACCESS_KEY_ID",
+  "IMAGE_STORAGE_SECRET_ACCESS_KEY",
+  "IMAGE_STORAGE_FORCE_PATH_STYLE",
+  "LEGACY_IMAGE_ALLOWED_HOSTS",
+  "LEGACY_IMAGE_DOWNLOAD_TIMEOUT_MS",
+  "LEGACY_IMAGE_DOWNLOAD_MAX_MB",
+  "RECEIPT_OUTLET_INSTAGRAM",
+  "RECEIPT_VENDOR_OUTLET_NAME",
+  "RECEIPT_VENDOR_OUTLET_ADDRESS",
+  "RECEIPT_VENDOR_OUTLET_PHONE",
+  "RECEIPT_VENDOR_OUTLET_INSTAGRAM",
+  "RECEIPT_DOCUMENT_PROFILE_ID",
+  "RECEIPT_OVERLAY_OFFSET_X_MM",
+  "RECEIPT_OVERLAY_OFFSET_Y_MM",
+  "RECEIPT_OVERLAY_SCALE",
+  "PDF_RENDER_TOKEN_TTL_MS",
+  "PDF_RENDER_MAX_CONCURRENCY",
+  "PDF_RENDER_MAX_QUEUE",
+  "PDF_RENDER_QUEUE_WAIT_TIMEOUT_MS",
+  "PDF_RENDER_TIMEOUT_MS",
+  "PDF_RENDER_DISABLE_SANDBOX",
+  "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH",
+] as const;
+
 const PLACEHOLDER_PATTERN =
-  /(?:change[-_ ]?me|replace[-_ ]?me|generate[-_ ]?me|your[-_ ]?(?:secret|password|key)|example[-_ ]?(?:secret|password|key)|todo)/i;
+  /(?:change[-_ ]?me|replace[-_ ]?me|generate[-_ ]?me|your[-_ ]?(?:secret|password|key)|example[-_ ]?(?:secret|password|key)|sample[-_ ]?(?:secret|password|key)|dummy|todo|password123|secret123|<[^>]+>)/i;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,63}$/;
 const BOOLEAN_VALUES = new Set(["true", "false", "1", "0", "yes", "no", "on", "off"]);
@@ -76,6 +191,35 @@ function required(source: EnvironmentSource, name: string): string {
 
 function isPlaceholder(value: string): boolean {
   return PLACEHOLDER_PATTERN.test(value);
+}
+
+function hasWeakCharacterDiversity(value: string): boolean {
+  return new Set(value).size < 12;
+}
+
+function validateSecretValue(
+  issues: EnvironmentValidationIssue[],
+  name: string,
+  value: string,
+  minimumLength: number,
+): void {
+  if (value.length < minimumLength) {
+    pushIssue(
+      issues,
+      name,
+      `minimal harus terdiri dari ${minimumLength} karakter.`,
+    );
+  }
+  if (isPlaceholder(value)) {
+    pushIssue(issues, name, "masih memakai placeholder dan wajib diganti.");
+  }
+  if (hasWeakCharacterDiversity(value)) {
+    pushIssue(
+      issues,
+      name,
+      "terlalu mudah ditebak; gunakan secret acak dari generator atau password manager.",
+    );
+  }
 }
 
 function secret(source: EnvironmentSource, name: string): string {
@@ -326,18 +470,15 @@ function validateOrganizationSlug(
 function validateSecrets(
   source: EnvironmentSource,
   issues: EnvironmentValidationIssue[],
+  mode: EnvironmentMode,
 ): void {
   const configuredSecrets: Array<{ name: string; value: string }> = [];
+  const minimumLength = mode === "production" ? 43 : 32;
 
   for (const name of CORE_SECRET_NAMES) {
     const value = optional(source, name);
     if (!value) continue;
-    if (value.length < 32) {
-      pushIssue(issues, name, "minimal harus terdiri dari 32 karakter.");
-    }
-    if (isPlaceholder(value)) {
-      pushIssue(issues, name, "masih memakai placeholder dan wajib diganti.");
-    }
+    validateSecretValue(issues, name, value, minimumLength);
     configuredSecrets.push({ name, value });
   }
 
@@ -521,12 +662,151 @@ function validateSecurityAndRuntimeOptions(
   }
 }
 
+function decodeUrlComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function validateProductionDeployment(
+  source: EnvironmentSource,
+  issues: EnvironmentValidationIssue[],
+  mode: EnvironmentMode,
+): void {
+  for (const name of PRODUCTION_DEPLOYMENT_REQUIRED_NAMES) {
+    if (!optional(source, name)) {
+      pushIssue(issues, name, "wajib diatur untuk deployment production.");
+    }
+  }
+
+  if (optional(source, "NODE_ENV") !== "production") {
+    pushIssue(issues, "NODE_ENV", "wajib bernilai production untuk deployment production.");
+  }
+
+  const databaseName = optional(source, "POSTGRES_DB");
+  const databaseUser = optional(source, "POSTGRES_USER");
+  const databasePassword = optional(source, "POSTGRES_PASSWORD");
+
+  const identifierPattern = /^[A-Za-z_][A-Za-z0-9_-]{0,62}$/;
+  if (databaseName && !identifierPattern.test(databaseName)) {
+    pushIssue(
+      issues,
+      "POSTGRES_DB",
+      "harus berupa identifier database sederhana tanpa spasi atau karakter shell.",
+    );
+  }
+  if (databaseUser && !identifierPattern.test(databaseUser)) {
+    pushIssue(
+      issues,
+      "POSTGRES_USER",
+      "harus berupa identifier role sederhana tanpa spasi atau karakter shell.",
+    );
+  }
+  if (databasePassword) {
+    validateSecretValue(issues, "POSTGRES_PASSWORD", databasePassword, 32);
+    if (databasePassword === databaseUser || databasePassword === databaseName) {
+      pushIssue(
+        issues,
+        "POSTGRES_PASSWORD",
+        "tidak boleh sama dengan nama database atau username database.",
+      );
+    }
+  }
+
+  const databaseUrl = optional(source, "DATABASE_URL");
+  if (databaseUrl && databaseName && databaseUser && databasePassword) {
+    try {
+      const parsed = new URL(databaseUrl);
+      const urlDatabaseName = decodeUrlComponent(parsed.pathname.replace(/^\//, ""));
+      const urlUser = decodeUrlComponent(parsed.username);
+      const urlPassword = decodeUrlComponent(parsed.password);
+
+      if (urlDatabaseName !== databaseName) {
+        pushIssue(
+          issues,
+          "DATABASE_URL",
+          "nama database harus sama dengan POSTGRES_DB.",
+        );
+      }
+      if (urlUser !== databaseUser) {
+        pushIssue(
+          issues,
+          "DATABASE_URL",
+          "username harus sama dengan POSTGRES_USER.",
+        );
+      }
+      if (urlPassword !== databasePassword) {
+        pushIssue(
+          issues,
+          "DATABASE_URL",
+          "password harus sama dengan POSTGRES_PASSWORD.",
+        );
+      }
+    } catch {
+      // Format URL sudah dilaporkan oleh validateDatabaseUrl.
+    }
+  }
+
+  const publicAppUrl = optional(source, "NEXT_PUBLIC_APP_URL");
+  const appUrlValue = optional(source, "APP_URL");
+  if (publicAppUrl && appUrlValue) {
+    try {
+      const publicOrigin = parseHttpOrigin(publicAppUrl, "NEXT_PUBLIC_APP_URL").origin;
+      const privateOrigin = parseHttpOrigin(appUrlValue, "APP_URL").origin;
+      if (publicOrigin !== privateOrigin) {
+        pushIssue(
+          issues,
+          "NEXT_PUBLIC_APP_URL",
+          "harus sama dengan APP_URL agar origin public dan server konsisten.",
+        );
+      }
+    } catch (error) {
+      if (error instanceof EnvironmentValidationError) {
+        issues.push(...error.issues);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  const bindAddress = optional(source, "ASIHJAYA_BIND_ADDRESS");
+  if (bindAddress && !["127.0.0.1", "::1", "localhost"].includes(bindAddress)) {
+    pushIssue(
+      issues,
+      "ASIHJAYA_BIND_ADDRESS",
+      "wajib bind ke loopback; akses publik harus melalui reverse proxy.",
+    );
+  }
+
+  validateOptionalInteger(source, issues, "ASIHJAYA_APP_PORT", 1, 65_535);
+
+  const environmentFile = optional(source, "ASIHJAYA_ENV_FILE");
+  if (environmentFile?.endsWith(".example")) {
+    pushIssue(
+      issues,
+      "ASIHJAYA_ENV_FILE",
+      "tidak boleh menunjuk file contoh pada deployment production.",
+    );
+  }
+
+  if (mode !== "production") {
+    pushIssue(
+      issues,
+      "NODE_ENV",
+      "deployment profile hanya boleh divalidasi dalam mode production.",
+    );
+  }
+}
+
 export function collectServerEnvironmentIssues(
   source: EnvironmentSource = process.env,
   options: ValidateEnvironmentOptions = {},
 ): EnvironmentValidationIssue[] {
   const mode = options.mode ?? resolveMode(source);
   const requireCore = options.requireCore ?? mode === "production";
+  const requireDeployment = options.requireDeployment ?? false;
   const issues: EnvironmentValidationIssue[] = [];
 
   if (requireCore) {
@@ -536,10 +816,13 @@ export function collectServerEnvironmentIssues(
   validateApplicationUrls(source, issues, mode);
   validateDatabaseUrl(source, issues, mode);
   validateOrganizationSlug(source, issues);
-  validateSecrets(source, issues);
+  validateSecrets(source, issues, mode);
   validateProxyPolicy(source, issues, mode);
   validateStoragePolicy(source, issues);
   validateSecurityAndRuntimeOptions(source, issues, mode);
+  if (requireDeployment) {
+    validateProductionDeployment(source, issues, mode);
+  }
 
   return issues;
 }

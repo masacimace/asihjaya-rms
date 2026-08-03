@@ -34,11 +34,17 @@ function makeSecret(label: string): string {
 }
 
 function makeProductionEnvironment(): Record<string, string> {
-  return {
+  const environment = {
     NODE_ENV: "production",
+    ASIHJAYA_ENV_FILE: ".env.production",
+    ASIHJAYA_BIND_ADDRESS: "127.0.0.1",
+    ASIHJAYA_APP_PORT: "3000",
     APP_URL: "https://ajsystem.id",
+    NEXT_PUBLIC_APP_URL: "https://ajsystem.id",
     INTERNAL_RENDER_ORIGIN: "http://127.0.0.1:3000",
-    DATABASE_URL: "postgresql://app:strong-password@db:5432/asihjaya_rms",
+    POSTGRES_DB: "asihjaya_rms",
+    POSTGRES_USER: "app",
+    POSTGRES_PASSWORD: makeSecret("postgres-password"),
     DEFAULT_ORGANIZATION_SLUG: "asihjaya",
     SESSION_SECRET: makeSecret("session"),
     RECEIPT_VERIFICATION_SECRET: makeSecret("receipt"),
@@ -52,12 +58,21 @@ function makeProductionEnvironment(): Record<string, string> {
     IMAGE_STORAGE_DRIVER: "local",
     HARDWARE_AGENT_AUTH_MODE: "signed-only",
   };
+
+  return {
+    ...environment,
+    DATABASE_URL: `postgresql://${environment.POSTGRES_USER}:${environment.POSTGRES_PASSWORD}@db:5432/${environment.POSTGRES_DB}`,
+  };
 }
 
-function issueNames(source: EnvironmentSource): string[] {
+function issueNames(
+  source: EnvironmentSource,
+  requireDeployment = false,
+): string[] {
   return collectServerEnvironmentIssues(source, {
     mode: "production",
     requireCore: true,
+    requireDeployment,
   }).map((issue) => issue.name);
 }
 
@@ -68,6 +83,40 @@ assert.doesNotThrow(() => {
     requireCore: true,
   });
 });
+assert.doesNotThrow(() => {
+  assertServerEnvironment(validProduction, {
+    mode: "production",
+    requireCore: true,
+    requireDeployment: true,
+  });
+});
+
+const mismatchedDatabaseCredential = {
+  ...validProduction,
+  POSTGRES_PASSWORD: makeSecret("different-postgres-password"),
+};
+assert(
+  issueNames(mismatchedDatabaseCredential, true).includes("DATABASE_URL"),
+  "DATABASE_URL harus konsisten dengan POSTGRES_PASSWORD deployment.",
+);
+
+const publicBindAddress = {
+  ...validProduction,
+  ASIHJAYA_BIND_ADDRESS: "0.0.0.0",
+};
+assert(
+  issueNames(publicBindAddress, true).includes("ASIHJAYA_BIND_ADDRESS"),
+  "Production app tidak boleh bind langsung ke interface publik.",
+);
+
+const weakProductionSecret = {
+  ...validProduction,
+  SESSION_SECRET: "a".repeat(64),
+};
+assert(
+  issueNames(weakProductionSecret).includes("SESSION_SECRET"),
+  "Secret production dengan diversity rendah harus ditolak.",
+);
 
 const missingCore = { NODE_ENV: "production" };
 const missingNames = issueNames(missingCore);
@@ -176,5 +225,5 @@ assert.throws(
 );
 
 console.log(
-  "Environment validation checks passed: production core, secret separation, proxy, storage, runtime bounds, dan bootstrap seed.",
+  "Environment validation checks passed: production core/deployment, secret entropy, database consistency, proxy, storage, runtime bounds, dan bootstrap seed.",
 );

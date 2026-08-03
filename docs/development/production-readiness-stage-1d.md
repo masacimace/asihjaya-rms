@@ -40,20 +40,20 @@ Tahap 1D menyiapkan aplikasi agar aman dan dapat dioperasikan di lingkungan prod
 
 ## Ringkasan Tahapan
 
-| Tahap | Fokus | Lokasi utama pengujian | Output utama |
-|---|---|---|---|
-| 1D.1 | Production container foundation | Lokal | Image dan Compose production |
-| 1D.2 | Environment dan secrets | Lokal | Template, validator, dan secret policy |
-| 1D.3 | Migration safety | Lokal | Migration runner yang aman |
-| 1D.4 | Backup dan restore | Lokal | Backup, retention, dan restore rehearsal |
-| 1D.5 | Reverse proxy dan Cloudflare | VPS | HTTPS, proxy, firewall, origin protection |
-| 1D.6 | Logging dan monitoring | Lokal + VPS | Log rotation, health, dan monitoring ringan |
-| 1D.7 | Deployment dan rollback | VPS | Script deploy dan rollback teruji |
-| 1D.8 | Production rehearsal | VPS | Simulasi operasional dan runbook final |
+| Tahap | Fokus                           | Lokasi utama pengujian | Output utama                                | Status |
+| ----- | ------------------------------- | ---------------------- | ------------------------------------------- | ------ |
+| 1D.1  | Production container foundation | Lokal                  | Image dan Compose production                | (DONE) |
+| 1D.2  | Environment dan secrets         | Lokal                  | Template, validator, dan secret policy      |
+| 1D.3  | Migration safety                | Lokal                  | Migration runner yang aman                  |
+| 1D.4  | Backup dan restore              | Lokal                  | Backup, retention, dan restore rehearsal    |
+| 1D.5  | Reverse proxy dan Cloudflare    | VPS                    | HTTPS, proxy, firewall, origin protection   |
+| 1D.6  | Logging dan monitoring          | Lokal + VPS            | Log rotation, health, dan monitoring ringan |
+| 1D.7  | Deployment dan rollback         | VPS                    | Script deploy dan rollback teruji           |
+| 1D.8  | Production rehearsal            | VPS                    | Simulasi operasional dan runbook final      |
 
 ---
 
-# 1D.1 — Production Container Foundation
+# 1D.1 — Production Container Foundation (DONE)
 
 ## Tujuan
 

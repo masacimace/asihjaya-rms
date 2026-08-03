@@ -46,35 +46,25 @@ Jangan menghapus volume production dengan `docker compose down --volumes`. Opsi 
 
 ## Menyiapkan environment lokal
 
-Tahap 1D.2 akan membuat template production final. Untuk rehearsal 1D.1, buat file lokal yang tidak dilacak Git:
+Tahap 1D.2 menyediakan template dan generator production khusus:
 
 ```powershell
-Copy-Item .env.example .env.production
-npm run env:generate-secrets -- --write .env.production
+npm run env:prepare:production
+npm run env:validate:production
 ```
 
-Tambahkan atau sesuaikan nilai berikut:
+Generator membuat `.env.production` dari `.env.production.example`, mengisi secret acak, menyinkronkan credential PostgreSQL pada `DATABASE_URL`, dan tidak mencetak nilai secret.
+
+Untuk rehearsal loopback tanpa reverse proxy, ubah hanya nilai berikut setelah file dibuat:
 
 ```dotenv
-NODE_ENV=production
 APP_URL=http://127.0.0.1:3000
 NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000
 TRUST_PROXY=false
-
-POSTGRES_DB=asihjaya_rms
-POSTGRES_USER=asihjaya
-POSTGRES_PASSWORD=GANTI_DENGAN_PASSWORD_LOKAL_YANG_KUAT
-DATABASE_URL=postgresql://asihjaya:GANTI_DENGAN_PASSWORD_LOKAL_YANG_KUAT@db:5432/asihjaya_rms
-
-IMAGE_STORAGE_DRIVER=local
-IMAGE_STORAGE_ROOT=.data/uploads
+TRUST_PROXY_HOPS=1
 ```
 
-Gunakan password URL-safe untuk rehearsal ini atau percent-encode password pada `DATABASE_URL`. Validasi sebelum container dijalankan:
-
-```powershell
-npm run env:validate -- --mode production --env-file .env.production
-```
+Jalankan kembali validator deployment setelah perubahan. Runbook lengkap tersedia di `docs/development/production-environment.md`.
 
 ## Validasi static
 
