@@ -213,3 +213,21 @@ npm run test:database-deployment:local
 Static check memvalidasi journal/hash, destructive-operation guard, advisory lock, migrator image, dan dependency ordering Compose. Rehearsal lokal memakai PostgreSQL 17 disposable untuk membuktikan concurrency lock, idempotent no-op, history drift rejection, serta destructive migration approval boundary.
 
 CI dan runbook production wajib memakai `npm run db:deploy`. `npm run db:migrate` adalah primitive internal dan tidak boleh dipanggil langsung oleh deployment production.
+
+## Backup dan restore PostgreSQL
+
+Kontrak static:
+
+```bash
+npm run check:database-backup
+```
+
+Disposable rehearsal dengan PostgreSQL 17 dan Docker:
+
+```bash
+npm run test:database-backup:local
+```
+
+Check static memvalidasi custom-format archive, metadata, SHA-256, disk guard, retention, guarded production restore, package scripts, environment template, dan dokumentasi. Rehearsal membuktikan archive dapat dipulihkan, transaksi dummy tetap terbaca, backup rusak ditolak, serta retention tidak menghapus backup terbaru, manual, atau protected.
+
+GitHub Actions menjalankan job **Database Backup & Restore Rehearsal** secara terpisah.

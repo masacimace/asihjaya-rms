@@ -1,0 +1,23 @@
+name: asihjaya-rms-database-backup-test
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: asihjaya_backup_test
+      POSTGRES_PASSWORD: asihjaya_backup_test_password
+      POSTGRES_DB: asihjaya_rms_backup_test
+    ports:
+      - "127.0.0.1:${DATABASE_BACKUP_TEST_PORT:-55437}:5432"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U asihjaya_backup_test -d asihjaya_rms_backup_test
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - database_backup_test_data:/var/lib/postgresql/data
+
+volumes:
+  database_backup_test_data:

@@ -131,6 +131,9 @@ jobs:
       - name: Database deployment contract
         run: npm run check:database-deployment
 
+      - name: Database backup and restore contract
+        run: npm run check:database-backup
+
       - name: Security contracts
         run: npm run check:security
 
@@ -186,6 +189,27 @@ jobs:
 
       - name: Validate migrated PostgreSQL schema
         run: npm run check:database:live
+
+  database-backup-restore:
+    name: Database Backup & Restore Rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          package-manager-cache: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run disposable backup and restore rehearsal
+        run: npm run test:database-backup:local
 
   hardware-hub:
     name: Hardware Hub Checks

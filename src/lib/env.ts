@@ -73,6 +73,17 @@ export const PRODUCTION_ENVIRONMENT_TEMPLATE_NAMES = [
   "DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS",
   "DATABASE_MIGRATION_ALLOW_DESTRUCTIVE",
   "DATABASE_MIGRATION_APPROVAL_REFERENCE",
+  "DATABASE_BACKUP_ROOT",
+  "DATABASE_BACKUP_ENVIRONMENT",
+  "DATABASE_BACKUP_KIND",
+  "DATABASE_BACKUP_COMPRESSION_LEVEL",
+  "DATABASE_BACKUP_MIN_FREE_BYTES",
+  "DATABASE_BACKUP_FREE_SPACE_FACTOR",
+  "DATABASE_BACKUP_DAILY_RETENTION_DAYS",
+  "DATABASE_BACKUP_WEEKLY_RETENTION_WEEKS",
+  "DATABASE_BACKUP_PRE_DEPLOYMENT_RETENTION_COUNT",
+  "DATABASE_RESTORE_ALLOW_PRODUCTION",
+  "DATABASE_RESTORE_APPROVAL_REFERENCE",
   ...CORE_SECRET_NAMES,
   "TRUST_PROXY",
   "TRUST_PROXY_HOPS",
@@ -794,6 +805,37 @@ function validateProductionDeployment(
   validateOptionalInteger(source, issues, "DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS", 1_000, 900_000);
   validateOptionalInteger(source, issues, "DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS", 1_000, 3_600_000);
   validateOptionalBoolean(source, issues, "DATABASE_MIGRATION_ALLOW_DESTRUCTIVE");
+  validateOptionalInteger(source, issues, "DATABASE_BACKUP_COMPRESSION_LEVEL", 0, 9);
+  validateOptionalInteger(source, issues, "DATABASE_BACKUP_MIN_FREE_BYTES", 0, Number.MAX_SAFE_INTEGER);
+  validateOptionalInteger(source, issues, "DATABASE_BACKUP_FREE_SPACE_FACTOR", 1, 10);
+  validateOptionalInteger(source, issues, "DATABASE_BACKUP_DAILY_RETENTION_DAYS", 1, 3650);
+  validateOptionalInteger(source, issues, "DATABASE_BACKUP_WEEKLY_RETENTION_WEEKS", 1, 520);
+  validateOptionalInteger(source, issues, "DATABASE_BACKUP_PRE_DEPLOYMENT_RETENTION_COUNT", 1, 100);
+  validateOptionalBoolean(source, issues, "DATABASE_RESTORE_ALLOW_PRODUCTION");
+
+  const backupRoot = optional(source, "DATABASE_BACKUP_ROOT");
+  if (backupRoot && [".", "/", "\\"].includes(backupRoot)) {
+    pushIssue(issues, "DATABASE_BACKUP_ROOT", "harus menunjuk direktori backup khusus, bukan root filesystem atau project root.");
+  }
+  const backupEnvironment = optional(source, "DATABASE_BACKUP_ENVIRONMENT");
+  if (backupEnvironment && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(backupEnvironment)) {
+    pushIssue(issues, "DATABASE_BACKUP_ENVIRONMENT", "harus berupa label environment yang aman untuk nama file.");
+  }
+  const backupKind = optional(source, "DATABASE_BACKUP_KIND");
+  if (backupKind && !["daily", "weekly", "pre-deployment", "manual"].includes(backupKind)) {
+    pushIssue(issues, "DATABASE_BACKUP_KIND", "harus daily, weekly, pre-deployment, atau manual.");
+  }
+  const restoreProduction = optional(source, "DATABASE_RESTORE_ALLOW_PRODUCTION")?.toLowerCase();
+  const restoreApproval = optional(source, "DATABASE_RESTORE_APPROVAL_REFERENCE");
+  if (["true", "1", "yes", "on"].includes(restoreProduction ?? "")) {
+    if (!restoreApproval || restoreApproval.length < 8 || isPlaceholder(restoreApproval)) {
+      pushIssue(
+        issues,
+        "DATABASE_RESTORE_APPROVAL_REFERENCE",
+        "wajib berisi incident/change reference minimal 8 karakter saat restore database aktif diizinkan.",
+      );
+    }
+  }
 
   const migrationLockKey = optional(source, "DATABASE_MIGRATION_LOCK_KEY");
   if (migrationLockKey) {

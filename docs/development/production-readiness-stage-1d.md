@@ -611,7 +611,7 @@ chore: finalize production readiness rehearsal and runbook
   ↓
 1D.4 Backup dan restore                         [Lokal]
   ↓
-Siapkan VPS Ubuntu 24.04
+Siapkan Cloud VPS Ubuntu 24.04
   ↓
 1D.5 Reverse proxy dan Cloudflare               [VPS]
   ↓

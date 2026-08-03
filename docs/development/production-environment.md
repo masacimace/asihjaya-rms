@@ -183,3 +183,11 @@ Set `ASIHJAYA_ENV_FILE=/etc/asihjaya-rms/production.env` di file tersebut agar s
 Tahap 1D.3 menambahkan konfigurasi migrator image, readiness timeout, advisory-lock timeout, DDL lock timeout, statement timeout, dan destructive migration approval. Nilai default aman tersedia di `.env.production.example`.
 
 `DATABASE_MIGRATION_ALLOW_DESTRUCTIVE` harus tetap `false` pada operasi normal. Pengaktifan sementara wajib disertai `DATABASE_MIGRATION_APPROVAL_REFERENCE` yang dapat diaudit dan hanya dilakukan setelah backup serta review SQL. Detail lengkap tersedia di `docs/development/database-deployment.md`.
+
+## Environment backup dan restore
+
+Tahap 1D.4 menambahkan direktori backup, compression, disk reserve, retention, dan guarded restore. Nilai default tersedia di `.env.production.example` dan divalidasi oleh `env:validate:production`.
+
+`DATABASE_RESTORE_ALLOW_PRODUCTION` harus tetap `false` pada operasi normal. Mengubahnya menjadi `true` wajib disertai `DATABASE_RESTORE_APPROVAL_REFERENCE` yang dapat diaudit dan exact confirmation token pada command restore.
+
+Backup archive, checksum, dan metadata tidak mengandung password database, tetapi tetap mengandung data bisnis dan harus diperlakukan sebagai data sensitif. Simpan dengan permission terbatas dan salinan off-site terenkripsi. Detail lengkap terdapat di `docs/development/database-backup-restore.md`.

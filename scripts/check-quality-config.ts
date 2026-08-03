@@ -67,6 +67,7 @@ const requiredRootScripts = [
   "check:production-container",
   "check:production-environment",
   "check:database-deployment",
+  "check:database-backup",
   "check:source-hygiene",
   "check:database",
   "check:database:live",
@@ -92,8 +93,17 @@ const requiredRootScripts = [
   "container:production:down",
   "test:container:production:local",
   "test:database-deployment:local",
+  "test:database-backup:local",
   "db:deploy",
   "db:deploy:production",
+  "db:backup",
+  "db:backup:production",
+  "db:backup:weekly",
+  "db:backup:pre-deployment",
+  "db:backup:verify",
+  "db:backup:prune",
+  "db:restore",
+  "db:restore:production",
   "env:validate",
   "env:validate:production",
   "env:generate-secrets",
@@ -133,6 +143,7 @@ for (const jobId of [
   "static-quality",
   "security-business",
   "database-migrations",
+  "database-backup-restore",
   "financial-concurrency",
   "hardware-hub",
   "container-build",
@@ -172,6 +183,14 @@ assert(
   `${workflowPath} wajib memeriksa kontrak database deployment.`,
 );
 assert(
+  workflow.includes("npm run check:database-backup"),
+  `${workflowPath} wajib memeriksa kontrak backup dan restore database.`,
+);
+assert(
+  workflow.includes("npm run test:database-backup:local"),
+  `${workflowPath} wajib menjalankan disposable backup/restore rehearsal.`,
+);
+assert(
   workflow.includes("npm run check:database:live"),
   `${workflowPath} wajib memeriksa schema hasil migration.`,
 );
@@ -196,6 +215,7 @@ for (const documentationPath of [
   "docs/development/production-container.md",
   "docs/development/production-environment.md",
   "docs/development/database-deployment.md",
+  "docs/development/database-backup-restore.md",
   ".github/pull_request_template.md",
   "README.md",
 ]) {

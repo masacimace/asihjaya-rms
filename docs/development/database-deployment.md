@@ -172,3 +172,17 @@ Tahap 1D.3 selesai ketika:
 - destructive migration memerlukan approval eksplisit;
 - app hanya start setelah migration service exit `0`;
 - CI memakai `db:deploy`, bukan primitive migration langsung.
+
+## Integrasi backup Tahap 1D.4
+
+Migration production manual sekarang wajib melalui:
+
+```powershell
+npm run db:deploy:production
+```
+
+Command tersebut menjalankan `db:backup:pre-deployment` sebelum migration runner. Jika backup, checksum, archive verification, atau disk guard gagal, migration tidak dijalankan.
+
+`compose.production.yaml` masih menyediakan service `migrate` sebagai primitive startup. Workflow deployment resmi yang mengorkestrasi backup, build, migration, health check, dan rollback akan diselesaikan pada Tahap 1D.7. Sampai tahap tersebut selesai, jangan menjalankan migration production melalui primitive `db:migrate` atau menyalakan release baru tanpa backup verified.
+
+Runbook lengkap terdapat di `docs/development/database-backup-restore.md`.

@@ -102,6 +102,13 @@ assert.equal(templateEnvironment.ASIHJAYA_BIND_ADDRESS, "127.0.0.1");
 assert.equal(templateEnvironment.ASIHJAYA_MIGRATOR_IMAGE, "asihjaya-rms-migrator:production");
 assert.equal(templateEnvironment.DATABASE_MIGRATION_ALLOW_DESTRUCTIVE, "false");
 assert.equal(templateEnvironment.DATABASE_MIGRATION_APPROVAL_REFERENCE, "");
+assert.equal(templateEnvironment.DATABASE_BACKUP_ROOT, ".data/backups/postgres");
+assert.equal(templateEnvironment.DATABASE_BACKUP_KIND, "daily");
+assert.equal(templateEnvironment.DATABASE_BACKUP_COMPRESSION_LEVEL, "6");
+assert.equal(templateEnvironment.DATABASE_BACKUP_DAILY_RETENTION_DAYS, "7");
+assert.equal(templateEnvironment.DATABASE_BACKUP_WEEKLY_RETENTION_WEEKS, "4");
+assert.equal(templateEnvironment.DATABASE_RESTORE_ALLOW_PRODUCTION, "false");
+assert.equal(templateEnvironment.DATABASE_RESTORE_APPROVAL_REFERENCE, "");
 assert.equal(templateEnvironment.TRUST_PROXY, "true");
 assert.equal(templateEnvironment.ASIHJAYA_ENV_FILE, ".env.production");
 
@@ -282,6 +289,21 @@ const unsafeMigrationIssues = collectServerEnvironmentIssues(unsafeMigrationEnvi
 assert(
   unsafeMigrationIssues.some((issue) => issue.name === "DATABASE_MIGRATION_APPROVAL_REFERENCE"),
   "Destructive migration tanpa approval reference wajib ditolak validator production.",
+);
+
+const unsafeRestoreEnvironment = {
+  ...templateEnvironment,
+  DATABASE_RESTORE_ALLOW_PRODUCTION: "true",
+  DATABASE_RESTORE_APPROVAL_REFERENCE: "",
+};
+const unsafeRestoreIssues = collectServerEnvironmentIssues(unsafeRestoreEnvironment, {
+  mode: "production",
+  requireCore: true,
+  requireDeployment: true,
+});
+assert(
+  unsafeRestoreIssues.some((issue) => issue.name === "DATABASE_RESTORE_APPROVAL_REFERENCE"),
+  "Restore database aktif tanpa approval reference wajib ditolak validator production.",
 );
 
 const placeholderIssues = collectServerEnvironmentIssues(templateEnvironment, {
