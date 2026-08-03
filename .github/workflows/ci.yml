@@ -89,8 +89,11 @@ jobs:
           POSTGRES_PASSWORD: asihjaya_ci_container_config
         run: docker compose -f compose.production.yaml config --quiet
 
-      - name: Build production container
-        run: docker build --pull --tag asihjaya-rms:ci .
+      - name: Build production application container
+        run: docker build --pull --target runner --tag asihjaya-rms:ci .
+
+      - name: Build production migrator container
+        run: docker build --pull --target migrator --tag asihjaya-rms-migrator:ci .
 
   security-business:
     name: Security & Business Checks
@@ -124,6 +127,9 @@ jobs:
 
       - name: Migration metadata
         run: npm run check:database
+
+      - name: Database deployment contract
+        run: npm run check:database-deployment
 
       - name: Security contracts
         run: npm run check:security
@@ -172,11 +178,11 @@ jobs:
       - name: Validate migration metadata
         run: npm run check:database
 
-      - name: Apply all migrations
-        run: npm run db:migrate
+      - name: Apply all migrations through guarded deployment runner
+        run: npm run db:deploy
 
-      - name: Re-run migrations for idempotent no-op
-        run: npm run db:migrate
+      - name: Re-run guarded deployment for idempotent no-op
+        run: npm run db:deploy
 
       - name: Validate migrated PostgreSQL schema
         run: npm run check:database:live
@@ -241,8 +247,8 @@ jobs:
       - name: Validate migration metadata
         run: npm run check:database
 
-      - name: Apply all migrations
-        run: npm run db:migrate
+      - name: Apply all migrations through guarded deployment runner
+        run: npm run db:deploy
 
       - name: Run financial and concurrency integration suite
         run: npm run test:financial

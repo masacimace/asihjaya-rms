@@ -32,6 +32,7 @@ for (const requiredStage of [
   "FROM base AS toolchain",
   "FROM toolchain AS deps",
   "FROM toolchain AS builder",
+  "FROM toolchain AS migrator",
   "FROM base AS runner",
 ]) {
   assert(dockerfile.includes(requiredStage), `Dockerfile wajib memuat ${requiredStage}.`);
@@ -64,12 +65,28 @@ assert(
   "Dockerfile tidak boleh menyalin file environment ke image.",
 );
 
+assert(
+  dockerfile.includes('CMD ["npm", "run", "db:deploy"]') &&
+    dockerfile.includes("USER migrator") &&
+    dockerfile.includes("NPM_CONFIG_CACHE=/tmp/.npm"),
+  "Migrator image wajib menjalankan guarded database deployment sebagai user non-root.",
+);
+assert(
+  compose.includes("ASIHJAYA_MIGRATOR_IMAGE") &&
+    compose.includes("DATABASE_MIGRATION_ALLOW_DESTRUCTIVE"),
+  "Compose production wajib memiliki migrator image dan destructive migration boundary.",
+);
+
 for (const requiredComposeContract of [
   "name: asihjaya-rms-production",
   "  app:",
+  "  migrate:",
   "  db:",
   "restart: unless-stopped",
   "condition: service_healthy",
+  "condition: service_completed_successfully",
+  "target: migrator",
+  'restart: "no"',
   "read_only: true",
   "/app/.data/uploads",
   "/app/.next/cache",
@@ -146,6 +163,8 @@ for (const scriptName of [
   "container:production:up",
   "container:production:down",
   "test:container:production:local",
+  "db:deploy",
+  "db:deploy:production",
 ]) {
   assert(packageJson.scripts?.[scriptName], `package.json wajib memiliki script ${scriptName}.`);
 }

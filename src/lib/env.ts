@@ -49,6 +49,7 @@ export const GENERATED_PRODUCTION_SECRET_NAMES = [
 export const PRODUCTION_ENVIRONMENT_TEMPLATE_NAMES = [
   "NODE_ENV",
   "ASIHJAYA_IMAGE",
+  "ASIHJAYA_MIGRATOR_IMAGE",
   "ASIHJAYA_ENV_FILE",
   "ASIHJAYA_BIND_ADDRESS",
   "ASIHJAYA_APP_PORT",
@@ -65,6 +66,13 @@ export const PRODUCTION_ENVIRONMENT_TEMPLATE_NAMES = [
   "POSTGRES_USER",
   "POSTGRES_PASSWORD",
   "DATABASE_URL",
+  "DATABASE_MIGRATION_LOCK_KEY",
+  "DATABASE_MIGRATION_READY_TIMEOUT_MS",
+  "DATABASE_MIGRATION_LOCK_TIMEOUT_MS",
+  "DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS",
+  "DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS",
+  "DATABASE_MIGRATION_ALLOW_DESTRUCTIVE",
+  "DATABASE_MIGRATION_APPROVAL_REFERENCE",
   ...CORE_SECRET_NAMES,
   "TRUST_PROXY",
   "TRUST_PROXY_HOPS",
@@ -781,6 +789,48 @@ function validateProductionDeployment(
   }
 
   validateOptionalInteger(source, issues, "ASIHJAYA_APP_PORT", 1, 65_535);
+  validateOptionalInteger(source, issues, "DATABASE_MIGRATION_READY_TIMEOUT_MS", 1_000, 900_000);
+  validateOptionalInteger(source, issues, "DATABASE_MIGRATION_LOCK_TIMEOUT_MS", 1_000, 900_000);
+  validateOptionalInteger(source, issues, "DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS", 1_000, 900_000);
+  validateOptionalInteger(source, issues, "DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS", 1_000, 3_600_000);
+  validateOptionalBoolean(source, issues, "DATABASE_MIGRATION_ALLOW_DESTRUCTIVE");
+
+  const migrationLockKey = optional(source, "DATABASE_MIGRATION_LOCK_KEY");
+  if (migrationLockKey) {
+    if (!/^-?\d{1,19}$/.test(migrationLockKey)) {
+      pushIssue(
+        issues,
+        "DATABASE_MIGRATION_LOCK_KEY",
+        "harus berupa bigint PostgreSQL dalam format angka desimal.",
+      );
+    } else {
+      const parsedMigrationLockKey = BigInt(migrationLockKey);
+      if (
+        parsedMigrationLockKey < BigInt("-9223372036854775808") ||
+        parsedMigrationLockKey > BigInt("9223372036854775807")
+      ) {
+        pushIssue(
+          issues,
+          "DATABASE_MIGRATION_LOCK_KEY",
+          "berada di luar rentang bigint PostgreSQL.",
+        );
+      }
+    }
+  }
+
+  const allowDestructiveMigration = optional(source, "DATABASE_MIGRATION_ALLOW_DESTRUCTIVE")
+    ?.trim()
+    .toLowerCase();
+  const destructiveApproval = optional(source, "DATABASE_MIGRATION_APPROVAL_REFERENCE");
+  if (["true", "1", "yes", "on"].includes(allowDestructiveMigration ?? "")) {
+    if (!destructiveApproval || destructiveApproval.length < 8 || isPlaceholder(destructiveApproval)) {
+      pushIssue(
+        issues,
+        "DATABASE_MIGRATION_APPROVAL_REFERENCE",
+        "wajib berisi change/approval reference minimal 8 karakter saat destructive migration diizinkan.",
+      );
+    }
+  }
 
   const environmentFile = optional(source, "ASIHJAYA_ENV_FILE");
   if (environmentFile?.endsWith(".example")) {

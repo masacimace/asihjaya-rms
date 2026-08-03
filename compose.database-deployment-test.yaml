@@ -1,0 +1,23 @@
+name: asihjaya-rms-database-deployment-test
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: asihjaya_migration_test
+      POSTGRES_PASSWORD: asihjaya_migration_test_password
+      POSTGRES_DB: asihjaya_rms_migration_test
+    ports:
+      - "127.0.0.1:${DATABASE_DEPLOYMENT_TEST_PORT:-55436}:5432"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U asihjaya_migration_test -d asihjaya_rms_migration_test
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - database_deployment_test_data:/var/lib/postgresql/data
+
+volumes:
+  database_deployment_test_data:

@@ -200,3 +200,16 @@ git rm --cached <file>
 ```
 
 Kemudian pastikan pola yang sesuai sudah ada di `.gitignore`.
+
+## Database deployment safety
+
+Jalur migration production diverifikasi melalui:
+
+```bash
+npm run check:database-deployment
+npm run test:database-deployment:local
+```
+
+Static check memvalidasi journal/hash, destructive-operation guard, advisory lock, migrator image, dan dependency ordering Compose. Rehearsal lokal memakai PostgreSQL 17 disposable untuk membuktikan concurrency lock, idempotent no-op, history drift rejection, serta destructive migration approval boundary.
+
+CI dan runbook production wajib memakai `npm run db:deploy`. `npm run db:migrate` adalah primitive internal dan tidak boleh dipanggil langsung oleh deployment production.

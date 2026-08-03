@@ -44,6 +44,31 @@ COPY . .
 RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build \
     npm run build:clean
 
+FROM toolchain AS migrator
+WORKDIR /app
+ENV HOME=/tmp
+ENV TMPDIR=/tmp
+ENV NPM_CONFIG_CACHE=/tmp/.npm
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json .npmrc drizzle.config.ts tsconfig.json ./
+COPY drizzle ./drizzle
+COPY scripts/database-deployment-state.ts scripts/run-database-deployment.ts ./scripts/
+COPY src/db/schema ./src/db/schema
+
+RUN groupadd --system --gid 10002 migrator \
+    && useradd --system \
+        --uid 10002 \
+        --gid migrator \
+        --create-home \
+        --home-dir /home/migrator \
+        migrator
+
+USER migrator
+STOPSIGNAL SIGTERM
+CMD ["npm", "run", "db:deploy"]
+
 FROM base AS runner
 WORKDIR /app
 

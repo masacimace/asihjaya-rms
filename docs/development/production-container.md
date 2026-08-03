@@ -164,3 +164,9 @@ Tahap 1D.1 selesai ketika:
 - restart policy, resource limit, log rotation, dan persistent volume terverifikasi;
 - container dapat berkomunikasi dengan PostgreSQL melalui readiness check;
 - smoke UI dan receipt PDF dijadwalkan setelah migration workflow Tahap 1D.3 tersedia.
+
+## Database migrator service
+
+Mulai Tahap 1D.3, production stack memiliki image dan service `migrate` terpisah. Application menunggu PostgreSQL healthy dan migration service selesai sukses sebelum start. `container:production:build` membangun target `app` dan `migrate` sekaligus.
+
+Lihat `docs/development/database-deployment.md` untuk advisory lock, migration history validation, destructive-operation approval, rehearsal, dan failure handling.

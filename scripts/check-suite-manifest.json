@@ -38,6 +38,7 @@
   ],
   "infrastructure": [
     "check-build-baseline.ts",
+    "check-database-deployment.ts",
     "check-database-migrations.ts",
     "check-production-container.ts",
     "check-quality-config.ts",

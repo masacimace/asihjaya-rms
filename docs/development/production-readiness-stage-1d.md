@@ -43,8 +43,8 @@ Tahap 1D menyiapkan aplikasi agar aman dan dapat dioperasikan di lingkungan prod
 | Tahap | Fokus                           | Lokasi utama pengujian | Output utama                                | Status |
 | ----- | ------------------------------- | ---------------------- | ------------------------------------------- | ------ |
 | 1D.1  | Production container foundation | Lokal                  | Image dan Compose production                | (DONE) |
-| 1D.2  | Environment dan secrets         | Lokal                  | Template, validator, dan secret policy      |
-| 1D.3  | Migration safety                | Lokal                  | Migration runner yang aman                  |
+| 1D.2  | Environment dan secrets         | Lokal                  | Template, validator, dan secret policy      | (DONE) |
+| 1D.3  | Migration safety                | Lokal                  | Migration runner yang aman                  | (DONE) |
 | 1D.4  | Backup dan restore              | Lokal                  | Backup, retention, dan restore rehearsal    |
 | 1D.5  | Reverse proxy dan Cloudflare    | VPS                    | HTTPS, proxy, firewall, origin protection   |
 | 1D.6  | Logging dan monitoring          | Lokal + VPS            | Log rotation, health, dan monitoring ringan |
@@ -112,7 +112,7 @@ infra: add production container foundation
 
 ---
 
-# 1D.2 — Environment & Secret Management
+# 1D.2 — Environment & Secret Management (DONE)
 
 ## Tujuan
 
@@ -603,11 +603,11 @@ chore: finalize production readiness rehearsal and runbook
 # Urutan Pelaksanaan yang Direkomendasikan
 
 ```text
-1D.1 Production container foundation            [Lokal]
+1D.1 Production container foundation            [Lokal] (DONE)
   ↓
-1D.2 Environment dan secrets                    [Lokal]
+1D.2 Environment dan secrets                    [Lokal] (DONE)
   ↓
-1D.3 Migration safety                           [Lokal]
+1D.3 Migration safety                           [Lokal] (DONE)
   ↓
 1D.4 Backup dan restore                         [Lokal]
   ↓
@@ -628,37 +628,37 @@ Satu Pull Request ke main
 
 # Checklist Status
 
-## 1D.1 — Production Container Foundation
+## 1D.1 — Production Container Foundation (DONE)
 
-- [ ] Branch Tahap 1D dibuat.
-- [ ] Multi-stage production image siap.
-- [ ] Runtime non-root.
-- [ ] Production Compose siap.
-- [ ] Health check aktif.
-- [ ] Restart policy aktif.
-- [ ] Resource limit ditentukan.
-- [ ] Log rotation container aktif.
-- [ ] Local production smoke test berhasil.
+- [+] Branch Tahap 1D dibuat.
+- [+] Multi-stage production image siap.
+- [+] Runtime non-root.
+- [+] Production Compose siap.
+- [+] Health check aktif.
+- [+] Restart policy aktif.
+- [+] Resource limit ditentukan.
+- [+] Log rotation container aktif.
+- [+] Local production smoke test berhasil.
 
-## 1D.2 — Environment & Secrets
+## 1D.2 — Environment & Secrets (DONE)
 
-- [ ] `.env.production.example` siap.
-- [ ] Semua variable production terdokumentasi.
-- [ ] Validator production fail-fast.
-- [ ] Generator secret tersedia.
-- [ ] Secret tidak masuk Git atau image.
-- [ ] File-permission policy terdokumentasi.
-- [ ] Secret-rotation runbook tersedia.
+- [+] `.env.production.example` siap.
+- [+] Semua variable production terdokumentasi.
+- [+] Validator production fail-fast.
+- [+] Generator secret tersedia.
+- [+] Secret tidak masuk Git atau image.
+- [+] File-permission policy terdokumentasi.
+- [+] Secret-rotation runbook tersedia.
 
-## 1D.3 — Migration Safety
+## 1D.3 — Migration Safety (DONE)
 
-- [ ] Database readiness check tersedia.
-- [ ] Migration runner tersedia.
-- [ ] Migration lock tersedia.
-- [ ] Concurrent migration test berhasil.
-- [ ] Migration failure test berhasil.
-- [ ] Pre-migration backup terhubung.
-- [ ] Migration policy terdokumentasi.
+- [+] Database readiness check tersedia.
+- [+] Migration runner tersedia.
+- [+] Migration lock tersedia.
+- [+] Concurrent migration test berhasil.
+- [+] Migration failure test berhasil.
+- [+] Pre-migration backup terhubung.
+- [+] Migration policy terdokumentasi.
 
 ## 1D.4 — Backup & Restore
 

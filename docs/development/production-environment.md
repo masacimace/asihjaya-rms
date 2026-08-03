@@ -177,3 +177,9 @@ Set `ASIHJAYA_ENV_FILE=/etc/asihjaya-rms/production.env` di file tersebut agar s
 - `ASIHJAYA_BIND_ADDRESS` tetap loopback.
 - Backup dan pemilik credential terdokumentasi.
 - Tidak ada output resolved Compose atau environment pada log CI.
+
+## Environment database deployment
+
+Tahap 1D.3 menambahkan konfigurasi migrator image, readiness timeout, advisory-lock timeout, DDL lock timeout, statement timeout, dan destructive migration approval. Nilai default aman tersedia di `.env.production.example`.
+
+`DATABASE_MIGRATION_ALLOW_DESTRUCTIVE` harus tetap `false` pada operasi normal. Pengaktifan sementara wajib disertai `DATABASE_MIGRATION_APPROVAL_REFERENCE` yang dapat diaudit dan hanya dilakukan setelah backup serta review SQL. Detail lengkap tersedia di `docs/development/database-deployment.md`.

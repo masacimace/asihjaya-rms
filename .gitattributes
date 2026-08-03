@@ -7,3 +7,7 @@ vendor/*.sha512 text eol=lf
 package-lock.json text eol=lf
 .npmrc text eol=lf
 .nvmrc text eol=lf
+
+# Migration hashes must remain identical on Windows, CI, and Linux production.
+drizzle/*.sql text eol=lf
+drizzle/meta/*.json text eol=lf

@@ -66,6 +66,7 @@ const requiredRootScripts = [
   "check:build-baseline",
   "check:production-container",
   "check:production-environment",
+  "check:database-deployment",
   "check:source-hygiene",
   "check:database",
   "check:database:live",
@@ -90,6 +91,9 @@ const requiredRootScripts = [
   "container:production:up",
   "container:production:down",
   "test:container:production:local",
+  "test:database-deployment:local",
+  "db:deploy",
+  "db:deploy:production",
   "env:validate",
   "env:validate:production",
   "env:generate-secrets",
@@ -160,8 +164,12 @@ assert(
   `${workflowPath} wajib menginstal dependency melalui npm ci.`,
 );
 assert(
-  workflow.includes("npm run db:migrate"),
-  `${workflowPath} wajib menjalankan migration nyata.`,
+  workflow.includes("npm run db:deploy"),
+  `${workflowPath} wajib menjalankan guarded database deployment nyata.`,
+);
+assert(
+  workflow.includes("npm run check:database-deployment"),
+  `${workflowPath} wajib memeriksa kontrak database deployment.`,
 );
 assert(
   workflow.includes("npm run check:database:live"),
@@ -187,6 +195,7 @@ for (const documentationPath of [
   "docs/development/pos-stage-1c-stabilization.md",
   "docs/development/production-container.md",
   "docs/development/production-environment.md",
+  "docs/development/database-deployment.md",
   ".github/pull_request_template.md",
   "README.md",
 ]) {

@@ -99,6 +99,9 @@ for (const name of GENERATED_PRODUCTION_SECRET_NAMES) {
 }
 assert.equal(templateEnvironment.NODE_ENV, "production");
 assert.equal(templateEnvironment.ASIHJAYA_BIND_ADDRESS, "127.0.0.1");
+assert.equal(templateEnvironment.ASIHJAYA_MIGRATOR_IMAGE, "asihjaya-rms-migrator:production");
+assert.equal(templateEnvironment.DATABASE_MIGRATION_ALLOW_DESTRUCTIVE, "false");
+assert.equal(templateEnvironment.DATABASE_MIGRATION_APPROVAL_REFERENCE, "");
 assert.equal(templateEnvironment.TRUST_PROXY, "true");
 assert.equal(templateEnvironment.ASIHJAYA_ENV_FILE, ".env.production");
 
@@ -265,6 +268,21 @@ ${localGeneration.stderr}`,
 } finally {
   rmSync(temporaryRoot, { recursive: true, force: true });
 }
+
+const unsafeMigrationEnvironment = {
+  ...templateEnvironment,
+  DATABASE_MIGRATION_ALLOW_DESTRUCTIVE: "true",
+  DATABASE_MIGRATION_APPROVAL_REFERENCE: "",
+};
+const unsafeMigrationIssues = collectServerEnvironmentIssues(unsafeMigrationEnvironment, {
+  mode: "production",
+  requireCore: true,
+  requireDeployment: true,
+});
+assert(
+  unsafeMigrationIssues.some((issue) => issue.name === "DATABASE_MIGRATION_APPROVAL_REFERENCE"),
+  "Destructive migration tanpa approval reference wajib ditolak validator production.",
+);
 
 const placeholderIssues = collectServerEnvironmentIssues(templateEnvironment, {
   mode: "production",

@@ -8,6 +8,7 @@ const processSuffix = `${process.pid}-${Date.now()}`;
 const projectName = `asihjaya-rms-production-smoke-${process.pid}`;
 const envFileName = `.env.production.container-smoke-${processSuffix}`;
 const imageName = "asihjaya-rms:production-smoke";
+const migratorImageName = "asihjaya-rms-migrator:production-smoke";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -135,6 +136,7 @@ const cliEnvironment: NodeJS.ProcessEnv = {
   ASIHJAYA_BIND_ADDRESS: "127.0.0.1",
   ASIHJAYA_APP_PORT: String(port),
   ASIHJAYA_IMAGE: imageName,
+  ASIHJAYA_MIGRATOR_IMAGE: migratorImageName,
   APP_REVISION: "container-smoke",
   APP_BUILD_DATE: new Date().toISOString(),
 };
@@ -171,11 +173,19 @@ try {
   runDocker(["version"], { capture: true, environment: cliEnvironment });
   compose(["down", "--volumes", "--remove-orphans"], { allowFailure: true });
 
-  console.log("Membangun production image dari Docker context bersih...");
-  compose(["build", "--pull", "app"]);
+  console.log("Membangun application dan migrator image dari Docker context bersih...");
+  compose(["build", "--pull", "app", "migrate"]);
 
   console.log("Menyalakan production Compose disposable...");
   compose(["up", "-d"]);
+
+  const migrationContainerId = compose(["ps", "-a", "-q", "migrate"], { capture: true });
+  assert(migrationContainerId, "Container migrate tidak ditemukan setelah compose up.");
+  assert(
+    inspect("{{.State.Status}}", migrationContainerId) === "exited" &&
+      inspect("{{.State.ExitCode}}", migrationContainerId) === "0",
+    "Migration service wajib selesai sukses sebelum application start.",
+  );
 
   const appContainerId = compose(["ps", "-q", "app"], { capture: true });
   assert(appContainerId, "Container app tidak ditemukan setelah compose up.");
@@ -270,7 +280,7 @@ try {
   );
 
   console.log(
-    `OK: production container smoke test lulus pada http://127.0.0.1:${port}; non-root, read-only, healthy, resource-limited, dan restart otomatis.`,
+    `OK: production container smoke test lulus pada http://127.0.0.1:${port}; migration guarded, non-root, read-only, healthy, resource-limited, dan restart otomatis.`,
   );
 } catch (error) {
   compose(["logs", "--no-color", "--tail", "200"], { allowFailure: true });
