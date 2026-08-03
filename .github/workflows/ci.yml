@@ -80,6 +80,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Validate production Compose
+        env:
+          ASIHJAYA_ENV_FILE: .env.example
+          POSTGRES_DB: asihjaya_rms_ci
+          POSTGRES_USER: asihjaya_ci
+          POSTGRES_PASSWORD: asihjaya_ci_container_config
+        run: docker compose -f compose.production.yaml config > /dev/null
+
       - name: Build production container
         run: docker build --pull --tag asihjaya-rms:ci .
 
@@ -106,6 +114,9 @@ jobs:
 
       - name: Reproducible build baseline
         run: npm run check:build-baseline
+
+      - name: Production container contract
+        run: npm run check:production-container
 
       - name: Source hygiene
         run: npm run check:source-hygiene

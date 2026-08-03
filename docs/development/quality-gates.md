@@ -19,6 +19,7 @@ Pemeriksaan lengkap tanpa mengubah database:
 ```bash
 npm ci
 npm run check:build-baseline
+npm run check:production-container
 npm run check:environment
 npm run check:all
 ```
@@ -27,6 +28,7 @@ Kelompok pemeriksaan:
 
 ```bash
 npm run check:build-baseline
+npm run check:production-container
 npm run check:quality
 npm run check:static
 npm run check:security
@@ -59,6 +61,15 @@ Production image harus dapat dibangun dari fresh Docker context:
 ```bash
 docker build --pull --tag asihjaya-rms:local .
 ```
+
+Kontrak dan smoke test production container:
+
+```bash
+npm run check:production-container
+npm run test:container:production:local
+```
+
+Compose production, batas resource, volume, health/readiness, dan troubleshooting didokumentasikan di `docs/development/production-container.md`.
 
 ## Finalisasi POS Stage 1C
 

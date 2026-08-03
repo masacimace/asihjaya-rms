@@ -64,6 +64,7 @@ assert(
 const requiredRootScripts = [
   "check:quality-config",
   "check:build-baseline",
+  "check:production-container",
   "check:source-hygiene",
   "check:database",
   "check:database:live",
@@ -83,6 +84,11 @@ const requiredRootScripts = [
   "check:critical",
   "verify:pos-stage-1c",
   "verify:pos-stage-1c:local",
+  "container:production:config",
+  "container:production:build",
+  "container:production:up",
+  "container:production:down",
+  "test:container:production:local",
   "env:validate",
   "env:generate-secrets",
 ];
@@ -167,6 +173,7 @@ for (const documentationPath of [
   "docs/development/environment-configuration.md",
   "docs/development/financial-concurrency-tests.md",
   "docs/development/pos-stage-1c-stabilization.md",
+  "docs/development/production-container.md",
   ".github/pull_request_template.md",
   "README.md",
 ]) {
