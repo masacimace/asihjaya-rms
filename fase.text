@@ -1,6 +1,7 @@
 ---- HOLD SAMPAI FITUR BARU SELESAI DI DEVELOP SEMUA ----
 Fase 8 — Production deployment readiness (HOLD)
 Fase 9 — Tenant integrity dan refactor bertahap (butuh diskusi sebelum implementasikan)
+
 --------------------------------------------------------------
 
 Tahap 1 — Stabilkan fondasi
@@ -12,14 +13,66 @@ Tahap 1 — Stabilkan fondasi
 6. Production build dan Docker build (DONE)
 7. Environment validation dan .env.example (DONE)
 8. Tambahkan critical-path test (DONE)
-
 1C.8C — ekstraksi dialog POS (DONE)
 1C.8D — ekstraksi receipt dan checkout-result visuals (DONE)
 1C.8E — final workspace composition cleanup (DONE)
-1C.9  — full stabilization, review, dan satu PR ke main
+1C.9  — full stabilization, review, dan satu PR ke main (DONE)
 
-9. Final stabilization gate (perlu pembahasan)
+--------------------------------------------------------------
 
+Tahap berikutnya yang paling saya rekomendasikan
+
+Daripada langsung menambahkan banyak fitur, urutan terbaik adalah:
+Tahap 1D — Production Readiness & Deployment Foundation
+
+Ini penting karena dari review awal, sisi fitur sudah cukup matang, tetapi kesiapan production masih menjadi area terbesar yang belum selesai.
+
+Fokusnya:
+Docker production yang lebih kecil dan efisien.
+Health check aplikasi dan database.
+Deployment Docker Compose untuk Ubuntu 24.04.
+Reverse proxy dan Cloudflare SSL.
+Environment production dan secret handling.
+PostgreSQL backup otomatis.
+Prosedur restore dan simulasi restore.
+Log rotation.
+Monitoring resource VPS.
+Application error logging.
+Deployment dan rollback script.
+Runbook operasional.
+Strategi migration saat deployment.
+
+Tahap ini tidak menambah fitur kasir, tetapi memastikan aplikasi aman untuk benar-benar dipakai outlet.
+
+--------------------------------------------------------------
+
+Setelah itu — Feature Discovery
+Kita dapat membuat backlog fitur dan menilainya berdasarkan:
+dampak bisnis
+risiko transaksi
+kompleksitas
+ketergantungan data
+kebutuhan UI
+kebutuhan perangkat keras
+prioritas outlet
+
+Contoh kelompok diskusi:
+Inventory dan mutasi antar-outlet.
+Purchasing dan supplier.
+Reparasi atau servis perhiasan.
+Buyback dan tukar tambah.
+Cicilan atau layaway.
+Membership dan loyalty.
+Promo dan pricing rules.
+Dashboard manajemen.
+Laporan keuangan.
+Mobile approval.
+Integrasi WhatsApp.
+Integrasi akuntansi.
+Offline resilience.
+Multi-outlet synchronization.
+
+--------------------------------------------------------------
 
 ---- NEXT FITUR LANJUTAN ----
 1. PWA untuk bagian POS only
