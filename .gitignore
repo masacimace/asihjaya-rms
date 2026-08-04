@@ -64,3 +64,6 @@ next-env.d.ts
 /backup-*.sql
 /*.dump
 /*.backup
+
+# production build output
+.deploy/
