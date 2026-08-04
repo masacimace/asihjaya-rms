@@ -40,20 +40,20 @@ Tahap 1D menyiapkan aplikasi agar aman dan dapat dioperasikan di lingkungan prod
 
 ## Ringkasan Tahapan
 
-| Tahap | Fokus | Lokasi utama pengujian | Output utama |
-|---|---|---|---|
-| 1D.1 | Production container foundation | Lokal | Image dan Compose production |
-| 1D.2 | Environment dan secrets | Lokal | Template, validator, dan secret policy |
-| 1D.3 | Migration safety | Lokal | Migration runner yang aman |
-| 1D.4 | Backup dan restore | Lokal | Backup, retention, dan restore rehearsal |
-| 1D.5 | Reverse proxy dan Cloudflare | VPS | HTTPS, proxy, firewall, origin protection |
-| 1D.6 | Logging dan monitoring | Lokal + VPS | Log rotation, health, dan monitoring ringan |
-| 1D.7 | Deployment dan rollback | VPS | Script deploy dan rollback teruji |
-| 1D.8 | Production rehearsal | VPS | Simulasi operasional dan runbook final |
+| Tahap | Fokus                           | Lokasi utama pengujian | Output utama                                | Status |
+| ----- | ------------------------------- | ---------------------- | ------------------------------------------- | ------ |
+| 1D.1  | Production container foundation | Lokal                  | Image dan Compose production                | (DONE) |
+| 1D.2  | Environment dan secrets         | Lokal                  | Template, validator, dan secret policy      | (DONE) |
+| 1D.3  | Migration safety                | Lokal                  | Migration runner yang aman                  | (DONE) |
+| 1D.4  | Backup dan restore              | Lokal                  | Backup, retention, dan restore rehearsal    | (DONE) |
+| 1D.5  | Reverse proxy dan Cloudflare    | VPS                    | HTTPS, proxy, firewall, origin protection   |
+| 1D.6  | Logging dan monitoring          | Lokal + VPS            | Log rotation, health, dan monitoring ringan |
+| 1D.7  | Deployment dan rollback         | VPS                    | Script deploy dan rollback teruji           |
+| 1D.8  | Production rehearsal            | VPS                    | Simulasi operasional dan runbook final      |
 
 ---
 
-# 1D.1 — Production Container Foundation
+# 1D.1 — Production Container Foundation (DONE)
 
 ## Tujuan
 
@@ -112,7 +112,7 @@ infra: add production container foundation
 
 ---
 
-# 1D.2 — Environment & Secret Management
+# 1D.2 — Environment & Secret Management (DONE)
 
 ## Tujuan
 
@@ -171,7 +171,7 @@ infra: harden production environment and secrets
 
 ---
 
-# 1D.3 — Database Deployment & Migration Safety
+# 1D.3 — Database Deployment & Migration Safety (DONE)
 
 ## Tujuan
 
@@ -224,7 +224,7 @@ infra: add safe production migration workflow
 
 ---
 
-# 1D.4 — PostgreSQL Backup, Retention & Restore
+# 1D.4 — PostgreSQL Backup, Retention & Restore (DONE)
 
 ## Tujuan
 
@@ -603,15 +603,15 @@ chore: finalize production readiness rehearsal and runbook
 # Urutan Pelaksanaan yang Direkomendasikan
 
 ```text
-1D.1 Production container foundation            [Lokal]
+1D.1 Production container foundation            [Lokal] (DONE)
   ↓
-1D.2 Environment dan secrets                    [Lokal]
+1D.2 Environment dan secrets                    [Lokal] (DONE)
   ↓
-1D.3 Migration safety                           [Lokal]
+1D.3 Migration safety                           [Lokal] (DONE)
   ↓
-1D.4 Backup dan restore                         [Lokal]
+1D.4 Backup dan restore                         [Lokal] (DONE)
   ↓
-Siapkan VPS Ubuntu 24.04
+Siapkan Cloud VPS Ubuntu 24.04
   ↓
 1D.5 Reverse proxy dan Cloudflare               [VPS]
   ↓
@@ -628,48 +628,48 @@ Satu Pull Request ke main
 
 # Checklist Status
 
-## 1D.1 — Production Container Foundation
+## 1D.1 — Production Container Foundation (DONE)
 
-- [ ] Branch Tahap 1D dibuat.
-- [ ] Multi-stage production image siap.
-- [ ] Runtime non-root.
-- [ ] Production Compose siap.
-- [ ] Health check aktif.
-- [ ] Restart policy aktif.
-- [ ] Resource limit ditentukan.
-- [ ] Log rotation container aktif.
-- [ ] Local production smoke test berhasil.
+- [+] Branch Tahap 1D dibuat.
+- [+] Multi-stage production image siap.
+- [+] Runtime non-root.
+- [+] Production Compose siap.
+- [+] Health check aktif.
+- [+] Restart policy aktif.
+- [+] Resource limit ditentukan.
+- [+] Log rotation container aktif.
+- [+] Local production smoke test berhasil.
 
-## 1D.2 — Environment & Secrets
+## 1D.2 — Environment & Secrets (DONE)
 
-- [ ] `.env.production.example` siap.
-- [ ] Semua variable production terdokumentasi.
-- [ ] Validator production fail-fast.
-- [ ] Generator secret tersedia.
-- [ ] Secret tidak masuk Git atau image.
-- [ ] File-permission policy terdokumentasi.
-- [ ] Secret-rotation runbook tersedia.
+- [+] `.env.production.example` siap.
+- [+] Semua variable production terdokumentasi.
+- [+] Validator production fail-fast.
+- [+] Generator secret tersedia.
+- [+] Secret tidak masuk Git atau image.
+- [+] File-permission policy terdokumentasi.
+- [+] Secret-rotation runbook tersedia.
 
-## 1D.3 — Migration Safety
+## 1D.3 — Migration Safety (DONE)
 
-- [ ] Database readiness check tersedia.
-- [ ] Migration runner tersedia.
-- [ ] Migration lock tersedia.
-- [ ] Concurrent migration test berhasil.
-- [ ] Migration failure test berhasil.
-- [ ] Pre-migration backup terhubung.
-- [ ] Migration policy terdokumentasi.
+- [+] Database readiness check tersedia.
+- [+] Migration runner tersedia.
+- [+] Migration lock tersedia.
+- [+] Concurrent migration test berhasil.
+- [+] Migration failure test berhasil.
+- [+] Pre-migration backup terhubung.
+- [+] Migration policy terdokumentasi.
 
-## 1D.4 — Backup & Restore
+## 1D.4 — Backup & Restore (DONE)
 
-- [ ] Backup script tersedia.
-- [ ] Compression dan checksum aktif.
-- [ ] Retention policy aktif.
-- [ ] Restore script tersedia.
-- [ ] Disposable restore rehearsal berhasil.
-- [ ] Backup rusak ditolak.
-- [ ] Off-site backup plan tersedia.
-- [ ] Disaster-recovery runbook tersedia.
+- [+] Backup script tersedia.
+- [+] Compression dan checksum aktif.
+- [+] Retention policy aktif.
+- [+] Restore script tersedia.
+- [+] Disposable restore rehearsal berhasil.
+- [+] Backup rusak ditolak.
+- [+] Off-site backup plan tersedia.
+- [+] Disaster-recovery runbook tersedia.
 
 ## 1D.5 — Reverse Proxy & Cloudflare
 

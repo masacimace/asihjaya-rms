@@ -14,12 +14,19 @@ export async function GET() {
 
     await db.execute(sql`select 1`);
 
-    return NextResponse.json({
-      status: "healthy",
-      database: "connected",
-      latencyMs: Date.now() - startedAt,
-      checkedAt: new Date().toISOString(),
-    });
+    return NextResponse.json(
+      {
+        status: "healthy",
+        database: "connected",
+        latencyMs: Date.now() - startedAt,
+        checkedAt: new Date().toISOString(),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      },
+    );
   } catch (error) {
     console.error("[health/database] Database health check failed:", error);
 
@@ -32,6 +39,9 @@ export async function GET() {
       },
       {
         status: 503,
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
       },
     );
   }

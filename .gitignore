@@ -30,6 +30,7 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+!.env.production.example
 !hardware-hub/.env.example
 
 # local hardware hub runtime files
@@ -63,3 +64,6 @@ next-env.d.ts
 /backup-*.sql
 /*.dump
 /*.backup
+
+# production build output
+.deploy/

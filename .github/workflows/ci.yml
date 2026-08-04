@@ -11,6 +11,7 @@ on:
       - "chore/**"
       - "test/**"
       - "refactor/**"
+      - "infra/**"
   pull_request:
   workflow_dispatch:
 
@@ -29,13 +30,13 @@ env:
   INTERNAL_RENDER_ORIGIN: http://127.0.0.1:3000
   DEFAULT_ORGANIZATION_SLUG: asihjaya
   DATABASE_URL: postgresql://asihjaya_ci:asihjaya_ci@127.0.0.1:5432/asihjaya_rms_ci
-  SESSION_SECRET: ci-session-secret-000000000000000000000000000000000000000000000000
-  RECEIPT_VERIFICATION_SECRET: ci-receipt-secret-0000000000000000000000000000000000000000000000
-  CUSTOMER_HISTORY_SESSION_SECRET: ci-history-session-secret-00000000000000000000000000000000000000000000
-  CUSTOMER_HISTORY_PIN_PEPPER: ci-history-pin-pepper-000000000000000000000000000000000000000000000
-  SECURITY_RATE_LIMIT_SECRET: ci-rate-limit-secret-000000000000000000000000000000000000000000000
-  PDF_RENDER_TOKEN_SECRET: ci-pdf-render-secret-000000000000000000000000000000000000000000000
-  HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY: ci-agent-encryption-key-0000000000000000000000000000000000000000000
+  SESSION_SECRET: ci-session-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
+  RECEIPT_VERIFICATION_SECRET: ci-receipt-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
+  CUSTOMER_HISTORY_SESSION_SECRET: ci-history-session-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
+  CUSTOMER_HISTORY_PIN_PEPPER: ci-history-pin-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ
+  SECURITY_RATE_LIMIT_SECRET: ci-rate-limit-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz
+  PDF_RENDER_TOKEN_SECRET: ci-pdf-render-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
+  HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY: ci-agent-encryption-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
   IMAGE_STORAGE_DRIVER: local
   IMAGE_STORAGE_ROOT: .data/ci-uploads
   SERVER_ACTION_BODY_SIZE_LIMIT: 20mb
@@ -80,8 +81,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Build production container
-        run: docker build --pull --tag asihjaya-rms:ci .
+      - name: Validate production Compose
+        env:
+          ASIHJAYA_ENV_FILE: .env.example
+          POSTGRES_DB: asihjaya_rms_ci
+          POSTGRES_USER: asihjaya_ci
+          POSTGRES_PASSWORD: asihjaya_ci_container_config
+        run: docker compose -f compose.production.yaml config --quiet
+
+      - name: Build production application container
+        run: docker build --pull --target runner --tag asihjaya-rms:ci .
+
+      - name: Build production migrator container
+        run: docker build --pull --target migrator --tag asihjaya-rms-migrator:ci .
 
   security-business:
     name: Security & Business Checks
@@ -107,11 +119,20 @@ jobs:
       - name: Reproducible build baseline
         run: npm run check:build-baseline
 
+      - name: Production container contract
+        run: npm run check:production-container
+
       - name: Source hygiene
         run: npm run check:source-hygiene
 
       - name: Migration metadata
         run: npm run check:database
+
+      - name: Database deployment contract
+        run: npm run check:database-deployment
+
+      - name: Database backup and restore contract
+        run: npm run check:database-backup
 
       - name: Security contracts
         run: npm run check:security
@@ -160,14 +181,38 @@ jobs:
       - name: Validate migration metadata
         run: npm run check:database
 
-      - name: Apply all migrations
-        run: npm run db:migrate
+      - name: Apply all migrations through guarded deployment runner
+        run: npm run db:deploy
 
-      - name: Re-run migrations for idempotent no-op
-        run: npm run db:migrate
+      - name: Re-run guarded deployment for idempotent no-op
+        run: npm run db:deploy
 
       - name: Validate migrated PostgreSQL schema
         run: npm run check:database:live
+
+  database-backup-restore:
+    name: Database Backup & Restore Rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          package-manager-cache: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run disposable backup and restore rehearsal
+        run: npm run test:database-backup:local
+
+      - name: Run off-site backup orchestration rehearsal
+        run: npm run test:database-backup-offsite:local
 
   hardware-hub:
     name: Hardware Hub Checks
@@ -229,8 +274,8 @@ jobs:
       - name: Validate migration metadata
         run: npm run check:database
 
-      - name: Apply all migrations
-        run: npm run db:migrate
+      - name: Apply all migrations through guarded deployment runner
+        run: npm run db:deploy
 
       - name: Run financial and concurrency integration suite
         run: npm run test:financial

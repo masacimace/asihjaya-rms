@@ -15,6 +15,10 @@ function optionValue(args: string[], name: string): string | undefined {
   return value;
 }
 
+function hasFlag(args: string[], name: string): boolean {
+  return args.includes(name);
+}
+
 function parseMode(rawValue: string | undefined): EnvironmentMode | undefined {
   if (!rawValue) return undefined;
   if (
@@ -29,6 +33,13 @@ function parseMode(rawValue: string | undefined): EnvironmentMode | undefined {
 
 const args = process.argv.slice(2);
 const environmentFile = optionValue(args, "--env-file");
+const mode = parseMode(optionValue(args, "--mode"));
+const requireDeployment = hasFlag(args, "--deployment");
+
+if (requireDeployment && mode !== "production") {
+  throw new Error("--deployment wajib digunakan bersama --mode production.");
+}
+
 const dotenvResult = config(
   environmentFile
     ? {
@@ -43,14 +54,14 @@ if (environmentFile && dotenvResult.error) {
   throw new Error(`Gagal membaca environment file ${environmentFile}.`);
 }
 
-const mode = parseMode(optionValue(args, "--mode"));
 assertServerEnvironment(process.env, {
   mode,
   requireCore: mode === "production" || process.env.NODE_ENV === "production",
+  requireDeployment,
 });
 
 console.log(
   `Environment valid untuk mode ${mode ?? process.env.NODE_ENV ?? "development"}${
-    environmentFile ? ` dari ${environmentFile}` : ""
-  }.`,
+    requireDeployment ? " dengan deployment profile" : ""
+  }${environmentFile ? ` dari ${environmentFile}` : ""}.`,
 );

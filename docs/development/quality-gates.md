@@ -19,6 +19,8 @@ Pemeriksaan lengkap tanpa mengubah database:
 ```bash
 npm ci
 npm run check:build-baseline
+npm run check:production-container
+npm run check:production-environment
 npm run check:environment
 npm run check:all
 ```
@@ -27,6 +29,8 @@ Kelompok pemeriksaan:
 
 ```bash
 npm run check:build-baseline
+npm run check:production-container
+npm run check:production-environment
 npm run check:quality
 npm run check:static
 npm run check:security
@@ -46,7 +50,7 @@ npm run test:financial:local
 
 Untuk database test yang sudah dimigrasikan, gunakan `npm run test:financial`. Dokumentasi lengkap tersedia di `docs/development/financial-concurrency-tests.md`.
 
-`check:quality` mencakup konfigurasi quality gate, reproducible build baseline, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract. `check:security` mencakup kontrak environment production dan pemisahan secret. `check:pos-stage-1c` menggabungkan seluruh kontrak hasil modularisasi checkout, payment, scanner, cart, customer, held cart, katalog, dialog, result/shift, dan workspace composition. `check:transactions` menambahkan fingerprint/recovery checkout, rekonsiliasi nominal cash/mixed payment/Dana Titip, manual payment, sale correction, reconciliation, dan settlement import.
+`check:quality` mencakup konfigurasi quality gate, reproducible build baseline, production container, source hygiene, dan metadata migration. `check:static` mencakup ESLint, TypeScript, serta route contract. `check:security` mencakup kontrak environment server, template deployment production, generator secret non-leaking, dan pemisahan secret. `check:pos-stage-1c` menggabungkan seluruh kontrak hasil modularisasi checkout, payment, scanner, cart, customer, held cart, katalog, dialog, result/shift, dan workspace composition. `check:transactions` menambahkan fingerprint/recovery checkout, rekonsiliasi nominal cash/mixed payment/Dana Titip, manual payment, sale correction, reconciliation, dan settlement import.
 
 Clean build menghapus output lama sebelum membuat production bundle:
 
@@ -58,6 +62,22 @@ Production image harus dapat dibangun dari fresh Docker context:
 
 ```bash
 docker build --pull --tag asihjaya-rms:local .
+```
+
+Kontrak dan smoke test production container:
+
+```bash
+npm run check:production-container
+npm run test:container:production:local
+```
+
+Compose production, batas resource, volume, health/readiness, dan troubleshooting didokumentasikan di `docs/development/production-container.md`.
+
+Template production, validator deployment, permission file, dan secret rotation didokumentasikan di `docs/development/production-environment.md`.
+
+```bash
+npm run env:prepare:production
+npm run env:validate:production
 ```
 
 ## Finalisasi POS Stage 1C
@@ -114,7 +134,7 @@ Check lama berbasis milestone atau pencarian potongan source harus diganti denga
 - Database dump dan backup.
 - Private key atau pola token berisiko tinggi.
 
-`.env.example` dan `hardware-hub/.env.example` tetap diperbolehkan karena hanya berisi contoh.
+`.env.example`, `.env.production.example`, dan template Hardware Hub tetap diperbolehkan karena hanya berisi placeholder atau value non-secret.
 
 ## GitHub Actions
 
@@ -180,3 +200,50 @@ git rm --cached <file>
 ```
 
 Kemudian pastikan pola yang sesuai sudah ada di `.gitignore`.
+
+## Database deployment safety
+
+Jalur migration production diverifikasi melalui:
+
+```bash
+npm run check:database-deployment
+npm run test:database-deployment:local
+```
+
+Static check memvalidasi journal/hash, destructive-operation guard, advisory lock, migrator image, dan dependency ordering Compose. Rehearsal lokal memakai PostgreSQL 17 disposable untuk membuktikan concurrency lock, idempotent no-op, history drift rejection, serta destructive migration approval boundary.
+
+CI dan runbook production wajib memakai `npm run db:deploy`. `npm run db:migrate` adalah primitive internal dan tidak boleh dipanggil langsung oleh deployment production.
+
+## Backup dan restore PostgreSQL
+
+Kontrak static:
+
+```bash
+npm run check:database-backup
+```
+
+Disposable rehearsal dengan PostgreSQL 17 dan Docker:
+
+```bash
+npm run test:database-backup:local
+```
+
+Check static memvalidasi custom-format archive, metadata, SHA-256, disk guard, retention, guarded production restore, package scripts, environment template, dan dokumentasi. Rehearsal membuktikan archive dapat dipulihkan, transaksi dummy tetap terbaca, backup rusak ditolak, serta retention tidak menghapus backup terbaru, manual, atau protected.
+
+GitHub Actions menjalankan job **Database Backup & Restore Rehearsal** secara terpisah.
+
+## Automated off-site backup
+
+Kontrak Backblaze B2:
+
+```bash
+npm run check:database-backup-offsite
+```
+
+Rehearsal tanpa credential production memakai object store in-memory:
+
+```bash
+npm run test:database-backup-offsite:local
+```
+
+Rehearsal membuktikan upload empat-object, idempotency, Object Lock boundary, full SHA-256 verification, corruption rejection, download, dan remote retention. GitHub Actions menjalankannya pada job **Database Backup & Restore Rehearsal** tanpa mengakses bucket production.

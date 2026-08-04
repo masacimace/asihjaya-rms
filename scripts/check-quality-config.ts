@@ -64,6 +64,11 @@ assert(
 const requiredRootScripts = [
   "check:quality-config",
   "check:build-baseline",
+  "check:production-container",
+  "check:production-environment",
+  "check:database-deployment",
+  "check:database-backup",
+  "check:database-backup-offsite",
   "check:source-hygiene",
   "check:database",
   "check:database:live",
@@ -83,8 +88,35 @@ const requiredRootScripts = [
   "check:critical",
   "verify:pos-stage-1c",
   "verify:pos-stage-1c:local",
+  "container:production:config",
+  "container:production:build",
+  "container:production:up",
+  "container:production:down",
+  "test:container:production:local",
+  "test:database-deployment:local",
+  "test:database-backup:local",
+  "test:database-backup-offsite:local",
+  "db:deploy",
+  "db:deploy:production",
+  "db:backup",
+  "db:backup:production",
+  "db:backup:weekly",
+  "db:backup:pre-deployment",
+  "db:backup:verify",
+  "db:backup:prune",
+  "db:backup:offsite",
+  "db:backup:offsite:verify",
+  "db:backup:offsite:prune",
+  "db:backup:offsite:download",
+  "db:backup:production:offsite",
+  "db:backup:weekly:offsite",
+  "db:backup:pre-deployment:offsite",
+  "db:restore",
+  "db:restore:production",
   "env:validate",
+  "env:validate:production",
   "env:generate-secrets",
+  "env:prepare:production",
 ];
 
 for (const scriptName of requiredRootScripts) {
@@ -120,6 +152,7 @@ for (const jobId of [
   "static-quality",
   "security-business",
   "database-migrations",
+  "database-backup-restore",
   "financial-concurrency",
   "hardware-hub",
   "container-build",
@@ -129,6 +162,11 @@ for (const jobId of [
     `${workflowPath} wajib memiliki job ${jobId}.`,
   );
 }
+
+assert(
+  workflow.includes('- "infra/**"'),
+  `${workflowPath} wajib berjalan pada branch infrastructure.`,
+);
 
 for (const actionReference of ["actions/checkout@v6", "actions/setup-node@v6"]) {
   assert(
@@ -146,8 +184,24 @@ assert(
   `${workflowPath} wajib menginstal dependency melalui npm ci.`,
 );
 assert(
-  workflow.includes("npm run db:migrate"),
-  `${workflowPath} wajib menjalankan migration nyata.`,
+  workflow.includes("npm run db:deploy"),
+  `${workflowPath} wajib menjalankan guarded database deployment nyata.`,
+);
+assert(
+  workflow.includes("npm run check:database-deployment"),
+  `${workflowPath} wajib memeriksa kontrak database deployment.`,
+);
+assert(
+  workflow.includes("npm run check:database-backup"),
+  `${workflowPath} wajib memeriksa kontrak backup dan restore database.`,
+);
+assert(
+  workflow.includes("npm run test:database-backup:local"),
+  `${workflowPath} wajib menjalankan disposable backup/restore rehearsal.`,
+);
+assert(
+  workflow.includes("npm run test:database-backup-offsite:local"),
+  `${workflowPath} wajib menjalankan off-site backup rehearsal tanpa credential production.`,
 );
 assert(
   workflow.includes("npm run check:database:live"),
@@ -161,12 +215,21 @@ assert(
   workflow.includes("npm run env:validate -- --mode production"),
   `${workflowPath} wajib memvalidasi environment production.`,
 );
+assert(
+  workflow.includes("docker compose -f compose.production.yaml config --quiet"),
+  `${workflowPath} wajib memvalidasi Compose tanpa mencetak resolved secret.`,
+);
 
 for (const documentationPath of [
   "docs/development/quality-gates.md",
   "docs/development/environment-configuration.md",
   "docs/development/financial-concurrency-tests.md",
   "docs/development/pos-stage-1c-stabilization.md",
+  "docs/development/production-container.md",
+  "docs/development/production-environment.md",
+  "docs/development/database-deployment.md",
+  "docs/development/database-backup-restore.md",
+  "docs/development/database-backup-offsite.md",
   ".github/pull_request_template.md",
   "README.md",
 ]) {

@@ -30,6 +30,7 @@
     "check-pos-result-shift-view.ts",
     "check-pos-workspace-commands.ts",
     "check-pos-workspace-composition.ts",
+    "check-production-environment.ts",
     "check-receipt-token.ts",
     "check-routes.ts",
     "check-sale-correction.ts",
@@ -37,7 +38,11 @@
   ],
   "infrastructure": [
     "check-build-baseline.ts",
+    "check-database-deployment.ts",
+    "check-database-backup.ts",
+    "check-database-backup-offsite.ts",
     "check-database-migrations.ts",
+    "check-production-container.ts",
     "check-quality-config.ts",
     "check-source-hygiene.ts"
   ],

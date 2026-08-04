@@ -1,0 +1,165 @@
+name: asihjaya-rms-production
+
+services:
+  app:
+    image: ${ASIHJAYA_IMAGE:-asihjaya-rms:production}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+      args:
+        APP_REVISION: ${APP_REVISION:-unknown}
+        APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ${ASIHJAYA_ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      INTERNAL_RENDER_ORIGIN: http://127.0.0.1:3000
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      HOME: /tmp
+      TMPDIR: /tmp
+      NODE_OPTIONS: --max-old-space-size=1024
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${ASIHJAYA_BIND_ADDRESS:-127.0.0.1}:${ASIHJAYA_APP_PORT:-3000}:3000"
+    volumes:
+      - app_uploads:/app/.data/uploads
+      - app_next_cache:/app/.next/cache
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    shm_size: 256mb
+    mem_limit: 1800m
+    cpus: 1.25
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:3000/api/health/database',{signal:AbortSignal.timeout(6000)})
+          .then((response)=>{if(!response.ok)process.exit(1)})
+          .catch(()=>process.exit(1))
+      interval: 20s
+      timeout: 8s
+      start_period: 45s
+      retries: 6
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+    networks:
+      - edge
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "1.25"
+          memory: 1800M
+          pids: 512
+        reservations:
+          cpus: "0.50"
+          memory: 768M
+
+  migrate:
+    image: ${ASIHJAYA_MIGRATOR_IMAGE:-asihjaya-rms-migrator:production}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    restart: "no"
+    init: true
+    env_file:
+      - ${ASIHJAYA_ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      DATABASE_MIGRATION_LOCK_KEY: ${DATABASE_MIGRATION_LOCK_KEY:-718143293674}
+      DATABASE_MIGRATION_READY_TIMEOUT_MS: ${DATABASE_MIGRATION_READY_TIMEOUT_MS:-120000}
+      DATABASE_MIGRATION_LOCK_TIMEOUT_MS: ${DATABASE_MIGRATION_LOCK_TIMEOUT_MS:-120000}
+      DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS: ${DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS:-30000}
+      DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS: ${DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS:-900000}
+      DATABASE_MIGRATION_ALLOW_DESTRUCTIVE: ${DATABASE_MIGRATION_ALLOW_DESTRUCTIVE:-false}
+      DATABASE_MIGRATION_APPROVAL_REFERENCE: ${DATABASE_MIGRATION_APPROVAL_REFERENCE:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    mem_limit: 768m
+    cpus: 0.50
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 768M
+          pids: 256
+        reservations:
+          cpus: "0.10"
+          memory: 256M
+
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB wajib diatur di .env.production}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER wajib diatur di .env.production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD wajib diatur di .env.production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    shm_size: 256mb
+    mem_limit: 1200m
+    cpus: 0.75
+    stop_grace_period: 60s
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 1200M
+          pids: 256
+        reservations:
+          cpus: "0.25"
+          memory: 384M
+
+volumes:
+  postgres_data:
+  app_uploads:
+  app_next_cache:
+
+networks:
+  edge:
+  backend:
+    internal: true
