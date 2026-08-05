@@ -127,6 +127,41 @@ services:
           cpus: "0.10"
           memory: 256M
 
+  operations:
+    profiles:
+      - operations
+    image: ${ASIHJAYA_OPERATIONS_IMAGE:-asihjaya-rms-operations:production}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: operations
+      args:
+        APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
+        APP_REVISION: ${APP_REVISION:-unknown}
+        APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
+    command:
+      - node
+      - --version
+    restart: "no"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    network_mode: none
+    mem_limit: 768m
+    cpus: 0.50
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 768M
+          pids: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
   db:
     image: postgres:17-bookworm
     restart: unless-stopped

@@ -41,6 +41,7 @@ switch (command) {
       createdAt: optionValue(args, "--created-at"),
       appRepository: optionValue(args, "--app-repository"),
       migratorRepository: optionValue(args, "--migrator-repository"),
+      operationsRepository: optionValue(args, "--operations-repository"),
       previousReleaseId: optionValue(args, "--previous-release-id") ?? current?.releaseId ?? null,
       operator: optionValue(args, "--operator") ?? process.env.SUDO_USER ?? process.env.USER ?? "unknown",
       hostname: optionValue(args, "--hostname") ?? os.hostname(),

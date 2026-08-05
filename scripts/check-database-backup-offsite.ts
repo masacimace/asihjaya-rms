@@ -204,6 +204,17 @@ assert.match(runner, /s3\.\$\{region\}\.backblazeb2\.com/);
 assert.match(runner, /DATABASE_BACKUP_OFFSITE_ENABLED harus true/);
 assert.match(runner, /DATABASE_BACKUP_OFFSITE_MAX_ARCHIVE_BYTES/);
 assert.doesNotMatch(runner, /console\.(?:log|error)\([^\n]*(?:SECRET_ACCESS_KEY|ACCESS_KEY_ID)/);
+assert.match(runner, /--result-file/);
+assert.match(runner, /writeDatabaseBackupOffsiteResult/);
+
+const preDeploymentRunner = readFileSync(
+  path.join(projectRoot, "scripts/run-database-backup-pre-deployment.ts"),
+  "utf8",
+);
+assert.match(preDeploymentRunner, /backupResult\.artifact\.metadataPath/);
+assert.match(preDeploymentRunner, /offsiteResult\.backupId === backupResult\.artifact\.backupId/);
+assert.match(preDeploymentRunner, /offsiteResult\.fullVerification/);
+assert.doesNotMatch(preDeploymentRunner, /--upload-latest/);
 
 const service = readFileSync(path.join(projectRoot, "scripts/database-backup-offsite-service.ts"), "utf8");
 assert.match(service, /Full SHA-256 verification/);

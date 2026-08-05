@@ -53,6 +53,7 @@ try {
   assert.equal(first.releaseId, expectedReleaseId);
   assert.equal(first.images.app.reference, `asihjaya-rms:${expectedReleaseId}`);
   assert.equal(first.images.migrator.reference, `asihjaya-rms-migrator:${expectedReleaseId}`);
+  assert.equal(first.images.operations.reference, `asihjaya-rms-operations:${expectedReleaseId}`);
   validateReleaseRecord(first);
   assert.deepEqual(parseReleaseRecord(`${JSON.stringify(first)}\n`), first);
 
@@ -197,6 +198,7 @@ const compose = readFileSync(path.join(projectRoot, "compose.production.yaml"), 
 for (const variableName of ["APP_RELEASE_ID", "APP_REVISION", "APP_BUILD_DATE"]) {
   assert(compose.includes(`${variableName}:`), `Compose wajib meneruskan ${variableName} ke runtime.`);
 }
+assert(compose.includes("ASIHJAYA_OPERATIONS_IMAGE"), "Compose wajib mendefinisikan immutable operations image.");
 const dockerfile = readFileSync(path.join(projectRoot, "Dockerfile"), "utf8");
 assert.match(dockerfile, /org\.opencontainers\.image\.version="\$\{APP_RELEASE_ID\}"/);
 assert.match(dockerfile, /ENV APP_RELEASE_ID="\$\{APP_RELEASE_ID\}"/);

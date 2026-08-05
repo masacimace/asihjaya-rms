@@ -12,6 +12,7 @@ import {
 } from "./database-backup-state";
 import {
   assertSafeDownloadDirectory,
+  localOffsiteReceiptPath,
   parseOffsiteReceipt,
   sanitizeOffsitePrefix,
   type DatabaseBackupOffsiteReceipt,
@@ -26,6 +27,7 @@ import {
   type DatabaseBackupOffsiteConfig,
 } from "./database-backup-offsite-service";
 import { S3DatabaseBackupOffsiteStore } from "./database-backup-offsite-store";
+import { writeDatabaseBackupOffsiteResult } from "./database-backup-pre-deployment-state";
 
 const projectRoot = process.cwd();
 const MAX_SINGLE_OBJECT_BYTES = 5 * 1024 * 1024 * 1024;
@@ -36,6 +38,7 @@ type CliOptions = {
   receiptPath?: string;
   backupId?: string;
   downloadDirectory?: string;
+  resultFile?: string;
   uploadLatest: boolean;
   verifyLatest: boolean;
   prune: boolean;
@@ -61,6 +64,7 @@ function parseOptions(args: string[]): CliOptions {
     "--receipt",
     "--backup-id",
     "--download-dir",
+    "--result-file",
   ]);
   const flagOptions = new Set(["--upload-latest", "--verify-latest", "--prune", "--download"]);
   for (let index = 0; index < args.length; index += 1) {
@@ -79,6 +83,7 @@ function parseOptions(args: string[]): CliOptions {
     receiptPath: optionValue(args, "--receipt"),
     backupId: optionValue(args, "--backup-id"),
     downloadDirectory: optionValue(args, "--download-dir"),
+    resultFile: optionValue(args, "--result-file"),
     uploadLatest: args.includes("--upload-latest"),
     verifyLatest: args.includes("--verify-latest"),
     prune: args.includes("--prune"),
@@ -88,6 +93,9 @@ function parseOptions(args: string[]): CliOptions {
     options.uploadLatest || options.metadataPath || options.verifyLatest || options.receiptPath || options.prune || options.download,
     "Pilih --upload-latest, --metadata, --verify-latest, --receipt, --prune, atau --download.",
   );
+  if (options.resultFile) {
+    assert(options.metadataPath || options.uploadLatest, "--result-file hanya didukung untuk operasi upload.");
+  }
   if (options.download) {
     assert(options.backupId, "--download membutuhkan --backup-id.");
     assert(options.downloadDirectory, "--download membutuhkan --download-dir.");
@@ -229,8 +237,10 @@ const store = new S3DatabaseBackupOffsiteStore({
 });
 
 let latestReceipt: DatabaseBackupOffsiteReceipt | undefined;
+let uploadedArtifact: DatabaseBackupArtifact | undefined;
 if (options.uploadLatest || options.metadataPath) {
   const artifact = resolveLocalArtifact(options, resolved.backupRoot);
+  uploadedArtifact = artifact;
   console.log(`Mengunggah backup verified ${artifact.metadata.fileName} ke Backblaze B2...`);
   latestReceipt = await uploadBackupOffsite({ store, artifact, config: resolved.config });
   writeOffsiteStatus({ statusPath: resolved.config.statusPath, receipt: latestReceipt });
@@ -286,6 +296,22 @@ if (options.download) {
   );
   const artifact = await downloadOffsiteBackup({ store, receipt, outputDirectory });
   console.log(`OK: backup off-site diunduh dan diverifikasi ke ${artifact.metadataPath}.`);
+}
+
+if (options.resultFile) {
+  assert(latestReceipt && uploadedArtifact, "Result file off-site membutuhkan upload yang berhasil.");
+  writeDatabaseBackupOffsiteResult(path.resolve(projectRoot, options.resultFile), {
+    version: 1,
+    operation: "database-backup-offsite",
+    status: "verified",
+    completedAt: new Date().toISOString(),
+    backupId: latestReceipt.backup.backupId,
+    releaseId: latestReceipt.backup.releaseId ?? null,
+    receiptPath: localOffsiteReceiptPath(uploadedArtifact.metadataPath),
+    receiptKey: latestReceipt.receiptKey,
+    verifiedAt: latestReceipt.verifiedAt,
+    fullVerification: latestReceipt.fullVerification,
+  });
 }
 
 if (options.prune) {

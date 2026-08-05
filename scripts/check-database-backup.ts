@@ -213,6 +213,7 @@ for (const scriptName of [
   "db:backup",
   "db:backup:production",
   "db:backup:pre-deployment",
+  "db:backup:pre-deployment:verified",
   "db:backup:prune",
   "db:restore",
   "db:restore:production",
@@ -221,8 +222,8 @@ for (const scriptName of [
 }
 assert.match(
   packageJson.scripts?.["db:deploy:production"] ?? "",
-  /db:backup:pre-deployment/,
-  "Production migration wajib didahului backup terverifikasi.",
+  /db:backup:pre-deployment:verified/,
+  "Production migration wajib didahului backup lokal dan off-site yang terverifikasi.",
 );
 
 const environmentTemplate = readFileSync(path.join(projectRoot, ".env.production.example"), "utf8");
@@ -251,6 +252,8 @@ assert.match(backupRunner, /DATABASE_BACKUP_MIN_FREE_BYTES/);
 assert.match(backupRunner, /Direktori backup tidak boleh menggunakan project root/);
 assert.match(backupRunner, /Direktori backup tidak boleh menggunakan filesystem root/);
 assert.match(backupRunner, /planBackupRetention/);
+assert.match(backupRunner, /--result-file/);
+assert.match(backupRunner, /writeDatabaseBackupResult/);
 assert.doesNotMatch(backupRunner, /console\.(?:log|error)\([^\n]*(?:POSTGRES_PASSWORD|DATABASE_URL)/);
 
 const restoreRunner = readFileSync(path.join(projectRoot, "scripts/run-database-restore.ts"), "utf8");

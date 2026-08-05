@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
-export const DEPLOYMENT_STATE_SCHEMA_VERSION = 1 as const;
+export const DEPLOYMENT_STATE_SCHEMA_VERSION = 2 as const;
 export const DEPLOYMENT_STATE_DIRECTORY_MODE = 0o750;
 export const DEPLOYMENT_STATE_FILE_MODE = 0o640;
 
@@ -55,6 +55,7 @@ export type ReleaseRecord = {
   images: {
     app: ReleaseImage;
     migrator: ReleaseImage;
+    operations: ReleaseImage;
   };
   deployment: {
     operator: string;
@@ -89,6 +90,7 @@ export type CreateReleasePlanInput = {
   createdAt?: string;
   appRepository?: string;
   migratorRepository?: string;
+  operationsRepository?: string;
   previousReleaseId?: string | null;
   operator?: string;
   hostname?: string;
@@ -218,6 +220,7 @@ export function createPlannedRelease(input: CreateReleasePlanInput): ReleaseReco
     images: {
       app: buildImmutableImage(input.appRepository ?? "asihjaya-rms", releaseId),
       migrator: buildImmutableImage(input.migratorRepository ?? "asihjaya-rms-migrator", releaseId),
+      operations: buildImmutableImage(input.operationsRepository ?? "asihjaya-rms-operations", releaseId),
     },
     deployment: {
       operator: input.operator?.trim() || "unknown",
@@ -290,6 +293,7 @@ export function validateReleaseRecord(value: unknown): asserts value is ReleaseR
   assertPlainObject(value.images, "images");
   validateReleaseImage(value.images.app, "images.app", value.releaseId);
   validateReleaseImage(value.images.migrator, "images.migrator", value.releaseId);
+  validateReleaseImage(value.images.operations, "images.operations", value.releaseId);
 
   assertPlainObject(value.deployment, "deployment");
   assert(typeof value.deployment.operator === "string" && value.deployment.operator.length > 0, "deployment.operator wajib diisi.");

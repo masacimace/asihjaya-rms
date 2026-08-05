@@ -143,7 +143,7 @@ Workflow `.github/workflows/ci.yml` berjalan pada push, pull request, dan manual
 Status check utama:
 
 1. **Static Quality** — install, lint, typecheck, route check, dan clean production build.
-2. **Container Build** — membangun production Docker image dari context bersih.
+2. **Container Build** — membangun application, migrator, dan operations image dari context bersih.
 3. **Security & Business Checks** — quality config, source hygiene, migration metadata, security contracts, business contracts, dan kontrak hardware sisi aplikasi.
 4. **Database Migration** — PostgreSQL 17 disposable, migration dua kali, lalu schema verification.
 5. **Hardware Hub Checks** — request signing, DPAPI mock, Protocol v2, failure injection, operations, PDF profile, dan SATO golden files.
@@ -247,3 +247,12 @@ npm run test:database-backup-offsite:local
 ```
 
 Rehearsal membuktikan upload empat-object, idempotency, Object Lock boundary, full SHA-256 verification, corruption rejection, download, dan remote retention. GitHub Actions menjalankannya pada job **Database Backup & Restore Rehearsal** tanpa mengakses bucket production.
+## Operations image dan pre-deployment backup
+
+Jalankan kontrak static berikut:
+
+```bash
+npm run check:operations-image
+```
+
+Check ini memvalidasi target Docker `operations`, OCI release identity, user non-root, Compose profile, penolakan mutable image pada wrapper VPS, exact-artifact upload, full off-site verification, serta format result JSON pre-deployment. Quality gate utama `npm run check:quality` juga menjalankan check ini.

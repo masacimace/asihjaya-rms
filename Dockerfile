@@ -83,6 +83,45 @@ USER migrator
 STOPSIGNAL SIGTERM
 CMD ["npm", "run", "db:deploy"]
 
+FROM toolchain AS operations
+WORKDIR /app
+
+ARG APP_RELEASE_ID=unknown
+ARG APP_REVISION=unknown
+ARG APP_BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="Asihjaya RMS Operations" \
+      org.opencontainers.image.description="Asihjaya Finishing RMS database backup, off-site verification, and restore tools" \
+      org.opencontainers.image.version="${APP_RELEASE_ID}" \
+      org.opencontainers.image.revision="${APP_REVISION}" \
+      org.opencontainers.image.created="${APP_BUILD_DATE}"
+
+ENV APP_RELEASE_ID="${APP_RELEASE_ID}"
+ENV APP_REVISION="${APP_REVISION}"
+ENV APP_BUILD_DATE="${APP_BUILD_DATE}"
+ENV NODE_ENV=production
+ENV HOME=/tmp
+ENV TMPDIR=/tmp
+ENV NPM_CONFIG_CACHE=/tmp/.npm
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json .npmrc tsconfig.json compose.production.yaml ./
+COPY scripts ./scripts
+
+RUN mkdir -p /usr/local/lib/docker/cli-plugins \
+    && groupadd --system --gid 10003 operations \
+    && useradd --system \
+        --uid 10003 \
+        --gid operations \
+        --create-home \
+        --home-dir /home/operations \
+        operations
+
+USER operations
+STOPSIGNAL SIGTERM
+CMD ["npm", "run", "db:backup:pre-deployment:verified"]
+
 FROM base AS runner
 WORKDIR /app
 

@@ -28,6 +28,7 @@ pnpm-debug.log*
 hardware-hub
 docs
 compose*.yaml
+!compose.production.yaml
 README.md
 *.patch
 *.zip
