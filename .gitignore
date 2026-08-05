@@ -67,3 +67,5 @@ next-env.d.ts
 
 # production build output
 .deploy/
+/docs/asihjaya-rms-handoff-2026-08-05
+ops/
