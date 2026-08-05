@@ -20,7 +20,7 @@ type PackageJson = {
 };
 
 const dockerfile = readText("Dockerfile");
-const compose = readText("compose.production.yaml");
+const compose = readText("compose.production.yaml").replace(/\r\n/g, "\n");
 const dockerignore = readText(".dockerignore");
 const livenessRoute = readText("src/app/api/health/route.ts");
 const readinessRoute = readText("src/app/api/health/database/route.ts");
@@ -61,6 +61,11 @@ assert(
 );
 assert(dockerfile.includes("STOPSIGNAL SIGTERM"), "Docker image wajib memakai SIGTERM untuk shutdown.");
 assert(
+  dockerfile.includes('org.opencontainers.image.version="${APP_RELEASE_ID}"') &&
+    dockerfile.includes('ENV APP_RELEASE_ID="${APP_RELEASE_ID}"'),
+  "Application dan migrator image wajib membawa immutable release identity.",
+);
+assert(
   !/COPY\s+.*\.env/i.test(dockerfile),
   "Dockerfile tidak boleh menyalin file environment ke image.",
 );
@@ -100,6 +105,9 @@ for (const requiredComposeContract of [
   "pids: 512",
   "pids: 256",
   "internal: true",
+  "APP_RELEASE_ID:",
+  "APP_REVISION:",
+  "APP_BUILD_DATE:",
 ]) {
   assert(
     compose.includes(requiredComposeContract),
@@ -150,6 +158,7 @@ for (const ignoredPath of [
 for (const route of [livenessRoute, readinessRoute]) {
   assert(route.includes('dynamic = "force-dynamic"'), "Health route wajib selalu dinamis.");
   assert(route.includes('"Cache-Control": "no-store, max-age=0"'), "Health route tidak boleh di-cache.");
+  assert(route.includes("getReleaseInfo"), "Health route wajib melaporkan release identity.");
 }
 assert(
   readinessRoute.includes("select 1") && readinessRoute.includes("status: 503"),

@@ -422,7 +422,7 @@ async function createBackup(
     assert(listEntryCount > 0, "Archive hasil pg_dump tidak dapat dibaca pg_restore.");
 
     const completedAt = new Date().toISOString();
-    const releaseId = (options.releaseId ?? process.env.APP_REVISION)?.trim();
+    const releaseId = (options.releaseId ?? process.env.APP_RELEASE_ID ?? process.env.APP_REVISION)?.trim();
     const metadata: DatabaseBackupMetadata = {
       version: 1,
       backupId: identity.backupId,

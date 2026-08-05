@@ -69,6 +69,7 @@ const requiredRootScripts = [
   "check:database-deployment",
   "check:database-backup",
   "check:database-backup-offsite",
+  "check:deployment",
   "check:source-hygiene",
   "check:database",
   "check:database:live",
@@ -96,6 +97,7 @@ const requiredRootScripts = [
   "test:database-deployment:local",
   "test:database-backup:local",
   "test:database-backup-offsite:local",
+  "deployment:contract",
   "db:deploy",
   "db:deploy:production",
   "db:backup",
@@ -230,6 +232,7 @@ for (const documentationPath of [
   "docs/development/database-deployment.md",
   "docs/development/database-backup-restore.md",
   "docs/development/database-backup-offsite.md",
+  "docs/development/deployment-rollback-automation.md",
   ".github/pull_request_template.md",
   "README.md",
 ]) {

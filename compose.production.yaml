@@ -8,6 +8,7 @@ services:
       dockerfile: Dockerfile
       target: runner
       args:
+        APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
         APP_REVISION: ${APP_REVISION:-unknown}
         APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
     restart: unless-stopped
@@ -16,6 +17,9 @@ services:
       - ${ASIHJAYA_ENV_FILE:-.env.production}
     environment:
       NODE_ENV: production
+      APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
+      APP_REVISION: ${APP_REVISION:-unknown}
+      APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
       PORT: "3000"
       HOSTNAME: 0.0.0.0
       INTERNAL_RENDER_ORIGIN: http://127.0.0.1:3000
@@ -77,12 +81,19 @@ services:
       context: .
       dockerfile: Dockerfile
       target: migrator
+      args:
+        APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
+        APP_REVISION: ${APP_REVISION:-unknown}
+        APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
     restart: "no"
     init: true
     env_file:
       - ${ASIHJAYA_ENV_FILE:-.env.production}
     environment:
       NODE_ENV: production
+      APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
+      APP_REVISION: ${APP_REVISION:-unknown}
+      APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
       DATABASE_MIGRATION_LOCK_KEY: ${DATABASE_MIGRATION_LOCK_KEY:-718143293674}
       DATABASE_MIGRATION_READY_TIMEOUT_MS: ${DATABASE_MIGRATION_READY_TIMEOUT_MS:-120000}
       DATABASE_MIGRATION_LOCK_TIMEOUT_MS: ${DATABASE_MIGRATION_LOCK_TIMEOUT_MS:-120000}

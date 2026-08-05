@@ -41,6 +41,7 @@
     "check-database-deployment.ts",
     "check-database-backup.ts",
     "check-database-backup-offsite.ts",
+    "check-deployment-automation.ts",
     "check-database-migrations.ts",
     "check-production-container.ts",
     "check-quality-config.ts",

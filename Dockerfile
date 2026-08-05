@@ -46,6 +46,20 @@ RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build \
 
 FROM toolchain AS migrator
 WORKDIR /app
+
+ARG APP_RELEASE_ID=unknown
+ARG APP_REVISION=unknown
+ARG APP_BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="Asihjaya RMS Migrator" \
+      org.opencontainers.image.description="Asihjaya Finishing RMS guarded database migrator" \
+      org.opencontainers.image.version="${APP_RELEASE_ID}" \
+      org.opencontainers.image.revision="${APP_REVISION}" \
+      org.opencontainers.image.created="${APP_BUILD_DATE}"
+
+ENV APP_RELEASE_ID="${APP_RELEASE_ID}"
+ENV APP_REVISION="${APP_REVISION}"
+ENV APP_BUILD_DATE="${APP_BUILD_DATE}"
 ENV HOME=/tmp
 ENV TMPDIR=/tmp
 ENV NPM_CONFIG_CACHE=/tmp/.npm
@@ -72,14 +86,19 @@ CMD ["npm", "run", "db:deploy"]
 FROM base AS runner
 WORKDIR /app
 
+ARG APP_RELEASE_ID=unknown
 ARG APP_REVISION=unknown
 ARG APP_BUILD_DATE=unknown
 
 LABEL org.opencontainers.image.title="Asihjaya RMS" \
       org.opencontainers.image.description="Asihjaya Finishing RMS and POS production runtime" \
+      org.opencontainers.image.version="${APP_RELEASE_ID}" \
       org.opencontainers.image.revision="${APP_REVISION}" \
       org.opencontainers.image.created="${APP_BUILD_DATE}"
 
+ENV APP_RELEASE_ID="${APP_RELEASE_ID}"
+ENV APP_REVISION="${APP_REVISION}"
+ENV APP_BUILD_DATE="${APP_BUILD_DATE}"
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
