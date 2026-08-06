@@ -1,0 +1,377 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 027
+
+ACTION="${1:-}"
+BACKUP_ID="${2:-}"
+
+PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
+DEPLOYMENT_USER="${ASIHJAYA_DEPLOYMENT_USER:-ubuntu}"
+DEPLOYMENT_GROUP="${ASIHJAYA_DEPLOYMENT_GROUP:-ubuntu}"
+INSTALL_DIR="${ASIHJAYA_AUTOMATION_INSTALL_DIR:-/usr/local/sbin}"
+STATE_ROOT="${ASIHJAYA_DEPLOYMENT_STATE_ROOT:-/var/lib/asihjaya-rms/deployments}"
+BACKUP_RUNNER_STATE_DIR="${ASIHJAYA_BACKUP_RUNNER_STATE_DIR:-/var/lib/asihjaya-rms/backup-runner}"
+INSTALL_BACKUP_ROOT="${ASIHJAYA_AUTOMATION_INSTALL_BACKUP_ROOT:-/var/backups/asihjaya-rms/deployment-automation}"
+ENV_FILE="${ASIHJAYA_ENV_FILE:-/etc/asihjaya-rms/production.env}"
+SYSTEMD_DIR="${ASIHJAYA_SYSTEMD_DIR:-/etc/systemd/system}"
+TMPFILES_DIR="${ASIHJAYA_TMPFILES_DIR:-/etc/tmpfiles.d}"
+LOCK_PATH="${ASIHJAYA_DEPLOYMENT_LOCK_PATH:-/run/lock/asihjaya-rms/deployment.lock}"
+LOCK_OWNER_PATH="${ASIHJAYA_DEPLOYMENT_LOCK_OWNER_PATH:-${LOCK_PATH}.owner}"
+BACKUP_SERVICE="ajsystem-db-backup@.service"
+TMPFILES_CONFIG="asihjaya-rms-deployment.conf"
+
+COMMANDS=(
+  ajsystem-deployment-lock
+  ajsystem-db-backup
+  ajsystem-deploy
+  ajsystem-rollback
+  ajsystem-deployment-preflight
+)
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  sudo ./ops/scripts/ajsystem-install-deployment-automation install
+  sudo ./ops/scripts/ajsystem-install-deployment-automation verify
+  sudo ./ops/scripts/ajsystem-install-deployment-automation restore <backup-id>
+
+Environment overrides:
+  ASIHJAYA_PROJECT_DIR
+  ASIHJAYA_DEPLOYMENT_USER
+  ASIHJAYA_DEPLOYMENT_GROUP
+  ASIHJAYA_AUTOMATION_INSTALL_DIR
+  ASIHJAYA_DEPLOYMENT_STATE_ROOT
+  ASIHJAYA_BACKUP_RUNNER_STATE_DIR
+  ASIHJAYA_AUTOMATION_INSTALL_BACKUP_ROOT
+  ASIHJAYA_ENV_FILE
+  ASIHJAYA_SYSTEMD_DIR
+  ASIHJAYA_TMPFILES_DIR
+  ASIHJAYA_DEPLOYMENT_LOCK_PATH
+  ASIHJAYA_DEPLOYMENT_LOCK_OWNER_PATH
+USAGE
+}
+
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 64
+}
+
+log() {
+  printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*"
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "command wajib tidak tersedia: $1"
+}
+
+assert_absolute() {
+  [[ "$2" == /* ]] || fail "$1 harus absolute: $2"
+}
+
+[[ "$EUID" -eq 0 ]] || fail "installer wajib dijalankan dengan sudo/root."
+case "$ACTION" in
+  install|verify)
+    [[ $# -eq 1 ]] || { usage >&2; exit 64; }
+    ;;
+  restore)
+    [[ $# -eq 2 ]] || { usage >&2; exit 64; }
+    [[ "$BACKUP_ID" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+$ ]] || fail "backup-id tidak valid."
+    ;;
+  *)
+    usage >&2
+    exit 64
+    ;;
+esac
+
+for command_name in install stat sha256sum bash id getent runuser date hostname cp mv rm mkdir find grep tr awk flock systemctl systemd-analyze systemd-tmpfiles touch chown chmod dirname; do
+  require_command "$command_name"
+done
+for pair in \
+  "PROJECT_DIR:$PROJECT_DIR" \
+  "INSTALL_DIR:$INSTALL_DIR" \
+  "STATE_ROOT:$STATE_ROOT" \
+  "BACKUP_RUNNER_STATE_DIR:$BACKUP_RUNNER_STATE_DIR" \
+  "INSTALL_BACKUP_ROOT:$INSTALL_BACKUP_ROOT" \
+  "ENV_FILE:$ENV_FILE" \
+  "SYSTEMD_DIR:$SYSTEMD_DIR" \
+  "TMPFILES_DIR:$TMPFILES_DIR" \
+  "LOCK_PATH:$LOCK_PATH" \
+  "LOCK_OWNER_PATH:$LOCK_OWNER_PATH"
+do
+  assert_absolute "${pair%%:*}" "${pair#*:}"
+done
+
+getent passwd "$DEPLOYMENT_USER" >/dev/null || fail "deployment user tidak ditemukan: $DEPLOYMENT_USER"
+getent group "$DEPLOYMENT_GROUP" >/dev/null || fail "deployment group tidak ditemukan: $DEPLOYMENT_GROUP"
+id -nG "$DEPLOYMENT_USER" | tr ' ' '\n' | grep -Fxq docker || fail "user $DEPLOYMENT_USER wajib menjadi anggota grup docker."
+
+source_path() {
+  printf '%s/ops/scripts/%s' "$PROJECT_DIR" "$1"
+}
+
+destination_path() {
+  printf '%s/%s' "$INSTALL_DIR" "$1"
+}
+
+service_source_path() {
+  printf '%s/ops/systemd/%s' "$PROJECT_DIR" "$BACKUP_SERVICE"
+}
+
+service_destination_path() {
+  printf '%s/%s' "$SYSTEMD_DIR" "$BACKUP_SERVICE"
+}
+
+tmpfiles_source_path() {
+  printf '%s/ops/tmpfiles.d/%s' "$PROJECT_DIR" "$TMPFILES_CONFIG"
+}
+
+tmpfiles_destination_path() {
+  printf '%s/%s' "$TMPFILES_DIR" "$TMPFILES_CONFIG"
+}
+
+verify_source() {
+  [[ -d "$PROJECT_DIR/.git" ]] || fail "Git working copy tidak ditemukan: $PROJECT_DIR"
+  runuser -u "$DEPLOYMENT_USER" -- git -C "$PROJECT_DIR" rev-parse HEAD >/dev/null 2>&1 || fail "Git working copy tidak dapat dibaca dengan aman oleh $DEPLOYMENT_USER."
+  [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || fail "production environment tidak tersedia sebagai regular file: $ENV_FILE"
+  if ! runuser -u "$DEPLOYMENT_USER" -- test -r "$ENV_FILE"; then
+    fail "user $DEPLOYMENT_USER tidak dapat membaca $ENV_FILE. Atur owner root:$DEPLOYMENT_GROUP dan mode 0640 secara eksplisit."
+  fi
+
+  local command_name source_file service_source tmpfiles_source
+  for command_name in "${COMMANDS[@]}"; do
+    source_file="$(source_path "$command_name")"
+    [[ -f "$source_file" && ! -L "$source_file" ]] || fail "source command tidak tersedia sebagai regular file: $source_file"
+    bash -n "$source_file"
+  done
+  service_source="$(service_source_path)"
+  [[ -f "$service_source" && ! -L "$service_source" ]] || fail "source systemd unit tidak tersedia: $service_source"
+  tmpfiles_source="$(tmpfiles_source_path)"
+  [[ -f "$tmpfiles_source" && ! -L "$tmpfiles_source" ]] || fail "source tmpfiles config tidak tersedia: $tmpfiles_source"
+  grep -Fq "d /run/lock/asihjaya-rms" "$tmpfiles_source" || fail "tmpfiles config wajib membuat dedicated deployment lock directory."
+}
+
+verify_installation() {
+  verify_source
+  local command_name source_file destination_file owner group mode source_hash installed_hash
+  for command_name in "${COMMANDS[@]}"; do
+    source_file="$(source_path "$command_name")"
+    destination_file="$(destination_path "$command_name")"
+    [[ -f "$destination_file" && ! -L "$destination_file" ]] || fail "installed command tidak tersedia: $destination_file"
+    owner="$(stat -c '%U' "$destination_file")"
+    group="$(stat -c '%G' "$destination_file")"
+    mode="$(stat -c '%a' "$destination_file")"
+    [[ "$owner" == root ]] || fail "owner $destination_file harus root, ditemukan $owner."
+    [[ "$group" == "$DEPLOYMENT_GROUP" ]] || fail "group $destination_file harus $DEPLOYMENT_GROUP, ditemukan $group."
+    [[ "$mode" == 750 ]] || fail "mode $destination_file harus 750, ditemukan $mode."
+    source_hash="$(sha256sum "$source_file" | awk '{print $1}')"
+    installed_hash="$(sha256sum "$destination_file" | awk '{print $1}')"
+    [[ "$source_hash" == "$installed_hash" ]] || fail "hash installed command berbeda dari source: $command_name"
+  done
+
+  local service_source service_destination service_owner service_group service_mode
+  service_source="$(service_source_path)"
+  service_destination="$(service_destination_path)"
+  [[ -f "$service_destination" && ! -L "$service_destination" ]] || fail "installed systemd unit tidak tersedia: $service_destination"
+  service_owner="$(stat -c '%U' "$service_destination")"
+  service_group="$(stat -c '%G' "$service_destination")"
+  service_mode="$(stat -c '%a' "$service_destination")"
+  [[ "$service_owner" == root && "$service_group" == root && "$service_mode" == 644 ]] || fail "systemd unit harus root:root 0644."
+  [[ "$(sha256sum "$service_source" | awk '{print $1}')" == "$(sha256sum "$service_destination" | awk '{print $1}')" ]] || fail "installed systemd unit berbeda dari source."
+  systemd-analyze verify "$service_destination" >/dev/null
+
+  local tmpfiles_source tmpfiles_destination tmpfiles_owner tmpfiles_group tmpfiles_mode
+  tmpfiles_source="$(tmpfiles_source_path)"
+  tmpfiles_destination="$(tmpfiles_destination_path)"
+  [[ -f "$tmpfiles_destination" && ! -L "$tmpfiles_destination" ]] || fail "installed tmpfiles config tidak tersedia: $tmpfiles_destination"
+  tmpfiles_owner="$(stat -c '%U' "$tmpfiles_destination")"
+  tmpfiles_group="$(stat -c '%G' "$tmpfiles_destination")"
+  tmpfiles_mode="$(stat -c '%a' "$tmpfiles_destination")"
+  [[ "$tmpfiles_owner" == root && "$tmpfiles_group" == root && "$tmpfiles_mode" == 644 ]] || fail "tmpfiles config harus root:root 0644."
+  [[ "$(sha256sum "$tmpfiles_source" | awk '{print $1}')" == "$(sha256sum "$tmpfiles_destination" | awk '{print $1}')" ]] || fail "installed tmpfiles config berbeda dari source."
+  local lock_dir
+  lock_dir="$(dirname "$LOCK_PATH")"
+  [[ -d "$lock_dir" ]] || fail "runtime lock directory tidak tersedia: $lock_dir"
+  [[ "$(stat -c '%U' "$lock_dir")" == "$DEPLOYMENT_USER" ]] || fail "owner runtime lock directory harus $DEPLOYMENT_USER."
+  [[ "$(stat -c '%G' "$lock_dir")" == "$DEPLOYMENT_GROUP" ]] || fail "group runtime lock directory harus $DEPLOYMENT_GROUP."
+  [[ "$(stat -c '%a' "$lock_dir")" == 750 ]] || fail "mode runtime lock directory harus 750."
+  runuser -u "$DEPLOYMENT_USER" -- test -w "$lock_dir" || fail "runtime lock directory tidak writable oleh $DEPLOYMENT_USER."
+
+  for writable_path in "$STATE_ROOT" "$BACKUP_RUNNER_STATE_DIR"; do
+    [[ -d "$writable_path" ]] || fail "state directory tidak tersedia: $writable_path"
+    [[ "$(stat -c '%U' "$writable_path")" == "$DEPLOYMENT_USER" ]] || fail "owner $writable_path harus $DEPLOYMENT_USER."
+    [[ "$(stat -c '%G' "$writable_path")" == "$DEPLOYMENT_GROUP" ]] || fail "group $writable_path harus $DEPLOYMENT_GROUP."
+    runuser -u "$DEPLOYMENT_USER" -- test -w "$writable_path" || fail "state directory tidak writable oleh $DEPLOYMENT_USER: $writable_path"
+  done
+
+  runuser -u "$DEPLOYMENT_USER" -- docker info >/dev/null 2>&1 || fail "Docker daemon tidak dapat diakses oleh $DEPLOYMENT_USER."
+  runuser -u "$DEPLOYMENT_USER" -- docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin tidak dapat diakses oleh $DEPLOYMENT_USER."
+  log "Verifikasi instalasi deployment automation berhasil."
+}
+
+install_commands() {
+  verify_source
+  install -d -m 0755 -o root -g root "$INSTALL_DIR"
+  install -d -m 0750 -o root -g root "$INSTALL_BACKUP_ROOT"
+
+  local timestamp backup_dir command_name source_file destination_file temp_file
+  timestamp="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  backup_dir="$INSTALL_BACKUP_ROOT/$timestamp"
+  install -d -m 0700 -o root -g root "$backup_dir"
+
+  for command_name in "${COMMANDS[@]}"; do
+    destination_file="$(destination_path "$command_name")"
+    if [[ -e "$destination_file" ]]; then
+      cp -a -- "$destination_file" "$backup_dir/$command_name"
+    else
+      : > "$backup_dir/$command_name.absent"
+      chmod 0600 "$backup_dir/$command_name.absent"
+    fi
+  done
+  local service_destination
+  service_destination="$(service_destination_path)"
+  if [[ -e "$service_destination" ]]; then
+    cp -a -- "$service_destination" "$backup_dir/$BACKUP_SERVICE"
+  else
+    : > "$backup_dir/$BACKUP_SERVICE.absent"
+    chmod 0600 "$backup_dir/$BACKUP_SERVICE.absent"
+  fi
+  local tmpfiles_destination
+  tmpfiles_destination="$(tmpfiles_destination_path)"
+  if [[ -e "$tmpfiles_destination" ]]; then
+    cp -a -- "$tmpfiles_destination" "$backup_dir/$TMPFILES_CONFIG"
+  else
+    : > "$backup_dir/$TMPFILES_CONFIG.absent"
+    chmod 0600 "$backup_dir/$TMPFILES_CONFIG.absent"
+  fi
+
+  {
+    printf 'backup_id=%s\n' "$timestamp"
+    printf 'created_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'hostname=%s\n' "$(hostname 2>/dev/null || printf unknown)"
+    printf 'project_dir=%s\n' "$PROJECT_DIR"
+    printf 'deployment_user=%s\n' "$DEPLOYMENT_USER"
+    printf 'deployment_group=%s\n' "$DEPLOYMENT_GROUP"
+  } > "$backup_dir/manifest.env"
+  chmod 0600 "$backup_dir/manifest.env"
+
+  for command_name in "${COMMANDS[@]}"; do
+    source_file="$(source_path "$command_name")"
+    destination_file="$(destination_path "$command_name")"
+    temp_file="$INSTALL_DIR/.${command_name}.${timestamp}.tmp"
+    install -m 0750 -o root -g "$DEPLOYMENT_GROUP" "$source_file" "$temp_file"
+    mv -f -- "$temp_file" "$destination_file"
+  done
+
+  install -d -m 0755 -o root -g root "$SYSTEMD_DIR"
+  local service_source service_temp
+  service_source="$(service_source_path)"
+  service_destination="$(service_destination_path)"
+  service_temp="$SYSTEMD_DIR/.${BACKUP_SERVICE}.${timestamp}.tmp"
+  install -m 0644 -o root -g root "$service_source" "$service_temp"
+  mv -f -- "$service_temp" "$service_destination"
+  systemctl daemon-reload
+
+  install -d -m 0755 -o root -g root "$TMPFILES_DIR"
+  local tmpfiles_source tmpfiles_temp
+  tmpfiles_source="$(tmpfiles_source_path)"
+  tmpfiles_destination="$(tmpfiles_destination_path)"
+  tmpfiles_temp="$TMPFILES_DIR/.${TMPFILES_CONFIG}.${timestamp}.tmp"
+  install -m 0644 -o root -g root "$tmpfiles_source" "$tmpfiles_temp"
+  mv -f -- "$tmpfiles_temp" "$tmpfiles_destination"
+  systemd-tmpfiles --create "$tmpfiles_destination"
+
+  install -d -m 0750 -o "$DEPLOYMENT_USER" -g "$DEPLOYMENT_GROUP" \
+    "$STATE_ROOT" \
+    "$STATE_ROOT/work" \
+    "$STATE_ROOT/evidence" \
+    "$STATE_ROOT/history" \
+    "$STATE_ROOT/failed" \
+    "$STATE_ROOT/rollbacks" \
+    "$STATE_ROOT/rollback-work" \
+    "$STATE_ROOT/bootstrap" \
+    "$STATE_ROOT/install-history" \
+    "$BACKUP_RUNNER_STATE_DIR"
+
+  local lock_dir owner_dir
+  lock_dir="$(dirname "$LOCK_PATH")"
+  owner_dir="$(dirname "$LOCK_OWNER_PATH")"
+  [[ "$lock_dir" != /run/lock && "$lock_dir" != /run ]] || fail "lock path wajib memakai subdirectory khusus, bukan $lock_dir."
+  [[ "$owner_dir" != /run/lock && "$owner_dir" != /run ]] || fail "lock owner path wajib memakai subdirectory khusus, bukan $owner_dir."
+  [[ -d "$lock_dir" && -d "$owner_dir" ]] || fail "tmpfiles gagal membuat lock directory."
+  touch "$LOCK_PATH"
+  chown "$DEPLOYMENT_USER:$DEPLOYMENT_GROUP" "$LOCK_PATH"
+  chmod 0640 "$LOCK_PATH"
+  rm -f -- "$LOCK_OWNER_PATH"
+
+  local install_record="$STATE_ROOT/install-history/$timestamp.env"
+  {
+    printf 'installed_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'backup_id=%s\n' "$timestamp"
+    printf 'project_revision=%s\n' "$(runuser -u "$DEPLOYMENT_USER" -- git -C "$PROJECT_DIR" rev-parse HEAD)"
+    for command_name in "${COMMANDS[@]}"; do
+      printf '%s_sha256=%s\n' "$command_name" "$(sha256sum "$(destination_path "$command_name")" | awk '{print $1}')"
+    done
+    printf '%s_sha256=%s\n' "$BACKUP_SERVICE" "$(sha256sum "$(service_destination_path)" | awk '{print $1}')"
+    printf '%s_sha256=%s\n' "$TMPFILES_CONFIG" "$(sha256sum "$(tmpfiles_destination_path)" | awk '{print $1}')"
+  } > "$install_record"
+  chown "$DEPLOYMENT_USER:$DEPLOYMENT_GROUP" "$install_record"
+  chmod 0640 "$install_record"
+
+  verify_installation
+  log "Instalasi selesai. Backup command sebelumnya: $backup_dir"
+  log "Gunakan backup-id $timestamp untuk restore installer bila diperlukan."
+}
+
+restore_commands() {
+  local backup_dir="$INSTALL_BACKUP_ROOT/$BACKUP_ID"
+  [[ -d "$backup_dir" && -f "$backup_dir/manifest.env" ]] || fail "backup instalasi tidak ditemukan: $backup_dir"
+
+  local command_name destination_file temp_file
+  for command_name in "${COMMANDS[@]}"; do
+    destination_file="$(destination_path "$command_name")"
+    if [[ -f "$backup_dir/$command_name.absent" ]]; then
+      rm -f -- "$destination_file"
+      continue
+    fi
+    [[ -f "$backup_dir/$command_name" ]] || fail "artifact restore hilang: $backup_dir/$command_name"
+    temp_file="$INSTALL_DIR/.${command_name}.${BACKUP_ID}.restore.tmp"
+    cp -a -- "$backup_dir/$command_name" "$temp_file"
+    mv -f -- "$temp_file" "$destination_file"
+  done
+
+  local service_destination service_temp
+  service_destination="$(service_destination_path)"
+  if [[ -f "$backup_dir/$BACKUP_SERVICE.absent" ]]; then
+    rm -f -- "$service_destination"
+  else
+    [[ -f "$backup_dir/$BACKUP_SERVICE" ]] || fail "artifact restore hilang: $backup_dir/$BACKUP_SERVICE"
+    service_temp="$SYSTEMD_DIR/.${BACKUP_SERVICE}.${BACKUP_ID}.restore.tmp"
+    cp -a -- "$backup_dir/$BACKUP_SERVICE" "$service_temp"
+    mv -f -- "$service_temp" "$service_destination"
+  fi
+  local tmpfiles_destination tmpfiles_temp
+  tmpfiles_destination="$(tmpfiles_destination_path)"
+  if [[ -f "$backup_dir/$TMPFILES_CONFIG.absent" ]]; then
+    rm -f -- "$tmpfiles_destination"
+  else
+    [[ -f "$backup_dir/$TMPFILES_CONFIG" ]] || fail "artifact restore hilang: $backup_dir/$TMPFILES_CONFIG"
+    tmpfiles_temp="$TMPFILES_DIR/.${TMPFILES_CONFIG}.${BACKUP_ID}.restore.tmp"
+    cp -a -- "$backup_dir/$TMPFILES_CONFIG" "$tmpfiles_temp"
+    mv -f -- "$tmpfiles_temp" "$tmpfiles_destination"
+    systemd-tmpfiles --create "$tmpfiles_destination"
+  fi
+  systemctl daemon-reload
+  log "Installed commands, systemd unit, dan tmpfiles config dipulihkan dari backup $BACKUP_ID."
+}
+
+case "$ACTION" in
+  install)
+    install_commands
+    ;;
+  verify)
+    verify_installation
+    ;;
+  restore)
+    restore_commands
+    ;;
+esac

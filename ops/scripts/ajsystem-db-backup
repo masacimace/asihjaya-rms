@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+MODE="${1:-}"
+REQUESTED_RELEASE_ID="${2:-${APP_RELEASE_ID:-}}"
+
+case "$MODE" in
+  daily|weekly|verify)
+    if [[ -n "${2:-}" ]]; then
+      echo "Usage: $0 {daily|weekly|verify}" >&2
+      exit 64
+    fi
+    ;;
+  pre-deployment)
+    if [[ -z "$REQUESTED_RELEASE_ID" ]]; then
+      echo "Usage: $0 pre-deployment <release-id>" >&2
+      exit 64
+    fi
+    ;;
+  *)
+    echo "Usage: $0 {daily|weekly|verify|pre-deployment <release-id>}" >&2
+    exit 64
+    ;;
+esac
+
+printf '[%s] Wrapper backup dipanggil mode=%s\n' "$(date --iso-8601=seconds)" "$MODE"
+
+PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
+ENV_FILE="${ASIHJAYA_ENV_FILE:-/etc/asihjaya-rms/production.env}"
+RELEASE_ENV_FILE="${ASIHJAYA_RELEASE_ENV_FILE:-/var/lib/asihjaya-rms/deployments/current.env}"
+BACKUP_DIR="${ASIHJAYA_DATABASE_BACKUP_DIR:-/var/backups/asihjaya-rms/postgres}"
+STATUS_DIR="${ASIHJAYA_OFFSITE_STATUS_DIR:-/var/lib/asihjaya-rms/offsite-status}"
+STATE_DIR="${ASIHJAYA_BACKUP_RUNNER_STATE_DIR:-/var/lib/asihjaya-rms/backup-runner}"
+DEPLOYMENT_USER="${ASIHJAYA_DEPLOYMENT_USER:-ubuntu}"
+
+if [[ "$EUID" -eq 0 ]]; then
+  echo "ERROR: jalankan backup wrapper sebagai $DEPLOYMENT_USER tanpa sudo." >&2
+  exit 77
+fi
+if [[ "$(id -un)" != "$DEPLOYMENT_USER" ]]; then
+  echo "ERROR: backup wrapper wajib dijalankan sebagai user $DEPLOYMENT_USER." >&2
+  exit 77
+fi
+
+for required_path in \
+  "$PROJECT_DIR/compose.production.yaml" \
+  "$ENV_FILE" \
+  "$BACKUP_DIR" \
+  "$STATUS_DIR" \
+  "$STATE_DIR"
+do
+  if [[ ! -e "$required_path" ]]; then
+    echo "ERROR: path wajib tidak tersedia: $required_path" >&2
+    exit 66
+  fi
+done
+
+read_env_file_value() {
+  local file_path="$1" key="$2"
+  local line value
+  [[ -r "$file_path" ]] || return 0
+  line="$(grep -E "^${key}=" "$file_path" | tail -n 1 || true)"
+  value="${line#*=}"
+  value="${value%$'\r'}"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "$value"
+}
+
+read_env_value() {
+  local key="$1" value
+  value="$(read_env_file_value "$RELEASE_ENV_FILE" "$key")"
+  if [[ -z "$value" ]]; then
+    value="$(read_env_file_value "$ENV_FILE" "$key")"
+  fi
+  printf '%s' "$value"
+}
+
+
+IMAGE="${ASIHJAYA_OPERATIONS_IMAGE:-$(read_env_value ASIHJAYA_OPERATIONS_IMAGE)}"
+if [[ -z "$IMAGE" ]]; then
+  echo "ERROR: ASIHJAYA_OPERATIONS_IMAGE wajib diatur." >&2
+  exit 78
+fi
+if [[ "$IMAGE" == *:latest || "$IMAGE" == *:production ]]; then
+  echo "ERROR: operations image harus immutable; tag latest/production ditolak: $IMAGE" >&2
+  exit 78
+fi
+if [[ "$IMAGE" != *@sha256:* && ! "$IMAGE" =~ :[0-9]{8}T[0-9]{6}Z-[a-f0-9]{7,12}$ ]]; then
+  echo "ERROR: operations image harus memakai release tag atau sha256 digest: $IMAGE" >&2
+  exit 78
+fi
+
+if [[ -n "$REQUESTED_RELEASE_ID" && ! "$REQUESTED_RELEASE_ID" =~ ^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{7,12}$ ]]; then
+  echo "ERROR: release ID tidak valid: $REQUESTED_RELEASE_ID" >&2
+  exit 64
+fi
+
+DOCKER_BIN="$(command -v docker || true)"
+COMPOSE_PLUGIN=""
+
+for plugin_dir in \
+  /usr/libexec/docker/cli-plugins \
+  /usr/lib/docker/cli-plugins \
+  /usr/local/lib/docker/cli-plugins
+do
+  candidate="${plugin_dir}/docker-compose"
+  if [[ -x "$candidate" ]]; then
+    COMPOSE_PLUGIN="$candidate"
+    break
+  fi
+done
+
+if [[ -z "$DOCKER_BIN" || ! -x "$DOCKER_BIN" ]]; then
+  echo "ERROR: Docker CLI tidak ditemukan." >&2
+  exit 69
+fi
+if [[ -z "$COMPOSE_PLUGIN" || ! -x "$COMPOSE_PLUGIN" ]]; then
+  echo "ERROR: Docker Compose plugin tidak ditemukan." >&2
+  exit 69
+fi
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "ERROR: image $IMAGE belum tersedia." >&2
+  exit 69
+fi
+
+IMAGE_RELEASE_ID="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$IMAGE")"
+IMAGE_REVISION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE")"
+if [[ ! "$IMAGE_RELEASE_ID" =~ ^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{7,12}$ ]]; then
+  echo "ERROR: OCI label release ID operations image tidak valid: $IMAGE_RELEASE_ID" >&2
+  exit 78
+fi
+if [[ ! "$IMAGE_REVISION" =~ ^[a-f0-9]{7,64}$ ]]; then
+  echo "ERROR: OCI label Git revision operations image tidak valid." >&2
+  exit 78
+fi
+if [[ "$MODE" == "pre-deployment" && "$IMAGE_RELEASE_ID" != "$REQUESTED_RELEASE_ID" ]]; then
+  echo "ERROR: operations image release $IMAGE_RELEASE_ID tidak sama dengan candidate $REQUESTED_RELEASE_ID." >&2
+  exit 78
+fi
+
+JOB_RELEASE_ID="${REQUESTED_RELEASE_ID:-$IMAGE_RELEASE_ID}"
+DOCKER_GID="$(getent group docker | cut -d: -f3)"
+if [[ -z "$DOCKER_GID" ]]; then
+  echo "ERROR: grup docker tidak ditemukan." >&2
+  exit 69
+fi
+
+LOCK_FILE="$STATE_DIR/backup.lock"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "ERROR: proses backup atau verifikasi lain masih berjalan." >&2
+  exit 75
+fi
+
+CID_FILE="$STATE_DIR/container.cid"
+rm -f "$CID_FILE"
+CONTAINER_NAME="ajsystem-db-backup-${MODE}-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+RESULT_FILE=""
+
+cleanup() {
+  local exit_code=$?
+  trap - EXIT INT TERM
+  if [[ -s "$CID_FILE" ]]; then
+    container_id="$(cat "$CID_FILE" 2>/dev/null || true)"
+    if [[ -n "$container_id" ]]; then
+      docker rm -f "$container_id" >/dev/null 2>&1 || true
+    fi
+  fi
+  rm -f "$CID_FILE"
+  exit "$exit_code"
+}
+trap cleanup EXIT INT TERM
+
+case "$MODE" in
+  daily)
+    COMMAND=(npm run db:backup:production:offsite)
+    ;;
+  weekly)
+    COMMAND=(npm run db:backup:weekly:offsite)
+    ;;
+  verify)
+    COMMAND=(npm run db:backup:offsite:verify)
+    ;;
+  pre-deployment)
+    RESULT_FILE="$STATE_DIR/pre-deployment-${JOB_RELEASE_ID}.json"
+    rm -f "$RESULT_FILE"
+    COMMAND=(npm run db:backup:pre-deployment:verified -- --release-id "$JOB_RELEASE_ID" --result-file "$RESULT_FILE")
+    ;;
+esac
+
+echo "[$(date --iso-8601=seconds)] Memulai job backup mode=$MODE release=$JOB_RELEASE_ID image=$IMAGE"
+
+docker run \
+  --rm \
+  --init \
+  --name "$CONTAINER_NAME" \
+  --cidfile "$CID_FILE" \
+  --user "$(id -u):$(id -g)" \
+  --group-add "$DOCKER_GID" \
+  --read-only \
+  --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+  --security-opt no-new-privileges:true \
+  --memory 768m \
+  --cpus 0.75 \
+  --pids-limit 256 \
+  --label com.asihjaya.purpose=database-backup \
+  --label "com.asihjaya.release-id=$JOB_RELEASE_ID" \
+  --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+  --mount type=bind,src="$DOCKER_BIN",dst=/usr/local/bin/docker,readonly \
+  --mount type=bind,src="$COMPOSE_PLUGIN",dst=/usr/local/lib/docker/cli-plugins/docker-compose,readonly \
+  --mount type=bind,src="$PROJECT_DIR/compose.production.yaml",dst=/app/compose.production.yaml,readonly \
+  --mount type=bind,src="$ENV_FILE",dst=/app/.env.production,readonly \
+  --mount type=bind,src="$ENV_FILE",dst="$ENV_FILE",readonly \
+  --mount type=bind,src="$BACKUP_DIR",dst="$BACKUP_DIR" \
+  --mount type=bind,src="$STATUS_DIR",dst="$STATUS_DIR" \
+  --mount type=bind,src="$STATE_DIR",dst="$STATE_DIR" \
+  --mount type=bind,src="$BACKUP_DIR",dst=/app/.data/backups/postgres \
+  --mount type=bind,src="$STATUS_DIR",dst=/app/.data/backups/offsite-status \
+  -e APP_RELEASE_ID="$JOB_RELEASE_ID" \
+  -e DATABASE_BACKUP_ROOT="$BACKUP_DIR" \
+  -e DATABASE_BACKUP_OFFSITE_STATUS_PATH="$STATUS_DIR/latest.json" \
+  -e HOME=/tmp \
+  -e NPM_CONFIG_CACHE=/tmp/.npm \
+  -e NPM_CONFIG_UPDATE_NOTIFIER=false \
+  "$IMAGE" \
+  "${COMMAND[@]}"
+
+if [[ "$MODE" == "pre-deployment" ]]; then
+  if [[ ! -s "$RESULT_FILE" ]]; then
+    echo "ERROR: bukti pre-deployment tidak dibuat: $RESULT_FILE" >&2
+    exit 74
+  fi
+  if ! grep -Fq "\"releaseId\": \"$JOB_RELEASE_ID\"" "$RESULT_FILE"; then
+    echo "ERROR: bukti pre-deployment tidak cocok dengan release $JOB_RELEASE_ID." >&2
+    exit 74
+  fi
+  if ! grep -Eq '"status": "(verified|skipped-uninitialized)"' "$RESULT_FILE"; then
+    echo "ERROR: status bukti pre-deployment tidak valid." >&2
+    exit 74
+  fi
+  chmod 600 "$RESULT_FILE"
+  echo "[$(date --iso-8601=seconds)] Bukti pre-deployment: $RESULT_FILE"
+fi
+
+echo "[$(date --iso-8601=seconds)] Job backup mode=$MODE selesai"

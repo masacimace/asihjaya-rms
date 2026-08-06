@@ -1,0 +1,434 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+STATE_DIR="/var/lib/asihjaya-rms/monitor"
+STATE_FILE="$STATE_DIR/latest.json"
+ISSUES_FILE="$(mktemp)"
+trap 'rm -f "$ISSUES_FILE"' EXIT
+
+COMPOSE=(
+  docker compose
+  --env-file /etc/asihjaya-rms/production.env
+  -f /opt/asihjaya-rms/app/compose.production.yaml
+)
+
+critical_count=0
+warning_count=0
+
+disk_percent=0
+inode_percent=0
+memory_available_percent=0
+swap_used_percent=0
+local_backup_age_hours=-1
+offsite_backup_age_hours=-1
+offsite_upload_age_hours=-1
+offsite_verify_age_hours=-1
+
+issue() {
+  local level="$1" code="$2" message="$3"
+  printf '%s\t%s\t%s\n' "$level" "$code" "$message" >> "$ISSUES_FILE"
+
+  case "$level" in
+    critical) critical_count=$((critical_count + 1)) ;;
+    warning)  warning_count=$((warning_count + 1)) ;;
+  esac
+}
+
+check_http_json() {
+  local name="$1" url="$2" expected_status="$3" expected_key="$4" expected_value="$5"
+  local body
+
+  if ! body="$(curl -fsS --max-time 8 "$url" 2>&1)"; then
+    issue critical "${name}_failed" "Health check $name gagal: $body"
+    return
+  fi
+
+  if ! python3 -c '
+import json
+import sys
+
+expected_status, expected_key, expected_value = sys.argv[1:]
+data = json.load(sys.stdin)
+if data.get("status") != expected_status:
+    raise SystemExit(1)
+if data.get(expected_key) != expected_value:
+    raise SystemExit(1)
+' "$expected_status" "$expected_key" "$expected_value" <<< "$body"
+  then
+    issue critical "${name}_invalid" "Health check $name mengembalikan JSON yang tidak sesuai"
+  fi
+}
+
+check_unit_active() {
+  local unit="$1"
+  local state
+  state="$(systemctl is-active "$unit" 2>/dev/null || true)"
+  if [[ "$state" != "active" ]]; then
+    issue critical service_inactive "Service $unit berstatus ${state:-unknown}"
+  fi
+}
+
+check_timer() {
+  local timer="$1"
+  local active enabled
+  active="$(systemctl is-active "$timer" 2>/dev/null || true)"
+  enabled="$(systemctl is-enabled "$timer" 2>/dev/null || true)"
+
+  [[ "$active" == "active" ]] || issue critical backup_timer_inactive "Timer $timer berstatus ${active:-unknown}"
+  [[ "$enabled" == "enabled" ]] || issue critical backup_timer_disabled "Timer $timer berstatus ${enabled:-unknown}"
+}
+
+check_container() {
+  local service="$1" expected_status="$2" expected_health="$3" expected_exit="$4"
+  local container_id inspection status health exit_code restart_count
+
+  container_id="$("${COMPOSE[@]}" ps -a -q "$service" 2>/dev/null | head -n 1)"
+  if [[ -z "$container_id" ]]; then
+    issue critical container_missing "Container service $service tidak ditemukan"
+    return
+  fi
+
+  inspection="$(docker inspect --format '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.State.ExitCode}}|{{.RestartCount}}' "$container_id" 2>/dev/null || true)"
+  IFS='|' read -r status health exit_code restart_count <<< "$inspection"
+
+  if [[ "$status" != "$expected_status" ]]; then
+    issue critical container_status "Container $service status=${status:-unknown}, expected=$expected_status"
+  fi
+
+  if [[ "$expected_health" != "ignore" && "$health" != "$expected_health" ]]; then
+    issue critical container_health "Container $service health=${health:-unknown}, expected=$expected_health"
+  fi
+
+  if [[ "$expected_exit" != "ignore" && "$exit_code" != "$expected_exit" ]]; then
+    issue critical container_exit "Container $service exitCode=${exit_code:-unknown}, expected=$expected_exit"
+  fi
+
+  if [[ "${restart_count:-0}" =~ ^[0-9]+$ ]] && (( restart_count > 0 )); then
+    issue warning container_restart "Container $service memiliki RestartCount=$restart_count"
+  fi
+}
+
+check_age_threshold() {
+  local metric="$1" age="$2"
+  if (( age >= 36 )); then
+    issue critical "${metric}_stale" "$metric berusia ${age} jam"
+  elif (( age >= 30 )); then
+    issue warning "${metric}_aging" "$metric berusia ${age} jam"
+  fi
+}
+
+mkdir -p "$STATE_DIR"
+
+# Health endpoints
+check_http_json local_app \
+  http://127.0.0.1:3000/api/health \
+  ok service asihjaya-rms
+
+check_http_json local_database \
+  http://127.0.0.1:3000/api/health/database \
+  healthy database connected
+
+check_http_json public_app \
+  https://ajsystem.id/api/health \
+  ok service asihjaya-rms
+
+# Host services
+check_unit_active docker.service
+check_unit_active caddy.service
+check_unit_active fail2ban.service
+
+ssh_socket_state="$(systemctl is-active ssh.socket 2>/dev/null || true)"
+ssh_service_state="$(systemctl is-active ssh.service 2>/dev/null || true)"
+if [[ "$ssh_socket_state" != "active" && "$ssh_service_state" != "active" ]]; then
+  issue critical ssh_inactive "ssh.socket dan ssh.service sama-sama tidak aktif"
+fi
+
+# Backup timers
+for timer in \
+  ajsystem-db-backup-daily.timer \
+  ajsystem-db-backup-weekly.timer \
+  ajsystem-db-backup-verify.timer
+do
+  check_timer "$timer"
+done
+
+# Containers
+check_container app running healthy ignore
+check_container db running healthy ignore
+check_container migrate exited ignore 0
+
+# Disk, inode, memory, and swap
+disk_percent="$(df -P / | awk 'NR==2 {gsub(/%/, "", $5); print $5}')"
+inode_percent="$(df -Pi / | awk 'NR==2 {gsub(/%/, "", $5); print $5}')"
+
+if (( disk_percent >= 85 )); then
+  issue critical disk_critical "Disk root terpakai ${disk_percent}%"
+elif (( disk_percent >= 75 )); then
+  issue warning disk_warning "Disk root terpakai ${disk_percent}%"
+fi
+
+if (( inode_percent >= 90 )); then
+  issue critical inode_critical "Inode root terpakai ${inode_percent}%"
+elif (( inode_percent >= 80 )); then
+  issue warning inode_warning "Inode root terpakai ${inode_percent}%"
+fi
+
+read -r memory_available_percent swap_used_percent < <(
+  python3 - <<'PY'
+from pathlib import Path
+
+values = {}
+for line in Path('/proc/meminfo').read_text().splitlines():
+    key, raw = line.split(':', 1)
+    values[key] = int(raw.strip().split()[0])
+
+mem_total = values.get('MemTotal', 0)
+mem_available = values.get('MemAvailable', 0)
+swap_total = values.get('SwapTotal', 0)
+swap_free = values.get('SwapFree', 0)
+
+mem_percent = round((mem_available / mem_total) * 100) if mem_total else 0
+swap_percent = round(((swap_total - swap_free) / swap_total) * 100) if swap_total else 0
+print(mem_percent, swap_percent)
+PY
+)
+
+if (( memory_available_percent < 10 )); then
+  issue critical memory_critical "RAM tersedia hanya ${memory_available_percent}%"
+elif (( memory_available_percent < 20 )); then
+  issue warning memory_warning "RAM tersedia hanya ${memory_available_percent}%"
+fi
+
+if (( swap_used_percent >= 60 )); then
+  issue critical swap_critical "Swap terpakai ${swap_used_percent}%"
+elif (( swap_used_percent >= 25 )); then
+  issue warning swap_warning "Swap terpakai ${swap_used_percent}%"
+fi
+
+# Listening ports
+listeners="$(ss -H -lnt 2>/dev/null || true)"
+for port in 22 80 443 3000; do
+  if ! awk -v port=":$port" '$4 ~ port"$" {found=1} END {exit !found}' <<< "$listeners"; then
+    issue critical required_port_missing "TCP port $port tidak listening"
+  fi
+done
+
+while read -r local_address; do
+  [[ -z "$local_address" ]] && continue
+  case "$local_address" in
+    127.0.0.1:*|'[::1]':*) ;;
+    *) issue critical private_port_exposed "TCP port 3000 terekspos pada $local_address" ;;
+  esac
+done < <(awk '$4 ~ /:3000$/ {print $4}' <<< "$listeners")
+
+while read -r local_address; do
+  [[ -z "$local_address" ]] && continue
+  case "$local_address" in
+    127.0.0.1:*|'[::1]':*) ;;
+    *) issue critical private_port_exposed "Caddy admin port 2019 terekspos pada $local_address" ;;
+  esac
+done < <(awk '$4 ~ /:2019$/ {print $4}' <<< "$listeners")
+
+if awk '$4 ~ /:5432$/ {found=1} END {exit !found}' <<< "$listeners"; then
+  issue critical postgres_port_exposed "PostgreSQL host port 5432 sedang listening"
+fi
+
+# Local backup age
+latest_dump_epoch="$(
+  find /var/backups/asihjaya-rms/postgres \
+    -maxdepth 1 \
+    -type f \
+    -name '*.dump' \
+    -printf '%T@\n' 2>/dev/null |
+  sort -nr |
+  head -n 1 |
+  cut -d. -f1
+)"
+
+if [[ -z "$latest_dump_epoch" ]]; then
+  issue critical local_backup_missing "Belum ada file backup lokal .dump"
+else
+  local_backup_age_hours=$(( ($(date +%s) - latest_dump_epoch) / 3600 ))
+  check_age_threshold local_backup "$local_backup_age_hours"
+fi
+
+# Off-site status age and verification
+if [[ ! -r /var/lib/asihjaya-rms/offsite-status/latest.json ]]; then
+  issue critical offsite_status_missing "Status off-site latest.json tidak dapat dibaca"
+else
+  offsite_values="$(python3 - <<'PY'
+import datetime as dt
+import json
+from pathlib import Path
+
+path = Path('/var/lib/asihjaya-rms/offsite-status/latest.json')
+data = json.loads(path.read_text())
+now = dt.datetime.now(dt.timezone.utc)
+
+def age(field):
+    raw = data.get(field)
+    if not raw:
+        return -1
+    parsed = dt.datetime.fromisoformat(raw.replace('Z', '+00:00'))
+    return max(0, int((now - parsed).total_seconds() // 3600))
+
+print(
+    data.get('provider', ''),
+    str(data.get('fullVerification', False)).lower(),
+    age('latestBackupCreatedAt'),
+    age('lastSuccessfulUploadAt'),
+    age('lastSuccessfulVerificationAt'),
+)
+PY
+  2>/dev/null || true)"
+
+  read -r offsite_provider full_verification \
+    offsite_backup_age_hours offsite_upload_age_hours offsite_verify_age_hours \
+    <<< "$offsite_values"
+
+  [[ "$offsite_provider" == "backblaze-b2" ]] || issue critical offsite_provider "Provider off-site tidak sesuai"
+  [[ "$full_verification" == "true" ]] || issue critical offsite_verification "Full verification off-site tidak aktif"
+
+  for pair in \
+    "offsite_backup:$offsite_backup_age_hours" \
+    "offsite_upload:$offsite_upload_age_hours" \
+    "offsite_verification:$offsite_verify_age_hours"
+  do
+    metric="${pair%%:*}"
+    age="${pair##*:}"
+    if [[ ! "$age" =~ ^[0-9]+$ ]]; then
+      issue critical "${metric}_invalid" "Timestamp $metric tidak valid"
+    else
+      check_age_threshold "$metric" "$age"
+    fi
+  done
+fi
+
+# Existing failed units
+failed_units="$(systemctl --failed --no-legend --plain --no-pager 2>/dev/null || true)"
+if [[ -n "${failed_units//[[:space:]]/}" ]]; then
+  issue critical systemd_failed_units "Terdapat failed systemd unit"
+fi
+
+if (( critical_count > 0 )); then
+  overall=critical
+elif (( warning_count > 0 )); then
+  overall=warning
+else
+  overall=healthy
+fi
+
+python3 - \
+  "$STATE_FILE" \
+  "$ISSUES_FILE" \
+  "$overall" \
+  "$critical_count" \
+  "$warning_count" \
+  "$disk_percent" \
+  "$inode_percent" \
+  "$memory_available_percent" \
+  "$swap_used_percent" \
+  "$local_backup_age_hours" \
+  "$offsite_backup_age_hours" \
+  "$offsite_upload_age_hours" \
+  "$offsite_verify_age_hours" <<'PY'
+import datetime as dt
+import json
+import os
+import sys
+from pathlib import Path
+
+(
+    state_file,
+    issues_file,
+    overall,
+    critical_count,
+    warning_count,
+    disk_percent,
+    inode_percent,
+    memory_available_percent,
+    swap_used_percent,
+    local_backup_age_hours,
+    offsite_backup_age_hours,
+    offsite_upload_age_hours,
+    offsite_verify_age_hours,
+) = sys.argv[1:]
+
+issues = []
+for line in Path(issues_file).read_text().splitlines():
+    if not line:
+        continue
+    level, code, message = line.split('\t', 2)
+    issues.append({'level': level, 'code': code, 'message': message})
+
+path = Path(state_file)
+previous_overall = None
+if path.exists():
+    try:
+        previous_overall = json.loads(path.read_text()).get('overall')
+    except Exception:
+        pass
+
+result = {
+    'version': 1,
+    'checkedAt': dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00', 'Z'),
+    'overall': overall,
+    'previousOverall': previous_overall,
+    'stateChanged': previous_overall is not None and previous_overall != overall,
+    'summary': {
+        'critical': int(critical_count),
+        'warning': int(warning_count),
+    },
+    'metrics': {
+        'diskRootPercent': int(disk_percent),
+        'inodeRootPercent': int(inode_percent),
+        'memoryAvailablePercent': int(memory_available_percent),
+        'swapUsedPercent': int(swap_used_percent),
+        'localBackupAgeHours': int(local_backup_age_hours),
+        'offsiteBackupAgeHours': int(offsite_backup_age_hours),
+        'offsiteUploadAgeHours': int(offsite_upload_age_hours),
+        'offsiteVerificationAgeHours': int(offsite_verify_age_hours),
+    },
+    'issues': issues,
+}
+
+temporary = path.with_name(f'.{path.name}.{os.getpid()}.tmp')
+temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
+os.chmod(temporary, 0o600)
+os.replace(temporary, path)
+PY
+
+printf 'AJSystem monitor: overall=%s critical=%d warning=%d disk=%s%% memory_available=%s%%\n' \
+  "$overall" "$critical_count" "$warning_count" "$disk_percent" "$memory_available_percent"
+
+while IFS=$'\t' read -r level code message; do
+  [[ -z "$level" ]] && continue
+  printf '%s: %s: %s\n' "${level^^}" "$code" "$message"
+done < "$ISSUES_FILE"
+
+# Laporkan status ke Healthchecks.io.
+#
+# Healthy  -> ping normal.
+# Critical -> kirim sinyal /fail untuk alert segera.
+#
+# Bila Healthchecks.io sendiri tidak dapat dijangkau, monitor internal tetap
+# menyimpan status lokal dan hanya mencatat warning ke journald.
+if [[ -n "${HEALTHCHECKS_PING_URL:-}" ]]; then
+  healthchecks_base_url="${HEALTHCHECKS_PING_URL%/}"
+  healthchecks_target_url="$healthchecks_base_url"
+
+  if (( critical_count > 0 )); then
+    healthchecks_target_url="${healthchecks_base_url}/fail"
+  fi
+
+  if ! curl     -fsS     --max-time 10     --retry 2     --retry-delay 1     --retry-all-errors     "$healthchecks_target_url"     > /dev/null
+  then
+    printf '%s\n'       'WARNING: gagal mengirim status ke Healthchecks.io'       >&2
+  fi
+fi
+
+if (( critical_count > 0 )); then
+  exit 1
+fi
+
+exit 0

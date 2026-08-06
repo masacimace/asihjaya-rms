@@ -1,0 +1,13 @@
+[Unit]
+Description=AJSystem daily PostgreSQL backup timer
+
+[Timer]
+OnCalendar=Mon..Sat *-*-* 02:30:00 Asia/Jakarta
+AccuracySec=1min
+RandomizedDelaySec=10min
+FixedRandomDelay=true
+Persistent=true
+Unit=ajsystem-db-backup@daily.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,514 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 027
+
+PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
+ENV_FILE="${ASIHJAYA_ENV_FILE:-/etc/asihjaya-rms/production.env}"
+COMPOSE_FILE="${ASIHJAYA_COMPOSE_FILE:-$PROJECT_DIR/compose.production.yaml}"
+STATE_ROOT="${ASIHJAYA_DEPLOYMENT_STATE_ROOT:-/var/lib/asihjaya-rms/deployments}"
+RELEASE_ENV_FILE="${ASIHJAYA_RELEASE_ENV_FILE:-$STATE_ROOT/current.env}"
+LOCK_HELPER="${ASIHJAYA_DEPLOYMENT_LOCK_HELPER:-/usr/local/sbin/ajsystem-deployment-lock}"
+CANDIDATE_PORT="${ASIHJAYA_ROLLBACK_CANDIDATE_PORT:-3001}"
+DEPLOYMENT_USER="${ASIHJAYA_DEPLOYMENT_USER:-ubuntu}"
+COMPOSE_PROJECT_NAME_VALUE="asihjaya-rms-production"
+BACKEND_NETWORK="${COMPOSE_PROJECT_NAME_VALUE}_backend"
+UPLOADS_VOLUME="${COMPOSE_PROJECT_NAME_VALUE}_app_uploads"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ajsystem-rollback check [expected-previous-release-id]
+  ajsystem-rollback approve <compatibility-reference>
+  ajsystem-rollback deny <compatibility-reference>
+  ajsystem-rollback execute [expected-previous-release-id]
+
+Rules:
+  - rollback hanya menuju previous healthy release;
+  - database tidak pernah di-rollback;
+  - schema change membutuhkan approval compatibility eksplisit;
+  - execute selalu menjalankan preflight, candidate smoke, activation, dan production health.
+USAGE
+}
+
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 64
+}
+
+log() {
+  printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*"
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "command wajib tidak tersedia: $1"
+}
+
+assert_absolute_path() {
+  [[ "$2" == /* ]] || fail "$1 harus absolute: $2"
+}
+
+assert_runtime_user() {
+  [[ "$EUID" -ne 0 ]] || fail "jalankan rollback sebagai $DEPLOYMENT_USER tanpa sudo."
+  [[ "$(id -un)" == "$DEPLOYMENT_USER" ]] || fail "rollback wajib dijalankan sebagai user $DEPLOYMENT_USER."
+}
+
+read_env_file_value() {
+  local file_path="$1" key="$2"
+  local line value
+  line="$(grep -E "^${key}=" "$file_path" | tail -n 1 || true)"
+  value="${line#*=}"
+  value="${value%$'\r'}"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "$value"
+}
+
+validate_reference() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]{2,199}$ ]] || fail "compatibility reference tidak valid."
+  [[ "$1" != "no-schema-change" ]] || fail "reference no-schema-change hanya boleh dibuat otomatis."
+}
+
+assert_runtime_user
+
+if [[ "${1:-}" != "--locked" ]]; then
+  [[ $# -ge 1 ]] || { usage >&2; exit 64; }
+  ACTION="$1"
+  case "$ACTION" in
+    check|execute)
+      [[ $# -le 2 ]] || { usage >&2; exit 64; }
+      ;;
+    approve|deny)
+      [[ $# -eq 2 ]] || { usage >&2; exit 64; }
+      validate_reference "$2"
+      ;;
+    *)
+      usage >&2
+      exit 64
+      ;;
+  esac
+  [[ -x "$LOCK_HELPER" ]] || fail "deployment lock helper tidak executable: $LOCK_HELPER"
+  [[ -r "$RELEASE_ENV_FILE" ]] || fail "current release environment tidak dapat dibaca: $RELEASE_ENV_FILE"
+  export ASIHJAYA_DEPLOYMENT_OPERATION="rollback-$ACTION"
+  export APP_RELEASE_ID="$(read_env_file_value "$RELEASE_ENV_FILE" APP_RELEASE_ID)"
+  exec "$LOCK_HELPER" -- "$0" --locked "$@"
+fi
+
+shift
+[[ $# -ge 1 ]] || { usage >&2; exit 64; }
+ACTION="$1"
+shift
+
+for pair in \
+  "PROJECT_DIR:$PROJECT_DIR" \
+  "ENV_FILE:$ENV_FILE" \
+  "COMPOSE_FILE:$COMPOSE_FILE" \
+  "STATE_ROOT:$STATE_ROOT" \
+  "RELEASE_ENV_FILE:$RELEASE_ENV_FILE"
+do
+  assert_absolute_path "${pair%%:*}" "${pair#*:}"
+done
+
+for command_name in docker date install grep sed sync hostname id chmod mv rm tail dirname; do
+  require_command "$command_name"
+done
+[[ -r "$ENV_FILE" ]] || fail "production environment tidak dapat dibaca: $ENV_FILE"
+[[ -r "$COMPOSE_FILE" ]] || fail "Compose production tidak dapat dibaca: $COMPOSE_FILE"
+[[ -r "$RELEASE_ENV_FILE" ]] || fail "current release environment tidak dapat dibaca: $RELEASE_ENV_FILE"
+[[ "$CANDIDATE_PORT" =~ ^[0-9]+$ ]] && (( CANDIDATE_PORT >= 1024 && CANDIDATE_PORT <= 65535 )) || fail "candidate port tidak valid."
+
+docker info >/dev/null 2>&1 || fail "Docker daemon tidak dapat diakses."
+docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin tidak tersedia."
+
+CURRENT_RELEASE_ID="$(read_env_file_value "$RELEASE_ENV_FILE" APP_RELEASE_ID)"
+CURRENT_REVISION="$(read_env_file_value "$RELEASE_ENV_FILE" APP_REVISION)"
+CURRENT_BUILD_DATE="$(read_env_file_value "$RELEASE_ENV_FILE" APP_BUILD_DATE)"
+CURRENT_APP_IMAGE="$(read_env_file_value "$RELEASE_ENV_FILE" ASIHJAYA_IMAGE)"
+CURRENT_MIGRATOR_IMAGE="$(read_env_file_value "$RELEASE_ENV_FILE" ASIHJAYA_MIGRATOR_IMAGE)"
+CURRENT_OPERATIONS_IMAGE="$(read_env_file_value "$RELEASE_ENV_FILE" ASIHJAYA_OPERATIONS_IMAGE)"
+for name in CURRENT_RELEASE_ID CURRENT_REVISION CURRENT_BUILD_DATE CURRENT_APP_IMAGE CURRENT_MIGRATOR_IMAGE CURRENT_OPERATIONS_IMAGE; do
+  [[ -n "${!name}" ]] || fail "$name tidak tersedia pada current.env."
+done
+[[ "$CURRENT_RELEASE_ID" =~ ^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{7,12}$ ]] || fail "APP_RELEASE_ID current.env tidak valid."
+[[ "$CURRENT_REVISION" =~ ^[a-f0-9]{7,64}$ ]] || fail "APP_REVISION current.env tidak valid."
+for image in "$CURRENT_APP_IMAGE" "$CURRENT_MIGRATOR_IMAGE" "$CURRENT_OPERATIONS_IMAGE"; do
+  [[ "$image" != *:latest && "$image" != *:production ]] || fail "image current harus immutable: $image"
+done
+docker image inspect "$CURRENT_OPERATIONS_IMAGE" >/dev/null 2>&1 || fail "operations image current tidak ditemukan: $CURRENT_OPERATIONS_IMAGE"
+ROLLBACK_OPERATOR="${SUDO_USER:-${USER:-unknown}}"
+ROLLBACK_HOSTNAME="$(hostname --fqdn 2>/dev/null || hostname)"
+export ASIHJAYA_ENV_FILE="$ENV_FILE"
+
+install -d -m 0750 "$STATE_ROOT" "$STATE_ROOT/rollback-work" "$STATE_ROOT/rollbacks" "$STATE_ROOT/evidence"
+PUBLIC_ORIGIN="$(read_env_file_value "$ENV_FILE" APP_URL)"
+[[ -n "$PUBLIC_ORIGIN" ]] || fail "APP_URL wajib tersedia di production environment."
+
+run_rollback_contract() {
+  docker run --rm --init \
+    --user "$(id -u):$(id -g)" \
+    --read-only \
+    --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+    --security-opt no-new-privileges:true \
+    --network none \
+    --memory 512m \
+    --cpus 0.50 \
+    --pids-limit 192 \
+    --mount "type=bind,src=$STATE_ROOT,dst=$STATE_ROOT" \
+    -e HOME=/tmp \
+    -e NPM_CONFIG_CACHE=/tmp/.npm \
+    -e NPM_CONFIG_UPDATE_NOTIFIER=false \
+    "$CURRENT_OPERATIONS_IMAGE" \
+    npm run rollback:contract -- "$@"
+}
+
+run_health_check() {
+  local scope="$1" local_origin="$2" result_file="$3" release_id="$4" revision="$5"
+  local -a health_arguments=(
+    --scope "$scope"
+    --release-id "$release_id"
+    --revision "$revision"
+    --local-origin "$local_origin"
+    --result-file "$result_file"
+  )
+  if [[ "$scope" == "production" ]]; then
+    health_arguments+=(--public-origin "$PUBLIC_ORIGIN")
+  fi
+
+  docker run --rm --init \
+    --user "$(id -u):$(id -g)" \
+    --read-only \
+    --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+    --security-opt no-new-privileges:true \
+    --network host \
+    --memory 512m \
+    --cpus 0.50 \
+    --pids-limit 192 \
+    --mount "type=bind,src=$STATE_ROOT,dst=$STATE_ROOT" \
+    -e HOME=/tmp \
+    -e NPM_CONFIG_CACHE=/tmp/.npm \
+    -e NPM_CONFIG_UPDATE_NOTIFIER=false \
+    "$CURRENT_OPERATIONS_IMAGE" \
+    npm run deployment:health -- "${health_arguments[@]}"
+}
+
+if [[ "$ACTION" == "approve" || "$ACTION" == "deny" ]]; then
+  [[ $# -eq 1 ]] || { usage >&2; exit 64; }
+  REFERENCE="$1"
+  validate_reference "$REFERENCE"
+  DECISION="compatible"
+  [[ "$ACTION" == "deny" ]] && DECISION="incompatible"
+  run_rollback_contract compatibility \
+    --state-root "$STATE_ROOT" \
+    --decision "$DECISION" \
+    --reference "$REFERENCE" \
+    --operator "$ROLLBACK_OPERATOR" \
+    --hostname "$ROLLBACK_HOSTNAME"
+  exit 0
+fi
+
+EXPECTED_TARGET="${1:-}"
+[[ $# -le 1 ]] || { usage >&2; exit 64; }
+if [[ -n "$EXPECTED_TARGET" ]]; then
+  [[ "$EXPECTED_TARGET" =~ ^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{7,12}$ ]] || fail "expected target release ID tidak valid."
+fi
+
+GUARD_ARGS=(guard --state-root "$STATE_ROOT")
+[[ -n "$EXPECTED_TARGET" ]] && GUARD_ARGS+=(--expected-target "$EXPECTED_TARGET")
+if [[ "$ACTION" == "check" ]]; then
+  run_rollback_contract "${GUARD_ARGS[@]}"
+  exit 0
+fi
+[[ "$ACTION" == "execute" ]] || { usage >&2; exit 64; }
+
+GUARD_OUTPUT="$(run_rollback_contract "${GUARD_ARGS[@]}" --format env)"
+FROM_RELEASE_ID=""
+FROM_REVISION=""
+FROM_BUILD_DATE=""
+FROM_APP_IMAGE=""
+FROM_APP_DIGEST=""
+FROM_MIGRATOR_IMAGE=""
+FROM_MIGRATOR_DIGEST=""
+FROM_OPERATIONS_IMAGE=""
+FROM_OPERATIONS_DIGEST=""
+TO_RELEASE_ID=""
+TO_REVISION=""
+TO_BUILD_DATE=""
+TO_APP_IMAGE=""
+TO_APP_DIGEST=""
+TO_MIGRATOR_IMAGE=""
+TO_MIGRATOR_DIGEST=""
+TO_OPERATIONS_IMAGE=""
+TO_OPERATIONS_DIGEST=""
+COMPATIBILITY_REFERENCE=""
+while IFS='=' read -r key value; do
+  case "$key" in
+    FROM_RELEASE_ID|FROM_REVISION|FROM_BUILD_DATE|FROM_APP_IMAGE|FROM_APP_DIGEST|FROM_MIGRATOR_IMAGE|FROM_MIGRATOR_DIGEST|FROM_OPERATIONS_IMAGE|FROM_OPERATIONS_DIGEST|TO_RELEASE_ID|TO_REVISION|TO_BUILD_DATE|TO_APP_IMAGE|TO_APP_DIGEST|TO_MIGRATOR_IMAGE|TO_MIGRATOR_DIGEST|TO_OPERATIONS_IMAGE|TO_OPERATIONS_DIGEST|COMPATIBILITY_REFERENCE)
+      printf -v "$key" '%s' "$value"
+      ;;
+  esac
+done <<< "$GUARD_OUTPUT"
+
+for name in FROM_RELEASE_ID FROM_REVISION FROM_BUILD_DATE FROM_APP_IMAGE FROM_APP_DIGEST FROM_MIGRATOR_IMAGE FROM_MIGRATOR_DIGEST FROM_OPERATIONS_IMAGE FROM_OPERATIONS_DIGEST TO_RELEASE_ID TO_REVISION TO_BUILD_DATE TO_APP_IMAGE TO_APP_DIGEST TO_MIGRATOR_IMAGE TO_MIGRATOR_DIGEST TO_OPERATIONS_IMAGE TO_OPERATIONS_DIGEST COMPATIBILITY_REFERENCE; do
+  [[ -n "${!name}" ]] || fail "rollback guard tidak menghasilkan $name."
+done
+[[ "$CURRENT_RELEASE_ID" == "$FROM_RELEASE_ID" ]] || fail "current.env release ID tidak sama dengan current release metadata."
+[[ "$CURRENT_REVISION" == "$FROM_REVISION" ]] || fail "current.env revision tidak sama dengan current release metadata."
+[[ "$CURRENT_BUILD_DATE" == "$FROM_BUILD_DATE" ]] || fail "current.env build date tidak sama dengan current release metadata."
+[[ "$CURRENT_APP_IMAGE" == "$FROM_APP_IMAGE" ]] || fail "current.env app image tidak sama dengan current release metadata."
+[[ "$CURRENT_MIGRATOR_IMAGE" == "$FROM_MIGRATOR_IMAGE" ]] || fail "current.env migrator image tidak sama dengan current release metadata."
+[[ "$CURRENT_OPERATIONS_IMAGE" == "$FROM_OPERATIONS_IMAGE" ]] || fail "current.env operations image tidak sama dengan current release metadata."
+
+COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+"${COMPOSE[@]}" config --quiet
+
+verify_image_identity() {
+  local image="$1" digest="$2" expected_title="$3" expected_release="$4" expected_revision="$5" expected_created="$6"
+  docker image inspect "$image" >/dev/null 2>&1 || fail "image rollback tidak ditemukan: $image"
+  local observed_digest version revision created title
+  observed_digest="$(docker image inspect --format '{{.Id}}' "$image")"
+  version="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$image")"
+  revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")"
+  created="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.created"}}' "$image")"
+  title="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.title"}}' "$image")"
+  [[ "$observed_digest" == "$digest" ]] || fail "image digest berubah: $image"
+  [[ "$version" == "$expected_release" ]] || fail "OCI release label tidak cocok: $image"
+  [[ "$revision" == "$expected_revision" ]] || fail "OCI revision label tidak cocok: $image"
+  [[ "$created" == "$expected_created" ]] || fail "OCI build date label tidak cocok: $image"
+  [[ "$title" == "$expected_title" ]] || fail "OCI title label tidak cocok: $image"
+}
+
+CURRENT_STAGE="rollback-plan"
+FAILURE_MESSAGE="Command rollback gagal."
+ROLLBACK_FILE=""
+EVIDENCE_DIR=""
+CANDIDATE_CONTAINER=""
+CANDIDATE_CACHE_VOLUME=""
+RELEASE_ENV_TEMP=""
+TARGET_ACTIVATED=false
+STATE_PROMOTED=false
+
+cleanup_candidate() {
+  if [[ -n "$CANDIDATE_CONTAINER" ]]; then
+    docker rm -f "$CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
+    CANDIDATE_CONTAINER=""
+  fi
+  if [[ -n "$CANDIDATE_CACHE_VOLUME" ]]; then
+    docker volume rm "$CANDIDATE_CACHE_VOLUME" >/dev/null 2>&1 || true
+    CANDIDATE_CACHE_VOLUME=""
+  fi
+  if [[ -n "$RELEASE_ENV_TEMP" && "$STATE_PROMOTED" == false ]]; then
+    rm -f -- "$RELEASE_ENV_TEMP"
+    RELEASE_ENV_TEMP=""
+  fi
+}
+
+restore_outgoing_application() {
+  log "Memulihkan application release awal $FROM_RELEASE_ID"
+  ASIHJAYA_IMAGE="$FROM_APP_IMAGE" \
+  ASIHJAYA_MIGRATOR_IMAGE="$FROM_MIGRATOR_IMAGE" \
+  ASIHJAYA_OPERATIONS_IMAGE="$FROM_OPERATIONS_IMAGE" \
+  APP_RELEASE_ID="$FROM_RELEASE_ID" \
+  APP_REVISION="$FROM_REVISION" \
+  APP_BUILD_DATE="$FROM_BUILD_DATE" \
+  "${COMPOSE[@]}" up -d --no-deps --force-recreate app
+  TARGET_ACTIVATED=false
+}
+
+finish_failure() {
+  local exit_code="$1"
+  trap - ERR HUP INT TERM
+  set +e
+  cleanup_candidate
+  if [[ "$TARGET_ACTIVATED" == true && "$STATE_PROMOTED" == false ]]; then
+    restore_outgoing_application >/dev/null 2>&1 || true
+  fi
+  if [[ "$STATE_PROMOTED" == false && -n "$ROLLBACK_FILE" && -s "$ROLLBACK_FILE" ]]; then
+    run_rollback_contract fail \
+      --file "$ROLLBACK_FILE" \
+      --state-root "$STATE_ROOT" \
+      --stage "$CURRENT_STAGE" \
+      --message "$FAILURE_MESSAGE (exit code $exit_code)" >/dev/null 2>&1 || true
+  fi
+  if [[ "$STATE_PROMOTED" == true && -n "$RELEASE_ENV_TEMP" ]]; then
+    printf 'CRITICAL: state dan application sudah menunjuk target, tetapi current.env belum dipromosikan. File recovery: %s\n' "$RELEASE_ENV_TEMP" >&2
+  fi
+  printf 'ERROR: rollback gagal pada stage %s. %s\n' "$CURRENT_STAGE" "$FAILURE_MESSAGE" >&2
+  exit "$exit_code"
+}
+
+record_failure() {
+  finish_failure "$?"
+}
+
+handle_signal() {
+  local signal_name="$1" exit_code="$2"
+  CURRENT_STAGE="signal"
+  FAILURE_MESSAGE="Rollback dihentikan oleh $signal_name."
+  finish_failure "$exit_code"
+}
+
+trap cleanup_candidate EXIT
+trap record_failure ERR
+trap 'handle_signal SIGHUP 129' HUP
+trap 'handle_signal SIGINT 130' INT
+trap 'handle_signal SIGTERM 143' TERM
+
+REQUESTED_AT="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+ROLLBACK_TIMESTAMP="${REQUESTED_AT//[-:]/}"
+ROLLBACK_TIMESTAMP="${ROLLBACK_TIMESTAMP/.000Z/Z}"
+ROLLBACK_ID="rb-${ROLLBACK_TIMESTAMP}-${FROM_RELEASE_ID##*-}-${TO_RELEASE_ID##*-}"
+ROLLBACK_FILE="$STATE_ROOT/rollback-work/$ROLLBACK_ID.json"
+EVIDENCE_DIR="$STATE_ROOT/evidence/$ROLLBACK_ID"
+PREFLIGHT_HEALTH_RESULT="$EVIDENCE_DIR/preflight-health.json"
+CANDIDATE_HEALTH_RESULT="$EVIDENCE_DIR/candidate-health.json"
+PRODUCTION_HEALTH_RESULT="$EVIDENCE_DIR/production-health.json"
+RECOVERY_HEALTH_RESULT="$EVIDENCE_DIR/recovery-health.json"
+install -d -m 0750 "$EVIDENCE_DIR"
+rm -f "$ROLLBACK_FILE" "$PREFLIGHT_HEALTH_RESULT" "$CANDIDATE_HEALTH_RESULT" "$PRODUCTION_HEALTH_RESULT" "$RECOVERY_HEALTH_RESULT"
+
+PLAN_ARGS=(
+  plan
+  --state-root "$STATE_ROOT"
+  --expected-target "$TO_RELEASE_ID"
+  --requested-at "$REQUESTED_AT"
+  --operator "$ROLLBACK_OPERATOR"
+  --hostname "$ROLLBACK_HOSTNAME"
+  --output "$ROLLBACK_FILE"
+)
+run_rollback_contract "${PLAN_ARGS[@]}" >/dev/null
+
+CURRENT_STAGE="image-verification"
+verify_image_identity "$FROM_APP_IMAGE" "$FROM_APP_DIGEST" "Asihjaya RMS" "$FROM_RELEASE_ID" "$FROM_REVISION" "$FROM_BUILD_DATE"
+verify_image_identity "$FROM_MIGRATOR_IMAGE" "$FROM_MIGRATOR_DIGEST" "Asihjaya RMS Migrator" "$FROM_RELEASE_ID" "$FROM_REVISION" "$FROM_BUILD_DATE"
+verify_image_identity "$FROM_OPERATIONS_IMAGE" "$FROM_OPERATIONS_DIGEST" "Asihjaya RMS Operations" "$FROM_RELEASE_ID" "$FROM_REVISION" "$FROM_BUILD_DATE"
+verify_image_identity "$TO_APP_IMAGE" "$TO_APP_DIGEST" "Asihjaya RMS" "$TO_RELEASE_ID" "$TO_REVISION" "$TO_BUILD_DATE"
+verify_image_identity "$TO_MIGRATOR_IMAGE" "$TO_MIGRATOR_DIGEST" "Asihjaya RMS Migrator" "$TO_RELEASE_ID" "$TO_REVISION" "$TO_BUILD_DATE"
+verify_image_identity "$TO_OPERATIONS_IMAGE" "$TO_OPERATIONS_DIGEST" "Asihjaya RMS Operations" "$TO_RELEASE_ID" "$TO_REVISION" "$TO_BUILD_DATE"
+
+docker run --rm --init \
+  --read-only \
+  --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+  --security-opt no-new-privileges:true \
+  --network none \
+  --memory 256m \
+  --cpus 0.25 \
+  --pids-limit 128 \
+  -e HOME=/tmp \
+  -e NPM_CONFIG_CACHE=/tmp/.npm \
+  -e NPM_CONFIG_UPDATE_NOTIFIER=false \
+  "$TO_OPERATIONS_IMAGE" \
+  npm run rollback:contract -- runtime >/dev/null
+
+run_rollback_contract images \
+  --file "$ROLLBACK_FILE" \
+  --from-app-digest "$FROM_APP_DIGEST" \
+  --from-migrator-digest "$FROM_MIGRATOR_DIGEST" \
+  --from-operations-digest "$FROM_OPERATIONS_DIGEST" \
+  --to-app-digest "$TO_APP_DIGEST" \
+  --to-migrator-digest "$TO_MIGRATOR_DIGEST" \
+  --to-operations-digest "$TO_OPERATIONS_DIGEST"
+
+CURRENT_STAGE="preflight-health"
+log "Memverifikasi current release $FROM_RELEASE_ID sebelum rollback"
+run_health_check production "http://127.0.0.1:3000" "$PREFLIGHT_HEALTH_RESULT" "$FROM_RELEASE_ID" "$FROM_REVISION"
+run_rollback_contract health --file "$ROLLBACK_FILE" --phase preflight --result-file "$PREFLIGHT_HEALTH_RESULT"
+
+CURRENT_STAGE="candidate-smoke"
+log "Menguji target rollback $TO_RELEASE_ID terhadap schema database saat ini"
+CANDIDATE_CONTAINER="ajsystem-rollback-candidate-$ROLLBACK_ID"
+CANDIDATE_CACHE_VOLUME="ajsystem-rollback-cache-$ROLLBACK_ID"
+docker volume create "$CANDIDATE_CACHE_VOLUME" >/dev/null
+
+docker run -d \
+  --name "$CANDIDATE_CONTAINER" \
+  --init \
+  --restart no \
+  --env-file "$ENV_FILE" \
+  -e NODE_ENV=production \
+  -e APP_RELEASE_ID="$TO_RELEASE_ID" \
+  -e APP_REVISION="$TO_REVISION" \
+  -e APP_BUILD_DATE="$TO_BUILD_DATE" \
+  -e PORT=3000 \
+  -e HOSTNAME=0.0.0.0 \
+  -e INTERNAL_RENDER_ORIGIN=http://127.0.0.1:3000 \
+  -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+  -e HOME=/tmp \
+  -e TMPDIR=/tmp \
+  -e NODE_OPTIONS=--max-old-space-size=1024 \
+  --network "$BACKEND_NETWORK" \
+  --publish "127.0.0.1:$CANDIDATE_PORT:3000" \
+  --mount "type=volume,src=$UPLOADS_VOLUME,dst=/app/.data/uploads,readonly" \
+  --mount "type=volume,src=$CANDIDATE_CACHE_VOLUME,dst=/app/.next/cache" \
+  --read-only \
+  --tmpfs /tmp:rw,nosuid,nodev,size=512m \
+  --shm-size 256m \
+  --memory 1800m \
+  --cpus 1.25 \
+  --pids-limit 512 \
+  --security-opt no-new-privileges:true \
+  "$TO_APP_IMAGE" >/dev/null
+
+if ! run_health_check candidate "http://127.0.0.1:$CANDIDATE_PORT" "$CANDIDATE_HEALTH_RESULT" "$TO_RELEASE_ID" "$TO_REVISION"; then
+  if [[ -s "$CANDIDATE_HEALTH_RESULT" ]]; then
+    run_rollback_contract health --file "$ROLLBACK_FILE" --phase candidate --result-file "$CANDIDATE_HEALTH_RESULT" >/dev/null 2>&1 || true
+  fi
+  FAILURE_MESSAGE="Target previous release gagal candidate smoke; current application tetap aktif."
+  false
+fi
+run_rollback_contract health --file "$ROLLBACK_FILE" --phase candidate --result-file "$CANDIDATE_HEALTH_RESULT"
+cleanup_candidate
+
+CURRENT_STAGE="application-activation"
+RELEASE_ENV_TEMP="${RELEASE_ENV_FILE}.${ROLLBACK_ID}.$$.tmp"
+printf '%s\n' \
+  "APP_RELEASE_ID=$TO_RELEASE_ID" \
+  "APP_REVISION=$TO_REVISION" \
+  "APP_BUILD_DATE=$TO_BUILD_DATE" \
+  "ASIHJAYA_IMAGE=$TO_APP_IMAGE" \
+  "ASIHJAYA_MIGRATOR_IMAGE=$TO_MIGRATOR_IMAGE" \
+  "ASIHJAYA_OPERATIONS_IMAGE=$TO_OPERATIONS_IMAGE" \
+  "ASIHJAYA_ENV_FILE=$ENV_FILE" \
+  > "$RELEASE_ENV_TEMP"
+chmod 0640 "$RELEASE_ENV_TEMP"
+sync -f "$RELEASE_ENV_TEMP"
+
+log "Mengaktifkan previous application release $TO_RELEASE_ID tanpa menjalankan migration"
+ASIHJAYA_IMAGE="$TO_APP_IMAGE" \
+ASIHJAYA_MIGRATOR_IMAGE="$TO_MIGRATOR_IMAGE" \
+ASIHJAYA_OPERATIONS_IMAGE="$TO_OPERATIONS_IMAGE" \
+APP_RELEASE_ID="$TO_RELEASE_ID" \
+APP_REVISION="$TO_REVISION" \
+APP_BUILD_DATE="$TO_BUILD_DATE" \
+"${COMPOSE[@]}" up -d --no-deps --force-recreate app
+TARGET_ACTIVATED=true
+
+CURRENT_STAGE="production-health"
+if ! run_health_check production "http://127.0.0.1:3000" "$PRODUCTION_HEALTH_RESULT" "$TO_RELEASE_ID" "$TO_REVISION"; then
+  if [[ -s "$PRODUCTION_HEALTH_RESULT" ]]; then
+    run_rollback_contract health --file "$ROLLBACK_FILE" --phase production --result-file "$PRODUCTION_HEALTH_RESULT" >/dev/null 2>&1 || true
+  fi
+  log "Production health target gagal; memulihkan outgoing application $FROM_RELEASE_ID"
+  restore_outgoing_application
+  if run_health_check production "http://127.0.0.1:3000" "$RECOVERY_HEALTH_RESULT" "$FROM_RELEASE_ID" "$FROM_REVISION"; then
+    run_rollback_contract health --file "$ROLLBACK_FILE" --phase recovery --result-file "$RECOVERY_HEALTH_RESULT" >/dev/null 2>&1 || true
+    FAILURE_MESSAGE="Target rollback gagal production health; outgoing application berhasil dipulihkan."
+  else
+    FAILURE_MESSAGE="Target rollback gagal production health dan pemulihan outgoing application juga gagal."
+  fi
+  false
+fi
+run_rollback_contract health --file "$ROLLBACK_FILE" --phase production --result-file "$PRODUCTION_HEALTH_RESULT"
+
+CURRENT_STAGE="state-promotion"
+run_rollback_contract complete --file "$ROLLBACK_FILE" --state-root "$STATE_ROOT"
+STATE_PROMOTED=true
+mv -f "$RELEASE_ENV_TEMP" "$RELEASE_ENV_FILE"
+RELEASE_ENV_TEMP=""
+sync -f "$(dirname "$RELEASE_ENV_FILE")"
+rm -f "$ROLLBACK_FILE"
+
+CURRENT_STAGE="completed"
+log "Rollback application selesai: $FROM_RELEASE_ID -> $TO_RELEASE_ID"
+log "Database tidak diubah. Audit: $STATE_ROOT/rollbacks/$ROLLBACK_ID.json"

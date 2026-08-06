@@ -1,0 +1,13 @@
+[Unit]
+Description=AJSystem Backblaze B2 backup verification timer
+
+[Timer]
+OnCalendar=*-*-* 05:00:00 Asia/Jakarta
+AccuracySec=1min
+RandomizedDelaySec=10min
+FixedRandomDelay=true
+Persistent=true
+Unit=ajsystem-db-backup@verify.service
+
+[Install]
+WantedBy=timers.target

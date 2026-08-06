@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 027
+
+LOCK_PATH="${ASIHJAYA_DEPLOYMENT_LOCK_PATH:-/run/lock/asihjaya-rms/deployment.lock}"
+OWNER_PATH="${ASIHJAYA_DEPLOYMENT_LOCK_OWNER_PATH:-${LOCK_PATH}.owner}"
+OPERATION="${ASIHJAYA_DEPLOYMENT_OPERATION:-deployment}"
+RELEASE_ID="${APP_RELEASE_ID:-unknown}"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ajsystem-deployment-lock -- <command> [args...]
+
+Environment:
+  ASIHJAYA_DEPLOYMENT_LOCK_PATH        Lock file (default /run/lock/asihjaya-rms/deployment.lock)
+  ASIHJAYA_DEPLOYMENT_LOCK_OWNER_PATH  Owner metadata path (default <lock>.owner)
+  ASIHJAYA_DEPLOYMENT_OPERATION        Operation name for diagnostics
+  APP_RELEASE_ID                       Release ID for diagnostics
+USAGE
+}
+
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 64
+}
+
+[[ "${1:-}" == "--" ]] || { usage >&2; fail "separator -- wajib diberikan."; }
+shift
+[[ $# -gt 0 ]] || { usage >&2; fail "command wajib diberikan."; }
+[[ "$LOCK_PATH" == /* ]] || fail "ASIHJAYA_DEPLOYMENT_LOCK_PATH harus absolute."
+[[ "$OWNER_PATH" == /* ]] || fail "ASIHJAYA_DEPLOYMENT_LOCK_OWNER_PATH harus absolute."
+command -v flock >/dev/null 2>&1 || fail "command flock tidak tersedia."
+
+[[ -d "$(dirname "$LOCK_PATH")" && -w "$(dirname "$LOCK_PATH")" ]] || fail "lock directory tidak writable: $(dirname "$LOCK_PATH")"
+[[ -d "$(dirname "$OWNER_PATH")" && -w "$(dirname "$OWNER_PATH")" ]] || fail "owner directory tidak writable: $(dirname "$OWNER_PATH")"
+exec 9>"$LOCK_PATH"
+
+if ! flock -n 9; then
+  printf 'ERROR: deployment/rollback lain sedang berjalan.\n' >&2
+  if [[ -r "$OWNER_PATH" ]]; then
+    printf '%s\n' '--- lock owner ---' >&2
+    cat "$OWNER_PATH" >&2
+  fi
+  exit 75
+fi
+
+OWNER_TEMP="${OWNER_PATH}.${BASHPID}.tmp"
+cleanup() {
+  rm -f -- "$OWNER_TEMP" "$OWNER_PATH"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+HOSTNAME_VALUE="$(hostname 2>/dev/null || printf unknown)"
+EXECUTABLE="$(basename -- "$1")"
+printf '%s\n' \
+  "pid=$$" \
+  "hostname=$HOSTNAME_VALUE" \
+  "started_at=$STARTED_AT" \
+  "operation=$OPERATION" \
+  "release_id=$RELEASE_ID" \
+  "executable=$EXECUTABLE" \
+  > "$OWNER_TEMP"
+chmod 0644 "$OWNER_TEMP"
+mv -f -- "$OWNER_TEMP" "$OWNER_PATH"
+
+"$@"

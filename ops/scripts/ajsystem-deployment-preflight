@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 027
+
+ACTION="${1:-check}"
+PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
+ENV_FILE="${ASIHJAYA_ENV_FILE:-/etc/asihjaya-rms/production.env}"
+STATE_ROOT="${ASIHJAYA_DEPLOYMENT_STATE_ROOT:-/var/lib/asihjaya-rms/deployments}"
+RELEASE_ENV_FILE="${ASIHJAYA_RELEASE_ENV_FILE:-$STATE_ROOT/current.env}"
+DEPLOYMENT_USER="${ASIHJAYA_DEPLOYMENT_USER:-ubuntu}"
+INSTALL_DIR="${ASIHJAYA_AUTOMATION_INSTALL_DIR:-/usr/local/sbin}"
+LOCK_HELPER="${ASIHJAYA_DEPLOYMENT_LOCK_HELPER:-$INSTALL_DIR/ajsystem-deployment-lock}"
+LOCK_PATH="${ASIHJAYA_DEPLOYMENT_LOCK_PATH:-/run/lock/asihjaya-rms/deployment.lock}"
+CANDIDATE_PORT="${ASIHJAYA_DEPLOYMENT_CANDIDATE_PORT:-3001}"
+MIN_FREE_BYTES="${ASIHJAYA_DEPLOYMENT_MIN_FREE_BYTES:-5368709120}"
+COMPOSE_FILE="${ASIHJAYA_COMPOSE_FILE:-$PROJECT_DIR/compose.production.yaml}"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ajsystem-deployment-preflight check
+  ajsystem-deployment-preflight status
+  ajsystem-deployment-preflight snapshot
+  ajsystem-deployment-preflight lock-test
+
+Run as the deployment user without sudo.
+USAGE
+}
+
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 64
+}
+
+log() {
+  printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*"
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "command wajib tidak tersedia: $1"
+}
+
+read_env_file_value() {
+  local file_path="$1" key="$2" line value
+  [[ -r "$file_path" ]] || return 0
+  line="$(grep -E "^${key}=" "$file_path" | tail -n 1 || true)"
+  value="${line#*=}"
+  value="${value%$'\r'}"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "$value"
+}
+
+assert_runtime_user() {
+  [[ "$EUID" -ne 0 ]] || fail "jalankan command sebagai $DEPLOYMENT_USER tanpa sudo."
+  [[ "$(id -un)" == "$DEPLOYMENT_USER" ]] || fail "command wajib dijalankan sebagai user $DEPLOYMENT_USER."
+}
+
+installed_commands=(
+  ajsystem-deployment-lock
+  ajsystem-db-backup
+  ajsystem-deploy
+  ajsystem-rollback
+  ajsystem-deployment-preflight
+)
+
+assert_runtime_user
+case "$ACTION" in
+  check|status|snapshot|lock-test)
+    [[ $# -le 1 ]] || { usage >&2; exit 64; }
+    ;;
+  *)
+    usage >&2
+    exit 64
+    ;;
+esac
+
+for command_name in git docker flock date df stat hostname install grep sed sha256sum curl ss awk id systemctl sleep cp head; do
+  require_command "$command_name"
+done
+
+check_common() {
+  [[ -d "$PROJECT_DIR/.git" ]] || fail "Git working copy tidak ditemukan: $PROJECT_DIR"
+  [[ -r "$ENV_FILE" ]] || fail "production environment tidak dapat dibaca oleh $DEPLOYMENT_USER: $ENV_FILE"
+  [[ -r "$COMPOSE_FILE" ]] || fail "Compose production tidak dapat dibaca: $COMPOSE_FILE"
+  [[ -d "$STATE_ROOT" && -w "$STATE_ROOT" ]] || fail "deployment state root tidak writable: $STATE_ROOT"
+  [[ "$CANDIDATE_PORT" =~ ^[0-9]+$ ]] && (( CANDIDATE_PORT >= 1024 && CANDIDATE_PORT <= 65535 )) || fail "candidate port tidak valid."
+  [[ "$MIN_FREE_BYTES" =~ ^[0-9]+$ ]] || fail "minimum free bytes tidak valid."
+
+  local command_name source_file installed_file
+  for command_name in "${installed_commands[@]}"; do
+    source_file="$PROJECT_DIR/ops/scripts/$command_name"
+    installed_file="$INSTALL_DIR/$command_name"
+    [[ -x "$installed_file" ]] || fail "installed command tidak executable: $installed_file"
+    [[ -f "$source_file" ]] || fail "source command tidak tersedia: $source_file"
+    [[ "$(sha256sum "$source_file" | awk '{print $1}')" == "$(sha256sum "$installed_file" | awk '{print $1}')" ]] \
+      || fail "installed command berbeda dari source: $command_name"
+  done
+
+  docker info >/dev/null 2>&1 || fail "Docker daemon tidak dapat diakses oleh $DEPLOYMENT_USER."
+  docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin tidak tersedia."
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config --quiet
+
+  cd "$PROJECT_DIR"
+  [[ -z "$(git status --porcelain --untracked-files=all)" ]] || fail "working tree VPS tidak bersih."
+  git remote get-url origin >/dev/null
+
+  local available_bytes
+  available_bytes="$(df -PB1 "$PROJECT_DIR" | awk 'NR==2 {print $4}')"
+  [[ "$available_bytes" =~ ^[0-9]+$ ]] || fail "gagal membaca kapasitas disk."
+  (( available_bytes >= MIN_FREE_BYTES )) || fail "ruang disk bebas kurang dari minimum $MIN_FREE_BYTES byte."
+
+  if ss -ltn | awk 'NR > 1 {print $4}' | grep -Eq "(^|:)${CANDIDATE_PORT}$"; then
+    fail "candidate port $CANDIDATE_PORT sedang digunakan."
+  fi
+
+  exec 9>"$LOCK_PATH"
+  flock -n 9 || fail "deployment lock sedang digunakan."
+  flock -u 9
+  exec 9>&-
+}
+
+print_status() {
+  local compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+  local app_container app_image current_release previous_release
+  app_container="$("${compose[@]}" ps -q app 2>/dev/null | head -n 1)"
+  app_image=""
+  if [[ -n "$app_container" ]]; then
+    app_image="$(docker inspect --format '{{.Config.Image}}' "$app_container")"
+  fi
+  current_release="$(read_env_file_value "$RELEASE_ENV_FILE" APP_RELEASE_ID)"
+  previous_release=""
+  if [[ -r "$STATE_ROOT/previous.json" ]]; then
+    previous_release="$(grep -E '"releaseId"[[:space:]]*:' "$STATE_ROOT/previous.json" | head -n 1 | sed -E 's/.*"releaseId"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
+  fi
+
+  printf 'deployment_user=%s\n' "$DEPLOYMENT_USER"
+  printf 'project_head=%s\n' "$(git -C "$PROJECT_DIR" rev-parse HEAD)"
+  printf 'app_container=%s\n' "${app_container:-none}"
+  printf 'app_image=%s\n' "${app_image:-none}"
+  printf 'current_release=%s\n' "${current_release:-bootstrap-not-promoted}"
+  printf 'previous_release=%s\n' "${previous_release:-none}"
+  printf 'daily_timer=%s/%s\n' "$(systemctl is-enabled ajsystem-db-backup-daily.timer 2>/dev/null || true)" "$(systemctl is-active ajsystem-db-backup-daily.timer 2>/dev/null || true)"
+  printf 'weekly_timer=%s/%s\n' "$(systemctl is-enabled ajsystem-db-backup-weekly.timer 2>/dev/null || true)" "$(systemctl is-active ajsystem-db-backup-weekly.timer 2>/dev/null || true)"
+  printf 'verify_timer=%s/%s\n' "$(systemctl is-enabled ajsystem-db-backup-verify.timer 2>/dev/null || true)" "$(systemctl is-active ajsystem-db-backup-verify.timer 2>/dev/null || true)"
+}
+
+create_bootstrap_snapshot() {
+  [[ ! -e "$RELEASE_ENV_FILE" ]] || fail "current.env sudah tersedia; gunakan rollback metadata resmi, bukan bootstrap snapshot."
+  local compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+  local container_id image_ref image_id timestamp snapshot_dir bootstrap_tag
+  container_id="$("${compose[@]}" ps -q app 2>/dev/null | head -n 1)"
+  [[ -n "$container_id" ]] || fail "app container aktif tidak ditemukan."
+  image_ref="$(docker inspect --format '{{.Config.Image}}' "$container_id")"
+  image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
+  [[ -n "$image_id" ]] || fail "image ID app aktif tidak dapat dibaca."
+
+  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  snapshot_dir="$STATE_ROOT/bootstrap/$timestamp"
+  bootstrap_tag="asihjaya-rms-bootstrap:$timestamp"
+  install -d -m 0750 "$snapshot_dir"
+  docker image tag "$image_id" "$bootstrap_tag"
+
+  {
+    printf 'snapshot_id=%s\n' "$timestamp"
+    printf 'created_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'hostname=%s\n' "$(hostname 2>/dev/null || printf unknown)"
+    printf 'source_head=%s\n' "$(git -C "$PROJECT_DIR" rev-parse HEAD)"
+    printf 'container_id=%s\n' "$container_id"
+    printf 'original_image=%s\n' "$image_ref"
+    printf 'bootstrap_image=%s\n' "$bootstrap_tag"
+    printf 'image_id=%s\n' "$image_id"
+    printf 'app_release_id=%s\n' "$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" | sed -n 's/^APP_RELEASE_ID=//p' | tail -n 1)"
+    printf 'app_revision=%s\n' "$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" | sed -n 's/^APP_REVISION=//p' | tail -n 1)"
+    printf 'app_build_date=%s\n' "$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" | sed -n 's/^APP_BUILD_DATE=//p' | tail -n 1)"
+  } > "$snapshot_dir/bootstrap.env"
+  chmod 0640 "$snapshot_dir/bootstrap.env"
+  cp "$snapshot_dir/bootstrap.env" "$STATE_ROOT/bootstrap/latest.env"
+  chmod 0640 "$STATE_ROOT/bootstrap/latest.env"
+  log "Bootstrap application image disimpan sebagai $bootstrap_tag"
+  log "Snapshot metadata: $snapshot_dir/bootstrap.env"
+}
+
+run_lock_test() {
+  local holder_output="$STATE_ROOT/evidence/lock-test-holder.$$.log"
+  install -d -m 0750 "$STATE_ROOT/evidence"
+  ASIHJAYA_DEPLOYMENT_OPERATION=rehearsal-lock-holder APP_RELEASE_ID=lock-test \
+    "$LOCK_HELPER" -- bash -c 'sleep 4' >"$holder_output" 2>&1 &
+  local holder_pid=$!
+  sleep 1
+  set +e
+  ASIHJAYA_DEPLOYMENT_OPERATION=rehearsal-lock-contender APP_RELEASE_ID=lock-test \
+    "$LOCK_HELPER" -- true >/dev/null 2>&1
+  local contender_status=$?
+  set -e
+  wait "$holder_pid"
+  [[ "$contender_status" -eq 75 ]] || fail "lock contention test mengharapkan exit 75, ditemukan $contender_status."
+  rm -f "$holder_output"
+  log "Deployment lock contention test berhasil; contender ditolak dengan exit 75."
+}
+
+case "$ACTION" in
+  check)
+    check_common
+    log "Preflight deployment automation berhasil."
+    print_status
+    ;;
+  status)
+    check_common
+    print_status
+    ;;
+  snapshot)
+    check_common
+    create_bootstrap_snapshot
+    ;;
+  lock-test)
+    check_common
+    run_lock_test
+    ;;
+esac

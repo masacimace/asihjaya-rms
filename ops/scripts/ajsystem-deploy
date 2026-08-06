@@ -1,0 +1,500 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 027
+
+PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
+ENV_FILE="${ASIHJAYA_ENV_FILE:-/etc/asihjaya-rms/production.env}"
+COMPOSE_FILE="${ASIHJAYA_COMPOSE_FILE:-$PROJECT_DIR/compose.production.yaml}"
+STATE_ROOT="${ASIHJAYA_DEPLOYMENT_STATE_ROOT:-/var/lib/asihjaya-rms/deployments}"
+RELEASE_ENV_FILE="${ASIHJAYA_RELEASE_ENV_FILE:-$STATE_ROOT/current.env}"
+BACKUP_STATE_DIR="${ASIHJAYA_BACKUP_RUNNER_STATE_DIR:-/var/lib/asihjaya-rms/backup-runner}"
+LOCK_HELPER="${ASIHJAYA_DEPLOYMENT_LOCK_HELPER:-/usr/local/sbin/ajsystem-deployment-lock}"
+BACKUP_WRAPPER="${ASIHJAYA_BACKUP_WRAPPER:-/usr/local/sbin/ajsystem-db-backup}"
+SOURCE_REF_DEFAULT="${ASIHJAYA_DEPLOYMENT_SOURCE_REF:-origin/main}"
+CANDIDATE_PORT="${ASIHJAYA_DEPLOYMENT_CANDIDATE_PORT:-3001}"
+MIN_FREE_BYTES="${ASIHJAYA_DEPLOYMENT_MIN_FREE_BYTES:-5368709120}"
+DEPLOYMENT_USER="${ASIHJAYA_DEPLOYMENT_USER:-ubuntu}"
+COMPOSE_PROJECT_NAME_VALUE="asihjaya-rms-production"
+BACKEND_NETWORK="${COMPOSE_PROJECT_NAME_VALUE}_backend"
+UPLOADS_VOLUME="${COMPOSE_PROJECT_NAME_VALUE}_app_uploads"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ajsystem-deploy [git-ref]
+
+Default git-ref: origin/main
+
+Environment overrides:
+  ASIHJAYA_PROJECT_DIR
+  ASIHJAYA_ENV_FILE
+  ASIHJAYA_DEPLOYMENT_STATE_ROOT
+  ASIHJAYA_RELEASE_ENV_FILE
+  ASIHJAYA_DEPLOYMENT_SOURCE_REF
+  ASIHJAYA_DEPLOYMENT_CANDIDATE_PORT
+  ASIHJAYA_DEPLOYMENT_MIN_FREE_BYTES
+USAGE
+}
+
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 64
+}
+
+log() {
+  printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*"
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "command wajib tidak tersedia: $1"
+}
+
+assert_absolute_path() {
+  [[ "$2" == /* ]] || fail "$1 harus absolute: $2"
+}
+
+assert_runtime_user() {
+  [[ "$EUID" -ne 0 ]] || fail "jalankan deployment sebagai $DEPLOYMENT_USER tanpa sudo."
+  [[ "$(id -un)" == "$DEPLOYMENT_USER" ]] || fail "deployment wajib dijalankan sebagai user $DEPLOYMENT_USER."
+}
+
+read_env_file_value() {
+  local file_path="$1" key="$2"
+  local line value
+  line="$(grep -E "^${key}=" "$file_path" | tail -n 1 || true)"
+  value="${line#*=}"
+  value="${value%$'\r'}"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "$value"
+}
+
+assert_runtime_user
+
+if [[ "${1:-}" != "--locked" ]]; then
+  [[ $# -le 1 ]] || { usage >&2; exit 64; }
+  SOURCE_REF="${1:-$SOURCE_REF_DEFAULT}"
+  [[ -x "$LOCK_HELPER" ]] || fail "deployment lock helper tidak executable: $LOCK_HELPER"
+  export ASIHJAYA_DEPLOYMENT_OPERATION=deploy
+  export APP_RELEASE_ID=pending
+  exec "$LOCK_HELPER" -- "$0" --locked "$SOURCE_REF"
+fi
+
+shift
+[[ $# -eq 1 ]] || { usage >&2; exit 64; }
+SOURCE_REF="$1"
+[[ "$SOURCE_REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$ ]] || fail "git-ref tidak valid."
+
+for pair in \
+  "PROJECT_DIR:$PROJECT_DIR" \
+  "ENV_FILE:$ENV_FILE" \
+  "COMPOSE_FILE:$COMPOSE_FILE" \
+  "STATE_ROOT:$STATE_ROOT" \
+  "RELEASE_ENV_FILE:$RELEASE_ENV_FILE" \
+  "BACKUP_STATE_DIR:$BACKUP_STATE_DIR"
+do
+  assert_absolute_path "${pair%%:*}" "${pair#*:}"
+done
+
+for command_name in git docker flock date df stat hostname install grep sed sync; do
+  require_command "$command_name"
+done
+[[ -x "$BACKUP_WRAPPER" ]] || fail "backup wrapper tidak executable: $BACKUP_WRAPPER"
+[[ -d "$PROJECT_DIR/.git" ]] || fail "Git working copy tidak ditemukan: $PROJECT_DIR"
+[[ -r "$ENV_FILE" ]] || fail "production environment tidak dapat dibaca: $ENV_FILE"
+[[ -r "$COMPOSE_FILE" ]] || fail "Compose production tidak dapat dibaca: $COMPOSE_FILE"
+PUBLIC_ORIGIN="$(read_env_file_value "$ENV_FILE" APP_URL)"
+[[ -n "$PUBLIC_ORIGIN" ]] || fail "APP_URL wajib tersedia di production environment."
+[[ "$CANDIDATE_PORT" =~ ^[0-9]+$ ]] && (( CANDIDATE_PORT >= 1024 && CANDIDATE_PORT <= 65535 )) || fail "candidate port tidak valid."
+[[ "$MIN_FREE_BYTES" =~ ^[0-9]+$ ]] || fail "minimum free bytes tidak valid."
+
+docker info >/dev/null 2>&1 || fail "Docker daemon tidak dapat diakses."
+docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin tidak tersedia."
+
+install -d -m 0750 "$STATE_ROOT" "$STATE_ROOT/work" "$STATE_ROOT/evidence" "$BACKUP_STATE_DIR"
+[[ -w "$STATE_ROOT" ]] || fail "deployment state root tidak writable: $STATE_ROOT"
+[[ -w "$BACKUP_STATE_DIR" ]] || fail "backup runner state tidak writable: $BACKUP_STATE_DIR"
+
+available_bytes="$(df -PB1 "$PROJECT_DIR" | awk 'NR==2 {print $4}')"
+[[ "$available_bytes" =~ ^[0-9]+$ ]] || fail "gagal membaca kapasitas disk."
+(( available_bytes >= MIN_FREE_BYTES )) || fail "ruang disk bebas kurang dari minimum $MIN_FREE_BYTES byte."
+
+cd "$PROJECT_DIR"
+if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+  fail "working tree VPS tidak bersih; commit/remove perubahan lokal sebelum deployment."
+fi
+
+CURRENT_STAGE="source-fetch"
+FAILURE_MESSAGE="Command deployment gagal."
+CANDIDATE_FILE=""
+OPERATIONS_IMAGE=""
+CANDIDATE_CONTAINER=""
+CANDIDATE_CACHE_VOLUME=""
+EVIDENCE_DIR=""
+MIGRATION_RESULT=""
+RELEASE_ENV_TEMP=""
+PREVIOUS_APP_IMAGE=""
+PREVIOUS_RELEASE_ID=""
+PREVIOUS_REVISION=""
+PREVIOUS_BUILD_DATE=""
+
+run_operations_state() {
+  docker run --rm --init \
+    --user "$(id -u):$(id -g)" \
+    --read-only \
+    --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+    --security-opt no-new-privileges:true \
+    --network none \
+    --memory 512m \
+    --cpus 0.50 \
+    --pids-limit 192 \
+    --mount "type=bind,src=$STATE_ROOT,dst=$STATE_ROOT" \
+    -e HOME=/tmp \
+    -e NPM_CONFIG_CACHE=/tmp/.npm \
+    -e NPM_CONFIG_UPDATE_NOTIFIER=false \
+    "$OPERATIONS_IMAGE" \
+    npm run deployment:contract -- "$@"
+}
+
+run_environment_validation() {
+  docker run --rm --init \
+    --user "$(id -u):$(id -g)" \
+    --read-only \
+    --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+    --security-opt no-new-privileges:true \
+    --network none \
+    --memory 512m \
+    --cpus 0.50 \
+    --pids-limit 192 \
+    --env-file "$ENV_FILE" \
+    -e APP_RELEASE_ID="$RELEASE_ID" \
+    -e APP_REVISION="$REVISION" \
+    -e APP_BUILD_DATE="$BUILD_DATE" \
+    -e ASIHJAYA_IMAGE="$APP_IMAGE" \
+    -e ASIHJAYA_MIGRATOR_IMAGE="$MIGRATOR_IMAGE" \
+    -e ASIHJAYA_OPERATIONS_IMAGE="$OPERATIONS_IMAGE" \
+    -e ASIHJAYA_ENV_FILE="$ENV_FILE" \
+    -e HOME=/tmp \
+    -e NPM_CONFIG_CACHE=/tmp/.npm \
+    -e NPM_CONFIG_UPDATE_NOTIFIER=false \
+    "$OPERATIONS_IMAGE" \
+    npm run env:validate -- --mode production --deployment
+}
+
+run_health_check() {
+  local scope="$1" local_origin="$2" result_file="$3" release_id="$4" revision="$5"
+  local -a health_arguments=(
+    --scope "$scope"
+    --release-id "$release_id"
+    --revision "$revision"
+    --local-origin "$local_origin"
+    --result-file "$result_file"
+  )
+  if [[ "$scope" == "production" ]]; then
+    health_arguments+=(--public-origin "$PUBLIC_ORIGIN")
+  fi
+
+  docker run --rm --init \
+    --user "$(id -u):$(id -g)" \
+    --read-only \
+    --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+    --security-opt no-new-privileges:true \
+    --network host \
+    --memory 512m \
+    --cpus 0.50 \
+    --pids-limit 192 \
+    --mount "type=bind,src=$STATE_ROOT,dst=$STATE_ROOT" \
+    -e HOME=/tmp \
+    -e NPM_CONFIG_CACHE=/tmp/.npm \
+    -e NPM_CONFIG_UPDATE_NOTIFIER=false \
+    "$OPERATIONS_IMAGE" \
+    npm run deployment:health -- \
+      "${health_arguments[@]}"
+}
+
+container_environment_value() {
+  local container_id="$1" key="$2"
+  docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" 2>/dev/null \
+    | sed -n "s/^${key}=//p" \
+    | tail -n 1
+}
+
+cleanup_candidate() {
+  if [[ -n "$RELEASE_ENV_TEMP" ]]; then
+    rm -f -- "$RELEASE_ENV_TEMP"
+    RELEASE_ENV_TEMP=""
+  fi
+  if [[ -n "$CANDIDATE_CONTAINER" ]]; then
+    docker rm -f "$CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
+    CANDIDATE_CONTAINER=""
+  fi
+  if [[ -n "$CANDIDATE_CACHE_VOLUME" ]]; then
+    docker volume rm "$CANDIDATE_CACHE_VOLUME" >/dev/null 2>&1 || true
+    CANDIDATE_CACHE_VOLUME=""
+  fi
+}
+
+finish_failure() {
+  local exit_code="$1"
+  trap - ERR HUP INT TERM
+  set +e
+  cleanup_candidate
+  if [[ -n "$CANDIDATE_FILE" && -s "$CANDIDATE_FILE" && -n "$OPERATIONS_IMAGE" ]]; then
+    run_operations_state fail \
+      --file "$CANDIDATE_FILE" \
+      --state-root "$STATE_ROOT" \
+      --stage "$CURRENT_STAGE" \
+      --message "$FAILURE_MESSAGE (exit code $exit_code)" >/dev/null 2>&1 || true
+  fi
+  printf 'ERROR: deployment gagal pada stage %s. %s\n' "$CURRENT_STAGE" "$FAILURE_MESSAGE" >&2
+  exit "$exit_code"
+}
+
+record_failure() {
+  finish_failure "$?"
+}
+
+handle_signal() {
+  local signal_name="$1" exit_code="$2"
+  CURRENT_STAGE="signal"
+  FAILURE_MESSAGE="Deployment dihentikan oleh $signal_name."
+  finish_failure "$exit_code"
+}
+
+trap cleanup_candidate EXIT
+trap record_failure ERR
+trap 'handle_signal SIGHUP 129' HUP
+trap 'handle_signal SIGINT 130' INT
+trap 'handle_signal SIGTERM 143' TERM
+
+log "Mengambil source ref $SOURCE_REF"
+git fetch --prune origin
+REVISION="$(git rev-parse --verify "${SOURCE_REF}^{commit}")"
+[[ "$REVISION" =~ ^[a-f0-9]{40,64}$ ]] || fail "Git revision hasil resolve tidak valid."
+BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+RELEASE_TIMESTAMP="${BUILD_DATE//[-:]/}"
+RELEASE_TIMESTAMP="${RELEASE_TIMESTAMP/.000Z/Z}"
+RELEASE_ID="${RELEASE_TIMESTAMP}-${REVISION:0:12}"
+APP_IMAGE="asihjaya-rms:$RELEASE_ID"
+MIGRATOR_IMAGE="asihjaya-rms-migrator:$RELEASE_ID"
+OPERATIONS_IMAGE="asihjaya-rms-operations:$RELEASE_ID"
+
+export APP_RELEASE_ID="$RELEASE_ID"
+export APP_REVISION="$REVISION"
+export APP_BUILD_DATE="$BUILD_DATE"
+export ASIHJAYA_IMAGE="$APP_IMAGE"
+export ASIHJAYA_MIGRATOR_IMAGE="$MIGRATOR_IMAGE"
+export ASIHJAYA_OPERATIONS_IMAGE="$OPERATIONS_IMAGE"
+export ASIHJAYA_ENV_FILE="$ENV_FILE"
+
+EVIDENCE_DIR="$STATE_ROOT/evidence/$RELEASE_ID"
+CANDIDATE_FILE="$STATE_ROOT/work/$RELEASE_ID.json"
+MIGRATION_RESULT="$EVIDENCE_DIR/database-migration.json"
+CANDIDATE_HEALTH_RESULT="$EVIDENCE_DIR/candidate-health.json"
+PRODUCTION_HEALTH_RESULT="$EVIDENCE_DIR/production-health.json"
+install -d -m 0750 "$EVIDENCE_DIR"
+rm -f "$CANDIDATE_FILE" "$MIGRATION_RESULT" "$CANDIDATE_HEALTH_RESULT" "$PRODUCTION_HEALTH_RESULT"
+
+if [[ -e "$STATE_ROOT/history/$RELEASE_ID.json" || -e "$STATE_ROOT/failed/$RELEASE_ID.json" ]]; then
+  fail "release ID sudah pernah digunakan: $RELEASE_ID"
+fi
+
+CURRENT_STAGE="source-checkout"
+log "Checkout detached revision $REVISION"
+git checkout --detach --force "$REVISION"
+[[ "$(git rev-parse HEAD)" == "$REVISION" ]] || fail "HEAD tidak sama dengan revision candidate."
+[[ -z "$(git status --porcelain --untracked-files=all)" ]] || fail "working tree berubah setelah checkout candidate."
+
+COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+"${COMPOSE[@]}" config --quiet
+
+CURRENT_STAGE="operations-image-build"
+log "Membangun operations image $OPERATIONS_IMAGE"
+"${COMPOSE[@]}" build --pull operations
+
+verify_image_identity() {
+  local image="$1" expected_title="$2"
+  docker image inspect "$image" >/dev/null 2>&1 || fail "image tidak ditemukan setelah build: $image"
+  local version revision created title
+  version="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$image")"
+  revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")"
+  created="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.created"}}' "$image")"
+  title="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.title"}}' "$image")"
+  [[ "$version" == "$RELEASE_ID" ]] || fail "OCI release label tidak cocok pada $image."
+  [[ "$revision" == "$REVISION" ]] || fail "OCI revision label tidak cocok pada $image."
+  [[ "$created" == "$BUILD_DATE" ]] || fail "OCI build date label tidak cocok pada $image."
+  [[ "$title" == "$expected_title" ]] || fail "OCI title label tidak cocok pada $image."
+}
+
+verify_image_identity "$OPERATIONS_IMAGE" "Asihjaya RMS Operations"
+
+CURRENT_STAGE="environment-validation"
+log "Memvalidasi production environment dengan candidate release identity"
+run_environment_validation
+
+CURRENT_STAGE="release-plan"
+run_operations_state plan \
+  --state-root "$STATE_ROOT" \
+  --revision "$REVISION" \
+  --source-ref "$SOURCE_REF" \
+  --created-at "$BUILD_DATE" \
+  --output "$CANDIDATE_FILE" >/dev/null
+
+CURRENT_STAGE="application-image-build"
+log "Membangun app dan migrator image immutable"
+"${COMPOSE[@]}" build --pull app migrate
+verify_image_identity "$APP_IMAGE" "Asihjaya RMS"
+verify_image_identity "$MIGRATOR_IMAGE" "Asihjaya RMS Migrator"
+
+APP_DIGEST="$(docker image inspect --format '{{.Id}}' "$APP_IMAGE")"
+MIGRATOR_DIGEST="$(docker image inspect --format '{{.Id}}' "$MIGRATOR_IMAGE")"
+OPERATIONS_DIGEST="$(docker image inspect --format '{{.Id}}' "$OPERATIONS_IMAGE")"
+run_operations_state images \
+  --file "$CANDIDATE_FILE" \
+  --app-digest "$APP_DIGEST" \
+  --migrator-digest "$MIGRATOR_DIGEST" \
+  --operations-digest "$OPERATIONS_DIGEST"
+
+CURRENT_STAGE="database-start"
+log "Memastikan PostgreSQL container aktif"
+"${COMPOSE[@]}" up -d db
+
+CURRENT_STAGE="pre-deployment-backup"
+log "Menjalankan backup pre-deployment dan full off-site verification"
+ASIHJAYA_OPERATIONS_IMAGE="$OPERATIONS_IMAGE" \
+APP_RELEASE_ID="$RELEASE_ID" \
+ASIHJAYA_BACKUP_RUNNER_STATE_DIR="$BACKUP_STATE_DIR" \
+"$BACKUP_WRAPPER" pre-deployment "$RELEASE_ID"
+BACKUP_RESULT="$BACKUP_STATE_DIR/pre-deployment-$RELEASE_ID.json"
+[[ -s "$BACKUP_RESULT" ]] || fail "bukti backup pre-deployment tidak ditemukan: $BACKUP_RESULT"
+run_operations_state backup --file "$CANDIDATE_FILE" --result-file "$BACKUP_RESULT"
+
+CURRENT_STAGE="database-migration"
+log "Menjalankan guarded database migration"
+"${COMPOSE[@]}" rm -sf migrate >/dev/null 2>&1 || true
+"${COMPOSE[@]}" run --rm --no-deps \
+  --user "$(id -u):$(id -g)" \
+  --volume "$STATE_ROOT:$STATE_ROOT" \
+  --env DATABASE_DEPLOYMENT_RESULT_PATH="$MIGRATION_RESULT" \
+  migrate
+[[ -s "$MIGRATION_RESULT" ]] || fail "bukti database migration tidak dibuat."
+run_operations_state migration --file "$CANDIDATE_FILE" --result-file "$MIGRATION_RESULT"
+
+CURRENT_STAGE="candidate-smoke"
+log "Menjalankan candidate container pada loopback port $CANDIDATE_PORT"
+CANDIDATE_CONTAINER="ajsystem-candidate-$RELEASE_ID"
+CANDIDATE_CACHE_VOLUME="ajsystem-candidate-cache-$RELEASE_ID"
+docker volume create "$CANDIDATE_CACHE_VOLUME" >/dev/null
+
+docker run -d \
+  --name "$CANDIDATE_CONTAINER" \
+  --init \
+  --restart no \
+  --env-file "$ENV_FILE" \
+  -e NODE_ENV=production \
+  -e APP_RELEASE_ID="$RELEASE_ID" \
+  -e APP_REVISION="$REVISION" \
+  -e APP_BUILD_DATE="$BUILD_DATE" \
+  -e PORT=3000 \
+  -e HOSTNAME=0.0.0.0 \
+  -e INTERNAL_RENDER_ORIGIN=http://127.0.0.1:3000 \
+  -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+  -e HOME=/tmp \
+  -e TMPDIR=/tmp \
+  -e NODE_OPTIONS=--max-old-space-size=1024 \
+  --network "$BACKEND_NETWORK" \
+  --publish "127.0.0.1:$CANDIDATE_PORT:3000" \
+  --mount "type=volume,src=$UPLOADS_VOLUME,dst=/app/.data/uploads,readonly" \
+  --mount "type=volume,src=$CANDIDATE_CACHE_VOLUME,dst=/app/.next/cache" \
+  --read-only \
+  --tmpfs /tmp:rw,nosuid,nodev,size=512m \
+  --shm-size 256m \
+  --memory 1800m \
+  --cpus 1.25 \
+  --pids-limit 512 \
+  --security-opt no-new-privileges:true \
+  "$APP_IMAGE" >/dev/null
+
+if ! run_health_check candidate "http://127.0.0.1:$CANDIDATE_PORT" "$CANDIDATE_HEALTH_RESULT" "$RELEASE_ID" "$REVISION"; then
+  if [[ -s "$CANDIDATE_HEALTH_RESULT" ]]; then
+    run_operations_state health --file "$CANDIDATE_FILE" --result-file "$CANDIDATE_HEALTH_RESULT" >/dev/null 2>&1 || true
+  fi
+  FAILURE_MESSAGE="Candidate image gagal health check; application lama tetap aktif."
+  false
+fi
+run_operations_state health --file "$CANDIDATE_FILE" --result-file "$CANDIDATE_HEALTH_RESULT"
+cleanup_candidate
+
+CURRENT_STAGE="application-activation"
+PREVIOUS_CONTAINER_ID="$("${COMPOSE[@]}" ps -q app 2>/dev/null | head -n 1)"
+if [[ -n "$PREVIOUS_CONTAINER_ID" ]]; then
+  PREVIOUS_APP_IMAGE="$(docker inspect --format '{{.Config.Image}}' "$PREVIOUS_CONTAINER_ID")"
+  PREVIOUS_RELEASE_ID="$(container_environment_value "$PREVIOUS_CONTAINER_ID" APP_RELEASE_ID)"
+  PREVIOUS_REVISION="$(container_environment_value "$PREVIOUS_CONTAINER_ID" APP_REVISION)"
+  PREVIOUS_BUILD_DATE="$(container_environment_value "$PREVIOUS_CONTAINER_ID" APP_BUILD_DATE)"
+fi
+
+log "Mengaktifkan application release $RELEASE_ID"
+"${COMPOSE[@]}" up -d --no-deps --force-recreate app
+
+CURRENT_STAGE="production-health"
+if ! run_health_check production "http://127.0.0.1:3000" "$PRODUCTION_HEALTH_RESULT" "$RELEASE_ID" "$REVISION"; then
+  if [[ -s "$PRODUCTION_HEALTH_RESULT" ]]; then
+    run_operations_state health --file "$CANDIDATE_FILE" --result-file "$PRODUCTION_HEALTH_RESULT" >/dev/null 2>&1 || true
+  fi
+
+  if grep -Fq '"schemaChanged": false' "$MIGRATION_RESULT" \
+    && [[ "$PREVIOUS_RELEASE_ID" =~ ^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{7,12}$ ]] \
+    && [[ "$PREVIOUS_REVISION" =~ ^[a-f0-9]{7,64}$ ]] \
+    && [[ -n "$PREVIOUS_BUILD_DATE" ]] \
+    && docker image inspect "$PREVIOUS_APP_IMAGE" >/dev/null 2>&1
+  then
+    log "Health production gagal tanpa perubahan schema; memulihkan application image sebelumnya"
+    ASIHJAYA_IMAGE="$PREVIOUS_APP_IMAGE" \
+    APP_RELEASE_ID="$PREVIOUS_RELEASE_ID" \
+    APP_REVISION="$PREVIOUS_REVISION" \
+    APP_BUILD_DATE="$PREVIOUS_BUILD_DATE" \
+    "${COMPOSE[@]}" up -d --no-deps --force-recreate app
+
+    RECOVERY_RESULT="$EVIDENCE_DIR/recovery-health.json"
+    if run_health_check production "http://127.0.0.1:3000" "$RECOVERY_RESULT" "$PREVIOUS_RELEASE_ID" "$PREVIOUS_REVISION"; then
+      FAILURE_MESSAGE="Release baru gagal health check; application sebelumnya berhasil dipulihkan karena schema tidak berubah."
+    else
+      FAILURE_MESSAGE="Release baru gagal health check dan pemulihan application sebelumnya juga gagal."
+    fi
+  else
+    FAILURE_MESSAGE="Release baru gagal health check; automatic restore ditolak karena schema berubah atau identitas release sebelumnya tidak valid."
+  fi
+  false
+fi
+run_operations_state health --file "$CANDIDATE_FILE" --result-file "$PRODUCTION_HEALTH_RESULT"
+
+CURRENT_STAGE="release-promotion"
+run_operations_state healthy --file "$CANDIDATE_FILE"
+
+RELEASE_ENV_TEMP="${RELEASE_ENV_FILE}.${RELEASE_ID}.$$.tmp"
+printf '%s\n' \
+  "APP_RELEASE_ID=$RELEASE_ID" \
+  "APP_REVISION=$REVISION" \
+  "APP_BUILD_DATE=$BUILD_DATE" \
+  "ASIHJAYA_IMAGE=$APP_IMAGE" \
+  "ASIHJAYA_MIGRATOR_IMAGE=$MIGRATOR_IMAGE" \
+  "ASIHJAYA_OPERATIONS_IMAGE=$OPERATIONS_IMAGE" \
+  "ASIHJAYA_ENV_FILE=$ENV_FILE" \
+  > "$RELEASE_ENV_TEMP"
+chmod 0640 "$RELEASE_ENV_TEMP"
+sync -f "$RELEASE_ENV_TEMP"
+
+run_operations_state promote --state-root "$STATE_ROOT" --file "$CANDIDATE_FILE"
+mv -f "$RELEASE_ENV_TEMP" "$RELEASE_ENV_FILE"
+RELEASE_ENV_TEMP=""
+sync -f "$(dirname "$RELEASE_ENV_FILE")"
+rm -f "$CANDIDATE_FILE"
+
+CURRENT_STAGE="completed"
+log "Deployment release $RELEASE_ID selesai dan healthy."
+log "Current metadata: $STATE_ROOT/current.json"
+log "Release environment: $RELEASE_ENV_FILE"

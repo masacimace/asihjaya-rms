@@ -1,0 +1,12 @@
+[Unit]
+Description=Run AJSystem internal monitor every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+AccuracySec=30s
+RandomizedDelaySec=30s
+Unit=ajsystem-monitor.service
+
+[Install]
+WantedBy=timers.target
