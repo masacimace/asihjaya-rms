@@ -15,6 +15,7 @@ CANDIDATE_PORT="${ASIHJAYA_DEPLOYMENT_CANDIDATE_PORT:-3001}"
 MIN_FREE_BYTES="${ASIHJAYA_DEPLOYMENT_MIN_FREE_BYTES:-5368709120}"
 DEPLOYMENT_USER="${ASIHJAYA_DEPLOYMENT_USER:-ubuntu}"
 COMPOSE_PROJECT_NAME_VALUE="asihjaya-rms-production"
+EDGE_NETWORK="${COMPOSE_PROJECT_NAME_VALUE}_edge"
 BACKEND_NETWORK="${COMPOSE_PROJECT_NAME_VALUE}_backend"
 UPLOADS_VOLUME="${COMPOSE_PROJECT_NAME_VALUE}_app_uploads"
 
@@ -113,6 +114,10 @@ PUBLIC_ORIGIN="$(read_env_file_value "$ENV_FILE" APP_URL)"
 
 docker info >/dev/null 2>&1 || fail "Docker daemon tidak dapat diakses."
 docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin tidak tersedia."
+
+docker network inspect "$EDGE_NETWORK" >/dev/null 2>&1 || fail "edge network tidak ditemukan: $EDGE_NETWORK"
+docker network inspect "$BACKEND_NETWORK" >/dev/null 2>&1 || fail "backend network tidak ditemukan: $BACKEND_NETWORK"
+docker volume inspect "$UPLOADS_VOLUME" >/dev/null 2>&1 || fail "uploads volume tidak ditemukan: $UPLOADS_VOLUME"
 
 install -d -m 0750 "$STATE_ROOT" "$STATE_ROOT/work" "$STATE_ROOT/evidence" "$BACKUP_STATE_DIR"
 [[ -w "$STATE_ROOT" ]] || fail "deployment state root tidak writable: $STATE_ROOT"
@@ -408,6 +413,7 @@ docker run -d \
   -e HOME=/tmp \
   -e TMPDIR=/tmp \
   -e NODE_OPTIONS=--max-old-space-size=1024 \
+  --network "$EDGE_NETWORK" \
   --network "$BACKEND_NETWORK" \
   --publish "127.0.0.1:$CANDIDATE_PORT:3000" \
   --mount "type=volume,src=$UPLOADS_VOLUME,dst=/app/.data/uploads,readonly" \
@@ -420,6 +426,11 @@ docker run -d \
   --pids-limit 512 \
   --security-opt no-new-privileges:true \
   "$APP_IMAGE" >/dev/null
+
+CANDIDATE_PORT_BINDING="$(docker port "$CANDIDATE_CONTAINER" 3000/tcp 2>/dev/null || true)"
+if ! grep -Fxq "127.0.0.1:$CANDIDATE_PORT" <<<"$CANDIDATE_PORT_BINDING"; then
+  fail "candidate port 3000 tidak ter-publish ke 127.0.0.1:$CANDIDATE_PORT; pastikan candidate terhubung ke edge dan backend network."
+fi
 
 if ! run_health_check candidate "http://127.0.0.1:$CANDIDATE_PORT" "$CANDIDATE_HEALTH_RESULT" "$RELEASE_ID" "$REVISION"; then
   if [[ -s "$CANDIDATE_HEALTH_RESULT" ]]; then
