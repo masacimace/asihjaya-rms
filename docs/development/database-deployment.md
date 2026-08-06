@@ -183,6 +183,6 @@ npm run db:deploy:production
 
 Command tersebut menjalankan `db:backup:pre-deployment` sebelum migration runner. Jika backup, checksum, archive verification, atau disk guard gagal, migration tidak dijalankan.
 
-`compose.production.yaml` masih menyediakan service `migrate` sebagai primitive startup. Workflow deployment resmi yang mengorkestrasi backup, build, migration, health check, dan rollback akan diselesaikan pada Tahap 1D.7. Sampai tahap tersebut selesai, jangan menjalankan migration production melalui primitive `db:migrate` atau menyalakan release baru tanpa backup verified.
+`compose.production.yaml` masih menyediakan service `migrate` sebagai primitive. Orchestrator `ops/scripts/ajsystem-deploy` sekarang menjalankan exact pre-deployment backup, full off-site verification, guarded migration, candidate smoke, dan release-aware health check. Script baru dianggap aktif setelah installation/rehearsal VPS; `db:migrate` tetap primitive internal dan tidak boleh dipanggil langsung untuk release production.
 
 Runbook lengkap terdapat di `docs/development/database-backup-restore.md`.

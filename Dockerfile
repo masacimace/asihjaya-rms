@@ -68,7 +68,7 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json .npmrc drizzle.config.ts tsconfig.json ./
 COPY drizzle ./drizzle
-COPY scripts/database-deployment-state.ts scripts/run-database-deployment.ts ./scripts/
+COPY scripts/database-deployment-state.ts scripts/database-deployment-result.ts scripts/deployment-state.ts scripts/run-database-deployment.ts ./scripts/
 COPY src/db/schema ./src/db/schema
 
 RUN groupadd --system --gid 10002 migrator \
@@ -108,6 +108,7 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json .npmrc tsconfig.json compose.production.yaml ./
 COPY scripts ./scripts
+COPY src/lib/env.ts ./src/lib/env.ts
 
 RUN mkdir -p /usr/local/lib/docker/cli-plugins \
     && groupadd --system --gid 10003 operations \

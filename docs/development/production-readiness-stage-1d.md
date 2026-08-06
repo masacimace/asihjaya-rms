@@ -433,16 +433,16 @@ Membuat proses deploy dan rollback konsisten, dapat diaudit, dan tidak bergantun
 ## Alur deployment target
 
 ```text
-preflight
-→ cek disk dan environment
-→ backup database
-→ pull atau siapkan release
-→ build image
-→ jalankan migration
-→ start/restart service
-→ tunggu health check
-→ jalankan smoke test
-→ tandai release berhasil
+process-wide deployment lock
+→ cek disk, environment, dan clean Git working tree
+→ resolve commit dan release ID immutable
+→ build operations, app, dan migrator image
+→ backup database exact artifact + full off-site verification
+→ jalankan guarded migration
+→ candidate smoke test pada loopback port
+→ aktifkan application image
+→ local/public release-aware health check
+→ promote release metadata
 ```
 
 ## Alur rollback target
@@ -696,12 +696,13 @@ Satu Pull Request ke main
 
 ## 1D.7 — Deployment & Rollback
 
-- [ ] Deployment script tersedia.
-- [ ] Deployment lock aktif.
-- [ ] Pre-deployment backup aktif.
-- [ ] Migration terintegrasi.
-- [ ] Health verification terintegrasi.
-- [ ] Smoke test terintegrasi.
+- [x] Deployment script tersedia di source.
+- [x] Deployment lock terintegrasi di source.
+- [x] Pre-deployment backup terintegrasi di source.
+- [x] Migration terintegrasi di source.
+- [x] Health verification terintegrasi di source.
+- [x] Candidate smoke test terintegrasi di source.
+- [ ] Deployment script dipasang dan direhearsal di VPS.
 - [ ] Rollback image berhasil diuji.
 - [ ] Deployment runbook tersedia.
 

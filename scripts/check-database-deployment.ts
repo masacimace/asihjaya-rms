@@ -12,6 +12,12 @@ import {
 } from "./database-deployment-state";
 
 const projectRoot = process.cwd();
+
+function readProjectText(relativePath: string): string {
+  const absolutePath = path.join(projectRoot, relativePath);
+  return readFileSync(absolutePath, "utf8").replace(/\r\n?/g, "\n");
+}
+
 const migrationPlan = loadMigrationPlan(path.join(projectRoot, "drizzle"));
 assert(migrationPlan.length > 0, "Migration plan tidak boleh kosong.");
 assert.equal(migrationPlan[0]?.index, 0);
@@ -90,7 +96,7 @@ assert.equal(parseBoolean("true"), true);
 assert.equal(parseBoolean("off"), false);
 assert.throws(() => parseBoolean("maybe"));
 
-const packageJson = JSON.parse(readFileSync(path.join(projectRoot, "package.json"), "utf8")) as {
+const packageJson = JSON.parse(readProjectText("package.json")) as {
   scripts?: Record<string, string>;
 };
 for (const scriptName of [
@@ -102,12 +108,12 @@ for (const scriptName of [
   assert(packageJson.scripts?.[scriptName], `package.json wajib memiliki ${scriptName}.`);
 }
 
-const dockerfile = readFileSync(path.join(projectRoot, "Dockerfile"), "utf8");
+const dockerfile = readProjectText("Dockerfile");
 assert.match(dockerfile, /FROM toolchain AS migrator/);
 assert.match(dockerfile, /USER migrator/);
 assert.match(dockerfile, /CMD \["npm", "run", "db:deploy"\]/);
 
-const compose = readFileSync(path.join(projectRoot, "compose.production.yaml"), "utf8");
+const compose = readProjectText("compose.production.yaml");
 assert.match(compose, /\n  migrate:\n/);
 assert.match(compose, /target: migrator/);
 assert.match(compose, /condition: service_completed_successfully/);
@@ -115,10 +121,10 @@ assert.match(compose, /restart: "no"/);
 assert.match(compose, /read_only: true/);
 assert.match(compose, /DATABASE_MIGRATION_ALLOW_DESTRUCTIVE/);
 
-const drizzleConfig = readFileSync(path.join(projectRoot, "drizzle.config.ts"), "utf8");
+const drizzleConfig = readProjectText("drizzle.config.ts");
 assert.match(drizzleConfig, /DRIZZLE_MIGRATIONS_DIR/);
 
-const runner = readFileSync(path.join(projectRoot, "scripts/run-database-deployment.ts"), "utf8");
+const runner = readProjectText("scripts/run-database-deployment.ts");
 assert.match(runner, /pg_try_advisory_lock/);
 assert.match(runner, /pg_advisory_unlock/);
 assert.match(runner, /DATABASE_MIGRATION_APPROVAL_REFERENCE/);
@@ -127,7 +133,7 @@ assert.match(runner, /runDrizzleMigration/);
 assert.match(runner, /DRIZZLE_MIGRATIONS_DIR/);
 assert.doesNotMatch(runner, /console\.(?:log|error)\([^\n]*DATABASE_URL/);
 
-const attributes = readFileSync(path.join(projectRoot, ".gitattributes"), "utf8");
+const attributes = readProjectText(".gitattributes");
 assert.match(attributes, /^drizzle\/\*\.sql text eol=lf$/m);
 
 console.log(

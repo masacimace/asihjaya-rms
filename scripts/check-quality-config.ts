@@ -49,12 +49,8 @@ assert(
   "Setiap check script hanya boleh berada dalam satu kategori manifest.",
 );
 
-const unclassified = checkFiles.filter(
-  (fileName) => !classifiedSet.has(fileName),
-);
-const missing = classifiedFiles.filter(
-  (fileName) => !checkFiles.includes(fileName),
-);
+const unclassified = checkFiles.filter((fileName) => !classifiedSet.has(fileName));
+const missing = classifiedFiles.filter((fileName) => !checkFiles.includes(fileName));
 
 assert(
   unclassified.length === 0,
@@ -74,6 +70,8 @@ const requiredRootScripts = [
   "check:database-backup",
   "check:database-backup-offsite",
   "check:deployment",
+  "check:deployment-orchestration",
+  "check:operations-image",
   "check:source-hygiene",
   "check:database",
   "check:database:live",
@@ -102,6 +100,7 @@ const requiredRootScripts = [
   "test:database-backup:local",
   "test:database-backup-offsite:local",
   "deployment:contract",
+  "deployment:health",
   "db:deploy",
   "db:deploy:production",
   "db:backup",
@@ -174,10 +173,7 @@ assert(
   `${workflowPath} wajib berjalan pada branch infrastructure.`,
 );
 
-for (const actionReference of [
-  "actions/checkout@v6",
-  "actions/setup-node@v6",
-]) {
+for (const actionReference of ["actions/checkout@v6", "actions/setup-node@v6"]) {
   assert(
     workflow.includes(actionReference),
     `${workflowPath} wajib memakai ${actionReference}.`,
@@ -203,6 +199,10 @@ assert(
 assert(
   workflow.includes("npm run check:database-backup"),
   `${workflowPath} wajib memeriksa kontrak backup dan restore database.`,
+);
+assert(
+  workflow.includes("npm run check:deployment-orchestration"),
+  `${workflowPath} wajib memeriksa deployment orchestration.`,
 );
 assert(
   workflow.includes("npm run test:database-backup:local"),
@@ -233,6 +233,7 @@ for (const documentationPath of [
   "docs/development/quality-gates.md",
   "docs/development/environment-configuration.md",
   "docs/development/financial-concurrency-tests.md",
+  "docs/development/pos-stage-1c-stabilization.md",
   "docs/development/production-container.md",
   "docs/development/production-environment.md",
   "docs/development/database-deployment.md",
@@ -242,10 +243,7 @@ for (const documentationPath of [
   ".github/pull_request_template.md",
   "README.md",
 ]) {
-  assert(
-    existsSync(path.join(projectRoot, documentationPath)),
-    `${documentationPath} wajib tersedia.`,
-  );
+  assert(existsSync(path.join(projectRoot, documentationPath)), `${documentationPath} wajib tersedia.`);
 }
 
 console.log(

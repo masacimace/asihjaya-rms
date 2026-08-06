@@ -108,7 +108,7 @@ Menjalankan retention tanpa membuat backup baru:
 npm run db:backup:prune
 ```
 
-`db:deploy:production` sekarang menjalankan backup pre-deployment terlebih dahulu. Deployment automation penuh baru diselesaikan pada Tahap 1D.7, tetapi migration production manual tidak boleh melewati command resmi tersebut.
+`db:deploy:production` menjalankan backup pre-deployment terlebih dahulu untuk penggunaan manual terbatas. Workflow release resmi memakai `ops/scripts/ajsystem-deploy`, yang mewajibkan exact backup artifact, full off-site verification, dan result JSON sebelum guarded migration. Script tersebut baru dianggap aktif setelah installation/rehearsal VPS.
 
 ## Kebijakan retention awal
 

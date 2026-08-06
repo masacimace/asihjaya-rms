@@ -4,6 +4,10 @@ import { config as loadDotenv } from "dotenv";
 import { Client } from "pg";
 
 import {
+  writeDatabaseDeploymentResult,
+  type DatabaseDeploymentResult,
+} from "./database-deployment-result";
+import {
   analyzeMigrationHistory,
   findDestructiveMigrationFindings,
   loadMigrationPlan,
@@ -47,6 +51,39 @@ function parseOptions(args: string[]): CliOptions {
     environmentFile: optionValue(args, "--env-file"),
   };
   return options;
+}
+
+
+function writeCommandResult(
+  startedAt: string,
+  status: DatabaseDeploymentResult["status"],
+  migrationCountBefore: number,
+  migrationCountAfter: number,
+  pendingCountBefore: number,
+  destructiveOperations: string[],
+): void {
+  const resultPath = process.env.DATABASE_DEPLOYMENT_RESULT_PATH?.trim();
+  if (!resultPath) return;
+
+  const releaseId = process.env.APP_RELEASE_ID?.trim();
+  if (!releaseId) {
+    throw new Error("APP_RELEASE_ID wajib diatur ketika DATABASE_DEPLOYMENT_RESULT_PATH digunakan.");
+  }
+
+  writeDatabaseDeploymentResult(resultPath, {
+    version: 1,
+    operation: "database-deployment",
+    status,
+    releaseId,
+    startedAt,
+    completedAt: new Date().toISOString(),
+    migrationCountBefore,
+    migrationCountAfter,
+    pendingCountBefore,
+    schemaChanged: migrationCountAfter > migrationCountBefore,
+    destructiveOperations,
+  });
+  console.log(`Bukti database deployment: ${resultPath}`);
 }
 
 function sleep(durationMs: number): Promise<void> {
@@ -166,6 +203,7 @@ function buildPgOptions(existing: string | undefined, ddlLockTimeoutMs: number, 
 }
 
 async function main(): Promise<void> {
+  const startedAt = new Date().toISOString();
   const options = parseOptions(process.argv.slice(2));
   if (options.environmentFile) {
     const result = loadDotenv({ path: options.environmentFile, override: true, quiet: true });
@@ -236,6 +274,9 @@ async function main(): Promise<void> {
 
     const before = analyzeMigrationHistory(localMigrations, await readAppliedMigrations(client));
     const destructiveFindings = findDestructiveMigrationFindings(before.pending);
+    const destructiveOperations = destructiveFindings.map(
+      (finding) => `${finding.migrationTag}:${finding.operation}`,
+    );
     if (destructiveFindings.length > 0) {
       const allowDestructive = parseBoolean(process.env.DATABASE_MIGRATION_ALLOW_DESTRUCTIVE, false);
       const approvalReference = process.env.DATABASE_MIGRATION_APPROVAL_REFERENCE?.trim();
@@ -255,11 +296,20 @@ async function main(): Promise<void> {
     );
 
     if (options.checkOnly) {
+      writeCommandResult(
+        startedAt,
+        "checked",
+        before.appliedCount,
+        before.appliedCount,
+        before.pending.length,
+        destructiveOperations,
+      );
       console.log("OK: database deployment preflight lulus tanpa menerapkan migration.");
       return;
     }
 
     if (before.pending.length === 0) {
+      writeCommandResult(startedAt, "completed", before.appliedCount, before.appliedCount, 0, destructiveOperations);
       console.log("OK: tidak ada migration pending; deployment database merupakan no-op.");
       return;
     }
@@ -277,6 +327,14 @@ async function main(): Promise<void> {
       throw new Error(`Migration selesai tetapi masih tersisa ${after.pending.length} migration pending.`);
     }
 
+    writeCommandResult(
+      startedAt,
+      "completed",
+      before.appliedCount,
+      after.appliedCount,
+      before.pending.length,
+      destructiveOperations,
+    );
     console.log(`OK: ${localMigrations.length} migration tervalidasi dan database deployment selesai.`);
   } finally {
     if (lockAcquired) {

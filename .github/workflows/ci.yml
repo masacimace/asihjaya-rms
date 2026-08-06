@@ -146,6 +146,9 @@ jobs:
       - name: Deployment metadata and lock contract
         run: npm run check:deployment
 
+      - name: Production deployment orchestration contract
+        run: npm run check:deployment-orchestration
+
       - name: Security contracts
         run: npm run check:security
 

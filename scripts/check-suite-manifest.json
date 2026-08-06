@@ -38,12 +38,14 @@
   ],
   "infrastructure": [
     "check-build-baseline.ts",
-    "check-database-deployment.ts",
-    "check-database-backup.ts",
     "check-database-backup-offsite.ts",
-    "check-deployment-automation.ts",
+    "check-database-backup.ts",
+    "check-database-deployment.ts",
     "check-database-migrations.ts",
+    "check-deployment-automation.ts",
+    "check-operations-image.ts",
     "check-production-container.ts",
+    "check-production-deployment.ts",
     "check-quality-config.ts",
     "check-source-hygiene.ts"
   ],

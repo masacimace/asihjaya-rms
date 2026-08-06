@@ -2,7 +2,7 @@
 
 Dokumen ini menetapkan kontrak Tahap 1D.7 untuk deployment aplikasi ASIHJAYA RMS. Model operasinya adalah **manual approval, automated execution**: operator memilih commit dan memulai deployment, sedangkan backup, migration, aktivasi image, health check, pencatatan release, dan rollback aplikasi dijalankan oleh automation.
 
-Tahap 1D.7B hanya membangun identitas release, metadata, dan deployment lock. Script deployment production penuh belum diaktifkan sampai orchestration, smoke test, dan rollback guard pada tahap berikutnya selesai.
+Tahap 1D.7B membangun identitas release, metadata, dan deployment lock; 1D.7C menambahkan operations image serta exact pre-deployment backup. Tahap 1D.7D menambahkan deployment orchestration, sementara rollback eksplisit tetap diselesaikan pada 1D.7E.
 
 ## Identitas release
 
@@ -141,3 +141,77 @@ backup lokal verified untuk candidate release
 Automation tidak menggunakan `--upload-latest` untuk pre-deployment. Backup ID, release ID, metadata path, receipt path, receipt key, dan waktu verifikasi harus cocok sebelum migration boleh dimulai. Database bootstrap yang benar-benar kosong menghasilkan status `skipped-uninitialized`; status ini bukan kegagalan karena belum ada data aplikasi yang dapat dibackup.
 
 Penambahan operations image menaikkan `deployment state schemaVersion` menjadi `2`. Metadata eksperimen 1D.7B yang masih memakai schemaVersion 1 harus dibuat ulang; belum ada metadata production yang perlu dimigrasikan pada fase preview ini.
+
+## Tahap 1D.7D — production deployment orchestration
+
+Tahap 1D.7D menyediakan orchestrator source-side berikut:
+
+```text
+ops/scripts/ajsystem-deploy
+```
+
+Script ini belum dianggap aktif pada VPS sampai installation dan rehearsal Tahap 1D.7F selesai. Setelah dipasang, operator memicu deployment secara manual dengan Git ref eksplisit atau default `origin/main`:
+
+```bash
+ajsystem-deploy origin/main
+```
+
+Deployment selalu berjalan di dalam `ajsystem-deployment-lock`. Working tree VPS harus bersih; script melakukan `git fetch --prune origin`, resolve commit immutable, lalu checkout detached ke commit tersebut. ZIP, SCP, FileZilla, dan copy source manual bukan bagian workflow resmi.
+
+Urutan fail-fast yang diterapkan:
+
+```text
+process-wide flock
+→ disk dan Git preflight
+→ resolve immutable Git revision
+→ build operations image
+→ validate production environment dengan candidate identity
+→ buat candidate release metadata
+→ build app dan migrator image
+→ verifikasi OCI label dan image ID
+→ pastikan PostgreSQL aktif
+→ exact pre-deployment backup
+→ full off-site verification
+→ guarded migration dengan result JSON
+→ candidate container pada loopback port 3001
+→ candidate release-aware health check
+→ recreate production app
+→ local dan public release-aware health check
+→ tandai healthy
+→ promote current.json/previous.json
+→ tulis generated current.env
+```
+
+Candidate container bergabung hanya ke network backend, bind ke `127.0.0.1`, memakai uploads volume read-only, cache volume sementara, read-only root filesystem, dan tidak menerima traffic dari Caddy. Bila candidate health check gagal, application lama tetap aktif dan release dicatat gagal.
+
+Setelah candidate lulus, container production direcreate dengan immutable app image. Health verifier memeriksa `/api/health`, `/api/health/database`, dan halaman login serta memastikan response membawa `releaseId` dan `revision` candidate. HTTP 200 dari release lama tidak dianggap sukses.
+
+Bila health production gagal dan migration result membuktikan **schema tidak berubah**, orchestrator mencoba memulihkan application image sebelumnya dan memverifikasinya kembali. Bila schema berubah atau identitas release sebelumnya tidak dapat dibuktikan, automatic restore ditolak. Database tidak di-rollback otomatis.
+
+Bukti deployment disimpan di:
+
+```text
+/var/lib/asihjaya-rms/deployments/
+├── current.json
+├── previous.json
+├── current.env
+├── history/
+├── failed/
+├── evidence/<release-id>/
+└── work/
+```
+
+`current.env` tidak mengandung secret. File ini hanya menyimpan release ID, revision, build date, serta tiga immutable image references. Backup timer membaca operations image dari file tersebut sehingga daily/weekly job tetap memakai tool image release aktif. Secret tetap berada di `/etc/asihjaya-rms/production.env`.
+
+Quality gate tahap ini:
+
+```bash
+npm run check:deployment-orchestration
+npm run check:deployment
+npm run check:operations-image
+npm run check:database-deployment
+npm run check:database-backup
+npm run check:database-backup-offsite
+```
+
+Tahap 1D.7E berikutnya menambahkan command rollback eksplisit, pemilihan previous healthy release, compatibility approval untuk schema yang berubah, dan audit rollback. Orchestrator 1D.7D hanya memiliki recovery terbatas untuk failure aktivasi ketika migration merupakan no-op.

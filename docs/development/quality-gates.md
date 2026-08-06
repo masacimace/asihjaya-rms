@@ -71,6 +71,16 @@ npm run check:production-container
 npm run test:container:production:local
 ```
 
+Kontrak deployment automation:
+
+```bash
+npm run check:deployment
+npm run check:operations-image
+npm run check:deployment-orchestration
+```
+
+`check:deployment-orchestration` menguji urutan fail-fast Git/build/backup/migration, candidate smoke test, release-aware local/public health, failure recording, no-schema-change recovery boundary, dan atomic release promotion.
+
 Compose production, batas resource, volume, health/readiness, dan troubleshooting didokumentasikan di `docs/development/production-container.md`.
 
 Template production, validator deployment, permission file, dan secret rotation didokumentasikan di `docs/development/production-environment.md`.
