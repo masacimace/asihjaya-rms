@@ -295,8 +295,9 @@ CANDIDATE_FILE="$STATE_ROOT/work/$RELEASE_ID.json"
 MIGRATION_RESULT="$EVIDENCE_DIR/database-migration.json"
 CANDIDATE_HEALTH_RESULT="$EVIDENCE_DIR/candidate-health.json"
 PRODUCTION_HEALTH_RESULT="$EVIDENCE_DIR/production-health.json"
+BACKUP_EVIDENCE="$EVIDENCE_DIR/pre-deployment-backup.json"
 install -d -m 0750 "$EVIDENCE_DIR"
-rm -f "$CANDIDATE_FILE" "$MIGRATION_RESULT" "$CANDIDATE_HEALTH_RESULT" "$PRODUCTION_HEALTH_RESULT"
+rm -f "$CANDIDATE_FILE" "$MIGRATION_RESULT" "$CANDIDATE_HEALTH_RESULT" "$PRODUCTION_HEALTH_RESULT" "$BACKUP_EVIDENCE"
 
 if [[ -e "$STATE_ROOT/history/$RELEASE_ID.json" || -e "$STATE_ROOT/failed/$RELEASE_ID.json" ]]; then
   fail "release ID sudah pernah digunakan: $RELEASE_ID"
@@ -370,7 +371,9 @@ ASIHJAYA_BACKUP_RUNNER_STATE_DIR="$BACKUP_STATE_DIR" \
 "$BACKUP_WRAPPER" pre-deployment "$RELEASE_ID"
 BACKUP_RESULT="$BACKUP_STATE_DIR/pre-deployment-$RELEASE_ID.json"
 [[ -s "$BACKUP_RESULT" ]] || fail "bukti backup pre-deployment tidak ditemukan: $BACKUP_RESULT"
-run_operations_state backup --file "$CANDIDATE_FILE" --result-file "$BACKUP_RESULT"
+install -m 0600 "$BACKUP_RESULT" "$BACKUP_EVIDENCE"
+sync -f "$BACKUP_EVIDENCE"
+run_operations_state backup --file "$CANDIDATE_FILE" --result-file "$BACKUP_EVIDENCE"
 
 CURRENT_STAGE="database-migration"
 log "Menjalankan guarded database migration"

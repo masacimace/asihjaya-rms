@@ -99,6 +99,20 @@ assert(
   deploymentScript.includes("grep -Fq '\"schemaChanged\": false'"),
   "Automatic restore application lama hanya boleh dilakukan ketika schema tidak berubah.",
 );
+assert(
+  deploymentScript.includes('BACKUP_EVIDENCE="$EVIDENCE_DIR/pre-deployment-backup.json"'),
+  "Evidence backup pre-deployment wajib disimpan di deployment evidence directory yang di-mount ke operations container.",
+);
+assertOrdered(deploymentScript, [
+  '"$BACKUP_WRAPPER" pre-deployment "$RELEASE_ID"',
+  'install -m 0600 "$BACKUP_RESULT" "$BACKUP_EVIDENCE"',
+  'sync -f "$BACKUP_EVIDENCE"',
+  'run_operations_state backup --file "$CANDIDATE_FILE" --result-file "$BACKUP_EVIDENCE"',
+]);
+assert(
+  !deploymentScript.includes('run_operations_state backup --file "$CANDIDATE_FILE" --result-file "$BACKUP_RESULT"'),
+  "Operations container tidak boleh membaca host-only backup runner path secara langsung.",
+);
 
 if (process.platform !== "win32") {
   const shellCheck = spawnSync("bash", ["-n", deploymentScriptPath], { cwd: projectRoot, encoding: "utf8" });
