@@ -67,10 +67,10 @@ export function LoginForm() {
             name="identifier"
             type="text"
             required
-            autoFocus
             autoCapitalize="none"
             autoCorrect="off"
             autoComplete="username"
+            enterKeyHint="next"
             defaultValue={state.values?.identifier ?? ""}
             placeholder="admin atau admin@asihjaya.local"
             className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
@@ -98,6 +98,7 @@ export function LoginForm() {
             type={showPassword ? "text" : "password"}
             required
             autoComplete="current-password"
+            enterKeyHint="go"
             placeholder="Masukkan kata sandi"
             className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
           />
