@@ -47,18 +47,26 @@ export function PosDiscountApprovalDialog({
     });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-3 backdrop-blur-sm sm:items-center sm:p-6">
-      <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
-        <div className="border-b border-[var(--border)] p-4 sm:p-5">
+    <div className="fixed inset-0 z-[70] flex items-stretch justify-center bg-black/35 backdrop-blur-sm sm:items-center sm:p-6">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pos-discount-approval-title"
+        className="flex h-[100dvh] max-h-[100dvh] w-full max-w-lg flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[calc(100dvh-3rem)] sm:rounded-3xl sm:border sm:border-[var(--border)]"
+      >
+        <header className="shrink-0 border-b border-[var(--border)] px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase text-[var(--accent)]">
                 Approval Diskon POS
               </p>
-              <h2 className="mt-1 text-lg font-semibold text-neutral-950">
+              <h2
+                id="pos-discount-approval-title"
+                className="mt-1 text-base font-semibold text-neutral-950 sm:text-lg"
+              >
                 Minta diskon manager/owner
               </h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+              <p className="mt-2 text-xs leading-5 text-[var(--muted)] sm:text-sm sm:leading-6">
                 Request akan masuk ke Riwayat Approval. Diskon baru bisa dipakai
                 setelah status disetujui.
               </p>
@@ -74,9 +82,9 @@ export function PosDiscountApprovalDialog({
               <X className="size-5" />
             </button>
           </div>
-        </div>
+        </header>
 
-        <div className="max-h-[70vh] overflow-y-auto p-4 sm:p-5">
+        <div className="scrollbar-clean min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
           <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3 text-sm">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[var(--muted)]">Subtotal cart</span>
@@ -146,7 +154,7 @@ export function PosDiscountApprovalDialog({
             <p className="text-xs font-semibold uppercase text-[var(--muted)]">
               Item dalam request
             </p>
-            <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
+            <div className="mt-3 space-y-2 sm:max-h-48 sm:overflow-y-auto sm:overscroll-contain sm:pr-1">
               {cartItems.map((item, index) => (
                 <div
                   key={item.id}
@@ -175,12 +183,12 @@ export function PosDiscountApprovalDialog({
           ) : null}
         </div>
 
-        <div className="grid gap-2 border-t border-[var(--border)] p-4 sm:grid-cols-[1fr_1.4fr] sm:p-5">
+        <footer className="grid shrink-0 grid-cols-[0.85fr_1.4fr] gap-2 border-t border-[var(--border)] px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:grid-cols-[1fr_1.4fr] sm:p-5">
           <button
             type="button"
             onClick={onCancel}
             disabled={isPending}
-            className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
+            className="flex h-11 min-w-0 items-center justify-center rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50 sm:px-4 sm:text-sm"
           >
             Batal
           </button>
@@ -188,7 +196,7 @@ export function PosDiscountApprovalDialog({
             type="button"
             onClick={onSubmit}
             disabled={isPending || discountIsTooHigh}
-            className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent)]/90 disabled:cursor-wait disabled:opacity-70"
+            className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-3 text-xs font-semibold text-white transition hover:bg-[var(--accent)]/90 disabled:cursor-wait disabled:opacity-70 sm:px-4 sm:text-sm"
           >
             {isPending ? (
               <>
@@ -202,8 +210,8 @@ export function PosDiscountApprovalDialog({
               </>
             )}
           </button>
-        </div>
-      </div>
+        </footer>
+      </section>
     </div>
   );
 }

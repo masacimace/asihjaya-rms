@@ -98,12 +98,12 @@ export default async function SettlementImportPage({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-clip">
       <FlashMessage type={query.type} message={query.message} />
 
-      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
-        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-end lg:p-7">
-          <div>
+      <section className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+        <div className="grid w-full min-w-0 gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-end lg:p-7">
+          <div className="min-w-0">
             <Link
               href="/admin/keuangan/rekonsiliasi"
               className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:bg-[var(--accent-soft)]/40"
@@ -136,16 +136,16 @@ export default async function SettlementImportPage({
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)]">
+      <section className="grid w-full min-w-0 max-w-full gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)]">
         <form
           action={uploadSettlementCsvAction}
-          className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6"
+          className="w-full min-w-0 max-w-full rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6"
         >
-          <div className="flex items-center gap-3">
-            <div className="grid size-11 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
               <UploadCloud className="size-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="font-semibold text-neutral-950">Upload file CSV</h2>
               <p className="text-xs leading-5 text-[var(--muted)]">
                 Maksimal 5 MB dan 1.000 baris per batch.
@@ -154,12 +154,12 @@ export default async function SettlementImportPage({
           </div>
 
           <div className="mt-6 grid gap-4">
-            <label className="grid gap-2 text-sm font-semibold text-neutral-800">
+            <label className="grid min-w-0 gap-2 text-sm font-semibold text-neutral-800">
               Outlet
               <select
                 name="outletId"
                 required
-                className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
+                className="h-11 w-full min-w-0 max-w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
               >
                 <option value="">Pilih outlet</option>
                 {data.outlets.map((outlet) => (
@@ -170,12 +170,12 @@ export default async function SettlementImportPage({
               </select>
             </label>
 
-            <label className="grid gap-2 text-sm font-semibold text-neutral-800">
+            <label className="grid min-w-0 gap-2 text-sm font-semibold text-neutral-800">
               Payment profile
               <select
                 name="profileId"
                 required
-                className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
+                className="h-11 w-full min-w-0 max-w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
               >
                 <option value="">Pilih terminal EDC</option>
                 {data.profiles.map((profile) => (
@@ -186,19 +186,19 @@ export default async function SettlementImportPage({
               </select>
             </label>
 
-            <label className="grid gap-2 text-sm font-semibold text-neutral-800">
+            <label className="grid min-w-0 gap-2 text-sm font-semibold text-neutral-800">
               File settlement
               <input
                 name="file"
                 type="file"
                 accept=".csv,text/csv,text/plain"
                 required
-                className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-3 py-4 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-950 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+                className="block w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-3 py-4 text-xs text-neutral-700 file:mr-3 file:max-w-full file:rounded-lg file:border-0 file:bg-neutral-950 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white sm:text-sm"
               />
             </label>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+          <div className="mt-5 min-w-0 break-words rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
             <p className="font-semibold">Kolom minimum</p>
             <p className="mt-1">
               Tanggal transaksi, reference payment, dan gross amount. Fee, pajak,
@@ -210,19 +210,19 @@ export default async function SettlementImportPage({
           <button
             type="submit"
             disabled={data.profiles.length === 0}
-            className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-6 inline-flex h-11 w-full min-w-0 max-w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FileSpreadsheet className="size-4" />
             Upload dan preview CSV
           </button>
         </form>
 
-        <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
-          <div className="flex items-center gap-3">
-            <div className="grid size-11 place-items-center rounded-2xl bg-neutral-100 text-neutral-700">
+        <section className="w-full min-w-0 max-w-full rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-neutral-100 text-neutral-700">
               <ShieldCheck className="size-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="font-semibold text-neutral-950">Guardrail import</h2>
               <p className="text-xs leading-5 text-[var(--muted)]">
                 Dibuat untuk mencegah rekonsiliasi otomatis yang ambigu.
@@ -237,12 +237,12 @@ export default async function SettlementImportPage({
               ["Duplicate file guard", "Hash SHA-256 mencegah laporan settlement yang sama diimpor dua kali."],
               ["Review queue", "Ambiguous, mismatch, duplicate, dan not found tetap membutuhkan keputusan finance."],
             ].map(([title, description]) => (
-              <div key={title} className="rounded-2xl bg-neutral-50 p-4">
-                <p className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
-                  <CheckCircle2 className="size-4 text-emerald-600" />
-                  {title}
+              <div key={title} className="min-w-0 rounded-2xl bg-neutral-50 p-4">
+                <p className="flex min-w-0 items-start gap-2 text-sm font-semibold text-neutral-900">
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                  <span className="min-w-0 break-words">{title}</span>
                 </p>
-                <p className="mt-1 pl-6 text-xs leading-5 text-[var(--muted)]">
+                <p className="mt-1 break-words pl-6 text-xs leading-5 text-[var(--muted)]">
                   {description}
                 </p>
               </div>
@@ -251,13 +251,13 @@ export default async function SettlementImportPage({
         </section>
       </section>
 
-      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-xl bg-neutral-100 text-neutral-700">
+      <section className="w-full min-w-0 max-w-full rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
+        <div className="flex min-w-0 items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-neutral-100 text-neutral-700">
               <History className="size-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="font-semibold text-neutral-950">Riwayat import</h2>
               <p className="text-xs text-[var(--muted)]">15 batch terbaru yang dapat kamu akses.</p>
             </div>
@@ -271,7 +271,7 @@ export default async function SettlementImportPage({
         </div>
 
         {data.recentBatches.length ? (
-          <div className="mt-5 overflow-x-auto">
+          <div className="mt-5 max-w-full overflow-x-auto">
             <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="border-y border-neutral-100 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
                 <tr>

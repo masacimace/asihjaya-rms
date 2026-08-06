@@ -3,9 +3,9 @@
 import {
   Bell,
   ChevronRight,
+  ListChevronsDownUp,
   Clock3,
   LayoutDashboard,
-  MoreHorizontal,
   Pause,
   PackageSearch,
   Printer,
@@ -139,6 +139,17 @@ const mobileMoreNavigation = [
     access: "migration",
   },
 ] as const;
+
+const mobileBottomNavigationItemClassName =
+  "flex min-w-0 appearance-none flex-col items-center justify-center gap-1 border-0 !text-black bg-transparent px-1 !text-xs !font-semibold leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]";
+const mobileBottomNavigationIconClassName = "size-[21px] shrink-0";
+
+function getMobileBottomNavigationItemClassName(active: boolean) {
+  return cn(
+    mobileBottomNavigationItemClassName,
+    active ? "text-[var(--accent)]" : "text-neutral-700",
+  );
+}
 
 type SidebarContentProps = {
   pathname: string;
@@ -465,6 +476,12 @@ export function PosShell({
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [topbarQuery, setTopbarQuery] = useState("");
+  const isMoreNavigationActive =
+    isMoreOpen ||
+    mobileMoreNavigation.some(
+      ({ href }) =>
+        href !== "/pos/ditahan" && isNavigationActive(pathname, href),
+    );
 
   useEffect(() => {
     let isDisposed = false;
@@ -929,12 +946,14 @@ export function PosShell({
               <Link
                 key={href}
                 href={href}
-                className={cn(
-                  "flex flex-col items-center justify-center gap-1 text-[11px] font-medium",
-                  active ? "text-[var(--accent)]" : "text-neutral-500",
-                )}
+                aria-current={active ? "page" : undefined}
+                className={getMobileBottomNavigationItemClassName(active)}
               >
-                <Icon className="size-5" />
+                <Icon
+                  aria-hidden="true"
+                  className={mobileBottomNavigationIconClassName}
+                  strokeWidth={1.9}
+                />
                 <span>{label}</span>
               </Link>
             );
@@ -942,11 +961,19 @@ export function PosShell({
 
           <button
             type="button"
+            aria-haspopup="dialog"
+            aria-expanded={isMoreOpen}
             onClick={() => setIsMoreOpen(true)}
-            className="flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-neutral-500"
+            className={getMobileBottomNavigationItemClassName(
+              isMoreNavigationActive,
+            )}
           >
-            <MoreHorizontal className="size-5" />
-            <span>Lainnya</span>
+            <ListChevronsDownUp
+              aria-hidden="true"
+              className={mobileBottomNavigationIconClassName}
+              strokeWidth={2.1}
+            />
+            <span>Menu</span>
           </button>
         </nav>
       </div>
