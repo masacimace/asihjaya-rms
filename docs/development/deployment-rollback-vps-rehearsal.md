@@ -325,3 +325,5 @@ cat /var/lib/asihjaya-rms/deployments/bootstrap/latest.env
 ```
 
 Ambil `bootstrap_image`, `app_release_id`, `app_revision`, dan `app_build_date`, lalu jalankan application-only recreate dengan nilai tersebut. Jangan menjalankan migration atau restore database. Setelah recovery, validasi local/public health dan hentikan rehearsal untuk audit.
+
+- Immutable release kedua untuk rollback rehearsal dibuat pada 2026-08-06T07:15:13Z.
