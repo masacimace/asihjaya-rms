@@ -72,6 +72,7 @@ const requiredRootScripts = [
   "check:deployment",
   "check:deployment-orchestration",
   "check:application-rollback",
+  "check:deployment-installation",
   "check:operations-image",
   "check:source-hygiene",
   "check:database",
@@ -211,6 +212,10 @@ assert(
   `${workflowPath} wajib memeriksa application rollback contract.`,
 );
 assert(
+  workflow.includes("npm run check:deployment-installation"),
+  `${workflowPath} wajib memeriksa deployment installation contract.`,
+);
+assert(
   workflow.includes("npm run test:database-backup:local"),
   `${workflowPath} wajib menjalankan disposable backup/restore rehearsal.`,
 );
@@ -246,6 +251,7 @@ for (const documentationPath of [
   "docs/development/database-backup-restore.md",
   "docs/development/database-backup-offsite.md",
   "docs/development/deployment-rollback-automation.md",
+  "docs/development/deployment-rollback-vps-rehearsal.md",
   ".github/pull_request_template.md",
   "README.md",
 ]) {

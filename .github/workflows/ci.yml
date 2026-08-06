@@ -152,6 +152,9 @@ jobs:
       - name: Application rollback and schema compatibility contract
         run: npm run check:application-rollback
 
+      - name: Deployment installation and VPS rehearsal contract
+        run: npm run check:deployment-installation
+
       - name: Security contracts
         run: npm run check:security
 

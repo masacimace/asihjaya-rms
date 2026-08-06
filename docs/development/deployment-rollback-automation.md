@@ -76,8 +76,8 @@ ops/scripts/ajsystem-deployment-lock
 Default path:
 
 ```text
-/run/lock/asihjaya-rms-deployment.lock
-/run/lock/asihjaya-rms-deployment.lock.owner
+/run/lock/asihjaya-rms/deployment.lock
+/run/lock/asihjaya-rms/deployment.lock.owner
 ```
 
 Wrapper menolak proses kedua dengan exit code `75`, menampilkan metadata owner yang aman, dan melepas lock otomatis saat process selesai atau terputus. Owner metadata tidak menyimpan seluruh command argument agar secret tidak bocor.
@@ -304,4 +304,30 @@ npm run check:deployment
 npm run check:deployment-orchestration
 npm run typecheck
 npm run lint
+```
+
+## Tahap 1D.7F — instalasi command dan rehearsal VPS preview
+
+Source menyediakan installer dan preflight berikut:
+
+```text
+ops/scripts/ajsystem-install-deployment-automation
+ops/scripts/ajsystem-deployment-preflight
+```
+
+Installer wajib dijalankan dengan `sudo`, membuat backup command host lama, memasang lima command dengan owner `root:ubuntu` mode `0750`, membuat deployment state directory milik `ubuntu`, memverifikasi hash source/installed, dan menyediakan restore berdasarkan backup ID. Runtime deployment, rollback, preflight, dan backup dijalankan sebagai user `ubuntu` tanpa sudo agar ownership evidence konsisten dengan systemd backup job.
+
+Installer memasang tmpfiles policy untuk membuat `/run/lock/asihjaya-rms` pada setiap boot; lock helper tidak pernah mengubah permission shared parent `/run/lock`.
+
+Sebelum immutable `current.env` pertama tersedia, timer backup dihentikan sementara. Service backup juga memiliki `ConditionPathExists=/var/lib/asihjaya-rms/deployments/current.env` agar bootstrap tidak menjalankan operations image mutable. Production environment memakai owner `root:ubuntu` dan mode `0640`; nilainya tidak pernah dicetak atau disalin ke repository.
+
+Rehearsal membentuk dua healthy release yang sama-sama membawa contract 1D.7E/1D.7F, menjalankan application rollback dari release kedua ke release pertama, lalu reverse rollback agar release kedua kembali aktif. Database tidak pernah diturunkan. Runbook lengkap tersedia di `docs/development/deployment-rollback-vps-rehearsal.md`.
+
+Quality gate:
+
+```bash
+npm run check:deployment-installation
+npm run check:application-rollback
+npm run check:deployment-orchestration
+npm run check:deployment
 ```

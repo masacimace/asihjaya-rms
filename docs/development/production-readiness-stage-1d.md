@@ -704,7 +704,7 @@ Satu Pull Request ke main
 - [x] Candidate smoke test terintegrasi di source.
 - [ ] Deployment script dipasang dan direhearsal di VPS.
 - [ ] Rollback image berhasil diuji.
-- [ ] Deployment runbook tersedia.
+- [x] Deployment runbook source tersedia (`deployment-rollback-vps-rehearsal.md`).
 
 ## 1D.8 — Production Rehearsal
 
@@ -775,3 +775,7 @@ Setelah Tahap 1D selesai, ASIHJAYA FINISHING memiliki:
 ### 1D.7E — explicit application rollback
 
 Source-side contract menyediakan `ajsystem-rollback check|approve|deny|execute`. Rollback hanya menuju previous healthy release, memakai deployment lock yang sama dengan deploy, menolak schema change tanpa compatibility reference, menjalankan candidate smoke terhadap schema aktif, mengganti service app saja, dan tidak pernah menjalankan database rollback. Audit disimpan di deployment state root. Instalasi dan rehearsal VPS tetap dilakukan pada 1D.7F.
+
+### 1D.7F — VPS installation and rollback rehearsal
+
+Source-side installer, deployment-user guard, preflight, bootstrap image snapshot, lock contention test, systemd bootstrap condition, tmpfiles lock persistence, dan runbook VPS tersedia. Aktivasi tahap dilakukan sebagai perubahan terkontrol pada VPS preview: install command host, deploy commit yang sama dua kali untuk membentuk dua healthy release, rollback ke release pertama, reverse rollback ke release kedua, lalu aktifkan kembali timer backup. Bukti dan command lengkap berada di `docs/development/deployment-rollback-vps-rehearsal.md`.

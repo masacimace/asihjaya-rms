@@ -44,6 +44,7 @@
     "check-database-deployment.ts",
     "check-database-migrations.ts",
     "check-deployment-automation.ts",
+    "check-deployment-installation.ts",
     "check-operations-image.ts",
     "check-production-container.ts",
     "check-production-deployment.ts",
