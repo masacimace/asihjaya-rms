@@ -37,6 +37,7 @@
     "check-settlement-import.ts"
   ],
   "infrastructure": [
+    "check-application-rollback.ts",
     "check-build-baseline.ts",
     "check-database-backup-offsite.ts",
     "check-database-backup.ts",

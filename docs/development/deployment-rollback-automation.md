@@ -2,7 +2,7 @@
 
 Dokumen ini menetapkan kontrak Tahap 1D.7 untuk deployment aplikasi ASIHJAYA RMS. Model operasinya adalah **manual approval, automated execution**: operator memilih commit dan memulai deployment, sedangkan backup, migration, aktivasi image, health check, pencatatan release, dan rollback aplikasi dijalankan oleh automation.
 
-Tahap 1D.7B membangun identitas release, metadata, dan deployment lock; 1D.7C menambahkan operations image serta exact pre-deployment backup. Tahap 1D.7D menambahkan deployment orchestration, sementara rollback eksplisit tetap diselesaikan pada 1D.7E.
+Tahap 1D.7B membangun identitas release, metadata, dan deployment lock; 1D.7C menambahkan operations image serta exact pre-deployment backup; 1D.7D menambahkan deployment orchestration; dan 1D.7E menambahkan explicit application rollback beserta schema compatibility guard.
 
 ## Identitas release
 
@@ -41,7 +41,9 @@ Default deployment state root yang akan digunakan di VPS:
 ├── current.json
 ├── previous.json
 ├── history/
-└── failed/
+├── failed/
+├── rollbacks/
+└── rollback-work/
 ```
 
 Metadata mencatat release ID, commit, source ref, image application dan migrator, operator, hostname, waktu deployment, previous release, status migration, backup terverifikasi, health checks, failure stage, serta keputusan compatibility rollback.
@@ -214,4 +216,92 @@ npm run check:database-backup
 npm run check:database-backup-offsite
 ```
 
-Tahap 1D.7E berikutnya menambahkan command rollback eksplisit, pemilihan previous healthy release, compatibility approval untuk schema yang berubah, dan audit rollback. Orchestrator 1D.7D hanya memiliki recovery terbatas untuk failure aktivasi ketika migration merupakan no-op.
+## Tahap 1D.7E — explicit application rollback dan schema compatibility guard
+
+Rollback production memakai command terpisah:
+
+```text
+ops/scripts/ajsystem-rollback
+```
+
+Command ini tidak melakukan Git checkout, build image, migration, restore database, atau `docker compose down`. Rollback hanya boleh menuju **previous healthy release** yang ditunjuk konsisten oleh `current.json`, `current.previousReleaseId`, dan `previous.json`. Release historis lain tidak dapat dipilih langsung agar keputusan compatibility hanya mencakup transisi schema dari deployment terakhir.
+
+Sebelum eksekusi, lihat target dan keputusan guard:
+
+```bash
+ajsystem-rollback check
+```
+
+Operator dapat mengunci ekspektasi target agar perubahan pointer tidak diterima diam-diam:
+
+```bash
+ajsystem-rollback check 20260806T010203Z-0123456789ab
+```
+
+Bila deployment current tidak mengubah schema, migration result otomatis memberi keputusan `compatible` dengan reference `no-schema-change`. Bila deployment current mengubah schema, status awal adalah `approval-required` dan rollback ditolak. Compatibility hanya boleh diset setelah review expand-and-contract atau bukti bahwa previous application tetap dapat berjalan pada schema terbaru:
+
+```bash
+ajsystem-rollback approve CHANGE-1234-expand-contract
+```
+
+Untuk mencatat bahwa rollback tidak aman:
+
+```bash
+ajsystem-rollback deny CHANGE-1234-breaking-schema
+```
+
+Reference harus menunjuk ticket, change request, atau dokumen review yang dapat diaudit. Approval tidak menggantikan test runtime: target previous release tetap harus lulus candidate smoke test terhadap database dengan schema saat ini.
+
+Eksekusi eksplisit:
+
+```bash
+ajsystem-rollback execute
+```
+
+Atau dengan target yang diharapkan:
+
+```bash
+ajsystem-rollback execute 20260806T010203Z-0123456789ab
+```
+
+Urutan rollback:
+
+```text
+process-wide deployment lock
+→ guard current/previous metadata
+→ cocokkan current.env dengan current release metadata
+→ verifikasi digest dan OCI identity current/target images
+→ verifikasi target operations runtime
+→ preflight local/public health current release
+→ candidate previous app pada 127.0.0.1:3001
+→ candidate health terhadap schema database saat ini
+→ recreate service app saja dengan target image
+→ local/public production health target
+→ promote target sebagai current active snapshot
+→ simpan rollback audit dan current.env secara atomic
+```
+
+Database tidak di-rollback. Service `migrate` tidak dijalankan. App, migrator, dan operations image untuk release asal maupun target harus masih tersedia secara lokal serta memiliki digest dan OCI label yang sama dengan metadata release. `current.env` wajib cocok dengan identitas current release sebelum aktivasi. Target operations image juga harus membawa runtime contract 1D.7E agar backup timer dan rollback berikutnya tetap operasional setelah promotion. Karena itu, rollback menuju release yang dibuat sebelum 1D.7E sengaja ditolak. Pada bootstrap 1D.7F, rehearsal harus membentuk setidaknya dua healthy release yang sama-sama membawa contract 1D.7E sebelum rollback pertama diuji.
+
+Jika candidate gagal, current application tidak disentuh. Jika production health target gagal setelah activation, automation mengembalikan outgoing application image dan menjalankan recovery health check. Jika state sudah berhasil dipromosikan tetapi update `current.env` gagal, automation tidak memutar balik database atau state secara diam-diam; operator mengikuti evidence dan audit rollback untuk recovery.
+
+Rollback audit mencatat operator, hostname VPS, compatibility reference, serta enam image identity asal/target. Setiap percobaan disimpan di:
+
+```text
+/var/lib/asihjaya-rms/deployments/
+├── rollbacks/<rollback-id>.json
+├── rollback-work/
+└── evidence/<rollback-id>/
+```
+
+Setelah rollback sukses, `current.json` menjadi active snapshot target dengan `previousReleaseId` menunjuk outgoing release. Karena rollback sendiri tidak mengubah schema, reverse rollback ke outgoing release dapat diperiksa sebagai transisi application-only dengan reference `no-schema-change`. Historical release metadata tetap tersedia di `history/`, sedangkan detail keputusan dan health evidence berada pada rollback audit.
+
+Quality gate tahap ini:
+
+```bash
+npm run check:application-rollback
+npm run check:deployment
+npm run check:deployment-orchestration
+npm run typecheck
+npm run lint
+```

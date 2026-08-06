@@ -440,6 +440,61 @@ export function readCurrentRelease(rootDirectory: string): ReleaseRecord | null 
   return readReleaseFile(paths.current);
 }
 
+export function readPreviousRelease(rootDirectory: string): ReleaseRecord | null {
+  const paths = resolveDeploymentStatePaths(rootDirectory);
+  if (!existsSync(paths.previous)) return null;
+  return readReleaseFile(paths.previous);
+}
+
+function assertCompatibilityReference(value: string): string {
+  const normalized = value.trim();
+  assert(
+    /^[A-Za-z0-9][A-Za-z0-9._:/-]{2,199}$/.test(normalized),
+    "Compatibility reference harus 3-200 karakter dan hanya memakai huruf, angka, titik, underscore, colon, slash, atau dash.",
+  );
+  assert(normalized !== "no-schema-change", "Reference no-schema-change hanya boleh dibuat otomatis oleh migration no-op.");
+  return normalized;
+}
+
+export function updateCurrentReleaseCompatibility(
+  rootDirectory: string,
+  decision: "compatible" | "incompatible",
+  reference: string,
+  evaluatedBy: string,
+  evaluatedAt = new Date().toISOString(),
+): ReleaseRecord {
+  const paths = ensureDeploymentStateDirectories(rootDirectory);
+  const current = readCurrentRelease(rootDirectory);
+  assert(current, "Current release belum tersedia.");
+  assert(current.status === "healthy", "Compatibility hanya boleh dievaluasi untuk current release yang healthy.");
+  assert(current.database.schemaChanged === true, "Compatibility manual hanya diperlukan ketika deployment mengubah schema.");
+  assertIsoTimestamp(evaluatedAt, "evaluatedAt");
+
+  const normalizedReference = assertCompatibilityReference(reference);
+  const normalizedEvaluator = evaluatedBy.replace(/[\r\n]+/g, " ").trim().slice(0, 160);
+  assert(normalizedEvaluator.length > 0, "Evaluator compatibility wajib diisi.");
+  const check: ReleaseCheck = {
+    name: "rollback-compatibility",
+    status: decision === "compatible" ? "passed" : "failed",
+    checkedAt: evaluatedAt,
+    detail: `${decision}; reference=${normalizedReference}; evaluatedBy=${normalizedEvaluator}`,
+  };
+  const updated: ReleaseRecord = {
+    ...current,
+    updatedAt: evaluatedAt,
+    database: {
+      ...current.database,
+      rollbackCompatibility: decision,
+      compatibilityReference: normalizedReference,
+    },
+    checks: [...current.checks.filter((item) => item.name !== check.name), check],
+  };
+  validateReleaseRecord(updated);
+  writeReleaseHistory(rootDirectory, updated);
+  writeJsonAtomic(paths.current, updated);
+  return updated;
+}
+
 export function promoteHealthyRelease(rootDirectory: string, record: ReleaseRecord): void {
   validateReleaseRecord(record);
   assert(record.status === "healthy", "Hanya release berstatus healthy yang boleh dipromosikan menjadi current.");

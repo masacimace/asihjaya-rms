@@ -771,3 +771,7 @@ Setelah Tahap 1D selesai, ASIHJAYA FINISHING memiliki:
 - deployment dan rollback otomatis;
 - runbook operasional dan disaster recovery;
 - baseline production yang siap menjadi fondasi penambahan fitur berikutnya.
+
+### 1D.7E — explicit application rollback
+
+Source-side contract menyediakan `ajsystem-rollback check|approve|deny|execute`. Rollback hanya menuju previous healthy release, memakai deployment lock yang sama dengan deploy, menolak schema change tanpa compatibility reference, menjalankan candidate smoke terhadap schema aktif, mengganti service app saja, dan tidak pernah menjalankan database rollback. Audit disimpan di deployment state root. Instalasi dan rehearsal VPS tetap dilakukan pada 1D.7F.

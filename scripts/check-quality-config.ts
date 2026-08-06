@@ -71,6 +71,7 @@ const requiredRootScripts = [
   "check:database-backup-offsite",
   "check:deployment",
   "check:deployment-orchestration",
+  "check:application-rollback",
   "check:operations-image",
   "check:source-hygiene",
   "check:database",
@@ -101,6 +102,7 @@ const requiredRootScripts = [
   "test:database-backup-offsite:local",
   "deployment:contract",
   "deployment:health",
+  "rollback:contract",
   "db:deploy",
   "db:deploy:production",
   "db:backup",
@@ -203,6 +205,10 @@ assert(
 assert(
   workflow.includes("npm run check:deployment-orchestration"),
   `${workflowPath} wajib memeriksa deployment orchestration.`,
+);
+assert(
+  workflow.includes("npm run check:application-rollback"),
+  `${workflowPath} wajib memeriksa application rollback contract.`,
 );
 assert(
   workflow.includes("npm run test:database-backup:local"),

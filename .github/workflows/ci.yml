@@ -149,6 +149,9 @@ jobs:
       - name: Production deployment orchestration contract
         run: npm run check:deployment-orchestration
 
+      - name: Application rollback and schema compatibility contract
+        run: npm run check:application-rollback
+
       - name: Security contracts
         run: npm run check:security
 

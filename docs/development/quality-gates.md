@@ -77,9 +77,12 @@ Kontrak deployment automation:
 npm run check:deployment
 npm run check:operations-image
 npm run check:deployment-orchestration
+npm run check:application-rollback
 ```
 
 `check:deployment-orchestration` menguji urutan fail-fast Git/build/backup/migration, candidate smoke test, release-aware local/public health, failure recording, no-schema-change recovery boundary, dan atomic release promotion.
+
+`check:application-rollback` menguji previous-only target selection, explicit schema compatibility approval, image digest/OCI guard, preflight dan candidate health ordering, application-only activation, recovery ke outgoing image, atomic active-state promotion, serta larangan database rollback.
 
 Compose production, batas resource, volume, health/readiness, dan troubleshooting didokumentasikan di `docs/development/production-container.md`.
 
