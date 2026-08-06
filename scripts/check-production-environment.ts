@@ -100,6 +100,8 @@ for (const name of GENERATED_PRODUCTION_SECRET_NAMES) {
 assert.equal(templateEnvironment.NODE_ENV, "production");
 assert.equal(templateEnvironment.ASIHJAYA_BIND_ADDRESS, "127.0.0.1");
 assert.equal(templateEnvironment.ASIHJAYA_MIGRATOR_IMAGE, "asihjaya-rms-migrator:production");
+assert.equal(templateEnvironment.ASIHJAYA_OPERATIONS_IMAGE, "asihjaya-rms-operations:production");
+assert.equal(templateEnvironment.APP_RELEASE_ID, "unknown");
 assert.equal(templateEnvironment.DATABASE_MIGRATION_ALLOW_DESTRUCTIVE, "false");
 assert.equal(templateEnvironment.DATABASE_MIGRATION_APPROVAL_REFERENCE, "");
 assert.equal(templateEnvironment.DATABASE_BACKUP_ROOT, ".data/backups/postgres");
@@ -185,6 +187,13 @@ try {
   ]);
   const generatedContent = readFileSync(generatedPath, "utf8");
   const generatedEnvironment = parseEnvironment(generatedContent);
+  const generatedReleaseId = "20260806T010203Z-0123456789ab";
+  generatedEnvironment.APP_RELEASE_ID = generatedReleaseId;
+  generatedEnvironment.APP_REVISION = "0123456789abcdef0123456789abcdef01234567";
+  generatedEnvironment.APP_BUILD_DATE = "2026-08-06T01:02:03.000Z";
+  generatedEnvironment.ASIHJAYA_IMAGE = `asihjaya-rms:${generatedReleaseId}`;
+  generatedEnvironment.ASIHJAYA_MIGRATOR_IMAGE = `asihjaya-rms-migrator:${generatedReleaseId}`;
+  generatedEnvironment.ASIHJAYA_OPERATIONS_IMAGE = `asihjaya-rms-operations:${generatedReleaseId}`;
   const generationOutput = `${generation.stdout}\n${generation.stderr}`;
   assertOutputDoesNotContainSecrets(generationOutput, generatedEnvironment);
 

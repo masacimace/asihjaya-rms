@@ -50,9 +50,11 @@ export const PRODUCTION_ENVIRONMENT_TEMPLATE_NAMES = [
   "NODE_ENV",
   "ASIHJAYA_IMAGE",
   "ASIHJAYA_MIGRATOR_IMAGE",
+  "ASIHJAYA_OPERATIONS_IMAGE",
   "ASIHJAYA_ENV_FILE",
   "ASIHJAYA_BIND_ADDRESS",
   "ASIHJAYA_APP_PORT",
+  "APP_RELEASE_ID",
   "APP_REVISION",
   "APP_BUILD_DATE",
   "NEXT_PUBLIC_APP_NAME",
@@ -803,6 +805,37 @@ function validateProductionDeployment(
       } else {
         throw error;
       }
+    }
+  }
+
+  const releaseId = optional(source, "APP_RELEASE_ID");
+  const revision = optional(source, "APP_REVISION");
+  const buildDate = optional(source, "APP_BUILD_DATE");
+  const releaseIdPattern = /^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{7,12}$/;
+
+  if (!releaseId || !releaseIdPattern.test(releaseId)) {
+    pushIssue(issues, "APP_RELEASE_ID", "wajib memakai format immutable YYYYMMDDTHHMMSSZ-<git-sha>.");
+  }
+  if (!revision || !/^[a-f0-9]{7,64}$/.test(revision)) {
+    pushIssue(issues, "APP_REVISION", "wajib berupa Git revision hexadecimal.");
+  }
+  if (!buildDate) {
+    pushIssue(issues, "APP_BUILD_DATE", "wajib berupa timestamp ISO UTC canonical.");
+  } else {
+    const parsed = new Date(buildDate);
+    if (Number.isNaN(parsed.valueOf()) || parsed.toISOString() !== buildDate) {
+      pushIssue(issues, "APP_BUILD_DATE", "wajib berupa timestamp ISO UTC canonical.");
+    }
+  }
+
+  for (const [name, repository] of [
+    ["ASIHJAYA_IMAGE", "asihjaya-rms"],
+    ["ASIHJAYA_MIGRATOR_IMAGE", "asihjaya-rms-migrator"],
+    ["ASIHJAYA_OPERATIONS_IMAGE", "asihjaya-rms-operations"],
+  ] as const) {
+    const image = optional(source, name);
+    if (!image || !releaseId || image !== `${repository}:${releaseId}`) {
+      pushIssue(issues, name, `wajib menunjuk ${repository}:<APP_RELEASE_ID> tanpa tag mutable.`);
     }
   }
 

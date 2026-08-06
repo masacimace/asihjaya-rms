@@ -108,7 +108,7 @@ Menjalankan retention tanpa membuat backup baru:
 npm run db:backup:prune
 ```
 
-`db:deploy:production` sekarang menjalankan backup pre-deployment terlebih dahulu. Deployment automation penuh baru diselesaikan pada Tahap 1D.7, tetapi migration production manual tidak boleh melewati command resmi tersebut.
+`db:deploy:production` menjalankan backup pre-deployment terlebih dahulu untuk penggunaan manual terbatas. Workflow release resmi memakai `ops/scripts/ajsystem-deploy`, yang mewajibkan exact backup artifact, full off-site verification, dan result JSON sebelum guarded migration. Script tersebut baru dianggap aktif setelah installation/rehearsal VPS.
 
 ## Kebijakan retention awal
 
@@ -257,3 +257,17 @@ Jangan menyimpan credential off-site di repository, command history, atau metada
 - Target aktif memerlukan guard serta token eksplisit.
 - Retention mempertahankan backup terbaru, manual, dan protected.
 - Prosedur off-site dan disaster recovery terdokumentasi.
+
+## Pre-deployment backup terikat release
+
+Deployment resmi tidak memakai rangkaian umum “buat backup lalu upload latest”. Gunakan orchestrator berikut agar backup lokal dan receipt off-site terikat ke release candidate yang sama:
+
+```bash
+npm run db:backup:pre-deployment:verified -- \
+  --release-id 20260806T010203Z-0123456789ab \
+  --result-file /var/lib/asihjaya-rms/backup-runner/pre-deployment-20260806T010203Z-0123456789ab.json
+```
+
+Result JSON hanya ditulis setelah archive lokal lolos checksum serta `pg_restore --list`, lalu metadata path yang persis sama berhasil di-upload dan diverifikasi penuh dari Backblaze B2. Migration production tidak boleh dimulai bila command gagal, result file tidak ada, release ID berbeda, backup ID berbeda, atau `fullVerification` bukan `true`.
+
+Pada database bootstrap kosong, command menghasilkan `status: skipped-uninitialized`. Kondisi tersebut hanya valid ketika tidak ada tabel aplikasi dan migration history belum terbentuk; database yang memiliki tabel tanpa migration history tetap ditolak.

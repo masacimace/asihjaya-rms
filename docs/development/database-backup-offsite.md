@@ -211,3 +211,18 @@ Jangan menghapus key lama sebelum key baru berhasil membaca, menulis, memverifik
 - Receipt dan status lokal tercatat tanpa credential.
 - Retention remote menghormati Object Lock, manual, protected, dan latest-per-kind.
 - Backup dapat di-download dan diverifikasi untuk restore rehearsal.
+
+## Integrasi pre-deployment exact artifact
+
+Command `db:backup:pre-deployment:verified` membuat backup lokal dengan `releaseId`, menerima metadata path terstruktur dari backup runner, lalu memanggil uploader menggunakan `--metadata <path-yang-sama>`. Jalur ini sengaja tidak memakai `--upload-latest`, sehingga backup deployment tidak dapat tertukar dengan daily/weekly job lain.
+
+Bukti akhir ditulis secara atomic dan mencatat:
+
+- candidate release ID;
+- backup ID lokal;
+- archive, checksum, dan metadata path;
+- receipt path serta receipt key Backblaze B2;
+- waktu verifikasi lokal dan off-site;
+- `fullVerification: true`.
+
+Deployment harus memperlakukan result JSON tersebut sebagai prerequisite migration, bukan hanya mengandalkan exit code atau status file backup terbaru.

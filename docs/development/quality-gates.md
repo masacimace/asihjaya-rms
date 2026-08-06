@@ -71,6 +71,22 @@ npm run check:production-container
 npm run test:container:production:local
 ```
 
+Kontrak deployment automation:
+
+```bash
+npm run check:deployment
+npm run check:operations-image
+npm run check:deployment-orchestration
+npm run check:application-rollback
+npm run check:deployment-installation
+```
+
+`check:deployment-orchestration` menguji urutan fail-fast Git/build/backup/migration, candidate smoke test, release-aware local/public health, failure recording, no-schema-change recovery boundary, dan atomic release promotion.
+
+`check:application-rollback` menguji previous-only target selection, explicit schema compatibility approval, image digest/OCI guard, preflight dan candidate health ordering, application-only activation, recovery ke outgoing image, atomic active-state promotion, serta larangan database rollback.
+
+`check:deployment-installation` menguji installer atomic beserta backup/restore command host, ownership `root:ubuntu`, runtime guard user `ubuntu` tanpa sudo, bootstrap snapshot non-secret, lock contention rehearsal, systemd bootstrap condition, tmpfiles lock persistence, serta kelengkapan runbook VPS 1D.7F.
+
 Compose production, batas resource, volume, health/readiness, dan troubleshooting didokumentasikan di `docs/development/production-container.md`.
 
 Template production, validator deployment, permission file, dan secret rotation didokumentasikan di `docs/development/production-environment.md`.
@@ -143,7 +159,7 @@ Workflow `.github/workflows/ci.yml` berjalan pada push, pull request, dan manual
 Status check utama:
 
 1. **Static Quality** — install, lint, typecheck, route check, dan clean production build.
-2. **Container Build** — membangun production Docker image dari context bersih.
+2. **Container Build** — membangun application, migrator, dan operations image dari context bersih.
 3. **Security & Business Checks** — quality config, source hygiene, migration metadata, security contracts, business contracts, dan kontrak hardware sisi aplikasi.
 4. **Database Migration** — PostgreSQL 17 disposable, migration dua kali, lalu schema verification.
 5. **Hardware Hub Checks** — request signing, DPAPI mock, Protocol v2, failure injection, operations, PDF profile, dan SATO golden files.
@@ -247,3 +263,12 @@ npm run test:database-backup-offsite:local
 ```
 
 Rehearsal membuktikan upload empat-object, idempotency, Object Lock boundary, full SHA-256 verification, corruption rejection, download, dan remote retention. GitHub Actions menjalankannya pada job **Database Backup & Restore Rehearsal** tanpa mengakses bucket production.
+## Operations image dan pre-deployment backup
+
+Jalankan kontrak static berikut:
+
+```bash
+npm run check:operations-image
+```
+
+Check ini memvalidasi target Docker `operations`, OCI release identity, user non-root, Compose profile, penolakan mutable image pada wrapper VPS, exact-artifact upload, full off-site verification, serta format result JSON pre-deployment. Quality gate utama `npm run check:quality` juga menjalankan check ini.

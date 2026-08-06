@@ -14,6 +14,8 @@ import {
 import path from "node:path";
 import { config as loadDotenv } from "dotenv";
 
+import { writeDatabaseBackupResult } from "./database-backup-pre-deployment-state";
+
 import {
   CRITICAL_BACKUP_TABLES,
   artifactPaths,
@@ -52,6 +54,7 @@ type CliOptions = {
   pruneOnly: boolean;
   skipIfUninitialized: boolean;
   verifyMetadataPath?: string;
+  resultFile?: string;
 };
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -77,6 +80,7 @@ function parseOptions(args: string[]): CliOptions {
     "--label",
     "--release-id",
     "--verify",
+    "--result-file",
   ]);
   const flagOptions = new Set([
     "--protect",
@@ -99,6 +103,8 @@ function parseOptions(args: string[]): CliOptions {
   const pruneOnly = args.includes("--prune-only");
   const verifyMetadataPath = optionValue(args, "--verify");
   assert(!(pruneOnly && verifyMetadataPath), "--prune-only tidak dapat digabung dengan --verify.");
+  const resultFile = optionValue(args, "--result-file");
+  assert(!(resultFile && (pruneOnly || verifyMetadataPath)), "--result-file hanya didukung saat membuat backup baru.");
   return {
     environmentFile: optionValue(args, "--env-file"),
     composeFile: optionValue(args, "--compose-file") ?? "compose.production.yaml",
@@ -113,6 +119,7 @@ function parseOptions(args: string[]): CliOptions {
     pruneOnly,
     skipIfUninitialized: args.includes("--skip-if-uninitialized"),
     verifyMetadataPath,
+    resultFile,
   };
 }
 
@@ -422,7 +429,7 @@ async function createBackup(
     assert(listEntryCount > 0, "Archive hasil pg_dump tidak dapat dibaca pg_restore.");
 
     const completedAt = new Date().toISOString();
-    const releaseId = (options.releaseId ?? process.env.APP_REVISION)?.trim();
+    const releaseId = (options.releaseId ?? process.env.APP_RELEASE_ID ?? process.env.APP_REVISION)?.trim();
     const metadata: DatabaseBackupMetadata = {
       version: 1,
       backupId: identity.backupId,
@@ -512,13 +519,38 @@ async function main(): Promise<void> {
     if (options.skipIfUninitialized) {
       console.log("SKIP: database bootstrap masih kosong; tidak ada data aplikasi untuk dibackup.");
       if (options.prune) pruneBackups(outputDirectory);
+      if (options.resultFile) {
+        writeDatabaseBackupResult(path.resolve(projectRoot, options.resultFile), {
+          version: 1,
+          operation: "database-backup",
+          status: "skipped-uninitialized",
+          completedAt: new Date().toISOString(),
+          artifact: null,
+        });
+      }
       return;
     }
     throw new Error("Schema aplikasi belum diinisialisasi; backup production belum dapat dibuat.");
   }
 
-  await createBackup(options, target, outputDirectory);
+  const artifact = await createBackup(options, target, outputDirectory);
   if (options.prune) pruneBackups(outputDirectory);
+  if (options.resultFile) {
+    writeDatabaseBackupResult(path.resolve(projectRoot, options.resultFile), {
+      version: 1,
+      operation: "database-backup",
+      status: "created",
+      completedAt: new Date().toISOString(),
+      artifact: {
+        backupId: artifact.metadata.backupId,
+        metadataPath: artifact.metadataPath,
+        archivePath: artifact.archivePath,
+        checksumPath: artifact.checksumPath,
+        releaseId: artifact.metadata.releaseId ?? null,
+        verifiedAt: artifact.metadata.verifiedAt,
+      },
+    });
+  }
 }
 
 await main();

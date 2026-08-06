@@ -8,6 +8,7 @@ services:
       dockerfile: Dockerfile
       target: runner
       args:
+        APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
         APP_REVISION: ${APP_REVISION:-unknown}
         APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
     restart: unless-stopped
@@ -16,6 +17,9 @@ services:
       - ${ASIHJAYA_ENV_FILE:-.env.production}
     environment:
       NODE_ENV: production
+      APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
+      APP_REVISION: ${APP_REVISION:-unknown}
+      APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
       PORT: "3000"
       HOSTNAME: 0.0.0.0
       INTERNAL_RENDER_ORIGIN: http://127.0.0.1:3000
@@ -77,12 +81,19 @@ services:
       context: .
       dockerfile: Dockerfile
       target: migrator
+      args:
+        APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
+        APP_REVISION: ${APP_REVISION:-unknown}
+        APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
     restart: "no"
     init: true
     env_file:
       - ${ASIHJAYA_ENV_FILE:-.env.production}
     environment:
       NODE_ENV: production
+      APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
+      APP_REVISION: ${APP_REVISION:-unknown}
+      APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
       DATABASE_MIGRATION_LOCK_KEY: ${DATABASE_MIGRATION_LOCK_KEY:-718143293674}
       DATABASE_MIGRATION_READY_TIMEOUT_MS: ${DATABASE_MIGRATION_READY_TIMEOUT_MS:-120000}
       DATABASE_MIGRATION_LOCK_TIMEOUT_MS: ${DATABASE_MIGRATION_LOCK_TIMEOUT_MS:-120000}
@@ -115,6 +126,41 @@ services:
         reservations:
           cpus: "0.10"
           memory: 256M
+
+  operations:
+    profiles:
+      - operations
+    image: ${ASIHJAYA_OPERATIONS_IMAGE:-asihjaya-rms-operations:production}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: operations
+      args:
+        APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
+        APP_REVISION: ${APP_REVISION:-unknown}
+        APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
+    command:
+      - node
+      - --version
+    restart: "no"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    network_mode: none
+    mem_limit: 768m
+    cpus: 0.50
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 768M
+          pids: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
   db:
     image: postgres:17-bookworm

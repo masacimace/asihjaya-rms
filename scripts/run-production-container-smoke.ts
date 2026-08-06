@@ -137,7 +137,8 @@ const cliEnvironment: NodeJS.ProcessEnv = {
   ASIHJAYA_APP_PORT: String(port),
   ASIHJAYA_IMAGE: imageName,
   ASIHJAYA_MIGRATOR_IMAGE: migratorImageName,
-  APP_REVISION: "container-smoke",
+  APP_RELEASE_ID: "20260806T000000Z-0123456789ab",
+  APP_REVISION: "0123456789abcdef0123456789abcdef01234567",
   APP_BUILD_DATE: new Date().toISOString(),
 };
 const composePrefix = [
@@ -200,6 +201,17 @@ try {
     signal: AbortSignal.timeout(8_000),
   });
   assert(livenessResponse.ok, `Liveness endpoint gagal dengan HTTP ${livenessResponse.status}.`);
+  const livenessPayload = (await livenessResponse.json()) as {
+    release?: { releaseId?: string; revision?: string };
+  };
+  assert(
+    livenessPayload.release?.releaseId === cliEnvironment.APP_RELEASE_ID,
+    "Liveness endpoint wajib melaporkan release ID image yang aktif.",
+  );
+  assert(
+    livenessPayload.release?.revision === cliEnvironment.APP_REVISION,
+    "Liveness endpoint wajib melaporkan Git revision image yang aktif.",
+  );
 
   const readinessResponse = await fetch(
     `http://127.0.0.1:${port}/api/health/database`,

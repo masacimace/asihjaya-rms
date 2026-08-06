@@ -46,6 +46,20 @@ RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build \
 
 FROM toolchain AS migrator
 WORKDIR /app
+
+ARG APP_RELEASE_ID=unknown
+ARG APP_REVISION=unknown
+ARG APP_BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="Asihjaya RMS Migrator" \
+      org.opencontainers.image.description="Asihjaya Finishing RMS guarded database migrator" \
+      org.opencontainers.image.version="${APP_RELEASE_ID}" \
+      org.opencontainers.image.revision="${APP_REVISION}" \
+      org.opencontainers.image.created="${APP_BUILD_DATE}"
+
+ENV APP_RELEASE_ID="${APP_RELEASE_ID}"
+ENV APP_REVISION="${APP_REVISION}"
+ENV APP_BUILD_DATE="${APP_BUILD_DATE}"
 ENV HOME=/tmp
 ENV TMPDIR=/tmp
 ENV NPM_CONFIG_CACHE=/tmp/.npm
@@ -54,7 +68,7 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json .npmrc drizzle.config.ts tsconfig.json ./
 COPY drizzle ./drizzle
-COPY scripts/database-deployment-state.ts scripts/run-database-deployment.ts ./scripts/
+COPY scripts/database-deployment-state.ts scripts/database-deployment-result.ts scripts/deployment-state.ts scripts/run-database-deployment.ts ./scripts/
 COPY src/db/schema ./src/db/schema
 
 RUN groupadd --system --gid 10002 migrator \
@@ -69,17 +83,62 @@ USER migrator
 STOPSIGNAL SIGTERM
 CMD ["npm", "run", "db:deploy"]
 
+FROM toolchain AS operations
+WORKDIR /app
+
+ARG APP_RELEASE_ID=unknown
+ARG APP_REVISION=unknown
+ARG APP_BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="Asihjaya RMS Operations" \
+      org.opencontainers.image.description="Asihjaya Finishing RMS database backup, off-site verification, and restore tools" \
+      org.opencontainers.image.version="${APP_RELEASE_ID}" \
+      org.opencontainers.image.revision="${APP_REVISION}" \
+      org.opencontainers.image.created="${APP_BUILD_DATE}"
+
+ENV APP_RELEASE_ID="${APP_RELEASE_ID}"
+ENV APP_REVISION="${APP_REVISION}"
+ENV APP_BUILD_DATE="${APP_BUILD_DATE}"
+ENV NODE_ENV=production
+ENV HOME=/tmp
+ENV TMPDIR=/tmp
+ENV NPM_CONFIG_CACHE=/tmp/.npm
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json .npmrc tsconfig.json compose.production.yaml ./
+COPY scripts ./scripts
+COPY src/lib/env.ts ./src/lib/env.ts
+
+RUN mkdir -p /usr/local/lib/docker/cli-plugins \
+    && groupadd --system --gid 10003 operations \
+    && useradd --system \
+        --uid 10003 \
+        --gid operations \
+        --create-home \
+        --home-dir /home/operations \
+        operations
+
+USER operations
+STOPSIGNAL SIGTERM
+CMD ["npm", "run", "db:backup:pre-deployment:verified"]
+
 FROM base AS runner
 WORKDIR /app
 
+ARG APP_RELEASE_ID=unknown
 ARG APP_REVISION=unknown
 ARG APP_BUILD_DATE=unknown
 
 LABEL org.opencontainers.image.title="Asihjaya RMS" \
       org.opencontainers.image.description="Asihjaya Finishing RMS and POS production runtime" \
+      org.opencontainers.image.version="${APP_RELEASE_ID}" \
       org.opencontainers.image.revision="${APP_REVISION}" \
       org.opencontainers.image.created="${APP_BUILD_DATE}"
 
+ENV APP_RELEASE_ID="${APP_RELEASE_ID}"
+ENV APP_REVISION="${APP_REVISION}"
+ENV APP_BUILD_DATE="${APP_BUILD_DATE}"
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
