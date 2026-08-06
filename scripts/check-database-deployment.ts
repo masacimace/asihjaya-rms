@@ -22,6 +22,12 @@ const migrationPlan = loadMigrationPlan(path.join(projectRoot, "drizzle"));
 assert(migrationPlan.length > 0, "Migration plan tidak boleh kosong.");
 assert.equal(migrationPlan[0]?.index, 0);
 assert.match(migrationPlan[0]?.hash ?? "", /^[a-f0-9]{64}$/);
+assert(
+  migrationPlan.every((migration) =>
+    migration.compatibleLineEndingHashes.every((hash) => /^[a-f0-9]{64}$/.test(hash)),
+  ),
+  "Hash compatibility line-ending migration harus berupa SHA-256.",
+);
 
 const firstTwoApplied = migrationPlan.slice(0, 2).map((migration, index) => ({
   id: index + 1,
@@ -43,6 +49,22 @@ assert.equal(
   ).pending.length,
   0,
 );
+
+const firstMigration = migrationPlan[0]!;
+const compatibleLineEndingHash = firstMigration.compatibleLineEndingHashes[0];
+if (compatibleLineEndingHash) {
+  const compatible = analyzeMigrationHistory(migrationPlan, [
+    { ...firstTwoApplied[0]!, hash: compatibleLineEndingHash },
+  ]);
+  assert.deepEqual(compatible.lineEndingCompatibilityMatches, [
+    {
+      index: 0,
+      tag: firstMigration.tag,
+      databaseHash: compatibleLineEndingHash,
+      releaseHash: firstMigration.hash,
+    },
+  ]);
+}
 
 assert.throws(
   () => analyzeMigrationHistory(migrationPlan, [{ ...firstTwoApplied[0]!, hash: "tampered" }]),
@@ -70,6 +92,7 @@ function migration(sql: string, tag = "9999_test"): MigrationDescriptor {
     tag,
     createdAt: "9999999999999",
     hash: "0".repeat(64),
+    compatibleLineEndingHashes: [],
     sql,
     filePath: `${tag}.sql`,
   };
@@ -129,6 +152,7 @@ assert.match(runner, /pg_try_advisory_lock/);
 assert.match(runner, /pg_advisory_unlock/);
 assert.match(runner, /DATABASE_MIGRATION_APPROVAL_REFERENCE/);
 assert.match(runner, /analyzeMigrationHistory/);
+assert.match(runner, /Compatibility migration line-ending diterima/);
 assert.match(runner, /runDrizzleMigration/);
 assert.match(runner, /DRIZZLE_MIGRATIONS_DIR/);
 assert.doesNotMatch(runner, /console\.(?:log|error)\([^\n]*DATABASE_URL/);

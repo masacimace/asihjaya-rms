@@ -273,6 +273,12 @@ async function main(): Promise<void> {
     if (Number.isFinite(testHoldMs) && testHoldMs > 0) await sleep(Math.min(testHoldMs, 10_000));
 
     const before = analyzeMigrationHistory(localMigrations, await readAppliedMigrations(client));
+    if (before.lineEndingCompatibilityMatches.length > 0) {
+      const tags = before.lineEndingCompatibilityMatches.map((match) => match.tag).join(", ");
+      console.warn(
+        `Compatibility migration line-ending diterima untuk ${before.lineEndingCompatibilityMatches.length} migration (${tags}); hash database hanya berbeda karena LF/CRLF.`,
+      );
+    }
     const destructiveFindings = findDestructiveMigrationFindings(before.pending);
     const destructiveOperations = destructiveFindings.map(
       (finding) => `${finding.migrationTag}:${finding.operation}`,

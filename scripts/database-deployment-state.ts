@@ -15,6 +15,7 @@ export type MigrationDescriptor = {
   tag: string;
   createdAt: string;
   hash: string;
+  compatibleLineEndingHashes: string[];
   sql: string;
   filePath: string;
 };
@@ -25,9 +26,17 @@ export type AppliedMigration = {
   createdAt: string;
 };
 
+export type MigrationLineEndingCompatibilityMatch = {
+  index: number;
+  tag: string;
+  databaseHash: string;
+  releaseHash: string;
+};
+
 export type MigrationHistoryAnalysis = {
   appliedCount: number;
   pending: MigrationDescriptor[];
+  lineEndingCompatibilityMatches: MigrationLineEndingCompatibilityMatch[];
 };
 
 export type DestructiveMigrationFinding = {
@@ -41,6 +50,12 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function sha256(content: string): string {
   return createHash("sha256").update(content).digest("hex");
+}
+
+function lineEndingHashCandidates(content: string): string[] {
+  const lf = content.replace(/\r\n?/g, "\n");
+  const crlf = lf.replace(/\n/g, "\r\n");
+  return [...new Set([sha256(lf), sha256(crlf)])];
 }
 
 function stripSqlComments(sql: string): string {
@@ -88,11 +103,13 @@ export function loadMigrationPlan(migrationsDirectory: string): MigrationDescrip
     const sql = readFileSync(filePath, "utf8");
     assert(sql.trim().length > 0, `Migration SQL kosong: ${filePath}.`);
 
+    const hash = sha256(sql);
     return {
       index,
       tag: entry.tag,
       createdAt: String(entry.when),
-      hash: sha256(sql),
+      hash,
+      compatibleLineEndingHashes: lineEndingHashCandidates(sql).filter((candidate) => candidate !== hash),
       sql,
       filePath,
     };
@@ -109,6 +126,8 @@ export function analyzeMigrationHistory(
     );
   }
 
+  const lineEndingCompatibilityMatches: MigrationLineEndingCompatibilityMatch[] = [];
+
   for (const [index, applied] of appliedMigrations.entries()) {
     const local = localMigrations[index];
     assert(local, `Migration lokal pada posisi ${index} tidak tersedia.`);
@@ -119,15 +138,25 @@ export function analyzeMigrationHistory(
       );
     }
     if (applied.hash !== local.hash) {
-      throw new Error(
-        `Riwayat migration database berbeda pada ${local.tag}: hash SQL tidak cocok. Migration yang sudah diterapkan tidak boleh diedit.`,
-      );
+      if (local.compatibleLineEndingHashes.includes(applied.hash)) {
+        lineEndingCompatibilityMatches.push({
+          index,
+          tag: local.tag,
+          databaseHash: applied.hash,
+          releaseHash: local.hash,
+        });
+      } else {
+        throw new Error(
+          `Riwayat migration database berbeda pada ${local.tag}: hash SQL tidak cocok. Migration yang sudah diterapkan tidak boleh diedit.`,
+        );
+      }
     }
   }
 
   return {
     appliedCount: appliedMigrations.length,
     pending: localMigrations.slice(appliedMigrations.length),
+    lineEndingCompatibilityMatches,
   };
 }
 
