@@ -117,6 +117,70 @@ check_age_threshold() {
   fi
 }
 
+check_current_release_migration() {
+  local state_file="/var/lib/asihjaya-rms/deployments/current.json"
+  local result
+
+  if [[ ! -r "$state_file" ]]; then
+    issue critical deployment_state_missing "Current release metadata tidak dapat dibaca: $state_file"
+    return
+  fi
+
+  if ! result="$(python3 - "$state_file" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+data = json.loads(path.read_text())
+
+release_id = data.get("releaseId")
+if not isinstance(release_id, str) or not release_id:
+    raise SystemExit("releaseId tidak valid")
+
+if data.get("status") != "healthy":
+    raise SystemExit(f"release {release_id} status={data.get('status')!r}, expected='healthy'")
+
+checks = data.get("checks")
+if not isinstance(checks, list):
+    raise SystemExit("checks tidak valid")
+
+migration_checks = [
+    item for item in checks
+    if isinstance(item, dict) and item.get("name") == "database-migration"
+]
+if not migration_checks:
+    raise SystemExit("database-migration evidence tidak ditemukan")
+
+latest = migration_checks[-1]
+if latest.get("status") != "passed":
+    raise SystemExit(
+        f"database-migration status={latest.get('status')!r}, expected='passed'"
+    )
+
+database = data.get("database")
+if not isinstance(database, dict):
+    raise SystemExit("database state tidak valid")
+
+before = database.get("migrationCountBefore")
+after = database.get("migrationCountAfter")
+schema_changed = database.get("schemaChanged")
+if not isinstance(before, int) or not isinstance(after, int):
+    raise SystemExit("migration count belum tercatat")
+if not isinstance(schema_changed, bool):
+    raise SystemExit("schemaChanged belum tercatat")
+
+print(
+    f"release={release_id} migrations={before}->{after} "
+    f"schemaChanged={str(schema_changed).lower()}"
+)
+PY
+  )"; then
+    issue critical deployment_migration_invalid "Current release migration evidence tidak valid: ${result:-unknown error}"
+    return
+  fi
+}
+
 mkdir -p "$STATE_DIR"
 
 # Health endpoints
@@ -152,10 +216,12 @@ do
   check_timer "$timer"
 done
 
-# Containers
+# Long-running containers and deployment evidence.
+# Migrator dijalankan sebagai disposable `docker compose run --rm`, sehingga
+# ketiadaan container migrate adalah kondisi normal setelah deployment sukses.
 check_container app running healthy ignore
 check_container db running healthy ignore
-check_container migrate exited ignore 0
+check_current_release_migration
 
 # Disk, inode, memory, and swap
 disk_percent="$(df -P / | awk 'NR==2 {gsub(/%/, "", $5); print $5}')"
@@ -304,10 +370,16 @@ PY
   done
 fi
 
-# Existing failed units
-failed_units="$(systemctl --failed --no-legend --plain --no-pager 2>/dev/null || true)"
+# Existing failed units. Monitor mengecualikan unit dirinya sendiri agar hasil
+# critical sebelumnya tidak membuat service terus gagal secara self-latching.
+failed_units="$(
+  systemctl --failed --no-legend --plain --no-pager 2>/dev/null \
+    | awk '$1 != "ajsystem-monitor.service"' \
+    || true
+)"
 if [[ -n "${failed_units//[[:space:]]/}" ]]; then
-  issue critical systemd_failed_units "Terdapat failed systemd unit"
+  failed_unit_names="$(awk '{print $1}' <<< "$failed_units" | paste -sd, -)"
+  issue critical systemd_failed_units "Failed systemd unit: ${failed_unit_names:-unknown}"
 fi
 
 if (( critical_count > 0 )); then
