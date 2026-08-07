@@ -109,6 +109,10 @@ const secretPatterns: Array<{ pattern: RegExp; description: string }> = [
   { pattern: /ghp_[A-Za-z0-9]{30,}/, description: "GitHub personal access token" },
   { pattern: /github_pat_[A-Za-z0-9_]{40,}/, description: "GitHub fine-grained token" },
   { pattern: /sk_live_[A-Za-z0-9]{20,}/, description: "live API secret" },
+  {
+    pattern: /\b\d{5,20}:[A-Za-z0-9_-]{35,}\b/,
+    description: "Telegram bot token",
+  },
 ];
 
 const textExtensions = new Set([

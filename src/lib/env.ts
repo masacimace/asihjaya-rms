@@ -181,6 +181,11 @@ export const PRODUCTION_ENVIRONMENT_TEMPLATE_NAMES = [
   "PDF_RENDER_TIMEOUT_MS",
   "PDF_RENDER_DISABLE_SANDBOX",
   "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH",
+  "TELEGRAM_INTEGRATION_ENABLED",
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_API_BASE_URL",
+  "TELEGRAM_REQUEST_TIMEOUT_MS",
+  "TELEGRAM_MAX_ATTEMPTS",
 ] as const;
 
 const PLACEHOLDER_PATTERN =
@@ -590,6 +595,82 @@ function validateStoragePolicy(
       issues,
       "IMAGE_STORAGE_ENDPOINT",
       "wajib diatur ketika region S3 menggunakan nilai auto.",
+    );
+  }
+}
+
+function validateTelegramIntegration(
+  source: EnvironmentSource,
+  issues: EnvironmentValidationIssue[],
+  mode: EnvironmentMode,
+): void {
+  const enabled =
+    validateOptionalBoolean(source, issues, "TELEGRAM_INTEGRATION_ENABLED") ??
+    false;
+  const apiBaseUrl = optional(source, "TELEGRAM_API_BASE_URL");
+
+  if (apiBaseUrl) {
+    try {
+      const parsed = parseHttpOrigin(apiBaseUrl, "TELEGRAM_API_BASE_URL");
+      if (
+        parsed.protocol === "http:" &&
+        !isLoopbackHostname(parsed.hostname)
+      ) {
+        pushIssue(
+          issues,
+          "TELEGRAM_API_BASE_URL",
+          "HTTP hanya diizinkan untuk mock API pada loopback/local machine.",
+        );
+      }
+      if (
+        mode === "production" &&
+        parsed.origin !== "https://api.telegram.org"
+      ) {
+        pushIssue(
+          issues,
+          "TELEGRAM_API_BASE_URL",
+          "production wajib memakai https://api.telegram.org.",
+        );
+      }
+    } catch (error) {
+      if (error instanceof EnvironmentValidationError) {
+        issues.push(...error.issues);
+      } else {
+        throw error;
+      }
+    }
+  } else if (enabled) {
+    pushIssue(issues, "TELEGRAM_API_BASE_URL", "wajib diatur ketika integrasi aktif.");
+  }
+
+  validateOptionalInteger(
+    source,
+    issues,
+    "TELEGRAM_REQUEST_TIMEOUT_MS",
+    250,
+    60_000,
+  );
+  validateOptionalInteger(source, issues, "TELEGRAM_MAX_ATTEMPTS", 1, 10);
+
+  const token = optional(source, "TELEGRAM_BOT_TOKEN");
+  if (enabled && !token) {
+    pushIssue(issues, "TELEGRAM_BOT_TOKEN", "wajib diatur ketika integrasi aktif.");
+    return;
+  }
+
+  if (token && !isPlaceholder(token)) {
+    if (!/^\d{5,20}:[A-Za-z0-9_-]{20,}$/.test(token)) {
+      pushIssue(
+        issues,
+        "TELEGRAM_BOT_TOKEN",
+        "format token BotFather tidak valid.",
+      );
+    }
+  } else if (enabled && token) {
+    pushIssue(
+      issues,
+      "TELEGRAM_BOT_TOKEN",
+      "masih memakai placeholder dan wajib diganti sebelum integrasi diaktifkan.",
     );
   }
 }
@@ -1053,6 +1134,7 @@ export function collectServerEnvironmentIssues(
   validateSecrets(source, issues, mode);
   validateProxyPolicy(source, issues, mode);
   validateStoragePolicy(source, issues);
+  validateTelegramIntegration(source, issues, mode);
   validateSecurityAndRuntimeOptions(source, issues, mode);
   if (requireDeployment) {
     validateProductionDeployment(source, issues, mode);
