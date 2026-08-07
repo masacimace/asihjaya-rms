@@ -162,6 +162,54 @@ services:
         max-size: 10m
         max-file: "3"
 
+  telegram-runtime:
+    profiles:
+      - telegram
+    image: ${ASIHJAYA_OPERATIONS_IMAGE:-asihjaya-rms-operations:production}
+    command:
+      - npm
+      - run
+      - telegram:deliver
+    restart: "no"
+    init: true
+    env_file:
+      - ${ASIHJAYA_ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
+      APP_REVISION: ${APP_REVISION:-unknown}
+      APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
+      HOME: /tmp
+      TMPDIR: /tmp
+      NPM_CONFIG_CACHE: /tmp/.npm
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    mem_limit: 512m
+    cpus: 0.40
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
+    networks:
+      - edge
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.40"
+          memory: 512M
+          pids: 192
+        reservations:
+          cpus: "0.05"
+          memory: 128M
+
   db:
     image: postgres:17-bookworm
     restart: unless-stopped

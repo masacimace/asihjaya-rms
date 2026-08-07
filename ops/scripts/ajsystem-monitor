@@ -23,6 +23,12 @@ local_backup_age_hours=-1
 offsite_backup_age_hours=-1
 offsite_upload_age_hours=-1
 offsite_verify_age_hours=-1
+telegram_pending=0
+telegram_retry=0
+telegram_failed=0
+telegram_oldest_pending_age_seconds=0
+telegram_delivery_success_age_minutes=-1
+telegram_reconcile_success_age_minutes=-1
 
 issue() {
   local level="$1" code="$2" message="$3"
@@ -76,6 +82,77 @@ check_timer() {
 
   [[ "$active" == "active" ]] || issue critical backup_timer_inactive "Timer $timer berstatus ${active:-unknown}"
   [[ "$enabled" == "enabled" ]] || issue critical backup_timer_disabled "Timer $timer berstatus ${enabled:-unknown}"
+}
+
+check_telegram_timer() {
+  local timer="$1"
+  local active enabled
+  active="$(systemctl is-active "$timer" 2>/dev/null || true)"
+  enabled="$(systemctl is-enabled "$timer" 2>/dev/null || true)"
+
+  [[ "$active" == "active" ]] || issue warning telegram_timer_inactive "Timer $timer berstatus ${active:-unknown}"
+  [[ "$enabled" == "enabled" ]] || issue warning telegram_timer_disabled "Timer $timer berstatus ${enabled:-unknown}"
+}
+
+telegram_success_age_minutes() {
+  local marker="$1" now epoch
+  [[ -r "$marker" ]] || { printf '%s' -1; return; }
+  epoch="$(tr -d '[:space:]' < "$marker")"
+  [[ "$epoch" =~ ^[0-9]+$ ]] || { printf '%s' -1; return; }
+  now="$(date +%s)"
+  (( epoch <= now )) || { printf '%s' 0; return; }
+  printf '%s' "$(( (now - epoch) / 60 ))"
+}
+
+check_telegram_reporting() {
+  command -v ajsystem-telegram-reporting >/dev/null 2>&1 || return
+
+  local status_output integration_enabled line key value
+  if ! status_output="$(ajsystem-telegram-reporting status 2>&1)"; then
+    issue warning telegram_status_failed "Telegram reporting status gagal dibaca: ${status_output:-unknown error}"
+    return
+  fi
+
+  integration_enabled=false
+  while IFS='=' read -r key value; do
+    case "$key" in
+      integration_enabled) integration_enabled="$value" ;;
+      pending) telegram_pending="$value" ;;
+      retry) telegram_retry="$value" ;;
+      failed) telegram_failed="$value" ;;
+      oldest_pending_age_seconds) telegram_oldest_pending_age_seconds="$value" ;;
+    esac
+  done <<< "$status_output"
+
+  [[ "$integration_enabled" =~ ^(true|1|yes|on)$ ]] || return
+
+  check_telegram_timer ajsystem-telegram-delivery.timer
+  check_telegram_timer ajsystem-telegram-report-reconcile.timer
+
+  telegram_delivery_success_age_minutes="$(telegram_success_age_minutes /var/lib/asihjaya-rms/telegram-reporting/delivery-success.epoch)"
+  telegram_reconcile_success_age_minutes="$(telegram_success_age_minutes /var/lib/asihjaya-rms/telegram-reporting/reconcile-success.epoch)"
+
+  if (( telegram_delivery_success_age_minutes < 0 )); then
+    issue warning telegram_delivery_never_succeeded "Belum ada successful Telegram delivery worker marker."
+  elif (( telegram_delivery_success_age_minutes >= 30 )); then
+    issue warning telegram_delivery_stale "Successful Telegram delivery worker terakhir ${telegram_delivery_success_age_minutes} menit lalu."
+  fi
+
+  if (( telegram_reconcile_success_age_minutes < 0 )); then
+    issue warning telegram_reconcile_never_succeeded "Belum ada successful Telegram reconciliation marker."
+  elif (( telegram_reconcile_success_age_minutes >= 180 )); then
+    issue warning telegram_reconcile_stale "Successful Telegram reconciliation terakhir ${telegram_reconcile_success_age_minutes} menit lalu."
+  fi
+
+  if (( telegram_pending + telegram_retry >= 50 )); then
+    issue warning telegram_backlog "Telegram pending+retry backlog=$((telegram_pending + telegram_retry))."
+  fi
+  if (( telegram_failed > 0 )); then
+    issue warning telegram_failed_deliveries "Telegram failed delivery count=$telegram_failed."
+  fi
+  if (( telegram_oldest_pending_age_seconds >= 3600 )); then
+    issue warning telegram_oldest_pending "Oldest Telegram pending/retry berusia $((telegram_oldest_pending_age_seconds / 60)) menit."
+  fi
 }
 
 check_container() {
@@ -215,6 +292,10 @@ for timer in \
 do
   check_timer "$timer"
 done
+
+# Telegram reporting bersifat non-critical terhadap health utama POS.
+# Saat integration OFF, monitor tidak menuntut timer aktif.
+check_telegram_reporting
 
 # Long-running containers and deployment evidence.
 # Migrator dijalankan sebagai disposable `docker compose run --rm`, sehingga
@@ -403,7 +484,13 @@ python3 - \
   "$local_backup_age_hours" \
   "$offsite_backup_age_hours" \
   "$offsite_upload_age_hours" \
-  "$offsite_verify_age_hours" <<'PY'
+  "$offsite_verify_age_hours" \
+  "$telegram_pending" \
+  "$telegram_retry" \
+  "$telegram_failed" \
+  "$telegram_oldest_pending_age_seconds" \
+  "$telegram_delivery_success_age_minutes" \
+  "$telegram_reconcile_success_age_minutes" <<'PY'
 import datetime as dt
 import json
 import os
@@ -424,6 +511,12 @@ from pathlib import Path
     offsite_backup_age_hours,
     offsite_upload_age_hours,
     offsite_verify_age_hours,
+    telegram_pending,
+    telegram_retry,
+    telegram_failed,
+    telegram_oldest_pending_age_seconds,
+    telegram_delivery_success_age_minutes,
+    telegram_reconcile_success_age_minutes,
 ) = sys.argv[1:]
 
 issues = []
@@ -460,6 +553,12 @@ result = {
         'offsiteBackupAgeHours': int(offsite_backup_age_hours),
         'offsiteUploadAgeHours': int(offsite_upload_age_hours),
         'offsiteVerificationAgeHours': int(offsite_verify_age_hours),
+        'telegramPending': int(telegram_pending),
+        'telegramRetry': int(telegram_retry),
+        'telegramFailed': int(telegram_failed),
+        'telegramOldestPendingAgeSeconds': int(telegram_oldest_pending_age_seconds),
+        'telegramDeliverySuccessAgeMinutes': int(telegram_delivery_success_age_minutes),
+        'telegramReconcileSuccessAgeMinutes': int(telegram_reconcile_success_age_minutes),
     },
     'issues': issues,
 }

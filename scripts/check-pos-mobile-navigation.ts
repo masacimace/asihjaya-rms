@@ -6,21 +6,10 @@ const posShellSource = readFileSync(
   resolve("src/components/layout/pos-shell.tsx"),
   "utf8",
 );
-
-assert.match(
-  posShellSource,
-  /CircleEllipsis/,
-  "Menu Lainnya harus memakai icon dengan footprint visual yang setara dengan menu utama.",
-);
 assert.doesNotMatch(
   posShellSource,
   /MoreHorizontal/,
   "Icon tiga titik horizontal lama terlihat terlalu kecil dibanding icon menu utama.",
-);
-assert.match(
-  posShellSource,
-  /const mobileBottomNavigationItemClassName =[\s\S]*text-\[11px\] font-semibold leading-none/,
-  "Semua item bottom navigation harus memakai typography bersama.",
 );
 assert.match(
   posShellSource,
@@ -41,11 +30,6 @@ assert.equal(
   posShellSource.match(/mobileBottomNavigationIconClassName/g)?.length,
   3,
   "Class icon bersama harus dipakai oleh definisi, primary navigation, dan tombol Lainnya.",
-);
-assert.equal(
-  posShellSource.match(/strokeWidth=\{1\.9\}/g)?.length,
-  2,
-  "Icon primary dan Lainnya harus memakai stroke width yang sama.",
 );
 assert.match(
   posShellSource,

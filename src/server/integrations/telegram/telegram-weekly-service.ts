@@ -26,6 +26,13 @@ export type FinalizeTelegramWeeklyAfterClosingInput = {
   closingBusinessDate: string;
 };
 
+export type EnqueueTelegramWeeklyPeriodInput = Omit<
+  FinalizeTelegramWeeklyAfterClosingInput,
+  "integrationEnabled" | "closingBusinessDate"
+> & {
+  period: TelegramWeeklyPeriod;
+};
+
 export type FinalizeTelegramWeeklyAfterClosingResult =
   | { status: "integration_disabled" }
   | { status: "destination_unavailable" }
@@ -164,14 +171,10 @@ async function getWeeklyDepositBoundary(
   };
 }
 
-export async function finalizeTelegramWeeklyAfterClosingInTransaction(
+export async function enqueueTelegramWeeklyPeriodInTransaction(
   transaction: TelegramRepositoryTransaction,
-  input: FinalizeTelegramWeeklyAfterClosingInput,
+  input: EnqueueTelegramWeeklyPeriodInput,
 ): Promise<FinalizeTelegramWeeklyAfterClosingResult> {
-  if (!input.integrationEnabled) {
-    return { status: "integration_disabled" };
-  }
-
   const destination = await findEnabledTelegramDestinationForOutlet(transaction, {
     organizationId: input.organizationId,
     outletId: input.outletId,
@@ -179,7 +182,7 @@ export async function finalizeTelegramWeeklyAfterClosingInTransaction(
   });
   if (!destination) return { status: "destination_unavailable" };
 
-  const period = getLatestCompletedWeeklyPeriod(input.closingBusinessDate);
+  const period = input.period;
   const previousPeriod = getPreviousWeeklyPeriod(period);
   const [current, previous, depositBoundary] = await Promise.all([
     aggregateWeeklyPeriod(transaction, {
@@ -272,4 +275,22 @@ export async function finalizeTelegramWeeklyAfterClosingInTransaction(
   return delivery.created
     ? { status: "enqueued", deliveryId: delivery.delivery.id, period }
     : { status: "duplicate", deliveryId: delivery.delivery.id, period };
+}
+
+export async function finalizeTelegramWeeklyAfterClosingInTransaction(
+  transaction: TelegramRepositoryTransaction,
+  input: FinalizeTelegramWeeklyAfterClosingInput,
+): Promise<FinalizeTelegramWeeklyAfterClosingResult> {
+  if (!input.integrationEnabled) {
+    return { status: "integration_disabled" };
+  }
+
+  return enqueueTelegramWeeklyPeriodInTransaction(transaction, {
+    maxAttempts: input.maxAttempts,
+    organizationId: input.organizationId,
+    outletId: input.outletId,
+    outletCode: input.outletCode,
+    outletName: input.outletName,
+    period: getLatestCompletedWeeklyPeriod(input.closingBusinessDate),
+  });
 }

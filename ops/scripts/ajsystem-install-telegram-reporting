@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 027
+
+ACTION="${1:-}"
+PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
+DEPLOYMENT_USER="${ASIHJAYA_DEPLOYMENT_USER:-ubuntu}"
+DEPLOYMENT_GROUP="${ASIHJAYA_DEPLOYMENT_GROUP:-ubuntu}"
+INSTALL_DIR="${ASIHJAYA_AUTOMATION_INSTALL_DIR:-/usr/local/sbin}"
+SYSTEMD_DIR="${ASIHJAYA_SYSTEMD_DIR:-/etc/systemd/system}"
+ENV_FILE="${ASIHJAYA_ENV_FILE:-/etc/asihjaya-rms/production.env}"
+DEPLOYMENT_STATE_ROOT="${ASIHJAYA_DEPLOYMENT_STATE_ROOT:-/var/lib/asihjaya-rms/deployments}"
+RELEASE_ENV_FILE="${ASIHJAYA_RELEASE_ENV_FILE:-$DEPLOYMENT_STATE_ROOT/current.env}"
+TELEGRAM_STATE_ROOT="${ASIHJAYA_TELEGRAM_STATE_ROOT:-/var/lib/asihjaya-rms/telegram-reporting}"
+
+TELEGRAM_COMMAND="ajsystem-telegram-reporting"
+MONITOR_COMMAND="ajsystem-monitor"
+UNITS=(
+  ajsystem-telegram-delivery.service
+  ajsystem-telegram-delivery.timer
+  ajsystem-telegram-report-reconcile.service
+  ajsystem-telegram-report-reconcile.timer
+)
+TIMERS=(
+  ajsystem-telegram-delivery.timer
+  ajsystem-telegram-report-reconcile.timer
+)
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  sudo ./ops/scripts/ajsystem-install-telegram-reporting install
+  sudo ./ops/scripts/ajsystem-install-telegram-reporting verify
+  sudo ./ops/scripts/ajsystem-install-telegram-reporting uninstall
+
+Installer tidak meng-enable timer secara otomatis. Timer baru diaktifkan setelah
+production destination dan test message selesai diverifikasi.
+USAGE
+}
+
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 64
+}
+
+log() {
+  printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*"
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "command wajib tidak tersedia: $1"
+}
+
+assert_absolute() {
+  [[ "$2" == /* ]] || fail "$1 harus absolute: $2"
+}
+
+read_env_file_value() {
+  local file_path="$1" key="$2" line value
+  line="$(grep -E "^${key}=" "$file_path" | tail -n 1 || true)"
+  value="${line#*=}"
+  value="${value%$'\r'}"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "$value"
+}
+
+[[ "$EUID" -eq 0 ]] || fail "installer wajib dijalankan dengan sudo/root."
+case "$ACTION" in
+  install|verify|uninstall)
+    [[ $# -eq 1 ]] || { usage >&2; exit 64; }
+    ;;
+  *)
+    usage >&2
+    exit 64
+    ;;
+esac
+
+for pair in \
+  "PROJECT_DIR:$PROJECT_DIR" \
+  "INSTALL_DIR:$INSTALL_DIR" \
+  "SYSTEMD_DIR:$SYSTEMD_DIR" \
+  "ENV_FILE:$ENV_FILE" \
+  "RELEASE_ENV_FILE:$RELEASE_ENV_FILE" \
+  "TELEGRAM_STATE_ROOT:$TELEGRAM_STATE_ROOT"
+do
+  assert_absolute "${pair%%:*}" "${pair#*:}"
+done
+
+for command_name in install stat sha256sum bash id getent runuser date rm mkdir grep tail awk systemctl systemd-analyze git; do
+  require_command "$command_name"
+done
+getent passwd "$DEPLOYMENT_USER" >/dev/null || fail "deployment user tidak ditemukan: $DEPLOYMENT_USER"
+getent group "$DEPLOYMENT_GROUP" >/dev/null || fail "deployment group tidak ditemukan: $DEPLOYMENT_GROUP"
+id -nG "$DEPLOYMENT_USER" | tr ' ' '\n' | grep -Fxq docker || fail "user $DEPLOYMENT_USER wajib menjadi anggota grup docker."
+
+source_command_path() {
+  printf '%s/ops/scripts/%s' "$PROJECT_DIR" "$1"
+}
+
+installed_command_path() {
+  printf '%s/%s' "$INSTALL_DIR" "$1"
+}
+
+source_unit_path() {
+  printf '%s/ops/systemd/%s' "$PROJECT_DIR" "$1"
+}
+
+installed_unit_path() {
+  printf '%s/%s' "$SYSTEMD_DIR" "$1"
+}
+
+verify_source_release() {
+  [[ -d "$PROJECT_DIR/.git" ]] || fail "Git working copy tidak ditemukan: $PROJECT_DIR"
+  [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || fail "production environment tidak tersedia: $ENV_FILE"
+  [[ -f "$RELEASE_ENV_FILE" && ! -L "$RELEASE_ENV_FILE" ]] || fail "current release environment tidak tersedia: $RELEASE_ENV_FILE"
+  runuser -u "$DEPLOYMENT_USER" -- test -r "$ENV_FILE" || fail "$DEPLOYMENT_USER tidak dapat membaca production environment."
+
+  local head revision
+  head="$(runuser -u "$DEPLOYMENT_USER" -- git -C "$PROJECT_DIR" rev-parse HEAD)"
+  revision="$(read_env_file_value "$RELEASE_ENV_FILE" APP_REVISION)"
+  [[ "$revision" =~ ^[a-f0-9]{40,64}$ ]] || fail "APP_REVISION current release tidak valid."
+  [[ "$head" == "$revision" ]] || fail "source checkout tidak sama dengan exact current release."
+  [[ -z "$(runuser -u "$DEPLOYMENT_USER" -- git -C "$PROJECT_DIR" status --porcelain --untracked-files=all)" ]] || fail "working tree VPS tidak bersih."
+
+  local file unit
+  for file in "$TELEGRAM_COMMAND" "$MONITOR_COMMAND"; do
+    [[ -f "$(source_command_path "$file")" && ! -L "$(source_command_path "$file")" ]] || fail "source command tidak tersedia: $file"
+    bash -n "$(source_command_path "$file")"
+  done
+  for unit in "${UNITS[@]}"; do
+    [[ -f "$(source_unit_path "$unit")" && ! -L "$(source_unit_path "$unit")" ]] || fail "source unit tidak tersedia: $unit"
+  done
+}
+
+verify_installed_file() {
+  local source="$1" destination="$2" owner="$3" group="$4" mode="$5"
+  [[ -f "$destination" && ! -L "$destination" ]] || fail "installed file tidak tersedia: $destination"
+  [[ "$(stat -c '%U' "$destination")" == "$owner" ]] || fail "owner $destination harus $owner."
+  [[ "$(stat -c '%G' "$destination")" == "$group" ]] || fail "group $destination harus $group."
+  [[ "$(stat -c '%a' "$destination")" == "$mode" ]] || fail "mode $destination harus $mode."
+  [[ "$(sha256sum "$source" | awk '{print $1}')" == "$(sha256sum "$destination" | awk '{print $1}')" ]] || fail "installed file berbeda dari exact source: $destination"
+}
+
+verify_installation() {
+  verify_source_release
+  verify_installed_file "$(source_command_path "$TELEGRAM_COMMAND")" "$(installed_command_path "$TELEGRAM_COMMAND")" root "$DEPLOYMENT_GROUP" 750
+  verify_installed_file "$(source_command_path "$MONITOR_COMMAND")" "$(installed_command_path "$MONITOR_COMMAND")" root "$DEPLOYMENT_GROUP" 750
+
+  local unit
+  for unit in "${UNITS[@]}"; do
+    verify_installed_file "$(source_unit_path "$unit")" "$(installed_unit_path "$unit")" root root 644
+    systemd-analyze verify "$(installed_unit_path "$unit")" >/dev/null
+  done
+
+  [[ -d "$TELEGRAM_STATE_ROOT" ]] || fail "Telegram state directory tidak tersedia."
+  [[ "$(stat -c '%U' "$TELEGRAM_STATE_ROOT")" == "$DEPLOYMENT_USER" ]] || fail "owner Telegram state directory harus $DEPLOYMENT_USER."
+  [[ "$(stat -c '%G' "$TELEGRAM_STATE_ROOT")" == "$DEPLOYMENT_GROUP" ]] || fail "group Telegram state directory harus $DEPLOYMENT_GROUP."
+  [[ "$(stat -c '%a' "$TELEGRAM_STATE_ROOT")" == 750 ]] || fail "mode Telegram state directory harus 750."
+  runuser -u "$DEPLOYMENT_USER" -- test -w "$TELEGRAM_STATE_ROOT" || fail "Telegram state directory tidak writable oleh $DEPLOYMENT_USER."
+
+  runuser -u "$DEPLOYMENT_USER" -- "$(installed_command_path "$TELEGRAM_COMMAND")" status >/dev/null
+  log "Verifikasi Telegram reporting installation berhasil."
+}
+
+install_all() {
+  verify_source_release
+  install -d -m 0755 -o root -g root "$INSTALL_DIR" "$SYSTEMD_DIR"
+  install -d -m 0750 -o "$DEPLOYMENT_USER" -g "$DEPLOYMENT_GROUP" "$TELEGRAM_STATE_ROOT"
+
+  install -m 0750 -o root -g "$DEPLOYMENT_GROUP" "$(source_command_path "$TELEGRAM_COMMAND")" "$(installed_command_path "$TELEGRAM_COMMAND")"
+  install -m 0750 -o root -g "$DEPLOYMENT_GROUP" "$(source_command_path "$MONITOR_COMMAND")" "$(installed_command_path "$MONITOR_COMMAND")"
+
+  local unit
+  for unit in "${UNITS[@]}"; do
+    install -m 0644 -o root -g root "$(source_unit_path "$unit")" "$(installed_unit_path "$unit")"
+  done
+
+  systemctl daemon-reload
+  log "Source Telegram reporting terpasang. Timer sengaja BELUM di-enable."
+  verify_installation
+}
+
+uninstall_all() {
+  local timer unit
+  for timer in "${TIMERS[@]}"; do
+    systemctl disable --now "$timer" >/dev/null 2>&1 || true
+  done
+  systemctl stop ajsystem-telegram-delivery.service ajsystem-telegram-report-reconcile.service >/dev/null 2>&1 || true
+
+  for unit in "${UNITS[@]}"; do
+    rm -f "$(installed_unit_path "$unit")"
+  done
+  rm -f "$(installed_command_path "$TELEGRAM_COMMAND")"
+  systemctl daemon-reload
+  systemctl reset-failed ajsystem-telegram-delivery.service ajsystem-telegram-report-reconcile.service >/dev/null 2>&1 || true
+  log "Telegram reporting units/helper dihapus. Core ajsystem-monitor dan state history dipertahankan."
+}
+
+case "$ACTION" in
+  install) install_all ;;
+  verify) verify_installation ;;
+  uninstall) uninstall_all ;;
+esac

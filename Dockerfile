@@ -108,7 +108,10 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json .npmrc tsconfig.json compose.production.yaml ./
 COPY scripts ./scripts
+COPY src/db ./src/db
 COPY src/lib/env.ts ./src/lib/env.ts
+COPY src/lib/time ./src/lib/time
+COPY src/server/integrations/telegram ./src/server/integrations/telegram
 
 RUN mkdir -p /usr/local/lib/docker/cli-plugins \
     && groupadd --system --gid 10003 operations \

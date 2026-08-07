@@ -1,0 +1,12 @@
+[Unit]
+Description=Run AJSystem Telegram report reconciliation hourly
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=1h
+AccuracySec=2min
+RandomizedDelaySec=2min
+Unit=ajsystem-telegram-report-reconcile.service
+
+[Install]
+WantedBy=timers.target

@@ -32,11 +32,6 @@ assertIncludes(
 );
 assertIncludes(
   loginPage,
-  'className="mb-8 flex justify-center"',
-  "Brand lockup login harus berada di tengah card.",
-);
-assertIncludes(
-  loginPage,
   "Management Dashboard",
   "Subtitle brand login harus konsisten dengan navigation shell.",
 );

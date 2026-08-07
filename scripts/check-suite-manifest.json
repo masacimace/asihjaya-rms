@@ -34,7 +34,21 @@
     "check-receipt-token.ts",
     "check-routes.ts",
     "check-sale-correction.ts",
-    "check-settlement-import.ts"
+    "check-settlement-import.ts",
+    "check-camera-scanner.ts",
+    "check-mobile-login-layout.ts",
+    "check-pos-mobile-navigation.ts",
+    "check-settings-hub.ts",
+    "check-settlement-import-mobile-layout.ts",
+    "check-telegram-admin.ts",
+    "check-telegram-client.ts",
+    "check-telegram-connectivity.ts",
+    "check-telegram-daily.ts",
+    "check-telegram-monthly.ts",
+    "check-telegram-opening.ts",
+    "check-telegram-outbox.ts",
+    "check-telegram-weekly.ts",
+    "check-telegram-worker.ts"
   ],
   "infrastructure": [
     "check-application-rollback.ts",
@@ -49,11 +63,10 @@
     "check-production-container.ts",
     "check-production-deployment.ts",
     "check-quality-config.ts",
-    "check-source-hygiene.ts"
+    "check-source-hygiene.ts",
+    "check-telegram-operations.ts"
   ],
-  "manual": [
-    "check-receipt-pdf-contract.tsx"
-  ],
+  "manual": ["check-receipt-pdf-contract.tsx"],
   "notes": {
     "blocking": "Kontrak aktif yang wajib lulus melalui quality gate otomatis.",
     "infrastructure": "Pemeriksaan konfigurasi quality gate, source hygiene, dan metadata migration.",

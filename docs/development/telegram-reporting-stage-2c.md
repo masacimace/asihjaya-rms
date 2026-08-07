@@ -1966,3 +1966,77 @@ npm run check:settings-hub
 npm run routes:check
 npm run check:telegram-admin
 ```
+
+## 2C.10 — VPS Services dan Timers
+
+Status: implemented locally, pending project quality gates dan VPS acceptance.
+
+Contract local-first:
+
+- source systemd dibuat di repository lokal dan di-install dari exact deployed commit;
+- tidak ada source yang diedit langsung di VPS;
+- runtime Telegram memakai immutable `ASIHJAYA_OPERATIONS_IMAGE` milik current release;
+- production secret tetap hanya dibaca dari `/etc/asihjaya-rms/production.env` dan tidak ditulis ke systemd unit;
+- installer tidak meng-enable timer secara otomatis;
+- delivery worker adalah `oneshot` yang dipicu timer setiap 2 menit;
+- reconciliation adalah `oneshot` yang dipicu timer setiap 1 jam;
+- reconciliation hanya membuat missing weekly/monthly outbox event secara idempotent dari `finance_closing_snapshots` dan tidak pernah mengirim Telegram langsung;
+- period yang berakhir saat outlet tidak buka tetap menunggu sampai ada finance closing snapshot pada/ setelah akhir period; reconciliation tidak mengirim report hanya karena jam kalender sudah melewati period end;
+- reconciliation menggunakan `telegram_report_settings.updated_at` sebagai cutoff agar enabling setting tidak membanjiri group dengan period sebelum konfigurasi reporting aktif;
+- systemd success marker disimpan pada `/var/lib/asihjaya-rms/telegram-reporting` untuk monitoring run terakhir;
+- monitor memeriksa timer, last successful delivery/reconciliation, pending/retry/failed backlog, dan oldest pending age;
+- Telegram degradation dicatat sebagai warning sehingga health utama POS tidak dibuat gagal hanya karena kanal Telegram;
+- uninstaller menghentikan/menghapus Telegram unit/helper tetapi mempertahankan state history dan core `ajsystem-monitor`.
+
+Source operations:
+
+```text
+ops/scripts/ajsystem-telegram-reporting
+ops/scripts/ajsystem-install-telegram-reporting
+ops/systemd/ajsystem-telegram-delivery.service
+ops/systemd/ajsystem-telegram-delivery.timer
+ops/systemd/ajsystem-telegram-report-reconcile.service
+ops/systemd/ajsystem-telegram-report-reconcile.timer
+```
+
+Runtime commands:
+
+```bash
+ajsystem-telegram-reporting delivery
+ajsystem-telegram-reporting reconcile
+ajsystem-telegram-reporting status
+```
+
+Installer contract:
+
+```bash
+sudo ./ops/scripts/ajsystem-install-telegram-reporting install
+sudo ./ops/scripts/ajsystem-install-telegram-reporting verify
+sudo ./ops/scripts/ajsystem-install-telegram-reporting uninstall
+```
+
+`install` bersifat idempotent dan sengaja tidak mengaktifkan timer. Activation dilakukan setelah destination production + Admin Test Message lulus.
+
+Local checks:
+
+```powershell
+npm run check:telegram-operations
+npm run test:telegram-reconciliation:local
+```
+
+VPS verification setelah exact commit deployment:
+
+```bash
+sudo ./ops/scripts/ajsystem-install-telegram-reporting install
+sudo ./ops/scripts/ajsystem-install-telegram-reporting verify
+
+systemctl list-timers 'ajsystem-telegram-*' --all --no-pager
+```
+
+Timer baru diaktifkan pada rollout production yang sudah mendapat acceptance eksplisit:
+
+```bash
+sudo systemctl enable --now \
+  ajsystem-telegram-delivery.timer \
+  ajsystem-telegram-report-reconcile.timer
+```
