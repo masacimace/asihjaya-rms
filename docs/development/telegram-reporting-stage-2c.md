@@ -1036,3 +1036,130 @@ upgraded DB→ migration 0000..0012 → seed representative existing rows
 ```
 
 Ini menjadi gate utama sebelum stage 2C.4.
+
+## 20. Stage 2C.4 — Opening notification implementation lock
+
+Stage 2C.4 mengaktifkan **event generation lokal** untuk opening shift, tetapi tetap tidak melakukan HTTP Telegram dari POS request path.
+
+### 20.1 Persisted business date
+
+Semua shift baru yang dibuka oleh aplikasi stage 2C.4 wajib mengisi:
+
+```text
+shifts.business_date = calendar date dari opened_at pada organizations.timezone
+```
+
+Implementasi memakai helper existing:
+
+```text
+getBusinessDateKey(now, auth.organization.timezone)
+```
+
+Nilai tersebut ditulis bersama row shift dalam transaction opening dan juga disimpan pada audit `shift.open`.
+
+### 20.2 Opening outbox event
+
+Event key dikunci:
+
+```text
+outlet-opened:<outlet-id>:<business-date>
+```
+
+Opening outbox hanya dibuat jika seluruh guard berikut terpenuhi:
+
+```text
+TELEGRAM_INTEGRATION_ENABLED=true
+active destination tersedia untuk outlet
+telegram_report_settings.is_active=true
+telegram_report_settings.opening_enabled=true
+```
+
+Jika salah satu guard tidak terpenuhi, opening shift tetap berjalan normal dan tidak membuat outbox Telegram.
+
+### 20.3 Transaction boundary
+
+Flow stage 2C.4:
+
+```text
+BEGIN TRANSACTION
+→ insert shift + business_date
+→ insert opening_balance cash movement
+→ insert shift.open audit log
+→ resolve destination/settings
+→ insert opening Telegram outbox idempotently
+COMMIT
+```
+
+Tidak ada `fetch()`, `sendMessage()`, atau Telegram client pada opening request path.
+
+HTTP delivery tetap menjadi tanggung jawab worker stage 2C.6.
+
+### 20.4 Immutable opening payload
+
+Opening payload snapshot V1 menyimpan:
+
+```text
+schema_version = 1
+report_type = opening
+shift_id
+outlet id/code/name
+business_date
+cashier id/name
+opened_at ISO timestamp
+opening_cash
+report timezone
+```
+
+Payload tidak menyimpan bot token atau chat ID.
+
+Message tetap plain text:
+
+```text
+🟢 OUTLET DIBUKA
+
+Outlet: <outlet>
+Tanggal operasional: <business date>
+Kasir utama: <cashier>
+Waktu buka: <HH:mm timezone>
+Kas awal: <rupiah>
+
+Shift: <uuid>
+Status: Operasional dimulai
+```
+
+### 20.5 Idempotency dan duplicate guard
+
+`enqueueTelegramDelivery()` tetap menggunakan unique database contract:
+
+```text
+unique(event_key, destination_id)
+```
+
+Pemanggilan enqueue kedua untuk opening event yang sama mengembalikan existing delivery dan tidak membuat row baru.
+
+### 20.6 Local checks
+
+Commands stage 2C.4:
+
+```powershell
+npm run check:telegram-opening
+npm run test:telegram-opening:local
+```
+
+Checker mengunci:
+
+```text
+business date timezone handling
+opening message formatter
+immutable payload
+runtime feature flag
+opening_enabled guard
+inactive destination guard
+idempotency
+transaction rollback
+no HTTP/client call pada opening path
+```
+
+`test:telegram-opening:local` memakai PostgreSQL 17 disposable, menjalankan migration terbaru, lalu menguji opening outbox terhadap database nyata.
+
+Stage 2C.4 belum mengaktifkan systemd worker/timer dan belum melakukan production acceptance test.

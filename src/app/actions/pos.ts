@@ -112,7 +112,10 @@ import {
 import { lookupPosItemByScanValue } from "@/features/pos/queries";
 import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
 import { getClientIp } from "@/lib/http/client-ip";
-import { getBusinessCompactDate } from "@/lib/time/business-time";
+import {
+  getBusinessCompactDate,
+  getBusinessDateKey,
+} from "@/lib/time/business-time";
 import {
   publishSaleCompletedNotificationInTransaction,
   publishSaleRecoveryNotification,
@@ -138,6 +141,8 @@ import {
   parseShiftClosingActualCash,
   ShiftClosingError,
 } from "@/lib/shifts/shift-closing";
+import { enqueueTelegramOpeningNotification } from "@/server/integrations/telegram/telegram-opening-service";
+import { getTelegramRuntimeOutboxConfig } from "@/server/integrations/telegram/telegram-runtime-config";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -4330,10 +4335,12 @@ export async function openPosShiftAction(
   }
 
   const requestMetadata = await getRequestMetadata();
+  const telegramRuntime = getTelegramRuntimeOutboxConfig();
 
   try {
     await db.transaction(async (transaction) => {
       const now = new Date();
+      const businessDate = getBusinessDateKey(now, auth.organization.timezone);
       const openingCashAmount = String(openingCash);
 
       const shiftRows = await transaction
@@ -4343,6 +4350,7 @@ export async function openPosShiftAction(
           registerId: register.id,
           openedBy: auth.user.id,
           status: "open",
+          businessDate,
           openingCash: openingCashAmount,
           expectedCash: openingCashAmount,
           openedAt: now,
@@ -4382,6 +4390,7 @@ export async function openPosShiftAction(
           registerId: register.id,
           registerCode: register.code,
           registerName: register.name,
+          businessDate,
           openingCash: openingCashAmount,
           note: note || null,
         },
@@ -4390,6 +4399,21 @@ export async function openPosShiftAction(
         metadata: {
           source: "pos.open_shift",
         },
+      });
+
+      await enqueueTelegramOpeningNotification(transaction, {
+        integrationEnabled: telegramRuntime.enabled,
+        maxAttempts: telegramRuntime.maxAttempts,
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet.id,
+        outletCode: primaryOutlet.code,
+        outletName: primaryOutlet.name,
+        shiftId: shift.id,
+        businessDate,
+        cashierId: auth.user.id,
+        cashierName: auth.user.fullName,
+        openedAt: now,
+        openingCash: openingCashAmount,
       });
     });
   } catch (error) {
