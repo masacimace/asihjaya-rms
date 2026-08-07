@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock3, LoaderCircle, StopCircle, WalletCards } from "lucide-react";
+import { Clock3, LoaderCircle, RotateCcw, StopCircle, WalletCards } from "lucide-react";
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import {
   closePosShiftAction,
   openPosShiftAction,
+  reopenPosShiftAction,
 } from "@/app/actions/pos";
 import {
   initialPosShiftActionState,
@@ -117,6 +118,30 @@ function OpenShiftSubmitButton() {
   );
 }
 
+function ReopenShiftSubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-wait disabled:opacity-70 sm:w-auto"
+    >
+      {pending ? (
+        <>
+          <LoaderCircle className="size-4 animate-spin" />
+          Membuka kembali shift...
+        </>
+      ) : (
+        <>
+          <RotateCcw className="size-4" />
+          Buka Kembali Shift
+        </>
+      )}
+    </button>
+  );
+}
+
 function CloseShiftSubmitButton() {
   const { pending } = useFormStatus();
 
@@ -144,11 +169,13 @@ function CloseShiftSubmitButton() {
 export function PosContextNotice({
   context,
   canManageShifts,
+  canReopenShifts,
   onCloseShiftClick,
   isCloseShiftPanelOpen = false,
 }: {
   context: PosOperationalContext;
   canManageShifts: boolean;
+  canReopenShifts: boolean;
   onCloseShiftClick?: () => void;
   isCloseShiftPanelOpen?: boolean;
 }) {
@@ -171,6 +198,19 @@ export function PosContextNotice({
   }
 
   if (!context.activeShift) {
+    if (context.reopenCandidate) {
+      return (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Shift tanggal operasional {context.reopenCandidate.businessDate} sudah
+          ditutup pada {formatPosShiftOpenedAt(context.reopenCandidate.closedAt)}.
+          Checkout diblokir sampai shift yang sama dibuka kembali.
+          {canReopenShifts
+            ? " Gunakan menu Buka Kembali Shift di bawah dan isi alasan reopen."
+            : " Hubungi manager/owner untuk membuka kembali shift."}
+        </div>
+      );
+    }
+
     return (
       <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
         Shift untuk register {context.register.name} belum aktif. Sales masih
@@ -252,7 +292,12 @@ export function PosOpenShiftCard({
     }
   }, [router, state.status]);
 
-  if (!context.outlet || !context.register || context.activeShift) {
+  if (
+    !context.outlet ||
+    !context.register ||
+    context.activeShift ||
+    context.reopenCandidate
+  ) {
     return null;
   }
 
@@ -314,6 +359,76 @@ export function PosOpenShiftCard({
             berikutnya.
           </p>
           <OpenShiftSubmitButton />
+        </div>
+      </form>
+    </section>
+  );
+}
+
+export function PosReopenShiftCard({
+  context,
+}: {
+  context: PosOperationalContext;
+}) {
+  const router = useRouter();
+  const [state, formAction] = useActionState(
+    reopenPosShiftAction,
+    initialPosShiftActionState,
+  );
+
+  useEffect(() => {
+    if (state.status === "success") router.refresh();
+  }, [router, state.status]);
+
+  const candidate = context.reopenCandidate;
+  if (!context.outlet || !context.register || context.activeShift || !candidate) {
+    return null;
+  }
+
+  return (
+    <section className="mb-4 rounded-2xl border border-amber-200 bg-white p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-700">
+          <RotateCcw className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-semibold text-neutral-950">Buka Kembali Shift</h2>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+            Shift {candidate.businessDate} sudah ditutup pada {formatPosShiftOpenedAt(candidate.closedAt)}.
+            Reopen menggunakan shift ID, business date, modal awal, dan alur kas yang sama; tidak membuat shift baru.
+          </p>
+        </div>
+      </div>
+
+      <form action={formAction} className="mt-4 space-y-4">
+        <input type="hidden" name="shiftId" value={candidate.id} />
+        <ActionMessage state={state} />
+
+        <div className="grid gap-3 rounded-xl border border-amber-100 bg-amber-50/70 p-3 text-xs text-amber-950 sm:grid-cols-3">
+          <div><span className="block text-[var(--muted)]">Expected saat closing</span><strong>{formatCurrency(candidate.expectedCash)}</strong></div>
+          <div><span className="block text-[var(--muted)]">Actual closing</span><strong>{formatCurrency(candidate.actualCash)}</strong></div>
+          <div><span className="block text-[var(--muted)]">Variance closing</span><strong>{formatCurrency(candidate.cashVariance)}</strong></div>
+        </div>
+
+        <label className="block text-sm">
+          <span className="mb-2 block font-medium text-neutral-800">Alasan buka kembali <span className="text-red-600">*</span></span>
+          <textarea
+            name="reason"
+            required
+            minLength={5}
+            maxLength={500}
+            rows={3}
+            placeholder="Contoh: Shift tidak sengaja ditutup sebelum toko selesai beroperasi."
+            className="w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
+          />
+          <FieldError message={state.fieldErrors?.reason} />
+        </label>
+
+        <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-2xl text-xs leading-5 text-[var(--muted)]">
+            Hanya manager/owner berizin yang dapat melakukan reopen. Closing snapshot lama tetap diaudit sebagai superseded; laporan final baru dibuat saat closing berikutnya.
+          </p>
+          <ReopenShiftSubmitButton />
         </div>
       </form>
     </section>

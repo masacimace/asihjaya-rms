@@ -18,6 +18,7 @@ import {
   PosCloseShiftCard,
   PosContextNotice,
   PosOpenShiftCard,
+  PosReopenShiftCard,
 } from "@/components/pos/workspace/pos-shift-controls";
 import type { PosOperationalContext } from "@/features/pos/contracts";
 import { getPosWorkspacePanelContent } from "@/features/pos/workspace-state";
@@ -36,6 +37,7 @@ type PosWorkspaceDialogs = {
 type PosWorkspaceShiftProps = {
   context: PosOperationalContext;
   canManageShifts: boolean;
+  canReopenShifts: boolean;
   isCloseShiftPanelOpen: boolean;
   onToggleCloseShiftPanel: () => void;
   onCloseShiftPanel: () => void;
@@ -98,11 +100,16 @@ export function PosWorkspaceView({
           <PosContextNotice
             context={shifts.context}
             canManageShifts={shifts.canManageShifts}
+            canReopenShifts={shifts.canReopenShifts}
             isCloseShiftPanelOpen={shifts.isCloseShiftPanelOpen}
             onCloseShiftClick={shifts.onToggleCloseShiftPanel}
           />
 
-          {shifts.canManageShifts ? (
+          {shifts.canReopenShifts && shifts.context.reopenCandidate ? (
+            <PosReopenShiftCard context={shifts.context} />
+          ) : null}
+
+          {shifts.canManageShifts && !shifts.context.reopenCandidate ? (
             <PosOpenShiftCard context={shifts.context} />
           ) : null}
 

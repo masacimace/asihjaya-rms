@@ -40,6 +40,7 @@
     "check-pos-mobile-navigation.ts",
     "check-settings-hub.ts",
     "check-settlement-import-mobile-layout.ts",
+    "check-shift-reopen.ts",
     "check-telegram-admin.ts",
     "check-telegram-client.ts",
     "check-telegram-connectivity.ts",

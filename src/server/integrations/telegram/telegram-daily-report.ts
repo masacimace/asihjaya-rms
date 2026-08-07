@@ -5,9 +5,10 @@ import {
 import { assertIsoBusinessDate } from "@/server/integrations/telegram/telegram-outbox-contract";
 
 export type TelegramDailyFinanceSnapshot = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   reportType: "closing_daily";
   shiftId: string;
+  revision: number;
   outlet: {
     id: string;
     code: string;
@@ -161,9 +162,13 @@ function formatRate(value: string): string {
 export function buildTelegramDailyFinanceEventKey(
   outletId: string,
   businessDate: string,
+  revision = 1,
 ): string {
   assertIsoBusinessDate(businessDate);
-  return `daily-finance:${assertNonBlank(outletId, "TELEGRAM_OUTLET_ID_REQUIRED")}:${businessDate}`;
+  const normalizedRevision = assertCount(revision, "TELEGRAM_DAILY_REVISION_INVALID");
+  if (normalizedRevision < 1) throw new Error("TELEGRAM_DAILY_REVISION_INVALID");
+  const base = `daily-finance:${assertNonBlank(outletId, "TELEGRAM_OUTLET_ID_REQUIRED")}:${businessDate}`;
+  return normalizedRevision === 1 ? base : `${base}:r${normalizedRevision}`;
 }
 
 export function buildTelegramDailyFinanceSnapshot(
@@ -194,10 +199,14 @@ export function buildTelegramDailyFinanceSnapshot(
     throw new Error("TELEGRAM_COST_SNAPSHOT_STATE_INVALID");
   }
 
+  const revision = assertCount(input.revision, "TELEGRAM_DAILY_REVISION_INVALID");
+  if (revision < 1) throw new Error("TELEGRAM_DAILY_REVISION_INVALID");
+
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     reportType: "closing_daily",
     shiftId: assertNonBlank(input.shiftId, "TELEGRAM_SHIFT_ID_REQUIRED"),
+    revision,
     outlet: {
       id: assertNonBlank(input.outlet.id, "TELEGRAM_OUTLET_ID_REQUIRED"),
       code: assertNonBlank(input.outlet.code, "TELEGRAM_OUTLET_CODE_REQUIRED"),
@@ -350,13 +359,22 @@ export function formatTelegramDailyFinanceMessage(
     `Saldo akhir: ${formatRupiah(snapshot.customerDeposit.closingBalance)}`,
   );
 
+  const hasVariance = BigInt(snapshot.cash.variance) !== BIGINT_ZERO;
   const status =
-    BigInt(snapshot.cash.variance) === BIGINT_ZERO
-      ? "Closing sesuai"
-      : "Perlu review variance kas";
+    snapshot.revision > 1
+      ? hasVariance
+        ? "Final setelah reopen · Perlu review variance kas"
+        : "Final setelah reopen"
+      : hasVariance
+        ? "Perlu review variance kas"
+        : "Closing sesuai";
+  const title =
+    snapshot.revision > 1
+      ? `🔴 OUTLET DITUTUP — DAILY FINANCE REPORT (REVISI ${snapshot.revision})`
+      : "🔴 OUTLET DITUTUP — DAILY FINANCE REPORT";
 
   return [
-    "🔴 OUTLET DITUTUP — DAILY FINANCE REPORT",
+    title,
     "",
     `Outlet: ${snapshot.outlet.name}`,
     `Tanggal operasional: ${formatBusinessDate(snapshot.businessDate)}`,

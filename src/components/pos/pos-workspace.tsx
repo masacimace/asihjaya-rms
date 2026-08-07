@@ -63,6 +63,7 @@ type PosWorkspaceProps = {
   paymentPolicies: PosManualPaymentPolicy[];
   context: PosOperationalContext;
   canManageShifts: boolean;
+  canReopenShifts: boolean;
 };
 
 export function PosWorkspace({
@@ -73,6 +74,7 @@ export function PosWorkspace({
   paymentPolicies,
   context,
   canManageShifts,
+  canReopenShifts,
 }: PosWorkspaceProps) {
   const router = useRouter();
   const [activeCategoryId, setActiveCategoryId] = useState("all");
@@ -863,6 +865,7 @@ export function PosWorkspace({
     shifts: {
       context,
       canManageShifts,
+      canReopenShifts,
       isCloseShiftPanelOpen,
       onToggleCloseShiftPanel: () =>
         setIsCloseShiftPanelOpen((isOpen) => !isOpen),

@@ -141,6 +141,10 @@ import {
   parseShiftClosingActualCash,
   ShiftClosingError,
 } from "@/lib/shifts/shift-closing";
+import {
+  reopenClosedShift,
+  ShiftReopenError,
+} from "@/lib/shifts/shift-reopen";
 import { enqueueTelegramOpeningNotification } from "@/server/integrations/telegram/telegram-opening-service";
 import { getTelegramRuntimeOutboxConfig } from "@/server/integrations/telegram/telegram-runtime-config";
 
@@ -4249,6 +4253,61 @@ export async function closePosShiftAction(
   return success("Shift berhasil ditutup dan kas sudah direkonsiliasi.");
 }
 
+export async function reopenPosShiftAction(
+  _previousState: PosShiftActionState,
+  formData: FormData,
+): Promise<PosShiftActionState> {
+  try {
+    const auth = await requirePermission("shifts.reopen");
+    const shiftId = String(formData.get("shiftId") ?? "").trim();
+    const reason = String(formData.get("reason") ?? "").trim();
+
+    if (!UUID_PATTERN.test(shiftId)) {
+      return failure("Shift yang akan dibuka kembali tidak valid.");
+    }
+    if (reason.length < 5) {
+      return failure("Alasan membuka kembali shift wajib diisi minimal 5 karakter.", {
+        reason: "Isi alasan minimal 5 karakter.",
+      });
+    }
+    if (reason.length > 500) {
+      return failure("Alasan membuka kembali shift maksimal 500 karakter.", {
+        reason: "Maksimal 500 karakter.",
+      });
+    }
+
+    const headerStore = await headers();
+    const result = await reopenClosedShift({
+      auth,
+      shiftId,
+      reason,
+      source: "pos.reopen_shift",
+      requestMetadata: {
+        ipAddress: getClientIp(headerStore),
+        userAgent: headerStore.get("user-agent"),
+      },
+    });
+
+    revalidatePath("/pos");
+    revalidatePath("/pos/shift");
+    revalidatePath("/admin/operasional/shift");
+    revalidatePath("/admin/operasional/kas");
+    revalidatePath("/admin/pengaturan/integrasi/telegram");
+
+    return success(
+      `Shift ${result.businessDate} berhasil dibuka kembali pada shift yang sama.`,
+    );
+  } catch (error) {
+    if (error instanceof ShiftReopenError) {
+      return failure(error.message);
+    }
+    console.error("Failed to reopen POS shift", error);
+    return failure(
+      "Shift belum bisa dibuka kembali karena terjadi kendala sistem. Coba ulang atau hubungi admin.",
+    );
+  }
+}
+
 export async function openPosShiftAction(
   _previousState: PosShiftActionState,
   formData: FormData,
@@ -4419,6 +4478,11 @@ export async function openPosShiftAction(
       });
     });
   } catch (error) {
+    if (isPostgresUniqueViolation(error, "shifts_outlet_business_date_uq")) {
+      return failure(
+        "Shift untuk tanggal operasional hari ini sudah pernah dibuka. Jika shift sudah ditutup terlalu cepat, minta manager/owner menggunakan Buka Kembali Shift.",
+      );
+    }
     console.error("Failed to open POS shift", error);
 
     return failure(

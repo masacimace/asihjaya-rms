@@ -33,6 +33,7 @@ const reportLabels = {
   closing_daily: "Closing / Daily",
   weekly: "Weekly",
   monthly: "Monthly",
+  shift_reopened: "Shift Reopened",
   test: "Test",
 } as const;
 

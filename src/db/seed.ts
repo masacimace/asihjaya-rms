@@ -244,6 +244,11 @@ const permissionSeeds = [
     module: "operations",
   },
   {
+    code: "shifts.reopen",
+    name: "Membuka kembali shift yang sudah ditutup pada tanggal operasional yang sama",
+    module: "operations",
+  },
+  {
     code: "reports.view",
     name: "Melihat laporan",
     module: "reports",
@@ -415,6 +420,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "returns.receive",
     "returns.inspect",
     "shifts.manage",
+    "shifts.reopen",
     "hardware.resolve_unknown",
     "reports.view",
     "audit.view",

@@ -15,12 +15,14 @@ export default async function PosPage() {
   const initialData = await getPosInitialData({
     organizationId: auth.organization.id,
     outletId: primaryOutlet?.id,
+    timezone: auth.organization.timezone,
   });
 
   return (
     <PosWorkspace
       {...initialData}
       canManageShifts={auth.permissionCodes.includes("shifts.manage")}
+      canReopenShifts={auth.permissionCodes.includes("shifts.reopen")}
     />
   );
 }

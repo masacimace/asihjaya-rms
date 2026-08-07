@@ -1,4 +1,4 @@
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -100,6 +100,7 @@ async function loadSnapshotBusinessDates(target: ReconciliationTarget): Promise<
       and(
         eq(financeClosingSnapshots.organizationId, target.organizationId),
         eq(financeClosingSnapshots.outletId, target.outletId),
+        isNull(financeClosingSnapshots.supersededAt),
       ),
     )
     .orderBy(asc(financeClosingSnapshots.businessDate));

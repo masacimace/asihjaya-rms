@@ -1,4 +1,4 @@
-import { and, count, eq, gte, lt, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNull, lt, lte, sql } from "drizzle-orm";
 
 import {
   approvals,
@@ -219,7 +219,25 @@ async function persistFinanceSnapshot(
   transaction: TelegramRepositoryTransaction,
   input: FinalizeTelegramDailyFinanceInput,
 ) {
+  const currentSnapshot = await transaction.query.financeClosingSnapshots.findFirst({
+    where: and(
+      eq(financeClosingSnapshots.shiftId, input.shiftId),
+      isNull(financeClosingSnapshots.supersededAt),
+    ),
+  });
+
+  if (currentSnapshot) {
+    return { created: false as const, snapshot: currentSnapshot };
+  }
+
   const metrics = await calculateFinanceMetrics(transaction, input);
+  const [latestRevision] = await transaction
+    .select({ revision: financeClosingSnapshots.revision })
+    .from(financeClosingSnapshots)
+    .where(eq(financeClosingSnapshots.shiftId, input.shiftId))
+    .orderBy(desc(financeClosingSnapshots.revision))
+    .limit(1);
+  const revision = (latestRevision?.revision ?? 0) + 1;
 
   const inserted = await transaction
     .insert(financeClosingSnapshots)
@@ -228,6 +246,7 @@ async function persistFinanceSnapshot(
       organizationId: input.organizationId,
       outletId: input.outletId,
       businessDate: input.businessDate,
+      revision,
       grossSales: integerString(metrics.grossSales),
       discountTotal: integerString(metrics.discountTotal),
       netSales: integerString(metrics.netSales),
@@ -268,7 +287,9 @@ async function persistFinanceSnapshot(
       cashierId: input.cashierId,
       createdAt: input.closedAt,
     })
-    .onConflictDoNothing({ target: financeClosingSnapshots.shiftId })
+    .onConflictDoNothing({
+      target: [financeClosingSnapshots.shiftId, financeClosingSnapshots.revision],
+    })
     .returning();
 
   if (inserted[0]) {
@@ -276,7 +297,10 @@ async function persistFinanceSnapshot(
   }
 
   const existing = await transaction.query.financeClosingSnapshots.findFirst({
-    where: eq(financeClosingSnapshots.shiftId, input.shiftId),
+    where: and(
+      eq(financeClosingSnapshots.shiftId, input.shiftId),
+      eq(financeClosingSnapshots.revision, revision),
+    ),
   });
 
   if (!existing) throw new Error("FINANCE_CLOSING_SNAPSHOT_LOOKUP_FAILED");
@@ -290,6 +314,7 @@ function buildPayloadFromPersistedSnapshot(
 ): TelegramDailyFinanceSnapshot {
   return buildTelegramDailyFinanceSnapshot({
     shiftId: snapshot.shiftId,
+    revision: snapshot.revision,
     outlet: {
       id: input.outletId,
       code: input.outletCode,
@@ -379,6 +404,7 @@ export async function finalizeTelegramDailyFinanceInTransaction(
     eventKey: buildTelegramDailyFinanceEventKey(
       input.outletId,
       persisted.snapshot.businessDate,
+      persisted.snapshot.revision,
     ),
     destinationId: destination.destinationId,
     outletId: input.outletId,

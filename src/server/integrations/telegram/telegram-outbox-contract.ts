@@ -3,6 +3,7 @@ export const TELEGRAM_REPORT_TYPES = [
   "closing_daily",
   "weekly",
   "monthly",
+  "shift_reopened",
   "test",
 ] as const;
 
@@ -93,7 +94,11 @@ export function assertTelegramReportPeriod(input: {
   assertIsoBusinessDate(periodStart);
   assertIsoBusinessDate(periodEnd);
 
-  if (reportType === "opening" || reportType === "closing_daily") {
+  if (
+    reportType === "opening" ||
+    reportType === "closing_daily" ||
+    reportType === "shift_reopened"
+  ) {
     if (!businessDate) {
       throw new Error("TELEGRAM_DAILY_BUSINESS_DATE_REQUIRED");
     }

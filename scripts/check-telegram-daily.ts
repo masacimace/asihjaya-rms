@@ -94,9 +94,14 @@ assert.equal(
   buildTelegramDailyFinanceEventKey(outletId, businessDate),
   `daily-finance:${outletId}:${businessDate}`,
 );
+assert.equal(
+  buildTelegramDailyFinanceEventKey(outletId, businessDate, 2),
+  `daily-finance:${outletId}:${businessDate}:r2`,
+);
 
 const snapshot = buildTelegramDailyFinanceSnapshot({
   shiftId,
+  revision: 1,
   outlet: {
     id: outletId,
     code: "PBG",

@@ -48,6 +48,16 @@ export type PosActiveShiftContext = {
   expectedCash: string | null;
 };
 
+export type PosReopenShiftCandidate = {
+  id: string;
+  businessDate: string;
+  openedAt: Date;
+  closedAt: Date;
+  actualCash: string;
+  cashVariance: string;
+  expectedCash: string;
+};
+
 export type PosOperationalContext = {
   outlet: {
     id: string;
@@ -56,6 +66,7 @@ export type PosOperationalContext = {
   } | null;
   register: PosRegisterContext | null;
   activeShift: PosActiveShiftContext | null;
+  reopenCandidate: PosReopenShiftCandidate | null;
 };
 
 export type PosCustomerOption = {

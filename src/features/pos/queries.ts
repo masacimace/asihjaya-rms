@@ -35,7 +35,10 @@ import {
   shifts,
   users,
 } from "@/db/schema";
-import { getStartOfBusinessDay } from "@/lib/time/business-time";
+import {
+  getBusinessDateKey,
+  getStartOfBusinessDay,
+} from "@/lib/time/business-time";
 import {
   DEFAULT_MANUAL_PAYMENT_POLICIES,
   isNonCashManualPaymentMethod,
@@ -226,9 +229,11 @@ function getScannedItemUnavailableMessage({
 export async function getPosInitialData({
   organizationId,
   outletId,
+  timezone,
 }: {
   organizationId: string;
   outletId?: string | null;
+  timezone: string;
 }): Promise<PosInitialData> {
   if (!outletId) {
     return {
@@ -236,6 +241,7 @@ export async function getPosInitialData({
         outlet: null,
         register: null,
         activeShift: null,
+        reopenCandidate: null,
       },
       categories: [],
       items: [],
@@ -269,6 +275,7 @@ export async function getPosInitialData({
         outlet: null,
         register: null,
         activeShift: null,
+        reopenCandidate: null,
       },
       categories: [],
       items: [],
@@ -443,8 +450,9 @@ export async function getPosInitialData({
   }
 
   const register = registerRows[0] ?? null;
+  const currentBusinessDate = getBusinessDateKey(new Date(), timezone);
 
-  const [activeShiftRows, paymentProfileRows, paymentPolicyRows] =
+  const [activeShiftRows, reopenCandidateRows, paymentProfileRows, paymentPolicyRows] =
     await Promise.all([
       register
         ? db
@@ -466,6 +474,29 @@ export async function getPosInitialData({
               ),
             )
             .orderBy(desc(shifts.openedAt))
+            .limit(1)
+        : Promise.resolve([]),
+      register
+        ? db
+            .select({
+              id: shifts.id,
+              businessDate: shifts.businessDate,
+              openedAt: shifts.openedAt,
+              closedAt: shifts.closedAt,
+              actualCash: shifts.actualCash,
+              cashVariance: shifts.cashVariance,
+              expectedCash: shifts.expectedCash,
+            })
+            .from(shifts)
+            .where(
+              and(
+                eq(shifts.outletId, outlet.id),
+                eq(shifts.registerId, register.id),
+                eq(shifts.status, "closed"),
+                eq(shifts.businessDate, currentBusinessDate),
+              ),
+            )
+            .orderBy(desc(shifts.closedAt))
             .limit(1)
         : Promise.resolve([]),
       db
@@ -546,6 +577,27 @@ export async function getPosInitialData({
       outlet,
       register,
       activeShift: activeShiftRows[0] ?? null,
+      reopenCandidate: (() => {
+        const candidate = reopenCandidateRows[0];
+        if (
+          !candidate?.businessDate ||
+          !candidate.closedAt ||
+          candidate.actualCash === null ||
+          candidate.cashVariance === null ||
+          candidate.expectedCash === null
+        ) {
+          return null;
+        }
+        return {
+          id: candidate.id,
+          businessDate: candidate.businessDate,
+          openedAt: candidate.openedAt,
+          closedAt: candidate.closedAt,
+          actualCash: candidate.actualCash,
+          cashVariance: candidate.cashVariance,
+          expectedCash: candidate.expectedCash,
+        };
+      })(),
     },
     categories: categoryRows.map((category) => ({
       ...category,

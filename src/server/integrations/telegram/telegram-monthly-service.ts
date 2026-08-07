@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 
 import { financeClosingSnapshots } from "@/db/schema";
 import {
@@ -42,6 +42,8 @@ export type FinalizeTelegramMonthlyAfterClosingResult =
 
 type MonthlyAggregate = {
   snapshotDays: number;
+  maxRevision: number;
+  sourceRevisionKey: string;
   grossSales: string;
   discountTotal: string;
   netSales: string;
@@ -74,6 +76,8 @@ async function aggregateMonthlyPeriod(
   const rows = await transaction
     .select({
       snapshotDays: sql<number>`count(*)::integer`.mapWith(Number),
+      maxRevision: sql<number>`coalesce(max(${financeClosingSnapshots.revision}), 1)::integer`.mapWith(Number),
+      sourceRevisionKey: sql<string>`md5(coalesce(string_agg(${financeClosingSnapshots.businessDate}::text || ':' || ${financeClosingSnapshots.revision}::text, ',' order by ${financeClosingSnapshots.businessDate}), ''))`,
       grossSales: sql<string>`coalesce(sum(${financeClosingSnapshots.grossSales}::numeric), 0)`,
       discountTotal: sql<string>`coalesce(sum(${financeClosingSnapshots.discountTotal}::numeric), 0)`,
       netSales: sql<string>`coalesce(sum(${financeClosingSnapshots.netSales}::numeric), 0)`,
@@ -101,11 +105,14 @@ async function aggregateMonthlyPeriod(
         eq(financeClosingSnapshots.outletId, input.outletId),
         gte(financeClosingSnapshots.businessDate, input.period.start),
         lte(financeClosingSnapshots.businessDate, input.period.end),
+        isNull(financeClosingSnapshots.supersededAt),
       ),
     );
 
   return rows[0] ?? {
     snapshotDays: 0,
+    maxRevision: 1,
+    sourceRevisionKey: "",
     grossSales: "0",
     discountTotal: "0",
     netSales: "0",
@@ -141,6 +148,7 @@ async function getMonthlyDepositBoundary(
     eq(financeClosingSnapshots.outletId, input.outletId),
     gte(financeClosingSnapshots.businessDate, input.period.start),
     lte(financeClosingSnapshots.businessDate, input.period.end),
+    isNull(financeClosingSnapshots.supersededAt),
   );
 
   const [firstRows, lastRows] = await Promise.all([
@@ -259,9 +267,14 @@ export async function enqueueTelegramMonthlyPeriodInTransaction(
     },
   });
 
+  const baseEventKey = buildTelegramMonthlyFinanceEventKey(input.outletId, period.start);
+  const eventKey =
+    current.maxRevision > 1
+      ? `${baseEventKey}:rev-${current.sourceRevisionKey.slice(0, 16)}`
+      : baseEventKey;
   const delivery = await enqueueTelegramDelivery(transaction, {
     organizationId: input.organizationId,
-    eventKey: buildTelegramMonthlyFinanceEventKey(input.outletId, period.start),
+    eventKey,
     destinationId: destination.destinationId,
     outletId: input.outletId,
     reportType: "monthly",

@@ -302,6 +302,7 @@ export const telegramReportTypeEnum = pgEnum("telegram_report_type", [
   "closing_daily",
   "weekly",
   "monthly",
+  "shift_reopened",
   "test",
 ]);
 
@@ -1558,6 +1559,12 @@ export const financeClosingSnapshots = pgTable(
       .notNull()
       .references(() => outlets.id, { onDelete: "restrict" }),
     businessDate: date("business_date", { mode: "string" }).notNull(),
+    revision: integer("revision").default(1).notNull(),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
+    supersededByUserId: uuid("superseded_by_user_id").references(() => users.id, {
+      onDelete: "restrict",
+    }),
+    supersededReason: text("superseded_reason"),
     grossSales: numeric("gross_sales", { precision: 18, scale: 0 })
       .default("0")
       .notNull(),
@@ -1638,14 +1645,40 @@ export const financeClosingSnapshots = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("finance_closing_snapshots_shift_uq").on(table.shiftId),
-    uniqueIndex("finance_closing_snapshots_outlet_business_date_uq").on(
+    uniqueIndex("finance_closing_snapshots_shift_revision_uq").on(
+      table.shiftId,
+      table.revision,
+    ),
+    uniqueIndex("finance_closing_snapshots_outlet_date_revision_uq").on(
       table.outletId,
       table.businessDate,
+      table.revision,
     ),
+    uniqueIndex("finance_closing_snapshots_current_shift_uq")
+      .on(table.shiftId)
+      .where(sql`${table.supersededAt} is null`),
+    uniqueIndex("finance_closing_snapshots_current_outlet_date_uq")
+      .on(table.outletId, table.businessDate)
+      .where(sql`${table.supersededAt} is null`),
     index("finance_closing_snapshots_org_period_idx").on(
       table.organizationId,
       table.businessDate,
+    ),
+    check(
+      "finance_closing_snapshots_revision_positive_ck",
+      sql`${table.revision} > 0`,
+    ),
+    check(
+      "finance_closing_snapshots_superseded_state_ck",
+      sql`(
+        ${table.supersededAt} is null
+        and ${table.supersededByUserId} is null
+        and ${table.supersededReason} is null
+      ) or (
+        ${table.supersededAt} is not null
+        and ${table.supersededByUserId} is not null
+        and length(btrim(${table.supersededReason})) >= 5
+      )`,
     ),
     check(
       "finance_closing_snapshots_sales_nonnegative_ck",

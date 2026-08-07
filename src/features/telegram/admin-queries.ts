@@ -29,7 +29,13 @@ export type TelegramDeliveryHistoryRow = {
   createdAt: Date;
   outletName: string;
   destinationName: string;
-  reportType: "opening" | "closing_daily" | "weekly" | "monthly" | "test";
+  reportType:
+    | "opening"
+    | "closing_daily"
+    | "weekly"
+    | "monthly"
+    | "shift_reopened"
+    | "test";
   status: "pending" | "processing" | "retry" | "sent" | "failed" | "cancelled";
   attemptCount: number;
   maxAttempts: number;
@@ -40,76 +46,88 @@ export type TelegramDeliveryHistoryRow = {
 };
 
 export async function getTelegramAdminOverview(organizationId: string) {
-  const [outletRows, destinationRows, deliveryRows, statusRows] = await Promise.all([
-    db
-      .select({
-        id: outlets.id,
-        code: outlets.code,
-        name: outlets.name,
-      })
-      .from(outlets)
-      .where(and(eq(outlets.organizationId, organizationId), eq(outlets.isActive, true)))
-      .orderBy(asc(outlets.name)),
+  const [outletRows, destinationRows, deliveryRows, statusRows] =
+    await Promise.all([
+      db
+        .select({
+          id: outlets.id,
+          code: outlets.code,
+          name: outlets.name,
+        })
+        .from(outlets)
+        .where(
+          and(
+            eq(outlets.organizationId, organizationId),
+            eq(outlets.isActive, true),
+          ),
+        )
+        .orderBy(asc(outlets.name)),
 
-    db
-      .select({
-        id: telegramDestinations.id,
-        outletId: telegramDestinations.outletId,
-        name: telegramDestinations.name,
-        chatId: telegramDestinations.chatId,
-        isActive: telegramDestinations.isActive,
-        createdAt: telegramDestinations.createdAt,
-        openingEnabled: telegramReportSettings.openingEnabled,
-        closingDailyEnabled: telegramReportSettings.closingDailyEnabled,
-        weeklyEnabled: telegramReportSettings.weeklyEnabled,
-        monthlyEnabled: telegramReportSettings.monthlyEnabled,
-        timezone: telegramReportSettings.timezone,
-        settingsActive: telegramReportSettings.isActive,
-      })
-      .from(telegramDestinations)
-      .leftJoin(
-        telegramReportSettings,
-        eq(telegramReportSettings.destinationId, telegramDestinations.id),
-      )
-      .where(eq(telegramDestinations.organizationId, organizationId))
-      .orderBy(desc(telegramDestinations.isActive), desc(telegramDestinations.updatedAt)),
+      db
+        .select({
+          id: telegramDestinations.id,
+          outletId: telegramDestinations.outletId,
+          name: telegramDestinations.name,
+          chatId: telegramDestinations.chatId,
+          isActive: telegramDestinations.isActive,
+          createdAt: telegramDestinations.createdAt,
+          openingEnabled: telegramReportSettings.openingEnabled,
+          closingDailyEnabled: telegramReportSettings.closingDailyEnabled,
+          weeklyEnabled: telegramReportSettings.weeklyEnabled,
+          monthlyEnabled: telegramReportSettings.monthlyEnabled,
+          timezone: telegramReportSettings.timezone,
+          settingsActive: telegramReportSettings.isActive,
+        })
+        .from(telegramDestinations)
+        .leftJoin(
+          telegramReportSettings,
+          eq(telegramReportSettings.destinationId, telegramDestinations.id),
+        )
+        .where(eq(telegramDestinations.organizationId, organizationId))
+        .orderBy(
+          desc(telegramDestinations.isActive),
+          desc(telegramDestinations.updatedAt),
+        ),
 
-    db
-      .select({
-        id: telegramDeliveryOutbox.id,
-        createdAt: telegramDeliveryOutbox.createdAt,
-        outletName: outlets.name,
-        destinationName: telegramDestinations.name,
-        reportType: telegramDeliveryOutbox.reportType,
-        status: telegramDeliveryOutbox.status,
-        attemptCount: telegramDeliveryOutbox.attemptCount,
-        maxAttempts: telegramDeliveryOutbox.maxAttempts,
-        sentAt: telegramDeliveryOutbox.sentAt,
-        telegramMessageId: telegramDeliveryOutbox.telegramMessageId,
-        lastErrorCode: telegramDeliveryOutbox.lastErrorCode,
-        lastErrorMessage: telegramDeliveryOutbox.lastErrorMessage,
-      })
-      .from(telegramDeliveryOutbox)
-      .innerJoin(outlets, eq(outlets.id, telegramDeliveryOutbox.outletId))
-      .innerJoin(
-        telegramDestinations,
-        eq(telegramDestinations.id, telegramDeliveryOutbox.destinationId),
-      )
-      .where(eq(telegramDeliveryOutbox.organizationId, organizationId))
-      .orderBy(desc(telegramDeliveryOutbox.createdAt))
-      .limit(50),
+      db
+        .select({
+          id: telegramDeliveryOutbox.id,
+          createdAt: telegramDeliveryOutbox.createdAt,
+          outletName: outlets.name,
+          destinationName: telegramDestinations.name,
+          reportType: telegramDeliveryOutbox.reportType,
+          status: telegramDeliveryOutbox.status,
+          attemptCount: telegramDeliveryOutbox.attemptCount,
+          maxAttempts: telegramDeliveryOutbox.maxAttempts,
+          sentAt: telegramDeliveryOutbox.sentAt,
+          telegramMessageId: telegramDeliveryOutbox.telegramMessageId,
+          lastErrorCode: telegramDeliveryOutbox.lastErrorCode,
+          lastErrorMessage: telegramDeliveryOutbox.lastErrorMessage,
+        })
+        .from(telegramDeliveryOutbox)
+        .innerJoin(outlets, eq(outlets.id, telegramDeliveryOutbox.outletId))
+        .innerJoin(
+          telegramDestinations,
+          eq(telegramDestinations.id, telegramDeliveryOutbox.destinationId),
+        )
+        .where(eq(telegramDeliveryOutbox.organizationId, organizationId))
+        .orderBy(desc(telegramDeliveryOutbox.createdAt))
+        .limit(50),
 
-    db
-      .select({
-        status: telegramDeliveryOutbox.status,
-        total: count(),
-      })
-      .from(telegramDeliveryOutbox)
-      .where(eq(telegramDeliveryOutbox.organizationId, organizationId))
-      .groupBy(telegramDeliveryOutbox.status),
-  ]);
+      db
+        .select({
+          status: telegramDeliveryOutbox.status,
+          total: count(),
+        })
+        .from(telegramDeliveryOutbox)
+        .where(eq(telegramDeliveryOutbox.organizationId, organizationId))
+        .groupBy(telegramDeliveryOutbox.status),
+    ]);
 
-  const latestDestinationByOutlet = new Map<string, (typeof destinationRows)[number]>();
+  const latestDestinationByOutlet = new Map<
+    string,
+    (typeof destinationRows)[number]
+  >();
   for (const row of destinationRows) {
     if (!latestDestinationByOutlet.has(row.outletId)) {
       latestDestinationByOutlet.set(row.outletId, row);
@@ -134,9 +152,9 @@ export async function getTelegramAdminOverview(organizationId: string) {
     };
   });
 
-  const statusCounts = Object.fromEntries(statusRows.map((row) => [row.status, row.total])) as Partial<
-    Record<TelegramDeliveryHistoryRow["status"], number>
-  >;
+  const statusCounts = Object.fromEntries(
+    statusRows.map((row) => [row.status, row.total]),
+  ) as Partial<Record<TelegramDeliveryHistoryRow["status"], number>>;
 
   return {
     destinations,
@@ -198,7 +216,8 @@ export async function getTelegramDeliveryDetail(input: {
       httpStatus: telegramDeliveryAttempts.httpStatus,
       telegramOk: telegramDeliveryAttempts.telegramOk,
       telegramErrorCode: telegramDeliveryAttempts.telegramErrorCode,
-      telegramErrorDescription: telegramDeliveryAttempts.telegramErrorDescription,
+      telegramErrorDescription:
+        telegramDeliveryAttempts.telegramErrorDescription,
       telegramMessageId: telegramDeliveryAttempts.telegramMessageId,
       durationMs: telegramDeliveryAttempts.durationMs,
     })
