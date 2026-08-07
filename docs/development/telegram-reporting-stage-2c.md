@@ -1544,3 +1544,178 @@ unexpected internal error → failed
 Regression sebelum commit tetap mencakup client/outbox/opening/daily checks serta `typecheck`, `lint`, `build`, dan source hygiene.
 
 Stage 2C.6 belum membuat weekly/monthly report, admin UI, atau systemd unit/timer source. Systemd tetap stage 2C.10.
+
+## 23. Stage 2C.7 — Weekly Finance Report
+
+Stage 2C.7 menambahkan event weekly berbasis immutable `finance_closing_snapshots`. Tidak ada query ulang ke master product/cost dan tidak ada HTTP Telegram pada closing path.
+
+### 23.1 Period contract
+
+Weekly selalu memakai business date kalender:
+
+```text
+Senin 00:00 → Minggu 23:59
+```
+
+Karena source agregasi adalah `finance_closing_snapshots.business_date`, batas minggu tidak bergantung pada tanggal server atau waktu worker mengirim message.
+
+Contoh:
+
+```text
+business_date 2026-08-03 (Senin)
+→ period 2026-08-03 ... 2026-08-09
+
+business_date 2026-08-09 (Minggu)
+→ period yang sama sudah selesai setelah closing
+
+business_date 2026-08-10 (Senin)
+→ latest completed period tetap 2026-08-03 ... 2026-08-09
+```
+
+Jika outlet tidak buka pada Minggu, report menunggu closing berikutnya dan tetap mengunci period minggu yang sudah selesai. Closing hook 2C.7 hanya mengejar latest completed week. Period lama yang terlewat karena downtime/inaktivitas panjang akan ditangani reconciliation job, bukan dengan mengubah period weekly.
+
+### 23.2 Source of truth
+
+Weekly hanya menjumlahkan:
+
+```text
+finance_closing_snapshots
+WHERE outlet_id = target
+AND business_date BETWEEN period_start AND period_end
+```
+
+Field weekly:
+
+```text
+gross sales
+discount
+net sales
+cost of goods
+gross margin
+gross margin rate
+cash
+bank transfer
+EDC debit
+EDC credit
+Dana Titip opening / in / used / withdrawal / adjustment / closing
+total cash variance
+transaction count
+items sold
+```
+
+QRIS dan `other` tetap di luar payment contract Telegram V1.
+
+### 23.3 Cost completeness
+
+Weekly COGS dan gross margin hanya authoritative jika seluruh daily snapshot dalam period mempunyai:
+
+```text
+cost_snapshot_complete = true
+```
+
+Jika satu daily snapshot saja incomplete:
+
+```text
+weekly cost_snapshot_complete = false
+cost_of_goods = null
+gross_margin = null
+gross_margin_rate = null
+```
+
+Report menampilkan `Belum tersedia`; partial COGS tidak boleh dianggap sebagai weekly COGS.
+
+### 23.4 Dana Titip weekly
+
+Dana Titip tetap section finansial tersendiri, bukan revenue dan bukan tender biasa.
+
+```text
+opening balance = opening balance snapshot pertama dalam period
+in / used / withdrawal / adjustment = SUM movement snapshot period
+closing balance = closing balance snapshot terakhir dalam period
+```
+
+Hari outlet tutup tanpa snapshot tidak mengubah period kalender.
+
+### 23.5 Previous-week comparison
+
+Comparison weekly menggunakan **Net Sales**:
+
+```text
+(current_week_net_sales - previous_week_net_sales)
+/ previous_week_net_sales
+* 100
+```
+
+Jika previous week tidak mempunyai finance snapshot atau previous Net Sales = 0, comparison berstatus `Belum tersedia`. Nilai 0 tidak digunakan sebagai denominator palsu.
+
+### 23.6 Event dan idempotency
+
+Event key:
+
+```text
+weekly-finance:<outlet-id>:<period-start>
+```
+
+Outbox:
+
+```text
+report_type = weekly
+business_date = NULL
+period_start = Monday
+period_end = Sunday
+```
+
+Unique `(event_key, destination_id)` tetap menjadi duplicate guard.
+
+Weekly event hanya dibuat ketika:
+
+```text
+TELEGRAM_INTEGRATION_ENABLED=true
+destination active
+report settings active
+weekly_enabled=true
+period sudah selesai
+period mempunyai minimal satu finance closing snapshot
+```
+
+### 23.7 Closing boundary
+
+Di closing transaction:
+
+```text
+close shift
+→ finance closing snapshot + daily event
+→ check latest completed weekly period
+→ weekly outbox event (jika eligible)
+→ COMMIT
+```
+
+Weekly service tidak memanggil `fetch`, `TelegramClient`, atau `sendMessage`. Pengiriman tetap menjadi tanggung jawab delivery worker 2C.6.
+
+### 23.8 Local checks
+
+```powershell
+npm run check:telegram-weekly
+npm run test:telegram-weekly:local
+```
+
+Database rehearsal menguji:
+
+```text
+Monday–Sunday boundary
+week crossing month
+direct Sunday generation
+delayed generation setelah outlet tidak buka Minggu
+aggregation dari finance_closing_snapshots
+previous-week Net Sales comparison
+previous week unavailable/zero guard
+cost completeness across daily snapshots
+Dana Titip weekly boundary + movements
+period_start/period_end outbox
+idempotency
+weekly_enabled guard
+integration disabled guard
+no-data period guard
+```
+
+Stage 2C.7 belum membuat monthly report, admin UI, reconciliation timer, atau systemd unit.

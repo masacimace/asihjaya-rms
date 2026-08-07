@@ -18,6 +18,7 @@ import {
   summarizeCashMovements,
 } from "@/lib/shifts/cash-reconciliation";
 import { finalizeTelegramDailyFinanceInTransaction } from "@/server/integrations/telegram/telegram-daily-service";
+import { finalizeTelegramWeeklyAfterClosingInTransaction } from "@/server/integrations/telegram/telegram-weekly-service";
 import { getTelegramRuntimeOutboxConfig } from "@/server/integrations/telegram/telegram-runtime-config";
 
 export class ShiftClosingError extends Error {
@@ -253,6 +254,16 @@ export async function closeShiftWithReconciliation({
       expectedCash,
       actualCash,
       cashVariance: variance,
+    });
+
+    await finalizeTelegramWeeklyAfterClosingInTransaction(transaction, {
+      integrationEnabled: telegramConfig.enabled,
+      maxAttempts: telegramConfig.maxAttempts,
+      organizationId: auth.organization.id,
+      outletId: shift.outletId,
+      outletCode: shift.outletCode,
+      outletName: shift.outletName,
+      closingBusinessDate: businessDate,
     });
 
     return {
