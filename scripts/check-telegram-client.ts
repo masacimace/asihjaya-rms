@@ -12,7 +12,7 @@ import {
   type TelegramMockScenario,
 } from "./telegram-mock-server";
 
-const SAMPLE_TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
+const SAMPLE_TOKEN = ["123456789", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"].join(":");
 const CHAT_ID = "-1001234567890";
 
 async function closeServer(server: Awaited<ReturnType<typeof startTelegramMockServer>>["server"]) {

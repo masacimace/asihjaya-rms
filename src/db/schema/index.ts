@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -290,6 +291,27 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "qris_manual",
   "qris_gateway",
   "other",
+]);
+
+export const telegramDestinationTypeEnum = pgEnum("telegram_destination_type", [
+  "private_group",
+]);
+
+export const telegramReportTypeEnum = pgEnum("telegram_report_type", [
+  "opening",
+  "closing_daily",
+  "weekly",
+  "monthly",
+  "test",
+]);
+
+export const telegramDeliveryStatusEnum = pgEnum("telegram_delivery_status", [
+  "pending",
+  "processing",
+  "retry",
+  "sent",
+  "failed",
+  "cancelled",
 ]);
 
 export const posHeldCartStatusEnum = pgEnum("pos_held_cart_status", [
@@ -1481,6 +1503,7 @@ export const shifts = pgTable(
       .references(() => users.id),
     closedBy: uuid("closed_by").references(() => users.id),
     status: shiftStatusEnum("status").default("open").notNull(),
+    businessDate: date("business_date", { mode: "string" }),
     openingCash: numeric("opening_cash", { precision: 18, scale: 0 })
       .default("0")
       .notNull(),
@@ -1500,6 +1523,9 @@ export const shifts = pgTable(
       .where(sql`${table.status} in ('open', 'closing')`),
     index("shifts_register_status_idx").on(table.registerId, table.status),
     index("shifts_outlet_opened_idx").on(table.outletId, table.openedAt),
+    uniqueIndex("shifts_outlet_business_date_uq")
+      .on(table.outletId, table.businessDate)
+      .where(sql`${table.businessDate} is not null`),
     check("shifts_opening_cash_nonnegative_ck", sql`${table.openingCash} >= 0`),
     check(
       "shifts_actual_cash_nonnegative_ck",
@@ -1514,6 +1540,373 @@ export const shifts = pgTable(
         and ${table.cashVariance} is not null
         and ${table.closedAt} is not null
       )`,
+    ),
+  ],
+);
+
+export const financeClosingSnapshots = pgTable(
+  "finance_closing_snapshots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => shifts.id, { onDelete: "restrict" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id, { onDelete: "restrict" }),
+    businessDate: date("business_date", { mode: "string" }).notNull(),
+    grossSales: numeric("gross_sales", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    discountTotal: numeric("discount_total", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    netSales: numeric("net_sales", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    costSnapshotComplete: boolean("cost_snapshot_complete")
+      .default(false)
+      .notNull(),
+    costOfGoods: numeric("cost_of_goods", { precision: 18, scale: 0 }),
+    grossMargin: numeric("gross_margin", { precision: 18, scale: 0 }),
+    grossMarginRate: numeric("gross_margin_rate", { precision: 9, scale: 4 }),
+    cashTotal: numeric("cash_total", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    bankTransferTotal: numeric("bank_transfer_total", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    debitCardTotal: numeric("debit_card_total", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    creditCardTotal: numeric("credit_card_total", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    customerDepositOpeningBalance: numeric("customer_deposit_opening_balance", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    customerDepositIn: numeric("customer_deposit_in", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    customerDepositUsed: numeric("customer_deposit_used", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    customerDepositWithdrawal: numeric("customer_deposit_withdrawal", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    customerDepositAdjustmentIn: numeric("customer_deposit_adjustment_in", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    customerDepositAdjustmentOut: numeric("customer_deposit_adjustment_out", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    customerDepositClosingBalance: numeric("customer_deposit_closing_balance", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    expectedCash: numeric("expected_cash", { precision: 18, scale: 0 }).notNull(),
+    actualCash: numeric("actual_cash", { precision: 18, scale: 0 }).notNull(),
+    cashVariance: numeric("cash_variance", { precision: 18, scale: 0 }).notNull(),
+    transactionCount: integer("transaction_count").default(0).notNull(),
+    itemsSoldCount: integer("items_sold_count").default(0).notNull(),
+    heldTransactionCount: integer("held_transaction_count").default(0).notNull(),
+    pendingApprovalCount: integer("pending_approval_count").default(0).notNull(),
+    openedAt: timestamp("opened_at", { withTimezone: true }).notNull(),
+    closedAt: timestamp("closed_at", { withTimezone: true }).notNull(),
+    cashierId: uuid("cashier_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("finance_closing_snapshots_shift_uq").on(table.shiftId),
+    uniqueIndex("finance_closing_snapshots_outlet_business_date_uq").on(
+      table.outletId,
+      table.businessDate,
+    ),
+    index("finance_closing_snapshots_org_period_idx").on(
+      table.organizationId,
+      table.businessDate,
+    ),
+    check(
+      "finance_closing_snapshots_sales_nonnegative_ck",
+      sql`${table.grossSales} >= 0 and ${table.discountTotal} >= 0 and ${table.netSales} >= 0`,
+    ),
+    check(
+      "finance_closing_snapshots_payment_nonnegative_ck",
+      sql`${table.cashTotal} >= 0
+        and ${table.bankTransferTotal} >= 0
+        and ${table.debitCardTotal} >= 0
+        and ${table.creditCardTotal} >= 0`,
+    ),
+    check(
+      "finance_closing_snapshots_deposit_nonnegative_ck",
+      sql`${table.customerDepositOpeningBalance} >= 0
+        and ${table.customerDepositIn} >= 0
+        and ${table.customerDepositUsed} >= 0
+        and ${table.customerDepositWithdrawal} >= 0
+        and ${table.customerDepositAdjustmentIn} >= 0
+        and ${table.customerDepositAdjustmentOut} >= 0
+        and ${table.customerDepositClosingBalance} >= 0`,
+    ),
+    check(
+      "finance_closing_snapshots_cost_state_ck",
+      sql`(
+        ${table.costSnapshotComplete} = false
+        and ${table.costOfGoods} is null
+        and ${table.grossMargin} is null
+        and ${table.grossMarginRate} is null
+      ) or (
+        ${table.costSnapshotComplete} = true
+        and ${table.costOfGoods} is not null
+        and ${table.costOfGoods} >= 0
+        and ${table.grossMargin} is not null
+        and ${table.grossMarginRate} is not null
+      )`,
+    ),
+    check(
+      "finance_closing_snapshots_counts_nonnegative_ck",
+      sql`${table.transactionCount} >= 0
+        and ${table.itemsSoldCount} >= 0
+        and ${table.heldTransactionCount} >= 0
+        and ${table.pendingApprovalCount} >= 0`,
+    ),
+    check(
+      "finance_closing_snapshots_actual_cash_nonnegative_ck",
+      sql`${table.actualCash} >= 0`,
+    ),
+    check(
+      "finance_closing_snapshots_time_order_ck",
+      sql`${table.closedAt} >= ${table.openedAt}`,
+    ),
+  ],
+);
+
+export const telegramDestinations = pgTable(
+  "telegram_destinations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id, { onDelete: "restrict" }),
+    name: varchar("name", { length: 160 }).notNull(),
+    chatId: varchar("chat_id", { length: 32 }).notNull(),
+    destinationType: telegramDestinationTypeEnum("destination_type")
+      .default("private_group")
+      .notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    updatedBy: uuid("updated_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("telegram_destinations_chat_id_uq").on(table.chatId),
+    uniqueIndex("telegram_destinations_one_active_per_outlet_uq")
+      .on(table.outletId)
+      .where(sql`${table.isActive} = true`),
+    index("telegram_destinations_org_outlet_idx").on(
+      table.organizationId,
+      table.outletId,
+    ),
+    check(
+      "telegram_destinations_name_not_blank_ck",
+      sql`length(btrim(${table.name})) > 0 and ${table.name} = btrim(${table.name})`,
+    ),
+    check(
+      "telegram_destinations_chat_id_not_blank_ck",
+      sql`length(btrim(${table.chatId})) > 0 and ${table.chatId} = btrim(${table.chatId})`,
+    ),
+  ],
+);
+
+export const telegramReportSettings = pgTable(
+  "telegram_report_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    destinationId: uuid("destination_id")
+      .notNull()
+      .references(() => telegramDestinations.id, { onDelete: "cascade" }),
+    openingEnabled: boolean("opening_enabled").default(false).notNull(),
+    closingDailyEnabled: boolean("closing_daily_enabled").default(false).notNull(),
+    weeklyEnabled: boolean("weekly_enabled").default(false).notNull(),
+    monthlyEnabled: boolean("monthly_enabled").default(false).notNull(),
+    timezone: varchar("timezone", { length: 64 })
+      .default("Asia/Jakarta")
+      .notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("telegram_report_settings_destination_uq").on(
+      table.destinationId,
+    ),
+    check(
+      "telegram_report_settings_timezone_not_blank_ck",
+      sql`length(btrim(${table.timezone})) > 0 and ${table.timezone} = btrim(${table.timezone})`,
+    ),
+  ],
+);
+
+export const telegramDeliveryOutbox = pgTable(
+  "telegram_delivery_outbox",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    eventKey: varchar("event_key", { length: 200 }).notNull(),
+    destinationId: uuid("destination_id")
+      .notNull()
+      .references(() => telegramDestinations.id, { onDelete: "restrict" }),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id, { onDelete: "restrict" }),
+    reportType: telegramReportTypeEnum("report_type").notNull(),
+    businessDate: date("business_date", { mode: "string" }),
+    periodStart: date("period_start", { mode: "string" }),
+    periodEnd: date("period_end", { mode: "string" }),
+    payloadSnapshotJson: jsonb("payload_snapshot_json")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    messageText: text("message_text").notNull(),
+    status: telegramDeliveryStatusEnum("status").default("pending").notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(5).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: varchar("locked_by", { length: 120 }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    telegramMessageId: varchar("telegram_message_id", { length: 64 }),
+    lastErrorCode: varchar("last_error_code", { length: 80 }),
+    lastErrorMessage: text("last_error_message"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("telegram_delivery_outbox_event_destination_uq").on(
+      table.eventKey,
+      table.destinationId,
+    ),
+    index("telegram_delivery_outbox_status_next_attempt_idx").on(
+      table.status,
+      table.nextAttemptAt,
+      table.createdAt,
+    ),
+    index("telegram_delivery_outbox_outlet_report_date_idx").on(
+      table.outletId,
+      table.reportType,
+      table.businessDate,
+      table.createdAt,
+    ),
+    index("telegram_delivery_outbox_destination_created_idx").on(
+      table.destinationId,
+      table.createdAt,
+    ),
+    check(
+      "telegram_delivery_outbox_event_key_not_blank_ck",
+      sql`length(btrim(${table.eventKey})) > 0 and ${table.eventKey} = btrim(${table.eventKey})`,
+    ),
+    check(
+      "telegram_delivery_outbox_message_not_blank_ck",
+      sql`length(${table.messageText}) > 0`,
+    ),
+    check(
+      "telegram_delivery_outbox_attempts_ck",
+      sql`${table.attemptCount} >= 0 and ${table.maxAttempts} > 0 and ${table.attemptCount} <= ${table.maxAttempts}`,
+    ),
+    check(
+      "telegram_delivery_outbox_lock_pair_ck",
+      sql`(${table.lockedAt} is null and ${table.lockedBy} is null)
+        or (${table.lockedAt} is not null and ${table.lockedBy} is not null)`,
+    ),
+    check(
+      "telegram_delivery_outbox_processing_lock_ck",
+      sql`${table.status} <> 'processing' or (${table.lockedAt} is not null and ${table.lockedBy} is not null)`,
+    ),
+    check(
+      "telegram_delivery_outbox_sent_state_ck",
+      sql`${table.status} <> 'sent' or (${table.sentAt} is not null and ${table.telegramMessageId} is not null)`,
+    ),
+    check(
+      "telegram_delivery_outbox_period_order_ck",
+      sql`${table.periodStart} is null or ${table.periodEnd} is null or ${table.periodEnd} >= ${table.periodStart}`,
+    ),
+  ],
+);
+
+export const telegramDeliveryAttempts = pgTable(
+  "telegram_delivery_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    deliveryId: uuid("delivery_id")
+      .notNull()
+      .references(() => telegramDeliveryOutbox.id, { onDelete: "cascade" }),
+    attemptNumber: integer("attempt_number").notNull(),
+    requestedAt: timestamp("requested_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    httpStatus: integer("http_status"),
+    telegramOk: boolean("telegram_ok"),
+    telegramErrorCode: integer("telegram_error_code"),
+    telegramErrorDescription: text("telegram_error_description"),
+    telegramMessageId: varchar("telegram_message_id", { length: 64 }),
+    durationMs: integer("duration_ms"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("telegram_delivery_attempts_delivery_number_uq").on(
+      table.deliveryId,
+      table.attemptNumber,
+    ),
+    index("telegram_delivery_attempts_delivery_requested_idx").on(
+      table.deliveryId,
+      table.requestedAt,
+    ),
+    check(
+      "telegram_delivery_attempts_number_positive_ck",
+      sql`${table.attemptNumber} > 0`,
+    ),
+    check(
+      "telegram_delivery_attempts_http_status_ck",
+      sql`${table.httpStatus} is null or ${table.httpStatus} between 100 and 599`,
+    ),
+    check(
+      "telegram_delivery_attempts_duration_nonnegative_ck",
+      sql`${table.durationMs} is null or ${table.durationMs} >= 0`,
+    ),
+    check(
+      "telegram_delivery_attempts_time_order_ck",
+      sql`${table.completedAt} is null or ${table.completedAt} >= ${table.requestedAt}`,
     ),
   ],
 );
@@ -2025,6 +2418,10 @@ export const saleItems = pgTable(
       precision: 18,
       scale: 0,
     }).notNull(),
+    costAmountSnapshot: numeric("cost_amount_snapshot", {
+      precision: 18,
+      scale: 0,
+    }),
     snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
@@ -2051,6 +2448,10 @@ export const saleItems = pgTable(
     check(
       "sale_items_final_price_formula_ck",
       sql`${table.finalPriceAmount} = ${table.listPriceAmount} - ${table.discountAmount}`,
+    ),
+    check(
+      "sale_items_cost_snapshot_nonnegative_ck",
+      sql`${table.costAmountSnapshot} is null or ${table.costAmountSnapshot} >= 0`,
     ),
   ],
 );

@@ -236,8 +236,10 @@ Menggunakan `opened_at`, `closed_at`, atau `sales.completed_at` secara langsung 
 Tambahkan secara additive:
 
 ```text
-shifts.business_date DATE NOT NULL
+shifts.business_date DATE NULL
 ```
+
+Nullable di level database adalah compatibility contract agar rollback ke aplikasi lama tetap dapat membuka shift. Mulai aplikasi Telegram stage 2C.4, semua shift **baru** wajib mengisi business date pada application layer dan nilainya immutable. Existing shift sebelum migration tidak di-backfill secara spekulatif.
 
 Nilai shift baru:
 
@@ -257,7 +259,13 @@ business_date = 2026-08-31
 
 Semua finance snapshot dan Telegram event menggunakan `shifts.business_date`.
 
-Migration wajib memiliki preflight/backfill untuk row shift existing sebelum kolom dibuat NOT NULL.
+Database menjaga satu shift per outlet/business date untuk row yang sudah memiliki business date melalui partial unique index:
+
+```text
+unique(outlet_id, business_date) where business_date is not null
+```
+
+Existing row dengan `business_date IS NULL` tetap valid dan tidak diklaim sebagai historical business date yang authoritative.
 
 ## 6. Historical cost dan gross margin audit
 
@@ -327,7 +335,7 @@ Audit log produk memang mencatat perubahan cost, tetapi rekonstruksi historical 
 Contract aman:
 
 ```text
-- transaksi setelah migration wajib memiliki cost snapshot valid;
+- transaksi setelah writer cost snapshot diaktifkan pada stage 2C.5 wajib memiliki cost snapshot valid;
 - jangan mengarang historical gross margin ketika reliable cost snapshot tidak tersedia;
 - comparison weekly/monthly boleh menjadi unavailable sampai snapshot period pembanding tersedia penuh.
 ```
@@ -377,14 +385,15 @@ cashier_id
 created_at
 ```
 
-Recommended constraints:
+Locked constraints:
 
 ```text
 unique(shift_id)
-index(outlet_id, business_date)
+unique(outlet_id, business_date)
+index(organization_id, business_date)
 ```
 
-Sebelum memutuskan unique `(outlet_id, business_date)`, migration preflight harus mengecek apakah database existing memiliki lebih dari satu shift per outlet/business date.
+Constraint tersebut hanya berlaku pada snapshot baru yang dibuat setelah business date tersedia. Existing shift tidak otomatis dibuatkan snapshot saat migration.
 
 ## 8. Daily finance field contract
 
@@ -894,3 +903,136 @@ non-retryable:
 Client **tidak menjalankan retry loop sendiri**. Client hanya menghasilkan satu request dan metadata `retryable` / `retryAfterSeconds`. Retry scheduling, attempt counter, max attempts, idempotency, dan delivery audit merupakan tanggung jawab outbox worker pada stage 2C.6.
 
 Structured client log tidak memuat bot token, request URL bertoken, message text, atau chat ID. Metadata yang boleh dicatat pada layer ini hanya method, outcome, HTTP status, Telegram error code, retryable, retry_after, duration, dan error kind.
+
+
+## 19. Stage 2C.3 — Database outbox dan audit
+
+Status: **implemented locally; production migration belum dijalankan.**
+
+Migration baru:
+
+```text
+drizzle/0013_telegram_reporting_foundation.sql
+```
+
+Schema foundation yang ditambahkan:
+
+```text
+shifts.business_date (nullable untuk rollback compatibility)
+sale_items.cost_amount_snapshot (nullable; historical rows tidak dipalsukan)
+finance_closing_snapshots
+telegram_destinations
+telegram_report_settings
+telegram_delivery_outbox
+telegram_delivery_attempts
+```
+
+### 19.1 Dormant schema rule
+
+Migration 0013 hanya menyediakan struktur. Stage 2C.3 **tidak** mengubah opening, checkout, atau closing flow untuk menulis Telegram event. Penulisan field baru dilakukan bertahap pada 2C.4/2C.5.
+
+Existing rows sengaja tetap:
+
+```text
+shifts.business_date = NULL
+sale_items.cost_amount_snapshot = NULL
+```
+
+Tidak ada migration yang menebak historical cost dari `product_items.cost_amount` saat ini.
+
+### 19.2 Destination dan settings constraints
+
+V1 mengunci:
+
+```text
+chat_id unique
+one active Telegram destination per outlet
+one report settings row per destination
+private_group sebagai destination type V1
+```
+
+Token bot tidak disimpan di database.
+
+### 19.3 Outbox idempotency
+
+Database mengunci:
+
+```text
+unique(event_key, destination_id)
+```
+
+Insert repository menggunakan `ON CONFLICT DO NOTHING`, kemudian mengembalikan row existing. Retry/deployment restart tidak membuat delivery row baru.
+
+### 19.4 Delivery state machine
+
+Allowed transition:
+
+```text
+pending    → processing | cancelled
+processing → sent | retry | failed
+retry      → processing | cancelled
+failed     → retry | cancelled
+sent       → terminal
+cancelled  → terminal
+```
+
+Direct transition seperti `pending → sent` atau `sent → retry` ditolak pada application contract.
+
+`processing` wajib memiliki lock pair `locked_at + locked_by`. `sent` wajib memiliki `sent_at + telegram_message_id`.
+
+### 19.5 Attempt audit
+
+Setiap attempt memiliki unique:
+
+```text
+(delivery_id, attempt_number)
+```
+
+Audit menyimpan HTTP/Telegram result metadata tanpa bot token. Retry policy/backoff belum dieksekusi pada tahap ini; itu milik worker 2C.6.
+
+### 19.6 Finance snapshot safety
+
+`finance_closing_snapshots` memiliki `cost_snapshot_complete`. Jika historical cost tidak lengkap:
+
+```text
+cost_snapshot_complete = false
+cost_of_goods = NULL
+gross_margin = NULL
+gross_margin_rate = NULL
+```
+
+Dengan demikian sistem tidak mengarang gross margin. Setelah seluruh sale item pada shift memiliki cost snapshot valid, field cost/margin boleh disimpan.
+
+Payment snapshot V1 hanya menyediakan:
+
+```text
+cash_total
+bank_transfer_total
+debit_card_total
+credit_card_total
+```
+
+QRIS dan `other` tetap hold sesuai contract 2C.0. Dana Titip disimpan dalam section snapshot tersendiri.
+
+### 19.7 Checker dan local database rehearsal
+
+Commands:
+
+```powershell
+npm run check:telegram-outbox
+npm run test:telegram-outbox:local
+```
+
+`check:telegram-outbox` memvalidasi contract schema, report period, state transition, attempt limits, dan—dengan `--database`—constraint/idempotency database.
+
+`test:telegram-outbox:local` memakai PostgreSQL 17 disposable untuk dua jalur:
+
+```text
+fresh DB   → migration 0000..0013 → DB constraint checks
+upgraded DB→ migration 0000..0012 → seed representative existing rows
+           → migration 0013
+           → verify existing business_date/cost snapshot tetap NULL
+           → DB constraint checks
+```
+
+Ini menjadi gate utama sebelum stage 2C.4.

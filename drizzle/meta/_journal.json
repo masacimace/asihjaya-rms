@@ -92,6 +92,13 @@
       "when": 1785594600000,
       "tag": "0012_legacy_barcode_pos",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786095300000,
+      "tag": "0013_telegram_reporting_foundation",
+      "breakpoints": true
     }
   ]
 }

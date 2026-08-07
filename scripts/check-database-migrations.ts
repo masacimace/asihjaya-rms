@@ -143,6 +143,11 @@ async function checkLiveDatabase(): Promise<void> {
       "legacy_migration_sold_records",
       "legacy_migration_cutover_runs",
       "item_barcodes",
+      "finance_closing_snapshots",
+      "telegram_destinations",
+      "telegram_report_settings",
+      "telegram_delivery_outbox",
+      "telegram_delivery_attempts",
     ];
 
     const tableResult = await pool.query<{ table_name: string }>(
@@ -218,6 +223,109 @@ async function checkLiveDatabase(): Promise<void> {
         ],
       ],
       ["item_barcodes", ["barcode_value", "source", "is_primary", "is_active"]],
+      ["shifts", ["business_date"]],
+      ["sale_items", ["cost_amount_snapshot"]],
+      [
+        "finance_closing_snapshots",
+        [
+          "shift_id",
+          "organization_id",
+          "outlet_id",
+          "business_date",
+          "gross_sales",
+          "discount_total",
+          "net_sales",
+          "cost_snapshot_complete",
+          "cost_of_goods",
+          "gross_margin",
+          "gross_margin_rate",
+          "cash_total",
+          "bank_transfer_total",
+          "debit_card_total",
+          "credit_card_total",
+          "customer_deposit_opening_balance",
+          "customer_deposit_in",
+          "customer_deposit_used",
+          "customer_deposit_withdrawal",
+          "customer_deposit_adjustment_in",
+          "customer_deposit_adjustment_out",
+          "customer_deposit_closing_balance",
+          "expected_cash",
+          "actual_cash",
+          "cash_variance",
+          "transaction_count",
+          "items_sold_count",
+          "held_transaction_count",
+          "pending_approval_count",
+          "opened_at",
+          "closed_at",
+          "cashier_id",
+        ],
+      ],
+      [
+        "telegram_destinations",
+        [
+          "organization_id",
+          "outlet_id",
+          "name",
+          "chat_id",
+          "destination_type",
+          "is_active",
+          "created_by",
+          "updated_by",
+        ],
+      ],
+      [
+        "telegram_report_settings",
+        [
+          "destination_id",
+          "opening_enabled",
+          "closing_daily_enabled",
+          "weekly_enabled",
+          "monthly_enabled",
+          "timezone",
+          "is_active",
+        ],
+      ],
+      [
+        "telegram_delivery_outbox",
+        [
+          "event_key",
+          "destination_id",
+          "outlet_id",
+          "report_type",
+          "business_date",
+          "period_start",
+          "period_end",
+          "payload_snapshot_json",
+          "message_text",
+          "status",
+          "attempt_count",
+          "max_attempts",
+          "next_attempt_at",
+          "locked_at",
+          "locked_by",
+          "sent_at",
+          "telegram_message_id",
+          "last_error_code",
+          "last_error_message",
+        ],
+      ],
+      [
+        "telegram_delivery_attempts",
+        [
+          "delivery_id",
+          "attempt_number",
+          "requested_at",
+          "completed_at",
+          "http_status",
+          "telegram_ok",
+          "telegram_error_code",
+          "telegram_error_description",
+          "telegram_message_id",
+          "duration_ms",
+        ],
+      ],
     ]);
 
     for (const [tableName, columns] of requiredColumns) {
@@ -249,6 +357,15 @@ async function checkLiveDatabase(): Promise<void> {
       "item_barcodes_org_active_value_uq",
       "item_barcodes_item_active_primary_uq",
       "inventory_movements_migration_opening_item_uq",
+      "shifts_outlet_business_date_uq",
+      "finance_closing_snapshots_shift_uq",
+      "finance_closing_snapshots_outlet_business_date_uq",
+      "telegram_destinations_chat_id_uq",
+      "telegram_destinations_one_active_per_outlet_uq",
+      "telegram_report_settings_destination_uq",
+      "telegram_delivery_outbox_event_destination_uq",
+      "telegram_delivery_outbox_status_next_attempt_idx",
+      "telegram_delivery_attempts_delivery_number_uq",
     ];
     const indexResult = await pool.query<{ indexname: string }>(
       `select indexname
@@ -273,6 +390,12 @@ async function checkLiveDatabase(): Promise<void> {
       "legacy_migration_verifications_purity_ck",
       "legacy_migration_verifications_photo_ck",
       "legacy_migration_verifications_revision_ck",
+      "sale_items_cost_snapshot_nonnegative_ck",
+      "finance_closing_snapshots_cost_state_ck",
+      "telegram_delivery_outbox_attempts_ck",
+      "telegram_delivery_outbox_processing_lock_ck",
+      "telegram_delivery_outbox_sent_state_ck",
+      "telegram_delivery_attempts_number_positive_ck",
     ];
     const constraintResult = await pool.query<{ conname: string }>(
       `select constraint_record.conname
@@ -282,7 +405,6 @@ async function checkLiveDatabase(): Promise<void> {
        inner join pg_namespace as namespace_record
          on namespace_record.oid = table_record.relnamespace
        where namespace_record.nspname = 'public'
-         and table_record.relname = 'legacy_migration_verifications'
          and constraint_record.conname = any($1::text[])`,
       [requiredConstraints],
     );
