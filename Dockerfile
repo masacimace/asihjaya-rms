@@ -71,6 +71,17 @@ COPY drizzle ./drizzle
 COPY scripts/database-deployment-state.ts scripts/database-deployment-result.ts scripts/deployment-state.ts scripts/run-database-deployment.ts ./scripts/
 COPY src/db/schema ./src/db/schema
 
+RUN chmod a+r \
+      package.json \
+      package-lock.json \
+      .npmrc \
+      drizzle.config.ts \
+      tsconfig.json \
+    && chmod -R a+rX \
+      drizzle \
+      scripts \
+      src
+
 RUN groupadd --system --gid 10002 migrator \
     && useradd --system \
         --uid 10002 \
@@ -112,6 +123,16 @@ COPY src/db ./src/db
 COPY src/lib/env.ts ./src/lib/env.ts
 COPY src/lib/time ./src/lib/time
 COPY src/server/integrations/telegram ./src/server/integrations/telegram
+
+RUN chmod a+r \
+      package.json \
+      package-lock.json \
+      .npmrc \
+      tsconfig.json \
+      compose.production.yaml \
+    && chmod -R a+rX \
+      scripts \
+      src
 
 RUN mkdir -p /usr/local/lib/docker/cli-plugins \
     && groupadd --system --gid 10003 operations \
