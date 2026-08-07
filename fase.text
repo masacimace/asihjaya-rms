@@ -1,6 +1,0 @@
----- NEXT FITUR LANJUTAN ----
-1. PWA untuk bagian POS only
-2. Membuat batch produk menggunakan format excel
-3. Telegram Integration untuk report daily, weekly, monthly payment, opening shift, closing shift
-4. Fitur Backup & Restore fullsite database (untuk menghindari masalah Cloud VPS tidak ada fitur backup automation)
-5. Redesign UI/UX Customer Transaction History page
