@@ -1163,3 +1163,170 @@ no HTTP/client call pada opening path
 `test:telegram-opening:local` memakai PostgreSQL 17 disposable, menjalankan migration terbaru, lalu menguji opening outbox terhadap database nyata.
 
 Stage 2C.4 belum mengaktifkan systemd worker/timer dan belum melakukan production acceptance test.
+
+## 21. Stage 2C.5 — Closing + daily finance implementation lock
+
+Stage 2C.5 mulai menulis historical finance snapshot dan daily outbox pada closing shift. Tidak ada HTTP Telegram pada request path closing.
+
+### 21.1 Cost snapshot pada checkout
+
+Setiap `sale_items` baru menyimpan:
+
+```text
+cost_amount_snapshot = product_items.cost_amount pada saat checkout
+```
+
+Nilai `NULL` tetap `NULL`; aplikasi tidak mengubah missing cost menjadi nol. Snapshot JSON item juga menyimpan `costAmountSnapshot` untuk audit payload checkout.
+
+Sale item existing dari sebelum stage ini tidak di-backfill. Jika satu saja item pada shift tidak memiliki cost snapshot, finance snapshot menyimpan:
+
+```text
+cost_snapshot_complete = false
+cost_of_goods = NULL
+gross_margin = NULL
+gross_margin_rate = NULL
+```
+
+### 21.2 Daily finance formulas
+
+Hanya sale berstatus `completed` pada `shift_id` yang dihitung.
+
+```text
+gross_sales    = SUM(sales.subtotal_amount)
+discount_total = SUM(sales.discount_amount)
+net_sales      = SUM(sale_items.final_price_amount)
+
+cost_of_goods  = SUM(sale_items.cost_amount_snapshot), hanya jika lengkap
+gross_margin   = net_sales - cost_of_goods
+gross_margin_rate = gross_margin / net_sales * 100
+```
+
+`additional_fee_amount` tidak dimasukkan ke net sales Telegram V1 sesuai contract 2C.0.
+
+Payment breakdown V1 hanya:
+
+```text
+cash
+bank_transfer
+debit_card
+credit_card
+```
+
+QRIS dan `other` tetap hold dan tidak ditampilkan pada finance snapshot Telegram V1.
+
+### 21.3 Dana Titip daily snapshot
+
+Dana Titip tidak diperlakukan sebagai omzet atau tender biasa.
+
+Opening balance dihitung dari seluruh ledger outlet sebelum `shift.opened_at`. Mutasi daily dihitung pada interval `opened_at` sampai `closed_at`:
+
+```text
+deposit_in + credit          → Dana Titip masuk
+deposit_used + debit         → Dana Titip digunakan
+deposit_withdrawal + debit   → Dana Titip dicairkan
+adjustment + credit           → adjustment masuk
+adjustment + debit            → adjustment keluar
+```
+
+Closing balance:
+
+```text
+opening
++ deposit_in
++ adjustment_in
+- deposit_used
+- withdrawal
+- adjustment_out
+```
+
+### 21.4 Closing transaction boundary
+
+Flow stage 2C.5:
+
+```text
+BEGIN TRANSACTION
+→ lock/read shift
+→ hitung expected cash + variance
+→ persist business_date fallback jika shift lama masih NULL
+→ update shift menjadi closed
+→ insert shift.close audit
+→ calculate + insert immutable finance_closing_snapshots
+→ resolve destination/settings jika Telegram enabled
+→ insert daily outbox idempotently
+COMMIT
+```
+
+External Telegram API tidak dipanggil di transaction ini. Kegagalan API Telegram tetap tidak dapat membatalkan closing karena delivery HTTP baru dilakukan worker stage 2C.6.
+
+### 21.5 Daily event contract
+
+Event key:
+
+```text
+daily-finance:<outlet-id>:<business-date>
+```
+
+Outbox hanya dibuat jika:
+
+```text
+TELEGRAM_INTEGRATION_ENABLED=true
+active destination tersedia
+telegram_report_settings.is_active=true
+telegram_report_settings.closing_daily_enabled=true
+```
+
+Finance snapshot tetap dibuat ketika integration OFF atau destination tidak tersedia.
+
+### 21.6 Immutable daily payload
+
+Payload V1 menyimpan:
+
+```text
+shift/outlet/business_date/cashier/opened_at/closed_at/timezone
+sales + cost completeness
+cash/bank transfer/EDC debit/EDC credit
+Dana Titip opening/in/used/withdrawal/adjustments/closing
+expected/actual/variance
+transaction/items sold/active hold/pending approval counts
+```
+
+Message plain text membagi section menjadi:
+
+```text
+PENJUALAN
+MARGIN
+TENDER DITERIMA
+DANA TITIP
+KAS
+OPERASIONAL
+```
+
+Jika cost snapshot tidak lengkap, COGS/gross margin ditampilkan sebagai `Belum tersedia`, bukan `Rp0`.
+
+### 21.7 Local checks
+
+Commands:
+
+```powershell
+npm run check:telegram-daily
+npm run test:telegram-daily:local
+```
+
+Checker mengunci:
+
+```text
+checkout cost snapshot
+business-date fallback saat closing
+finance snapshot formulas
+Dana Titip separation
+payment V1 tanpa QRIS/other
+daily event key
+closing_daily setting guard
+immutable snapshot
+idempotency
+no HTTP/client pada closing path
+```
+
+`test:telegram-daily:local` memakai PostgreSQL 17 disposable dan menjalankan migration terbaru sebelum integration checks.
+
+Stage 2C.5 belum mengirim outbox ke Telegram. Delivery/retry/locking tetap milik stage 2C.6.

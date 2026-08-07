@@ -3576,6 +3576,7 @@ export async function completePosCheckoutAction(
             listPriceAmount: String(listPriceAmount),
             discountAmount: String(lineDiscountAmount),
             finalPriceAmount: String(finalPriceAmount),
+            costAmountSnapshot: item!.costAmount,
             snapshot: {
               sku: item!.sku,
               barcode: item!.barcode,
@@ -3596,6 +3597,7 @@ export async function completePosCheckoutAction(
               color: item!.color,
               gemstone: item!.gemstone,
               sellingAmount: item!.sellingAmount,
+              costAmountSnapshot: item!.costAmount,
               imageKey: item!.imageKey,
               productImageKey: item!.productImageKey,
             },

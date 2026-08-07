@@ -7,14 +7,18 @@ import {
   outlets,
   registers,
   shifts,
+  users,
 } from "@/db/schema";
 import { notifyShiftClosedWithVariance } from "@/features/notifications/shift";
 import type { AuthContext } from "@/lib/auth/session";
+import { getBusinessDateKey } from "@/lib/time/business-time";
 import {
   parseCashAmountInput,
   parseCashAmountValue,
   summarizeCashMovements,
 } from "@/lib/shifts/cash-reconciliation";
+import { finalizeTelegramDailyFinanceInTransaction } from "@/server/integrations/telegram/telegram-daily-service";
+import { getTelegramRuntimeOutboxConfig } from "@/server/integrations/telegram/telegram-runtime-config";
 
 export class ShiftClosingError extends Error {
   constructor(message: string) {
@@ -98,14 +102,19 @@ export async function closeShiftWithReconciliation({
     actualCash,
     varianceReason,
   });
+  const telegramConfig = getTelegramRuntimeOutboxConfig();
 
   const result = await db.transaction(async (transaction) => {
     const [shift] = await transaction
       .select({
         id: shifts.id,
         status: shifts.status,
+        businessDate: shifts.businessDate,
         openingCash: shifts.openingCash,
         expectedCash: shifts.expectedCash,
+        openedAt: shifts.openedAt,
+        cashierId: shifts.openedBy,
+        cashierName: users.fullName,
         outletId: shifts.outletId,
         registerId: shifts.registerId,
         outletCode: outlets.code,
@@ -116,6 +125,7 @@ export async function closeShiftWithReconciliation({
       .from(shifts)
       .innerJoin(outlets, eq(shifts.outletId, outlets.id))
       .innerJoin(registers, eq(shifts.registerId, registers.id))
+      .innerJoin(users, eq(shifts.openedBy, users.id))
       .where(
         and(
           eq(shifts.id, shiftId),
@@ -162,11 +172,15 @@ export async function closeShiftWithReconciliation({
     }
 
     const now = new Date();
+    const businessDate =
+      shift.businessDate ??
+      getBusinessDateKey(shift.openedAt, auth.organization.timezone);
 
     const [updatedShift] = await transaction
       .update(shifts)
       .set({
         status: "closed",
+        businessDate,
         closedBy: auth.user.id,
         expectedCash: String(expectedCash),
         actualCash: String(actualCash),
@@ -199,6 +213,7 @@ export async function closeShiftWithReconciliation({
       },
       afterData: {
         status: "closed",
+        businessDate,
         outletId: shift.outletId,
         outletCode: shift.outletCode,
         outletName: shift.outletName,
@@ -220,6 +235,24 @@ export async function closeShiftWithReconciliation({
         closedAt: now.toISOString(),
       },
       createdAt: now,
+    });
+
+    await finalizeTelegramDailyFinanceInTransaction(transaction, {
+      integrationEnabled: telegramConfig.enabled,
+      maxAttempts: telegramConfig.maxAttempts,
+      organizationId: auth.organization.id,
+      outletId: shift.outletId,
+      outletCode: shift.outletCode,
+      outletName: shift.outletName,
+      shiftId: shift.id,
+      businessDate,
+      cashierId: shift.cashierId,
+      cashierName: shift.cashierName,
+      openedAt: shift.openedAt,
+      closedAt: now,
+      expectedCash,
+      actualCash,
+      cashVariance: variance,
     });
 
     return {
