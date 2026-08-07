@@ -1719,3 +1719,197 @@ no-data period guard
 ```
 
 Stage 2C.7 belum membuat monthly report, admin UI, reconciliation timer, atau systemd unit.
+
+## 24. Stage 2C.8 — Monthly Finance Report
+
+Stage 2C.8 menambahkan event monthly berbasis immutable `finance_closing_snapshots`. Tidak ada query ulang ke master product/cost dan tidak ada HTTP Telegram pada closing path.
+
+### 24.1 Period contract
+
+Monthly selalu memakai bulan kalender berdasarkan `business_date`:
+
+```text
+tanggal 1 → hari terakhir bulan
+```
+
+Boundary bulan mengikuti kalender Gregorian, termasuk:
+
+```text
+Februari 28 hari
+Februari leap year 29 hari
+bulan 30 hari
+bulan 31 hari
+pergantian tahun Desember → Januari
+```
+
+Contoh:
+
+```text
+business_date 2026-08-31
+→ period 2026-08-01 ... 2026-08-31
+→ period selesai setelah closing
+
+business_date 2026-09-01
+→ latest completed period tetap 2026-08-01 ... 2026-08-31
+```
+
+Shift yang dibuka 31 Agustus dan secara wall-clock ditutup 1 September tetap memakai `business_date=2026-08-31`, sehingga seluruh finance snapshot tetap masuk Agustus.
+
+Jika outlet tidak buka pada hari terakhir bulan, report menunggu closing berikutnya dan tetap mengunci bulan kalender yang sudah selesai. Closing hook 2C.8 hanya mengejar latest completed month. Period lama yang terlewat karena downtime/inaktivitas panjang tetap menjadi tanggung jawab reconciliation job.
+
+### 24.2 Source of truth
+
+Monthly hanya menjumlahkan:
+
+```text
+finance_closing_snapshots
+WHERE outlet_id = target
+AND business_date BETWEEN period_start AND period_end
+```
+
+Field monthly:
+
+```text
+gross sales
+discount
+net sales
+cost of goods
+gross margin
+gross margin rate
+cash
+bank transfer
+EDC debit
+EDC credit
+Dana Titip opening / in / used / withdrawal / adjustment / closing
+total cash variance
+transaction count
+items sold
+```
+
+QRIS dan `other` tetap di luar payment contract Telegram V1.
+
+### 24.3 Cost completeness
+
+Monthly COGS dan gross margin hanya authoritative jika seluruh daily snapshot dalam bulan mempunyai:
+
+```text
+cost_snapshot_complete = true
+```
+
+Jika satu daily snapshot saja incomplete:
+
+```text
+monthly cost_snapshot_complete = false
+cost_of_goods = null
+gross_margin = null
+gross_margin_rate = null
+```
+
+Partial COGS tidak boleh dianggap sebagai COGS bulanan.
+
+### 24.4 Dana Titip monthly
+
+Dana Titip tetap section finansial tersendiri, bukan revenue dan bukan tender biasa.
+
+```text
+opening balance = opening balance snapshot pertama dalam bulan
+in / used / withdrawal / adjustment = SUM movement snapshot bulan
+closing balance = closing balance snapshot terakhir dalam bulan
+```
+
+Hari outlet tidak beroperasi tidak mengubah calendar-month boundary.
+
+### 24.5 Previous-month comparison
+
+Comparison monthly menggunakan **Net Sales**:
+
+```text
+(current_month_net_sales - previous_month_net_sales)
+/ previous_month_net_sales
+* 100
+```
+
+Jika previous month tidak mempunyai finance snapshot atau previous Net Sales = 0, comparison berstatus `Belum tersedia`.
+
+### 24.6 Event dan idempotency
+
+Event key:
+
+```text
+monthly-finance:<outlet-id>:<year-month>
+```
+
+Contoh:
+
+```text
+monthly-finance:<outlet-id>:2026-08
+```
+
+Outbox:
+
+```text
+report_type = monthly
+business_date = NULL
+period_start = first day of month
+period_end = last day of month
+```
+
+Unique `(event_key, destination_id)` tetap menjadi duplicate guard.
+
+Monthly event hanya dibuat ketika:
+
+```text
+TELEGRAM_INTEGRATION_ENABLED=true
+destination active
+report settings active
+monthly_enabled=true
+period sudah selesai
+period mempunyai minimal satu finance closing snapshot
+```
+
+### 24.7 Closing boundary
+
+Di closing transaction:
+
+```text
+close shift
+→ finance closing snapshot + daily event
+→ check weekly period
+→ check latest completed monthly period
+→ monthly outbox event (jika eligible)
+→ COMMIT
+```
+
+Monthly service tidak memanggil `fetch`, `TelegramClient`, atau `sendMessage`. Pengiriman tetap menjadi tanggung jawab delivery worker 2C.6.
+
+### 24.8 Local checks
+
+```powershell
+npm run check:telegram-monthly
+npm run test:telegram-monthly:local
+```
+
+Database rehearsal menguji:
+
+```text
+28-day February
+29-day leap-year February
+30-day month
+31-day month
+year boundary
+business-date month assignment
+direct last-day generation
+delayed generation setelah outlet tidak buka akhir bulan
+aggregation dari finance_closing_snapshots
+previous-month Net Sales comparison
+previous month unavailable/zero guard
+cost completeness across daily snapshots
+Dana Titip monthly boundary + movements
+period_start/period_end outbox
+idempotency
+monthly_enabled guard
+integration disabled guard
+no-data period guard
+```
+
+Stage 2C.8 belum membuat admin UI, reconciliation timer/job, atau systemd unit.
