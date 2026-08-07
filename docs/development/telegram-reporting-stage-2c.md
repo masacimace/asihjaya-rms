@@ -1330,3 +1330,217 @@ no HTTP/client pada closing path
 `test:telegram-daily:local` memakai PostgreSQL 17 disposable dan menjalankan migration terbaru sebelum integration checks.
 
 Stage 2C.5 belum mengirim outbox ke Telegram. Delivery/retry/locking tetap milik stage 2C.6.
+
+## 22. Stage 2C.6 — Delivery worker implementation lock
+
+Stage 2C.6 menjadi titik pertama outbox melakukan HTTP `sendMessage()` ke Telegram. Opening/closing request path tetap hanya menulis database; delivery dilakukan oleh oneshot worker terpisah.
+
+### 22.1 Worker execution contract
+
+Command lokal/runtime:
+
+```text
+npm run telegram:deliver
+```
+
+Satu invocation:
+
+```text
+recover stale processing
+→ claim due batch dengan FOR UPDATE SKIP LOCKED
+→ status processing + worker lock
+→ buat attempt audit sebelum dispatch
+→ Telegram sendMessage
+→ complete attempt audit
+→ sent / retry / failed
+→ exit
+```
+
+Batch awal dikunci pada 20 delivery per invocation. Worker tidak menjalankan loop daemon permanen; systemd timer stage 2C.10 akan memanggil oneshot command ini secara berkala.
+
+### 22.2 Concurrency dan locking
+
+Claim hanya memilih:
+
+```text
+status IN (pending, retry)
+next_attempt_at <= now
+attempt_count < max_attempts
+```
+
+Rows dikunci memakai:
+
+```text
+FOR UPDATE SKIP LOCKED
+```
+
+Lalu dalam transaction yang sama diubah menjadi:
+
+```text
+status = processing
+locked_at = now
+locked_by = <worker-id>
+```
+
+Dua worker concurrent tidak boleh mengklaim delivery yang sama.
+
+### 22.3 Attempt audit boundary
+
+Sebelum HTTP dispatch, worker membuat row `telegram_delivery_attempts` dengan:
+
+```text
+attempt_number = delivery.attempt_count + 1
+requested_at = now
+completed_at = NULL
+```
+
+Setelah hasil request diketahui, row attempt yang sama dilengkapi dengan HTTP/Telegram metadata dan `completed_at`.
+
+Ini membedakan:
+
+```text
+processing tanpa incomplete attempt
+→ worker mati sebelum dispatch dimulai
+→ aman direqueue
+
+processing + incomplete attempt
+→ dispatch mungkin sudah mencapai Telegram
+→ outcome ambiguous
+→ automatic retry DILARANG
+→ delivery menjadi failed untuk mencegah duplicate message
+```
+
+Telegram Bot API tidak menyediakan idempotency key untuk `sendMessage`, sehingga outcome ambiguous tidak boleh diasumsikan aman untuk auto-retry.
+
+### 22.4 Retry policy
+
+Retryable berasal dari typed client stage 2C.2:
+
+```text
+network
+request timeout
+HTTP / Telegram 408
+HTTP / Telegram 429
+HTTP / Telegram 5xx
+invalid temporary upstream response
+```
+
+Non-retryable antara lain:
+
+```text
+400 invalid request/chat
+401 invalid token
+403 forbidden/bot removed
+```
+
+Backoff setelah failed attempt:
+
+```text
+attempt 1 → +1 menit
+attempt 2 → +5 menit
+attempt 3 → +15 menit
+attempt 4 → +60 menit
+attempt 5 → failed jika max_attempts=5
+```
+
+Jika Telegram memberikan `retry_after`, worker memakai nilai yang tidak lebih cepat dari policy backoff (`max(policy, retry_after)`).
+
+Worker tidak melakukan immediate retry di dalam satu HTTP call/invocation. Retry selalu kembali melalui outbox `next_attempt_at`, sehingga seluruh attempt tetap auditable.
+
+### 22.5 Stale processing recovery
+
+Default stale threshold:
+
+```text
+30 menit
+```
+
+Recovery policy:
+
+```text
+stale processing + belum ada incomplete attempt
+→ retry sekarang
+→ lock dilepas
+
+stale processing + incomplete attempt
+→ complete attempt sebagai ambiguous
+→ failed
+→ last_error_code = AMBIGUOUS_STALE_PROCESSING
+→ tidak auto retry
+
+stale processing + attempt_count >= max_attempts
+→ failed
+```
+
+Manual retry untuk failed/ambiguous delivery baru menjadi admin action pada stage 2C.9.
+
+### 22.6 Graceful exit
+
+Runner menangani `SIGINT` dan `SIGTERM`.
+
+Jika signal diterima:
+
+```text
+current HTTP request dibiarkan selesai/timeout
+claimed row yang belum memulai attempt dilepas ke retry
+worker exit setelah state database konsisten
+```
+
+Row yang sudah memulai attempt tidak boleh dilepas sebagai safe retry karena outcome dapat ambiguous.
+
+### 22.7 Logging dan secret safety
+
+Structured worker log hanya memuat metadata seperti:
+
+```text
+delivery id
+destination id
+report type
+outcome
+attempt
+HTTP status
+Telegram error code
+duration
+error code
+```
+
+Worker log tidak memiliki field untuk:
+
+```text
+bot token
+chat id
+message text
+payload snapshot
+full tokenized Telegram URL
+```
+
+Database tetap menyimpan message text di immutable outbox karena itulah payload delivery, tetapi token tidak pernah masuk database.
+
+### 22.8 Local checks
+
+Commands stage 2C.6:
+
+```powershell
+npm run check:telegram-worker
+npm run test:telegram-worker:local
+```
+
+Disposable PostgreSQL rehearsal menguji:
+
+```text
+successful send → sent
+429 → retry + backoff + attempt audit
+timeout → retry
+5xx → retry
+403 → failed
+max attempts → failed
+safe stale lock recovery
+ambiguous stale dispatch → failed tanpa resend
+graceful release sebelum attempt
+concurrent workers + SKIP LOCKED
+unexpected internal error → failed
+```
+
+Regression sebelum commit tetap mencakup client/outbox/opening/daily checks serta `typecheck`, `lint`, `build`, dan source hygiene.
+
+Stage 2C.6 belum membuat weekly/monthly report, admin UI, atau systemd unit/timer source. Systemd tetap stage 2C.10.

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { asc, and, desc, eq, inArray, isNull, lt, lte } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -267,4 +267,367 @@ export async function appendTelegramDeliveryAttempt(
   }
 
   return rows[0];
+}
+
+
+export type ClaimedTelegramDelivery = {
+  id: string;
+  organizationId: string;
+  eventKey: string;
+  destinationId: string;
+  outletId: string;
+  reportType: TelegramReportType;
+  messageText: string;
+  attemptCount: number;
+  maxAttempts: number;
+  chatId: string;
+};
+
+export async function recoverStaleTelegramDeliveries(input: {
+  workerId: string;
+  staleBefore: Date;
+  now?: Date;
+  limit?: number;
+}) {
+  const now = input.now ?? new Date();
+  const limit = input.limit ?? 50;
+
+  if (!input.workerId.trim()) {
+    throw new Error("TELEGRAM_WORKER_ID_REQUIRED");
+  }
+  if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 200) {
+    throw new Error("TELEGRAM_STALE_RECOVERY_LIMIT_INVALID");
+  }
+
+  return db.transaction(async (transaction) => {
+    const staleRows = await transaction
+      .select({
+        id: telegramDeliveryOutbox.id,
+        attemptCount: telegramDeliveryOutbox.attemptCount,
+        maxAttempts: telegramDeliveryOutbox.maxAttempts,
+      })
+      .from(telegramDeliveryOutbox)
+      .where(
+        and(
+          eq(telegramDeliveryOutbox.status, "processing"),
+          lte(telegramDeliveryOutbox.lockedAt, input.staleBefore),
+        ),
+      )
+      .orderBy(asc(telegramDeliveryOutbox.lockedAt))
+      .limit(limit)
+      .for("update", { skipLocked: true });
+
+    let requeued = 0;
+    let ambiguousFailed = 0;
+    let exhaustedFailed = 0;
+
+    for (const row of staleRows) {
+      const [incompleteAttempt] = await transaction
+        .select({
+          attemptNumber: telegramDeliveryAttempts.attemptNumber,
+        })
+        .from(telegramDeliveryAttempts)
+        .where(
+          and(
+            eq(telegramDeliveryAttempts.deliveryId, row.id),
+            isNull(telegramDeliveryAttempts.completedAt),
+          ),
+        )
+        .orderBy(desc(telegramDeliveryAttempts.attemptNumber))
+        .limit(1);
+
+      if (incompleteAttempt) {
+        await transaction
+          .update(telegramDeliveryAttempts)
+          .set({
+            completedAt: now,
+            telegramOk: null,
+            telegramErrorDescription:
+              "Worker berhenti setelah attempt dimulai; hasil pengiriman Telegram tidak dapat dipastikan.",
+          })
+          .where(
+            and(
+              eq(telegramDeliveryAttempts.deliveryId, row.id),
+              eq(
+                telegramDeliveryAttempts.attemptNumber,
+                incompleteAttempt.attemptNumber,
+              ),
+              isNull(telegramDeliveryAttempts.completedAt),
+            ),
+          );
+
+        await transitionTelegramDelivery(transaction, {
+          deliveryId: row.id,
+          from: "processing",
+          to: "failed",
+          attemptCount: Math.max(
+            row.attemptCount,
+            incompleteAttempt.attemptNumber,
+          ),
+          maxAttempts: row.maxAttempts,
+          lastErrorCode: "AMBIGUOUS_STALE_PROCESSING",
+          lastErrorMessage:
+            "Worker berhenti setelah dispatch mungkin dimulai; automatic retry dinonaktifkan untuk mencegah duplicate message.",
+        });
+        ambiguousFailed += 1;
+        continue;
+      }
+
+      if (row.attemptCount >= row.maxAttempts) {
+        await transitionTelegramDelivery(transaction, {
+          deliveryId: row.id,
+          from: "processing",
+          to: "failed",
+          attemptCount: row.attemptCount,
+          maxAttempts: row.maxAttempts,
+          lastErrorCode: "MAX_ATTEMPTS_EXHAUSTED",
+          lastErrorMessage:
+            "Delivery stale sudah mencapai batas maksimum attempt.",
+        });
+        exhaustedFailed += 1;
+        continue;
+      }
+
+      await transitionTelegramDelivery(transaction, {
+        deliveryId: row.id,
+        from: "processing",
+        to: "retry",
+        attemptCount: row.attemptCount,
+        maxAttempts: row.maxAttempts,
+        nextAttemptAt: now,
+        lastErrorCode: "STALE_LOCK_RECOVERED",
+        lastErrorMessage:
+          "Lock worker kedaluwarsa sebelum attempt Telegram dimulai; delivery aman untuk dicoba kembali.",
+      });
+      requeued += 1;
+    }
+
+    return {
+      inspected: staleRows.length,
+      requeued,
+      ambiguousFailed,
+      exhaustedFailed,
+    };
+  });
+}
+
+export async function claimTelegramDeliveryBatch(input: {
+  workerId: string;
+  batchSize?: number;
+  now?: Date;
+}): Promise<ClaimedTelegramDelivery[]> {
+  const workerId = input.workerId.trim();
+  const batchSize = input.batchSize ?? 20;
+  const now = input.now ?? new Date();
+
+  if (!workerId) {
+    throw new Error("TELEGRAM_WORKER_ID_REQUIRED");
+  }
+  if (!Number.isSafeInteger(batchSize) || batchSize <= 0 || batchSize > 100) {
+    throw new Error("TELEGRAM_BATCH_SIZE_INVALID");
+  }
+
+  return db.transaction(async (transaction) => {
+    const candidates = await transaction
+      .select({
+        id: telegramDeliveryOutbox.id,
+        status: telegramDeliveryOutbox.status,
+      })
+      .from(telegramDeliveryOutbox)
+      .where(
+        and(
+          inArray(telegramDeliveryOutbox.status, ["pending", "retry"]),
+          lte(telegramDeliveryOutbox.nextAttemptAt, now),
+          lt(
+            telegramDeliveryOutbox.attemptCount,
+            telegramDeliveryOutbox.maxAttempts,
+          ),
+        ),
+      )
+      .orderBy(
+        asc(telegramDeliveryOutbox.nextAttemptAt),
+        asc(telegramDeliveryOutbox.createdAt),
+      )
+      .limit(batchSize)
+      .for("update", { skipLocked: true });
+
+    if (candidates.length === 0) return [];
+
+    const candidateIds = candidates.map((row) => row.id);
+
+    await transaction
+      .update(telegramDeliveryOutbox)
+      .set({
+        status: "processing",
+        lockedAt: now,
+        lockedBy: workerId,
+        updatedAt: now,
+      })
+      .where(inArray(telegramDeliveryOutbox.id, candidateIds));
+
+    const claimed = await transaction
+      .select({
+        id: telegramDeliveryOutbox.id,
+        organizationId: telegramDeliveryOutbox.organizationId,
+        eventKey: telegramDeliveryOutbox.eventKey,
+        destinationId: telegramDeliveryOutbox.destinationId,
+        outletId: telegramDeliveryOutbox.outletId,
+        reportType: telegramDeliveryOutbox.reportType,
+        messageText: telegramDeliveryOutbox.messageText,
+        attemptCount: telegramDeliveryOutbox.attemptCount,
+        maxAttempts: telegramDeliveryOutbox.maxAttempts,
+        chatId: telegramDestinations.chatId,
+      })
+      .from(telegramDeliveryOutbox)
+      .innerJoin(
+        telegramDestinations,
+        eq(telegramDestinations.id, telegramDeliveryOutbox.destinationId),
+      )
+      .where(
+        and(
+          inArray(telegramDeliveryOutbox.id, candidateIds),
+          eq(telegramDeliveryOutbox.status, "processing"),
+          eq(telegramDeliveryOutbox.lockedBy, workerId),
+        ),
+      );
+
+    const byId = new Map(claimed.map((row) => [row.id, row]));
+    return candidateIds.flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [row] : [];
+    });
+  });
+}
+
+export async function beginTelegramDeliveryAttempt(
+  transaction: TelegramRepositoryTransaction,
+  input: {
+    deliveryId: string;
+    attemptNumber: number;
+    maxAttempts: number;
+    requestedAt: Date;
+  },
+) {
+  assertTelegramDeliveryAttemptNumber(input);
+
+  const rows = await transaction
+    .insert(telegramDeliveryAttempts)
+    .values({
+      deliveryId: input.deliveryId,
+      attemptNumber: input.attemptNumber,
+      requestedAt: input.requestedAt,
+      completedAt: null,
+      httpStatus: null,
+      telegramOk: null,
+      telegramErrorCode: null,
+      telegramErrorDescription: null,
+      telegramMessageId: null,
+      durationMs: null,
+      createdAt: input.requestedAt,
+    })
+    .returning();
+
+  if (!rows[0]) {
+    throw new Error("TELEGRAM_DELIVERY_ATTEMPT_INSERT_FAILED");
+  }
+
+  return rows[0];
+}
+
+export async function completeTelegramDeliveryAttempt(
+  transaction: TelegramRepositoryTransaction,
+  input: {
+    deliveryId: string;
+    attemptNumber: number;
+    completedAt: Date;
+    httpStatus?: number | null;
+    telegramOk?: boolean | null;
+    telegramErrorCode?: number | null;
+    telegramErrorDescription?: string | null;
+    telegramMessageId?: string | null;
+    durationMs?: number | null;
+  },
+) {
+  const rows = await transaction
+    .update(telegramDeliveryAttempts)
+    .set({
+      completedAt: input.completedAt,
+      httpStatus: input.httpStatus ?? null,
+      telegramOk: input.telegramOk ?? null,
+      telegramErrorCode: input.telegramErrorCode ?? null,
+      telegramErrorDescription: input.telegramErrorDescription ?? null,
+      telegramMessageId: input.telegramMessageId ?? null,
+      durationMs: input.durationMs ?? null,
+    })
+    .where(
+      and(
+        eq(telegramDeliveryAttempts.deliveryId, input.deliveryId),
+        eq(telegramDeliveryAttempts.attemptNumber, input.attemptNumber),
+        isNull(telegramDeliveryAttempts.completedAt),
+      ),
+    )
+    .returning();
+
+  if (!rows[0]) {
+    throw new Error("TELEGRAM_DELIVERY_ATTEMPT_COMPLETE_CONFLICT");
+  }
+
+  return rows[0];
+}
+
+export async function releaseClaimedTelegramDelivery(input: {
+  deliveryId: string;
+  workerId: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+
+  return db.transaction(async (transaction) => {
+    const [delivery] = await transaction
+      .select({
+        attemptCount: telegramDeliveryOutbox.attemptCount,
+        maxAttempts: telegramDeliveryOutbox.maxAttempts,
+      })
+      .from(telegramDeliveryOutbox)
+      .where(
+        and(
+          eq(telegramDeliveryOutbox.id, input.deliveryId),
+          eq(telegramDeliveryOutbox.status, "processing"),
+          eq(telegramDeliveryOutbox.lockedBy, input.workerId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+
+    if (!delivery) return false;
+
+    const [incompleteAttempt] = await transaction
+      .select({ id: telegramDeliveryAttempts.id })
+      .from(telegramDeliveryAttempts)
+      .where(
+        and(
+          eq(telegramDeliveryAttempts.deliveryId, input.deliveryId),
+          isNull(telegramDeliveryAttempts.completedAt),
+        ),
+      )
+      .limit(1);
+
+    if (incompleteAttempt) {
+      return false;
+    }
+
+    await transitionTelegramDelivery(transaction, {
+      deliveryId: input.deliveryId,
+      from: "processing",
+      to: "retry",
+      attemptCount: delivery.attemptCount,
+      maxAttempts: delivery.maxAttempts,
+      nextAttemptAt: now,
+      lastErrorCode: "WORKER_GRACEFUL_RELEASE",
+      lastErrorMessage:
+        "Worker dihentikan sebelum attempt dimulai; delivery dilepas kembali secara aman.",
+    });
+
+    return true;
+  });
 }
