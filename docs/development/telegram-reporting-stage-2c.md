@@ -1913,3 +1913,31 @@ no-data period guard
 ```
 
 Stage 2C.8 belum membuat admin UI, reconciliation timer/job, atau systemd unit.
+
+## 2C.9 — Admin UI
+
+Status: implemented locally, pending project quality gates.
+
+Contract:
+
+- route utama: `/admin/integrasi/telegram`;
+- permission guard: `settings.manage` pada page, detail page, dan seluruh server action;
+- satu destination aktif per outlet tetap mengikuti constraint database 2C.3;
+- destination dapat mengatur opening, closing/daily, weekly, monthly, timezone, dan active state;
+- Telegram Bot Token hanya dibaca server-side dari environment dan tidak pernah menjadi prop/form/API response;
+- bot identity (`getMe`) ditampilkan sebagai health/status server-side;
+- admin test message dikirim langsung server-side sebagai `report_type=test`, bukan finance event;
+- test message boleh dijalankan ketika `TELEGRAM_INTEGRATION_ENABLED=false` selama bot token sudah dikonfigurasi, sehingga Release A dapat melakukan connectivity test sebelum timer/automatic reporting diaktifkan;
+- test message memiliki outbox row + delivery attempt audit, tetapi `max_attempts=1` agar kegagalan test tidak tiba-tiba dikirim ulang otomatis;
+- delivery history menampilkan 50 row terbaru dengan outlet, report type, status, attempts, sent time, Telegram message ID, dan last error;
+- delivery detail menampilkan message snapshot dan attempt audit;
+- manual retry hanya tersedia untuk `failed`, memakai delivery row yang sama, mempertahankan attempt history, dan bila attempt limit sudah habis menambah satu allowance attempt pada row yang sama;
+- ambiguous stale delivery tetap memerlukan review manual sebelum retry;
+- tidak ada migration baru pada 2C.9.
+
+Checker:
+
+```powershell
+npm run check:telegram-admin
+npm run test:telegram-admin:local
+```

@@ -36,6 +36,8 @@ const expectedRouteFiles = [
   "app/(admin)/admin/inventaris/item/[itemId]/edit/page.tsx",
   "app/(admin)/admin/inventaris/item/[itemId]/page.tsx",
   "app/(admin)/admin/inventaris/page.tsx",
+  "app/(admin)/admin/integrasi/telegram/delivery/[deliveryId]/page.tsx",
+  "app/(admin)/admin/integrasi/telegram/page.tsx",
   "app/(admin)/admin/keuangan/rekonsiliasi/[paymentId]/page.tsx",
   "app/(admin)/admin/keuangan/rekonsiliasi/import/[batchId]/page.tsx",
   "app/(admin)/admin/keuangan/rekonsiliasi/import/page.tsx",

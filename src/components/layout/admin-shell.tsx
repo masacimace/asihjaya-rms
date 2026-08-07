@@ -14,6 +14,7 @@ import {
   ReceiptText,
   ScanBarcode,
   Search,
+  Send,
   Settings,
   ShieldCheck,
   ShoppingBag,
@@ -134,6 +135,12 @@ const navigation: NavigationItem[] = [
     href: "/admin/administrasi",
     icon: ShieldCheck,
     access: "administration",
+  },
+  {
+    label: "Integrasi",
+    href: "/admin/integrasi/telegram",
+    icon: Send,
+    access: "settings",
   },
   {
     label: "Pengaturan",

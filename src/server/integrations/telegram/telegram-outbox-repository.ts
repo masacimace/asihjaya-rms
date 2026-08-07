@@ -202,6 +202,7 @@ export async function transitionTelegramDelivery(
     .set({
       status: input.to,
       attemptCount: input.attemptCount,
+      maxAttempts: input.maxAttempts,
       nextAttemptAt: input.nextAttemptAt ?? now,
       lockedAt: input.to === "processing" ? (input.lockedAt ?? null) : null,
       lockedBy: input.to === "processing" ? (input.lockedBy?.trim() ?? null) : null,
@@ -282,6 +283,63 @@ export type ClaimedTelegramDelivery = {
   maxAttempts: number;
   chatId: string;
 };
+
+export async function manuallyRetryTelegramDelivery(input: {
+  organizationId: string;
+  deliveryId: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+
+  return db.transaction(async (transaction) => {
+    const [delivery] = await transaction
+      .select({
+        id: telegramDeliveryOutbox.id,
+        status: telegramDeliveryOutbox.status,
+        attemptCount: telegramDeliveryOutbox.attemptCount,
+        maxAttempts: telegramDeliveryOutbox.maxAttempts,
+      })
+      .from(telegramDeliveryOutbox)
+      .where(
+        and(
+          eq(telegramDeliveryOutbox.id, input.deliveryId),
+          eq(telegramDeliveryOutbox.organizationId, input.organizationId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+
+    if (!delivery) return null;
+    if (delivery.status !== "failed") {
+      throw new Error("TELEGRAM_MANUAL_RETRY_STATUS_INVALID");
+    }
+
+    const nextMaxAttempts =
+      delivery.attemptCount >= delivery.maxAttempts
+        ? delivery.attemptCount + 1
+        : delivery.maxAttempts;
+
+    if (nextMaxAttempts > 50) {
+      throw new Error("TELEGRAM_MANUAL_RETRY_LIMIT_REACHED");
+    }
+
+    const retried = await transitionTelegramDelivery(transaction, {
+      deliveryId: delivery.id,
+      from: "failed",
+      to: "retry",
+      attemptCount: delivery.attemptCount,
+      maxAttempts: nextMaxAttempts,
+      nextAttemptAt: now,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+    });
+
+    return {
+      before: delivery,
+      after: retried,
+    };
+  });
+}
 
 export async function recoverStaleTelegramDeliveries(input: {
   workerId: string;
