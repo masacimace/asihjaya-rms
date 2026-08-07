@@ -23,7 +23,7 @@ import {
 import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission } from "@/lib/auth/session";
 
-const SETTINGS_PATH = "/admin/pengaturan";
+const SETTINGS_PATH = "/admin/pengaturan/pembayaran/manual-edc";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -86,6 +86,7 @@ async function getRequestMetadata() {
 }
 
 function revalidatePaymentSettings() {
+  revalidatePath("/admin/pengaturan");
   revalidatePath(SETTINGS_PATH);
   revalidatePath("/pos");
 }

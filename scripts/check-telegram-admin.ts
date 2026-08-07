@@ -8,9 +8,9 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = process.cwd();
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
 
-const pageSource = read("src/app/(admin)/admin/integrasi/telegram/page.tsx");
+const pageSource = read("src/app/(admin)/admin/pengaturan/integrasi/telegram/page.tsx");
 const detailSource = read(
-  "src/app/(admin)/admin/integrasi/telegram/delivery/[deliveryId]/page.tsx",
+  "src/app/(admin)/admin/pengaturan/integrasi/telegram/delivery/[deliveryId]/page.tsx",
 );
 const actionSource = read("src/app/actions/telegram-settings.ts");
 const serviceSource = read(
@@ -20,6 +20,7 @@ const repositorySource = read(
   "src/server/integrations/telegram/telegram-outbox-repository.ts",
 );
 const shellSource = read("src/components/layout/admin-shell.tsx");
+const settingsHubSource = read("src/app/(admin)/admin/pengaturan/page.tsx");
 
 assert(
   pageSource.includes('requirePermission("settings.manage")') &&
@@ -28,9 +29,11 @@ assert(
   "Admin Telegram wajib memakai permission settings.manage pada page/detail/actions.",
 );
 assert(
-  shellSource.includes('href: "/admin/integrasi/telegram"') &&
-    shellSource.includes('access: "settings"'),
-  "Navigation Integrasi Telegram harus mengikuti access settings.",
+  shellSource.includes('href: "/admin/pengaturan"') &&
+    shellSource.includes('access: "settings"') &&
+    !shellSource.includes('href: "/admin/integrasi/telegram"') &&
+    settingsHubSource.includes('href: "/admin/pengaturan/integrasi/telegram"'),
+  "Telegram harus diakses melalui Settings Hub tanpa menu Integrasi terpisah di sidebar.",
 );
 assert(
   !pageSource.includes("TELEGRAM_BOT_TOKEN") &&

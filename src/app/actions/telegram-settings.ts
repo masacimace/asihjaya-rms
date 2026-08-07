@@ -20,7 +20,7 @@ import {
 } from "@/server/integrations/telegram/telegram-admin-service";
 import { manuallyRetryTelegramDelivery } from "@/server/integrations/telegram/telegram-outbox-repository";
 
-const TELEGRAM_ADMIN_PATH = "/admin/integrasi/telegram";
+const TELEGRAM_ADMIN_PATH = "/admin/pengaturan/integrasi/telegram";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CHAT_ID_PATTERN = /^-\d{5,31}$/;

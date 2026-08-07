@@ -686,7 +686,7 @@ Saat ini owner dan system admin memiliki seluruh permission. Manager tidak menda
 Locked V1 admin rule:
 
 ```text
-/admin/integrasi/telegram
+/admin/pengaturan/integrasi/telegram
 → require admin.access melalui admin layout
 → require settings.manage untuk configure destination/settings, test message, dan manual retry
 ```
@@ -1920,7 +1920,7 @@ Status: implemented locally, pending project quality gates.
 
 Contract:
 
-- route utama: `/admin/integrasi/telegram`;
+- route utama: `/admin/pengaturan/integrasi/telegram`;
 - permission guard: `settings.manage` pada page, detail page, dan seluruh server action;
 - satu destination aktif per outlet tetap mengikuti constraint database 2C.3;
 - destination dapat mengatur opening, closing/daily, weekly, monthly, timezone, dan active state;
@@ -1940,4 +1940,29 @@ Checker:
 ```powershell
 npm run check:telegram-admin
 npm run test:telegram-admin:local
+```
+
+
+## 2C.9B — Settings Hub dan route refactor
+
+Status: implemented locally, pending project quality gates.
+
+Contract:
+
+- sidebar hanya memiliki satu entry `Pengaturan` untuk area `settings.manage`;
+- `/admin/pengaturan` menjadi Settings Hub yang ringan dan tidak memuat form konfigurasi kompleks secara langsung;
+- Manual EDC dipindahkan ke `/admin/pengaturan/pembayaran/manual-edc`;
+- Telegram Reporting dipindahkan ke `/admin/pengaturan/integrasi/telegram`;
+- detail delivery Telegram berada di `/admin/pengaturan/integrasi/telegram/delivery/[deliveryId]`;
+- route Telegram lama `/admin/integrasi/telegram` dan detail delivery lama tetap menjadi compatibility redirect ke route baru agar bookmark/link lama tidak langsung rusak;
+- server actions Manual EDC dan Telegram redirect/revalidate canonical route baru;
+- permission `settings.manage`, Telegram token isolation, destination settings, test message, delivery history, dan manual retry tidak berubah;
+- tidak ada migration atau perubahan database pada 2C.9B.
+
+Checker:
+
+```powershell
+npm run check:settings-hub
+npm run routes:check
+npm run check:telegram-admin
 ```

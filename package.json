@@ -31,6 +31,7 @@
     "check:telegram-weekly": "tsx scripts/check-telegram-weekly.ts",
     "check:telegram-monthly": "tsx scripts/check-telegram-monthly.ts",
     "check:telegram-admin": "tsx scripts/check-telegram-admin.ts",
+    "check:settings-hub": "tsx scripts/check-settings-hub.ts",
     "test:telegram-outbox:local": "tsx scripts/run-telegram-outbox-local.ts",
     "test:telegram-opening:local": "tsx scripts/run-telegram-opening-local.ts",
     "test:telegram-daily:local": "tsx scripts/run-telegram-daily-local.ts",
