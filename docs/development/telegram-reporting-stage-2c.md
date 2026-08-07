@@ -844,3 +844,53 @@ Stage 2C.0 dianggap PASS jika tim menerima contract berikut:
 ```
 
 Setelah gate ini, implementasi berpindah ke **2C.1 — Bot setup dan local connectivity**.
+
+## 23. Stage 2C.1 completion lock
+
+Stage 2C.1 dinyatakan selesai setelah local mock connectivity dan private bot/group development acceptance berhasil.
+
+Contract yang tetap berlaku:
+
+```text
+- connectivity default memakai loopback mock API;
+- API Telegram nyata memerlukan TELEGRAM_DEV_REAL_API_ALLOWED=true;
+- getUpdates hanya dipakai utility one-shot chat discovery development;
+- runtime product tetap outbound-only dan tidak memiliki polling/webhook;
+- token development hanya berada di .env lokal yang di-ignore Git.
+```
+
+## 24. Stage 2C.2 — Telegram client contract
+
+Implementasi typed client dibatasi pada:
+
+```text
+getMe()
+sendMessage()
+request timeout dengan AbortController
+typed TelegramClientError
+HTTP/Telegram error metadata
+retry_after capture
+structured redacted logging
+mocked error tests
+```
+
+Retry contract dikunci sebagai berikut:
+
+```text
+retryable:
+  network failure
+  timeout
+  HTTP/Telegram 408
+  HTTP/Telegram 429
+  HTTP/Telegram 500-599
+  invalid/malformed upstream response
+
+non-retryable:
+  HTTP/Telegram 400 malformed/invalid request
+  HTTP/Telegram 401 invalid token
+  HTTP/Telegram 403 forbidden/bot removed
+```
+
+Client **tidak menjalankan retry loop sendiri**. Client hanya menghasilkan satu request dan metadata `retryable` / `retryAfterSeconds`. Retry scheduling, attempt counter, max attempts, idempotency, dan delivery audit merupakan tanggung jawab outbox worker pada stage 2C.6.
+
+Structured client log tidak memuat bot token, request URL bertoken, message text, atau chat ID. Metadata yang boleh dicatat pada layer ini hanya method, outcome, HTTP status, Telegram error code, retryable, retry_after, duration, dan error kind.

@@ -1,43 +1,29 @@
+import { TelegramClient } from "../src/server/integrations/telegram/telegram-client";
 import { redactTelegramSecrets } from "../src/server/integrations/telegram/telegram-redaction";
-import {
-  formatTelegramDevelopmentFailure,
-  loadTelegramDevelopmentConnectivityConfig,
-  requestTelegramDevelopmentApi,
-} from "./telegram-connectivity-support";
-
-type TelegramSentMessage = {
-  message_id?: number;
-};
+import { loadTelegramDevelopmentConnectivityConfig } from "./telegram-connectivity-support";
 
 async function main() {
   const config = loadTelegramDevelopmentConnectivityConfig({ requireChatId: true });
-  const response = await requestTelegramDevelopmentApi<TelegramSentMessage>({
-    config,
-    method: "sendMessage",
-    payload: {
-      chat_id: config.chatId,
-      text: [
-        "ASIHJAYA RMS Telegram Integration",
-        "",
-        "Test message development berhasil.",
-        "Source: local-first connectivity stage 2C.1",
-      ].join("\n"),
-    },
+  const client = new TelegramClient({
+    apiBaseUrl: config.apiBaseUrl,
+    botToken: config.botToken,
+    timeoutMs: config.timeoutMs,
+  });
+  const message = await client.sendMessage({
+    chatId: config.chatId!,
+    text: [
+      "ASIHJAYA RMS Telegram Integration",
+      "",
+      "Test message development berhasil.",
+      "Source: typed Telegram client stage 2C.2",
+    ].join("\n"),
   });
 
-  if (!response.ok || !response.result) {
-    throw new Error(formatTelegramDevelopmentFailure("sendMessage", response));
-  }
-
-  console.log(
-    `Telegram test message OK (message_id=${response.result.message_id ?? "unknown"}).`,
-  );
+  console.log(`Telegram test message OK (message_id=${message.messageId}).`);
 }
 
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
-  console.error(
-    redactTelegramSecrets(message, process.env.TELEGRAM_BOT_TOKEN),
-  );
+  console.error(redactTelegramSecrets(message, process.env.TELEGRAM_BOT_TOKEN));
   process.exitCode = 1;
 });

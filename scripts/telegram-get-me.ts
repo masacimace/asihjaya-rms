@@ -1,40 +1,25 @@
+import { TelegramClient } from "../src/server/integrations/telegram/telegram-client";
 import { redactTelegramSecrets } from "../src/server/integrations/telegram/telegram-redaction";
-import {
-  formatTelegramDevelopmentFailure,
-  loadTelegramDevelopmentConnectivityConfig,
-  requestTelegramDevelopmentApi,
-} from "./telegram-connectivity-support";
-
-type TelegramBotIdentity = {
-  id?: number;
-  is_bot?: boolean;
-  first_name?: string;
-  username?: string;
-};
+import { loadTelegramDevelopmentConnectivityConfig } from "./telegram-connectivity-support";
 
 async function main() {
   const config = loadTelegramDevelopmentConnectivityConfig();
-  const response = await requestTelegramDevelopmentApi<TelegramBotIdentity>({
-    config,
-    method: "getMe",
+  const client = new TelegramClient({
+    apiBaseUrl: config.apiBaseUrl,
+    botToken: config.botToken,
+    timeoutMs: config.timeoutMs,
   });
+  const identity = await client.getMe();
 
-  if (!response.ok || !response.result) {
-    throw new Error(formatTelegramDevelopmentFailure("getMe", response));
-  }
+  const username = identity.username
+    ? `@${identity.username}`
+    : identity.firstName || "bot tanpa username";
 
-  const username = response.result.username
-    ? `@${response.result.username}`
-    : response.result.first_name || "bot tanpa username";
-  const id = response.result.id ?? "unknown";
-
-  console.log(`Telegram getMe OK: ${username} (id=${id}).`);
+  console.log(`Telegram getMe OK: ${username} (id=${identity.id}).`);
 }
 
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
-  console.error(
-    redactTelegramSecrets(message, process.env.TELEGRAM_BOT_TOKEN),
-  );
+  console.error(redactTelegramSecrets(message, process.env.TELEGRAM_BOT_TOKEN));
   process.exitCode = 1;
 });
