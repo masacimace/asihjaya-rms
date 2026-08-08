@@ -307,8 +307,8 @@ function SidebarContent({
           <Image
             src="/logo/asihjaya-brand-text.png"
             alt="Asihjaya"
-            width={64}
-            height={64}
+            width={128}
+            height={128}
             className="h-7 w-auto object-contain"
           />
           <span className="mt-0.5 block truncate text-xs font-medium text-[var(--muted)]">
@@ -728,8 +728,8 @@ export function PosShell({
               <Image
                 src="/logo/asihjaya-brand-icon.png"
                 alt="Asihjaya"
-                width={64}
-                height={64}
+                width={128}
+                height={128}
                 className="h-12 w-auto object-contain"
               />
             </span>
@@ -738,8 +738,8 @@ export function PosShell({
               <Image
                 src="/logo/asihjaya-brand-text.png"
                 alt="Asihjaya"
-                width={64}
-                height={64}
+                width={128}
+                height={128}
                 className="h-6 w-auto object-contain"
               />
               <span className="block truncate text-[12px] font-medium text-[var(--muted)]">

@@ -178,8 +178,8 @@ function AdminBrandLink({
         <Image
           src="/logo/asihjaya-brand-text.png"
           alt="Asihjaya"
-          width={68}
-          height={68}
+          width={128}
+          height={128}
           className="h-7 w-auto object-contain"
         />
         <span
@@ -567,8 +567,8 @@ export function AdminShell({
               <Image
                 src="/logo/asihjaya-brand-icon.png"
                 alt="Asihjaya"
-                width={64}
-                height={64}
+                width={128}
+                height={128}
                 className="h-12 w-auto object-contain"
               />
             </span>
@@ -577,8 +577,8 @@ export function AdminShell({
               <Image
                 src="/logo/asihjaya-brand-text.png"
                 alt="Asihjaya"
-                width={64}
-                height={64}
+                width={128}
+                height={128}
                 className="h-6 w-auto object-contain"
               />
               <span className="block truncate text-[12px] font-medium text-[var(--muted)]">
