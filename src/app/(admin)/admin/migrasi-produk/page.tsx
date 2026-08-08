@@ -14,10 +14,7 @@ import Link from "next/link";
 import { uploadLegacyProductWorkbookAction } from "@/app/actions/legacy-product-import";
 import { FormSubmitButton } from "@/components/forms/form-submit-button";
 import { getLegacyMigrationOverview } from "@/features/legacy-migration/queries";
-import {
-  hasPermission,
-  requireAnyPermission,
-} from "@/lib/auth/session";
+import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -64,7 +61,7 @@ function FlashMessage({ type, message }: { type?: string; message?: string }) {
 function BatchStatusBadge({ status }: { status: string }) {
   const label =
     status === "ready"
-      ? "Siap direview"
+      ? "Review"
       : status === "processing"
         ? "Diproses"
         : status === "failed"
@@ -92,7 +89,10 @@ export default async function LegacyProductMigrationPage({
 }: {
   searchParams: Promise<{ type?: string; message?: string }>;
 }) {
-  const auth = await requireAnyPermission(["migration.view", "migration.import"]);
+  const auth = await requireAnyPermission([
+    "migration.view",
+    "migration.import",
+  ]);
   const [data, query] = await Promise.all([
     getLegacyMigrationOverview(auth),
     searchParams,
@@ -103,14 +103,30 @@ export default async function LegacyProductMigrationPage({
     value: number;
     Icon: LucideIcon;
   }> = [
-    { label: "Batch staging", value: data.totals.batchCount, Icon: FileSpreadsheet },
-    { label: "Baris referensi", value: data.totals.stagedRows, Icon: PackageSearch },
-    { label: "Perlu perhatian", value: data.totals.warningRows, Icon: AlertTriangle },
-    { label: "Data invalid", value: data.totals.invalidRows, Icon: ShieldCheck },
+    {
+      label: "Batch staging",
+      value: data.totals.batchCount,
+      Icon: FileSpreadsheet,
+    },
+    {
+      label: "Baris referensi",
+      value: data.totals.stagedRows,
+      Icon: PackageSearch,
+    },
+    {
+      label: "Perlu perhatian",
+      value: data.totals.warningRows,
+      Icon: AlertTriangle,
+    },
+    {
+      label: "Data invalid",
+      value: data.totals.invalidRows,
+      Icon: ShieldCheck,
+    },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-clip">
       <FlashMessage type={query.type} message={query.message} />
 
       <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
@@ -136,8 +152,8 @@ export default async function LegacyProductMigrationPage({
               Guardrail aktif
             </p>
             <p className="mt-2 text-sm leading-6 text-amber-800">
-              Stok aktif tetap bersumber dari verifikasi barang fisik. Harga lama
-              hanya disimpan sebagai referensi.
+              Stok aktif tetap bersumber dari verifikasi barang fisik. Harga
+              lama hanya disimpan sebagai referensi.
             </p>
           </div>
         </div>
@@ -160,17 +176,17 @@ export default async function LegacyProductMigrationPage({
         ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)]">
+      <section className="grid w-full min-w-0 max-w-full gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)]">
         {canImport ? (
           <form
             action={uploadLegacyProductWorkbookAction}
-            className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6"
+            className="w-full min-w-0 max-w-full rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6"
           >
-            <div className="flex items-center gap-3">
-              <div className="grid size-11 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
                 <UploadCloud className="size-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h2 className="font-semibold text-neutral-950">
                   Upload export master produk
                 </h2>
@@ -181,12 +197,12 @@ export default async function LegacyProductMigrationPage({
             </div>
 
             <div className="mt-6 grid gap-4">
-              <label className="grid gap-2 text-sm font-semibold text-neutral-800">
+              <label className="grid min-w-0 gap-2 text-sm font-semibold text-neutral-800">
                 Outlet tujuan verifikasi
                 <select
                   name="outletId"
                   required
-                  className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
+                  className="h-11 w-full min-w-0 max-w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
                 >
                   <option value="">Pilih outlet</option>
                   {data.outlets.map((outlet) => (
@@ -204,12 +220,12 @@ export default async function LegacyProductMigrationPage({
                   type="file"
                   accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   required
-                  className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-3 py-4 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-950 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+                  className="block w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-3 py-4 text-xs text-neutral-700 file:mr-3 file:max-w-full file:rounded-lg file:border-0 file:bg-neutral-950 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white sm:text-sm"
                 />
               </label>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+            <div className="mt-5 min-w-0 break-words rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
               <p className="font-semibold">Yang dilakukan sistem</p>
               <p className="mt-1">
                 Mempertahankan barcode enam digit termasuk nol di depan,
@@ -220,31 +236,32 @@ export default async function LegacyProductMigrationPage({
 
             <FormSubmitButton
               pendingText="Menganalisis dan menyimpan staging..."
-              className="mt-6 w-full bg-neutral-950 hover:bg-neutral-800"
+              className="mt-6 w-full min-w-0 max-w-full bg-neutral-950 hover:bg-neutral-800"
             >
               <FileSpreadsheet className="size-4" />
               Upload dan analisis XLSX
             </FormSubmitButton>
           </form>
         ) : (
-          <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
+          <section className="w-full min-w-0 max-w-full rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
             <ShieldCheck className="size-10 text-neutral-500" />
             <h2 className="mt-4 font-semibold text-neutral-950">
               Akses lihat saja
             </h2>
             <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              Akun ini dapat melihat hasil staging, tetapi membutuhkan permission
+              Akun ini dapat melihat hasil staging, tetapi membutuhkan
+              permission
               <strong> migration.import</strong> untuk mengunggah workbook.
             </p>
           </section>
         )}
 
         <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
-          <div className="flex items-center gap-3">
-            <div className="grid size-11 place-items-center rounded-2xl bg-neutral-100 text-neutral-700">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-neutral-100 text-neutral-700">
               <ShieldCheck className="size-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="font-semibold text-neutral-950">
                 Batas aman import
               </h2>
@@ -273,12 +290,16 @@ export default async function LegacyProductMigrationPage({
                 "Export lama tidak memiliki status yang dapat dipercaya, sehingga keberadaan fisik tetap wajib dipindai.",
               ],
             ].map(([title, description]) => (
-              <div key={title} className="rounded-2xl bg-neutral-50 p-4">
-                <p className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
-                  <CheckCircle2 className="size-4 text-emerald-600" />
-                  {title}
+              <div
+                key={title}
+                className="min-w-0 rounded-2xl bg-neutral-50 p-4"
+              >
+                <p className="flex min-w-0 items-start gap-2 text-sm font-semibold text-neutral-900">
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                  <span className="min-w-0 break-words">{title}</span>
                 </p>
-                <p className="mt-1 pl-6 text-xs leading-5 text-[var(--muted)]">
+
+                <p className="mt-1 break-words pl-6 text-xs leading-5 text-[var(--muted)]">
                   {description}
                 </p>
               </div>
@@ -287,13 +308,15 @@ export default async function LegacyProductMigrationPage({
         </section>
       </section>
 
-      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
+      <section className="w-full min-w-0 max-w-full rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
         <div className="flex items-center gap-3">
           <div className="grid size-10 place-items-center rounded-xl bg-neutral-100 text-neutral-700">
             <History className="size-5" />
           </div>
           <div>
-            <h2 className="font-semibold text-neutral-950">Batch migrasi terbaru</h2>
+            <h2 className="font-semibold text-neutral-950">
+              Batch migrasi terbaru
+            </h2>
             <p className="text-xs leading-5 text-[var(--muted)]">
               Dua puluh batch terbaru yang dapat diakses akun ini.
             </p>
@@ -344,14 +367,17 @@ export default async function LegacyProductMigrationPage({
                       <BatchStatusBadge status={batch.status} />
                     </td>
                     <td className="px-3 py-4 text-xs leading-5 text-[var(--muted)]">
-                      {formatDateTime(batch.completedAt ?? batch.createdAt, auth.organization.timezone)}
+                      {formatDateTime(
+                        batch.completedAt ?? batch.createdAt,
+                        auth.organization.timezone,
+                      )}
                     </td>
                     <td className="px-3 py-4 text-right">
                       <Link
                         href={`/admin/migrasi-produk/${batch.id}`}
                         className="inline-flex h-9 items-center rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-900 transition hover:bg-neutral-50"
                       >
-                        Buka pusat kendali
+                        Detail
                       </Link>
                     </td>
                   </tr>

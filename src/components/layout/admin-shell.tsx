@@ -171,7 +171,6 @@ function AdminBrandLink({
             "mb-2 w-auto object-contain",
             isMobile ? "h-16" : "h-16",
           )}
-          priority
         />
       </span>
 
@@ -179,10 +178,9 @@ function AdminBrandLink({
         <Image
           src="/logo/asihjaya-brand-text.png"
           alt="Asihjaya"
-          width={140}
-          height={28}
+          width={68}
+          height={68}
           className="h-7 w-auto object-contain"
-          priority
         />
         <span
           className={cn(
@@ -572,7 +570,6 @@ export function AdminShell({
                 width={64}
                 height={64}
                 className="h-12 w-auto object-contain"
-                priority
               />
             </span>
 
@@ -580,10 +577,9 @@ export function AdminShell({
               <Image
                 src="/logo/asihjaya-brand-text.png"
                 alt="Asihjaya"
-                width={112}
-                height={24}
+                width={64}
+                height={64}
                 className="h-6 w-auto object-contain"
-                priority
               />
               <span className="block truncate text-[12px] font-medium text-[var(--muted)]">
                 Retail Management

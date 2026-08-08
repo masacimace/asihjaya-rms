@@ -11,6 +11,12 @@ assert.doesNotMatch(
   /MoreHorizontal/,
   "Icon tiga titik horizontal lama terlihat terlalu kecil dibanding icon menu utama.",
 );
+
+assert.doesNotMatch(
+  posShellSource,
+  /priority/,
+  "Logo responsive POS tidak boleh memakai priority preload karena shell melakukan polling berkala.",
+);
 assert.match(
   posShellSource,
   /const mobileBottomNavigationIconClassName = "size-\[21px\] shrink-0"/,

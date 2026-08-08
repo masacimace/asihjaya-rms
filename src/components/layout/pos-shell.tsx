@@ -300,7 +300,6 @@ function SidebarContent({
             width={128}
             height={128}
             className="h-16 mb-2 w-auto object-contain"
-            priority
           />
         </span>
 
@@ -308,10 +307,9 @@ function SidebarContent({
           <Image
             src="/logo/asihjaya-brand-text.png"
             alt="Asihjaya"
-            width={140}
-            height={28}
+            width={64}
+            height={64}
             className="h-7 w-auto object-contain"
-            priority
           />
           <span className="mt-0.5 block truncate text-xs font-medium text-[var(--muted)]">
             Retail Sales Applications
@@ -733,7 +731,6 @@ export function PosShell({
                 width={64}
                 height={64}
                 className="h-12 w-auto object-contain"
-                priority
               />
             </span>
 
@@ -741,10 +738,9 @@ export function PosShell({
               <Image
                 src="/logo/asihjaya-brand-text.png"
                 alt="Asihjaya"
-                width={112}
-                height={24}
+                width={64}
+                height={64}
                 className="h-6 w-auto object-contain"
-                priority
               />
               <span className="block truncate text-[12px] font-medium text-[var(--muted)]">
                 Sales Retail Applications

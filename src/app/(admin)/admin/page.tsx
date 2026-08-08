@@ -650,7 +650,7 @@ export default async function AdminDashboardPage({
 
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_300px] 2xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">
-          <section className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4 2xl:grid-cols-4">
+          <section className="grid min-w-0 gap-3 sm:gap-4 2xl:grid-cols-4">
             {statisticCards.map(
               ({ label, value, metric, icon: Icon, iconClassName }) => {
                 const comparison = getComparison(
