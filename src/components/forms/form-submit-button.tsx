@@ -9,21 +9,25 @@ type FormSubmitButtonProps = {
   children: React.ReactNode;
   pendingText?: string;
   className?: string;
+  disabled?: boolean;
 };
 
 export function FormSubmitButton({
   children,
   pendingText = "Menyimpan...",
   className,
+  disabled = false,
 }: FormSubmitButtonProps) {
   const { pending } = useFormStatus();
+  const isDisabled = pending || disabled;
 
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={isDisabled}
       className={cn(
-        "flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold !text-white transition hover:brightness-95 disabled:cursor-wait disabled:opacity-60 [&_svg]:!text-white",
+        "flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold !text-white transition hover:brightness-95 disabled:opacity-60 [&_svg]:!text-white",
+        pending ? "disabled:cursor-wait" : "disabled:cursor-not-allowed",
         className,
       )}
     >

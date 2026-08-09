@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db";
@@ -183,6 +183,88 @@ function createEmptyDashboard(): HardwareHubDashboard {
   };
 }
 
+export type HardwareAgentProvisioningOption = {
+  outlet: {
+    id: string;
+    code: string;
+    name: string;
+  };
+  register: {
+    id: string;
+    code: string;
+    name: string;
+  };
+  activeAgent: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
+};
+
+export async function getHardwareAgentProvisioningOptions(
+  auth: AuthContext,
+): Promise<HardwareAgentProvisioningOption[]> {
+  const outletIds = auth.outlets.map((outlet) => outlet.id);
+
+  if (outletIds.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({
+      outletId: outlets.id,
+      outletCode: outlets.code,
+      outletName: outlets.name,
+
+      registerId: registers.id,
+      registerCode: registers.code,
+      registerName: registers.name,
+
+      activeAgentId: hardwareAgents.id,
+      activeAgentCode: hardwareAgents.code,
+      activeAgentName: hardwareAgents.name,
+    })
+    .from(registers)
+    .innerJoin(outlets, eq(registers.outletId, outlets.id))
+    .leftJoin(
+      hardwareAgents,
+      and(
+        eq(hardwareAgents.registerId, registers.id),
+        eq(hardwareAgents.isActive, true),
+      ),
+    )
+    .where(
+      and(
+        eq(outlets.organizationId, auth.organization.id),
+        inArray(outlets.id, outletIds),
+        eq(outlets.isActive, true),
+        eq(registers.isActive, true),
+      ),
+    )
+    .orderBy(asc(outlets.name), asc(registers.name));
+
+  return rows.map((row) => ({
+    outlet: {
+      id: row.outletId,
+      code: row.outletCode,
+      name: row.outletName,
+    },
+    register: {
+      id: row.registerId,
+      code: row.registerCode,
+      name: row.registerName,
+    },
+    activeAgent:
+      row.activeAgentId && row.activeAgentCode && row.activeAgentName
+        ? {
+            id: row.activeAgentId,
+            code: row.activeAgentCode,
+            name: row.activeAgentName,
+          }
+        : null,
+  }));
+}
+
 export async function getHardwareHubDashboard(
   auth: AuthContext,
 ): Promise<HardwareHubDashboard> {
@@ -208,155 +290,152 @@ export async function getHardwareHubDashboard(
     cleanupPreview,
     observabilityRows,
   ] = await Promise.all([
-      db
-        .select({
-          id: hardwareAgents.id,
-          code: hardwareAgents.code,
-          name: hardwareAgents.name,
-          dbStatus: hardwareAgents.status,
-          isActive: hardwareAgents.isActive,
-          capabilities: hardwareAgents.capabilities,
-          settings: hardwareAgents.settings,
-          lastSeenAt: hardwareAgents.lastSeenAt,
-          lastIpAddress: hardwareAgents.lastIpAddress,
-          lastUserAgent: hardwareAgents.lastUserAgent,
-          createdAt: hardwareAgents.createdAt,
-          updatedAt: hardwareAgents.updatedAt,
-          outletId: outlets.id,
-          outletCode: outlets.code,
-          outletName: outlets.name,
-          registerId: registers.id,
-          registerCode: registers.code,
-          registerName: registers.name,
-        })
-        .from(hardwareAgents)
-        .innerJoin(outlets, eq(hardwareAgents.outletId, outlets.id))
-        .innerJoin(registers, eq(hardwareAgents.registerId, registers.id))
-        .where(
-          and(
-            eq(hardwareAgents.organizationId, auth.organization.id),
-            inArray(hardwareAgents.outletId, outletIds),
-          ),
-        )
-        .orderBy(
-          desc(hardwareAgents.lastSeenAt),
-          desc(hardwareAgents.createdAt),
+    db
+      .select({
+        id: hardwareAgents.id,
+        code: hardwareAgents.code,
+        name: hardwareAgents.name,
+        dbStatus: hardwareAgents.status,
+        isActive: hardwareAgents.isActive,
+        capabilities: hardwareAgents.capabilities,
+        settings: hardwareAgents.settings,
+        lastSeenAt: hardwareAgents.lastSeenAt,
+        lastIpAddress: hardwareAgents.lastIpAddress,
+        lastUserAgent: hardwareAgents.lastUserAgent,
+        createdAt: hardwareAgents.createdAt,
+        updatedAt: hardwareAgents.updatedAt,
+        outletId: outlets.id,
+        outletCode: outlets.code,
+        outletName: outlets.name,
+        registerId: registers.id,
+        registerCode: registers.code,
+        registerName: registers.name,
+      })
+      .from(hardwareAgents)
+      .innerJoin(outlets, eq(hardwareAgents.outletId, outlets.id))
+      .innerJoin(registers, eq(hardwareAgents.registerId, registers.id))
+      .where(
+        and(
+          eq(hardwareAgents.organizationId, auth.organization.id),
+          inArray(hardwareAgents.outletId, outletIds),
         ),
+      )
+      .orderBy(desc(hardwareAgents.lastSeenAt), desc(hardwareAgents.createdAt)),
 
-      db
-        .select({
-          id: hardwareJobs.id,
-          protocolVersion: hardwareJobs.protocolVersion,
-          jobType: hardwareJobs.jobType,
-          deviceType: hardwareJobs.deviceType,
-          status: hardwareJobs.status,
-          targetDevice: hardwareJobs.targetDevice,
-          attempts: hardwareJobs.attempts,
-          maxAttempts: hardwareJobs.maxAttempts,
-          error: hardwareJobs.error,
-          result: hardwareJobs.result,
-          sourceType: hardwareJobs.sourceType,
-          sourceId: hardwareJobs.sourceId,
-          createdAt: hardwareJobs.createdAt,
-          updatedAt: hardwareJobs.updatedAt,
-          claimedAt: hardwareJobs.claimedAt,
-          startedAt: hardwareJobs.startedAt,
-          completedAt: hardwareJobs.completedAt,
-          failedAt: hardwareJobs.failedAt,
-          agentId: sql<
-            string | null
-          >`coalesce(${attemptJobAgent.id}, ${targetJobAgent.id}, ${legacyJobAgent.id})`,
-          agentCode: sql<
-            string | null
-          >`coalesce(${attemptJobAgent.code}, ${targetJobAgent.code}, ${legacyJobAgent.code})`,
-          agentName: sql<
-            string | null
-          >`coalesce(${attemptJobAgent.name}, ${targetJobAgent.name}, ${legacyJobAgent.name})`,
-          outletId: outlets.id,
-          outletCode: outlets.code,
-          outletName: outlets.name,
-          registerId: registers.id,
-          registerCode: registers.code,
-          registerName: registers.name,
-        })
-        .from(hardwareJobs)
-        .innerJoin(outlets, eq(hardwareJobs.outletId, outlets.id))
-        .innerJoin(registers, eq(hardwareJobs.registerId, registers.id))
-        .leftJoin(legacyJobAgent, eq(hardwareJobs.agentId, legacyJobAgent.id))
-        .leftJoin(
-          hardwareJobAttempts,
-          eq(hardwareJobs.currentAttemptId, hardwareJobAttempts.id),
-        )
-        .leftJoin(
-          attemptJobAgent,
-          eq(hardwareJobAttempts.agentId, attemptJobAgent.id),
-        )
-        .leftJoin(
-          targetJobAgent,
-          eq(hardwareJobs.targetAgentId, targetJobAgent.id),
-        )
-        .where(
-          and(
-            eq(hardwareJobs.organizationId, auth.organization.id),
-            inArray(hardwareJobs.outletId, outletIds),
-          ),
-        )
-        .orderBy(desc(hardwareJobs.createdAt))
-        .limit(30),
-
-      db
-        .select({
-          status: hardwareJobs.status,
-          total: count(),
-        })
-        .from(hardwareJobs)
-        .where(
-          and(
-            eq(hardwareJobs.organizationId, auth.organization.id),
-            inArray(hardwareJobs.outletId, outletIds),
-          ),
-        )
-        .groupBy(hardwareJobs.status),
-
-      db
-        .select({ total: count() })
-        .from(hardwareJobs)
-        .where(
-          and(
-            eq(hardwareJobs.organizationId, auth.organization.id),
-            inArray(hardwareJobs.outletId, outletIds),
-            // Dashboard stale recovery is a v1 compatibility action. Protocol v2
-            // lease recovery is performed atomically by the v2 claim endpoint.
-            eq(hardwareJobs.protocolVersion, 1),
-            inArray(hardwareJobs.status, ["claimed", "printing"]),
-            lt(hardwareJobs.updatedAt, staleJobCutoff),
-          ),
+    db
+      .select({
+        id: hardwareJobs.id,
+        protocolVersion: hardwareJobs.protocolVersion,
+        jobType: hardwareJobs.jobType,
+        deviceType: hardwareJobs.deviceType,
+        status: hardwareJobs.status,
+        targetDevice: hardwareJobs.targetDevice,
+        attempts: hardwareJobs.attempts,
+        maxAttempts: hardwareJobs.maxAttempts,
+        error: hardwareJobs.error,
+        result: hardwareJobs.result,
+        sourceType: hardwareJobs.sourceType,
+        sourceId: hardwareJobs.sourceId,
+        createdAt: hardwareJobs.createdAt,
+        updatedAt: hardwareJobs.updatedAt,
+        claimedAt: hardwareJobs.claimedAt,
+        startedAt: hardwareJobs.startedAt,
+        completedAt: hardwareJobs.completedAt,
+        failedAt: hardwareJobs.failedAt,
+        agentId: sql<
+          string | null
+        >`coalesce(${attemptJobAgent.id}, ${targetJobAgent.id}, ${legacyJobAgent.id})`,
+        agentCode: sql<
+          string | null
+        >`coalesce(${attemptJobAgent.code}, ${targetJobAgent.code}, ${legacyJobAgent.code})`,
+        agentName: sql<
+          string | null
+        >`coalesce(${attemptJobAgent.name}, ${targetJobAgent.name}, ${legacyJobAgent.name})`,
+        outletId: outlets.id,
+        outletCode: outlets.code,
+        outletName: outlets.name,
+        registerId: registers.id,
+        registerCode: registers.code,
+        registerName: registers.name,
+      })
+      .from(hardwareJobs)
+      .innerJoin(outlets, eq(hardwareJobs.outletId, outlets.id))
+      .innerJoin(registers, eq(hardwareJobs.registerId, registers.id))
+      .leftJoin(legacyJobAgent, eq(hardwareJobs.agentId, legacyJobAgent.id))
+      .leftJoin(
+        hardwareJobAttempts,
+        eq(hardwareJobs.currentAttemptId, hardwareJobAttempts.id),
+      )
+      .leftJoin(
+        attemptJobAgent,
+        eq(hardwareJobAttempts.agentId, attemptJobAgent.id),
+      )
+      .leftJoin(
+        targetJobAgent,
+        eq(hardwareJobs.targetAgentId, targetJobAgent.id),
+      )
+      .where(
+        and(
+          eq(hardwareJobs.organizationId, auth.organization.id),
+          inArray(hardwareJobs.outletId, outletIds),
         ),
+      )
+      .orderBy(desc(hardwareJobs.createdAt))
+      .limit(30),
 
-      getHardwareJobCleanupPreview({
-        organizationId: auth.organization.id,
-        outletIds,
-        now,
-      }),
-
-      db
-        .select({
-          unknownOutcomeJobs: sql<number>`count(*) filter (where ${hardwareJobs.status} = 'unknown_outcome')`,
-          staleSubmittedJobs: sql<number>`count(*) filter (where ${hardwareJobs.status} = 'submitted' and ${hardwareJobs.updatedAt} < ${staleSubmittedCutoff})`,
-          oldestPendingAt: sql<Date | null>`min(${hardwareJobs.createdAt}) filter (where ${hardwareJobs.status} = 'pending')`,
-          oldestSubmittedAt: sql<Date | null>`min(${hardwareJobs.submittedAt}) filter (where ${hardwareJobs.status} = 'submitted')`,
-          completedLast24Hours: sql<number>`count(*) filter (where ${hardwareJobs.status} = 'completed' and ${hardwareJobs.completedAt} >= ${last24HoursCutoff})`,
-          failedLast24Hours: sql<number>`count(*) filter (where ${hardwareJobs.status} = 'failed' and ${hardwareJobs.failedAt} >= ${last24HoursCutoff})`,
-          expiredLast24Hours: sql<number>`count(*) filter (where ${hardwareJobs.status} = 'expired' and ${hardwareJobs.expiredAt} >= ${last24HoursCutoff})`,
-        })
-        .from(hardwareJobs)
-        .where(
-          and(
-            eq(hardwareJobs.organizationId, auth.organization.id),
-            inArray(hardwareJobs.outletId, outletIds),
-          ),
+    db
+      .select({
+        status: hardwareJobs.status,
+        total: count(),
+      })
+      .from(hardwareJobs)
+      .where(
+        and(
+          eq(hardwareJobs.organizationId, auth.organization.id),
+          inArray(hardwareJobs.outletId, outletIds),
         ),
-    ]);
+      )
+      .groupBy(hardwareJobs.status),
+
+    db
+      .select({ total: count() })
+      .from(hardwareJobs)
+      .where(
+        and(
+          eq(hardwareJobs.organizationId, auth.organization.id),
+          inArray(hardwareJobs.outletId, outletIds),
+          // Dashboard stale recovery is a v1 compatibility action. Protocol v2
+          // lease recovery is performed atomically by the v2 claim endpoint.
+          eq(hardwareJobs.protocolVersion, 1),
+          inArray(hardwareJobs.status, ["claimed", "printing"]),
+          lt(hardwareJobs.updatedAt, staleJobCutoff),
+        ),
+      ),
+
+    getHardwareJobCleanupPreview({
+      organizationId: auth.organization.id,
+      outletIds,
+      now,
+    }),
+
+    db
+      .select({
+        unknownOutcomeJobs: sql<number>`count(*) filter (where ${hardwareJobs.status} = 'unknown_outcome')`,
+        staleSubmittedJobs: sql<number>`count(*) filter (where ${hardwareJobs.status} = 'submitted' and ${hardwareJobs.updatedAt} < ${staleSubmittedCutoff})`,
+        oldestPendingAt: sql<Date | null>`min(${hardwareJobs.createdAt}) filter (where ${hardwareJobs.status} = 'pending')`,
+        oldestSubmittedAt: sql<Date | null>`min(${hardwareJobs.submittedAt}) filter (where ${hardwareJobs.status} = 'submitted')`,
+        completedLast24Hours: sql<number>`count(*) filter (where ${hardwareJobs.status} = 'completed' and ${hardwareJobs.completedAt} >= ${last24HoursCutoff})`,
+        failedLast24Hours: sql<number>`count(*) filter (where ${hardwareJobs.status} = 'failed' and ${hardwareJobs.failedAt} >= ${last24HoursCutoff})`,
+        expiredLast24Hours: sql<number>`count(*) filter (where ${hardwareJobs.status} = 'expired' and ${hardwareJobs.expiredAt} >= ${last24HoursCutoff})`,
+      })
+      .from(hardwareJobs)
+      .where(
+        and(
+          eq(hardwareJobs.organizationId, auth.organization.id),
+          inArray(hardwareJobs.outletId, outletIds),
+        ),
+      ),
+  ]);
 
   const recentJobIds = recentJobRows.map((row) => row.id);
   const resolutionRows =
@@ -373,7 +452,10 @@ export async function getHardwareHubDashboard(
             createdAt: hardwareJobResolutions.createdAt,
           })
           .from(hardwareJobResolutions)
-          .leftJoin(users, eq(hardwareJobResolutions.resolvedByUserId, users.id))
+          .leftJoin(
+            users,
+            eq(hardwareJobResolutions.resolvedByUserId, users.id),
+          )
           .where(inArray(hardwareJobResolutions.jobId, recentJobIds))
           .orderBy(desc(hardwareJobResolutions.createdAt))
       : [];
@@ -508,9 +590,7 @@ export async function getHardwareHubDashboard(
       observabilityRow?.oldestSubmittedAt ?? null,
       now,
     ),
-    completedLast24Hours: Number(
-      observabilityRow?.completedLast24Hours ?? 0,
-    ),
+    completedLast24Hours: Number(observabilityRow?.completedLast24Hours ?? 0),
     failedLast24Hours: Number(observabilityRow?.failedLast24Hours ?? 0),
     expiredLast24Hours: Number(observabilityRow?.expiredLast24Hours ?? 0),
   };
@@ -548,8 +628,7 @@ export async function getHardwareHubDashboard(
         unknownOutcomeJobs: operationalMetrics.unknownOutcomeJobs,
         staleSubmittedJobs: operationalMetrics.staleSubmittedJobs,
         oldestPendingAgeSeconds: operationalMetrics.oldestPendingAgeSeconds,
-        oldestSubmittedAgeSeconds:
-          operationalMetrics.oldestSubmittedAgeSeconds,
+        oldestSubmittedAgeSeconds: operationalMetrics.oldestSubmittedAgeSeconds,
         completedLast24Hours: operationalMetrics.completedLast24Hours,
         failedLast24Hours: operationalMetrics.failedLast24Hours,
         expiredLast24Hours: operationalMetrics.expiredLast24Hours,
@@ -623,9 +702,15 @@ export async function getHardwareJobOperationalDetail(
       failedAt: hardwareJobs.failedAt,
       unknownAt: hardwareJobs.unknownAt,
       expiresAt: hardwareJobs.expiresAt,
-      agentId: sql<string | null>`coalesce(${attemptJobAgent.id}, ${targetJobAgent.id}, ${legacyJobAgent.id})`,
-      agentCode: sql<string | null>`coalesce(${attemptJobAgent.code}, ${targetJobAgent.code}, ${legacyJobAgent.code})`,
-      agentName: sql<string | null>`coalesce(${attemptJobAgent.name}, ${targetJobAgent.name}, ${legacyJobAgent.name})`,
+      agentId: sql<
+        string | null
+      >`coalesce(${attemptJobAgent.id}, ${targetJobAgent.id}, ${legacyJobAgent.id})`,
+      agentCode: sql<
+        string | null
+      >`coalesce(${attemptJobAgent.code}, ${targetJobAgent.code}, ${legacyJobAgent.code})`,
+      agentName: sql<
+        string | null
+      >`coalesce(${attemptJobAgent.name}, ${targetJobAgent.name}, ${legacyJobAgent.name})`,
       outletId: outlets.id,
       outletCode: outlets.code,
       outletName: outlets.name,
@@ -645,10 +730,7 @@ export async function getHardwareJobOperationalDetail(
       attemptJobAgent,
       eq(hardwareJobAttempts.agentId, attemptJobAgent.id),
     )
-    .leftJoin(
-      targetJobAgent,
-      eq(hardwareJobs.targetAgentId, targetJobAgent.id),
-    )
+    .leftJoin(targetJobAgent, eq(hardwareJobs.targetAgentId, targetJobAgent.id))
     .where(
       and(
         eq(hardwareJobs.id, jobId),
@@ -807,4 +889,3 @@ export async function getHardwareJobOperationalDetail(
     })),
   };
 }
-

@@ -41,6 +41,10 @@ import {
   getRequiredHardwareCapability,
   HARDWARE_JOB_PROTOCOL_V2,
 } from "@/lib/hardware/job-protocol-v2";
+import {
+  HardwareAgentProvisioningError,
+  provisionHardwareAgent,
+} from "@/features/hardware/agent-provisioning";
 
 const HARDWARE_DASHBOARD_PATH = "/admin/operasional/hardware";
 const UUID_PATTERN =
@@ -116,6 +120,101 @@ function getTestJobLabel(jobType: TestJobType) {
   if (jobType === "test_label_printer") return "test label printer";
   if (jobType === "test_document_printer") return "test document printer";
   return "test cash drawer";
+}
+
+export type ProvisionHardwareAgentActionState =
+  | {
+      status: "idle";
+    }
+  | {
+      status: "error";
+      message: string;
+      code?:
+        | "INVALID_INPUT"
+        | "OUTLET_NOT_FOUND"
+        | "REGISTER_NOT_FOUND"
+        | "ACTIVE_AGENT_EXISTS"
+        | "CODE_EXISTS";
+    }
+  | {
+      status: "success";
+      agent: {
+        id: string;
+        code: string;
+        name: string;
+        outletId: string;
+        outletCode: string;
+        outletName: string;
+        registerId: string;
+        registerCode: string;
+        registerName: string;
+      };
+      credential: {
+        secret: string;
+        authMode: "signed";
+        protocolMode: "v2-preferred";
+      };
+    };
+
+export async function provisionHardwareAgentAction(
+  _previousState: ProvisionHardwareAgentActionState,
+  formData: FormData,
+): Promise<ProvisionHardwareAgentActionState> {
+  const auth = await requirePermission("hardware.agents.manage");
+
+  const outletId = String(formData.get("outletId") ?? "").trim();
+  const registerId = String(formData.get("registerId") ?? "").trim();
+  const code = String(formData.get("code") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const requestId = String(formData.get("requestId") ?? "").trim();
+
+  const requestMetadata = await getActionRequestMetadata();
+
+  try {
+    const result = await provisionHardwareAgent({
+      organizationId: auth.organization.id,
+      accessibleOutletIds: auth.outlets.map((outlet) => outlet.id),
+      actorUserId: auth.user.id,
+      outletId,
+      registerId,
+      code,
+      name,
+      requestId: UUID_PATTERN.test(requestId) ? requestId : null,
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+    });
+
+    revalidatePath(HARDWARE_DASHBOARD_PATH);
+
+    return {
+      status: "success",
+      agent: result.agent,
+      credential: result.credential,
+    };
+  } catch (error) {
+    if (error instanceof HardwareAgentProvisioningError) {
+      return {
+        status: "error",
+        code: error.code,
+        message: error.message,
+      };
+    }
+
+    console.error("[hardware] provisioning Hardware Agent gagal", {
+      error:
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+            }
+          : "unknown_error",
+    });
+
+    return {
+      status: "error",
+      message: "Hardware Agent gagal dibuat.",
+    };
+  }
 }
 
 export async function createHardwareTestJobAction(formData: FormData) {

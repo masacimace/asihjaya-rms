@@ -22,7 +22,6 @@ const generatedSecretBytes = new Map([
   ["PDF_RENDER_TOKEN_SECRET", 48],
   ["HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY", 48],
   ["BOOTSTRAP_ADMIN_PASSWORD", 24],
-  ["HARDWARE_AGENT_SECRET", 48],
 ]);
 
 const rotatableSecretNames = new Set(

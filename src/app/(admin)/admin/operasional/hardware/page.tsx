@@ -35,7 +35,12 @@ import type {
   HardwareAgentSummary,
   HardwareJobSummary,
 } from "@/features/hardware/contracts";
-import { getHardwareHubDashboard } from "@/features/hardware/queries";
+import { HardwareAgentReactivateButton } from "@/components/hardware/hardware-agent-reactivate-button";
+import { HardwareAgentProvisioningDialog } from "@/components/hardware/hardware-agent-provisioning-dialog";
+import {
+  getHardwareAgentProvisioningOptions,
+  getHardwareHubDashboard,
+} from "@/features/hardware/queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
@@ -343,7 +348,19 @@ function RetentionStat({
   );
 }
 
-function AgentCard({ agent }: { agent: HardwareAgentSummary }) {
+function AgentCard({
+  agent,
+  canManageAgents,
+  activePeer,
+}: {
+  agent: HardwareAgentSummary;
+  canManageAgents: boolean;
+  activePeer: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
+}) {
   const canPrintLabel = readBooleanCapability(
     agent.capabilities,
     "print_label_sato",
@@ -437,6 +454,20 @@ function AgentCard({ agent }: { agent: HardwareAgentSummary }) {
         </p>
       ) : null}
 
+      {isDisabled && canManageAgents ? (
+        <div className="border-t border-[var(--border)] bg-white p-4">
+          <HardwareAgentReactivateButton
+            agent={{
+              id: agent.id,
+              code: agent.code,
+              name: agent.name,
+              outletName: agent.outlet.name,
+              registerName: agent.register.name,
+            }}
+            blockedByAgent={activePeer}
+          />
+        </div>
+      ) : null}
       <div className="grid gap-2 border-t border-[var(--border)] bg-[var(--surface-muted)] p-4 sm:grid-cols-3">
         <TestJobButton
           agentId={agent.id}
@@ -549,7 +580,8 @@ function RecentJobMobileCard({ job }: { job: HardwareJobSummary }) {
 
       {job.manualResolution ? (
         <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
-          Resolusi manual: {job.manualResolution.resolutionType} oleh {job.manualResolution.resolvedByName ?? "operator"}.
+          Resolusi manual: {job.manualResolution.resolutionType} oleh{" "}
+          {job.manualResolution.resolvedByName ?? "operator"}.
         </p>
       ) : null}
 
@@ -612,7 +644,16 @@ function RecentJobMobileCard({ job }: { job: HardwareJobSummary }) {
 export default async function HardwareHubPage({ searchParams }: PageProps) {
   const auth = await requirePermission("admin.access");
   const query = await searchParams;
-  const dashboard = await getHardwareHubDashboard(auth);
+  const canManageAgents = auth.permissionCodes.includes(
+    "hardware.agents.manage",
+  );
+
+  const [dashboard, provisioningOptions] = await Promise.all([
+    getHardwareHubDashboard(auth),
+    canManageAgents
+      ? getHardwareAgentProvisioningOptions(auth)
+      : Promise.resolve([]),
+  ]);
   const message = typeof query.message === "string" ? query.message : null;
   const messageType = query.type === "success" ? "success" : "error";
 
@@ -789,8 +830,7 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                   "text-emerald-700",
                 dashboard.observability.status === "warning" &&
                   "text-amber-800",
-                dashboard.observability.status === "critical" &&
-                  "text-red-800",
+                dashboard.observability.status === "critical" && "text-red-800",
               )}
             />
             <div>
@@ -802,7 +842,8 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
               </h2>
               <p className="mt-2 text-sm leading-6 text-neutral-700">
                 Snapshot ini mengukur unknown outcome, acknowledgement yang
-                terlambat, umur antrean, status agent, dan hasil 24 jam terakhir.
+                terlambat, umur antrean, status agent, dan hasil 24 jam
+                terakhir.
               </p>
             </div>
           </div>
@@ -911,27 +952,56 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
       </section>
 
       <section className="space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-              <Cpu className="size-3.5" />
-              Agent outlet
+        <div className="min-w-0">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                <Cpu className="size-3.5" />
+                Agent outlet
+              </div>
+              <h2 className="mt-3 text-xl font-semibold text-neutral-950">
+                Mini PC/Register Outlet
+              </h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Satu agent mewakili Mini PC/Register yang mengontrol hardware
+                lokal.
+              </p>
             </div>
-            <h2 className="mt-3 text-xl font-semibold text-neutral-950">
-              Mini PC/Register Outlet
-            </h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Satu agent mewakili Mini PC/Register yang mengontrol hardware
-              lokal.
-            </p>
+            {canManageAgents ? (
+              <HardwareAgentProvisioningDialog options={provisioningOptions} />
+            ) : null}
           </div>
         </div>
 
         {dashboard.agents.length > 0 ? (
           <div className="space-y-4">
-            {dashboard.agents.map((agent) => (
-              <AgentCard agent={agent} key={agent.id} />
-            ))}
+            {dashboard.agents.map((agent) => {
+              const activePeer =
+                dashboard.agents.find(
+                  (candidate) =>
+                    candidate.id !== agent.id &&
+                    candidate.register.id === agent.register.id &&
+                    candidate.isActive &&
+                    candidate.displayStatus !== "disabled",
+                ) ?? null;
+
+              return (
+                <AgentCard
+                  agent={agent}
+                  canManageAgents={canManageAgents}
+                  activePeer={
+                    activePeer
+                      ? {
+                          id: activePeer.id,
+                          code: activePeer.code,
+                          name: activePeer.name,
+                        }
+                      : null
+                  }
+                  key={agent.id}
+                />
+              );
+            })}
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
@@ -940,9 +1010,9 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
               Belum ada Hardware Agent
             </h3>
             <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--muted)]">
-              Jalankan script <code>npm run hardware:agent:create</code> untuk
-              membuat agent Mini PC outlet, lalu isi hasilnya ke
-              <code> hardware-hub/.env</code>.
+              {canManageAgents
+                ? "Tambahkan Hardware Agent dari dashboard ini, lalu download konfigurasi untuk Mini PC outlet."
+                : "Belum ada Hardware Agent yang terdaftar pada outlet yang bisa kamu akses."}
             </p>
           </div>
         )}

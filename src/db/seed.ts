@@ -264,6 +264,11 @@ const permissionSeeds = [
     module: "operations",
   },
   {
+    code: "hardware.agents.manage",
+    name: "Mengelola provisioning Hardware Agent",
+    module: "operations",
+  },
+  {
     code: "audit.view",
     name: "Melihat audit log",
     module: "administration",

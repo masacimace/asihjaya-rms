@@ -40,17 +40,12 @@ export const masterStatusEnum = pgEnum("master_status", [
   "inactive",
 ]);
 
-
-
-export const productItemNumberSequence = pgSequence(
-  "product_item_number_seq",
-  {
-    startWith: 1,
-    increment: 1,
-    minValue: 1,
-    cache: 1,
-  },
-);
+export const productItemNumberSequence = pgSequence("product_item_number_seq", {
+  startWith: 1,
+  increment: 1,
+  minValue: 1,
+  cache: 1,
+});
 
 export const legacyProductImportStatusEnum = pgEnum(
   "legacy_product_import_status",
@@ -189,18 +184,15 @@ export const manualPaymentVerificationStatusEnum = pgEnum(
   ["self_verified", "co_verification_required", "co_verified", "rejected"],
 );
 
-export const paymentSettlementStatusEnum = pgEnum(
-  "payment_settlement_status",
-  [
-    "not_applicable",
-    "unreconciled",
-    "pending_settlement",
-    "reconciled",
-    "mismatch",
-    "not_found",
-    "waived",
-  ],
-);
+export const paymentSettlementStatusEnum = pgEnum("payment_settlement_status", [
+  "not_applicable",
+  "unreconciled",
+  "pending_settlement",
+  "reconciled",
+  "mismatch",
+  "not_found",
+  "waived",
+]);
 
 export const settlementImportStatusEnum = pgEnum("settlement_import_status", [
   "uploaded",
@@ -227,11 +219,10 @@ export const settlementImportRowStatusEnum = pgEnum(
   ],
 );
 
-export const posCheckoutAttemptStatusEnum = pgEnum("pos_checkout_attempt_status", [
-  "processing",
-  "completed",
-  "failed",
-]);
+export const posCheckoutAttemptStatusEnum = pgEnum(
+  "pos_checkout_attempt_status",
+  ["processing", "completed", "failed"],
+);
 
 export const paymentRefundStatusEnum = pgEnum("payment_refund_status", [
   "requested",
@@ -621,14 +612,8 @@ export const metalPurities = pgTable(
     ...timestamps,
   },
   (table) => [
-    uniqueIndex("metal_purities_metal_code_uq").on(
-      table.metalId,
-      table.code,
-    ),
-    index("metal_purities_metal_active_idx").on(
-      table.metalId,
-      table.isActive,
-    ),
+    uniqueIndex("metal_purities_metal_code_uq").on(table.metalId, table.code),
+    index("metal_purities_metal_active_idx").on(table.metalId, table.isActive),
     check(
       "metal_purities_percentage_ck",
       sql`${table.purityPercentage} > 0 and ${table.purityPercentage} <= 100`,
@@ -705,8 +690,6 @@ export const productMasters = pgTable(
     ),
   ],
 );
-
-
 
 export const productItems = pgTable(
   "product_items",
@@ -961,10 +944,7 @@ export const legacyProductRows = pgTable(
       table.batchId,
       table.legacyMasterCode,
     ),
-    check(
-      "legacy_product_rows_row_number_ck",
-      sql`${table.rowNumber} > 1`,
-    ),
+    check("legacy_product_rows_row_number_ck", sql`${table.rowNumber} > 1`),
   ],
 );
 
@@ -984,7 +964,9 @@ export const legacyProductMasterMappings = pgTable(
     legacyMasterCode: varchar("legacy_master_code", { length: 120 }).notNull(),
     legacyMasterName: varchar("legacy_master_name", { length: 220 }).notNull(),
     legacyCategory: varchar("legacy_category", { length: 160 }),
-    normalizedCategoryName: varchar("normalized_category_name", { length: 160 }),
+    normalizedCategoryName: varchar("normalized_category_name", {
+      length: 160,
+    }),
     itemCount: integer("item_count").default(0).notNull(),
     status: legacyMasterMappingStatusEnum("status")
       .default("pending")
@@ -1357,7 +1339,9 @@ export const legacyMigrationCutoverRuns = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     batchId: uuid("batch_id")
       .notNull()
-      .references(() => legacyProductImportBatches.id, { onDelete: "restrict" }),
+      .references(() => legacyProductImportBatches.id, {
+        onDelete: "restrict",
+      }),
     sessionId: uuid("session_id")
       .notNull()
       .references(() => legacyMigrationSessions.id, { onDelete: "restrict" }),
@@ -1381,9 +1365,7 @@ export const legacyMigrationCutoverRuns = pgTable(
     ...timestamps,
   },
   (table) => [
-    uniqueIndex("legacy_migration_cutover_runs_session_uq").on(
-      table.sessionId,
-    ),
+    uniqueIndex("legacy_migration_cutover_runs_session_uq").on(table.sessionId),
     index("legacy_migration_cutover_runs_batch_time_idx").on(
       table.batchId,
       table.executedAt,
@@ -1561,9 +1543,12 @@ export const financeClosingSnapshots = pgTable(
     businessDate: date("business_date", { mode: "string" }).notNull(),
     revision: integer("revision").default(1).notNull(),
     supersededAt: timestamp("superseded_at", { withTimezone: true }),
-    supersededByUserId: uuid("superseded_by_user_id").references(() => users.id, {
-      onDelete: "restrict",
-    }),
+    supersededByUserId: uuid("superseded_by_user_id").references(
+      () => users.id,
+      {
+        onDelete: "restrict",
+      },
+    ),
     supersededReason: text("superseded_reason"),
     grossSales: numeric("gross_sales", { precision: 18, scale: 0 })
       .default("0")
@@ -1583,7 +1568,10 @@ export const financeClosingSnapshots = pgTable(
     cashTotal: numeric("cash_total", { precision: 18, scale: 0 })
       .default("0")
       .notNull(),
-    bankTransferTotal: numeric("bank_transfer_total", { precision: 18, scale: 0 })
+    bankTransferTotal: numeric("bank_transfer_total", {
+      precision: 18,
+      scale: 0,
+    })
       .default("0")
       .notNull(),
     debitCardTotal: numeric("debit_card_total", { precision: 18, scale: 0 })
@@ -1598,10 +1586,16 @@ export const financeClosingSnapshots = pgTable(
     })
       .default("0")
       .notNull(),
-    customerDepositIn: numeric("customer_deposit_in", { precision: 18, scale: 0 })
+    customerDepositIn: numeric("customer_deposit_in", {
+      precision: 18,
+      scale: 0,
+    })
       .default("0")
       .notNull(),
-    customerDepositUsed: numeric("customer_deposit_used", { precision: 18, scale: 0 })
+    customerDepositUsed: numeric("customer_deposit_used", {
+      precision: 18,
+      scale: 0,
+    })
       .default("0")
       .notNull(),
     customerDepositWithdrawal: numeric("customer_deposit_withdrawal", {
@@ -1628,13 +1622,23 @@ export const financeClosingSnapshots = pgTable(
     })
       .default("0")
       .notNull(),
-    expectedCash: numeric("expected_cash", { precision: 18, scale: 0 }).notNull(),
+    expectedCash: numeric("expected_cash", {
+      precision: 18,
+      scale: 0,
+    }).notNull(),
     actualCash: numeric("actual_cash", { precision: 18, scale: 0 }).notNull(),
-    cashVariance: numeric("cash_variance", { precision: 18, scale: 0 }).notNull(),
+    cashVariance: numeric("cash_variance", {
+      precision: 18,
+      scale: 0,
+    }).notNull(),
     transactionCount: integer("transaction_count").default(0).notNull(),
     itemsSoldCount: integer("items_sold_count").default(0).notNull(),
-    heldTransactionCount: integer("held_transaction_count").default(0).notNull(),
-    pendingApprovalCount: integer("pending_approval_count").default(0).notNull(),
+    heldTransactionCount: integer("held_transaction_count")
+      .default(0)
+      .notNull(),
+    pendingApprovalCount: integer("pending_approval_count")
+      .default(0)
+      .notNull(),
     openedAt: timestamp("opened_at", { withTimezone: true }).notNull(),
     closedAt: timestamp("closed_at", { withTimezone: true }).notNull(),
     cashierId: uuid("cashier_id")
@@ -1786,7 +1790,9 @@ export const telegramReportSettings = pgTable(
       .notNull()
       .references(() => telegramDestinations.id, { onDelete: "cascade" }),
     openingEnabled: boolean("opening_enabled").default(false).notNull(),
-    closingDailyEnabled: boolean("closing_daily_enabled").default(false).notNull(),
+    closingDailyEnabled: boolean("closing_daily_enabled")
+      .default(false)
+      .notNull(),
     weeklyEnabled: boolean("weekly_enabled").default(false).notNull(),
     monthlyEnabled: boolean("monthly_enabled").default(false).notNull(),
     timezone: varchar("timezone", { length: 64 })
@@ -2119,9 +2125,7 @@ export const customerHistoryIpRateLimits = pgTable(
   },
   (table) => [
     uniqueIndex("customer_history_ip_rate_limits_key_uq").on(table.keyHash),
-    index("customer_history_ip_rate_limits_blocked_idx").on(
-      table.blockedUntil,
-    ),
+    index("customer_history_ip_rate_limits_blocked_idx").on(table.blockedUntil),
     check(
       "customer_history_ip_rate_limits_failure_count_ck",
       sql`${table.failureCount} >= 0`,
@@ -2214,7 +2218,10 @@ export const posHeldCarts = pgTable(
     index("pos_held_carts_shift_status_idx").on(table.shiftId, table.status),
     index("pos_held_carts_customer_idx").on(table.customerId),
     index("pos_held_carts_held_by_idx").on(table.heldByUserId),
-    check("pos_held_carts_item_count_nonnegative_ck", sql`${table.itemCount} >= 0`),
+    check(
+      "pos_held_carts_item_count_nonnegative_ck",
+      sql`${table.itemCount} >= 0`,
+    ),
     check(
       "pos_held_carts_subtotal_nonnegative_ck",
       sql`${table.subtotalAmount} >= 0`,
@@ -2223,7 +2230,10 @@ export const posHeldCarts = pgTable(
       "pos_held_carts_discount_nonnegative_ck",
       sql`${table.discountAmount} >= 0`,
     ),
-    check("pos_held_carts_total_nonnegative_ck", sql`${table.totalAmount} >= 0`),
+    check(
+      "pos_held_carts_total_nonnegative_ck",
+      sql`${table.totalAmount} >= 0`,
+    ),
   ],
 );
 
@@ -2387,7 +2397,9 @@ export const posCheckoutAttempts = pgTable(
       .notNull()
       .references(() => users.id),
     idempotencyKey: varchar("idempotency_key", { length: 120 }).notNull(),
-    requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
+    requestFingerprint: varchar("request_fingerprint", {
+      length: 64,
+    }).notNull(),
     status: posCheckoutAttemptStatusEnum("status")
       .default("processing")
       .notNull(),
@@ -2506,7 +2518,9 @@ export const manualPaymentProfiles = pgTable(
     code: varchar("code", { length: 40 }).notNull(),
     name: varchar("name", { length: 120 }).notNull(),
     provider: varchar("provider", { length: 80 }).notNull(),
-    verificationSource: varchar("verification_source", { length: 40 }).notNull(),
+    verificationSource: varchar("verification_source", {
+      length: 40,
+    }).notNull(),
     merchantId: varchar("merchant_id", { length: 80 }),
     terminalId: varchar("terminal_id", { length: 80 }),
     destinationAccount: varchar("destination_account", { length: 120 }),
@@ -2673,7 +2687,6 @@ export const payments = pgTable(
   ],
 );
 
-
 export const paymentReconciliations = pgTable(
   "payment_reconciliations",
   {
@@ -2688,8 +2701,10 @@ export const paymentReconciliations = pgTable(
       .notNull()
       .references(() => payments.id, { onDelete: "cascade" }),
     status: paymentSettlementStatusEnum("status").notNull(),
-    expectedAmount: numeric("expected_amount", { precision: 18, scale: 0 })
-      .notNull(),
+    expectedAmount: numeric("expected_amount", {
+      precision: 18,
+      scale: 0,
+    }).notNull(),
     settlementGrossAmount: numeric("settlement_gross_amount", {
       precision: 18,
       scale: 0,
@@ -2935,7 +2950,9 @@ export const settlementImportRows = pgTable(
     netAmount: numeric("net_amount", { precision: 18, scale: 0 }),
     settlementReference: varchar("settlement_reference", { length: 160 }),
     providerStatus: varchar("provider_status", { length: 80 }),
-    status: settlementImportRowStatusEnum("status").default("pending").notNull(),
+    status: settlementImportRowStatusEnum("status")
+      .default("pending")
+      .notNull(),
     matchedPaymentId: uuid("matched_payment_id").references(() => payments.id),
     candidatePaymentIds: jsonb("candidate_payment_ids")
       .$type<string[]>()
@@ -2957,14 +2974,9 @@ export const settlementImportRows = pgTable(
       table.status,
       table.rowNumber,
     ),
-    index("settlement_import_rows_reference_idx").on(
-      table.normalizedReference,
-    ),
+    index("settlement_import_rows_reference_idx").on(table.normalizedReference),
     index("settlement_import_rows_payment_idx").on(table.matchedPaymentId),
-    check(
-      "settlement_import_rows_row_number_ck",
-      sql`${table.rowNumber} > 1`,
-    ),
+    check("settlement_import_rows_row_number_ck", sql`${table.rowNumber} > 1`),
     check(
       "settlement_import_rows_amounts_ck",
       sql`(${table.grossAmount} is null or ${table.grossAmount} >= 0)
@@ -3192,6 +3204,9 @@ export const hardwareAgents = pgTable(
       table.organizationId,
       table.code,
     ),
+    uniqueIndex("hardware_agents_one_active_per_register_uq")
+      .on(table.registerId)
+      .where(sql`${table.isActive} = true`),
     index("hardware_agents_register_idx").on(table.registerId, table.isActive),
     index("hardware_agents_org_status_idx").on(
       table.organizationId,
@@ -3211,9 +3226,7 @@ export const hardwareJobAttempts = pgTable(
       .notNull()
       .references(() => hardwareAgents.id),
     attemptNumber: integer("attempt_number").notNull(),
-    status: hardwareJobAttemptStatusEnum("status")
-      .default("claimed")
-      .notNull(),
+    status: hardwareJobAttemptStatusEnum("status").default("claimed").notNull(),
     leaseTokenHash: text("lease_token_hash").notNull(),
     leaseExpiresAt: timestamp("lease_expires_at", {
       withTimezone: true,
@@ -3256,10 +3269,7 @@ export const hardwareJobAttempts = pgTable(
       table.status,
       table.leaseExpiresAt,
     ),
-    check(
-      "hardware_job_attempts_number_ck",
-      sql`${table.attemptNumber} > 0`,
-    ),
+    check("hardware_job_attempts_number_ck", sql`${table.attemptNumber} > 0`),
     check(
       "hardware_job_attempts_event_sequence_ck",
       sql`${table.eventSequence} >= 0`,
@@ -3390,7 +3400,6 @@ export const hardwareJobs = pgTable(
   ],
 );
 
-
 export const hardwareJobResolutions = pgTable(
   "hardware_job_resolutions",
   {
@@ -3498,7 +3507,10 @@ export const notificationEvents = pgTable(
     entityId: varchar("entity_id", { length: 160 }),
     actionUrl: varchar("action_url", { length: 300 }),
     requiresAction: boolean("requires_action").default(false).notNull(),
-    payload: jsonb("payload").$type<Record<string, unknown>>().default({}).notNull(),
+    payload: jsonb("payload")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
     deduplicationKey: varchar("deduplication_key", { length: 220 }),
     occurredAt: timestamp("occurred_at", { withTimezone: true })
       .defaultNow()
@@ -3665,7 +3677,9 @@ export const approvals = pgTable(
     approvedBy: uuid("approved_by").references(() => users.id),
     referenceType: varchar("reference_type", { length: 80 }),
     referenceId: uuid("reference_id"),
-    requestData: jsonb("request_data").$type<Record<string, unknown>>().notNull(),
+    requestData: jsonb("request_data")
+      .$type<Record<string, unknown>>()
+      .notNull(),
     notes: text("notes"),
     responseNotes: text("response_notes"),
     executionStatus: approvalExecutionStatusEnum("execution_status")
@@ -3735,9 +3749,12 @@ export const customerDepositLedger = pgTable(
     paymentId: uuid("payment_id").references(() => payments.id, {
       onDelete: "set null",
     }),
-    cashMovementId: uuid("cash_movement_id").references(() => cashMovements.id, {
-      onDelete: "set null",
-    }),
+    cashMovementId: uuid("cash_movement_id").references(
+      () => cashMovements.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     approvalId: uuid("approval_id").references(() => approvals.id, {
       onDelete: "set null",
     }),
@@ -3780,7 +3797,10 @@ export const customerDepositLedger = pgTable(
     uniqueIndex("customer_deposit_ledger_idempotency_uq")
       .on(table.organizationId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} is not null`),
-    check("customer_deposit_ledger_amount_positive_ck", sql`${table.amount} > 0`),
+    check(
+      "customer_deposit_ledger_amount_positive_ck",
+      sql`${table.amount} > 0`,
+    ),
     check(
       "customer_deposit_ledger_balance_nonnegative_ck",
       sql`${table.balanceAfter} >= 0`,

@@ -68,3 +68,8 @@ next-env.d.ts
 # production build output
 .deploy/
 /docs/asihjaya-rms-handoff-2026-08-05
+
+# local repair / release-audit artifacts
+/.ai-backup/
+/.ai-audit/
+*.bak

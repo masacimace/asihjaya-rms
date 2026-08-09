@@ -9,7 +9,6 @@ import {
   type EnvironmentSource,
 } from "../src/lib/env";
 
-
 const environmentExample = readFileSync(".env.example", "utf8");
 for (const name of [
   "SESSION_SECRET",
@@ -20,7 +19,6 @@ for (const name of [
   "PDF_RENDER_TOKEN_SECRET",
   "HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY",
   "BOOTSTRAP_ADMIN_PASSWORD",
-  "HARDWARE_AGENT_SECRET",
 ]) {
   assert.match(
     environmentExample,
@@ -34,11 +32,18 @@ function makeSecret(label: string): string {
 }
 
 function makeProductionEnvironment(): Record<string, string> {
+  const releaseId = "20260809T010203Z-0123456789ab";
   const environment = {
     NODE_ENV: "production",
     ASIHJAYA_ENV_FILE: ".env.production",
     ASIHJAYA_BIND_ADDRESS: "127.0.0.1",
     ASIHJAYA_APP_PORT: "3000",
+    APP_RELEASE_ID: releaseId,
+    APP_REVISION: "0123456789abcdef0123456789abcdef01234567",
+    APP_BUILD_DATE: "2026-08-09T01:02:03.000Z",
+    ASIHJAYA_IMAGE: `asihjaya-rms:${releaseId}`,
+    ASIHJAYA_MIGRATOR_IMAGE: `asihjaya-rms-migrator:${releaseId}`,
+    ASIHJAYA_OPERATIONS_IMAGE: `asihjaya-rms-operations:${releaseId}`,
     APP_URL: "https://ajsystem.id",
     NEXT_PUBLIC_APP_URL: "https://ajsystem.id",
     INTERNAL_RENDER_ORIGIN: "http://127.0.0.1:3000",
@@ -126,7 +131,10 @@ for (const name of [
   "SESSION_SECRET",
   "HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY",
 ]) {
-  assert(missingNames.includes(name), `${name} wajib terdeteksi ketika tidak diatur.`);
+  assert(
+    missingNames.includes(name),
+    `${name} wajib terdeteksi ketika tidak diatur.`,
+  );
 }
 
 const insecurePublicUrl = {
@@ -180,7 +188,10 @@ for (const name of [
   "IMAGE_STORAGE_SECRET_ACCESS_KEY",
   "IMAGE_STORAGE_ENDPOINT",
 ]) {
-  assert(incompleteS3Issues.includes(name), `${name} wajib untuk storage S3 terkait.`);
+  assert(
+    incompleteS3Issues.includes(name),
+    `${name} wajib untuk storage S3 terkait.`,
+  );
 }
 
 const legacyOnly = {
@@ -213,7 +224,10 @@ const bootstrapEnvironment = {
   BOOTSTRAP_ADMIN_EMAIL: "admin@asihjaya.local",
   BOOTSTRAP_ADMIN_PASSWORD: "a-strong-bootstrap-password",
 };
-assert.equal(getBootstrapEnvironment(bootstrapEnvironment).outletCode, "TOKO-BG");
+assert.equal(
+  getBootstrapEnvironment(bootstrapEnvironment).outletCode,
+  "TOKO-BG",
+);
 
 assert.throws(
   () =>
