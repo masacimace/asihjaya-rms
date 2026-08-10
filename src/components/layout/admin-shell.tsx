@@ -530,12 +530,12 @@ export function AdminShell({
 
       <div className="flex h-dvh min-h-0 min-w-0 max-w-full flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="sticky top-0 z-50 flex h-20 w-full max-w-full min-w-0 shrink-0 items-center overflow-visible border-b border-[var(--border)] bg-white/95 px-2 backdrop-blur sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-50 flex h-20 w-full max-w-full min-w-0 shrink-0 items-center overflow-visible border-b border-[var(--border)] bg-white/95 px-1 backdrop-blur sm:px-6 lg:px-8">
           <button
             type="button"
             aria-label="Buka navigasi"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="grid size-10 shrink-0 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950 lg:hidden"
+            className="grid size-7 shrink-0 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950 lg:hidden"
           >
             <Menu className="size-5" />
           </button>
@@ -579,7 +579,7 @@ export function AdminShell({
                 alt="Asihjaya"
                 width={128}
                 height={128}
-                className="h-7 w-auto object-contain"
+                className="h-6 w-auto object-contain"
               />
             </span>
           </Link>
