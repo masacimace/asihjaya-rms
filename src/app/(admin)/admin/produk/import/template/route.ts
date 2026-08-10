@@ -9,9 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // 2B.1 memakai permission existing agar route dapat diuji sebelum migration
-  // permission products.batch_import ditambahkan pada stage 2B.2.
-  await requirePermission("products.manage");
+  await requirePermission("products.batch_import");
 
   const workbookBuffer = buildProductBatchImportTemplateBuffer();
   const responseBody = new Uint8Array(workbookBuffer.length);

@@ -245,6 +245,7 @@ export default async function ProductCatalogPage({
 }) {
   const auth = await requireAnyPermission(["products.view", "products.manage"]);
   const canManage = hasPermission(auth, "products.manage");
+  const canBatchImport = hasPermission(auth, "products.batch_import");
   const filters = parseProductListFilters(await searchParams);
 
   const [overview, categoryOptions, productList] = await Promise.all([
@@ -308,7 +309,7 @@ export default async function ProductCatalogPage({
                 Refresh
               </Link>
 
-              {canManage ? (
+              {canBatchImport ? (
                 <Link
                   href="/admin/produk/import"
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-xs font-semibold text-neutral-900 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"

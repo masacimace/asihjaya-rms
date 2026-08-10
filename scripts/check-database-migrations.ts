@@ -138,6 +138,10 @@ async function checkLiveDatabase(): Promise<void> {
       "security_rate_limits",
       "legacy_product_import_batches",
       "legacy_product_rows",
+      "product_batch_import_sessions",
+      "product_batch_import_master_rows",
+      "product_batch_import_item_rows",
+      "product_batch_import_media",
       "legacy_product_master_mappings",
       "legacy_migration_sessions",
       "legacy_migration_session_assignments",
@@ -170,6 +174,85 @@ async function checkLiveDatabase(): Promise<void> {
       ["security_rate_limits", ["scope", "key_hash", "attempt_count", "blocked_until"]],
       ["legacy_product_import_batches", ["file_hash", "validation_summary", "status"]],
       ["legacy_product_rows", ["normalized_barcode", "validation_status", "row_fingerprint"]],
+      [
+        "product_batch_import_sessions",
+        [
+          "organization_id",
+          "created_by_user_id",
+          "file_name",
+          "file_sha256",
+          "file_size_bytes",
+          "template_version",
+          "status",
+          "storage_key",
+          "total_master_rows",
+          "total_item_rows",
+          "valid_master_rows",
+          "valid_item_rows",
+          "invalid_rows",
+          "warning_count",
+          "committed_master_count",
+          "committed_item_count",
+          "validated_at",
+          "committed_at",
+          "cancelled_at",
+          "expires_at",
+        ],
+      ],
+      [
+        "product_batch_import_master_rows",
+        [
+          "session_id",
+          "row_number",
+          "master_key",
+          "raw_payload",
+          "normalized_payload",
+          "validation_status",
+          "validation_errors",
+          "validation_warnings",
+          "resolved_category_id",
+          "planned_product_master_id",
+          "committed_product_master_id",
+        ],
+      ],
+      [
+        "product_batch_import_item_rows",
+        [
+          "session_id",
+          "row_number",
+          "row_key",
+          "master_key",
+          "raw_payload",
+          "normalized_payload",
+          "validation_status",
+          "validation_errors",
+          "validation_warnings",
+          "resolved_outlet_id",
+          "planned_product_item_id",
+          "committed_product_item_id",
+          "generated_sku",
+          "generated_barcode",
+          "generated_qr_value",
+        ],
+      ],
+      [
+        "product_batch_import_media",
+        [
+          "session_id",
+          "archive_path",
+          "entity_kind",
+          "master_key",
+          "row_key",
+          "sha256",
+          "content_type",
+          "byte_size",
+          "width",
+          "height",
+          "staging_key",
+          "final_key",
+          "status",
+        ],
+      ],
       [
         "legacy_product_master_mappings",
         ["legacy_master_code", "item_count", "status", "target_product_master_id"],
@@ -350,6 +433,18 @@ async function checkLiveDatabase(): Promise<void> {
     }
 
     const requiredIndexes = [
+      "product_batch_import_sessions_org_hash_active_uq",
+      "product_batch_import_sessions_org_status_created_idx",
+      "product_batch_import_sessions_expires_idx",
+      "product_batch_import_master_rows_session_key_uq",
+      "product_batch_import_master_rows_session_row_uq",
+      "product_batch_import_master_rows_session_validation_idx",
+      "product_batch_import_item_rows_session_key_uq",
+      "product_batch_import_item_rows_session_row_uq",
+      "product_batch_import_item_rows_session_master_idx",
+      "product_batch_import_item_rows_session_validation_idx",
+      "product_batch_import_media_session_archive_path_uq",
+      "product_batch_import_media_session_target_idx",
       "legacy_migration_verifications_org_barcode_uq",
       "legacy_migration_verifications_legacy_row_uq",
       "legacy_migration_verifications_session_status_idx",
@@ -393,6 +488,17 @@ async function checkLiveDatabase(): Promise<void> {
     );
 
     const requiredConstraints = [
+      "product_batch_import_sessions_file_sha256_ck",
+      "product_batch_import_sessions_file_size_ck",
+      "product_batch_import_sessions_template_version_ck",
+      "product_batch_import_sessions_counts_nonnegative_ck",
+      "product_batch_import_sessions_counts_bounds_ck",
+      "product_batch_import_master_rows_row_number_ck",
+      "product_batch_import_item_rows_row_number_ck",
+      "product_batch_import_media_sha256_ck",
+      "product_batch_import_media_byte_size_ck",
+      "product_batch_import_media_dimensions_ck",
+      "product_batch_import_media_target_ck",
       "legacy_migration_verifications_source_ck",
       "legacy_migration_verifications_weight_ck",
       "legacy_migration_verifications_purity_ck",
@@ -514,6 +620,37 @@ async function checkLiveDatabase(): Promise<void> {
       barcodeBackfillResult.rows[0]?.missing_count === 0,
       `Masih ada ${barcodeBackfillResult.rows[0]?.missing_count ?? 0} product item tanpa alias barcode internal aktif.`,
     );
+
+    const productMasterSequenceResult = await pool.query<{ sequence_name: string }>(
+      `select sequence_name
+       from information_schema.sequences
+       where sequence_schema = 'public' and sequence_name = 'product_master_number_seq'`,
+    );
+    assert(
+      productMasterSequenceResult.rows.length === 1,
+      "Sequence product_master_number_seq belum tersedia.",
+    );
+
+    const productBatchPermissionResult = await pool.query<{ role_code: string }>(
+      `select role_record.code as role_code
+       from roles as role_record
+       inner join role_permissions as role_permission
+         on role_permission.role_id = role_record.id
+       inner join permissions as permission_record
+         on permission_record.id = role_permission.permission_id
+       where permission_record.code = 'products.batch_import'
+         and role_record.code = any($1::text[])`,
+      [["system_admin", "owner", "manager", "stock_admin"]],
+    );
+    const productBatchPermissionRoles = new Set(
+      productBatchPermissionResult.rows.map((row) => row.role_code),
+    );
+    for (const roleCode of ["system_admin", "owner", "manager", "stock_admin"]) {
+      assert(
+        productBatchPermissionRoles.has(roleCode),
+        `Permission products.batch_import belum terpasang pada role ${roleCode}.`,
+      );
+    }
 
     const movementEnumResult = await pool.query<{ enumlabel: string }>(
       `select enum_value.enumlabel

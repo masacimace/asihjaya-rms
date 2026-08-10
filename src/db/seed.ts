@@ -64,6 +64,11 @@ const permissionSeeds = [
     module: "products",
   },
   {
+    code: "products.batch_import",
+    name: "Mengimpor Product Master dan item fisik secara batch",
+    module: "products",
+  },
+  {
     code: "migration.view",
     name: "Melihat staging migrasi produk legacy",
     module: "migration",
@@ -390,6 +395,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "outlets.manage",
     "products.view",
     "products.manage",
+    "products.batch_import",
     "migration.view",
     "migration.import",
     "migration.mapping.manage",
@@ -451,6 +457,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "admin.access",
     "products.view",
     "products.manage",
+    "products.batch_import",
     "migration.view",
     "migration.import",
     "migration.mapping.manage",

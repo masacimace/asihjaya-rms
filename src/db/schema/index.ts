@@ -40,12 +40,52 @@ export const masterStatusEnum = pgEnum("master_status", [
   "inactive",
 ]);
 
+export const productMasterNumberSequence = pgSequence(
+  "product_master_number_seq",
+  {
+    startWith: 1,
+    increment: 1,
+    minValue: 1,
+    cache: 1,
+  },
+);
+
 export const productItemNumberSequence = pgSequence("product_item_number_seq", {
   startWith: 1,
   increment: 1,
   minValue: 1,
   cache: 1,
 });
+
+export const productBatchImportStatusEnum = pgEnum(
+  "product_batch_import_status",
+  [
+    "uploaded",
+    "validating",
+    "invalid",
+    "ready",
+    "committing",
+    "completed",
+    "failed",
+    "cancelled",
+    "expired",
+  ],
+);
+
+export const productBatchImportRowValidationStatusEnum = pgEnum(
+  "product_batch_import_row_validation_status",
+  ["pending", "valid", "warning", "invalid"],
+);
+
+export const productBatchImportMediaEntityKindEnum = pgEnum(
+  "product_batch_import_media_entity_kind",
+  ["master", "item"],
+);
+
+export const productBatchImportMediaStatusEnum = pgEnum(
+  "product_batch_import_media_status",
+  ["staged", "validated", "promoted", "failed", "deleted"],
+);
 
 export const legacyProductImportStatusEnum = pgEnum(
   "legacy_product_import_status",
@@ -783,6 +823,285 @@ export const productItems = pgTable(
     check(
       "product_items_deduction_nonnegative_ck",
       sql`${table.deductionPerGram} is null or ${table.deductionPerGram} >= 0`,
+    ),
+  ],
+);
+
+export const productBatchImportSessions = pgTable(
+  "product_batch_import_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    fileSha256: varchar("file_sha256", { length: 64 }).notNull(),
+    fileSizeBytes: integer("file_size_bytes").notNull(),
+    templateVersion: integer("template_version").notNull(),
+    status: productBatchImportStatusEnum("status")
+      .default("uploaded")
+      .notNull(),
+    storageKey: text("storage_key").notNull(),
+    totalMasterRows: integer("total_master_rows").default(0).notNull(),
+    totalItemRows: integer("total_item_rows").default(0).notNull(),
+    validMasterRows: integer("valid_master_rows").default(0).notNull(),
+    validItemRows: integer("valid_item_rows").default(0).notNull(),
+    invalidRows: integer("invalid_rows").default(0).notNull(),
+    warningCount: integer("warning_count").default(0).notNull(),
+    committedMasterCount: integer("committed_master_count")
+      .default(0)
+      .notNull(),
+    committedItemCount: integer("committed_item_count").default(0).notNull(),
+    failureCode: varchar("failure_code", { length: 120 }),
+    failureMessage: text("failure_message"),
+    validatedAt: timestamp("validated_at", { withTimezone: true }),
+    committedAt: timestamp("committed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("product_batch_import_sessions_org_hash_active_uq")
+      .on(table.organizationId, table.fileSha256)
+      .where(
+        sql`${table.status} in ('uploaded', 'validating', 'ready', 'committing', 'completed')`,
+      ),
+    index("product_batch_import_sessions_org_status_created_idx").on(
+      table.organizationId,
+      table.status,
+      table.createdAt,
+    ),
+    index("product_batch_import_sessions_expires_idx").on(
+      table.expiresAt,
+      table.status,
+    ),
+    check(
+      "product_batch_import_sessions_file_sha256_ck",
+      sql`${table.fileSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "product_batch_import_sessions_file_size_ck",
+      sql`${table.fileSizeBytes} between 1 and 104857600`,
+    ),
+    check(
+      "product_batch_import_sessions_template_version_ck",
+      sql`${table.templateVersion} > 0`,
+    ),
+    check(
+      "product_batch_import_sessions_counts_nonnegative_ck",
+      sql`${table.totalMasterRows} >= 0
+        and ${table.totalItemRows} >= 0
+        and ${table.validMasterRows} >= 0
+        and ${table.validItemRows} >= 0
+        and ${table.invalidRows} >= 0
+        and ${table.warningCount} >= 0
+        and ${table.committedMasterCount} >= 0
+        and ${table.committedItemCount} >= 0`,
+    ),
+    check(
+      "product_batch_import_sessions_counts_bounds_ck",
+      sql`${table.validMasterRows} <= ${table.totalMasterRows}
+        and ${table.validItemRows} <= ${table.totalItemRows}
+        and ${table.invalidRows} <= (${table.totalMasterRows} + ${table.totalItemRows})
+        and ${table.committedMasterCount} <= ${table.totalMasterRows}
+        and ${table.committedItemCount} <= ${table.totalItemRows}`,
+    ),
+  ],
+);
+
+export const productBatchImportMasterRows = pgTable(
+  "product_batch_import_master_rows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => productBatchImportSessions.id, { onDelete: "cascade" }),
+    rowNumber: integer("row_number").notNull(),
+    masterKey: varchar("master_key", { length: 120 }).notNull(),
+    rawPayload: jsonb("raw_payload")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    normalizedPayload: jsonb("normalized_payload")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    validationStatus: productBatchImportRowValidationStatusEnum(
+      "validation_status",
+    )
+      .default("pending")
+      .notNull(),
+    validationErrors: jsonb("validation_errors")
+      .$type<Array<Record<string, unknown>>>()
+      .default([])
+      .notNull(),
+    validationWarnings: jsonb("validation_warnings")
+      .$type<Array<Record<string, unknown>>>()
+      .default([])
+      .notNull(),
+    resolvedCategoryId: uuid("resolved_category_id").references(
+      () => productCategories.id,
+    ),
+    plannedProductMasterId: uuid("planned_product_master_id"),
+    committedProductMasterId: uuid("committed_product_master_id").references(
+      () => productMasters.id,
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("product_batch_import_master_rows_session_key_uq").on(
+      table.sessionId,
+      table.masterKey,
+    ),
+    uniqueIndex("product_batch_import_master_rows_session_row_uq").on(
+      table.sessionId,
+      table.rowNumber,
+    ),
+    index("product_batch_import_master_rows_session_validation_idx").on(
+      table.sessionId,
+      table.validationStatus,
+      table.rowNumber,
+    ),
+    check(
+      "product_batch_import_master_rows_row_number_ck",
+      sql`${table.rowNumber} >= 2`,
+    ),
+  ],
+);
+
+export const productBatchImportItemRows = pgTable(
+  "product_batch_import_item_rows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => productBatchImportSessions.id, { onDelete: "cascade" }),
+    rowNumber: integer("row_number").notNull(),
+    rowKey: varchar("row_key", { length: 120 }).notNull(),
+    masterKey: varchar("master_key", { length: 120 }).notNull(),
+    rawPayload: jsonb("raw_payload")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    normalizedPayload: jsonb("normalized_payload")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    validationStatus: productBatchImportRowValidationStatusEnum(
+      "validation_status",
+    )
+      .default("pending")
+      .notNull(),
+    validationErrors: jsonb("validation_errors")
+      .$type<Array<Record<string, unknown>>>()
+      .default([])
+      .notNull(),
+    validationWarnings: jsonb("validation_warnings")
+      .$type<Array<Record<string, unknown>>>()
+      .default([])
+      .notNull(),
+    resolvedOutletId: uuid("resolved_outlet_id").references(() => outlets.id),
+    plannedProductItemId: uuid("planned_product_item_id"),
+    committedProductItemId: uuid("committed_product_item_id").references(
+      () => productItems.id,
+    ),
+    generatedSku: varchar("generated_sku", { length: 80 }),
+    generatedBarcode: varchar("generated_barcode", { length: 120 }),
+    generatedQrValue: varchar("generated_qr_value", { length: 220 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("product_batch_import_item_rows_session_key_uq").on(
+      table.sessionId,
+      table.rowKey,
+    ),
+    uniqueIndex("product_batch_import_item_rows_session_row_uq").on(
+      table.sessionId,
+      table.rowNumber,
+    ),
+    index("product_batch_import_item_rows_session_master_idx").on(
+      table.sessionId,
+      table.masterKey,
+      table.rowNumber,
+    ),
+    index("product_batch_import_item_rows_session_validation_idx").on(
+      table.sessionId,
+      table.validationStatus,
+      table.rowNumber,
+    ),
+    check(
+      "product_batch_import_item_rows_row_number_ck",
+      sql`${table.rowNumber} >= 2`,
+    ),
+  ],
+);
+
+export const productBatchImportMedia = pgTable(
+  "product_batch_import_media",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => productBatchImportSessions.id, { onDelete: "cascade" }),
+    archivePath: text("archive_path").notNull(),
+    entityKind: productBatchImportMediaEntityKindEnum("entity_kind").notNull(),
+    masterKey: varchar("master_key", { length: 120 }),
+    rowKey: varchar("row_key", { length: 120 }),
+    sha256: varchar("sha256", { length: 64 }).notNull(),
+    contentType: varchar("content_type", { length: 100 }).notNull(),
+    byteSize: integer("byte_size").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    stagingKey: text("staging_key").notNull(),
+    finalKey: text("final_key"),
+    status: productBatchImportMediaStatusEnum("status")
+      .default("staged")
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("product_batch_import_media_session_archive_path_uq").on(
+      table.sessionId,
+      table.archivePath,
+    ),
+    index("product_batch_import_media_session_target_idx").on(
+      table.sessionId,
+      table.entityKind,
+      table.status,
+    ),
+    check(
+      "product_batch_import_media_sha256_ck",
+      sql`${table.sha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "product_batch_import_media_byte_size_ck",
+      sql`${table.byteSize} between 1 and 5242880`,
+    ),
+    check(
+      "product_batch_import_media_dimensions_ck",
+      sql`(${table.width} is null or ${table.width} > 0)
+        and (${table.height} is null or ${table.height} > 0)`,
+    ),
+    check(
+      "product_batch_import_media_target_ck",
+      sql`(
+        ${table.entityKind} = 'master'
+        and ${table.masterKey} is not null
+        and ${table.rowKey} is null
+      ) or (
+        ${table.entityKind} = 'item'
+        and ${table.masterKey} is null
+        and ${table.rowKey} is not null
+      )`,
     ),
   ],
 );

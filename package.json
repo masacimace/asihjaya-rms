@@ -72,6 +72,8 @@
     "check:business-timezone": "tsx scripts/check-business-timezone.ts",
     "check:xlsx-security": "tsx scripts/check-legacy-product-xlsx-security.ts",
     "check:product-batch-template": "tsx scripts/check-product-batch-import-template.ts",
+    "check:product-batch-database": "tsx scripts/check-product-batch-import-database.ts",
+    "check:product-batch-import": "npm run check:product-batch-template && npm run check:product-batch-database",
     "check:legacy-product-migration": "tsx scripts/check-legacy-product-migration.ts",
     "check:pos-checkout": "tsx scripts/check-pos-checkout-recovery.ts",
     "check:pos-checkout-services": "tsx scripts/check-pos-checkout-services.ts",
