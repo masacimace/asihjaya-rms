@@ -1192,20 +1192,6 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
           </div>
         )}
       </section>
-
-      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-        <div className="flex gap-3">
-          <ShieldCheck className="mt-0.5 size-5 shrink-0" />
-          <p>
-            Development tanpa printer fisik tetap dapat dilanjutkan dengan
-            dry-run dan fake adapter. Job <strong>unknown_outcome</strong> tidak
-            pernah di-retry otomatis: operator harus membuka Detail, memeriksa
-            bukti fisik atau output simulasi, lalu memilih sudah tercetak, retry
-            dengan risiko duplikat, atau batalkan. Semua keputusan dan lifecycle
-            penting disimpan pada audit log serta riwayat resolusi.
-          </p>
-        </div>
-      </section>
     </div>
   );
 }
