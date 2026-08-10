@@ -65,6 +65,13 @@ export const PRODUCT_BATCH_IMPORT_LIMITS = {
   imageBytes: 5 * 1024 * 1024,
   archiveEntries: 2_000,
   archiveUncompressedBytes: 250 * 1024 * 1024,
+  archiveEntryNameBytes: 512,
+  workbookArchiveEntries: 256,
+  workbookUncompressedBytes: 32 * 1024 * 1024,
+  workbookCellTextChars: 16_384,
+  workbookMetadataRows: 20,
+  workbookInstructionRows: 100,
+  imageInputPixels: 40_000_000,
 } as const;
 
 export const PRODUCT_BATCH_IMPORT_FORBIDDEN_OPERATOR_HEADERS = [
