@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { ProductBatchImportUpload } from "@/components/products/product-batch-import-upload";
 import {
   PRODUCT_BATCH_IMPORT_LIMITS,
   PRODUCT_BATCH_IMPORT_TEMPLATE_FILENAME,
@@ -42,8 +43,7 @@ export default async function ProductBatchImportPage() {
           <div className="min-w-0">
             <span className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
               <FileSpreadsheet className="size-3.5" />
-              Template Product Batch Import v
-              {PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION}
+              Template Product Batch Import v{PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION}
             </span>
             <h1 className="mt-3 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Siapkan import produk dalam satu workbook
@@ -79,9 +79,7 @@ export default async function ProductBatchImportPage() {
           <div className="grid size-10 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
             <FileSpreadsheet className="size-5" />
           </div>
-          <h2 className="mt-4 font-semibold text-neutral-950">
-            1. Isi workbook
-          </h2>
+          <h2 className="mt-4 font-semibold text-neutral-950">1. Isi workbook</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
             Gunakan sheet PRODUCT_MASTERS dan PHYSICAL_PRODUCTS. Ganti atau
             hapus baris contoh sebelum membuat paket final.
@@ -92,9 +90,7 @@ export default async function ProductBatchImportPage() {
           <div className="grid size-10 place-items-center rounded-xl bg-neutral-100 text-neutral-700">
             <ImageIcon className="size-5" />
           </div>
-          <h2 className="mt-4 font-semibold text-neutral-950">
-            2. Siapkan foto
-          </h2>
+          <h2 className="mt-4 font-semibold text-neutral-950">2. Siapkan foto</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
             Foto master masuk ke images/masters. Foto item fisik opsional masuk
             ke images/physical dan dapat kosong untuk memakai foto master.
@@ -105,15 +101,15 @@ export default async function ProductBatchImportPage() {
           <div className="grid size-10 place-items-center rounded-xl bg-neutral-100 text-neutral-700">
             <FolderArchive className="size-5" />
           </div>
-          <h2 className="mt-4 font-semibold text-neutral-950">
-            3. Buat satu ZIP
-          </h2>
+          <h2 className="mt-4 font-semibold text-neutral-950">3. Buat satu ZIP</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            products.xlsx berada di root ZIP. Upload dan preview akan diaktifkan
-            pada tahap berikutnya setelah parser dan staging aman.
+            products.xlsx berada di root ZIP. Upload validation staging sudah
+            aktif; preview detail akan tersedia pada tahap 2B.5.
           </p>
         </article>
       </section>
+
+      <ProductBatchImportUpload />
 
       <section className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0 rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
@@ -122,9 +118,7 @@ export default async function ProductBatchImportPage() {
               <ShieldCheck className="size-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="font-semibold text-neutral-950">
-                Contract penting v1
-              </h2>
+              <h2 className="font-semibold text-neutral-950">Contract penting v1</h2>
               <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
                 Template dibuat supaya staff cukup mengisi data bisnis dan tidak
                 perlu mengelola identifier teknis.
@@ -156,23 +150,11 @@ export default async function ProductBatchImportPage() {
           <h2 className="font-semibold text-neutral-950">Batas template v1</h2>
           <dl className="mt-4 space-y-3 text-sm">
             {[
-              [
-                "ZIP upload",
-                formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes),
-              ],
-              [
-                "Workbook",
-                formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.workbookBytes),
-              ],
-              [
-                "Product Master",
-                `${PRODUCT_BATCH_IMPORT_LIMITS.masterRows} baris`,
-              ],
+              ["ZIP upload", formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes)],
+              ["Workbook", formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.workbookBytes)],
+              ["Product Master", `${PRODUCT_BATCH_IMPORT_LIMITS.masterRows} baris`],
               ["Item fisik", `${PRODUCT_BATCH_IMPORT_LIMITS.itemRows} baris`],
-              [
-                "Satu image",
-                formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.imageBytes),
-              ],
+              ["Satu image", formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.imageBytes)],
             ].map(([label, value]) => (
               <div
                 key={label}
@@ -184,10 +166,10 @@ export default async function ProductBatchImportPage() {
             ))}
           </dl>
 
-          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-            Upload ZIP belum aktif pada 2B.1. Tahap ini hanya menyediakan
-            template resmi dan contract download agar parser berikutnya memakai
-            format yang sudah stabil.
+          <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+            Upload ZIP sudah aktif untuk validation staging. Preview detail,
+            commit Product Master/Product Item, dan label belum aktif sampai
+            tahap berikutnya.
           </div>
         </aside>
       </section>

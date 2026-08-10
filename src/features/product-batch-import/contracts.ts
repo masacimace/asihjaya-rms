@@ -57,6 +57,8 @@ export const PRODUCT_BATCH_IMPORT_ITEM_AVAILABILITIES = [
   "available",
 ] as const;
 
+export const PRODUCT_BATCH_IMPORT_SESSION_TTL_MS = 48 * 60 * 60 * 1000;
+
 export const PRODUCT_BATCH_IMPORT_LIMITS = {
   zipUploadBytes: 100 * 1024 * 1024,
   workbookBytes: 5 * 1024 * 1024,

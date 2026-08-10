@@ -36,6 +36,7 @@ type ProductContext = {
   code: string;
   name: string;
   status: "draft" | "active" | "inactive";
+  imageKey: string | null;
 };
 
 function failure(
@@ -189,6 +190,7 @@ async function getProductContext(
       code: productMasters.code,
       name: productMasters.name,
       status: productMasters.status,
+      imageKey: productMasters.imageKey,
     })
     .from(productMasters)
     .where(
@@ -383,8 +385,9 @@ export async function createProductItemAction(
       fieldErrors.currentOutletId = "Outlet awal wajib untuk item Tersedia.";
     }
 
-    if (!image) {
-      fieldErrors.image = "Foto aktual wajib untuk item Tersedia.";
+    if (!image && !product.imageKey) {
+      fieldErrors.image =
+        "Item Tersedia wajib memiliki foto aktual atau foto katalog Product Master.";
     }
 
     if (conditionRaw !== "good") {
@@ -589,6 +592,7 @@ export async function updateProductItemAction(
       productCode: productMasters.code,
       productName: productMasters.name,
       productStatus: productMasters.status,
+      productImageKey: productMasters.imageKey,
     })
     .from(productItems)
     .innerJoin(
@@ -766,8 +770,10 @@ export async function updateProductItemAction(
     }
   }
 
-  const willHaveImage =
-    Boolean(image) || Boolean(existing.imageKey && !removeImage);
+  const willHaveEffectiveImage =
+    Boolean(image) ||
+    Boolean(existing.imageKey && !removeImage) ||
+    Boolean(existing.productImageKey);
 
   if (targetAvailability === "available") {
     if (existing.productStatus !== "active") {
@@ -783,8 +789,9 @@ export async function updateProductItemAction(
     if (!finalOutlet) {
       fieldErrors.currentOutletId = "Outlet awal wajib untuk item Tersedia.";
     }
-    if (!willHaveImage) {
-      fieldErrors.image = "Foto aktual wajib untuk item Tersedia.";
+    if (!willHaveEffectiveImage) {
+      fieldErrors.image =
+        "Item Tersedia wajib memiliki foto aktual atau foto katalog Product Master.";
     }
     if (conditionRaw !== "good") {
       fieldErrors.condition =

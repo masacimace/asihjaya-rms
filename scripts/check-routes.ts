@@ -108,6 +108,7 @@ const expectedRouteFiles = [
   "app/(public)/akses-ditolak/page.tsx",
   "app/(public)/login/page.tsx",
   "app/api/admin/live-counts/route.ts",
+  "app/api/admin/product-batch-import/upload/route.ts",
   "app/api/hardware-agents/heartbeat/route.ts",
   "app/api/hardware-jobs/[jobId]/route.ts",
   "app/api/hardware-jobs/claim/route.ts",
