@@ -72,7 +72,7 @@ export function LoginForm() {
             autoComplete="username"
             enterKeyHint="next"
             defaultValue={state.values?.identifier ?? ""}
-            placeholder="admin atau admin@asihjaya.local"
+            placeholder="Masukan username atau email"
             className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
           />
         </div>
