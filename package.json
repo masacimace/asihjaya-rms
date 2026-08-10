@@ -71,6 +71,7 @@
     "check:security": "npm run check:environment && npm run check:production-environment && npm run check:customer-history-pin && npm run check:receipt-token && npm run check:pdf-render-security && npm run check:http-security",
     "check:business-timezone": "tsx scripts/check-business-timezone.ts",
     "check:xlsx-security": "tsx scripts/check-legacy-product-xlsx-security.ts",
+    "check:product-batch-template": "tsx scripts/check-product-batch-import-template.ts",
     "check:legacy-product-migration": "tsx scripts/check-legacy-product-migration.ts",
     "check:pos-checkout": "tsx scripts/check-pos-checkout-recovery.ts",
     "check:pos-checkout-services": "tsx scripts/check-pos-checkout-services.ts",

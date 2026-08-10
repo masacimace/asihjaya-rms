@@ -93,6 +93,8 @@ const expectedRouteFiles = [
   "app/(admin)/admin/produk/kategori/page.tsx",
   "app/(admin)/admin/produk/kategori/tambah/page.tsx",
   "app/(admin)/admin/produk/page.tsx",
+  "app/(admin)/admin/produk/import/page.tsx",
+  "app/(admin)/admin/produk/import/template/route.ts",
   "app/(admin)/admin/produk/tambah/page.tsx",
   "app/(pos)/pos/[section]/page.tsx",
   "app/(pos)/pos/ditahan/page.tsx",
