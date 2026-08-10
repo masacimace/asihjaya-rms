@@ -245,6 +245,36 @@ assert.match(environmentTemplate, /^DATABASE_RESTORE_ALLOW_PRODUCTION=false$/m);
 assert.match(environmentTemplate, /^DATABASE_BACKUP_DAILY_RETENTION_DAYS=7$/m);
 assert.match(environmentTemplate, /^DATABASE_BACKUP_WEEKLY_RETENTION_WEEKS=4$/m);
 
+const backupDockerHelper = readFileSync(
+  path.join(projectRoot, "scripts/database-backup-docker.ts"),
+  "utf8",
+);
+assert.match(
+  backupDockerHelper,
+  /pipeError\.code === "EPIPE"/,
+  "Backup Docker helper wajib menangani EPIPE ketika consumer stdin selesai lebih awal.",
+);
+assert.match(
+  backupDockerHelper,
+  /childStdin\.on\("error"/,
+  "Backup Docker helper wajib memasang error handler pada stdin child process.",
+);
+
+const backupLocalRehearsal = readFileSync(
+  path.join(projectRoot, "scripts/run-database-backup-local.ts"),
+  "utf8",
+);
+assert.match(
+  backupLocalRehearsal,
+  /DATABASE_MIGRATION_ALLOW_DESTRUCTIVE:\s*"true"/,
+  "Backup rehearsal fresh DB wajib mengizinkan replay historical destructive migration pada database disposable.",
+);
+assert.match(
+  backupLocalRehearsal,
+  /DATABASE_MIGRATION_APPROVAL_REFERENCE:\s*"REHEARSAL-BACKUP-FRESH-DB"/,
+  "Backup rehearsal fresh DB wajib memakai approval reference test-only.",
+);
+
 const backupRunner = readFileSync(path.join(projectRoot, "scripts/run-database-backup.ts"), "utf8");
 assert.match(backupRunner, /pg_dump --format=custom/);
 assert.match(backupRunner, /pg_restore", "--list/);

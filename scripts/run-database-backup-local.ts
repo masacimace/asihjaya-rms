@@ -283,6 +283,10 @@ const environment: NodeJS.ProcessEnv = {
   DATABASE_BACKUP_WEEKLY_RETENTION_WEEKS: "4",
   DATABASE_BACKUP_PRE_DEPLOYMENT_RETENTION_COUNT: "2",
   DATABASE_RESTORE_ALLOW_PRODUCTION: "false",
+  // Disposable fresh DB must replay all historical migrations, including
+  // previously reviewed destructive DDL such as constraint replacement.
+  DATABASE_MIGRATION_ALLOW_DESTRUCTIVE: "true",
+  DATABASE_MIGRATION_APPROVAL_REFERENCE: "REHEARSAL-BACKUP-FRESH-DB",
 };
 const composeArgs = ["compose", "--project-name", projectName, "-f", composeFile];
 const runnerTargetArgs = [

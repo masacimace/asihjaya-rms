@@ -73,9 +73,16 @@ export async function runDockerCapture(
         fail(new Error("Docker command tidak menyediakan stdin untuk archive database."));
         return;
       }
+      const childStdin = child.stdin;
+      childStdin.on("error", (error) => {
+        const pipeError = error as NodeJS.ErrnoException;
+        if (pipeError.code === "EPIPE") return;
+        fail(pipeError);
+      });
+
       const input = createReadStream(options.inputFile);
       input.once("error", fail);
-      input.pipe(child.stdin);
+      input.pipe(childStdin);
     }
   });
 }
