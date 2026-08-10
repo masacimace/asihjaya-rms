@@ -416,7 +416,7 @@ function AgentCard({
           <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
             Last seen
           </p>
-          <p className="mt-1 font-semibold text-neutral-950">
+          <p className="mt-1 text-xs font-semibold text-neutral-950">
             {formatDateTime(agent.lastSeenAt)}
           </p>
         </div>
@@ -424,7 +424,7 @@ function AgentCard({
           <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
             IP Address
           </p>
-          <p className="mt-1 font-semibold text-neutral-950">
+          <p className="mt-1 text-xs font-semibold text-neutral-950">
             {agent.lastIpAddress ?? "-"}
           </p>
         </div>
@@ -432,7 +432,7 @@ function AgentCard({
           <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
             Outlet
           </p>
-          <p className="mt-1 font-semibold text-neutral-950">
+          <p className="mt-1 text-xs font-semibold text-neutral-950">
             {agent.outlet.code}
           </p>
         </div>
@@ -440,7 +440,7 @@ function AgentCard({
           <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
             Register
           </p>
-          <p className="mt-1 font-semibold text-neutral-950">
+          <p className="mt-1 text-xs font-semibold text-neutral-950">
             {agent.register.code}
           </p>
         </div>
