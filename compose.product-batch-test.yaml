@@ -1,0 +1,23 @@
+name: asihjaya-rms-product-batch-test
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: asihjaya_test
+      POSTGRES_PASSWORD: asihjaya_test_password
+      POSTGRES_DB: asihjaya_rms_product_batch_test
+    ports:
+      - "127.0.0.1:55438:5432"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U asihjaya_test -d asihjaya_rms_product_batch_test
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - product_batch_test_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  product_batch_test_postgres_data:
