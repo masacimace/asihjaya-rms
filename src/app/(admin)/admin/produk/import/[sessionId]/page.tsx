@@ -325,6 +325,11 @@ export default async function ProductBatchImportPreviewPage({
     return true;
   }).filter((entry) => !normalizedSearch || `${entry.kind} ${entry.key} ${entry.issue.code} ${entry.issue.field ?? ""} ${entry.issue.message}`.toLocaleLowerCase("id-ID").includes(normalizedSearch));
 
+  const availableItemCount = preview.items.filter(
+    (row) => String(row.normalizedPayload.initial_availability ?? "draft") === "available",
+  ).length;
+  const draftItemCount = preview.items.length - availableItemCount;
+
   const summaryCards: Array<{
     label: string;
     value: number;
@@ -373,6 +378,22 @@ export default async function ProductBatchImportPreviewPage({
           </dl>
         </div>
       </section>
+
+      {preview.session.status === "completed" ? (
+        <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-sm leading-6 text-emerald-950">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
+            <div>
+              <h2 className="font-semibold">Atomic commit selesai</h2>
+              <p className="mt-1">
+                {formatNumber(preview.session.committedMasterCount)} Product Master dan {" "}
+                {formatNumber(preview.session.committedItemCount)} Product Item sudah menjadi data bisnis nyata.
+                Export result dan batch label akan dilanjutkan pada tahap 2B.7.
+              </p>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {summaryCards.map(({ label, value, icon: Icon, color }) => (
@@ -502,9 +523,19 @@ export default async function ProductBatchImportPreviewPage({
           <section className="rounded-3xl border border-[var(--border)] bg-white p-5">
             <div className="flex items-start gap-3">
               <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]"><ShieldCheck className="size-5" /></div>
-              <div><h2 className="font-semibold text-neutral-950">Review action</h2><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Commit belum menulis data bisnis pada 2B.5.</p></div>
+              <div><h2 className="font-semibold text-neutral-950">Review action</h2><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Session ready dapat di-commit secara atomic setelah konfirmasi final.</p></div>
             </div>
-            <div className="mt-4"><ProductBatchImportSessionActions sessionId={sessionId} status={preview.session.status} invalidRows={preview.session.invalidRows} /></div>
+            <div className="mt-4">
+              <ProductBatchImportSessionActions
+                sessionId={sessionId}
+                status={preview.session.status}
+                invalidRows={preview.session.invalidRows}
+                totalMasterRows={preview.session.totalMasterRows}
+                totalItemRows={preview.session.totalItemRows}
+                availableItemCount={availableItemCount}
+                draftItemCount={draftItemCount}
+              />
+            </div>
           </section>
 
           <section className="rounded-3xl border border-[var(--border)] bg-white p-5">

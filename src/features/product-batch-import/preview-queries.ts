@@ -27,6 +27,7 @@ export type ProductBatchPreviewMedia = {
   width: number | null;
   height: number | null;
   status: string;
+  finalKey: string | null;
 };
 
 export type ProductBatchPreviewMasterRow = {
@@ -237,6 +238,7 @@ export async function getProductBatchImportPreview(
         width: productBatchImportMedia.width,
         height: productBatchImportMedia.height,
         status: productBatchImportMedia.status,
+        finalKey: productBatchImportMedia.finalKey,
       })
       .from(productBatchImportMedia)
       .where(eq(productBatchImportMedia.sessionId, sessionId))
@@ -300,6 +302,7 @@ export async function getProductBatchImportMediaRecord({
       id: productBatchImportMedia.id,
       contentType: productBatchImportMedia.contentType,
       stagingKey: productBatchImportMedia.stagingKey,
+      finalKey: productBatchImportMedia.finalKey,
       status: productBatchImportMedia.status,
       organizationId: productBatchImportSessions.organizationId,
     })

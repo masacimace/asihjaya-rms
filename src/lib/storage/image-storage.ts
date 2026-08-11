@@ -281,32 +281,37 @@ export async function readImageFile(imageKey: string): Promise<Buffer> {
   );
 }
 
-export async function deleteImageFile(imageKey: string | null): Promise<void> {
+export async function deleteImageFileStrict(
+  imageKey: string | null,
+): Promise<void> {
   if (!imageKey) {
     return;
   }
 
   const normalized = normalizeImageKey(imageKey);
-
   if (!normalized) {
+    throw new Error("Kunci foto tidak valid.");
+  }
+
+  if (getStorageDriver() === "s3") {
+    await getS3Client().send(
+      new DeleteObjectCommand({
+        Bucket: getS3Bucket(),
+        Key: normalized,
+      }),
+    );
     return;
   }
 
-  try {
-    if (getStorageDriver() === "s3") {
-      await getS3Client().send(
-        new DeleteObjectCommand({
-          Bucket: getS3Bucket(),
-          Key: normalized,
-        }),
-      );
-      return;
-    }
+  await rm(
+    /* turbopackIgnore: true */ getAbsoluteImagePath(normalized),
+    { force: true },
+  );
+}
 
-    await rm(
-      /* turbopackIgnore: true */ getAbsoluteImagePath(normalized),
-      { force: true },
-    );
+export async function deleteImageFile(imageKey: string | null): Promise<void> {
+  try {
+    await deleteImageFileStrict(imageKey);
   } catch (error) {
     console.error("Gagal menghapus file foto:", error);
   }

@@ -45,8 +45,9 @@ async function main() {
   expect(page, "overflow-x-clip", "page horizontal overflow guard", problems);
   expect(page, "/errors", "error workbook link", problems);
   expect(actions, "invalidRows === 0", "commit readiness guard", problems);
-  expect(actions, "disabled", "2B.5 commit disabled", problems);
-  expect(actions, "2B.6", "commit scope boundary", problems);
+  expect(actions, "commitProductBatchImportSessionAction", "atomic commit action", problems);
+  expect(actions, "Commit Product Batch Import?", "commit confirmation UI", problems);
+  expect(actions, 'name="confirmCommit"', "explicit irreversible confirmation", problems);
   expect(upload, "router.push(`/admin/produk/import/${payload.session.id}`)", "persistent preview redirect", problems);
   expect(upload, "Buka session existing", "duplicate session recovery", problems);
   expect(upload, "Struktur ZIP yang benar", "operator ZIP structure guidance", problems);
@@ -64,6 +65,7 @@ async function main() {
   expect(queries, "productBatchImportMedia", "staging media query", problems);
   expect(queries, "auth.organization.id", "organization isolation", problems);
   expect(mediaRoute, "readProductBatchImportStagingFile", "private staging image read", problems);
+  expect(mediaRoute, "readImageFile", "completed final image read", problems);
   expect(mediaRoute, '"X-Content-Type-Options": "nosniff"', "media nosniff", problems);
   expect(errorRoute, "createXlsxResponse", "error workbook export", problems);
   expect(errorRoute, 'name: "MASTER_ERRORS"', "master error sheet", problems);
@@ -90,7 +92,7 @@ async function main() {
   console.log("Pemeriksaan Product Batch Import UI berhasil.");
   console.log("- Preview session memakai staging DB dan organization isolation.");
   console.log("- Master/item/image/issues, fallback image, filters, dan error workbook tersedia.");
-  console.log("- Upload mengarah ke preview persistent; atomic commit tetap belum aktif pada 2B.5.");
+  console.log("- Upload mengarah ke preview persistent; ready session mempunyai confirmation flow menuju atomic commit 2B.6.");
 }
 
 await main();
