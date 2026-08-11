@@ -96,6 +96,8 @@ const expectedRouteFiles = [
   "app/(admin)/admin/produk/import/[sessionId]/errors/route.ts",
   "app/(admin)/admin/produk/import/[sessionId]/media/[mediaId]/route.ts",
   "app/(admin)/admin/produk/import/[sessionId]/page.tsx",
+  "app/(admin)/admin/produk/import/[sessionId]/result/route.ts",
+  "app/(admin)/admin/produk/import/history/page.tsx",
   "app/(admin)/admin/produk/import/page.tsx",
   "app/(admin)/admin/produk/import/template/route.ts",
   "app/(admin)/admin/produk/tambah/page.tsx",

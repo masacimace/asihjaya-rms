@@ -168,8 +168,8 @@ export default async function ProductBatchImportPage() {
           </dl>
 
           <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-            Upload ZIP dan preview staging sudah aktif. Atomic commit Product
-            Master/Product Item dan label tetap belum aktif sampai tahap 2B.6+.
+            Upload, preview, atomic commit, result workbook, dan label Hardware Hub
+            sudah tersedia. Gunakan batch kecil terlebih dahulu sebelum volume besar.
           </div>
         </aside>
       </section>
@@ -179,9 +179,15 @@ export default async function ProductBatchImportPage() {
           <div>
             <h2 className="font-semibold text-neutral-950">Import terbaru</h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              Session staging tersimpan di database. Buka kembali preview kapan pun selama session masih tersedia.
+              Session tersimpan di database dan dapat dibuka kembali untuk preview maupun result completed.
             </p>
           </div>
+          <Link
+            href="/admin/produk/import/history"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-neutral-200 px-4 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+          >
+            Lihat semua history
+          </Link>
         </div>
         {recentSessions.length ? (
           <div className="mt-4 grid min-w-0 gap-3 lg:grid-cols-2">

@@ -8,6 +8,10 @@ import {
   ProductBatchImportCommitError,
 } from "@/features/product-batch-import/commit-service";
 import {
+  printProductBatchImportLabels,
+  ProductBatchImportLabelError,
+} from "@/features/product-batch-import/label-service";
+import {
   cancelProductBatchImportSession,
   ProductBatchImportServiceError,
 } from "@/features/product-batch-import/session-service";
@@ -29,6 +33,15 @@ export type ProductBatchImportCommitActionState = {
   message?: string;
   committedMasterCount?: number;
   committedItemCount?: number;
+};
+
+export type ProductBatchImportLabelActionState = {
+  status: "idle" | "success" | "error";
+  sessionId?: string;
+  message?: string;
+  createdCount?: number;
+  duplicateCount?: number;
+  skippedCount?: number;
 };
 
 async function getRequestMetadata() {
@@ -136,4 +149,62 @@ export async function cancelProductBatchImportSessionAction(
     sessionId,
     message: "Session import dibatalkan dan staging dibersihkan.",
   };
+}
+
+export async function printProductBatchImportLabelsAction(
+  _previousState: ProductBatchImportLabelActionState,
+  formData: FormData,
+): Promise<ProductBatchImportLabelActionState> {
+  const auth = await requirePermission("products.batch_import");
+  const sessionId = String(formData.get("sessionId") ?? "").trim();
+  const requestId = String(formData.get("requestId") ?? "").trim();
+  const mode = String(formData.get("mode") ?? "selected").trim();
+  const selectedItemIds = formData
+    .getAll("itemId")
+    .map((value) => String(value).trim());
+
+  if (!UUID_PATTERN.test(sessionId) || !UUID_PATTERN.test(requestId)) {
+    return {
+      status: "error",
+      sessionId,
+      message: "Intent cetak label Batch Import tidak valid.",
+    };
+  }
+  if (mode !== "all" && mode !== "selected") {
+    return {
+      status: "error",
+      sessionId,
+      message: "Mode cetak label Batch Import tidak valid.",
+    };
+  }
+
+  try {
+    const result = await printProductBatchImportLabels({
+      auth,
+      sessionId,
+      requestId,
+      mode,
+      selectedItemIds,
+      requestMetadata: await getRequestMetadata(),
+    });
+
+    revalidatePath(`/admin/produk/import/${sessionId}`);
+    return {
+      status: "success",
+      sessionId,
+      message: `Job label dibuat: ${result.createdCount} baru, ${result.duplicateCount} duplicate-safe, ${result.skippedCount} dilewati karena belum eligible.`,
+      createdCount: result.createdCount,
+      duplicateCount: result.duplicateCount,
+      skippedCount: result.skippedCount,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      sessionId,
+      message:
+        error instanceof ProductBatchImportLabelError || error instanceof Error
+          ? error.message
+          : "Pembuatan job label Batch Import gagal.",
+    };
+  }
 }

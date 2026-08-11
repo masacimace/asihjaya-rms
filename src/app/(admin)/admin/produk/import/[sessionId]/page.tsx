@@ -15,6 +15,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ProductBatchImportLabels } from "@/components/products/product-batch-import-labels";
 import { ProductBatchImportSessionActions } from "@/components/products/product-batch-import-session-actions";
 import {
   getProductBatchImportPreview,
@@ -23,7 +24,8 @@ import {
   type ProductBatchPreviewMasterRow,
   type ProductBatchPreviewMedia,
 } from "@/features/product-batch-import/preview-queries";
-import { requirePermission } from "@/lib/auth/session";
+import { getProductBatchImportResult } from "@/features/product-batch-import/result-queries";
+import { hasPermission, requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Preview Product Batch Import" };
@@ -287,6 +289,11 @@ export default async function ProductBatchImportPreviewPage({
   const [{ sessionId }, queryParams] = await Promise.all([params, searchParams]);
   const preview = await getProductBatchImportPreview(auth, sessionId);
   if (!preview) notFound();
+  const result =
+    preview.session.status === "completed"
+      ? await getProductBatchImportResult(auth, sessionId)
+      : null;
+  const canPrintLabels = hasPermission(auth, "inventory.print_label");
 
   const view: ViewMode = ["masters", "items", "images", "issues"].includes(queryParams.view ?? "")
     ? (queryParams.view as ViewMode)
@@ -366,7 +373,9 @@ export default async function ProductBatchImportPreviewPage({
             <h1 className="break-words text-2xl font-semibold text-neutral-950 sm:text-3xl">Preview Product Batch Import</h1>
             <p className="mt-2 break-all text-sm font-medium text-neutral-700">{preview.session.fileName}</p>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Preview ini membaca snapshot staging yang sama dengan hasil validation. Tidak ada SKU, barcode, QR, Product Master, atau Product Item nyata yang dibuat pada tahap review ini.
+              {preview.session.status === "completed"
+                ? "Session ini sudah completed. Halaman menyimpan evidence staging sekaligus hasil identifier, link data bisnis, export result, dan status label yang dapat dibuka ulang."
+                : "Preview ini membaca snapshot staging yang sama dengan hasil validation. Tidak ada SKU, barcode, QR, Product Master, atau Product Item nyata yang dibuat sebelum atomic commit."}
             </p>
           </div>
           <dl className="grid gap-2 rounded-2xl bg-neutral-50 p-4 text-xs">
@@ -379,19 +388,81 @@ export default async function ProductBatchImportPreviewPage({
         </div>
       </section>
 
-      {preview.session.status === "completed" ? (
-        <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-sm leading-6 text-emerald-950">
-          <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
-            <div>
-              <h2 className="font-semibold">Atomic commit selesai</h2>
-              <p className="mt-1">
-                {formatNumber(preview.session.committedMasterCount)} Product Master dan {" "}
-                {formatNumber(preview.session.committedItemCount)} Product Item sudah menjadi data bisnis nyata.
-                Export result dan batch label akan dilanjutkan pada tahap 2B.7.
-              </p>
+      {preview.session.status === "completed" && result ? (
+        <section className="space-y-4 rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-sm leading-6 text-emerald-950 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
+              <div className="min-w-0">
+                <h2 className="font-semibold">Import completed</h2>
+                <p className="mt-1">
+                  {formatNumber(result.masters.length)} Product Master dan {" "}
+                  {formatNumber(result.items.length)} Product Item sudah menjadi data bisnis nyata.
+                </p>
+                <p className="mt-1 text-xs text-emerald-800">
+                  Committed {formatDateTime(result.session.committedAt, auth.organization.timezone)} · operator {result.session.createdByName}
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/admin/produk/import/${sessionId}/result`}
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-900 px-4 text-sm font-semibold text-white hover:bg-emerald-800"
+            >
+              <Download className="size-4" />
+              Download result XLSX
+            </Link>
+          </div>
+
+          <div className="grid min-w-0 gap-3 md:grid-cols-2">
+            <div className="min-w-0 rounded-2xl bg-white/80 p-4">
+              <h3 className="font-semibold text-neutral-950">Created Product Masters</h3>
+              <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+                {result.masters.map((master) => (
+                  <Link
+                    key={master.productMasterId}
+                    href={`/admin/produk/${master.productMasterId}`}
+                    className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white p-3 text-neutral-800 hover:border-emerald-200"
+                  >
+                    <span className="min-w-0">
+                      <span className="block break-words text-sm font-semibold">{master.name}</span>
+                      <span className="mt-1 block font-mono text-[11px] text-[var(--muted)]">{master.code} · {master.masterKey}</span>
+                    </span>
+                    <ChevronRight className="size-4 shrink-0 text-neutral-400" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <div className="min-w-0 rounded-2xl bg-white/80 p-4">
+              <h3 className="font-semibold text-neutral-950">Generated Product Items</h3>
+              <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+                {result.items.map((item) => (
+                  <Link
+                    key={item.productItemId}
+                    href={`/admin/inventaris/item/${item.productItemId}`}
+                    className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white p-3 text-neutral-800 hover:border-emerald-200"
+                  >
+                    <span className="min-w-0">
+                      <span className="block break-words text-sm font-semibold">{item.displayName ?? item.productName}</span>
+                      <span className="mt-1 block break-all font-mono text-[11px] text-[var(--muted)]">{item.sku} · {item.barcode}</span>
+                    </span>
+                    <ChevronRight className="size-4 shrink-0 text-neutral-400" />
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
+        </section>
+      ) : null}
+
+      {preview.session.status === "completed" && result ? (
+        <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
+          <ProductBatchImportLabels
+            sessionId={sessionId}
+            items={result.items}
+            labelJobs={result.labelJobs}
+            canPrintLabels={canPrintLabels}
+          />
         </section>
       ) : null}
 
@@ -545,6 +616,12 @@ export default async function ProductBatchImportPreviewPage({
               <Download className="size-4" />
               Download error workbook
             </Link>
+            {preview.session.status === "completed" ? (
+              <Link href={`/admin/produk/import/${sessionId}/result`} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-3 text-sm font-semibold text-white hover:bg-neutral-800">
+                <Download className="size-4" />
+                Download result workbook
+              </Link>
+            ) : null}
           </section>
 
           <section className="rounded-3xl border border-[var(--border)] bg-white p-5 text-xs leading-5">
