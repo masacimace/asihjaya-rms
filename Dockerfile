@@ -122,6 +122,8 @@ COPY scripts ./scripts
 COPY src/db ./src/db
 COPY src/lib/env.ts ./src/lib/env.ts
 COPY src/lib/time ./src/lib/time
+COPY src/lib/storage ./src/lib/storage
+COPY src/features/product-batch-import ./src/features/product-batch-import
 COPY src/server/integrations/telegram ./src/server/integrations/telegram
 
 RUN chmod a+r \

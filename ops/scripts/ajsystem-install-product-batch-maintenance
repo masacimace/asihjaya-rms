@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 027
+
+ACTION="${1:-}"
+PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
+INSTALL_DIR="${ASIHJAYA_INSTALL_DIR:-/usr/local/sbin}"
+SYSTEMD_DIR="${ASIHJAYA_SYSTEMD_DIR:-/etc/systemd/system}"
+STATE_ROOT="${ASIHJAYA_PRODUCT_BATCH_STATE_ROOT:-/var/lib/asihjaya-rms/product-batch-import-maintenance}"
+DEPLOYMENT_STATE_ROOT="${ASIHJAYA_DEPLOYMENT_STATE_ROOT:-/var/lib/asihjaya-rms/deployments}"
+RELEASE_ENV_FILE="${ASIHJAYA_RELEASE_ENV_FILE:-$DEPLOYMENT_STATE_ROOT/current.env}"
+DEPLOYMENT_USER="${ASIHJAYA_DEPLOYMENT_USER:-ubuntu}"
+DEPLOYMENT_GROUP="${ASIHJAYA_DEPLOYMENT_GROUP:-ubuntu}"
+COMMAND="ajsystem-product-batch-maintenance"
+SERVICE="ajsystem-product-batch-maintenance.service"
+TIMER="ajsystem-product-batch-maintenance.timer"
+
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 64; }
+
+read_env_file_value() {
+  local file_path="$1" key="$2" line value
+  line="$(grep -E "^${key}=" "$file_path" | tail -n 1 || true)"
+  value="${line#*=}"
+  value="${value%$'\r'}"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "$value"
+}
+
+[[ "$EUID" -eq 0 ]] || fail "installer wajib dijalankan dengan sudo/root."
+case "$ACTION" in install|verify|uninstall) ;; *) printf 'Usage: %s install|verify|uninstall\n' "$0" >&2; exit 64 ;; esac
+for command_name in install stat sha256sum awk systemctl systemd-analyze id getent runuser git rm grep tail; do
+  command -v "$command_name" >/dev/null 2>&1 || fail "command wajib tidak tersedia: $command_name"
+done
+getent passwd "$DEPLOYMENT_USER" >/dev/null || fail "deployment user tidak ditemukan."
+getent group "$DEPLOYMENT_GROUP" >/dev/null || fail "deployment group tidak ditemukan."
+id -nG "$DEPLOYMENT_USER" | tr ' ' '\n' | grep -Fxq docker || fail "$DEPLOYMENT_USER wajib menjadi anggota grup docker."
+
+source_command="$PROJECT_DIR/ops/scripts/$COMMAND"
+installed_command="$INSTALL_DIR/$COMMAND"
+source_service="$PROJECT_DIR/ops/systemd/$SERVICE"
+source_timer="$PROJECT_DIR/ops/systemd/$TIMER"
+installed_service="$SYSTEMD_DIR/$SERVICE"
+installed_timer="$SYSTEMD_DIR/$TIMER"
+
+verify_source() {
+  [[ -d "$PROJECT_DIR/.git" ]] || fail "Git working copy tidak ditemukan."
+  [[ -f "$RELEASE_ENV_FILE" && ! -L "$RELEASE_ENV_FILE" ]] || fail "current release environment tidak tersedia."
+  local head revision
+  head="$(runuser -u "$DEPLOYMENT_USER" -- git -C "$PROJECT_DIR" rev-parse HEAD)"
+  revision="$(read_env_file_value "$RELEASE_ENV_FILE" APP_REVISION)"
+  [[ "$revision" =~ ^[a-f0-9]{40,64}$ ]] || fail "APP_REVISION current release tidak valid."
+  [[ "$head" == "$revision" ]] || fail "source checkout tidak sama dengan exact current release."
+  [[ -z "$(runuser -u "$DEPLOYMENT_USER" -- git -C "$PROJECT_DIR" status --porcelain --untracked-files=all)" ]] || fail "working tree VPS tidak bersih."
+  for file in "$source_command" "$source_service" "$source_timer"; do
+    [[ -f "$file" && ! -L "$file" ]] || fail "source maintenance tidak tersedia: $file"
+  done
+  bash -n "$source_command"
+}
+
+verify_file() {
+  local source="$1" destination="$2" mode="$3"
+  [[ -f "$destination" && ! -L "$destination" ]] || fail "installed file tidak tersedia: $destination"
+  [[ "$(stat -c '%a' "$destination")" == "$mode" ]] || fail "mode $destination harus $mode."
+  [[ "$(sha256sum "$source" | awk '{print $1}')" == "$(sha256sum "$destination" | awk '{print $1}')" ]] || fail "installed file berbeda dari exact source: $destination"
+}
+
+verify_installation() {
+  verify_source
+  verify_file "$source_command" "$installed_command" 750
+  verify_file "$source_service" "$installed_service" 644
+  verify_file "$source_timer" "$installed_timer" 644
+  systemd-analyze verify "$installed_service" "$installed_timer" >/dev/null
+  [[ -d "$STATE_ROOT" ]] || fail "maintenance state root tidak tersedia."
+  [[ "$(stat -c '%U' "$STATE_ROOT")" == "$DEPLOYMENT_USER" ]] || fail "owner state root salah."
+  [[ "$(stat -c '%G' "$STATE_ROOT")" == "$DEPLOYMENT_GROUP" ]] || fail "group state root salah."
+  runuser -u "$DEPLOYMENT_USER" -- test -w "$STATE_ROOT" || fail "state root tidak writable."
+  printf 'OK: Product Batch Import maintenance installation terverifikasi.\n'
+}
+
+case "$ACTION" in
+  install)
+    verify_source
+    install -d -m 0755 -o root -g root "$INSTALL_DIR" "$SYSTEMD_DIR"
+    install -d -m 0750 -o "$DEPLOYMENT_USER" -g "$DEPLOYMENT_GROUP" "$STATE_ROOT"
+    install -m 0750 -o root -g "$DEPLOYMENT_GROUP" "$source_command" "$installed_command"
+    install -m 0644 -o root -g root "$source_service" "$installed_service"
+    install -m 0644 -o root -g root "$source_timer" "$installed_timer"
+    systemctl daemon-reload
+    printf 'Source maintenance terpasang. Timer sengaja BELUM di-enable.\n'
+    verify_installation
+    ;;
+  verify) verify_installation ;;
+  uninstall)
+    systemctl disable --now "$TIMER" >/dev/null 2>&1 || true
+    systemctl stop "$SERVICE" >/dev/null 2>&1 || true
+    rm -f "$installed_command" "$installed_service" "$installed_timer"
+    systemctl daemon-reload
+    systemctl reset-failed "$SERVICE" >/dev/null 2>&1 || true
+    printf 'Product Batch Import maintenance unit/helper dihapus; state history dipertahankan.\n'
+    ;;
+esac

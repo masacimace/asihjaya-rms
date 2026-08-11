@@ -29,6 +29,10 @@ import {
 } from "@/lib/storage/product-batch-import-storage";
 
 import { getNextProductMasterCode } from "./product-master-identifiers";
+import {
+  logProductBatchImportError,
+  logProductBatchImportEvent,
+} from "./observability";
 
 export type ProductBatchImportCommitRequestMetadata = {
   ipAddress?: string | null;
@@ -130,14 +134,13 @@ function getDatabaseError(error: unknown): {
   };
   return {
     code: databaseError.code ?? databaseError.cause?.code,
-    constraint: databaseError.constraint ?? databaseError.cause?.constraint,
+    constraint:
+      databaseError.constraint ?? databaseError.cause?.constraint,
   };
 }
 
 function uniqueStrings(values: Array<string | null>) {
-  return Array.from(
-    new Set(values.filter((value): value is string => !!value)),
-  );
+  return Array.from(new Set(values.filter((value): value is string => !!value)));
 }
 
 type PlannedMasterRow = {
@@ -326,10 +329,7 @@ async function prepareCommitPlan({
     }
 
     for (const row of [...masterRows, ...itemRows]) {
-      if (
-        row.validationStatus !== "valid" &&
-        row.validationStatus !== "warning"
-      ) {
+      if (row.validationStatus !== "valid" && row.validationStatus !== "warning") {
         throw commitError(
           "STAGING_ROW_NOT_COMMITTABLE",
           "Terdapat staging row yang tidak lagi valid untuk commit.",
@@ -401,9 +401,7 @@ async function prepareCommitPlan({
       }
     }
 
-    const outletIds = uniqueStrings(
-      itemRows.map((row) => row.resolvedOutletId),
-    );
+    const outletIds = uniqueStrings(itemRows.map((row) => row.resolvedOutletId));
     const allowedOutletIds = new Set(auth.outlets.map((outlet) => outlet.id));
     if (outletIds.some((outletId) => !allowedOutletIds.has(outletId))) {
       throw commitError(
@@ -455,10 +453,7 @@ async function prepareCommitPlan({
           409,
         );
       }
-      const physicalImage = nullableText(
-        row.normalizedPayload,
-        "physical_image",
-      );
+      const physicalImage = nullableText(row.normalizedPayload, "physical_image");
       if (
         physicalImage &&
         !mediaRows.some(
@@ -472,7 +467,10 @@ async function prepareCommitPlan({
         );
       }
 
-      const availability = text(row.normalizedPayload, "initial_availability");
+      const availability = text(
+        row.normalizedPayload,
+        "initial_availability",
+      );
       if (availability === "available") {
         const parent = masterRows.find(
           (master) => master.masterKey === row.masterKey,
@@ -580,9 +578,7 @@ async function verifyStagingSnapshot(plan: CommitPlan) {
     );
   }
 
-  const archiveBuffer = await readProductBatchImportStagingFile(
-    plan.storageKey,
-  );
+  const archiveBuffer = await readProductBatchImportStagingFile(plan.storageKey);
   const actualHash = createHash("sha256").update(archiveBuffer).digest("hex");
   if (actualHash !== plan.fileSha256) {
     throw commitError(
@@ -692,6 +688,7 @@ async function promoteMedia({
       );
     }
   }
+
 }
 
 async function cleanupPromotedMedia({
@@ -788,9 +785,8 @@ async function markCommitFailed({
       .update(productBatchImportSessions)
       .set({
         status: "failed",
-        failureCode: (cleanupFailures.length
-          ? "COMMIT_CLEANUP_INCOMPLETE"
-          : baseCode
+        failureCode: (
+          cleanupFailures.length ? "COMMIT_CLEANUP_INCOMPLETE" : baseCode
         ).slice(0, 120),
         failureMessage: `${baseMessage}${cleanupMessage}`.slice(0, 4_000),
         updatedAt: now,
@@ -909,7 +905,9 @@ async function commitBusinessData({
         (row) =>
           !row.plannedProductItemId || row.committedProductItemId !== null,
       ) ||
-      mediaRows.some((row) => row.status !== "promoted" || !row.finalKey)
+      mediaRows.some(
+        (row) => row.status !== "promoted" || !row.finalKey,
+      )
     ) {
       throw commitError(
         "COMMIT_SNAPSHOT_CHANGED",
@@ -929,8 +927,7 @@ async function commitBusinessData({
     const itemMediaByKey = new Map(
       mediaRows
         .filter(
-          (media) =>
-            media.entityKind === "item" && media.rowKey && media.finalKey,
+          (media) => media.entityKind === "item" && media.rowKey && media.finalKey,
         )
         .map((media) => [media.rowKey as string, media.finalKey as string]),
     );
@@ -1335,12 +1332,31 @@ export async function commitProductBatchImportSession({
   now?: Date;
   testFailpoint?: ProductBatchImportCommitTestFailpoint;
 }): Promise<ProductBatchImportCommitResult> {
-  const plan = await prepareCommitPlan({
-    auth,
+  const startedAtMs = Date.now();
+  logProductBatchImportEvent({
+    event: "commit_started",
     sessionId,
-    requestMetadata,
-    now,
+    organizationId: auth.organization.id,
   });
+
+  let plan: CommitPlan;
+  try {
+    plan = await prepareCommitPlan({
+      auth,
+      sessionId,
+      requestMetadata,
+      now,
+    });
+  } catch (error) {
+    logProductBatchImportError({
+      event: "commit_rejected",
+      sessionId,
+      organizationId: auth.organization.id,
+      durationMs: Date.now() - startedAtMs,
+      error,
+    });
+    throw error;
+  }
 
   const promoted: PromotedMedia[] = [];
   try {
@@ -1355,6 +1371,14 @@ export async function commitProductBatchImportSession({
       cleanupFailures,
       requestMetadata,
       now: new Date(),
+    });
+    logProductBatchImportError({
+      event: "commit_failed",
+      sessionId,
+      organizationId: auth.organization.id,
+      durationMs: Date.now() - startedAtMs,
+      cleanupFailureCount: cleanupFailures.length,
+      error,
     });
     if (error instanceof ProductBatchImportCommitError) throw error;
     throw commitError(
@@ -1386,6 +1410,14 @@ export async function commitProductBatchImportSession({
       requestMetadata,
       now: new Date(),
     });
+    logProductBatchImportError({
+      event: "commit_failed",
+      sessionId,
+      organizationId: auth.organization.id,
+      durationMs: Date.now() - startedAtMs,
+      cleanupFailureCount: cleanupFailures.length,
+      error,
+    });
 
     if (error instanceof ProductBatchImportCommitError) throw error;
     const databaseError = getDatabaseError(error);
@@ -1410,6 +1442,18 @@ export async function commitProductBatchImportSession({
     plan,
     requestMetadata,
     now: new Date(),
+  });
+
+  logProductBatchImportEvent({
+    event: "commit_completed",
+    sessionId,
+    organizationId: auth.organization.id,
+    durationMs: Date.now() - startedAtMs,
+    committedMasterCount: result.committedMasterCount,
+    committedItemCount: result.committedItemCount,
+    availableItemCount: result.availableItemCount,
+    draftItemCount: result.draftItemCount,
+    stagingCleanupWarnings,
   });
 
   return { ...result, stagingCleanupWarnings };

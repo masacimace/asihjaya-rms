@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -315,4 +316,64 @@ export async function deleteImageFile(imageKey: string | null): Promise<void> {
   } catch (error) {
     console.error("Gagal menghapus file foto:", error);
   }
+}
+
+
+export async function listImageKeysForEntity({
+  organizationId,
+  entityType,
+  entityId,
+  maxObjects = 50,
+}: {
+  organizationId: string;
+  entityType: "products" | "items";
+  entityId: string;
+  maxObjects?: number;
+}): Promise<string[]> {
+  if (
+    !ORGANIZATION_KEY_PATTERN.test(organizationId) ||
+    !ENTITY_KEY_PATTERN.test(entityId)
+  ) {
+    throw new Error("Organization/entity image scope tidak valid.");
+  }
+  const boundedMax = Math.max(1, Math.min(500, Math.trunc(maxObjects)));
+  const prefix = `organizations/${organizationId}/${entityType}/${entityId}/`;
+
+  if (getStorageDriver() === "s3") {
+    const response = await getS3Client().send(
+      new ListObjectsV2Command({
+        Bucket: getS3Bucket(),
+        Prefix: prefix,
+        MaxKeys: boundedMax,
+      }),
+    );
+    return (response.Contents ?? [])
+      .flatMap((object) => {
+        if (!object.Key) return [];
+        const normalized = normalizeImageKey(object.Key);
+        return normalized?.startsWith(prefix) ? [normalized] : [];
+      })
+      .slice(0, boundedMax);
+  }
+
+  const directory = path.join(
+    getStorageRoot(),
+    "organizations",
+    organizationId,
+    entityType,
+    entityId,
+  );
+  const entries = await readdir(directory, { withFileTypes: true }).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    },
+  );
+  return entries
+    .filter((entry) => entry.isFile())
+    .flatMap((entry) => {
+      const normalized = normalizeImageKey(`${prefix}${entry.name}`);
+      return normalized ? [normalized] : [];
+    })
+    .slice(0, boundedMax);
 }

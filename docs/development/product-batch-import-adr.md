@@ -365,6 +365,30 @@ Rules:
 - database tidak otomatis di-rollback ketika application rollback;
 - Product Master/Product Item yang sudah committed diperlakukan sebagai data bisnis nyata dan tidak dihapus otomatis oleh rollback aplikasi.
 
+## ADR-15 — Cleanup, retention, dan observability
+
+Staging Product Batch Import tidak boleh menjadi storage permanen. Session yang belum committed memakai TTL 48 jam dan maintenance dijalankan secara idempotent setiap jam setelah deployment production diaktifkan.
+
+Retention rules:
+
+- session `completed` mempertahankan evidence database (session, staging rows, generated identifiers, audit/result history); hanya ZIP/media staging yang dibersihkan;
+- session `cancelled`, `failed`, dan `expired` mempertahankan evidence database tetapi staging storage dibersihkan;
+- object staging tanpa session database baru boleh dianggap orphan setelah grace period 2 jam agar maintenance tidak berlomba dengan upload yang sedang membuat storage sebelum transaction session tercatat;
+- final Product Master/Product Item image dari session `completed` tidak pernah dihapus maintenance;
+- final image candidate dari session terminal yang tidak committed hanya boleh dihapus setelah planned entity tidak ada dan exact image key tidak direferensikan oleh Product Master/Product Item mana pun;
+- session `committing` yang melewati 30 menit hanya dilaporkan sebagai stale/anomaly dan **tidak** di-auto-clean agar maintenance tidak merusak commit aktif;
+- completed evidence count mismatch hanya dilaporkan dan tidak memicu destructive cleanup.
+
+Observability minimum:
+
+- upload dan commit mengeluarkan structured JSON log dengan session/organization, counts, duration, outcome/error code;
+- maintenance mengeluarkan structured summary untuk expired sessions, staging cleanup, orphan cleanup, stale committing, evidence anomalies, staging bytes/object count, dan disk usage (untuk local storage);
+- staging warning threshold awal 512 MB, critical 1 GB; local disk warning 80% dan critical 90%;
+- local maupun S3-compatible image storage harus mempunyai bounded staging scan;
+- production maintenance menggunakan immutable operations image release yang sama dengan release aktif dan volume `app_uploads` yang sama ketika storage driver `local`.
+
+Systemd timer bersifat source-managed tetapi tidak otomatis di-enable saat installer dijalankan. Aktivasi production dilakukan pada stage deployment/acceptance setelah manual dry-run dan service run lulus.
+
 ## Konsekuensi keputusan
 
 ### Positif

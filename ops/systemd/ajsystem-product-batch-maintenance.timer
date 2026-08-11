@@ -1,0 +1,13 @@
+[Unit]
+Description=Run AJSystem Product Batch Import maintenance hourly
+
+[Timer]
+OnBootSec=10min
+OnUnitInactiveSec=1h
+AccuracySec=2min
+RandomizedDelaySec=2min
+Persistent=true
+Unit=ajsystem-product-batch-maintenance.service
+
+[Install]
+WantedBy=timers.target

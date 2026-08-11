@@ -210,6 +210,57 @@ services:
           cpus: "0.05"
           memory: 128M
 
+  product-batch-maintenance-runtime:
+    profiles:
+      - product-batch-maintenance
+    image: ${ASIHJAYA_OPERATIONS_IMAGE:-asihjaya-rms-operations:production}
+    command:
+      - npm
+      - run
+      - product-batch:maintenance
+    restart: "no"
+    init: true
+    user: "10001:10001"
+    env_file:
+      - ${ASIHJAYA_ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      APP_RELEASE_ID: ${APP_RELEASE_ID:-unknown}
+      APP_REVISION: ${APP_REVISION:-unknown}
+      APP_BUILD_DATE: ${APP_BUILD_DATE:-unknown}
+      HOME: /tmp
+      TMPDIR: /tmp
+      NPM_CONFIG_CACHE: /tmp/.npm
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - app_uploads:/app/.data/uploads
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    mem_limit: 512m
+    cpus: 0.40
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
+    networks:
+      - edge
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.40"
+          memory: 512M
+          pids: 192
+        reservations:
+          cpus: "0.05"
+          memory: 128M
+
   db:
     image: postgres:17-bookworm
     restart: unless-stopped

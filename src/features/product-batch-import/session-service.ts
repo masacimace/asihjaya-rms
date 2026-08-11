@@ -28,6 +28,10 @@ import {
 import { extractProductBatchArchiveEntry } from "./archive-parser";
 import { parseProductBatchImportPackage } from "./package-parser";
 import {
+  logProductBatchImportError,
+  logProductBatchImportEvent,
+} from "./observability";
+import {
   collectProductBatchLookupCodes,
   validateProductBatchImportPackage,
   type ProductBatchValidationLookups,
@@ -328,19 +332,21 @@ async function markSessionFailed(
     .catch(() => undefined);
 }
 
-export async function createProductBatchImportSession({
-  auth,
-  fileName,
-  archiveBuffer,
-  requestMetadata = {},
-  now = new Date(),
-}: {
+export type CreateProductBatchImportSessionInput = {
   auth: AuthContext;
   fileName: string;
   archiveBuffer: Buffer;
   requestMetadata?: ProductBatchImportRequestMetadata;
   now?: Date;
-}): Promise<ProductBatchImportSessionSummary> {
+};
+
+async function createProductBatchImportSessionInternal({
+  auth,
+  fileName,
+  archiveBuffer,
+  requestMetadata = {},
+  now = new Date(),
+}: CreateProductBatchImportSessionInput): Promise<ProductBatchImportSessionSummary> {
   assertPermission(auth, "products.batch_import");
   const normalizedFileName = normalizeProductBatchImportFileName(fileName);
 
@@ -606,6 +612,39 @@ export async function createProductBatchImportSession({
     warningCount: validation.warningCount,
     expiresAt,
   };
+}
+
+export async function createProductBatchImportSession(
+  input: CreateProductBatchImportSessionInput,
+): Promise<ProductBatchImportSessionSummary> {
+  const startedAtMs = Date.now();
+  try {
+    const result = await createProductBatchImportSessionInternal(input);
+    logProductBatchImportEvent({
+      event: "upload_validated",
+      sessionId: result.id,
+      organizationId: input.auth.organization.id,
+      durationMs: Date.now() - startedAtMs,
+      status: result.status,
+      totalMasterRows: result.totalMasterRows,
+      totalItemRows: result.totalItemRows,
+      validMasterRows: result.validMasterRows,
+      validItemRows: result.validItemRows,
+      invalidRows: result.invalidRows,
+      warningCount: result.warningCount,
+      fileSizeBytes: input.archiveBuffer.length,
+    });
+    return result;
+  } catch (error) {
+    logProductBatchImportError({
+      event: "upload_failed",
+      organizationId: input.auth.organization.id,
+      durationMs: Date.now() - startedAtMs,
+      fileSizeBytes: input.archiveBuffer.length,
+      error,
+    });
+    throw error;
+  }
 }
 
 async function getSessionStorageKeys({

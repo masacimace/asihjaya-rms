@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 027
+
+ACTION="${1:-}"
+PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
+ENV_FILE="${ASIHJAYA_ENV_FILE:-/etc/asihjaya-rms/production.env}"
+COMPOSE_FILE="${ASIHJAYA_COMPOSE_FILE:-$PROJECT_DIR/compose.production.yaml}"
+STATE_ROOT="${ASIHJAYA_PRODUCT_BATCH_STATE_ROOT:-/var/lib/asihjaya-rms/product-batch-import-maintenance}"
+DEPLOYMENT_STATE_ROOT="${ASIHJAYA_DEPLOYMENT_STATE_ROOT:-/var/lib/asihjaya-rms/deployments}"
+RELEASE_ENV_FILE="${ASIHJAYA_RELEASE_ENV_FILE:-$DEPLOYMENT_STATE_ROOT/current.env}"
+DEPLOYMENT_USER="${ASIHJAYA_DEPLOYMENT_USER:-ubuntu}"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ajsystem-product-batch-maintenance run
+  ajsystem-product-batch-maintenance dry-run
+  ajsystem-product-batch-maintenance status
+USAGE
+}
+
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 64
+}
+
+read_env_file_value() {
+  local file_path="$1" key="$2" line value
+  line="$(grep -E "^${key}=" "$file_path" | tail -n 1 || true)"
+  value="${line#*=}"
+  value="${value%$'\r'}"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "$value"
+}
+
+[[ "$EUID" -ne 0 ]] || fail "jalankan sebagai $DEPLOYMENT_USER tanpa sudo."
+[[ "$(id -un)" == "$DEPLOYMENT_USER" ]] || fail "maintenance wajib dijalankan sebagai $DEPLOYMENT_USER."
+case "$ACTION" in
+  run|dry-run|status) [[ $# -eq 1 ]] || { usage >&2; exit 64; } ;;
+  *) usage >&2; exit 64 ;;
+esac
+
+for command_name in docker grep tail id date mkdir chmod mv tee; do
+  command -v "$command_name" >/dev/null 2>&1 || fail "command wajib tidak tersedia: $command_name"
+done
+[[ "$PROJECT_DIR" == /* && "$ENV_FILE" == /* && "$COMPOSE_FILE" == /* && "$STATE_ROOT" == /* && "$RELEASE_ENV_FILE" == /* ]] || fail "seluruh path maintenance harus absolute."
+[[ -f "$ENV_FILE" && ! -L "$ENV_FILE" && -r "$ENV_FILE" ]] || fail "production environment tidak dapat dibaca: $ENV_FILE"
+[[ -f "$COMPOSE_FILE" && ! -L "$COMPOSE_FILE" && -r "$COMPOSE_FILE" ]] || fail "Compose production tidak dapat dibaca: $COMPOSE_FILE"
+[[ -f "$RELEASE_ENV_FILE" && ! -L "$RELEASE_ENV_FILE" && -r "$RELEASE_ENV_FILE" ]] || fail "current release environment tidak dapat dibaca: $RELEASE_ENV_FILE"
+[[ -d "$STATE_ROOT" && -w "$STATE_ROOT" ]] || fail "maintenance state directory tidak writable: $STATE_ROOT"
+
+docker info >/dev/null 2>&1 || fail "Docker daemon tidak dapat diakses."
+docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin tidak tersedia."
+
+APP_RELEASE_ID_VALUE="$(read_env_file_value "$RELEASE_ENV_FILE" APP_RELEASE_ID)"
+APP_REVISION_VALUE="$(read_env_file_value "$RELEASE_ENV_FILE" APP_REVISION)"
+APP_BUILD_DATE_VALUE="$(read_env_file_value "$RELEASE_ENV_FILE" APP_BUILD_DATE)"
+OPERATIONS_IMAGE="$(read_env_file_value "$RELEASE_ENV_FILE" ASIHJAYA_OPERATIONS_IMAGE)"
+
+[[ "$APP_RELEASE_ID_VALUE" =~ ^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$ ]] || fail "APP_RELEASE_ID current release tidak valid."
+[[ "$APP_REVISION_VALUE" =~ ^[a-f0-9]{40,64}$ ]] || fail "APP_REVISION current release tidak valid."
+[[ -n "$APP_BUILD_DATE_VALUE" && -n "$OPERATIONS_IMAGE" ]] || fail "metadata current release tidak lengkap."
+case "$OPERATIONS_IMAGE" in
+  *:latest|*:production) fail "operations image mutable ditolak: $OPERATIONS_IMAGE" ;;
+esac
+
+docker image inspect "$OPERATIONS_IMAGE" >/dev/null 2>&1 || fail "operations image current release tidak tersedia: $OPERATIONS_IMAGE"
+IMAGE_VERSION="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$OPERATIONS_IMAGE")"
+IMAGE_REVISION="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$OPERATIONS_IMAGE")"
+[[ "$IMAGE_VERSION" == "$APP_RELEASE_ID_VALUE" ]] || fail "operations image version tidak sama dengan current release."
+[[ "$IMAGE_REVISION" == "$APP_REVISION_VALUE" ]] || fail "operations image revision tidak sama dengan current release."
+
+export APP_RELEASE_ID="$APP_RELEASE_ID_VALUE"
+export APP_REVISION="$APP_REVISION_VALUE"
+export APP_BUILD_DATE="$APP_BUILD_DATE_VALUE"
+export ASIHJAYA_OPERATIONS_IMAGE="$OPERATIONS_IMAGE"
+export ASIHJAYA_ENV_FILE="$ENV_FILE"
+
+COMPOSE=(
+  docker compose
+  --env-file "$ENV_FILE"
+  -f "$COMPOSE_FILE"
+  --profile product-batch-maintenance
+)
+"${COMPOSE[@]}" config --quiet
+
+run_maintenance() {
+  local mode="$1" temporary latest success_epoch exit_code
+  temporary="$STATE_ROOT/run-$ACTION-$(date -u +%Y%m%dT%H%M%SZ)-$$.log.tmp"
+  latest="$STATE_ROOT/latest.log"
+  success_epoch="$STATE_ROOT/success.epoch"
+  set +e
+  if [[ "$mode" == "dry-run" ]]; then
+    "${COMPOSE[@]}" run --rm --no-deps product-batch-maintenance-runtime \
+      npm run product-batch:maintenance -- --dry-run 2>&1 | tee "$temporary"
+  else
+    "${COMPOSE[@]}" run --rm --no-deps product-batch-maintenance-runtime \
+      npm run product-batch:maintenance 2>&1 | tee "$temporary"
+  fi
+  exit_code=${PIPESTATUS[0]}
+  set -e
+  chmod 0640 "$temporary"
+  mv -f "$temporary" "$latest"
+  if [[ "$exit_code" -eq 0 && "$mode" == "run" ]]; then
+    printf '%s\n' "$(date +%s)" > "$success_epoch"
+    chmod 0640 "$success_epoch"
+  fi
+  return "$exit_code"
+}
+
+case "$ACTION" in
+  run) run_maintenance run ;;
+  dry-run) run_maintenance dry-run ;;
+  status)
+    printf 'latest_log=%s\n' "$STATE_ROOT/latest.log"
+    if [[ -f "$STATE_ROOT/success.epoch" ]]; then
+      printf 'last_success_epoch=%s\n' "$(cat "$STATE_ROOT/success.epoch")"
+    else
+      printf 'last_success_epoch=never\n'
+    fi
+    [[ ! -f "$STATE_ROOT/latest.log" ]] || tail -n 20 "$STATE_ROOT/latest.log"
+    ;;
+esac

@@ -1,9 +1,10 @@
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, statfs, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -214,4 +215,229 @@ export async function deleteProductBatchImportStagingFiles(keys: string[]) {
   }
 
   return failures;
+}
+
+
+export type ProductBatchImportStagingObject = {
+  key: string;
+  byteSize: number;
+  modifiedAt: Date | null;
+};
+
+export type ProductBatchImportStorageReport = {
+  driver: StorageDriver;
+  objectCount: number;
+  totalBytes: number;
+  truncated: boolean;
+  diskTotalBytes: number | null;
+  diskAvailableBytes: number | null;
+  diskUsedPercent: number | null;
+  objects: ProductBatchImportStagingObject[];
+};
+
+export function getProductBatchImportStorageDriver(): StorageDriver {
+  return getStorageDriver();
+}
+
+async function listLocalOrganizationStagingObjects({
+  organizationId,
+  maxObjects,
+}: {
+  organizationId: string;
+  maxObjects: number;
+}) {
+  const root = getStorageRoot();
+  const base = path.join(
+    root,
+    "organizations",
+    organizationId,
+    "product-batch-import",
+  );
+  const objects: ProductBatchImportStagingObject[] = [];
+  let truncated = false;
+
+  const sessionEntries = await readdir(base, { withFileTypes: true }).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    },
+  );
+
+  for (const sessionEntry of sessionEntries) {
+    if (!sessionEntry.isDirectory()) continue;
+    const sessionBase = path.join(base, sessionEntry.name);
+    const candidates = [path.join(sessionBase, "archive.zip")];
+    const mediaBase = path.join(sessionBase, "media");
+    const mediaEntries = await readdir(mediaBase, { withFileTypes: true }).catch(
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return [];
+        throw error;
+      },
+    );
+    for (const mediaEntry of mediaEntries) {
+      if (mediaEntry.isFile()) {
+        candidates.push(path.join(mediaBase, mediaEntry.name));
+      }
+    }
+
+    for (const absolutePath of candidates) {
+      if (objects.length >= maxObjects) {
+        truncated = true;
+        break;
+      }
+      const relative = path
+        .relative(root, absolutePath)
+        .split(path.sep)
+        .join("/");
+      const normalized = normalizeKey(relative);
+      if (!normalized) continue;
+      const metadata = await stat(absolutePath).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
+        },
+      );
+      if (!metadata?.isFile()) continue;
+      objects.push({
+        key: normalized,
+        byteSize: metadata.size,
+        modifiedAt: metadata.mtime,
+      });
+    }
+    if (truncated) break;
+  }
+
+  return { objects, truncated };
+}
+
+async function listS3OrganizationStagingObjects({
+  organizationId,
+  maxObjects,
+}: {
+  organizationId: string;
+  maxObjects: number;
+}) {
+  const objects: ProductBatchImportStagingObject[] = [];
+  let continuationToken: string | undefined;
+  let truncated = false;
+  const prefix = `organizations/${organizationId}/product-batch-import/`;
+
+  do {
+    const remaining = maxObjects - objects.length;
+    if (remaining <= 0) {
+      truncated = true;
+      break;
+    }
+    const response = await getS3Client().send(
+      new ListObjectsV2Command({
+        Bucket: requiredEnvironment("IMAGE_STORAGE_BUCKET"),
+        Prefix: prefix,
+        MaxKeys: Math.min(1_000, remaining),
+        ContinuationToken: continuationToken,
+      }),
+    );
+    for (const object of response.Contents ?? []) {
+      if (!object.Key) continue;
+      const normalized = normalizeKey(object.Key);
+      if (!normalized) continue;
+      objects.push({
+        key: normalized,
+        byteSize: Number(object.Size ?? 0),
+        modifiedAt: object.LastModified ?? null,
+      });
+    }
+    continuationToken = response.IsTruncated
+      ? response.NextContinuationToken
+      : undefined;
+    if (response.IsTruncated && !continuationToken) {
+      truncated = true;
+      break;
+    }
+  } while (continuationToken);
+
+  if (continuationToken) truncated = true;
+  return { objects, truncated };
+}
+
+export async function listProductBatchImportStagingObjects({
+  organizationIds,
+  maxObjectsPerOrganization = 10_000,
+}: {
+  organizationIds: string[];
+  maxObjectsPerOrganization?: number;
+}) {
+  const boundedMax = Math.max(
+    1,
+    Math.min(50_000, Math.trunc(maxObjectsPerOrganization)),
+  );
+  const uniqueOrganizationIds = Array.from(new Set(organizationIds));
+  const objects: ProductBatchImportStagingObject[] = [];
+  let truncated = false;
+
+  for (const organizationId of uniqueOrganizationIds) {
+    const result =
+      getStorageDriver() === "s3"
+        ? await listS3OrganizationStagingObjects({
+            organizationId,
+            maxObjects: boundedMax,
+          })
+        : await listLocalOrganizationStagingObjects({
+            organizationId,
+            maxObjects: boundedMax,
+          });
+    objects.push(...result.objects);
+    truncated ||= result.truncated;
+  }
+
+  return { objects, truncated };
+}
+
+export async function getProductBatchImportStorageReport({
+  organizationIds,
+  maxObjectsPerOrganization = 10_000,
+}: {
+  organizationIds: string[];
+  maxObjectsPerOrganization?: number;
+}): Promise<ProductBatchImportStorageReport> {
+  const listing = await listProductBatchImportStagingObjects({
+    organizationIds,
+    maxObjectsPerOrganization,
+  });
+  const totalBytes = listing.objects.reduce(
+    (total, object) => total + object.byteSize,
+    0,
+  );
+
+  if (getStorageDriver() === "s3") {
+    return {
+      driver: "s3",
+      objectCount: listing.objects.length,
+      totalBytes,
+      truncated: listing.truncated,
+      diskTotalBytes: null,
+      diskAvailableBytes: null,
+      diskUsedPercent: null,
+      objects: listing.objects,
+    };
+  }
+
+  const root = getStorageRoot();
+  const filesystem = await statfs(root).catch(async () => statfs(path.dirname(root)));
+  const diskTotalBytes = filesystem.blocks * filesystem.bsize;
+  const diskAvailableBytes = filesystem.bavail * filesystem.bsize;
+  const diskUsedPercent =
+    diskTotalBytes > 0
+      ? Math.round((1 - diskAvailableBytes / diskTotalBytes) * 10_000) / 100
+      : null;
+
+  return {
+    driver: "local",
+    objectCount: listing.objects.length,
+    totalBytes,
+    truncated: listing.truncated,
+    diskTotalBytes,
+    diskAvailableBytes,
+    diskUsedPercent,
+    objects: listing.objects,
+  };
 }
