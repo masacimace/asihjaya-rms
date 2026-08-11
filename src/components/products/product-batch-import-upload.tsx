@@ -1,79 +1,53 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, FolderArchive, LoaderCircle, XCircle } from "lucide-react";
-import { useActionState, useMemo, useRef, useState } from "react";
+import { FolderArchive, LoaderCircle, XCircle } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
 
-import {
-  cancelProductBatchImportSessionAction,
-  type ProductBatchImportCancelActionState,
-} from "@/app/actions/product-batch-import";
 import { PRODUCT_BATCH_IMPORT_LIMITS } from "@/features/product-batch-import/contracts";
-
-const initialCancelState: ProductBatchImportCancelActionState = {
-  status: "idle",
-};
 
 type UploadSession = {
   id: string;
   status: "ready" | "invalid";
-  fileName: string;
-  fileSha256: string;
-  totalMasterRows: number;
-  totalItemRows: number;
-  validMasterRows: number;
-  validItemRows: number;
-  invalidRows: number;
-  warningCount: number;
-  expiresAt: string;
 };
 
-type UploadResult =
-  | { kind: "success"; message: string; session: UploadSession }
-  | {
-      kind: "error";
-      code: string;
-      message: string;
-      existingSessionId?: string;
-      existingStatus?: string;
-    };
+type UploadError = {
+  code: string;
+  message: string;
+  existingSessionId?: string;
+  existingStatus?: string;
+};
 
 function formatMegabytes(bytes: number) {
   return `${Math.round(bytes / 1024 / 1024)} MB`;
 }
 
 export function ProductBatchImportUpload() {
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [result, setResult] = useState<UploadResult | null>(null);
-  const [cancelState, cancelAction, isCancelling] = useActionState(
-    cancelProductBatchImportSessionAction,
-    initialCancelState,
-  );
+  const [error, setError] = useState<UploadError | null>(null);
 
   const canUpload = useMemo(
-    () => Boolean(file && !isUploading && !isCancelling),
-    [file, isUploading, isCancelling],
+    () => Boolean(file && !isUploading),
+    [file, isUploading],
   );
 
   async function upload() {
     if (!file || isUploading) return;
-    setResult(null);
+    setError(null);
 
     if (!file.name.toLocaleLowerCase("en-US").endsWith(".zip")) {
-      setResult({
-        kind: "error",
+      setError({
         code: "UPLOAD_FILE_TYPE_INVALID",
         message: "Pilih satu file ZIP Product Batch Import.",
       });
       return;
     }
-    if (
-      file.size <= 0 ||
-      file.size > PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes
-    ) {
-      setResult({
-        kind: "error",
+    if (file.size <= 0 || file.size > PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes) {
+      setError({
         code: "UPLOAD_SIZE_INVALID",
         message: `Ukuran ZIP harus lebih dari 0 dan maksimal ${formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes)}.`,
       });
@@ -103,29 +77,22 @@ export function ProductBatchImportUpload() {
         | null;
 
       if (!response.ok || !payload?.session) {
-        setResult({
-          kind: "error",
+        setError({
           code: payload?.code ?? "UPLOAD_FAILED",
-          message:
-            payload?.message ?? "Upload gagal. Periksa file ZIP dan coba lagi.",
+          message: payload?.message ?? "Upload gagal. Periksa file ZIP dan coba lagi.",
           existingSessionId: payload?.existingSessionId,
           existingStatus: payload?.existingStatus,
         });
         return;
       }
 
-      setResult({
-        kind: "success",
-        message: payload.message ?? "Upload staging selesai.",
-        session: payload.session,
-      });
-    } catch (error) {
-      setResult({
-        kind: "error",
+      router.push(`/admin/produk/import/${payload.session.id}`);
+    } catch (caught) {
+      setError({
         code: "UPLOAD_NETWORK_ERROR",
         message:
-          error instanceof Error
-            ? error.message
+          caught instanceof Error
+            ? caught.message
             : "Upload gagal karena koneksi/request tidak dapat diselesaikan.",
       });
     } finally {
@@ -142,9 +109,7 @@ export function ProductBatchImportUpload() {
         <div className="min-w-0">
           <h2 className="font-semibold text-neutral-950">Upload ZIP ke staging</h2>
           <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-            File akan diperiksa keamanan ZIP/XLSX, image, category, outlet,
-            permission, dan business rule. Tahap ini belum membuat Product Master
-            atau Product Item nyata.
+            Setelah validasi selesai Anda langsung diarahkan ke preview session. Preview disimpan di database staging, sehingga refresh browser tidak menghilangkan hasil review.
           </p>
         </div>
       </div>
@@ -157,7 +122,7 @@ export function ProductBatchImportUpload() {
           className="block w-full min-w-0 text-sm text-neutral-700 file:mr-4 file:rounded-xl file:border-0 file:bg-white file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-neutral-900 file:shadow-sm"
           onChange={(event) => {
             setFile(event.currentTarget.files?.[0] ?? null);
-            setResult(null);
+            setError(null);
           }}
         />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--muted)]">
@@ -176,82 +141,30 @@ export function ProductBatchImportUpload() {
         onClick={() => void upload()}
         className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
       >
-        {isUploading ? (
-          <LoaderCircle className="size-4 animate-spin" />
-        ) : (
-          <FolderArchive className="size-4" />
-        )}
+        {isUploading ? <LoaderCircle className="size-4 animate-spin" /> : <FolderArchive className="size-4" />}
         {isUploading ? "Memvalidasi dan staging..." : "Upload & validasi ZIP"}
       </button>
 
-      {result?.kind === "error" ? (
+      {error ? (
         <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
           <div className="flex items-start gap-2">
             <XCircle className="mt-0.5 size-4 shrink-0" />
             <div className="min-w-0">
               <p className="font-semibold">Upload belum dapat diproses</p>
-              <p className="mt-1 leading-6">{result.message}</p>
-              <p className="mt-2 text-xs font-medium">Kode: {result.code}</p>
-              {result.existingSessionId ? (
-                <p className="mt-1 break-all text-xs">
-                  Existing session: {result.existingSessionId} ({result.existingStatus ?? "unknown"})
-                </p>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {result?.kind === "success" ? (
-        <div
-          className={`mt-5 rounded-2xl border p-4 text-sm ${
-            result.session.status === "ready"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-950"
-              : "border-amber-200 bg-amber-50 text-amber-950"
-          }`}
-        >
-          <div className="flex items-start gap-2">
-            {result.session.status === "ready" ? (
-              <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
-            ) : (
-              <AlertCircle className="mt-0.5 size-4 shrink-0" />
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold">
-                Session {result.session.status === "ready" ? "siap" : "invalid"}
-              </p>
-              <p className="mt-1 leading-6">{result.message}</p>
-              <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <div><dt className="text-xs opacity-70">Master</dt><dd className="font-semibold">{result.session.validMasterRows}/{result.session.totalMasterRows} valid</dd></div>
-                <div><dt className="text-xs opacity-70">Item</dt><dd className="font-semibold">{result.session.validItemRows}/{result.session.totalItemRows} valid</dd></div>
-                <div><dt className="text-xs opacity-70">Invalid rows</dt><dd className="font-semibold">{result.session.invalidRows}</dd></div>
-                <div><dt className="text-xs opacity-70">Warnings</dt><dd className="font-semibold">{result.session.warningCount}</dd></div>
-              </dl>
-              <p className="mt-3 break-all text-xs opacity-75">
-                Session ID: {result.session.id}
-              </p>
-              <p className="mt-1 text-xs opacity-75">
-                Preview detail akan diaktifkan pada 2B.5. Staging ini otomatis
-                kedaluwarsa setelah masa staging berakhir bila belum diproses.
-              </p>
-
-              <form action={cancelAction} className="mt-4">
-                <input type="hidden" name="sessionId" value={result.session.id} />
-                <button
-                  type="submit"
-                  disabled={
-                    isCancelling ||
-                    (cancelState.status === "success" &&
-                      cancelState.sessionId === result.session.id)
-                  }
-                  className="inline-flex h-9 items-center justify-center rounded-xl border border-current/20 bg-white/70 px-3 text-xs font-semibold transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isCancelling ? "Membatalkan..." : "Batalkan staging ini"}
-                </button>
-              </form>
-              {cancelState.message &&
-              cancelState.sessionId === result.session.id ? (
-                <p className="mt-2 text-xs font-medium">{cancelState.message}</p>
+              <p className="mt-1 leading-6">{error.message}</p>
+              <p className="mt-2 text-xs font-medium">Kode: {error.code}</p>
+              {error.existingSessionId ? (
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <span className="break-all text-xs">
+                    Session existing: {error.existingSessionId} ({error.existingStatus ?? "unknown"})
+                  </span>
+                  <Link
+                    href={`/admin/produk/import/${error.existingSessionId}`}
+                    className="inline-flex h-8 items-center rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-800"
+                  >
+                    Buka session existing
+                  </Link>
+                </div>
               ) : null}
             </div>
           </div>

@@ -15,6 +15,7 @@ import {
   PRODUCT_BATCH_IMPORT_TEMPLATE_FILENAME,
   PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION,
 } from "@/features/product-batch-import/contracts";
+import { getRecentProductBatchImportSessions } from "@/features/product-batch-import/preview-queries";
 import { requirePermission } from "@/lib/auth/session";
 
 export const metadata = {
@@ -26,7 +27,8 @@ function formatMegabytes(bytes: number) {
 }
 
 export default async function ProductBatchImportPage() {
-  await requirePermission("products.batch_import");
+  const auth = await requirePermission("products.batch_import");
+  const recentSessions = await getRecentProductBatchImportSessions(auth);
 
   return (
     <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 overflow-x-clip pb-6">
@@ -103,8 +105,8 @@ export default async function ProductBatchImportPage() {
           </div>
           <h2 className="mt-4 font-semibold text-neutral-950">3. Buat satu ZIP</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            products.xlsx berada di root ZIP. Upload validation staging sudah
-            aktif; preview detail akan tersedia pada tahap 2B.5.
+            products.xlsx berada di root ZIP. Upload validation staging dan preview detail session sekarang sudah
+            aktif setelah ZIP selesai divalidasi.
           </p>
         </article>
       </section>
@@ -167,11 +169,47 @@ export default async function ProductBatchImportPage() {
           </dl>
 
           <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-            Upload ZIP sudah aktif untuk validation staging. Preview detail,
-            commit Product Master/Product Item, dan label belum aktif sampai
-            tahap berikutnya.
+            Upload ZIP dan preview staging sudah aktif. Atomic commit Product
+            Master/Product Item dan label tetap belum aktif sampai tahap 2B.6+.
           </div>
         </aside>
+      </section>
+
+      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-neutral-950">Import terbaru</h2>
+            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+              Session staging tersimpan di database. Buka kembali preview kapan pun selama session masih tersedia.
+            </p>
+          </div>
+        </div>
+        {recentSessions.length ? (
+          <div className="mt-4 grid min-w-0 gap-3 lg:grid-cols-2">
+            {recentSessions.map((session) => (
+              <Link
+                key={session.id}
+                href={`/admin/produk/import/${session.id}`}
+                className="min-w-0 rounded-2xl border border-neutral-200 p-4 transition hover:border-neutral-300 hover:bg-neutral-50"
+              >
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-semibold text-neutral-950">{session.fileName}</p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {session.totalMasterRows} master · {session.totalItemRows} item · {session.invalidRows} invalid · {session.warningCount} warning
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">Operator: {session.createdByName}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
+                    {session.status}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 rounded-2xl bg-neutral-50 p-4 text-sm text-[var(--muted)]">Belum ada session Product Batch Import.</p>
+        )}
       </section>
     </div>
   );

@@ -176,7 +176,7 @@ export async function POST(request: Request) {
       {
         message:
           session.status === "ready"
-            ? "ZIP berhasil divalidasi dan session siap untuk tahap preview/commit."
+            ? "ZIP berhasil divalidasi dan session siap untuk direview pada halaman preview."
             : "ZIP berhasil masuk staging, tetapi masih memiliki validation error.",
         session: {
           ...session,
