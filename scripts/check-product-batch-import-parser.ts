@@ -18,7 +18,14 @@ import {
   buildProductBatchImportTemplateBuffer,
   buildProductBatchImportTemplateSheets,
 } from "../src/features/product-batch-import/template";
-import { buildTestZip, repackZipWithExtraEntries } from "./lib/product-batch-import-test-zip";
+import {
+  buildTestZip,
+  repackZipWithExtraEntries,
+} from "./lib/product-batch-import-test-zip";
+import {
+  extractStrictZipEntry,
+  inspectStrictZipArchive,
+} from "../src/features/product-batch-import/zip-reader";
 
 async function expectAsyncCode(
   code: string,
@@ -53,6 +60,34 @@ function validOuterZip(workbook: Buffer, jpeg: Buffer, extras = [] as Array<{ pa
   ]);
 }
 
+function rewriteWorkbookContentTypes(
+  workbook: Buffer,
+  transform: (xml: string) => string,
+): Buffer {
+  const inspection = inspectStrictZipArchive(workbook, {
+    maxArchiveBytes: 10 * 1024 * 1024,
+    maxEntries: 1_000,
+    maxUncompressedBytes: 64 * 1024 * 1024,
+    maxFileNameBytes: 1_024,
+  });
+
+  return buildTestZip(
+    inspection.entries
+      .filter((entry) => !entry.isDirectory)
+      .map((entry) => {
+        const extracted = extractStrictZipEntry(workbook, entry);
+        return {
+          path: entry.path,
+          data:
+            entry.path === "[Content_Types].xml"
+              ? Buffer.from(transform(extracted.toString("utf8")), "utf8")
+              : extracted,
+          method: entry.compressionMethod,
+        };
+      }),
+  );
+}
+
 async function main() {
   const jpeg = await makeJpeg();
   const validWorkbook = buildProductBatchImportTemplateBuffer({
@@ -67,6 +102,17 @@ async function main() {
   assert.equal(validPackage.images.warnings.length, 0);
   assert.match(validPackage.archive.archiveSha256, /^[0-9a-f]{64}$/);
   assert.match(validPackage.workbook.masterRows[0]?.rowFingerprint ?? "", /^[0-9a-f]{64}$/);
+
+  const googleSheetsStyleWorkbook = rewriteWorkbookContentTypes(validWorkbook, (xml) =>
+    xml.replace(
+      /<Override\s+PartName="\/xl\/workbook\.xml"\s+ContentType="([^"]+)"\s*\/>/i,
+      '<Override ContentType="$1" PartName="/xl/workbook.xml"/>',
+    ),
+  );
+  const googleSheetsStylePackage = await parseProductBatchImportPackage(
+    validOuterZip(googleSheetsStyleWorkbook, jpeg),
+  );
+  assert.equal(googleSheetsStylePackage.workbook.templateVersion, "1");
 
   const unusedPackage = await parseProductBatchImportPackage(
     validOuterZip(validWorkbook, jpeg, [{ path: "images/physical/UNUSED.jpg", data: jpeg }]),
@@ -140,6 +186,29 @@ async function main() {
   const tooManyRowsBuffer = buildXlsxBuffer(tooManySheets);
   expectWorkbookCode("WORKBOOK_RANGE_LIMIT", () => parseProductBatchWorkbook(tooManyRowsBuffer));
 
+  const harmlessDrawing = repackZipWithExtraEntries(validWorkbook, [
+    {
+      path: "xl/drawings/drawing1.xml",
+      data: Buffer.from(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"/>',
+      ),
+    },
+  ]);
+  const harmlessDrawingWorkbook = parseProductBatchWorkbook(harmlessDrawing);
+  assert.equal(harmlessDrawingWorkbook.templateVersion, "1");
+
+  const externalDrawingRelationship = repackZipWithExtraEntries(harmlessDrawing, [
+    {
+      path: "xl/drawings/_rels/drawing1.xml.rels",
+      data: Buffer.from(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/external" TargetMode="External"/></Relationships>',
+      ),
+    },
+  ]);
+  expectWorkbookCode("WORKBOOK_ACTIVE_CONTENT_REJECTED", () =>
+    parseProductBatchWorkbook(externalDrawingRelationship),
+  );
+
   const embeddedMedia = repackZipWithExtraEntries(validWorkbook, [
     { path: "xl/media/image1.png", data: Buffer.from("fake") },
   ]);
@@ -155,7 +224,8 @@ async function main() {
   console.log("- Valid package, SHA-256 row/archive, dan image manifest terbaca.");
   console.log("- Missing/invalid image ditolak; unused image menjadi warning.");
   console.log("- Formula, hyperlink, hidden sheet, unsupported template, dan over-row ditolak.");
-  console.log("- Embedded workbook media/active content ditolak sebelum SheetJS business parse.");
+  console.log("- XLSX valid dengan urutan atribut OOXML berbeda tetap diterima.");
+  console.log("- Drawing XML tanpa media/external relationship diterima; embedded media/external content tetap ditolak.");
 }
 
 void main();

@@ -11,6 +11,7 @@ const route = read("src/app/api/admin/product-batch-import/upload/route.ts");
 const validation = read("src/features/product-batch-import/validation.ts");
 const action = read("src/app/actions/product-batch-import.ts");
 const page = read("src/components/products/product-batch-import-upload.tsx");
+const sessionActions = read("src/components/products/product-batch-import-session-actions.tsx");
 const itemAction = read("src/app/actions/product-items.ts");
 
 for (const required of [
@@ -56,7 +57,8 @@ assert.ok(storage.includes('CacheControl: "private, no-store"'));
 assert.ok(storage.includes("deleteProductBatchImportStagingFiles"));
 assert.ok(action.includes("cancelProductBatchImportSession"));
 assert.ok(page.includes("Upload & validasi ZIP"));
-assert.ok(page.includes("Batalkan staging ini"));
+assert.ok(sessionActions.includes("cancelProductBatchImportSessionAction"));
+assert.ok(sessionActions.includes("Batalkan staging"));
 
 assert.ok(itemAction.includes("productImageKey: productMasters.imageKey"));
 assert.ok(itemAction.includes("willHaveEffectiveImage"));

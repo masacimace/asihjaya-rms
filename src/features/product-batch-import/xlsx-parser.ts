@@ -20,17 +20,20 @@ import {
 const MAX_WORKSHEET_RANGE_TEXT_LENGTH = 64;
 const BLOCKED_XLSX_PATH_PREFIXES = [
   "xl/activeX/",
-  "xl/drawings/",
+  "xl/charts/",
   "xl/embeddings/",
   "xl/externalLinks/",
   "xl/media/",
   "xl/oleObjects/",
   "xl/queryTables/",
+  "xl/webextensions/",
 ] as const;
 const BLOCKED_XLSX_EXACT_PATHS = new Set([
   "xl/connections.xml",
   "xl/vbaProject.bin",
 ]);
+const XLSX_WORKBOOK_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
 
 type ProductBatchCellValue = string | number | boolean | null;
 type ProductBatchRawPayload = Record<string, ProductBatchCellValue>;
@@ -83,6 +86,33 @@ function workbookError(code: string, message: string, cause?: unknown) {
   );
 }
 
+function readXmlAttribute(tag: string, attributeName: string): string | null {
+  const escapedName = attributeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = tag.match(new RegExp(`(?:^|\\s)${escapedName}\\s*=\\s*["']([^"']*)["']`, "i"));
+  return match?.[1] ?? null;
+}
+
+function getWorkbookContentType(contentTypesXml: string): string | null {
+  const overrideTags = contentTypesXml.match(/<(?:[A-Za-z_][\w.-]*:)?Override\b[^>]*>/gi) ?? [];
+  for (const tag of overrideTags) {
+    const partName = readXmlAttribute(tag, "PartName");
+    if (partName !== "/xl/workbook.xml") continue;
+    return readXmlAttribute(tag, "ContentType");
+  }
+  return null;
+}
+
+function getExternalRelationshipTarget(relationshipsXml: string): string | null {
+  const relationshipTags =
+    relationshipsXml.match(/<(?:[A-Za-z_][\w.-]*:)?Relationship\b[^>]*>/gi) ?? [];
+  for (const tag of relationshipTags) {
+    const targetMode = readXmlAttribute(tag, "TargetMode");
+    if (targetMode?.toLowerCase() !== "external") continue;
+    return readXmlAttribute(tag, "Target") ?? "external target";
+  }
+  return null;
+}
+
 function inspectXlsxContainer(buffer: Buffer): void {
   let inspection;
   try {
@@ -111,11 +141,14 @@ function inspectXlsxContainer(buffer: Buffer): void {
     throw workbookError("WORKBOOK_OOXML_INVALID", "[Content_Types].xml tidak ditemukan.");
   }
   const contentTypes = extractStrictZipEntry(buffer, contentTypesEntry).toString("utf8");
-  if (
-    !contentTypes.includes(
-      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"',
-    )
-  ) {
+  const workbookContentType = getWorkbookContentType(contentTypes);
+  if (!workbookContentType) {
+    throw workbookError(
+      "WORKBOOK_OOXML_INVALID",
+      "Content type untuk xl/workbook.xml tidak ditemukan.",
+    );
+  }
+  if (workbookContentType !== XLSX_WORKBOOK_CONTENT_TYPE) {
     throw workbookError(
       "WORKBOOK_MACRO_REJECTED",
       "Workbook macro-enabled/non-XLSX tidak diizinkan.",
@@ -132,14 +165,25 @@ function inspectXlsxContainer(buffer: Buffer): void {
         `Workbook mengandung embedded/active/external content yang tidak diizinkan: ${entry.path}.`,
       );
     }
-    if (!entry.isDirectory) {
-      try {
-        extractStrictZipEntry(buffer, entry);
-      } catch (error) {
-        if (error instanceof StrictZipError) {
-          throw workbookError("WORKBOOK_CONTAINER_INVALID", error.message, error);
-        }
-        throw error;
+    if (entry.isDirectory) continue;
+
+    let extracted: Buffer;
+    try {
+      extracted = extractStrictZipEntry(buffer, entry);
+    } catch (error) {
+      if (error instanceof StrictZipError) {
+        throw workbookError("WORKBOOK_CONTAINER_INVALID", error.message, error);
+      }
+      throw error;
+    }
+
+    if (entry.path.endsWith(".rels")) {
+      const externalTarget = getExternalRelationshipTarget(extracted.toString("utf8"));
+      if (externalTarget) {
+        throw workbookError(
+          "WORKBOOK_ACTIVE_CONTENT_REJECTED",
+          `Workbook mengandung external relationship yang tidak diizinkan: ${entry.path} -> ${externalTarget}.`,
+        );
       }
     }
   }
