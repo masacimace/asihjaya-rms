@@ -271,7 +271,8 @@ export async function getProductBatchImportPreview(
     );
     const effectiveImageSource = physicalMedia
       ? "physical"
-      : effectiveSource === "master" && masterMedia
+      : (effectiveSource === "master" || effectiveSource === "master_fallback") &&
+          masterMedia
         ? "master"
         : "none";
 
