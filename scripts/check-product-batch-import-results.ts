@@ -6,6 +6,7 @@ const requiredFiles = [
   "src/features/product-batch-import/result-queries.ts",
   "src/features/product-batch-import/label-service.ts",
   "src/components/products/product-batch-import-labels.tsx",
+  "src/lib/hardware/label-target.ts",
   "src/app/(admin)/admin/produk/import/[sessionId]/result/route.ts",
   "src/app/(admin)/admin/produk/import/history/page.tsx",
 ];
@@ -31,6 +32,7 @@ async function main() {
   const resultQueries = await read("src/features/product-batch-import/result-queries.ts");
   const labelService = await read("src/features/product-batch-import/label-service.ts");
   const labels = await read("src/components/products/product-batch-import-labels.tsx");
+  const labelTarget = await read("src/lib/hardware/label-target.ts");
   const resultRoute = await read("src/app/(admin)/admin/produk/import/[sessionId]/result/route.ts");
   const historyPage = await read("src/app/(admin)/admin/produk/import/history/page.tsx");
   const sessionPage = await read("src/app/(admin)/admin/produk/import/[sessionId]/page.tsx");
@@ -51,7 +53,11 @@ async function main() {
   expect(labelService, 'jobType: "print_label_sato"', "existing SATO job type", problems);
   expect(labelService, 'sourceType: "product_batch_import"', "batch label source", problems);
   expect(labelService, "batch-label:", "label idempotency key", problems);
-  expect(labelService, "registers.isHardwareHub", "Hardware Hub register guard", problems);
+  expect(labelService, "getLabelHardwareTargets", "capable Hardware Agent target resolver", problems);
+  expect(labelService, "targetAgentId: target.agentId", "exact Hardware Agent target", problems);
+  expect(labelTarget, "registers.isHardwareHub", "Hardware Hub register guard", problems);
+  expect(labelTarget, '"print_label_sato"', "label capability guard", problems);
+  expect(labelTarget, 'agentStatus === "online"', "prefer online Hardware Agent", problems);
   expect(labels, "Print selected", "selected labels", problems);
   expect(labels, "Print all eligible", "all labels", problems);
   expect(labels, "reprint", "reprint guidance", problems);

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -6,13 +6,12 @@ import {
   productBatchImportSessions,
   productItems,
   productMasters,
-  registers,
 } from "@/db/schema";
-import { DEFAULT_POS_REGISTER_MISSING_MESSAGE } from "@/features/pos/context";
 import type { AuthContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/session";
 import { buildInventoryLabelPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2InTransaction } from "@/lib/hardware/job-producer-v2";
+import { getLabelHardwareTargets } from "@/lib/hardware/label-target";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -28,7 +27,7 @@ export class ProductBatchImportLabelError extends Error {
       | "INVALID_SELECTION"
       | "NO_PRINTABLE_ITEMS"
       | "OUTLET_ACCESS_REQUIRED"
-      | "REGISTER_REQUIRED",
+      | "HARDWARE_AGENT_REQUIRED",
   ) {
     super(message);
     this.name = "ProductBatchImportLabelError";
@@ -156,22 +155,10 @@ export async function printProductBatchImportLabels(
     ),
   );
 
-  const registerRows = itemOutletIds.length
-    ? await db
-        .select({ id: registers.id, outletId: registers.outletId })
-        .from(registers)
-        .where(
-          and(
-            inArray(registers.outletId, itemOutletIds),
-            eq(registers.isActive, true),
-            eq(registers.isHardwareHub, true),
-          ),
-        )
-        .orderBy(asc(registers.createdAt))
-    : [];
-  const registerByOutletId = new Map(
-    registerRows.map((register) => [register.outletId, register.id]),
-  );
+  const targetByOutletId = await getLabelHardwareTargets({
+    organizationId: input.auth.organization.id,
+    outletIds: itemOutletIds,
+  });
 
   const printableRows = candidateRows.flatMap((row) => {
     if (
@@ -179,7 +166,7 @@ export async function printProductBatchImportLabels(
       !LABEL_PRINTABLE_AVAILABILITY.has(row.availability) ||
       !row.currentOutletId ||
       !accessibleOutletIds.has(row.currentOutletId) ||
-      !registerByOutletId.has(row.currentOutletId)
+      !targetByOutletId.has(row.currentOutletId)
     ) {
       return [];
     }
@@ -197,12 +184,12 @@ export async function printProductBatchImportLabels(
       );
     }
     const hasRegister = candidateRows.some(
-      (row) => row.currentOutletId && registerByOutletId.has(row.currentOutletId),
+      (row) => row.currentOutletId && targetByOutletId.has(row.currentOutletId),
     );
     if (!hasRegister) {
       throw new ProductBatchImportLabelError(
-        DEFAULT_POS_REGISTER_MISSING_MESSAGE,
-        "REGISTER_REQUIRED",
+        "Hardware Agent label dengan capability print_label_sato belum tersedia pada outlet item terpilih. Pastikan Agent Hardware Hub aktif pada register yang benar lalu jalankan Test Label Printer.",
+        "HARDWARE_AGENT_REQUIRED",
       );
     }
     throw new ProductBatchImportLabelError(
@@ -217,7 +204,8 @@ export async function printProductBatchImportLabels(
   await db.transaction(async (transaction) => {
     for (const row of printableRows) {
       const outletId = row.currentOutletId!;
-      const registerId = registerByOutletId.get(outletId)!;
+      const target = targetByOutletId.get(outletId)!;
+      const registerId = target.registerId;
       const payload = buildInventoryLabelPayloadV2({
         itemId: row.itemId,
         copies: 1,
@@ -238,6 +226,7 @@ export async function printProductBatchImportLabels(
         outletId,
         registerId,
         createdByUserId: input.auth.user.id,
+        targetAgentId: target.agentId,
         jobType: "print_label_sato",
         mode: "manual",
         payload,

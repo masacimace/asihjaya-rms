@@ -1,12 +1,8 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/db";
-import { productItems, productMasters, registers } from "@/db/schema";
-import {
-  DEFAULT_POS_REGISTER_MISSING_MESSAGE,
-  getDefaultPosRegisterCondition,
-} from "@/features/pos/context";
+import { productItems, productMasters } from "@/db/schema";
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
 import {
@@ -16,6 +12,7 @@ import {
 } from "@/lib/http/request-body";
 import { buildInventoryLabelPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
+import { getLabelHardwareTarget } from "@/lib/hardware/label-target";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -115,16 +112,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [register] = await db
-      .select({ id: registers.id, code: registers.code, name: registers.name })
-      .from(registers)
-      .where(getDefaultPosRegisterCondition(item.currentOutletId))
-      .orderBy(asc(registers.createdAt))
-      .limit(1);
+    const target = await getLabelHardwareTarget({
+      organizationId: auth.organization.id,
+      outletId: item.currentOutletId,
+    });
 
-    if (!register) {
+    if (!target) {
       return NextResponse.json(
-        { error: DEFAULT_POS_REGISTER_MISSING_MESSAGE },
+        {
+          error:
+            "Hardware Agent label dengan capability print_label_sato belum tersedia pada outlet ini. Pastikan Agent Hardware Hub aktif pada register yang benar lalu jalankan Test Label Printer.",
+        },
         { status: 400 },
       );
     }
@@ -148,8 +146,9 @@ export async function POST(req: NextRequest) {
     const { job, duplicate } = await createHardwareJobV2({
       organizationId: auth.organization.id,
       outletId: item.currentOutletId,
-      registerId: register.id,
+      registerId: target.registerId,
       createdByUserId: auth.user.id,
+      targetAgentId: target.agentId,
       jobType: "print_label_sato",
       mode: "manual",
       payload,
