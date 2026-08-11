@@ -5,6 +5,7 @@ import {
 } from "../../lib/export-files";
 
 import {
+  PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT,
   PRODUCT_BATCH_IMPORT_INSTRUCTION_HEADERS,
   PRODUCT_BATCH_IMPORT_ITEM_HEADERS,
   PRODUCT_BATCH_IMPORT_MASTER_HEADERS,
@@ -125,7 +126,11 @@ const instructionRows: ExportCell[][] = [
   ],
   [
     "Struktur ZIP",
-    "Taruh products.xlsx di root ZIP, foto master di images/masters, dan foto item fisik opsional di images/physical.",
+    `Taruh ${PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.workbookPath}, folder ${PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.masterDirectory}, dan folder ${PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.physicalDirectory} langsung di root ZIP. Foto master masuk ke ${PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.masterDirectory}; foto item fisik opsional masuk ke ${PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.physicalDirectory}. Jangan ZIP folder induknya.`,
+  ],
+  [
+    "Google Sheets",
+    "Template boleh diedit di Google Sheets. Setelah selesai pilih File > Download > Microsoft Excel (.xlsx), beri nama products.xlsx, lalu masukkan ke ZIP. Jangan insert gambar ke cell dan jangan gunakan formula/hyperlink sebagai nilai bisnis.",
   ],
   [
     "Relasi baris",

@@ -3,6 +3,12 @@ export const PRODUCT_BATCH_IMPORT_TYPE = "master_and_physical_create" as const;
 export const PRODUCT_BATCH_IMPORT_TEMPLATE_FILENAME =
   "asihjaya-product-batch-template-v1.xlsx";
 
+export const PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT = {
+  workbookPath: "products.xlsx",
+  masterDirectory: "masters/",
+  physicalDirectory: "physical/",
+} as const;
+
 export const PRODUCT_BATCH_IMPORT_SHEET_NAMES = [
   "METADATA",
   "PRODUCT_MASTERS",

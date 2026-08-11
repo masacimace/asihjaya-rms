@@ -4,6 +4,7 @@
 **Template version:** `1`
 **Import type:** `master_and_physical_create`
 **Roadmap stage:** 2B.0 contract; generator mulai dibuat pada 2B.1
+**Last amended:** 11 Agustus 2026 — 2B.5A UX & ZIP contract polish
 
 ## Tujuan
 
@@ -34,18 +35,19 @@ Nama ZIP bebas dan hanya digunakan sebagai metadata upload, contoh:
 asihjaya-product-batch-2026-08.zip
 ```
 
+**Amendment pre-production 11 Agustus 2026:** contract v1 disederhanakan sebelum 2B.6. Folder image sekarang langsung `masters/` dan `physical/` di root ZIP; layout `images/...` lama tidak diterima.
+
 Struktur yang diterima:
 
 ```text
 products.xlsx
-images/
-├── masters/
-│   ├── MASTER-001.jpg
-│   └── MASTER-002.webp
-└── physical/
-    ├── ITEM-001.jpg
-    ├── ITEM-002.jpg
-    └── ITEM-003.png
+masters/
+├── MASTER-001.jpg
+└── MASTER-002.webp
+physical/
+├── ITEM-001.jpg
+├── ITEM-002.jpg
+└── ITEM-003.png
 ```
 
 ### Path policy
@@ -54,8 +56,8 @@ Allowed files:
 
 ```text
 /products.xlsx
-/images/masters/<image-file>
-/images/physical/<image-file>
+/masters/<image-file>
+/physical/<image-file>
 ```
 
 Folder boleh tidak mempunyai image physical bila seluruh item menggunakan master fallback.
@@ -102,8 +104,8 @@ Image lookup harus:
 Contoh berikut dianggap duplicate dan merupakan fatal error bila keduanya ada:
 
 ```text
-images/masters/MASTER-001.JPG
-images/masters/master-001.jpg
+masters/MASTER-001.JPG
+masters/master-001.jpg
 ```
 
 Reference workbook hanya menyimpan **basename** image, bukan full path.
@@ -120,7 +122,7 @@ Tidak diterima:
 ```text
 ../MASTER-001.jpg
 C:\foto\MASTER-001.jpg
-images/masters/MASTER-001.jpg
+masters/MASTER-001.jpg
 https://example.com/MASTER-001.jpg
 ```
 
@@ -198,7 +200,7 @@ Tidak ada kolom `master_code` pada input v1. Product Master code dibuat server s
 | `material` | Tidak | max 80 chars |
 | `collection` | Tidak | max 120 chars |
 | `description` | Tidak | max 4.000 chars |
-| `primary_image` | Ya | basename image pada `images/masters`; JPG/JPEG/PNG/WebP |
+| `primary_image` | Ya | basename image pada `masters/`; JPG/JPEG/PNG/WebP |
 | `status` | Tidak | `draft` atau `active`; blank = `active` |
 
 ### `master_key`
@@ -296,7 +298,7 @@ Tidak ada kolom SKU, barcode, atau QR final.
 | `deduction_per_gram` | Tidak | integer Rupiah >= 0; membutuhkan `pricing.manage` bila diisi |
 | `condition` | Tidak | `good` atau `damaged`; blank = `good`; `available` wajib `good` |
 | `location_code` | Tidak | max 80 chars |
-| `physical_image` | Tidak | basename image pada `images/physical`; JPG/JPEG/PNG/WebP |
+| `physical_image` | Tidak | basename image pada `physical/`; JPG/JPEG/PNG/WebP |
 | `internal_notes` | Tidak | max 4.000 chars |
 | `initial_availability` | Tidak | `draft` atau `available`; blank = `draft` |
 

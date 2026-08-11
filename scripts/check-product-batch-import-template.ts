@@ -89,6 +89,12 @@ function assertTemplate(buffer: Buffer, expectSamples: boolean) {
   const instructionRows = getSheetRows(workbook, "INSTRUCTIONS");
   assertHeaders(instructionRows[0] ?? [], ["bagian", "panduan"], "INSTRUCTIONS");
   assert.ok(instructionRows.length >= 8, "INSTRUCTIONS harus cukup lengkap untuk operator non-developer.");
+  const instructionText = instructionRows.flat().map((value) => String(value)).join("\n");
+  assert.ok(instructionText.includes("masters"), "INSTRUCTIONS harus menjelaskan folder masters/ di root ZIP.");
+  assert.ok(instructionText.includes("physical"), "INSTRUCTIONS harus menjelaskan folder physical/ di root ZIP.");
+  assert.ok(instructionText.includes("Google Sheets"), "INSTRUCTIONS harus menjelaskan workflow Google Sheets.");
+  assert.ok(!instructionText.includes("images/masters"), "INSTRUCTIONS tidak boleh memakai layout images/masters lama.");
+  assert.ok(!instructionText.includes("images/physical"), "INSTRUCTIONS tidak boleh memakai layout images/physical lama.");
 
   assertNoFormulaOrHyperlink(workbook, "PRODUCT_MASTERS");
   assertNoFormulaOrHyperlink(workbook, "PHYSICAL_PRODUCTS");

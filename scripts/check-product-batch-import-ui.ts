@@ -49,6 +49,16 @@ async function main() {
   expect(actions, "2B.6", "commit scope boundary", problems);
   expect(upload, "router.push(`/admin/produk/import/${payload.session.id}`)", "persistent preview redirect", problems);
   expect(upload, "Buka session existing", "duplicate session recovery", problems);
+  expect(upload, "Struktur ZIP yang benar", "operator ZIP structure guidance", problems);
+  expect(upload, "Compress isi folder batch", "parent-folder ZIP guidance", problems);
+  expect(upload, "Google Sheets", "Google Sheets guidance", problems);
+  expect(upload, "Cara memperbaiki", "friendly error remediation", problems);
+  expect(upload, "Detail teknis", "technical error disclosure", problems);
+  expect(upload, "PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.masterDirectory", "root master image folder", problems);
+  expect(upload, "PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.physicalDirectory", "root physical image folder", problems);
+  if (upload.includes("images/masters") || upload.includes("images/physical")) {
+    problems.push("Upload UX tidak boleh lagi menampilkan layout images/* lama.");
+  }
   expect(queries, "productBatchImportMasterRows", "staging master query", problems);
   expect(queries, "productBatchImportItemRows", "staging item query", problems);
   expect(queries, "productBatchImportMedia", "staging media query", problems);

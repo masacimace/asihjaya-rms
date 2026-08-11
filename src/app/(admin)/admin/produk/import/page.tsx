@@ -94,8 +94,8 @@ export default async function ProductBatchImportPage() {
           </div>
           <h2 className="mt-4 font-semibold text-neutral-950">2. Siapkan foto</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            Foto master masuk ke images/masters. Foto item fisik opsional masuk
-            ke images/physical dan dapat kosong untuk memakai foto master.
+            Foto master masuk ke masters/. Foto item fisik opsional masuk
+            ke physical/ dan dapat kosong untuk memakai foto master.
           </p>
         </article>
 
@@ -105,8 +105,7 @@ export default async function ProductBatchImportPage() {
           </div>
           <h2 className="mt-4 font-semibold text-neutral-950">3. Buat satu ZIP</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            products.xlsx berada di root ZIP. Upload validation staging dan preview detail session sekarang sudah
-            aktif setelah ZIP selesai divalidasi.
+            products.xlsx, masters/, dan physical/ berada langsung di root ZIP. Jangan compress folder induk batch.
           </p>
         </article>
       </section>

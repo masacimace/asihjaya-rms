@@ -4,6 +4,7 @@
 **Roadmap stage:** 2B.0 — Baseline audit dan keputusan contract
 **Contract version:** 1
 **Decision date:** 10 Agustus 2026
+**Last amended:** 11 Agustus 2026 — 2B.5A UX & ZIP contract polish
 
 ## Tujuan
 
@@ -228,12 +229,14 @@ Jika volume operasi riil kemudian membutuhkan perubahan, perubahan limits adalah
 
 ## ADR-08 — Archive dan image policy
 
+**Amendment pre-production 11 Agustus 2026:** sebelum 2B.6, struktur image v1 disederhanakan dari `images/masters` + `images/physical` menjadi `masters/` + `physical/` langsung di root ZIP. Layout lama tidak menjadi compatibility contract karena fitur belum production.
+
 Struktur root v1:
 
 ```text
 products.xlsx
-images/masters/*
-images/physical/*
+masters/*
+physical/*
 ```
 
 Aturan utama:

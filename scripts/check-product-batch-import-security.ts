@@ -38,8 +38,8 @@ expectArchiveCode("ARCHIVE_IMAGE_DUPLICATE_NORMALIZED", () =>
   inspectProductBatchArchive(
     buildTestZip([
       { path: "products.xlsx", data: workbook },
-      { path: "images/masters/MASTER-001.JPG", data: Buffer.from("a") },
-      { path: "images/masters/master-001.jpg", data: Buffer.from("b") },
+      { path: "masters/MASTER-001.JPG", data: Buffer.from("a") },
+      { path: "masters/master-001.jpg", data: Buffer.from("b") },
     ]),
   ),
 );
@@ -48,7 +48,7 @@ expectArchiveCode("ZIP_SYMLINK_UNSUPPORTED", () =>
     buildTestZip([
       { path: "products.xlsx", data: workbook },
       {
-        path: "images/masters/link.jpg",
+        path: "masters/link.jpg",
         data: Buffer.alloc(0),
         versionMadeBy: 0x0314,
         externalAttributes: (0o120777 << 16) >>> 0,
@@ -81,7 +81,7 @@ expectArchiveCode("ZIP_BOMB_LIMIT", () =>
 
 const tooManyEntries = Array.from(
   { length: PRODUCT_BATCH_IMPORT_LIMITS.archiveEntries + 1 },
-  (_, index) => ({ path: `images/masters/X-${index}.jpg`, data: Buffer.alloc(0) }),
+  (_, index) => ({ path: `masters/X-${index}.jpg`, data: Buffer.alloc(0) }),
 );
 expectArchiveCode("ZIP_TOO_MANY_ENTRIES", () => inspectProductBatchArchive(buildTestZip(tooManyEntries)));
 
@@ -97,6 +97,22 @@ expectArchiveCode("ARCHIVE_PATH_UNSUPPORTED", () =>
       { path: "run.exe", data: Buffer.from("MZ") },
     ]),
   ),
+);
+
+assert.throws(
+  () =>
+    inspectProductBatchArchive(
+      buildTestZip([
+        { path: "products.xlsx", data: workbook },
+        { path: "images/masters/MASTER-001.jpg", data: Buffer.from("x") },
+      ]),
+    ),
+  (error: unknown) =>
+    error instanceof ProductBatchArchiveError &&
+    error.code === "ARCHIVE_PATH_UNSUPPORTED" &&
+    error.message.includes("masters/") &&
+    error.message.includes("physical/") &&
+    error.message.includes("root ZIP"),
 );
 
 assert.throws(

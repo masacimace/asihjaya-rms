@@ -53,9 +53,9 @@ async function makeJpeg() {
 function validOuterZip(workbook: Buffer, jpeg: Buffer, extras = [] as Array<{ path: string; data: Buffer }>) {
   return buildTestZip([
     { path: "products.xlsx", data: workbook },
-    { path: "images/masters/MASTER-001.jpg", data: jpeg },
-    { path: "images/masters/MASTER-002.jpg", data: jpeg },
-    { path: "images/physical/ITEM-001.jpg", data: jpeg },
+    { path: "masters/MASTER-001.jpg", data: jpeg },
+    { path: "masters/MASTER-002.jpg", data: jpeg },
+    { path: "physical/ITEM-001.jpg", data: jpeg },
     ...extras,
   ]);
 }
@@ -115,7 +115,7 @@ async function main() {
   assert.equal(googleSheetsStylePackage.workbook.templateVersion, "1");
 
   const unusedPackage = await parseProductBatchImportPackage(
-    validOuterZip(validWorkbook, jpeg, [{ path: "images/physical/UNUSED.jpg", data: jpeg }]),
+    validOuterZip(validWorkbook, jpeg, [{ path: "physical/UNUSED.jpg", data: jpeg }]),
   );
   assert.equal(unusedPackage.images.warnings.length, 1);
   assert.equal(unusedPackage.images.warnings[0]?.code, "UNUSED_IMAGE");
@@ -123,8 +123,8 @@ async function main() {
   await expectAsyncCode("IMAGE_REFERENCE_MISSING", async () => {
     const missing = buildTestZip([
       { path: "products.xlsx", data: validWorkbook },
-      { path: "images/masters/MASTER-001.jpg", data: jpeg },
-      { path: "images/physical/ITEM-001.jpg", data: jpeg },
+      { path: "masters/MASTER-001.jpg", data: jpeg },
+      { path: "physical/ITEM-001.jpg", data: jpeg },
     ]);
     await parseProductBatchImportPackage(missing);
   });
@@ -132,9 +132,9 @@ async function main() {
   await expectAsyncCode("IMAGE_MIME_MISMATCH", async () => {
     const invalid = buildTestZip([
       { path: "products.xlsx", data: validWorkbook },
-      { path: "images/masters/MASTER-001.jpg", data: Buffer.from("not-an-image") },
-      { path: "images/masters/MASTER-002.jpg", data: jpeg },
-      { path: "images/physical/ITEM-001.jpg", data: jpeg },
+      { path: "masters/MASTER-001.jpg", data: Buffer.from("not-an-image") },
+      { path: "masters/MASTER-002.jpg", data: jpeg },
+      { path: "physical/ITEM-001.jpg", data: jpeg },
     ]);
     await parseProductBatchImportPackage(invalid);
   });
@@ -151,7 +151,11 @@ async function main() {
   assert.ok(hyperlinkSheet?.B2);
   hyperlinkSheet.B2.l = { Target: "https://example.com" };
   const hyperlinkBuffer = XLSX.write(hyperlinkBook, { type: "buffer", bookType: "xlsx", compression: true }) as Buffer;
-  expectWorkbookCode("WORKBOOK_HYPERLINK_REJECTED", () => parseProductBatchWorkbook(hyperlinkBuffer));
+  // External hyperlinks are represented by OOXML external relationships.
+  // The bounded container guard intentionally rejects them before SheetJS cell parsing.
+  expectWorkbookCode("WORKBOOK_ACTIVE_CONTENT_REJECTED", () =>
+    parseProductBatchWorkbook(hyperlinkBuffer),
+  );
 
   const hiddenBook = XLSX.read(validWorkbook, { type: "buffer" });
   assert.ok(hiddenBook.Workbook?.Sheets?.[0]);
@@ -223,7 +227,7 @@ async function main() {
   console.log("Pemeriksaan Product Batch Import parser berhasil.");
   console.log("- Valid package, SHA-256 row/archive, dan image manifest terbaca.");
   console.log("- Missing/invalid image ditolak; unused image menjadi warning.");
-  console.log("- Formula, hyperlink, hidden sheet, unsupported template, dan over-row ditolak.");
+  console.log("- Formula, external hyperlink, hidden sheet, unsupported template, dan over-row ditolak.");
   console.log("- XLSX valid dengan urutan atribut OOXML berbeda tetap diterima.");
   console.log("- Drawing XML tanpa media/external relationship diterima; embedded media/external content tetap ditolak.");
 }

@@ -33,9 +33,9 @@ async function packageFromSheets(sheets: ReturnType<typeof buildProductBatchImpo
   return parseProductBatchImportPackage(
     buildTestZip([
       { path: "products.xlsx", data: buildXlsxBuffer(sheets) },
-      { path: "images/masters/MASTER-001.jpg", data: image },
-      { path: "images/masters/MASTER-002.jpg", data: image },
-      { path: "images/physical/ITEM-001.jpg", data: image },
+      { path: "masters/MASTER-001.jpg", data: image },
+      { path: "masters/MASTER-002.jpg", data: image },
+      { path: "physical/ITEM-001.jpg", data: image },
     ]),
   );
 }
