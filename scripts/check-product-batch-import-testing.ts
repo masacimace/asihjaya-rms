@@ -36,6 +36,8 @@ assert.ok(scripts["check:product-batch-import"]?.includes("check:product-batch-t
 
 for (const marker of [
   "1 master + 1 draft item",
+  "single XLSX Picture in Cell",
+  "buildInCellImageWorkbookFixture",
   "one master with many items",
   "multiple masters",
   "MASTER_KEY_DUPLICATE",
@@ -80,6 +82,9 @@ for (const section of [
   "Database/atomic coverage",
   "Regression gates",
   "Manual browser/hardware checks",
+  "Single XLSX embedded",
+  "Picture in Cell",
+  "Dual ingress parity",
   "Exit criteria 2B.9",
 ]) {
   assert.ok(testPlan.includes(section), `Test matrix belum mempunyai section: ${section}`);
@@ -87,5 +92,5 @@ for (const section of [
 
 console.log("Pemeriksaan Product Batch Import testing berhasil.");
 console.log("- Disposable PostgreSQL 17 integration runner + isolated local storage tersedia.");
-console.log("- Valid/invalid, duplicate, tenant isolation, atomic failure/concurrency, POS dan label coverage terdaftar.");
+console.log("- ZIP + single XLSX DrawingML/Picture in Cell, valid/invalid, duplicate, tenant isolation, atomic failure/concurrency, POS dan label coverage terdaftar.");
 console.log("- Regression matrix mengikat legacy migration, POS, inventory label dan database deployment checks.");

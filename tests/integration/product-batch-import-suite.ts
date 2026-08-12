@@ -45,6 +45,7 @@ import { lookupPosItemByScanValue } from "@/features/pos/queries";
 import { buildXlsxBuffer, type ExportCell } from "@/lib/export-files";
 import type { AuthContext } from "@/lib/auth/session";
 
+import { buildInCellImageWorkbookFixture } from "../../scripts/lib/product-batch-import-embedded-xlsx";
 import { buildTestZip } from "../../scripts/lib/product-batch-import-test-zip";
 
 type MasterInput = {
@@ -529,6 +530,97 @@ test("1 master + 1 draft item commits generated identities without opening movem
     await queryCount("inventory_movements", "where item_id = $1", [result.items[0]!.productItemId]),
     0,
   );
+});
+
+test("single XLSX Picture in Cell uses the same staging and atomic commit pipeline", async () => {
+  const fixture = await createOrganizationFixture("EMBEDDED");
+  const workbook = buildWorkbook(
+    [
+      {
+        masterKey: "MASTER-EMBEDDED",
+        categoryCode: fixture.categoryCode,
+        primaryImage: "",
+      },
+    ],
+    [
+      {
+        rowKey: "ITEM-EMBEDDED-PHYSICAL",
+        masterKey: "MASTER-EMBEDDED",
+        outletCode: fixture.outletCode,
+        weightGram: "2.5",
+        purityPercent: "75",
+        sellingAmount: "1750000",
+        physicalImage: "",
+        availability: "available",
+      },
+      {
+        rowKey: "ITEM-EMBEDDED-FALLBACK",
+        masterKey: "MASTER-EMBEDDED",
+        outletCode: fixture.outletCode,
+        weightGram: "1.75",
+        purityPercent: "75",
+        sellingAmount: "1250000",
+        physicalImage: "",
+        availability: "available",
+      },
+    ],
+  );
+  const embeddedWorkbook = buildInCellImageWorkbookFixture(workbook, [
+    {
+      sheetName: "PRODUCT_MASTERS",
+      rowNumber: 2,
+      columnIndex: 7,
+      data: VALID_PNG,
+      extension: ".png",
+    },
+    {
+      sheetName: "PHYSICAL_PRODUCTS",
+      rowNumber: 2,
+      columnIndex: 16,
+      data: VALID_PNG,
+      extension: ".png",
+    },
+  ]);
+
+  const session = await createSession(
+    fixture,
+    embeddedWorkbook,
+    "product-batch-embedded.xlsx",
+  );
+  assert.equal(session.status, "ready");
+  const preview = await getProductBatchImportPreview(fixture.auth, session.id);
+  assert.ok(preview);
+  assert.equal(preview.media.length, 2);
+  assert.equal(
+    preview.items.find((row) => row.rowKey === "ITEM-EMBEDDED-PHYSICAL")?.effectiveImageSource,
+    "physical",
+  );
+  assert.equal(
+    preview.items.find((row) => row.rowKey === "ITEM-EMBEDDED-FALLBACK")?.effectiveImageSource,
+    "master",
+  );
+
+  const committed = await commitProductBatchImportSession({
+    auth: fixture.auth,
+    sessionId: session.id,
+  });
+  assert.equal(committed.committedMasterCount, 1);
+  assert.equal(committed.committedItemCount, 2);
+  assert.equal(committed.availableItemCount, 2);
+
+  const result = await getProductBatchImportResult(fixture.auth, session.id);
+  assert.ok(result);
+  assert.equal(result.session.status, "completed");
+  const physical = result.items.find((row) => row.rowKey === "ITEM-EMBEDDED-PHYSICAL");
+  const fallback = result.items.find((row) => row.rowKey === "ITEM-EMBEDDED-FALLBACK");
+  assert.equal(physical?.imageSource, "physical");
+  assert.equal(fallback?.imageSource, "master-fallback");
+  const lookup = await lookupPosItemByScanValue({
+    organizationId: fixture.organizationId,
+    outletId: fixture.outletId,
+    scanValue: physical!.barcode,
+  });
+  assert.equal(lookup.status, "found");
 });
 
 test("one master with many items covers physical/master fallback, goods receipt, POS scan, labels and reprint idempotency", async () => {

@@ -42,7 +42,7 @@ async function main() {
   const sessionId = readArg("--session-id");
   if (!sessionId || !UUID_PATTERN.test(sessionId)) {
     throw new Error(
-      "Gunakan --session-id <UUID> dari hasil Upload & validasi ZIP.",
+      "Gunakan --session-id <UUID> dari hasil Upload & validasi ZIP/XLSX.",
     );
   }
 

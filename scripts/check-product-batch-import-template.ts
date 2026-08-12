@@ -93,6 +93,10 @@ function assertTemplate(buffer: Buffer, expectSamples: boolean) {
   assert.ok(instructionText.includes("masters"), "INSTRUCTIONS harus menjelaskan folder masters/ di root ZIP.");
   assert.ok(instructionText.includes("physical"), "INSTRUCTIONS harus menjelaskan folder physical/ di root ZIP.");
   assert.ok(instructionText.includes("Google Sheets"), "INSTRUCTIONS harus menjelaskan workflow Google Sheets.");
+  assert.ok(instructionText.includes("single XLSX"), "INSTRUCTIONS harus menjelaskan metode single XLSX embedded.");
+  assert.ok(instructionText.includes("gambar embedded"), "INSTRUCTIONS harus menjelaskan gambar embedded.");
+  assert.ok(instructionText.includes("Picture in Cell"), "INSTRUCTIONS harus merekomendasikan Picture in Cell.");
+  assert.ok(instructionText.includes("Place in Cell"), "INSTRUCTIONS harus menjelaskan kompatibilitas Microsoft Excel modern.");
   assert.ok(!instructionText.includes("images/masters"), "INSTRUCTIONS tidak boleh memakai layout images/masters lama.");
   assert.ok(!instructionText.includes("images/physical"), "INSTRUCTIONS tidak boleh memakai layout images/physical lama.");
 

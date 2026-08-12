@@ -4,7 +4,7 @@
 **Roadmap stage:** 2B.0 — Baseline audit dan keputusan contract
 **Contract version:** 1
 **Decision date:** 10 Agustus 2026
-**Last amended:** 11 Agustus 2026 — 2B.5A UX & ZIP contract polish
+**Last amended:** 12 Agustus 2026 — 2B.10C dual upload ingress
 
 ## Tujuan
 
@@ -57,7 +57,7 @@ Implementation tidak boleh membuat barcode engine, image storage engine, audit s
 - partial commit per row;
 - barcode manual dari Excel;
 - penggunaan ulang barcode yang pernah dialokasikan;
-- embedded image Excel;
+- arbitrary/unsupported embedded image Excel di luar contract direct single XLSX;
 - image gallery multi-file per entity;
 - formula/hyperlink sebagai sumber data bisnis;
 - Google Sheets URL;
@@ -231,6 +231,13 @@ Jika volume operasi riil kemudian membutuhkan perubahan, perubahan limits adalah
 
 **Amendment pre-production 11 Agustus 2026:** sebelum 2B.6, struktur image v1 disederhanakan dari `images/masters` + `images/physical` menjadi `masters/` + `physical/` langsung di root ZIP. Layout lama tidak menjadi compatibility contract karena fitur belum production.
 
+**Amendment pre-production 12 Agustus 2026 (2B.10C):** ingress Product Batch Import mendukung dua metode tanpa membuat downstream business pipeline kedua:
+
+1. `zip` — outer ZIP existing: `products.xlsx` + `masters/` + optional `physical/`;
+2. `xlsx_embedded` — satu XLSX langsung, dengan local Picture in Cell (`_localImage`) atau standard DrawingML picture yang dipetakan tepat pada `primary_image` / `physical_image` row.
+
+Kedua metode dinormalisasi menjadi `ParsedProductBatchWorkbook + ProductBatchImageManifest`, lalu memakai validation, staging, preview, atomic commit, identifier, movement, result, label, audit, cleanup, dan retention yang sama. Tidak ada migration/schema baru. Direct XLSX menerima local Picture in Cell dan DrawingML picture over cells; linked image, `IMAGE()`/`_webimage`, rich-data non-local-image, chart/shape/object, macro, ActiveX/OLE, atau external relationship tetap ditolak.
+
 Struktur root v1:
 
 ```text
@@ -249,7 +256,7 @@ Aturan utama:
 - image hanya JPG/JPEG, PNG, atau WebP;
 - content harus diverifikasi dari bytes/decoder, bukan extension atau declared MIME saja;
 - image dire-encode melalui image storage abstraction existing;
-- embedded image workbook ditolak;
+- embedded media/rich-data di `products.xlsx` pada metode ZIP ditolak; embedded image hanya diterima pada direct single XLSX;
 - image tidak direferensikan tetapi berada di folder image yang valid menghasilkan **warning**, bukan fatal error;
 - file non-image ekstra atau file di path yang tidak diizinkan adalah fatal error.
 

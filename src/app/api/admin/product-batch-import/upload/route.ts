@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { PRODUCT_BATCH_IMPORT_LIMITS } from "@/features/product-batch-import/contracts";
 import {
   createProductBatchImportSession,
+  getProductBatchImportUploadLimit,
+  normalizeProductBatchImportFileName,
   ProductBatchImportDuplicateError,
   ProductBatchImportServiceError,
 } from "@/features/product-batch-import/session-service";
@@ -42,7 +43,7 @@ function readUploadFileName(request: Request) {
   if (!encoded || encoded.length > 768) {
     throw new ProductBatchImportServiceError(
       "UPLOAD_FILE_NAME_MISSING",
-      "Header nama file ZIP tidak tersedia.",
+      "Header nama file upload tidak tersedia.",
       400,
     );
   }
@@ -51,7 +52,7 @@ function readUploadFileName(request: Request) {
   } catch {
     throw new ProductBatchImportServiceError(
       "UPLOAD_FILE_NAME_INVALID",
-      "Encoding nama file ZIP tidak valid.",
+      "Encoding nama file upload tidak valid.",
       400,
     );
   }
@@ -71,7 +72,7 @@ async function readRequestBodyBounded(request: Request, maxBytes: number) {
     if (contentLength > maxBytes) {
       throw new ProductBatchImportServiceError(
         "UPLOAD_TOO_LARGE",
-        "ZIP melebihi batas upload 100 MB.",
+        "File melebihi batas upload 100 MB.",
         413,
       );
     }
@@ -80,7 +81,7 @@ async function readRequestBodyBounded(request: Request, maxBytes: number) {
   if (!request.body) {
     throw new ProductBatchImportServiceError(
       "UPLOAD_BODY_MISSING",
-      "Body ZIP tidak tersedia.",
+      "Body file upload tidak tersedia.",
       400,
     );
   }
@@ -99,7 +100,7 @@ async function readRequestBodyBounded(request: Request, maxBytes: number) {
         await reader.cancel("Product Batch Import upload limit exceeded");
         throw new ProductBatchImportServiceError(
           "UPLOAD_TOO_LARGE",
-          "ZIP melebihi batas upload 100 MB.",
+          "File melebihi batas upload 100 MB.",
           413,
         );
       }
@@ -112,7 +113,7 @@ async function readRequestBodyBounded(request: Request, maxBytes: number) {
   if (total <= 0) {
     throw new ProductBatchImportServiceError(
       "UPLOAD_EMPTY",
-      "File ZIP kosong.",
+      "File upload kosong.",
       400,
     );
   }
@@ -136,30 +137,33 @@ export async function POST(request: Request) {
       );
     }
 
+    const fileName = normalizeProductBatchImportFileName(readUploadFileName(request));
     const contentType = request.headers
       .get("content-type")
       ?.split(";", 1)[0]
       ?.trim()
       .toLowerCase();
-    if (
-      !contentType ||
-      ![
-        "application/zip",
-        "application/x-zip-compressed",
-        "application/octet-stream",
-      ].includes(contentType)
-    ) {
+    const allowedContentTypes = fileName.toLocaleLowerCase("en-US").endsWith(".xlsx")
+      ? [
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/octet-stream",
+        ]
+      : [
+          "application/zip",
+          "application/x-zip-compressed",
+          "application/octet-stream",
+        ];
+    if (!contentType || !allowedContentTypes.includes(contentType)) {
       return jsonError(
         415,
         "UPLOAD_CONTENT_TYPE_INVALID",
-        "Endpoint hanya menerima raw ZIP body.",
+        "Content-Type tidak sesuai dengan file .zip atau .xlsx yang dipilih.",
       );
     }
 
-    const fileName = readUploadFileName(request);
     const buffer = await readRequestBodyBounded(
       request,
-      PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes,
+      getProductBatchImportUploadLimit(fileName),
     );
 
     const session = await createProductBatchImportSession({
@@ -176,8 +180,8 @@ export async function POST(request: Request) {
       {
         message:
           session.status === "ready"
-            ? "ZIP berhasil divalidasi dan session siap untuk direview pada halaman preview."
-            : "ZIP berhasil masuk staging, tetapi masih memiliki validation error.",
+            ? "File berhasil divalidasi dan session siap untuk direview pada halaman preview."
+            : "File berhasil masuk staging, tetapi masih memiliki validation error.",
         session: {
           ...session,
           expiresAt: session.expiresAt.toISOString(),

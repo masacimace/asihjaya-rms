@@ -19,6 +19,10 @@ import {
   buildProductBatchImportTemplateSheets,
 } from "../src/features/product-batch-import/template";
 import {
+  buildEmbeddedImageWorkbookFixture,
+  buildInCellImageWorkbookFixture,
+} from "./lib/product-batch-import-embedded-xlsx";
+import {
   buildTestZip,
   repackZipWithExtraEntries,
 } from "./lib/product-batch-import-test-zip";
@@ -88,6 +92,141 @@ function rewriteWorkbookContentTypes(
   );
 }
 
+function rewriteWorkbookEntry(
+  workbook: Buffer,
+  entryPath: string,
+  transform: (xml: string) => string,
+): Buffer {
+  const inspection = inspectStrictZipArchive(workbook, {
+    maxArchiveBytes: 10 * 1024 * 1024,
+    maxEntries: 1_000,
+    maxUncompressedBytes: 64 * 1024 * 1024,
+    maxFileNameBytes: 1_024,
+  });
+  let found = false;
+  const result = buildTestZip(
+    inspection.entries
+      .filter((entry) => !entry.isDirectory)
+      .map((entry) => {
+        const extracted = extractStrictZipEntry(workbook, entry);
+        if (entry.path !== entryPath) {
+          return { path: entry.path, data: extracted, method: entry.compressionMethod };
+        }
+        found = true;
+        return {
+          path: entry.path,
+          data: Buffer.from(transform(extracted.toString("utf8")), "utf8"),
+          method: entry.compressionMethod,
+        };
+      }),
+  );
+  assert.ok(found, `Fixture entry tidak ditemukan: ${entryPath}`);
+  return result;
+}
+
+function blankWorksheetCells(worksheetXml: string, addresses: string[]) {
+  let nextXml = worksheetXml;
+  for (const address of addresses) {
+    const cellPattern = new RegExp(
+      `<c\\b[^>]*\\br=["']${address}["'][^>]*>(?:[\\s\\S]*?)<\\/c>|<c\\b[^>]*\\br=["']${address}["'][^>]*/>`,
+      "i",
+    );
+    assert.match(nextXml, cellPattern, `Fixture cell tidak ditemukan: ${address}`);
+    nextXml = nextXml.replace(cellPattern, "");
+  }
+  return nextXml;
+}
+
+function blankEmbeddedImageTextCells(workbookBuffer: Buffer) {
+  const mastersBlanked = rewriteWorkbookEntry(
+    workbookBuffer,
+    "xl/worksheets/sheet2.xml",
+    (xml) => blankWorksheetCells(xml, ["H2", "H3"]),
+  );
+  return rewriteWorkbookEntry(
+    mastersBlanked,
+    "xl/worksheets/sheet3.xml",
+    (xml) => blankWorksheetCells(xml, ["Q2"]),
+  );
+}
+
+function addGoogleSheetsEmptyDrawingContainers(workbookBuffer: Buffer) {
+  const inspection = inspectStrictZipArchive(workbookBuffer, {
+    maxArchiveBytes: 10 * 1024 * 1024,
+    maxEntries: 1_000,
+    maxUncompressedBytes: 64 * 1024 * 1024,
+    maxFileNameBytes: 1_024,
+  });
+  const entries = inspection.entries
+    .filter((entry) => !entry.isDirectory)
+    .map((entry) => ({
+      path: entry.path,
+      data: extractStrictZipEntry(workbookBuffer, entry),
+      method: entry.compressionMethod,
+    }));
+  const byPath = new Map(entries.map((entry) => [entry.path, entry]));
+
+  for (const [sheetPath, drawingIndex] of [
+    ["xl/worksheets/sheet1.xml", 99],
+    ["xl/worksheets/sheet4.xml", 100],
+  ] as const) {
+    const worksheet = byPath.get(sheetPath);
+    assert.ok(worksheet);
+    const relationshipId = `rIdGoogleEmpty${drawingIndex}`;
+    const worksheetXml = worksheet.data.toString("utf8");
+    assert.ok(!/<(?:[A-Za-z_][\w.-]*:)?drawing\b/i.test(worksheetXml));
+    worksheet.data = Buffer.from(
+      worksheetXml.replace(
+        "</worksheet>",
+        `<drawing r:id="${relationshipId}"/></worksheet>`,
+      ),
+      "utf8",
+    );
+
+    const relationshipsPath = `${sheetPath.replace(/\/[^/]+$/, "")}/_rels/${sheetPath.split("/").pop()}.rels`;
+    const existingRelationships = byPath.get(relationshipsPath);
+    const relationshipTag = `<Relationship Id="${relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing${drawingIndex}.xml"/>`;
+    if (existingRelationships) {
+      existingRelationships.data = Buffer.from(
+        existingRelationships.data
+          .toString("utf8")
+          .replace("</Relationships>", `${relationshipTag}</Relationships>`),
+        "utf8",
+      );
+    } else {
+      byPath.set(relationshipsPath, {
+        path: relationshipsPath,
+        data: Buffer.from(
+          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationshipTag}</Relationships>`,
+          "utf8",
+        ),
+        method: 8 as const,
+      });
+    }
+
+    byPath.set(`xl/drawings/drawing${drawingIndex}.xml`, {
+      path: `xl/drawings/drawing${drawingIndex}.xml`,
+      data: Buffer.from(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"/>',
+        "utf8",
+      ),
+      method: 8 as const,
+    });
+  }
+
+  const contentTypes = byPath.get("[Content_Types].xml");
+  assert.ok(contentTypes);
+  contentTypes.data = Buffer.from(
+    contentTypes.data.toString("utf8").replace(
+      "</Types>",
+      '<Override PartName="/xl/drawings/drawing99.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/><Override PartName="/xl/drawings/drawing100.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>',
+    ),
+    "utf8",
+  );
+
+  return buildTestZip([...byPath.values()]);
+}
+
 async function main() {
   const jpeg = await makeJpeg();
   const validWorkbook = buildProductBatchImportTemplateBuffer({
@@ -100,8 +239,114 @@ async function main() {
   assert.equal(validPackage.workbook.itemRows.length, 3);
   assert.equal(validPackage.images.entries.length, 3);
   assert.equal(validPackage.images.warnings.length, 0);
+  assert.equal(validPackage.packageKind, "zip");
+  assert.ok(validPackage.archive);
   assert.match(validPackage.archive.archiveSha256, /^[0-9a-f]{64}$/);
   assert.match(validPackage.workbook.masterRows[0]?.rowFingerprint ?? "", /^[0-9a-f]{64}$/);
+
+  const embeddedBase = blankEmbeddedImageTextCells(validWorkbook);
+  const embeddedWorkbook = buildEmbeddedImageWorkbookFixture(embeddedBase, [
+    { sheetName: "PRODUCT_MASTERS", rowNumber: 2, columnIndex: 7, data: jpeg, extension: ".jpg" },
+    { sheetName: "PRODUCT_MASTERS", rowNumber: 3, columnIndex: 7, data: jpeg, extension: ".jpg" },
+    { sheetName: "PHYSICAL_PRODUCTS", rowNumber: 2, columnIndex: 16, data: jpeg, extension: ".jpg" },
+  ]);
+  const embeddedPackage = await parseProductBatchImportPackage(embeddedWorkbook, {
+    fileName: "products-embedded.xlsx",
+  });
+  assert.equal(embeddedPackage.packageKind, "xlsx_embedded");
+  assert.equal(embeddedPackage.archive, null);
+  assert.equal(embeddedPackage.images.entries.length, 3);
+  assert.match(
+    String(embeddedPackage.workbook.masterRows[0]?.normalizedPayload.primary_image ?? ""),
+    /^EMBEDDED-MASTER-ROW-0002\.jpg$/,
+  );
+  assert.match(
+    String(embeddedPackage.workbook.itemRows[0]?.normalizedPayload.physical_image ?? ""),
+    /^EMBEDDED-PHYSICAL-ROW-0002\.jpg$/,
+  );
+
+  const inCellWorkbook = buildInCellImageWorkbookFixture(embeddedBase, [
+    { sheetName: "PRODUCT_MASTERS", rowNumber: 2, columnIndex: 7, data: jpeg, extension: ".jpg" },
+    { sheetName: "PRODUCT_MASTERS", rowNumber: 3, columnIndex: 7, data: jpeg, extension: ".jpg" },
+    { sheetName: "PHYSICAL_PRODUCTS", rowNumber: 2, columnIndex: 16, data: jpeg, extension: ".jpg" },
+  ]);
+  const inCellPackage = await parseProductBatchImportPackage(inCellWorkbook, {
+    fileName: "products-picture-in-cell.xlsx",
+  });
+  assert.equal(inCellPackage.packageKind, "xlsx_embedded");
+  assert.equal(inCellPackage.archive, null);
+  assert.equal(inCellPackage.images.entries.length, 3);
+  assert.match(
+    String(inCellPackage.workbook.masterRows[0]?.normalizedPayload.primary_image ?? ""),
+    /^EMBEDDED-MASTER-ROW-0002\.jpg$/,
+  );
+  assert.match(
+    String(inCellPackage.workbook.itemRows[0]?.normalizedPayload.physical_image ?? ""),
+    /^EMBEDDED-PHYSICAL-ROW-0002\.jpg$/,
+  );
+
+  const nestedInCellWorkbook = buildInCellImageWorkbookFixture(
+    embeddedBase,
+    [
+      { sheetName: "PRODUCT_MASTERS", rowNumber: 2, columnIndex: 7, data: jpeg, extension: ".jpg" },
+      { sheetName: "PRODUCT_MASTERS", rowNumber: 3, columnIndex: 7, data: jpeg, extension: ".jpg" },
+      { sheetName: "PHYSICAL_PRODUCTS", rowNumber: 2, columnIndex: 16, data: jpeg, extension: ".jpg" },
+    ],
+    { relationshipTopology: "nested" },
+  );
+  const nestedInCellPackage = await parseProductBatchImportPackage(
+    nestedInCellWorkbook,
+    { fileName: "products-picture-in-cell-nested.xlsx" },
+  );
+  assert.equal(nestedInCellPackage.images.entries.length, 3);
+
+  await expectAsyncCode("WORKBOOK_EMBEDDED_IMAGE_LOCATION_INVALID", async () => {
+    const wrongInCellColumn = buildInCellImageWorkbookFixture(embeddedBase, [
+      { sheetName: "PRODUCT_MASTERS", rowNumber: 2, columnIndex: 6, data: jpeg, extension: ".jpg" },
+    ]);
+    await parseProductBatchImportPackage(wrongInCellColumn, {
+      fileName: "picture-in-cell-wrong-column.xlsx",
+    });
+  });
+
+  const webImageWorkbook = rewriteWorkbookEntry(
+    inCellWorkbook,
+    "xl/richData/rdrichvaluestructure.xml",
+    (xml) => xml.replace('t="_localImage"', 't="_webimage"'),
+  );
+  await expectAsyncCode("WORKBOOK_RICH_VALUE_IMAGE_UNSUPPORTED", () =>
+    parseProductBatchImportPackage(webImageWorkbook, {
+      fileName: "picture-in-cell-web-image.xlsx",
+    }),
+  );
+
+  expectWorkbookCode("WORKBOOK_ACTIVE_CONTENT_REJECTED", () =>
+    parseProductBatchWorkbook(inCellWorkbook),
+  );
+
+  const googleSheetsEmptyDrawingWorkbook =
+    addGoogleSheetsEmptyDrawingContainers(embeddedWorkbook);
+  const googleSheetsEmbeddedPackage = await parseProductBatchImportPackage(
+    googleSheetsEmptyDrawingWorkbook,
+    { fileName: "google-sheets-embedded.xlsx" },
+  );
+  assert.equal(googleSheetsEmbeddedPackage.images.entries.length, 3);
+  assert.equal(googleSheetsEmbeddedPackage.workbook.masterRows.length, 2);
+  assert.equal(googleSheetsEmbeddedPackage.workbook.itemRows.length, 3);
+
+  await expectAsyncCode("WORKBOOK_EMBEDDED_IMAGE_TEXT_CONFLICT", async () => {
+    const conflicting = buildEmbeddedImageWorkbookFixture(validWorkbook, [
+      { sheetName: "PRODUCT_MASTERS", rowNumber: 2, columnIndex: 7, data: jpeg, extension: ".jpg" },
+    ]);
+    await parseProductBatchImportPackage(conflicting, { fileName: "conflict.xlsx" });
+  });
+
+  await expectAsyncCode("WORKBOOK_EMBEDDED_IMAGE_LOCATION_INVALID", async () => {
+    const wrongColumn = buildEmbeddedImageWorkbookFixture(embeddedBase, [
+      { sheetName: "PRODUCT_MASTERS", rowNumber: 2, columnIndex: 6, data: jpeg, extension: ".jpg" },
+    ]);
+    await parseProductBatchImportPackage(wrongColumn, { fileName: "wrong-column.xlsx" });
+  });
 
   const googleSheetsStyleWorkbook = rewriteWorkbookContentTypes(validWorkbook, (xml) =>
     xml.replace(
@@ -229,7 +474,10 @@ async function main() {
   console.log("- Missing/invalid image ditolak; unused image menjadi warning.");
   console.log("- Formula, external hyperlink, hidden sheet, unsupported template, dan over-row ditolak.");
   console.log("- XLSX valid dengan urutan atribut OOXML berbeda tetap diterima.");
-  console.log("- Drawing XML tanpa media/external relationship diterima; embedded media/external content tetap ditolak.");
+  console.log("- ZIP existing tetap kompatibel; single XLSX DrawingML dan local Picture in Cell dipetakan ke row/cell yang exact.");
+  console.log("- Picture in Cell wrong-column/_webimage serta embedded image bercampur filename text ditolak deterministic.");
+  console.log("- Empty drawing container ala Google Sheets pada METADATA/INSTRUCTIONS diterima tanpa melonggarkan lokasi image.");
+  console.log("- Drawing XML tanpa media/external relationship diterima; embedded media pada mode ZIP/external content tetap ditolak.");
 }
 
 void main();

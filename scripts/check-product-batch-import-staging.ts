@@ -45,7 +45,8 @@ assert.ok(!service.includes("transaction.insert(itemBarcodes)"));
 assert.ok(!service.includes("transaction.insert(inventoryMovements)"));
 
 assert.ok(route.includes("request.body.getReader()"));
-assert.ok(route.includes("PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes"));
+assert.ok(route.includes("getProductBatchImportUploadLimit(fileName)"));
+assert.ok(route.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
 assert.ok(route.includes("CROSS_ORIGIN_REJECTED"));
 assert.ok(route.includes("getCurrentAuth()"));
 assert.ok(route.includes('hasPermission(auth, "products.batch_import")'));
@@ -56,7 +57,7 @@ assert.ok(storage.includes("product-batch-import"));
 assert.ok(storage.includes('CacheControl: "private, no-store"'));
 assert.ok(storage.includes("deleteProductBatchImportStagingFiles"));
 assert.ok(action.includes("cancelProductBatchImportSession"));
-assert.ok(page.includes("Upload & validasi ZIP"));
+assert.ok(page.includes("Upload & validasi ZIP/XLSX"));
 assert.ok(sessionActions.includes("cancelProductBatchImportSessionAction"));
 assert.ok(sessionActions.includes("Batalkan staging"));
 
@@ -65,7 +66,7 @@ assert.ok(itemAction.includes("willHaveEffectiveImage"));
 assert.ok(itemAction.includes("foto aktual atau foto katalog Product Master"));
 
 console.log("Pemeriksaan Product Batch Import staging berhasil.");
-console.log("- Upload raw ZIP bounded + same-origin/auth guard tersedia.");
+console.log("- Upload raw ZIP/XLSX bounded + same-origin/auth guard tersedia.");
 console.log("- Duplicate guard, session transitions, staging rows/media, cancel/expiry cleanup tersedia.");
 console.log("- 2B.4 tidak menyentuh product master/item/barcode/inventory tables.");
 console.log("- Manual Product Item effective-image rule sudah selaras dengan contract batch.");

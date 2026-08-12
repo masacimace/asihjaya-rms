@@ -52,7 +52,7 @@ export default async function ProductBatchImportPage() {
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
               Download template resmi, isi Product Master dan item fisik, lalu
-              siapkan foto dalam struktur ZIP yang dijelaskan di workbook.
+              pilih metode ZIP + folder foto atau satu file XLSX dengan gambar embedded.
               Identifier teknis seperti kode master, SKU, barcode, dan QR dibuat
               otomatis oleh sistem saat proses commit.
             </p>
@@ -92,10 +92,9 @@ export default async function ProductBatchImportPage() {
           <div className="grid size-10 place-items-center rounded-xl bg-neutral-100 text-neutral-700">
             <ImageIcon className="size-5" />
           </div>
-          <h2 className="mt-4 font-semibold text-neutral-950">2. Siapkan foto</h2>
+          <h2 className="mt-4 font-semibold text-neutral-950">2. Pilih sumber foto</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            Foto master masuk ke masters/. Foto item fisik opsional masuk
-            ke physical/ dan dapat kosong untuk memakai foto master.
+            Gunakan folder masters/ + physical/ pada metode ZIP, atau embed gambar langsung pada cell image untuk metode single XLSX.
           </p>
         </article>
 
@@ -103,9 +102,9 @@ export default async function ProductBatchImportPage() {
           <div className="grid size-10 place-items-center rounded-xl bg-neutral-100 text-neutral-700">
             <FolderArchive className="size-5" />
           </div>
-          <h2 className="mt-4 font-semibold text-neutral-950">3. Buat satu ZIP</h2>
+          <h2 className="mt-4 font-semibold text-neutral-950">3. Upload satu file</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            products.xlsx, masters/, dan physical/ berada langsung di root ZIP. Jangan compress folder induk batch.
+            Upload paket .zip existing atau file .xlsx embedded langsung. Keduanya memakai preview dan atomic commit yang sama.
           </p>
         </article>
       </section>
@@ -152,7 +151,8 @@ export default async function ProductBatchImportPage() {
           <dl className="mt-4 space-y-3 text-sm">
             {[
               ["ZIP upload", formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes)],
-              ["Workbook", formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.workbookBytes)],
+              ["Single XLSX", formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.xlsxUploadBytes)],
+              ["Workbook dalam ZIP", formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.workbookBytes)],
               ["Product Master", `${PRODUCT_BATCH_IMPORT_LIMITS.masterRows} baris`],
               ["Item fisik", `${PRODUCT_BATCH_IMPORT_LIMITS.itemRows} baris`],
               ["Satu image", formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.imageBytes)],

@@ -3,6 +3,13 @@ export const PRODUCT_BATCH_IMPORT_TYPE = "master_and_physical_create" as const;
 export const PRODUCT_BATCH_IMPORT_TEMPLATE_FILENAME =
   "asihjaya-product-batch-template-v1.xlsx";
 
+export const PRODUCT_BATCH_IMPORT_PACKAGE_KINDS = [
+  "zip",
+  "xlsx_embedded",
+] as const;
+export type ProductBatchImportPackageKind =
+  (typeof PRODUCT_BATCH_IMPORT_PACKAGE_KINDS)[number];
+
 export const PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT = {
   workbookPath: "products.xlsx",
   masterDirectory: "masters/",
@@ -79,6 +86,7 @@ export const PRODUCT_BATCH_IMPORT_MAINTENANCE = {
 
 export const PRODUCT_BATCH_IMPORT_LIMITS = {
   zipUploadBytes: 100 * 1024 * 1024,
+  xlsxUploadBytes: 100 * 1024 * 1024,
   workbookBytes: 5 * 1024 * 1024,
   masterRows: 250,
   itemRows: 500,
@@ -88,6 +96,8 @@ export const PRODUCT_BATCH_IMPORT_LIMITS = {
   archiveEntryNameBytes: 512,
   workbookArchiveEntries: 256,
   workbookUncompressedBytes: 32 * 1024 * 1024,
+  embeddedWorkbookArchiveEntries: 2_000,
+  embeddedWorkbookUncompressedBytes: 250 * 1024 * 1024,
   workbookCellTextChars: 16_384,
   workbookMetadataRows: 20,
   workbookInstructionRows: 100,

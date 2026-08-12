@@ -124,21 +124,34 @@ function assertPermission(auth: AuthContext, permission: string) {
 
 export function normalizeProductBatchImportFileName(value: string) {
   const normalized = value.normalize("NFKC").trim();
+  const lower = normalized.toLocaleLowerCase("en-US");
   if (
     !normalized ||
     normalized.length > 255 ||
     normalized.includes("/") ||
     normalized.includes("\\") ||
     normalized.startsWith(".") ||
-    !normalized.toLocaleLowerCase("en-US").endsWith(".zip")
+    (!lower.endsWith(".zip") && !lower.endsWith(".xlsx"))
   ) {
     throw serviceError(
       "UPLOAD_FILE_NAME_INVALID",
-      "Nama file upload harus berupa nama ZIP sederhana maksimal 255 karakter.",
+      "Nama file upload harus berupa nama .zip atau .xlsx sederhana maksimal 255 karakter.",
       400,
     );
   }
   return normalized;
+}
+
+export function getProductBatchImportUploadLimit(fileName: string) {
+  return fileName.toLocaleLowerCase("en-US").endsWith(".xlsx")
+    ? PRODUCT_BATCH_IMPORT_LIMITS.xlsxUploadBytes
+    : PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes;
+}
+
+export function getProductBatchImportUploadContentType(fileName: string) {
+  return fileName.toLocaleLowerCase("en-US").endsWith(".xlsx")
+    ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    : "application/zip";
 }
 
 async function findDuplicateSession(
@@ -250,9 +263,11 @@ function mediaRowsForPackage({
         }),
         finalKey: null,
         status: "validated" as const,
-        sourceEntry: parsed.archive.imageEntries.find(
-          (archiveEntry) => archiveEntry.path === entry.archivePath,
-        ),
+        sourceBytes: entry.sourceBytes ?? null,
+        sourceEntry:
+          parsed.archive?.imageEntries.find(
+            (archiveEntry) => archiveEntry.path === entry.archivePath,
+          ) ?? null,
       },
     ];
   });
@@ -261,10 +276,12 @@ function mediaRowsForPackage({
 async function stageFiles({
   archiveBuffer,
   archiveStorageKey,
+  archiveContentType,
   mediaRows,
 }: {
   archiveBuffer: Buffer;
   archiveStorageKey: string;
+  archiveContentType: string;
   mediaRows: ReturnType<typeof mediaRowsForPackage>;
 }) {
   const createdKeys: string[] = [];
@@ -272,22 +289,22 @@ async function stageFiles({
     await storeProductBatchImportStagingFile({
       key: archiveStorageKey,
       buffer: archiveBuffer,
-      contentType: "application/zip",
+      contentType: archiveContentType,
     });
     createdKeys.push(archiveStorageKey);
 
     for (const media of mediaRows) {
-      if (!media.sourceEntry) {
+      const bytes = media.sourceBytes ??
+        (media.sourceEntry
+          ? extractProductBatchArchiveEntry(archiveBuffer, media.sourceEntry)
+          : null);
+      if (!bytes) {
         throw serviceError(
           "MEDIA_SOURCE_MISSING",
-          `Archive entry untuk media ${media.archivePath} tidak ditemukan.`,
+          `Source media ${media.archivePath} tidak ditemukan pada upload package.`,
           500,
         );
       }
-      const bytes = extractProductBatchArchiveEntry(
-        archiveBuffer,
-        media.sourceEntry,
-      );
       await storeProductBatchImportStagingFile({
         key: media.stagingKey,
         buffer: bytes,
@@ -350,16 +367,12 @@ async function createProductBatchImportSessionInternal({
   assertPermission(auth, "products.batch_import");
   const normalizedFileName = normalizeProductBatchImportFileName(fileName);
 
-  if (
-    archiveBuffer.length <= 0 ||
-    archiveBuffer.length > PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes
-  ) {
+  const uploadLimit = getProductBatchImportUploadLimit(normalizedFileName);
+  if (archiveBuffer.length <= 0 || archiveBuffer.length > uploadLimit) {
     throw serviceError(
       "UPLOAD_SIZE_INVALID",
-      "Ukuran ZIP harus lebih dari 0 dan maksimal 100 MB.",
-      archiveBuffer.length > PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes
-        ? 413
-        : 400,
+      "Ukuran file harus lebih dari 0 dan maksimal 100 MB.",
+      archiveBuffer.length > uploadLimit ? 413 : 400,
     );
   }
 
@@ -375,11 +388,13 @@ async function createProductBatchImportSessionInternal({
     );
   }
 
-  const parsed = await parseProductBatchImportPackage(archiveBuffer);
-  if (parsed.archive.archiveSha256 !== fileSha256) {
+  const parsed = await parseProductBatchImportPackage(archiveBuffer, {
+    fileName: normalizedFileName,
+  });
+  if (parsed.fileSha256 !== fileSha256) {
     throw serviceError(
-      "ARCHIVE_HASH_MISMATCH",
-      "SHA-256 archive berubah selama parsing.",
+      "PACKAGE_HASH_MISMATCH",
+      "SHA-256 file berubah selama parsing.",
       500,
     );
   }
@@ -419,6 +434,7 @@ async function createProductBatchImportSessionInternal({
   const createdStorageKeys = await stageFiles({
     archiveBuffer,
     archiveStorageKey,
+    archiveContentType: getProductBatchImportUploadContentType(normalizedFileName),
     mediaRows: stagedMedia,
   });
 
@@ -541,7 +557,8 @@ async function createProductBatchImportSessionInternal({
 
       if (stagedMedia.length > 0) {
         await transaction.insert(productBatchImportMedia).values(
-          stagedMedia.map(({ sourceEntry, ...media }) => {
+          stagedMedia.map(({ sourceBytes, sourceEntry, ...media }) => {
+            void sourceBytes;
             void sourceEntry;
             return media;
           }),
@@ -575,6 +592,7 @@ async function createProductBatchImportSessionInternal({
           fileSha256,
           fileSizeBytes: archiveBuffer.length,
           templateVersion: PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION,
+          packageKind: parsed.packageKind,
           status: finalStatus,
           totalMasterRows: parsed.workbook.masterRows.length,
           totalItemRows: parsed.workbook.itemRows.length,

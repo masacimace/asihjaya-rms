@@ -50,9 +50,13 @@ async function main() {
   expect(actions, 'name="confirmCommit"', "explicit irreversible confirmation", problems);
   expect(upload, "router.push(`/admin/produk/import/${payload.session.id}`)", "persistent preview redirect", problems);
   expect(upload, "Buka session existing", "duplicate session recovery", problems);
-  expect(upload, "Struktur ZIP yang benar", "operator ZIP structure guidance", problems);
+  expect(upload, "Metode A — ZIP + folder foto", "operator ZIP method guidance", problems);
+  expect(upload, "Metode B — Single XLSX + gambar embedded", "operator embedded XLSX guidance", problems);
   expect(upload, "Compress isi folder batch", "parent-folder ZIP guidance", problems);
+  expect(upload, "Upload & validasi ZIP/XLSX", "dual upload action", problems);
   expect(upload, "Google Sheets", "Google Sheets guidance", problems);
+  expect(upload, "Insert image in cell", "Google Sheets Picture in Cell guidance", problems);
+  expect(upload, "Place in Cell", "Microsoft Excel Picture in Cell guidance", problems);
   expect(upload, "Cara memperbaiki", "friendly error remediation", problems);
   expect(upload, "Detail teknis", "technical error disclosure", problems);
   expect(upload, "PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.masterDirectory", "root master image folder", problems);

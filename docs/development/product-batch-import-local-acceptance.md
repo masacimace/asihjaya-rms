@@ -1,4 +1,4 @@
-# Product Batch Import — Local Acceptance Rehearsal 2B.10
+# Product Batch Import — Local Acceptance Rehearsal 2B.10 + 2B.10C
 
 Status: final local acceptance gate sebelum 2B.11 Deployment VPS dan production acceptance.
 
@@ -242,6 +242,55 @@ Product Batch Import tidak boleh merusak workflow lama. Lakukan smoke test singk
 ```
 
 Barcode legacy tidak boleh dimasukkan melalui Product Batch Import.
+
+---
+
+
+## Amendment 2B.10C — Dual upload acceptance
+
+2B.10C menambah ingress kedua tanpa mengubah schema atau downstream commit contract:
+
+```text
+Metode A: .zip → products.xlsx + masters/ + physical/
+Metode B: .xlsx → local Picture in Cell atau DrawingML picture over cells pada image cell
+                    ↓
+             validation / preview / commit yang sama
+```
+
+Fresh DB rehearsal 2B.10 yang sudah lulus **tidak perlu di-reset ulang hanya karena amendment ini**. Jalankan automated disposable integration suite dan smoke test browser kedua metode pada local DB aktif.
+
+Checklist single XLSX:
+
+```text
+[ ] template resmi v1 tetap dapat digunakan
+[ ] primary_image text dikosongkan lalu satu Picture in Cell ditempatkan pada cell image row master (recommended)
+[ ] minimal satu physical_image embedded terbaca sebagai physical
+[ ] minimal satu physical_image kosong memakai master fallback
+[ ] upload .xlsx langsung tanpa ZIP menjadi ready
+[ ] preview thumbnail master/physical/fallback benar
+[ ] commit completed dan generated identifier/barcode tetap normal
+[ ] barcode item available ditemukan POS
+[ ] result XLSX dan label flow tidak berubah
+[ ] nama file text + embedded picture ditolak
+[ ] picture pada kolom/row yang salah ditolak
+[ ] ZIP canonical existing tetap bekerja tanpa regression
+```
+
+Local `Picture in Cell` sekarang didukung dan direkomendasikan; standard picture over cells tetap kompatibel. Tetap jangan memakai formula `IMAGE()`/web image, linked image, chart, shape, rich-data non-local-image, macro, ActiveX/OLE, atau external relationship. Smoke test wajib mencakup file hasil Google Sheets `Insert image in cell` dan, bila tersedia, Microsoft Excel `Place in Cell`, selain regression metode ZIP.
+
+Automated delta gate:
+
+```powershell
+npm run check:product-batch-parser
+npm run check:product-batch-security
+npm run check:product-batch-import
+npm run test:product-batch:local
+npm run check:product-batch-regression
+npm run typecheck
+npm run lint
+npm run routes:check
+npm run build:clean
+```
 
 ---
 

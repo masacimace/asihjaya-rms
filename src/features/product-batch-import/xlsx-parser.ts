@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
 
 import * as XLSX from "xlsx";
 
@@ -23,12 +24,12 @@ const BLOCKED_XLSX_PATH_PREFIXES = [
   "xl/charts/",
   "xl/embeddings/",
   "xl/externalLinks/",
-  "xl/media/",
   "xl/oleObjects/",
   "xl/queryTables/",
   "xl/webextensions/",
 ] as const;
 const BLOCKED_XLSX_EXACT_PATHS = new Set([
+  "xl/cellimages.xml",
   "xl/connections.xml",
   "xl/vbaProject.bin",
 ]);
@@ -113,13 +114,181 @@ function getExternalRelationshipTarget(relationshipsXml: string): string | null 
   return null;
 }
 
-function inspectXlsxContainer(buffer: Buffer): void {
+type WorkbookRelationship = {
+  id: string;
+  type: string;
+  target: string;
+};
+
+function normalizeRelationshipTarget(sourcePartPath: string, target: string) {
+  if (!target || target.includes("\\") || target.includes("\0")) {
+    throw workbookError(
+      "WORKBOOK_RELATIONSHIP_INVALID",
+      `Target relationship tidak valid pada ${sourcePartPath}.`,
+    );
+  }
+  if (
+    target.startsWith("/") ||
+    /^[A-Za-z]:/.test(target) ||
+    /^[a-z][a-z0-9+.-]*:/i.test(target)
+  ) {
+    throw workbookError(
+      "WORKBOOK_RELATIONSHIP_INVALID",
+      `Target relationship absolute/external ditolak pada ${sourcePartPath}: ${target}.`,
+    );
+  }
+  const resolved = path.posix.normalize(
+    path.posix.join(path.posix.dirname(sourcePartPath), target),
+  );
+  if (
+    !resolved ||
+    resolved === "." ||
+    resolved === ".." ||
+    resolved.startsWith("../") ||
+    resolved.includes("/../")
+  ) {
+    throw workbookError(
+      "WORKBOOK_RELATIONSHIP_INVALID",
+      `Target relationship keluar dari package OOXML: ${sourcePartPath} -> ${target}.`,
+    );
+  }
+  return resolved;
+}
+
+function parseWorkbookRelationships(xml: string): Map<string, WorkbookRelationship> {
+  const result = new Map<string, WorkbookRelationship>();
+  const relationshipTags =
+    xml.match(/<(?:[A-Za-z_][\w.-]*:)?Relationship\b[^>]*>/gi) ?? [];
+  for (const tag of relationshipTags) {
+    const id = readXmlAttribute(tag, "Id");
+    const type = readXmlAttribute(tag, "Type");
+    const target = readXmlAttribute(tag, "Target");
+    if (!id || !type || !target || result.has(id)) {
+      throw workbookError(
+        "WORKBOOK_RELATIONSHIP_INVALID",
+        "Relationship workbook tidak lengkap atau duplicate.",
+      );
+    }
+    result.set(id, { id, type, target });
+  }
+  return result;
+}
+
+function collectRichValuePlaceholderCells({
+  buffer,
+  inspection,
+}: {
+  buffer: Buffer;
+  inspection: ReturnType<typeof inspectStrictZipArchive>;
+}) {
+  const workbookEntry = inspection.entries.find(
+    (entry) => entry.path === "xl/workbook.xml" && !entry.isDirectory,
+  );
+  const relationshipsEntry = inspection.entries.find(
+    (entry) => entry.path === "xl/_rels/workbook.xml.rels" && !entry.isDirectory,
+  );
+  if (!workbookEntry || !relationshipsEntry) {
+    throw workbookError(
+      "WORKBOOK_OOXML_INVALID",
+      "Relationship workbook XLSX tidak lengkap.",
+    );
+  }
+
+  const workbookXml = extractStrictZipEntry(buffer, workbookEntry).toString("utf8");
+  const workbookRelationships = parseWorkbookRelationships(
+    extractStrictZipEntry(buffer, relationshipsEntry).toString("utf8"),
+  );
+  const sheetTags = workbookXml.match(/<(?:[A-Za-z_][\w.-]*:)?sheet\b[^>]*>/gi) ?? [];
+  const placeholders = new Set<string>();
+
+  for (const sheetTag of sheetTags) {
+    const sheetName = readXmlAttribute(sheetTag, "name");
+    const relationshipId = readXmlAttribute(sheetTag, "r:id");
+    if (!sheetName || !relationshipId) {
+      throw workbookError(
+        "WORKBOOK_OOXML_INVALID",
+        "Definisi worksheet pada xl/workbook.xml tidak lengkap.",
+      );
+    }
+    const relationship = workbookRelationships.get(relationshipId);
+    if (!relationship || !relationship.type.endsWith("/worksheet")) {
+      throw workbookError(
+        "WORKBOOK_OOXML_INVALID",
+        `Relationship worksheet ${sheetName} tidak valid.`,
+      );
+    }
+    const worksheetPath = normalizeRelationshipTarget(
+      "xl/workbook.xml",
+      relationship.target,
+    );
+    const worksheetEntry = inspection.entries.find(
+      (entry) => entry.path === worksheetPath && !entry.isDirectory,
+    );
+    if (!worksheetEntry) {
+      throw workbookError(
+        "WORKBOOK_OOXML_INVALID",
+        `Worksheet ${sheetName} tidak ditemukan.`,
+      );
+    }
+    const worksheetXml = extractStrictZipEntry(buffer, worksheetEntry).toString("utf8");
+    const cellTags = worksheetXml.match(/<(?:[A-Za-z_][\w.-]*:)?c\b[^>]*>/gi) ?? [];
+    for (const cellTag of cellTags) {
+      const vmText = readXmlAttribute(cellTag, "vm");
+      if (vmText === null) continue;
+      const vm = Number(vmText);
+      const address = readXmlAttribute(cellTag, "r");
+      if (!Number.isSafeInteger(vm) || vm <= 0 || !address) {
+        throw workbookError(
+          "WORKBOOK_RICH_VALUE_INVALID",
+          `Rich-value cell tidak valid pada worksheet ${sheetName}.`,
+        );
+      }
+      let decoded: XLSX.CellAddress;
+      try {
+        decoded = XLSX.utils.decode_cell(address);
+      } catch (error) {
+        throw workbookError(
+          "WORKBOOK_RICH_VALUE_INVALID",
+          `Alamat rich-value cell tidak valid pada ${sheetName}!${address}.`,
+          error,
+        );
+      }
+      const validTarget =
+        (sheetName === "PRODUCT_MASTERS" && decoded.r >= 1 && decoded.c === 7) ||
+        (sheetName === "PHYSICAL_PRODUCTS" && decoded.r >= 1 && decoded.c === 16);
+      if (!validTarget) {
+        throw workbookError(
+          "WORKBOOK_EMBEDDED_IMAGE_LOCATION_INVALID",
+          `Picture in Cell hanya boleh berada pada primary_image atau physical_image, bukan ${sheetName}!${address}.`,
+        );
+      }
+      placeholders.add(`${sheetName}!${address.toUpperCase()}`);
+    }
+  }
+
+  return placeholders;
+}
+
+export type ProductBatchWorkbookParseOptions = {
+  allowEmbeddedImages?: boolean;
+};
+
+function inspectXlsxContainer(
+  buffer: Buffer,
+  options: ProductBatchWorkbookParseOptions,
+): Set<string> {
   let inspection;
   try {
     inspection = inspectStrictZipArchive(buffer, {
-      maxArchiveBytes: PRODUCT_BATCH_IMPORT_LIMITS.workbookBytes,
-      maxEntries: PRODUCT_BATCH_IMPORT_LIMITS.workbookArchiveEntries,
-      maxUncompressedBytes: PRODUCT_BATCH_IMPORT_LIMITS.workbookUncompressedBytes,
+      maxArchiveBytes: options.allowEmbeddedImages
+        ? PRODUCT_BATCH_IMPORT_LIMITS.xlsxUploadBytes
+        : PRODUCT_BATCH_IMPORT_LIMITS.workbookBytes,
+      maxEntries: options.allowEmbeddedImages
+        ? PRODUCT_BATCH_IMPORT_LIMITS.embeddedWorkbookArchiveEntries
+        : PRODUCT_BATCH_IMPORT_LIMITS.workbookArchiveEntries,
+      maxUncompressedBytes: options.allowEmbeddedImages
+        ? PRODUCT_BATCH_IMPORT_LIMITS.embeddedWorkbookUncompressedBytes
+        : PRODUCT_BATCH_IMPORT_LIMITS.workbookUncompressedBytes,
       maxFileNameBytes: PRODUCT_BATCH_IMPORT_LIMITS.archiveEntryNameBytes,
     });
   } catch (error) {
@@ -158,14 +327,16 @@ function inspectXlsxContainer(buffer: Buffer): void {
   for (const entry of inspection.entries) {
     if (
       BLOCKED_XLSX_EXACT_PATHS.has(entry.path) ||
-      BLOCKED_XLSX_PATH_PREFIXES.some((prefix) => entry.path.startsWith(prefix))
+      BLOCKED_XLSX_PATH_PREFIXES.some((prefix) => entry.path.startsWith(prefix)) ||
+      (!options.allowEmbeddedImages && entry.path.startsWith("xl/media/")) ||
+      (!options.allowEmbeddedImages && entry.path.startsWith("xl/richData/"))
     ) {
       throw workbookError(
         "WORKBOOK_ACTIVE_CONTENT_REJECTED",
         `Workbook mengandung embedded/active/external content yang tidak diizinkan: ${entry.path}.`,
       );
     }
-    if (entry.isDirectory) continue;
+    if (entry.isDirectory || !entry.path.endsWith(".rels")) continue;
 
     let extracted: Buffer;
     try {
@@ -177,16 +348,18 @@ function inspectXlsxContainer(buffer: Buffer): void {
       throw error;
     }
 
-    if (entry.path.endsWith(".rels")) {
-      const externalTarget = getExternalRelationshipTarget(extracted.toString("utf8"));
-      if (externalTarget) {
-        throw workbookError(
-          "WORKBOOK_ACTIVE_CONTENT_REJECTED",
-          `Workbook mengandung external relationship yang tidak diizinkan: ${entry.path} -> ${externalTarget}.`,
-        );
-      }
+    const externalTarget = getExternalRelationshipTarget(extracted.toString("utf8"));
+    if (externalTarget) {
+      throw workbookError(
+        "WORKBOOK_ACTIVE_CONTENT_REJECTED",
+        `Workbook mengandung external relationship yang tidak diizinkan: ${entry.path} -> ${externalTarget}.`,
+      );
     }
   }
+
+  return options.allowEmbeddedImages
+    ? collectRichValuePlaceholderCells({ buffer, inspection })
+    : new Set<string>();
 }
 
 function normalizeText(value: string): string {
@@ -316,11 +489,13 @@ function parseDataRows<T extends ParsedProductBatchMasterRow | ParsedProductBatc
   sheetName,
   headers,
   maxRows,
+  richValuePlaceholders,
 }: {
   worksheet: XLSX.WorkSheet;
   sheetName: string;
   headers: readonly string[];
   maxRows: number;
+  richValuePlaceholders: ReadonlySet<string>;
 }): T[] {
   const reference = getFullReference(worksheet);
   if (!reference) return [];
@@ -332,6 +507,7 @@ function parseDataRows<T extends ParsedProductBatchMasterRow | ParsedProductBatc
   for (let rowIndex = 1; rowIndex <= range.e.r; rowIndex += 1) {
     const rawValues = headers.map((_, columnIndex) => {
       const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+      if (richValuePlaceholders.has(`${sheetName}!${address}`)) return null;
       return cellValue(worksheet[address] as XLSX.CellObject | undefined, sheetName, address);
     });
     if (isBlankRow(rawValues)) continue;
@@ -420,11 +596,22 @@ function assertInstructionsSheet(worksheet: XLSX.WorkSheet): void {
   assertNoFormulaOrHyperlink(worksheet, "INSTRUCTIONS");
 }
 
-export function parseProductBatchWorkbook(buffer: Buffer): ParsedProductBatchWorkbook {
-  if (buffer.length === 0 || buffer.length > PRODUCT_BATCH_IMPORT_LIMITS.workbookBytes) {
-    throw workbookError("WORKBOOK_SIZE_INVALID", "Ukuran products.xlsx kosong atau melebihi batas 5 MB.");
+export function parseProductBatchWorkbook(
+  buffer: Buffer,
+  options: ProductBatchWorkbookParseOptions = {},
+): ParsedProductBatchWorkbook {
+  const maxBytes = options.allowEmbeddedImages
+    ? PRODUCT_BATCH_IMPORT_LIMITS.xlsxUploadBytes
+    : PRODUCT_BATCH_IMPORT_LIMITS.workbookBytes;
+  if (buffer.length === 0 || buffer.length > maxBytes) {
+    throw workbookError(
+      "WORKBOOK_SIZE_INVALID",
+      options.allowEmbeddedImages
+        ? "Ukuran XLSX embedded kosong atau melebihi batas 100 MB."
+        : "Ukuran products.xlsx kosong atau melebihi batas 5 MB.",
+    );
   }
-  inspectXlsxContainer(buffer);
+  const richValuePlaceholders = inspectXlsxContainer(buffer, options);
 
   let workbook: XLSX.WorkBook;
   try {
@@ -464,12 +651,14 @@ export function parseProductBatchWorkbook(buffer: Buffer): ParsedProductBatchWor
     sheetName: "PRODUCT_MASTERS",
     headers: PRODUCT_BATCH_IMPORT_MASTER_HEADERS,
     maxRows: PRODUCT_BATCH_IMPORT_LIMITS.masterRows,
+    richValuePlaceholders,
   });
   const itemRows = parseDataRows<ParsedProductBatchItemRow>({
     worksheet: itemSheet,
     sheetName: "PHYSICAL_PRODUCTS",
     headers: PRODUCT_BATCH_IMPORT_ITEM_HEADERS,
     maxRows: PRODUCT_BATCH_IMPORT_LIMITS.itemRows,
+    richValuePlaceholders,
   });
   assertInstructionsSheet(instructionsSheet);
 

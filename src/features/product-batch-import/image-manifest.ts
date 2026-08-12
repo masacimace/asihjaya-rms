@@ -5,7 +5,6 @@ import sharp from "sharp";
 import { PRODUCT_BATCH_IMPORT_LIMITS } from "./contracts";
 import {
   extractProductBatchArchiveEntry,
-  type ProductBatchArchiveImageEntry,
   type ProductBatchArchiveInspection,
 } from "./archive-parser";
 import type { ParsedProductBatchWorkbook } from "./xlsx-parser";
@@ -29,6 +28,7 @@ export type ProductBatchImageManifestEntry = {
   width: number;
   height: number;
   references: ProductBatchImageReference[];
+  sourceBytes?: Buffer;
 };
 
 export type ProductBatchImageManifestWarning = {
@@ -115,20 +115,29 @@ function expectedContentType(fileName: string): ProductBatchImageContentType | n
   return null;
 }
 
-async function validateImageBytes(
-  buffer: Buffer,
-  entry: ProductBatchArchiveImageEntry,
-): Promise<Omit<ProductBatchImageManifestEntry, "references">> {
+export async function validateProductBatchImageBytes({
+  buffer,
+  archivePath,
+  entityKind,
+  fileName,
+  normalizedFileName,
+}: {
+  buffer: Buffer;
+  archivePath: string;
+  entityKind: "master" | "physical";
+  fileName: string;
+  normalizedFileName: string;
+}): Promise<Omit<ProductBatchImageManifestEntry, "references" | "sourceBytes">> {
   if (buffer.length === 0 || buffer.length > PRODUCT_BATCH_IMPORT_LIMITS.imageBytes) {
-    throw imageError("IMAGE_SIZE_INVALID", `Ukuran image tidak valid: ${entry.path}.`);
+    throw imageError("IMAGE_SIZE_INVALID", `Ukuran image tidak valid: ${archivePath}.`);
   }
 
   const detected = detectImageContentType(buffer);
-  const expected = expectedContentType(entry.fileName);
+  const expected = expectedContentType(fileName);
   if (!detected || !expected || detected !== expected) {
     throw imageError(
       "IMAGE_MIME_MISMATCH",
-      `Extension dan bytes image tidak cocok/unsupported: ${entry.path}.`,
+      `Extension dan bytes image tidak cocok/unsupported: ${archivePath}.`,
     );
   }
 
@@ -142,10 +151,10 @@ async function validateImageBytes(
     const width = metadata.width ?? 0;
     const height = metadata.height ?? 0;
     if (!width || !height || width * height > PRODUCT_BATCH_IMPORT_LIMITS.imageInputPixels) {
-      throw imageError("IMAGE_DIMENSIONS_INVALID", `Dimensi image tidak valid/terlalu besar: ${entry.path}.`);
+      throw imageError("IMAGE_DIMENSIONS_INVALID", `Dimensi image tidak valid/terlalu besar: ${archivePath}.`);
     }
     if ((metadata.pages ?? 1) > 1) {
-      throw imageError("IMAGE_ANIMATED_UNSUPPORTED", `Animated/multi-page image tidak didukung: ${entry.path}.`);
+      throw imageError("IMAGE_ANIMATED_UNSUPPORTED", `Animated/multi-page image tidak didukung: ${archivePath}.`);
     }
 
     await sharp(buffer, {
@@ -159,10 +168,10 @@ async function validateImageBytes(
       .toBuffer();
 
     return {
-      archivePath: entry.path,
-      entityKind: entry.imageKind,
-      fileName: entry.fileName,
-      normalizedFileName: entry.normalizedFileName,
+      archivePath,
+      entityKind,
+      fileName,
+      normalizedFileName,
       sha256: createHash("sha256").update(buffer).digest("hex"),
       contentType: detected,
       byteSize: buffer.length,
@@ -171,7 +180,7 @@ async function validateImageBytes(
     };
   } catch (error) {
     if (error instanceof ProductBatchImageError) throw error;
-    throw imageError("IMAGE_DECODE_FAILED", `Image rusak/tidak dapat didecode: ${entry.path}.`, error);
+    throw imageError("IMAGE_DECODE_FAILED", `Image rusak/tidak dapat didecode: ${archivePath}.`, error);
   }
 }
 
@@ -244,7 +253,13 @@ export async function buildProductBatchImageManifest({
 
   for (const entry of archive.imageEntries) {
     const bytes = extractProductBatchArchiveEntry(archiveBuffer, entry);
-    const validated = await validateImageBytes(bytes, entry);
+    const validated = await validateProductBatchImageBytes({
+      buffer: bytes,
+      archivePath: entry.path,
+      entityKind: entry.imageKind,
+      fileName: entry.fileName,
+      normalizedFileName: entry.normalizedFileName,
+    });
     const references =
       entry.imageKind === "master"
         ? masterReferences.get(entry.normalizedFileName) ?? []

@@ -1,6 +1,6 @@
-# Product Batch Import — Test Matrix 2B.9
+# Product Batch Import — Test Matrix 2B.9 + 2B.10C
 
-Status: implementation gate sebelum 2B.10 Local Acceptance Rehearsal.
+Status: baseline 2B.9, diamendemen 2B.10C untuk dual upload ZIP + single XLSX embedded sebelum 2B.11.
 
 Dokumen ini hanya membahas Product Batch Import. Database integration test wajib memakai PostgreSQL 17 disposable dan storage lokal khusus test; jangan arahkan runner ke database development/production yang menyimpan data bisnis.
 
@@ -39,6 +39,9 @@ Suite `tests/integration/product-batch-import-suite.ts` mencakup:
 | Failure after media promotion | no partial product + compensating media cleanup |
 | Failure after identifier allocation | no partial master/item/barcode; sequence gap diperbolehkan |
 | Concurrent double commit | tepat satu commit sukses, satu `SESSION_NOT_READY` |
+| Single XLSX embedded | local Picture in Cell atau standard DrawingML picture di `primary_image` / `physical_image` → staging media → preview → atomic commit |
+| Single XLSX master fallback | item tanpa physical picture memakai embedded Product Master image |
+| Dual ingress parity | ZIP existing dan XLSX embedded berakhir di validation/preview/commit pipeline yang sama |
 
 ## Parser/security coverage
 
@@ -50,6 +53,8 @@ npm run check:product-batch-parser
 ```
 
 Keduanya tetap menjadi source of truth untuk corrupt ZIP/XLSX, zip slip, duplicate archive entry, archive bomb, formula/hyperlink, macro/active content, unsupported template, row limits, MIME/image validation, dan archive layout contract.
+
+Untuk amendment 2B.10C, parser checker wajib membuktikan bahwa direct `.xlsx` menerima dua representation yang aman: local Picture in Cell (`_localImage`) dan standard DrawingML picture yang anchored pada image cell yang benar. Nama file text + embedded picture, wrong column/row, linked/external image, `_webimage`/rich-data non-local-image, chart/shape/object, media orphan, serta format image unsupported harus ditolak. Workbook rich-data tetap ditolak pada metode ZIP.
 
 ## Database/atomic coverage
 
@@ -101,12 +106,13 @@ Manual Product Master create dan manual Product Item create tetap perlu smoke te
 2B.9 automated suite membuktikan label hardware job dibuat dengan target/capability yang benar, tetapi tidak menggantikan acceptance Hardware Hub process nyata. Sebelum 2B.10 ditutup, ulangi minimum:
 
 1. Upload valid ZIP dari halaman admin dan refresh preview.
-2. Commit batch kecil.
-3. Scan minimal satu barcode `available` melalui POS.
-4. `Print selected` dan `Print all eligible` harus menghasilkan `print_label_sato` yang di-claim Hardware Agent/fake adapter.
-5. Download result XLSX dan buka di Microsoft Excel.
-6. Buka history completed session setelah maintenance dry-run/cleanup.
-7. Buat Product Master manual dan Product Item manual untuk memastikan flow lama tetap berfungsi.
+2. Upload valid single XLSX dengan Picture in Cell master + minimal satu physical picture; pastikan item lain dapat memakai master fallback. Ulang sekali dengan image over cells sebagai regression compatibility.
+3. Commit batch kecil.
+4. Scan minimal satu barcode `available` melalui POS.
+5. `Print selected` dan `Print all eligible` harus menghasilkan `print_label_sato` yang di-claim Hardware Agent/fake adapter.
+6. Download result XLSX dan buka di Microsoft Excel.
+7. Buka history completed session setelah maintenance dry-run/cleanup.
+8. Buat Product Master manual dan Product Item manual untuk memastikan flow lama tetap berfungsi.
 
 Printer SATO fisik tidak diperlukan untuk membuktikan claim/job lifecycle bila fake adapter digunakan. Printer fisik diperlukan pada physical acceptance untuk ukuran label, sensor/gap, darkness, dan readability barcode.
 

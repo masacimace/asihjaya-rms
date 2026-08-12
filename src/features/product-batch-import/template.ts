@@ -125,12 +125,20 @@ const instructionRows: ExportCell[][] = [
     "File ini adalah template v1. Ganti atau hapus semua baris contoh pada PRODUCT_MASTERS dan PHYSICAL_PRODUCTS sebelum membuat paket ZIP final.",
   ],
   [
-    "Struktur ZIP",
+    "Dua metode upload",
+    "Metode A: ZIP + folder foto. Metode B: upload satu file XLSX dengan gambar embedded. Keduanya memakai validation, preview, commit, result, dan label pipeline yang sama.",
+  ],
+  [
+    "Metode A - ZIP",
     `Taruh ${PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.workbookPath}, folder ${PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.masterDirectory}, dan folder ${PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.physicalDirectory} langsung di root ZIP. Foto master masuk ke ${PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.masterDirectory}; foto item fisik opsional masuk ke ${PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.physicalDirectory}. Jangan ZIP folder induknya.`,
   ],
   [
+    "Metode B - single XLSX",
+    "Kosongkan text pada primary_image/physical_image yang memakai embedded image. Direkomendasikan gunakan local Picture in Cell agar foto mengikuti cell otomatis; standard picture over cells tetap didukung. Upload .xlsx langsung tanpa membuat ZIP. Jangan gunakan linked image, IMAGE() berbasis URL, web image, chart/object, macro, ActiveX, atau OLE.",
+  ],
+  [
     "Google Sheets",
-    "Template boleh diedit di Google Sheets. Setelah selesai pilih File > Download > Microsoft Excel (.xlsx), beri nama products.xlsx, lalu masukkan ke ZIP. Jangan insert gambar ke cell dan jangan gunakan formula/hyperlink sebagai nilai bisnis.",
+    "Template boleh diedit di Google Sheets. Untuk foto pilih Insert > Image > Insert image in cell (direkomendasikan), lalu File > Download > Microsoft Excel (.xlsx). Image over cells tetap didukung. Microsoft Excel modern dapat memakai Place in Cell atau picture over cells.",
   ],
   [
     "Relasi baris",
@@ -146,11 +154,11 @@ const instructionRows: ExportCell[][] = [
   ],
   [
     "Foto Product Master",
-    "primary_image wajib dan hanya berisi nama file, misalnya MASTER-001.jpg. Jangan tulis path folder, URL, atau hyperlink.",
+    "primary_image wajib. Metode ZIP: isi basename seperti MASTER-001.jpg. Metode single XLSX: biarkan text cell kosong lalu gunakan satu local Picture in Cell (direkomendasikan) atau satu embedded picture over cells pada primary_image row tersebut.",
   ],
   [
     "Foto item fisik",
-    "physical_image boleh kosong. Jika kosong, item memakai foto Product Master sebagai fallback. Jika diisi, file tersebut wajib tersedia dan valid.",
+    "physical_image boleh kosong untuk memakai foto Product Master sebagai fallback. Metode ZIP dapat mengisi basename file; metode single XLSX dapat memakai satu local Picture in Cell atau satu embedded picture over cells pada physical_image.",
   ],
   [
     "Status master",

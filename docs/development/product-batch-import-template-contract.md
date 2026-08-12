@@ -4,7 +4,7 @@
 **Template version:** `1`
 **Import type:** `master_and_physical_create`
 **Roadmap stage:** 2B.0 contract; generator mulai dibuat pada 2B.1
-**Last amended:** 11 Agustus 2026 — 2B.5A UX & ZIP contract polish
+**Last amended:** 12 Agustus 2026 — 2B.10C dual upload + local Picture in Cell compatibility
 
 ## Tujuan
 
@@ -27,7 +27,16 @@ Operator **tidak mengisi**:
 
 `master_key` dan `row_key` hanya identifier lokal di workbook agar row mudah dihubungkan dan error mudah ditemukan.
 
-## Paket ZIP v1
+## Metode upload v1
+
+Template v1 mendukung **dua ingress method** yang berakhir pada normalized staging/validation pipeline yang sama:
+
+1. **Metode A — ZIP + folder image** (existing/canonical compatibility).
+2. **Metode B — single XLSX + embedded image** (tanpa outer ZIP/folder terpisah).
+
+Business validation, preview, atomic commit, identifier generation, result workbook, label, audit, cleanup, dan retention tidak dibedakan berdasarkan metode upload.
+
+### Metode A — Paket ZIP
 
 Nama ZIP bebas dan hanya digunakan sebagai metadata upload, contoh:
 
@@ -78,11 +87,29 @@ Fatal error:
 
 Image valid tetapi tidak pernah direferensikan row menghasilkan warning `UNUSED_IMAGE`; batch tetap dapat di-commit bila tidak ada error lain.
 
+### Metode B — Single XLSX dengan embedded image
+
+Operator meng-upload file `.xlsx` template langsung tanpa membuat outer ZIP. Data bisnis tetap memakai empat worksheet v1 yang sama.
+
+Image contract:
+
+- `PRODUCT_MASTERS.primary_image`: text cell dikosongkan lalu tepat satu local Picture in Cell (direkomendasikan) atau satu standard embedded picture over cells ditempatkan pada cell tersebut; wajib untuk setiap master.
+- `PHYSICAL_PRODUCTS.physical_image`: text cell dikosongkan lalu optional satu local Picture in Cell atau satu standard embedded picture over cells ditempatkan pada cell tersebut; bila tidak ada picture maka master fallback tetap berlaku.
+- Picture in Cell dipetakan melalui value metadata + rich value `_localImage`; picture over cells dipetakan melalui DrawingML anchor. Keduanya harus resolve tepat ke image column dan data row yang sesuai.
+- satu image cell hanya boleh mempunyai satu embedded picture dan satu media tidak boleh dipakai ulang ke row lain.
+- jangan campur filename text dan embedded picture pada image cell yang sama.
+- supported media: JPG/JPEG, PNG, WebP; max 5 MB per image dan tetap melalui MIME/decode/pixel validation existing.
+- linked/external image, formula `IMAGE()`/web image (`_webimage`), chart/shape/object, macro, ActiveX, OLE, external relationship, serta rich-data non-local-image ditolak.
+- standard DrawingML `oneCellAnchor`/`twoCellAnchor` tetap didukung sebagai compatibility fallback; local Picture in Cell direkomendasikan karena staff tidak perlu resize manual.
+
+Single XLSX tidak memperkenalkan schema/DB baru. Parser membuat synthetic internal image reference untuk normalized row sehingga validation/preview/commit downstream tetap menggunakan contract yang sama.
+
 ## Limits v1
 
 ```text
 ZIP compressed upload    : max 100 MB
-products.xlsx             : max 5 MB
+Single XLSX upload        : max 100 MB
+products.xlsx dalam ZIP   : max 5 MB
 PRODUCT_MASTERS rows      : max 250 data rows
 PHYSICAL_PRODUCTS rows    : max 500 data rows
 individual image          : max 5 MB
@@ -200,7 +227,7 @@ Tidak ada kolom `master_code` pada input v1. Product Master code dibuat server s
 | `material` | Tidak | max 80 chars |
 | `collection` | Tidak | max 120 chars |
 | `description` | Tidak | max 4.000 chars |
-| `primary_image` | Ya | basename image pada `masters/`; JPG/JPEG/PNG/WebP |
+| `primary_image` | Ya | Metode ZIP: basename pada `masters/`. Metode single XLSX: text kosong + satu local Picture in Cell (recommended) atau satu embedded picture over cells pada cell row tersebut. |
 | `status` | Tidak | `draft` atau `active`; blank = `active` |
 
 ### `master_key`
