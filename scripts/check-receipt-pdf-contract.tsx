@@ -60,7 +60,12 @@ async function renderProfile(
       margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
     });
     const contract = validateReceiptPdfBuffer(pdf, profile);
-    assert.equal(contract.pageCount, receiptCertificateSampleData.items.length);
+
+    // Full-design receipt renders one front certificate page per item plus
+    // one static back page containing transaction terms/service information.
+    const expectedPageCount =
+      Math.max(receiptCertificateSampleData.items.length, 1) + 1;
+    assert.equal(contract.pageCount, expectedPageCount);
 
     const outputPath = path.join(outputDir, `${documentProfileId}.pdf`);
     fs.writeFileSync(outputPath, pdf);
