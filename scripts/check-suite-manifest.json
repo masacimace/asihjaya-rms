@@ -8,8 +8,8 @@
     "check-hardware-agent-environment-contract.ts",
     "check-hardware-agent-lifecycle.ts",
     "check-hardware-agent-parity.ts",
-    "check-hardware-agent-provisioning.ts",
     "check-hardware-agent-provisioning-ui.ts",
+    "check-hardware-agent-provisioning.ts",
     "check-hardware-agent-request-signing.ts",
     "check-hardware-job-lease.ts",
     "check-hardware-job-payloads.ts",
@@ -37,13 +37,24 @@
     "check-pos-result-shift-view.ts",
     "check-pos-workspace-commands.ts",
     "check-pos-workspace-composition.ts",
+    "check-product-batch-import-acceptance.ts",
+    "check-product-batch-import-commit.ts",
+    "check-product-batch-import-maintenance.ts",
+    "check-product-batch-import-parser.ts",
+    "check-product-batch-import-results.ts",
+    "check-product-batch-import-security.ts",
+    "check-product-batch-import-staging.ts",
+    "check-product-batch-import-template.ts",
+    "check-product-batch-import-testing.ts",
+    "check-product-batch-import-ui.ts",
+    "check-product-batch-import-validation.ts",
     "check-production-environment.ts",
     "check-receipt-token.ts",
     "check-routes.ts",
     "check-sale-correction.ts",
     "check-settings-hub.ts",
-    "check-settlement-import.ts",
     "check-settlement-import-mobile-layout.ts",
+    "check-settlement-import.ts",
     "check-shift-reopen.ts",
     "check-telegram-admin.ts",
     "check-telegram-client.ts",
@@ -58,13 +69,14 @@
   "infrastructure": [
     "check-application-rollback.ts",
     "check-build-baseline.ts",
-    "check-database-backup.ts",
     "check-database-backup-offsite.ts",
+    "check-database-backup.ts",
     "check-database-deployment.ts",
     "check-database-migrations.ts",
     "check-deployment-automation.ts",
     "check-deployment-installation.ts",
     "check-operations-image.ts",
+    "check-product-batch-import-database.ts",
     "check-production-container.ts",
     "check-production-deployment.ts",
     "check-quality-config.ts",
@@ -72,11 +84,15 @@
     "check-telegram-operations.ts"
   ],
   "manual": [
+    "check-product-batch-import-commit-live.ts",
+    "check-product-batch-import-maintenance-live.ts",
+    "check-product-batch-import-results-live.ts",
+    "check-product-batch-import-staging-live.ts",
     "check-receipt-pdf-contract.tsx"
   ],
   "notes": {
     "blocking": "Kontrak aktif yang wajib lulus melalui quality gate otomatis.",
     "infrastructure": "Pemeriksaan konfigurasi quality gate, source hygiene, dan metadata migration.",
-    "manual": "Pemeriksaan yang memerlukan runtime khusus dan dijalankan sebelum release terkait."
+    "manual": "Pemeriksaan yang memerlukan runtime/live database, session tertentu, atau kondisi khusus dan dijalankan sebelum release terkait."
   }
 }
