@@ -10,7 +10,6 @@ import {
   Layers3,
   PackageCheck,
   Plus,
-  RefreshCw,
   Search,
   Sparkles,
   Tag,
@@ -300,15 +299,7 @@ export default async function ProductCatalogPage({
               </div>
             </div>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-              <Link
-                href={buildProductListUrl(effectivePage, filters)}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-xs font-semibold text-neutral-900 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"
-              >
-                <RefreshCw className="size-4" />
-                Refresh
-              </Link>
-
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               {canBatchImport ? (
                 <Link
                   href="/admin/produk/import"
