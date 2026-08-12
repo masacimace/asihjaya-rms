@@ -8,6 +8,7 @@ import {
   ProductBatchImportServiceError,
 } from "@/features/product-batch-import/session-service";
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
+import { serverEnv } from "@/lib/env";
 import { getClientIp } from "@/lib/http/client-ip";
 
 export const runtime = "nodejs";
@@ -18,11 +19,11 @@ function jsonError(status: number, code: string, message: string, extra = {}) {
 }
 
 function assertSameOrigin(request: Request) {
-  const requestOrigin = new URL(request.url).origin;
+  const expectedOrigin = serverEnv.APP_URL;
   const origin = request.headers.get("origin");
   const fetchSite = request.headers.get("sec-fetch-site");
 
-  if (origin && origin !== requestOrigin) {
+  if (origin && origin !== expectedOrigin) {
     throw new ProductBatchImportServiceError(
       "CROSS_ORIGIN_REJECTED",
       "Upload Product Batch Import hanya menerima request same-origin.",
