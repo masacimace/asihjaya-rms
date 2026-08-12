@@ -127,6 +127,7 @@ import {
 } from "@/features/pos/manual-payment-verification";
 import { requirePermission } from "@/lib/auth/session";
 import { isPostgresUniqueViolation } from "@/lib/db/postgres-errors";
+import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { buildReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import {
   createHardwareJobV2,
@@ -3912,6 +3913,7 @@ export async function completePosCheckoutAction(
             saleId: sale.id,
             invoiceNumber,
             requestSource: "pos.checkout",
+            renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
             reprint: false,
             requestedAt: now,
           }),
@@ -4143,6 +4145,7 @@ export async function reprintPosReceiptCertificateAction(formData: FormData) {
         saleId: sale.id,
         invoiceNumber: sale.invoiceNumber,
         requestSource: "pos.transaction_detail",
+        renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
         reprint: true,
         requestedAt: now,
       }),

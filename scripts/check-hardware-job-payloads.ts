@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1 } from "@/features/sales/documents/receipt-document-profiles";
+import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
 import {
   assertHardwareJobPayloadV2,
   buildHardwareTestPayloadV2,
@@ -50,6 +52,67 @@ assert.equal(
   `/api/sales/${saleId}/receipt-certificate?profile=receipt_a4_landscape_v1`,
 );
 assertHardwareJobPayloadV2("print_receipt_certificate", receiptPayload);
+
+const overlayReceiptPayload = buildReceiptDocumentPayloadV2({
+  saleId,
+  invoiceNumber: "INV-2026-0001",
+  requestSource: "check.hardware.job-payloads.overlay",
+  reprint: false,
+  requestedAt: new Date("2026-07-16T10:00:00.000Z"),
+  renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+});
+assert.equal(
+  overlayReceiptPayload.download.path,
+  `/api/sales/${saleId}/receipt-certificate?profile=receipt_a4_landscape_v1&mode=preprinted_overlay`,
+);
+assert.equal(
+  overlayReceiptPayload.metadata.renderMode,
+  RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+);
+assertHardwareJobPayloadV2("print_receipt_certificate", overlayReceiptPayload);
+
+const posActionsSource = readFileSync(
+  new URL("../src/app/actions/pos.ts", import.meta.url),
+  "utf8",
+);
+const adminSalesActionsSource = readFileSync(
+  new URL("../src/features/sales/admin-actions.ts", import.meta.url),
+  "utf8",
+);
+
+function assertPhysicalReceiptCallUsesOverlay(
+  source: string,
+  requestSource: string,
+) {
+  const marker = `requestSource: "${requestSource}"`;
+  const markerIndex = source.indexOf(marker);
+  assert.notEqual(
+    markerIndex,
+    -1,
+    `Receipt call ${requestSource} tidak ditemukan.`,
+  );
+
+  const callStart = source.lastIndexOf(
+    "buildReceiptDocumentPayloadV2({",
+    markerIndex,
+  );
+  const callEnd = source.indexOf("}),", markerIndex);
+  assert.ok(callStart >= 0 && callEnd > markerIndex);
+
+  const callSource = source.slice(callStart, callEnd);
+  assert.match(
+    callSource,
+    /renderMode:\s*RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY/,
+    `${requestSource} wajib mencetak overlay pada kertas nota preprinted.`,
+  );
+}
+
+assertPhysicalReceiptCallUsesOverlay(posActionsSource, "pos.checkout");
+assertPhysicalReceiptCallUsesOverlay(posActionsSource, "pos.transaction_detail");
+assertPhysicalReceiptCallUsesOverlay(
+  adminSalesActionsSource,
+  "admin.sales.detail",
+);
 
 const testDocumentPayload = buildHardwareTestPayloadV2({
   jobType: "test_document_printer",
