@@ -13,7 +13,6 @@ import { ProductBatchImportUpload } from "@/components/products/product-batch-im
 import {
   PRODUCT_BATCH_IMPORT_LIMITS,
   PRODUCT_BATCH_IMPORT_TEMPLATE_FILENAME,
-  PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION,
 } from "@/features/product-batch-import/contracts";
 import { getRecentProductBatchImportSessions } from "@/features/product-batch-import/preview-queries";
 import { requirePermission } from "@/lib/auth/session";
