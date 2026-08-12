@@ -217,7 +217,6 @@ export async function deleteProductBatchImportStagingFiles(keys: string[]) {
   return failures;
 }
 
-
 export type ProductBatchImportStagingObject = {
   key: string;
   byteSize: number;
@@ -248,7 +247,7 @@ async function listLocalOrganizationStagingObjects({
 }) {
   const root = getStorageRoot();
   const base = path.join(
-    root,
+    /* turbopackIgnore: true */ root,
     "organizations",
     organizationId,
     "product-batch-import",
@@ -256,7 +255,10 @@ async function listLocalOrganizationStagingObjects({
   const objects: ProductBatchImportStagingObject[] = [];
   let truncated = false;
 
-  const sessionEntries = await readdir(base, { withFileTypes: true }).catch(
+  const sessionEntries = await readdir(
+    /* turbopackIgnore: true */ base,
+    { withFileTypes: true },
+  ).catch(
     (error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return [];
       throw error;
@@ -265,10 +267,21 @@ async function listLocalOrganizationStagingObjects({
 
   for (const sessionEntry of sessionEntries) {
     if (!sessionEntry.isDirectory()) continue;
-    const sessionBase = path.join(base, sessionEntry.name);
-    const candidates = [path.join(sessionBase, "archive.zip")];
-    const mediaBase = path.join(sessionBase, "media");
-    const mediaEntries = await readdir(mediaBase, { withFileTypes: true }).catch(
+    const sessionBase = path.join(
+      /* turbopackIgnore: true */ base,
+      sessionEntry.name,
+    );
+    const candidates = [
+      path.join(/* turbopackIgnore: true */ sessionBase, "archive.zip"),
+    ];
+    const mediaBase = path.join(
+      /* turbopackIgnore: true */ sessionBase,
+      "media",
+    );
+    const mediaEntries = await readdir(
+      /* turbopackIgnore: true */ mediaBase,
+      { withFileTypes: true },
+    ).catch(
       (error: NodeJS.ErrnoException) => {
         if (error.code === "ENOENT") return [];
         throw error;
@@ -276,7 +289,12 @@ async function listLocalOrganizationStagingObjects({
     );
     for (const mediaEntry of mediaEntries) {
       if (mediaEntry.isFile()) {
-        candidates.push(path.join(mediaBase, mediaEntry.name));
+        candidates.push(
+          path.join(
+            /* turbopackIgnore: true */ mediaBase,
+            mediaEntry.name,
+          ),
+        );
       }
     }
 
@@ -291,7 +309,9 @@ async function listLocalOrganizationStagingObjects({
         .join("/");
       const normalized = normalizeKey(relative);
       if (!normalized) continue;
-      const metadata = await stat(absolutePath).catch(
+      const metadata = await stat(
+        /* turbopackIgnore: true */ absolutePath,
+      ).catch(
         (error: NodeJS.ErrnoException) => {
           if (error.code === "ENOENT") return null;
           throw error;
@@ -422,7 +442,13 @@ export async function getProductBatchImportStorageReport({
   }
 
   const root = getStorageRoot();
-  const filesystem = await statfs(root).catch(async () => statfs(path.dirname(root)));
+  const filesystem = await statfs(
+    /* turbopackIgnore: true */ root,
+  ).catch(async () =>
+    statfs(
+      /* turbopackIgnore: true */ path.dirname(root),
+    ),
+  );
   const diskTotalBytes = filesystem.blocks * filesystem.bsize;
   const diskAvailableBytes = filesystem.bavail * filesystem.bsize;
   const diskUsedPercent =
