@@ -14,9 +14,9 @@ const { hashCanonicalJson } = require(
 const fixtures: unknown[] = [
   {
     schemaVersion: 1,
-    templateId: "jewelry_compact_v1",
-    templateVersion: 1,
-    printerProfileId: "sato_cg408tt_jewelry_v1",
+    templateId: "jewelry_barbell_host_bold_v2",
+    templateVersion: 2,
+    printerProfileId: "sato_cg408_jewelry_barbell_host_bold_v2",
     copies: 1,
     fields: {
       sku: "SKU-001",

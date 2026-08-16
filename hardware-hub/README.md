@@ -280,45 +280,40 @@ Recovery rules:
 
 ## Label SATO
 
-Protocol v2 memisahkan template bisnis dan profile printer:
+Production memakai satu jalur SATO CG408 yang sudah lolos physical acceptance:
 
 ```text
-jewelry_compact_v1
-→ sato_cg408tt_jewelry_v1
-→ deterministic SBPL
+jewelry_barbell_host_bold_v2
+→ sato_cg408_jewelry_barbell_host_bold_v2
+→ host-rendered Arial Narrow Bold + native CODE128_B
+→ RAW Winspool
+→ SATO CG408
 ```
 
-Konfigurasi:
+Konfigurasi runtime:
 
 ```env
-LABEL_PRINTER_NAME=SATO CG408TT
-LABEL_TEMPLATE_ID=jewelry_compact_v1
-SATO_PRINTER_PROFILE=sato_cg408tt_jewelry_v1
+LABEL_PRINTER_NAME=SATO CG408
+LABEL_PRINTER_ADAPTER=fake
+SATO_LABEL_CONFIG_PATH=./config/sato-jewelry-barbell-host-bold.json
 SATO_COPIES=1
-SATO_HORIZONTAL_OFFSET_DOTS=0
-SATO_VERTICAL_OFFSET_DOTS=0
-SATO_INCLUDE_PRICE=false
-SATO_MEDIA_WIDTH_DOTS=400
-SATO_MEDIA_HEIGHT_DOTS=300
-SATO_PRINT_SPEED=
-SATO_DARKNESS=
 ```
 
-`SATO_PRINT_SPEED` dan `SATO_DARKNESS` disimpan untuk physical tuning, tetapi belum dipancarkan sebagai device-control command sampai profile diuji di outlet.
+`LABEL_PRINTER_NAME` adalah Windows printer queue name persis seperti kolom `Name` dari `Get-Printer`. Printer tidak perlu di-share. Text label dirender host sebagai monochrome bitmap menggunakan font Bold Windows, barcode tetap native CODE128 Set B, lalu seluruh SBPL dikirim lewat Winspool dengan datatype `RAW`.
 
-Jalankan golden tests:
+Contract check:
 
 ```powershell
 npm run check:sato
 ```
 
-Raw print saat ini memakai Windows printer share:
+Untuk membuat SBPL production manual:
 
-```text
-\\localhost\NAMA_SHARE_PRINTER
+```powershell
+npm run render:sato-label -- -ProductName "NAMA PRODUK" -Barcode "AJ00000006" -Weight "6.05Gr" -Purity "16K-60%" -Copies 1 -OutputFile ".\data\temp\label.sbpl"
 ```
 
-Gunakan share name dari Printer Properties → Sharing. Output fake tersedia sebagai `label.sbpl` dan `artifact.json`; metadata mencatat template, profile, DPI, ukuran media, offset, SHA-256 command, dan status physical validation.
+Layout fisik hanya bersumber dari `config/sato-jewelry-barbell-host-bold.json`. Renderer/profile SATO legacy sudah dihapus dan Hardware Hub menolak template/profile selain contract production tersebut.
 
 ## Document printer
 
@@ -364,10 +359,10 @@ docs/hardware-hub/receipt-a4-epson-profile.md
 Konfigurasi awal:
 
 ```env
-CASH_DRAWER_PRINTER_NAME=NAMA_SHARE_PRINTER_TRIGGER
+CASH_DRAWER_PRINTER_NAME=NAMA_QUEUE_PRINTER_TRIGGER
 ```
 
-Agent mengirim pulse ESC/POS melalui printer share. Fitur ini belum dianggap final sampai interface cash drawer fisik dipilih dan divalidasi.
+Agent mengirim pulse ESC/POS RAW melalui Windows printer queue. Fitur ini belum dianggap final sampai interface cash drawer fisik dipilih dan divalidasi.
 
 ## Troubleshooting journal
 

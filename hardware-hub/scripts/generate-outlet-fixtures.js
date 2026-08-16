@@ -3,15 +3,15 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const {
-  resolveSatoProfileConfiguration,
-  SATO_PRINTER_PROFILE_CG408TT_JEWELRY_V1,
-} = require("../lib/sato-label-profiles");
+  SATO_JEWELRY_LABEL_TEMPLATE_ID,
+  SATO_JEWELRY_LABEL_PROFILE_ID,
+  DEFAULT_SATO_LABEL_CONFIG_PATH,
+  prepareSatoJewelryLabel,
+} = require("../lib/sato-jewelry-label");
 
 try {
   require("dotenv").config({ path: path.resolve(__dirname, "..", ".env"), quiet: true });
 } catch {}
-
-const ESC = "\x1B";
 
 function timestamp(now = new Date()) {
   return now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
@@ -115,69 +115,68 @@ function createEpsonFixturePdf() {
   return createSimplePdf({ pages: [page1, page2], width, height });
 }
 
-function createSatoAlignmentFixture(configuration) {
-  const width = configuration.mediaWidthDots;
-  const height = configuration.mediaHeightDots;
-  const h = (value) => String(Math.max(0, Math.min(width, value))).padStart(4, "0");
-  const v = (value) => String(Math.max(0, Math.min(height, value))).padStart(4, "0");
-  const commands = [`${ESC}A`];
-  commands.push(`${ESC}H${h(10)}${ESC}V${v(20)}${ESC}L0101${ESC}XSASIHJAYA SATO ALIGNMENT`);
-  commands.push(`${ESC}H${h(10)}${ESC}V${v(45)}${ESC}L0101${ESC}XSPROFILE ${configuration.profile.id}`);
-  commands.push(`${ESC}H${h(10)}${ESC}V${v(70)}${ESC}L0101${ESC}XSMEDIA ${width}x${height} DOTS`);
-  for (let x = 10; x < width - 10; x += 50) {
-    commands.push(`${ESC}H${h(x)}${ESC}V${v(95)}${ESC}L0101${ESC}XS|${x}`);
-  }
-  for (let y = 120; y < height - 20; y += 40) {
-    commands.push(`${ESC}H${h(10)}${ESC}V${v(y)}${ESC}L0101${ESC}XSY${y} +----------------------+`);
-  }
-  commands.push(`${ESC}Q1`, `${ESC}Z`);
-  return Buffer.from(commands.join(""), "latin1");
-}
-
-function createSatoBarcodeFixture(configuration) {
-  const commands = [
-    `${ESC}A`,
-    `${ESC}H0010${ESC}V0020${ESC}L0101${ESC}XSCODE39 SCAN TEST`,
-    `${ESC}H0030${ESC}V0080${ESC}${configuration.profile.barcode.command}*AJRMS-PR10-001*`,
-    `${ESC}H0060${ESC}V0200${ESC}L0101${ESC}XSAJRMS-PR10-001`,
-    `${ESC}Q1`,
-    `${ESC}Z`,
-  ];
-  return Buffer.from(commands.join(""), "latin1");
+function createSatoProductionContractFixture(configPath = DEFAULT_SATO_LABEL_CONFIG_PATH) {
+  const payload = {
+    schemaVersion: 1,
+    templateId: SATO_JEWELRY_LABEL_TEMPLATE_ID,
+    templateVersion: 2,
+    printerProfileId: SATO_JEWELRY_LABEL_PROFILE_ID,
+    itemId: "00000000-0000-4000-8000-000000000001",
+    copies: 1,
+    fields: {
+      sku: "AJ-TEST-LABEL",
+      barcode: "AJTEST123456",
+      productName: "CINCIN EMAS TEST ASIHJAYA",
+      weightGram: "2.350",
+      purityPercent: "75",
+      exchangePurityPercent: "70",
+      size: "12",
+      color: "Kuning",
+      gemstone: "Zircon",
+      sellingAmount: "1850000",
+    },
+  };
+  const prepared = prepareSatoJewelryLabel(payload, { configPath, copies: 1 });
+  return Buffer.from(
+    `${JSON.stringify({
+      contract: "asihjaya.sato.jewelry-label.v2",
+      payload,
+      renderInput: prepared.renderInput,
+      template: prepared.template,
+      printerProfile: prepared.profile,
+      layoutConfig: prepared.config,
+    }, null, 2)}\n`,
+    "utf8",
+  );
 }
 
 function generateFixtures({ outputRoot, now = new Date() } = {}) {
   const rootDir = path.resolve(__dirname, "..");
   const destination = path.resolve(outputRoot || path.join(rootDir, "outlet-fixtures", `fixture-${timestamp(now)}`));
   fs.mkdirSync(destination, { recursive: true });
-  const configuration = resolveSatoProfileConfiguration({
-    printerProfileId: process.env.SATO_PRINTER_PROFILE || SATO_PRINTER_PROFILE_CG408TT_JEWELRY_V1,
-    horizontalOffsetDots: process.env.SATO_HORIZONTAL_OFFSET_DOTS,
-    verticalOffsetDots: process.env.SATO_VERTICAL_OFFSET_DOTS,
-    mediaWidthDots: process.env.SATO_MEDIA_WIDTH_DOTS,
-    mediaHeightDots: process.env.SATO_MEDIA_HEIGHT_DOTS,
-    copies: 1,
-  });
+  const satoConfigPath = path.resolve(
+    process.env.SATO_LABEL_CONFIG_PATH || DEFAULT_SATO_LABEL_CONFIG_PATH,
+  );
   const files = {
-    alignment: path.join(destination, "sato-alignment.sbpl"),
-    barcode: path.join(destination, "sato-barcode-code39.sbpl"),
+    sato: path.join(destination, "sato-production-label-contract.json"),
     epson: path.join(destination, "epson-a4-landscape-validation.pdf"),
   };
   const buffers = {
-    alignment: createSatoAlignmentFixture(configuration),
-    barcode: createSatoBarcodeFixture(configuration),
+    sato: createSatoProductionContractFixture(satoConfigPath),
     epson: createEpsonFixturePdf(),
   };
+  const satoFixture = JSON.parse(buffers.sato.toString("utf8"));
   for (const key of Object.keys(files)) fs.writeFileSync(files[key], buffers[key]);
   const manifest = {
     generatedAt: now.toISOString(),
     purpose: "Outlet physical hardware acceptance fixtures. No business/customer data.",
     sato: {
-      profileId: configuration.profile.id,
-      dpi: configuration.profile.dpi,
-      mediaWidthDots: configuration.mediaWidthDots,
-      mediaHeightDots: configuration.mediaHeightDots,
-      physicalValidation: configuration.profile.tuning.physicalValidation,
+      templateId: satoFixture.template.id,
+      profileId: satoFixture.printerProfile.id,
+      renderer: satoFixture.printerProfile.renderer,
+      dpi: satoFixture.printerProfile.dpi,
+      barcodeStrategy: satoFixture.printerProfile.barcode.strategy,
+      physicalValidation: satoFixture.printerProfile.physicalValidation,
     },
     epson: {
       printProfileId: "epson_l3251_a4_v1",
@@ -212,13 +211,12 @@ if (require.main === module) {
   const outputRoot = outputIndex >= 0 ? process.argv[outputIndex + 1] : null;
   const result = generateFixtures({ outputRoot });
   console.log(`[PASS] Outlet fixtures dibuat: ${result.destination}`);
-  console.log(`[INFO] SATO ${result.manifest.sato.mediaWidthDots}x${result.manifest.sato.mediaHeightDots} dots; Epson A4 landscape 2 pages.`);
+  console.log(`[INFO] SATO ${result.manifest.sato.profileId} / ${result.manifest.sato.barcodeStrategy}; Epson A4 landscape 2 pages.`);
 }
 
 module.exports = {
   createEpsonFixturePdf,
-  createSatoAlignmentFixture,
-  createSatoBarcodeFixture,
+  createSatoProductionContractFixture,
   createSimplePdf,
   generateFixtures,
 };

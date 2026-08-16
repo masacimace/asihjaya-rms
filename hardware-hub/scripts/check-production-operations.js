@@ -76,18 +76,47 @@ async function main() {
     );
     assert.equal(
       diagnostics.labelPrinting.configuredProfileId,
-      "sato_cg408tt_jewelry_v1",
-      "support diagnostics harus mencantumkan deterministic SATO profile",
+      "sato_cg408_jewelry_barbell_host_bold_v2",
+      "support diagnostics harus mencantumkan single production SATO profile",
     );
     assert.equal(
       diagnostics.labelPrinting.active?.physicalValidation,
-      "pending",
-      "SATO physical validation harus tetap eksplisit pending",
+      "accepted",
+      "SATO physical validation final harus accepted",
+    );
+    assert.equal(
+      diagnostics.labelPrinting.active?.renderer,
+      "host_bold_bmp_v2",
+      "support diagnostics harus mencantumkan production host-bold renderer",
     );
 
-    for (const file of ["start-agent.ps1", "install-startup-task.ps1", "export-support-bundle.ps1"]) {
+    for (const file of [
+      "start-agent.ps1",
+      "install-startup-task.ps1",
+      "export-support-bundle.ps1",
+      "send-raw-to-printer.ps1",
+      "render-sato-jewelry-label.ps1",
+    ]) {
       assert(fs.existsSync(path.join(__dirname, file)), `${file} wajib tersedia`);
     }
+
+    const rawPrintBridge = fs.readFileSync(path.join(__dirname, "send-raw-to-printer.ps1"), "utf8");
+    assert(rawPrintBridge.includes("OpenPrinterW"), "RAW bridge wajib membuka Windows printer queue");
+    assert(rawPrintBridge.includes("StartDocPrinterW"), "RAW bridge wajib memulai spooler document");
+    assert(rawPrintBridge.includes("WritePrinter"), "RAW bridge wajib menulis bytes melalui Winspool");
+    assert(rawPrintBridge.includes('pDatatype = "RAW"'), "RAW bridge wajib memakai datatype RAW");
+
+    const hardwareAdapters = fs.readFileSync(path.join(__dirname, "..", "lib", "hardware-adapters.js"), "utf8");
+    assert(hardwareAdapters.includes('adapter: "windows_raw_winspool"'));
+    assert(hardwareAdapters.includes('render-sato-jewelry-label.ps1'));
+    assert(hardwareAdapters.includes('content: commandBuffer'));
+    assert(!hardwareAdapters.includes('adapter: "windows_raw_share"'));
+    assert(!hardwareAdapters.includes("copy /B"));
+    assert(!hardwareAdapters.includes("\\localhost\\${printerName}"));
+    const preflight = fs.readFileSync(path.join(__dirname, "outlet-preflight.ps1"), "utf8");
+    assert(preflight.includes('Get-Service -Name "Spooler"'));
+    assert(preflight.includes("driver=$($Printer.DriverName); port=$($Printer.PortName)"));
+
     const installTask = fs.readFileSync(path.join(__dirname, "install-startup-task.ps1"), "utf8");
     assert(installTask.includes("MultipleInstances IgnoreNew"));
     assert(installTask.includes("NodeExecutable"));

@@ -85,7 +85,7 @@ Test-Path "C:\Program Files\SumatraPDF\SumatraPDF.exe"
 
 ### Driver printer resmi
 
-Install driver Windows SATO CG408TT dan Epson EcoTank L3251 dari vendor/reseller resmi. Catat nama printer persis seperti yang tampil di Windows.
+Install driver Windows SATO CG408 dan Epson EcoTank L3251 dari vendor/reseller resmi. Catat nama printer persis seperti yang tampil di Windows.
 
 ```powershell
 Get-Printer | Select-Object Name, DriverName, PortName, PrinterStatus
@@ -95,7 +95,7 @@ Get-Printer | Select-Object Name, DriverName, PortName, PrinterStatus
 
 Pastikan perangkat dapat dipakai dari Windows sebelum melibatkan RMS atau agent.
 
-### SATO CG408TT
+### SATO CG408
 
 Pasang media label dan ribbon sesuai spesifikasi. Hubungkan USB, install driver, lalu lakukan test print Windows/vendor terlebih dahulu.
 
@@ -349,7 +349,7 @@ npm run health
 
 Uji happy path dan kegagalan nyata. Jangan hanya mengandalkan satu test print.
 
-### SATO CG408TT
+### SATO CG408
 
 Ukur media, tune offset, scan barcode menggunakan semua tipe Android sales, lalu uji kegagalan perangkat.
 

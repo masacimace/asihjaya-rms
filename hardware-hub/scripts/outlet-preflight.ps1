@@ -120,6 +120,20 @@ try {
 $LabelMode = (Get-EnvValue $Env "LABEL_PRINTER_ADAPTER" (Get-EnvValue $Env "HARDWARE_ADAPTER_MODE" "fake")).ToLower()
 $DocumentMode = (Get-EnvValue $Env "DOCUMENT_PRINTER_ADAPTER" (Get-EnvValue $Env "HARDWARE_ADAPTER_MODE" "fake")).ToLower()
 $DrawerMode = (Get-EnvValue $Env "CASH_DRAWER_ADAPTER" (Get-EnvValue $Env "HARDWARE_ADAPTER_MODE" "fake")).ToLower()
+$RealPrinterRequired = ($LabelMode -eq "real" -or $DocumentMode -eq "real")
+
+try {
+  $Spooler = Get-Service -Name "Spooler" -ErrorAction Stop
+  if ($Spooler.Status -eq "Running") {
+    Add-Result "Windows Print Spooler" "PASS" "Running; startup=$($Spooler.StartType)."
+  } else {
+    $Status = if ($RealPrinterRequired) { "BLOCKED" } else { "WARNING" }
+    Add-Result "Windows Print Spooler" $Status "Status=$($Spooler.Status); printer real memerlukan spooler aktif."
+  }
+} catch {
+  $Status = if ($RealPrinterRequired) { "BLOCKED" } else { "WARNING" }
+  Add-Result "Windows Print Spooler" $Status $_.Exception.Message
+}
 
 try {
   $Printers = @(Get-Printer -ErrorAction Stop)
@@ -132,14 +146,20 @@ try {
       Add-Result $Pair.Device $Status "Printer name belum diisi; adapter=$($Pair.Mode)."
       continue
     }
-    $Found = $Printers | Where-Object { $_.Name -eq $Pair.Name }
-    if ($Found) { Add-Result $Pair.Device "PASS" "$($Pair.Name) ($($Pair.Mode))" }
+    $Found = @($Printers | Where-Object { $_.Name -eq $Pair.Name })
+    if ($Found.Count -gt 0) {
+      $Printer = $Found[0]
+      Add-Result $Pair.Device "PASS" "$($Printer.Name); driver=$($Printer.DriverName); port=$($Printer.PortName); adapter=$($Pair.Mode)."
+    }
     else {
       $Status = if ($Pair.Mode -eq "real") { "BLOCKED" } else { "WARNING" }
       Add-Result $Pair.Device $Status "$($Pair.Name) tidak ditemukan; adapter=$($Pair.Mode)."
     }
   }
-} catch { Add-Result "Windows printers" "WARNING" $_.Exception.Message }
+} catch {
+  $Status = if ($RealPrinterRequired) { "BLOCKED" } else { "WARNING" }
+  Add-Result "Windows printers" $Status $_.Exception.Message
+}
 
 $SumatraPath = Get-EnvValue $Env "PDF_PRINT_EXECUTABLE" "C:\Program Files\SumatraPDF\SumatraPDF.exe"
 if (Test-Path $SumatraPath) { Add-Result "SumatraPDF" "PASS" $SumatraPath }

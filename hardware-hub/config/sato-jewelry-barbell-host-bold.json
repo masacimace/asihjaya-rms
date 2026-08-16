@@ -1,0 +1,58 @@
+{
+  "version": 2,
+  "id": "sato_cg408_jewelry_barbell_host_bold_v2",
+  "font": {
+    "family": "Arial Narrow",
+    "style": "Bold",
+    "inkSpreadPx": 0
+  },
+  "front": {
+    "productName": {
+      "x": 105,
+      "y": 9,
+      "canvasWidthDots": 170,
+      "canvasHeightDots": 26,
+      "fontPx": 14,
+      "maxChars": 22
+    },
+    "barcode": {
+      "x": 115,
+      "y": 34,
+      "heightDots": 38,
+      "narrowBarDots": 1,
+      "quietZoneModules": 10,
+      "strategy": "CODE128_B"
+    },
+    "barcodeText": {
+      "x": 105,
+      "y": 69,
+      "canvasWidthDots": 170,
+      "canvasHeightDots": 30,
+      "fontPx": 20
+    }
+  },
+  "back": {
+    "x": 98,
+    "y": 122,
+    "canvasWidthDots": 178,
+    "canvasHeightDots": 44,
+    "rotation": 180,
+    "weight": {
+      "x": 0,
+      "y": 0,
+      "widthDots": 82,
+      "heightDots": 44,
+      "fontPx": 26,
+      "textAlign": "center"
+    },
+    "purity": {
+      "x": 72,
+      "y": 0,
+      "widthDots": 106,
+      "heightDots": 44,
+      "fontPx": 22,
+      "prefix": "/ ",
+      "textAlign": "center"
+    }
+  }
+}

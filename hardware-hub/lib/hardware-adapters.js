@@ -11,7 +11,7 @@ const {
   resolveDocumentPrintProfile,
 } = require("./document-print-profiles");
 const { validatePdfFile } = require("./pdf-validation");
-const { generateSatoSbpl } = require("./sato-sbpl-generator");
+const { prepareSatoJewelryLabel } = require("./sato-jewelry-label");
 
 
 const DOCUMENT_DOWNLOAD_PATH_PATTERNS = [
@@ -98,7 +98,7 @@ function spawnCommand(executable, args, { timeoutMs, logger }) {
   });
 }
 
-function validatePrinterShareName(name) {
+function validatePrinterName(name) {
   if (!name) {
     throw new HardwareAdapterError("Nama printer belum dikonfigurasi.", {
       code: "PRINTER_NOT_CONFIGURED",
@@ -106,8 +106,8 @@ function validatePrinterShareName(name) {
       category: "configuration",
     });
   }
-  if (/["\r\n&|<>^]/.test(name)) {
-    throw new HardwareAdapterError("Printer share name memiliki karakter yang tidak aman.", {
+  if (/[\x00-\x1F\x7F]/.test(name)) {
+    throw new HardwareAdapterError("Nama printer memiliki karakter kontrol yang tidak aman.", {
       code: "INVALID_PRINTER_NAME",
       retrySafe: false,
       category: "configuration",
@@ -148,18 +148,35 @@ function writeDryRunMetadata(config, filePath, metadata) {
   );
 }
 
-function prepareRawWindowsJob(config, { printerName, content, extension = "bin", metadata = {} }) {
+function prepareRawWindowsJob(
+  config,
+  {
+    printerName,
+    content,
+    extension = "bin",
+    documentName = "Asihjaya Hardware Hub RAW",
+    metadata = {},
+  },
+) {
+  if (!Buffer.isBuffer(content)) {
+    throw new HardwareAdapterError("Payload raw printer wajib berupa Buffer binary.", {
+      code: "RAW_PRINTER_BUFFER_REQUIRED",
+      retrySafe: false,
+      category: "configuration",
+    });
+  }
+
   if (config.dryRun) {
     return {
       adapter: "dry_run_raw_file",
       target: printerName || null,
       async dispatch() {
         const outputFile = createDryRunPath(config, "raw-printer", extension);
-        fs.writeFileSync(outputFile, content, "binary");
+        fs.writeFileSync(outputFile, content);
         writeDryRunMetadata(config, outputFile, {
           kind: "raw_printer_job",
           printerName: printerName || null,
-          bytes: Buffer.byteLength(content, "binary"),
+          bytes: content.length,
           ...metadata,
         });
         return { mode: "dry_run", outputFile, printerName: printerName || null, ...metadata };
@@ -175,22 +192,57 @@ function prepareRawWindowsJob(config, { printerName, content, extension = "bin",
       category: "configuration",
     });
   }
-  validatePrinterShareName(printerName);
+
+  validatePrinterName(printerName);
+  const rawPrintScript = path.join(__dirname, "..", "scripts", "send-raw-to-printer.ps1");
+  if (!fs.existsSync(rawPrintScript)) {
+    throw new HardwareAdapterError(`RAW Winspool bridge tidak ditemukan: ${rawPrintScript}`, {
+      code: "RAW_PRINT_BRIDGE_MISSING",
+      retrySafe: false,
+      category: "configuration",
+    });
+  }
+
   const tmpFile = createTempPath(config, "raw-printer", extension);
-  fs.writeFileSync(tmpFile, content, "binary");
-  const target = `\\\\localhost\\${printerName}`;
+  fs.writeFileSync(tmpFile, content);
   return {
-    adapter: "windows_raw_share",
+    adapter: "windows_raw_winspool",
     target: printerName,
     async dispatch() {
       const result = await spawnCommand(
-        "cmd.exe",
-        ["/d", "/s", "/c", `copy /B "${tmpFile}" "${target}"`],
+        config.powershellExecutable || "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          rawPrintScript,
+          "-PrinterName",
+          printerName,
+          "-FilePath",
+          tmpFile,
+          "-DocumentName",
+          documentName,
+        ],
         { timeoutMs: config.printCommandTimeoutMs, logger: config.logger },
       );
+
+      let bridgeResult = null;
+      if (result.stdout) {
+        try {
+          bridgeResult = JSON.parse(result.stdout.split(/\r?\n/).filter(Boolean).at(-1));
+        } catch {}
+      }
+
       return {
-        mode: "windows_raw_share",
+        mode: "windows_raw_winspool",
         printerName,
+        jobId: Number.isInteger(bridgeResult?.jobId) ? bridgeResult.jobId : null,
+        bytesWritten: Number.isInteger(bridgeResult?.bytesWritten)
+          ? bridgeResult.bytesWritten
+          : content.length,
+        dataType: bridgeResult?.dataType || "RAW",
         exitCode: result.exitCode,
         ...metadata,
       };
@@ -391,44 +443,112 @@ function createHardwareAdapterFactory(config) {
   }
 
   async function prepareLabel(job, attemptId) {
-    const generated = generateSatoSbpl(job.payload || {}, {
-      templateId: config.satoTemplateId,
-      printerProfileId: config.satoPrinterProfileId,
-      horizontalOffsetDots: config.satoHorizontalOffsetDots,
-      verticalOffsetDots: config.satoVerticalOffsetDots,
-      includePrice: config.satoIncludePrice,
+    const prepared = prepareSatoJewelryLabel(job.payload || {}, {
       copies: config.satoCopies,
-      printSpeed: config.satoPrintSpeed,
-      darkness: config.satoDarkness,
-      mediaWidthDots: config.satoMediaWidthDots,
-      mediaHeightDots: config.satoMediaHeightDots,
+      configPath: config.satoLabelConfigPath,
     });
+
     if (isFake("label_printer")) {
       return requireFakeBackend("label_printer").prepareLabel({
         job,
         attemptId,
-        command: generated.command,
-        label: generated.label,
-        copies: generated.copies,
-        template: generated.template,
-        printerProfile: generated.printerProfile,
-        commandSha256: generated.commandSha256,
-        bytes: generated.bytes,
+        command: prepared.fakeCommand,
+        label: prepared.label,
+        copies: prepared.copies,
+        template: prepared.template,
+        printerProfile: prepared.profile,
+        commandSha256: prepared.fakeCommandSha256,
+        bytes: prepared.fakeCommand.length,
       });
     }
-    return prepareRawWindowsJob(config, {
-      printerName: config.labelPrinterName,
-      content: generated.command,
-      extension: "sbpl",
-      metadata: {
-        template: generated.template,
-        printerProfile: generated.printerProfile,
-        copies: generated.copies,
-        label: generated.label,
-        commandSha256: generated.commandSha256,
-        bytes: generated.bytes,
-      },
-    });
+
+    if (process.platform !== "win32") {
+      throw new HardwareAdapterError("SATO host-bold renderer production hanya dapat berjalan di Windows.", {
+        code: "WINDOWS_SATO_RENDERER_REQUIRED",
+        retrySafe: false,
+        category: "configuration",
+      });
+    }
+
+    const renderScript = path.join(__dirname, "..", "scripts", "render-sato-jewelry-label.ps1");
+    if (!fs.existsSync(renderScript)) {
+      throw new HardwareAdapterError(`SATO production renderer tidak ditemukan: ${renderScript}`, {
+        code: "SATO_RENDERER_MISSING",
+        retrySafe: false,
+        category: "configuration",
+      });
+    }
+
+    const renderFile = createTempPath(config, "sato-render", "sbpl");
+    const renderMetaFile = `${renderFile}.json`;
+    try {
+      await spawnCommand(
+        config.powershellExecutable || "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          renderScript,
+          "-ConfigPath",
+          prepared.configPath,
+          "-ProductName",
+          prepared.renderInput.productName,
+          "-Barcode",
+          prepared.renderInput.barcode,
+          "-Weight",
+          prepared.renderInput.weight,
+          "-Purity",
+          prepared.renderInput.purity,
+          "-Copies",
+          String(prepared.copies),
+          "-OutputFile",
+          renderFile,
+        ],
+        { timeoutMs: config.printCommandTimeoutMs, logger: config.logger },
+      );
+
+      if (!fs.existsSync(renderFile)) {
+        throw new HardwareAdapterError("SATO renderer selesai tanpa menghasilkan file SBPL.", {
+          code: "SATO_RENDER_OUTPUT_MISSING",
+          retrySafe: false,
+          category: "process",
+        });
+      }
+      const commandBuffer = fs.readFileSync(renderFile);
+      if (!commandBuffer.length) {
+        throw new HardwareAdapterError("SATO renderer menghasilkan SBPL kosong.", {
+          code: "SATO_RENDER_OUTPUT_EMPTY",
+          retrySafe: false,
+          category: "process",
+        });
+      }
+      const commandSha256 = crypto.createHash("sha256").update(commandBuffer).digest("hex");
+      let renderMetadata = null;
+      try {
+        renderMetadata = JSON.parse(fs.readFileSync(renderMetaFile, "utf8"));
+      } catch {}
+
+      return prepareRawWindowsJob(config, {
+        printerName: config.labelPrinterName,
+        content: commandBuffer,
+        extension: "sbpl",
+        documentName: `Asihjaya SATO ${sanitizeCode(job.id || attemptId || "label", "label")}`,
+        metadata: {
+          template: prepared.template,
+          printerProfile: prepared.profile,
+          copies: prepared.copies,
+          label: prepared.label,
+          commandSha256,
+          bytes: commandBuffer.length,
+          renderMetadata,
+        },
+      });
+    } finally {
+      try { fs.unlinkSync(renderFile); } catch {}
+      try { fs.unlinkSync(renderMetaFile); } catch {}
+    }
   }
 
   async function prepareDocument(job, attemptId) {
@@ -547,11 +667,12 @@ function createHardwareAdapterFactory(config) {
         drawerProfileId,
       });
     }
-    const kick = Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]).toString("binary");
+    const kick = Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]);
     return prepareRawWindowsJob(config, {
       printerName: config.cashDrawerPrinterName,
       content: kick,
       extension: "bin",
+      documentName: `Asihjaya Drawer ${sanitizeCode(job.id || attemptId || "kick", "kick")}`,
       metadata: { drawerProfileId },
     });
   }

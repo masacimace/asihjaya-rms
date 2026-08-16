@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 
 import {
   buildInventoryLabelPayloadV2,
-  INVENTORY_LABEL_TEMPLATE_V1,
-  SATO_CG408TT_LABEL_PROFILE_V1,
+  INVENTORY_LABEL_TEMPLATE_V2,
+  SATO_CG408_LABEL_PROFILE_V2,
 } from "@/lib/hardware/job-payload-contracts-v2";
 
 const payload = buildInventoryLabelPayloadV2({
@@ -21,9 +21,9 @@ const payload = buildInventoryLabelPayloadV2({
   sellingAmount: "1850000",
 });
 
-assert.equal(payload.templateId, INVENTORY_LABEL_TEMPLATE_V1);
-assert.equal(payload.templateVersion, 1);
-assert.equal(payload.printerProfileId, SATO_CG408TT_LABEL_PROFILE_V1);
+assert.equal(payload.templateId, INVENTORY_LABEL_TEMPLATE_V2);
+assert.equal(payload.templateVersion, 2);
+assert.equal(payload.printerProfileId, SATO_CG408_LABEL_PROFILE_V2);
 assert.equal(payload.copies, 2);
 assert.equal(payload.fields.barcode, "AJ00000001");
 
@@ -35,7 +35,7 @@ assert.throws(
       copies: 1,
       barcode: "barcode-lowercase",
     }),
-  /CODE39 uppercase/,
+  /CODE128 uppercase/,
 );
 
 console.log("Inventory label payload checks passed.");

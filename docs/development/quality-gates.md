@@ -180,7 +180,7 @@ Pemeriksaan berikut tetap manual sampai workflow browser/hardware khusus tersedi
 - Kamera scanner pada browser target.
 - PDF Playwright menggunakan Chromium production image dan hasil visualnya.
 - Print Epson A4 pada kertas nyata.
-- Alignment label SATO CG408TT.
+- Alignment label SATO CG408.
 - Startup task dan DPAPI nyata pada Windows outlet.
 - End-to-end Hardware Hub dengan perangkat fisik.
 

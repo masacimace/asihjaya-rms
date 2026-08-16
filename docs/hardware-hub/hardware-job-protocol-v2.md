@@ -189,7 +189,7 @@ Contoh heartbeat:
   "devices": {
     "labelPrinter": {
       "configured": true,
-      "name": "SATO CG408TT"
+      "name": "SATO CG408"
     },
     "documentPrinter": {
       "configured": true,
@@ -810,17 +810,22 @@ Payload menggunakan canonical JSON dan `schemaVersion`.
 ```json
 {
   "schemaVersion": 1,
-  "templateId": "jewelry_compact",
-  "templateVersion": 1,
-  "itemId": "item-uuid",
+  "templateId": "jewelry_barbell_host_bold_v2",
+  "templateVersion": 2,
+  "printerProfileId": "sato_cg408_jewelry_barbell_host_bold_v2",
+  "itemId": "00000000-0000-4000-8000-000000000001",
   "copies": 1,
   "fields": {
-    "sku": "SKU-001",
-    "barcode": "899000000001",
-    "name": "Cincin Emas",
+    "sku": "AJ-0001",
+    "barcode": "AJ00000001",
+    "productName": "Cincin Emas",
     "weightGram": "2.35",
-    "purity": "75%",
-    "price": 3500000
+    "purityPercent": "75",
+    "exchangePurityPercent": "70",
+    "size": "12",
+    "color": "Kuning",
+    "gemstone": "Zircon",
+    "sellingAmount": "3500000"
   }
 }
 ```
@@ -1297,9 +1302,9 @@ Physical margin, driver scaling, dan hasil cetak Epson tetap menjadi acceptance 
 
 ---
 
-## Appendix — SATO label profile v1
+## Appendix — SATO jewelry label production profile
 
-Job label baru menggunakan `templateId=jewelry_compact_v1` dan `printerProfileId=sato_cg408tt_jewelry_v1`. Alias `jewelry_compact` hanya untuk backward compatibility. Agent menghasilkan SBPL melalui deterministic generator, memvalidasi barcode CODE39 uppercase, mencatat command SHA-256, dan menolak raw printer command dari payload. Parameter fisik CG408TT tetap berstatus `pending` sampai outlet acceptance test.
+Job label hanya menerima `templateId=jewelry_barbell_host_bold_v2`, `templateVersion=2`, dan `printerProfileId=sato_cg408_jewelry_barbell_host_bold_v2`. Tidak ada alias legacy. Text dirender host menggunakan Arial Narrow Bold menjadi bitmap monochrome, barcode `AJ...` tetap native CODE128 Set B, dan hasil SBPL dikirim ke queue `SATO CG408` melalui RAW Winspool. Physical layout pada `config/sato-jewelry-barbell-host-bold.json` berstatus `accepted`.
 
 ## PR 10 — Outlet readiness and setup guide
 
@@ -1309,7 +1314,7 @@ PR 10 menambahkan readiness tooling tanpa mengubah delivery semantics Protocol v
 - `.env.outlet.example` dengan fake adapter sebagai default.
 - Windows preflight report dengan status PASS, WARNING, atau BLOCKED.
 - Safe adapter switch yang membuat backup `.env`, memblokir agent aktif/local recoverable attempt, dan menjalankan config check dengan rollback otomatis.
-- Calibration fixtures tanpa data transaksi untuk SATO CG408TT dan Epson A4 landscape.
+- Production contract fixture tanpa data transaksi untuk SATO CG408 dan Epson A4 landscape.
 - Outlet acceptance report dan sanitized support bundle.
 - Cash drawer real tetap diblokir sampai model/interface fisik disetujui.
 

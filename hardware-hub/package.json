@@ -24,11 +24,9 @@
     "setup:production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-production.ps1 -RunNow",
     "check:operations": "node scripts/check-production-operations.js",
     "check:print-profiles": "node scripts/check-document-print-profiles.js",
-    "check:sato": "node scripts/check-sato-label-profiles.js",
-    "update:golden:sato": "node scripts/check-sato-label-profiles.js --update-golden",
+    "check:sato": "node scripts/check-sato-production-renderer.js",
     "outlet:preflight": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/outlet-preflight.ps1",
     "outlet:fixtures": "node scripts/generate-outlet-fixtures.js",
-    "outlet:test-sato-alignment": "node scripts/generate-outlet-fixtures.js",
     "outlet:test-epson-a4": "node scripts/generate-outlet-fixtures.js",
     "outlet:enable-real-label": "node scripts/outlet-adapter-switch.js --device label --mode real",
     "outlet:enable-real-document": "node scripts/outlet-adapter-switch.js --device document --mode real",
@@ -36,7 +34,9 @@
     "outlet:rollback-to-fake": "node scripts/outlet-adapter-switch.js --device all --mode fake",
     "outlet:report": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-outlet-report.ps1",
     "check:outlet": "node scripts/check-outlet-readiness-pack.js",
-    "check:ci": "npm run check:auth && npm run check:dpapi && npm run check:v2 && npm run check:simulation && npm run check:operations && npm run check:print-profiles && npm run check:sato"
+    "check:ci": "npm run check:auth && npm run check:dpapi && npm run check:v2 && npm run check:simulation && npm run check:operations && npm run check:print-profiles && npm run check:sato",
+    "render:sato-label": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/render-sato-jewelry-label.ps1",
+    "outlet:test-sato-label": "node scripts/generate-outlet-fixtures.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2"

@@ -617,7 +617,6 @@ Manager juga dapat membagi pekerjaan per etalase dan menugaskan operator/lead me
 
 Semua Product Master hasil otomatis tetap berstatus `draft`. Milestone ini belum mengaktifkan item, belum mengubah stok, dan belum mengubah lookup POS.
 
-
 ### Legacy physical verification
 
 Staff yang ditugaskan pada sesi aktif dapat membuka `/pos/migrasi-barang`, memindai barcode lama, memverifikasi data fisik, dan mengirim hasil ke antrean manager. Barcode unmatched didukung dengan foto aktual wajib. Tahap ini tetap staging-only: tidak membuat stok aktif dan tidak mengubah checkout POS. Lihat `docs/development/legacy-product-migration.md`.

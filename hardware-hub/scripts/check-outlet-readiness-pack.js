@@ -16,7 +16,7 @@ try {
     "LABEL_PRINTER_ADAPTER=fake",
     "DOCUMENT_PRINTER_ADAPTER=fake",
     "CASH_DRAWER_ADAPTER=fake",
-    "LABEL_PRINTER_NAME=SATO CG408TT",
+    "LABEL_PRINTER_NAME=SATO CG408",
     "",
   ].join("\n");
   const updated = updateEnvContent(envText, {
@@ -36,8 +36,7 @@ try {
   const fixtureOutput = path.join(tempRoot, "fixtures");
   const generated = generateFixtures({ outputRoot: fixtureOutput, now: new Date("2026-07-18T10:00:00Z") });
   const expectedFiles = [
-    "sato-alignment.sbpl",
-    "sato-barcode-code39.sbpl",
+    "sato-production-label-contract.json",
     "epson-a4-landscape-validation.pdf",
     "fixture-manifest.json",
     "README.txt",
@@ -47,11 +46,12 @@ try {
   assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
   assert.match(pdf.toString("latin1"), /\/MediaBox \[0 0 841\.89 595\.28\]/);
   assert.equal(generated.manifest.epson.pages, 2);
-  assert.equal(generated.manifest.sato.physicalValidation, "pending");
+  assert.equal(generated.manifest.sato.physicalValidation, "accepted");
+  assert.equal(generated.manifest.sato.barcodeStrategy, "CODE128_B");
 
   console.log("[PASS] Adapter env updates preserve unrelated settings.");
   console.log("[PASS] Cash drawer real activation is blocked by default.");
-  console.log("[PASS] Deterministic SATO and Epson outlet fixtures are generated.");
+  console.log("[PASS] Deterministic production SATO contract and Epson outlet fixtures are generated.");
   console.log("[PASS] Epson fixture is a two-page A4 landscape PDF.");
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });

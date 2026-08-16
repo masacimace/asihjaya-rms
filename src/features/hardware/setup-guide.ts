@@ -146,7 +146,7 @@ export const hardwareSetupGuideSections: HardwareGuideSection[] = [
         id: "install-drivers",
         title: "Driver printer resmi",
         body: [
-          "Install driver Windows SATO CG408TT dan Epson EcoTank L3251 dari vendor/reseller resmi. Catat nama printer persis seperti yang tampil di Windows.",
+          "Install driver Windows SATO CG408 dan Epson EcoTank L3251 dari vendor/reseller resmi. Catat nama printer persis seperti yang tampil di Windows.",
         ],
         commands: [
           {
@@ -165,7 +165,7 @@ export const hardwareSetupGuideSections: HardwareGuideSection[] = [
     steps: [
       {
         id: "prepare-sato",
-        title: "SATO CG408TT",
+        title: "SATO CG408",
         body: [
           "Pasang media label dan ribbon sesuai spesifikasi. Hubungkan USB, install driver, lalu lakukan test print Windows/vendor terlebih dahulu.",
           "Ukur label fisik dan gap. Nilai development 400×300 dots bukan ukuran final sampai diverifikasi pada media outlet.",
@@ -480,7 +480,7 @@ export const hardwareSetupGuideSections: HardwareGuideSection[] = [
     steps: [
       {
         id: "sato-acceptance",
-        title: "SATO CG408TT",
+        title: "SATO CG408",
         body: [
           "Ukur media, tune offset, scan barcode menggunakan semua tipe Android sales, lalu uji kegagalan perangkat.",
         ],
