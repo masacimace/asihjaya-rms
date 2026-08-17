@@ -51,30 +51,29 @@ export function PosDiscountApprovalDialog({
       <section
         role="dialog"
         aria-modal="true"
-        aria-labelledby="pos-discount-approval-title"
+        aria-labelledby="pos-discount-title"
         className="flex h-[100dvh] max-h-[100dvh] w-full max-w-lg flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[calc(100dvh-3rem)] sm:rounded-3xl sm:border sm:border-[var(--border)]"
       >
         <header className="shrink-0 border-b border-[var(--border)] px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase text-[var(--accent)]">
-                Approval Diskon POS
+                Diskon POS
               </p>
               <h2
-                id="pos-discount-approval-title"
+                id="pos-discount-title"
                 className="mt-1 text-base font-semibold text-neutral-950 sm:text-lg"
               >
-                Minta diskon manager/owner
+                Terapkan diskon transaksi
               </h2>
               <p className="mt-2 text-xs leading-5 text-[var(--muted)] sm:text-sm sm:leading-6">
-                Request akan masuk ke Riwayat Approval. Diskon baru bisa dipakai
-                setelah status disetujui.
+                Diskon akan langsung diterapkan ke transaksi tanpa approval.
               </p>
             </div>
 
             <button
               type="button"
-              aria-label="Tutup form request diskon"
+              aria-label="Tutup form diskon"
               onClick={onCancel}
               disabled={isPending}
               className="grid size-9 shrink-0 place-items-center rounded-xl text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-50"
@@ -109,7 +108,7 @@ export function PosDiscountApprovalDialog({
           <div className="mt-4 space-y-4">
             <label className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
-                Nominal diskon diminta
+                Nominal diskon
               </span>
               <input
                 value={amountInput}
@@ -133,7 +132,7 @@ export function PosDiscountApprovalDialog({
 
             <label className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
-                Alasan diskon
+                Catatan diskon (opsional)
               </span>
               <textarea
                 value={reasonInput}
@@ -144,15 +143,14 @@ export function PosDiscountApprovalDialog({
                 className="w-full resize-none rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
               />
               <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
-                Minimal 5 karakter. Catatan ini akan terlihat di halaman
-                approval.
+                Boleh dikosongkan. Catatan disimpan bersama transaksi.
               </p>
             </label>
           </div>
 
           <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white p-3">
             <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-              Item dalam request
+              Item dalam transaksi
             </p>
             <div className="mt-3 space-y-2 sm:max-h-48 sm:overflow-y-auto sm:overscroll-contain sm:pr-1">
               {cartItems.map((item, index) => (
@@ -201,12 +199,12 @@ export function PosDiscountApprovalDialog({
             {isPending ? (
               <>
                 <LoaderCircle className="size-4 animate-spin" />
-                Mengirim request...
+                Menerapkan diskon...
               </>
             ) : (
               <>
                 <BadgePercent className="size-4" />
-                Kirim Request Diskon
+                Terapkan Diskon
               </>
             )}
           </button>

@@ -57,7 +57,7 @@ assert.equal(
   "manual",
 );
 assert.equal(
-  getPaymentProvider({ method: "credit_card", provider: "BCA" }),
+  getPaymentProvider({ method: "bank_transfer", provider: "BCA" }),
   "BCA",
 );
 

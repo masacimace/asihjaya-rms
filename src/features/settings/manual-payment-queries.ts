@@ -21,13 +21,17 @@ import type {
 } from "@/features/pos/contracts";
 
 function isProfileType(value: string): value is PosManualPaymentProfileType {
-  return value === "edc";
+  return value === "edc" || value === "bank_account";
 }
 
 function isVerificationSource(
   value: string,
 ): value is PosManualPaymentVerificationSource {
-  return value === "edc_terminal";
+  return (
+    value === "edc_terminal" ||
+    value === "bank_app" ||
+    value === "bank_statement"
+  );
 }
 
 export async function getManualPaymentSettingsData(

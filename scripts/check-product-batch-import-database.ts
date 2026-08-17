@@ -27,10 +27,11 @@ const previousSnapshot = JSON.parse(read("drizzle/meta/0015_snapshot.json")) as 
   id: string;
 };
 
-assert.equal(journal.entries.at(-1)?.idx, 16);
-assert.equal(
-  journal.entries.at(-1)?.tag,
-  "0016_product_batch_import_staging",
+assert.ok(
+  journal.entries.some(
+    (entry) => entry.idx === 16 && entry.tag === "0016_product_batch_import_staging",
+  ),
+  "Migration 0016_product_batch_import_staging wajib tetap terdaftar di journal.",
 );
 assert.equal(snapshot.prevId, previousSnapshot.id);
 

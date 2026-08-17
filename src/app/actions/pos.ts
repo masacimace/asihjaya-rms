@@ -2516,11 +2516,6 @@ export async function completePosCheckoutAction(
   const idempotencyKey = String(payload.idempotencyKey ?? "").trim();
   const customerId = normalizeNullableText(payload.customerId, 36);
   const saleNote = normalizeNullableText(payload.note, 240);
-  const discountApprovalId = normalizeNullableText(payload.discountApprovalId, 36);
-  const manualPaymentApprovalId = normalizeNullableText(
-    payload.manualPaymentApprovalId,
-    36,
-  );
   const submittedDiscountAmount =
     payload.discountAmount === null || payload.discountAmount === undefined
       ? 0
@@ -2556,9 +2551,6 @@ export async function completePosCheckoutAction(
     fieldErrors.discountAmount = "Nominal diskon tidak valid.";
   }
 
-  if (submittedDiscountAmount > 0 && !discountApprovalId) {
-    fieldErrors.discountApprovalId = "Diskon POS wajib memakai approval manager/owner.";
-  }
 
   if (
     !Number.isSafeInteger(customerDepositUsedAmount) ||
@@ -2578,14 +2570,6 @@ export async function completePosCheckoutAction(
     fieldErrors.customerId = "Dana Titip wajib terikat ke customer terdaftar.";
   }
 
-  if (discountApprovalId && !UUID_PATTERN.test(discountApprovalId)) {
-    fieldErrors.discountApprovalId = "Approval diskon tidak valid.";
-  }
-
-  if (manualPaymentApprovalId && !UUID_PATTERN.test(manualPaymentApprovalId)) {
-    fieldErrors.manualPaymentApprovalId =
-      "Approval verifikasi pembayaran manual tidak valid.";
-  }
 
   const submittedPayments = payload.payments ?? [];
 
@@ -2661,70 +2645,13 @@ export async function completePosCheckoutAction(
     throw error;
   }
 
-  const submittedManualReferenceKeys = new Set<string>();
-  const submittedEvidenceKeys = new Set<string>();
-
-  for (const payment of normalizedPayments) {
-    if (!isNonCashManualPaymentMethod(payment.method)) continue;
-
-    const referenceKey = [
-      payment.method,
-      payment.normalizedProvider,
-      payment.normalizedReference,
-    ].join(":");
-
-    if (submittedManualReferenceKeys.has(referenceKey)) {
-      return checkoutFailure(
-        `${manualPaymentMethodLabels[payment.method]} dengan provider dan reference yang sama tidak boleh ditambahkan dua kali dalam satu checkout.`,
-      );
-    }
-
-    submittedManualReferenceKeys.add(referenceKey);
-
-    if (payment.evidenceKey) {
-      if (submittedEvidenceKeys.has(payment.evidenceKey)) {
-        return checkoutFailure(
-          "Satu bukti pembayaran tidak boleh dipakai untuk lebih dari satu baris payment.",
-        );
-      }
-
-      submittedEvidenceKeys.add(payment.evidenceKey);
-    }
-  }
-
-  const evidenceKeys = Array.from(submittedEvidenceKeys);
-
-  if (evidenceKeys.length > 0) {
-    const evidenceRows = await db
-      .select({ storageKey: paymentEvidenceUploads.storageKey })
-      .from(paymentEvidenceUploads)
-      .where(
-        and(
-          eq(paymentEvidenceUploads.organizationId, auth.organization.id),
-          eq(paymentEvidenceUploads.outletId, primaryOutlet.id),
-          eq(paymentEvidenceUploads.uploadedBy, auth.user.id),
-          inArray(paymentEvidenceUploads.storageKey, evidenceKeys),
-          or(
-            isNotNull(paymentEvidenceUploads.saleId),
-            gt(paymentEvidenceUploads.expiresAt, new Date()),
-          ),
-        ),
-      );
-
-    if (evidenceRows.length !== evidenceKeys.length) {
-      return checkoutFailure(
-        "Bukti pembayaran tidak ditemukan, sudah kedaluwarsa, atau bukan milik sesi POS ini. Unggah ulang bukti payment.",
-      );
-    }
-  }
-
   const normalizedCheckoutPayload: PosCheckoutPayload = {
     itemIds,
     payments: normalizedPayments.map((payment) => ({
       method: payment.method,
       amount: payment.amount,
       manualPaymentProfileId: payment.manualPaymentProfileId,
-      verificationConfirmed: payment.method === "cash" ? null : true,
+      verificationConfirmed: null,
       receivedAmount: payment.receivedAmount,
       changeAmount: payment.changeAmount,
       provider: payment.provider,
@@ -2739,116 +2666,15 @@ export async function completePosCheckoutAction(
     idempotencyKey,
     customerId,
     note: saleNote,
-    discountApprovalId,
+    discountApprovalId: null,
     discountAmount: submittedDiscountAmount || null,
     discountReason: submittedDiscountReason,
     customerDepositUsedAmount: customerDepositUsedAmount || null,
     customerDepositInAmount: customerDepositInAmount || null,
-    manualPaymentApprovalId,
+    manualPaymentApprovalId: null,
   };
 
   const requestMetadata = await getRequestMetadata();
-  let manualPaymentVerificationFingerprint: string | null = null;
-  let manualPaymentVerifiedApprovalId: string | null = null;
-  let manualPaymentCoVerifierId: string | null = null;
-  let manualPaymentCoVerifiedAt: Date | null = null;
-  let manualPaymentDuplicatePaymentIds: string[] = [];
-
-  try {
-    const hasNonCashPayment = normalizedPayments.some(
-      (payment) => payment.method !== "cash",
-    );
-
-    if (hasNonCashPayment) {
-      const assessment = await assessManualPaymentReviewRequirement({
-        organizationId: auth.organization.id,
-        outletId: primaryOutlet.id,
-        cashierId: auth.user.id,
-        itemIds,
-        customerId,
-        discountApprovalId,
-        payments: normalizedPayments,
-        policies: manualPaymentPolicyMap,
-      });
-
-      manualPaymentVerificationFingerprint = assessment.fingerprint;
-      manualPaymentDuplicatePaymentIds = assessment.duplicatePayments.map(
-        (payment) => payment.paymentId,
-      );
-
-      if (assessment.requiresApproval) {
-        const approvalConditions = [
-          eq(approvals.organizationId, auth.organization.id),
-          eq(approvals.outletId, primaryOutlet.id),
-          eq(approvals.requestedBy, auth.user.id),
-          eq(approvals.type, "manual_payment_verification"),
-          sql`${approvals.requestData}->>'verificationFingerprint' = ${assessment.fingerprint}`,
-        ];
-
-        if (manualPaymentApprovalId) {
-          approvalConditions.push(eq(approvals.id, manualPaymentApprovalId));
-        }
-
-        const [approvalRow] = await db
-          .select({
-            id: approvals.id,
-            status: approvals.status,
-            approvedBy: approvals.approvedBy,
-            requestData: approvals.requestData,
-            notes: approvals.notes,
-            responseNotes: approvals.responseNotes,
-            createdAt: approvals.createdAt,
-            resolvedAt: approvals.resolvedAt,
-          })
-          .from(approvals)
-          .where(and(...approvalConditions))
-          .orderBy(sql`${approvals.createdAt} desc`)
-          .limit(1);
-
-        if (!approvalRow) {
-          const createdApproval = await getOrCreateManualPaymentApproval({
-            auth,
-            outletId: primaryOutlet.id,
-            assessment,
-            normalizedPayments,
-            requestMetadata,
-          });
-
-          return checkoutApprovalRequired(
-            createdApproval,
-            "Pembayaran membutuhkan co-verification manager/finance sebelum checkout dapat diselesaikan.",
-          );
-        }
-
-        const mappedApproval = mapPosManualPaymentApproval(approvalRow);
-
-        if (approvalRow.status !== "approved") {
-          return checkoutApprovalRequired(
-            mappedApproval,
-            approvalRow.status === "rejected"
-              ? "Verifikasi pembayaran ditolak. Perbaiki reference, bukti, atau detail payment lalu buat payment baru."
-              : "Pembayaran masih menunggu co-verification manager/finance.",
-          );
-        }
-
-        if (!approvalRow.approvedBy || !approvalRow.resolvedAt) {
-          return checkoutFailure(
-            "Approval pembayaran tidak lengkap. Hubungi manager untuk memproses ulang approval.",
-          );
-        }
-
-        manualPaymentVerifiedApprovalId = approvalRow.id;
-        manualPaymentCoVerifierId = approvalRow.approvedBy;
-        manualPaymentCoVerifiedAt = approvalRow.resolvedAt;
-      }
-    }
-  } catch (error) {
-    if (error instanceof CheckoutValidationError) {
-      return checkoutFailure(error.message);
-    }
-
-    throw error;
-  }
 
   let claimedAttemptId: string | null = null;
   let claimedAttemptCount: number | null = null;
@@ -3318,7 +3144,6 @@ export async function completePosCheckoutAction(
       const subtotalAmount = itemAmounts.reduce((total, amount) => total + amount, 0);
       let approvedDiscountAmount = 0;
       let approvedDiscountReason: string | null = null;
-      let appliedDiscountApprovalId: string | null = null;
 
       if (submittedDiscountAmount > 0) {
         if (submittedDiscountAmount >= subtotalAmount) {
@@ -3327,73 +3152,8 @@ export async function completePosCheckoutAction(
           );
         }
 
-        const cartFingerprint = createPosCartFingerprint({
-          outletId: primaryOutlet.id,
-          itemIds,
-          subtotalAmount,
-          discountAmount: submittedDiscountAmount,
-        });
-
-        const approvalRows = await transaction
-          .select({
-            id: approvals.id,
-            status: approvals.status,
-            requestData: approvals.requestData,
-            notes: approvals.notes,
-            responseNotes: approvals.responseNotes,
-            referenceType: approvals.referenceType,
-            referenceId: approvals.referenceId,
-          })
-          .from(approvals)
-          .where(
-            and(
-              eq(approvals.id, discountApprovalId!),
-              eq(approvals.organizationId, auth.organization.id),
-              eq(approvals.outletId, primaryOutlet.id),
-              eq(approvals.requestedBy, auth.user.id),
-              eq(approvals.type, "discount"),
-              eq(approvals.referenceType, "pos_cart"),
-            ),
-          )
-          .limit(1);
-
-        const approval = approvalRows[0];
-
-        if (!approval) {
-          throw new CheckoutValidationError(
-            "Approval diskon tidak ditemukan untuk transaksi POS ini.",
-          );
-        }
-
-        if (approval.status !== "approved") {
-          throw new CheckoutValidationError(
-            approval.status === "rejected"
-              ? "Approval diskon ditolak. Hapus diskon atau ajukan ulang."
-              : "Approval diskon masih pending. Tunggu manager/owner approve terlebih dahulu.",
-          );
-        }
-
-        const approvalDiscountAmount = Number(approval.requestData.discountAmount ?? 0);
-        const approvalFingerprint = String(
-          approval.requestData.cartFingerprint ?? "",
-        );
-
-        if (
-          !Number.isSafeInteger(approvalDiscountAmount) ||
-          approvalDiscountAmount !== submittedDiscountAmount ||
-          approvalFingerprint !== cartFingerprint ||
-          approval.referenceId
-        ) {
-          throw new CheckoutValidationError(
-            "Approval diskon tidak cocok dengan cart saat ini. Hapus diskon lalu ajukan ulang.",
-          );
-        }
-
         approvedDiscountAmount = submittedDiscountAmount;
-        approvedDiscountReason =
-          submittedDiscountReason ??
-          normalizeNullableText(String(approval.requestData.reason ?? approval.notes ?? ""), 500);
-        appliedDiscountApprovalId = approval.id;
+        approvedDiscountReason = submittedDiscountReason;
       }
 
       const lineDiscounts = allocateLineDiscounts({
@@ -3434,62 +3194,6 @@ export async function completePosCheckoutAction(
 
       const { totalAmount, externalPaymentDueAmount } = financialReconciliation;
 
-      const nonCashPayments = normalizedPayments.filter((payment) =>
-        isNonCashManualPaymentMethod(payment.method),
-      );
-
-      for (const payment of [...nonCashPayments].sort((left, right) =>
-        `${left.method}:${left.normalizedProvider}:${left.normalizedReference}`.localeCompare(
-          `${right.method}:${right.normalizedProvider}:${right.normalizedReference}`,
-        ),
-      )) {
-        await lockManualPaymentReference(transaction, {
-          organizationId: auth.organization.id,
-          outletId: primaryOutlet.id,
-          method: payment.method,
-          normalizedProvider: payment.normalizedProvider!,
-          normalizedReference: payment.normalizedReference!,
-        });
-
-        const policy =
-          manualPaymentPolicyMap[payment.method as NonCashManualPaymentMethod];
-        const lookbackDate = new Date(
-          now.getTime() - policy.duplicateLookbackDays * 24 * 60 * 60 * 1000,
-        );
-        const duplicateRows = await transaction
-          .select({
-            paymentId: payments.id,
-            invoiceNumber: sales.invoiceNumber,
-          })
-          .from(payments)
-          .innerJoin(sales, eq(payments.saleId, sales.id))
-          .where(
-            and(
-              eq(sales.organizationId, auth.organization.id),
-              eq(sales.outletId, primaryOutlet.id),
-              eq(payments.method, payment.method),
-              eq(payments.normalizedReference, payment.normalizedReference!),
-              eq(payments.status, "paid"),
-              gte(payments.createdAt, lookbackDate),
-              sql`upper(regexp_replace(${payments.provider}, '\\s+', ' ', 'g')) = ${payment.normalizedProvider}`,
-            ),
-          )
-          .limit(5);
-
-        if (duplicateRows.length > 0 && !manualPaymentCoVerifierId) {
-          throw new CheckoutValidationError(
-            `${manualPaymentMethodLabels[payment.method]} memakai reference yang baru saja tercatat pada transaksi lain. Retry checkout untuk membuat co-verification manager/finance.`,
-          );
-        }
-
-        manualPaymentDuplicatePaymentIds = Array.from(
-          new Set([
-            ...manualPaymentDuplicatePaymentIds,
-            ...duplicateRows.map((row) => row.paymentId),
-          ]),
-        );
-      }
-
       const invoiceNumber = generateInvoiceNumber({
         outletCode: primaryOutlet.code,
         date: now,
@@ -3529,43 +3233,6 @@ export async function completePosCheckoutAction(
 
       if (!sale) {
         throw new Error("SALE_INSERT_FAILED");
-      }
-
-      if (appliedDiscountApprovalId) {
-        await transaction
-          .update(approvals)
-          .set({
-            referenceType: "sale",
-            referenceId: sale.id,
-          })
-          .where(eq(approvals.id, appliedDiscountApprovalId));
-      }
-
-      if (evidenceKeys.length > 0) {
-        const attachedEvidenceRows = await transaction
-          .update(paymentEvidenceUploads)
-          .set({
-            saleId: sale.id,
-            attachedAt: now,
-            expiresAt: null,
-          })
-          .where(
-            and(
-              eq(paymentEvidenceUploads.organizationId, auth.organization.id),
-              eq(paymentEvidenceUploads.outletId, primaryOutlet.id),
-              eq(paymentEvidenceUploads.uploadedBy, auth.user.id),
-              inArray(paymentEvidenceUploads.storageKey, evidenceKeys),
-              isNull(paymentEvidenceUploads.saleId),
-              gt(paymentEvidenceUploads.expiresAt, now),
-            ),
-          )
-          .returning({ storageKey: paymentEvidenceUploads.storageKey });
-
-        if (attachedEvidenceRows.length !== evidenceKeys.length) {
-          throw new CheckoutValidationError(
-            "Bukti pembayaran sudah dipakai transaksi lain atau kedaluwarsa. Checkout dibatalkan.",
-          );
-        }
       }
 
       await transaction.insert(saleItems).values(
@@ -3650,64 +3317,49 @@ export async function completePosCheckoutAction(
 
       if (normalizedPayments.length > 0) {
         await transaction.insert(payments).values(
-          normalizedPayments.map((payment) => {
-            const isNonCash = isNonCashManualPaymentMethod(payment.method);
-            const isCoVerified = isNonCash && Boolean(manualPaymentCoVerifierId);
-
-            return {
-              saleId: sale.id,
+          normalizedPayments.map((payment) => ({
+            saleId: sale.id,
+            method: payment.method,
+            provider: getPaymentProvider({
               method: payment.method,
-              provider: getPaymentProvider({
-                method: payment.method,
-                provider: payment.provider,
-              }),
-              amount: String(payment.amount),
-              status: "paid" as const,
-              providerReference: payment.reference,
-              normalizedReference: payment.normalizedReference,
-              externalOrderId: null,
-              verificationStatus: isCoVerified
-                ? ("co_verified" as const)
-                : ("self_verified" as const),
-              verificationSource: payment.verificationSource,
-              providerPaidAt: payment.providerPaidAt,
-              verificationApprovalId: isCoVerified
-                ? manualPaymentVerifiedApprovalId
+              provider: payment.provider,
+            }),
+            amount: String(payment.amount),
+            status: "paid" as const,
+            providerReference: null,
+            normalizedReference: null,
+            externalOrderId: null,
+            verificationStatus: "self_verified" as const,
+            verificationSource: null,
+            providerPaidAt: null,
+            verificationApprovalId: null,
+            coVerifiedBy: null,
+            coVerifiedAt: null,
+            evidenceKey: null,
+            manualPaymentProfileId: payment.manualPaymentProfileId,
+            settlementStatus: "not_applicable" as const,
+            verifiedBy: auth.user.id,
+            verifiedAt: now,
+            paidAt: now,
+            metadata: {
+              source: "pos.simple_payment_v1",
+              methodLabel: manualPaymentMethodLabels[payment.method],
+              receivedAmount: payment.receivedAmount,
+              changeAmount: payment.changeAmount,
+              note: payment.note,
+              customerDepositUsedAmount: String(customerDepositUsedAmount),
+              customerDepositInAmount: String(customerDepositInAmount),
+              manualPaymentProfile: payment.manualPaymentProfileId
+                ? {
+                    id: payment.manualPaymentProfileId,
+                    code: payment.manualPaymentProfileCode,
+                    name: payment.manualPaymentProfileName,
+                  }
                 : null,
-              coVerifiedBy: isCoVerified ? manualPaymentCoVerifierId : null,
-              coVerifiedAt: isCoVerified ? manualPaymentCoVerifiedAt : null,
-              evidenceKey: payment.evidenceKey,
-              manualPaymentProfileId: payment.manualPaymentProfileId,
-              settlementStatus: isNonCash
-                ? ("unreconciled" as const)
-                : ("not_applicable" as const),
-              verifiedBy: auth.user.id,
-              verifiedAt: now,
-              paidAt: payment.providerPaidAt ?? now,
-              metadata: {
-                source: "pos.manual_payment_verification_v1",
-                methodLabel: manualPaymentMethodLabels[payment.method],
-                receivedAmount: payment.receivedAmount,
-                changeAmount: payment.changeAmount,
-                note: payment.note,
-                customerDepositUsedAmount: String(customerDepositUsedAmount),
-                customerDepositInAmount: String(customerDepositInAmount),
-                verificationFingerprint: manualPaymentVerificationFingerprint,
-                manualPaymentProfile: payment.manualPaymentProfileId
-                  ? {
-                      id: payment.manualPaymentProfileId,
-                      code: payment.manualPaymentProfileCode,
-                      name: payment.manualPaymentProfileName,
-                    }
-                  : null,
-                verificationDetails: payment.verificationDetails,
-                duplicatePaymentIds: manualPaymentDuplicatePaymentIds,
-                makerCheckerEnforced: isCoVerified,
-              },
-              createdAt: now,
-              updatedAt: now,
-            };
-          }),
+            },
+            createdAt: now,
+            updatedAt: now,
+          })),
         );
       }
 
@@ -3828,7 +3480,7 @@ export async function completePosCheckoutAction(
           subtotalAmount: String(subtotalAmount),
           discountAmount: String(approvedDiscountAmount),
           discountReason: approvedDiscountReason,
-          discountApprovalId: appliedDiscountApprovalId,
+          discountApprovalId: null,
           totalAmount: String(totalAmount),
           customerDepositUsedAmount: String(customerDepositUsedAmount),
           customerDepositInAmount: String(customerDepositInAmount),
@@ -3847,7 +3499,7 @@ export async function completePosCheckoutAction(
           source: "pos.checkout",
           idempotencyKey,
           customerId: selectedCustomer?.id ?? null,
-          discountApprovalId: appliedDiscountApprovalId,
+          discountApprovalId: null,
           customerDepositUsedAmount: String(customerDepositUsedAmount),
           customerDepositInAmount: String(customerDepositInAmount),
         },

@@ -68,28 +68,28 @@ export const paymentMethodConfigs: PaymentMethodConfig[] = [
   },
   {
     method: "debit_card",
-    label: "Debit Card EDC",
-    shortLabel: "Debit",
-    description: "Pembayaran kartu debit melalui terminal EDC outlet.",
-    amountLabel: "Nominal debit",
-    providerLabel: "Bank/acquirer",
-    providerPlaceholder: "Contoh: BCA, Mandiri, BRI",
-    referenceLabel: "Approval code",
-    referencePlaceholder: "Kode approval dari mesin EDC",
-    requiresReference: true,
+    label: "EDC",
+    shortLabel: "EDC",
+    description: "Pembayaran melalui terminal EDC outlet.",
+    amountLabel: "Nominal EDC",
+    providerLabel: "Terminal EDC",
+    providerPlaceholder: null,
+    referenceLabel: null,
+    referencePlaceholder: null,
+    requiresReference: false,
     allowOverpayment: false,
   },
   {
-    method: "credit_card",
-    label: "Credit Card EDC",
-    shortLabel: "Credit",
-    description: "Pembayaran kartu kredit melalui terminal EDC outlet.",
-    amountLabel: "Nominal credit",
-    providerLabel: "Bank/acquirer",
-    providerPlaceholder: "Contoh: BCA, Mandiri, BNI",
-    referenceLabel: "Approval code",
-    referencePlaceholder: "Kode approval dari mesin EDC",
-    requiresReference: true,
+    method: "bank_transfer",
+    label: "Transfer",
+    shortLabel: "Transfer",
+    description: "Transfer manual ke rekening outlet.",
+    amountLabel: "Nominal transfer",
+    providerLabel: "Rekening tujuan",
+    providerPlaceholder: null,
+    referenceLabel: null,
+    referencePlaceholder: null,
+    requiresReference: false,
     allowOverpayment: false,
   },
 ];
@@ -110,6 +110,7 @@ export function isStoredCheckoutPayment(
   return (
     typeof value.id === "string" &&
     typeof value.method === "string" &&
+    paymentMethodConfigs.some((config) => config.method === value.method) &&
     typeof value.methodLabel === "string" &&
     typeof value.amount === "number" &&
     (typeof value.receivedAmount === "number" ||
@@ -137,10 +138,15 @@ export function profileSupportsMethod(
   profile: PosManualPaymentProfile,
   method: PosManualPaymentMethod,
 ) {
-  return (
-    profile.profileType === "edc" &&
-    (method === "debit_card" || method === "credit_card")
-  );
+  if (method === "debit_card") {
+    return profile.profileType === "edc";
+  }
+
+  if (method === "bank_transfer") {
+    return profile.profileType === "bank_account";
+  }
+
+  return false;
 }
 
 export function getProfilesForMethod(
@@ -259,27 +265,8 @@ export function getPaymentDraftValidationMessage({
       return `Preset akun/terminal wajib dipilih untuk ${config.label}.`;
     }
 
-    if (!payment.verificationConfirmed) {
-      return `Pembayaran ${config.label} belum dikonfirmasi berhasil.`;
-    }
-
     if (!payment.provider?.trim()) {
-      return `Provider/bank wajib tersedia untuk ${config.label}.`;
-    }
-
-    if (config.requiresReference && !payment.reference?.trim()) {
-      return `${config.referenceLabel ?? "Reference"} wajib diisi untuk ${config.label}.`;
-    }
-
-    if (!payment.verificationSource || !payment.providerPaidAtIso) {
-      return `Sumber dan waktu verifikasi wajib tersedia untuk ${config.label}.`;
-    }
-
-    if (
-      (payment.method === "debit_card" || payment.method === "credit_card") &&
-      !payment.verificationDetails.terminalId
-    ) {
-      return "Terminal ID pada preset EDC belum lengkap.";
+      return `Akun/terminal wajib tersedia untuk ${config.label}.`;
     }
   }
 

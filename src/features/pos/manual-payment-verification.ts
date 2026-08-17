@@ -9,7 +9,7 @@ import type {
 
 export const NON_CASH_MANUAL_PAYMENT_METHODS = [
   "debit_card",
-  "credit_card",
+  "bank_transfer",
 ] as const satisfies readonly PosManualPaymentMethod[];
 
 export type NonCashManualPaymentMethod =
@@ -34,8 +34,8 @@ export const DEFAULT_MANUAL_PAYMENT_POLICIES: Record<
     duplicateLookbackDays: 7,
     isEnabled: true,
   },
-  credit_card: {
-    method: "credit_card",
+  bank_transfer: {
+    method: "bank_transfer",
     coVerificationThreshold: 30_000_000,
     evidenceThreshold: 20_000_000,
     duplicateLookbackDays: 7,
@@ -72,9 +72,8 @@ export function isNonCashManualPaymentMethod(
 
 export function getManualPaymentProfileType(
   method: NonCashManualPaymentMethod,
-): "edc" {
-  void method;
-  return "edc";
+): "edc" | "bank_account" {
+  return method === "bank_transfer" ? "bank_account" : "edc";
 }
 
 export function isValidPaymentEvidenceKey(
@@ -197,7 +196,7 @@ export function normalizeAndValidateManualPaymentVerification({
     );
   }
 
-  if (payment.method === "debit_card" || payment.method === "credit_card") {
+  if (payment.method === "debit_card") {
     if (verificationSource !== "edc_terminal") {
       throw new Error(
         "Pembayaran kartu manual harus diverifikasi dari terminal EDC.",

@@ -77,8 +77,8 @@ assert.equal(debitState.selectedConfig.method, "debit_card");
 assert.equal(debitState.eligibleProfiles.length, 1);
 assert.equal(debitState.selectedProfile?.id, debitProfile.id);
 assert.equal(debitState.selectedPolicy?.method, "debit_card");
-assert.equal(debitState.evidenceRequired, true);
-assert.equal(debitState.coVerificationRequired, true);
+assert.equal(debitState.evidenceRequired, false);
+assert.equal(debitState.coVerificationRequired, false);
 assert.equal(debitState.recognizedCashAmount, 5_000_000);
 assert.equal(debitState.cashChangeAmount, 0);
 assert.equal(debitState.paymentProgressPercentage, 20);
@@ -96,7 +96,7 @@ const pendingState = getPosPaymentPanelState({
   customerDepositBalance: 0,
   paymentProfiles: [],
   paymentPolicies: [],
-  selectedMethod: "credit_card",
+  selectedMethod: "bank_transfer",
   selectedProfileId: "missing",
   amountInput: "",
   isCheckoutPending: true,

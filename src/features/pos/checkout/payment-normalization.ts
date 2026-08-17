@@ -1,10 +1,6 @@
-import type {
-  PosCheckoutPayload,
-  PosManualPaymentVerificationSource,
-} from "@/features/pos/contracts";
+import type { PosCheckoutPayload } from "@/features/pos/contracts";
 import {
   getManualPaymentProfileType,
-  normalizeAndValidateManualPaymentVerification,
   type ManualPaymentPolicy,
   type NonCashManualPaymentMethod,
 } from "@/features/pos/manual-payment-verification";
@@ -36,23 +32,7 @@ function normalizeNullableText(
   maxLength: number,
 ) {
   const trimmedValue = String(value ?? "").trim();
-
-  if (!trimmedValue) {
-    return null;
-  }
-
-  return trimmedValue.slice(0, maxLength);
-}
-
-function normalizeVerificationSource(
-  value: string,
-): PosManualPaymentVerificationSource | null {
-  return value === "merchant_app" ||
-    value === "edc_terminal" ||
-    value === "bank_app" ||
-    value === "bank_statement"
-    ? value
-    : null;
+  return trimmedValue ? trimmedValue.slice(0, maxLength) : null;
 }
 
 export function normalizeCheckoutPayments({
@@ -68,7 +48,13 @@ export function normalizeCheckoutPayments({
   policies: Record<NonCashManualPaymentMethod, ManualPaymentPolicy>;
   verificationNowIso: string;
 }): NormalizedCheckoutPayment[] {
-  return submittedPayments.map((payment, index) => {
+  // Parameter legacy ini tetap diterima sementara sampai schema cleanup R4.
+  // Runtime POS R1 tidak lagi memakai policy/evidence/co-verification.
+  void organizationId;
+  void policies;
+  void verificationNowIso;
+
+  return submittedPayments.map<NormalizedCheckoutPayment>((payment, index) => {
     const method = String(payment.method ?? "");
 
     if (!isManualPaymentMethod(method)) {
@@ -84,37 +70,30 @@ export function normalizeCheckoutPayments({
         ? null
         : Number(payment.receivedAmount);
     const changeAmount = Number(payment.changeAmount ?? 0);
-    const reference = normalizeNullableText(payment.reference, 160);
     const note = normalizeNullableText(payment.note, 160);
 
     if (!Number.isSafeInteger(amount) || amount <= 0) {
       throw new CheckoutValidationError(
-        `Nominal pembayaran ${methodLabel} harus lebih dari Rp0.`,
+        `${methodLabel}: nominal pembayaran harus lebih dari Rp0.`,
       );
     }
 
-    if (!Number.isSafeInteger(changeAmount) || changeAmount < 0) {
-      throw new CheckoutValidationError("Nominal kembalian cash tidak valid.");
-    }
-
     if (method === "cash") {
-      if (receivedAmount === null) {
+      if (
+        receivedAmount === null ||
+        !Number.isSafeInteger(receivedAmount) ||
+        receivedAmount < amount
+      ) {
         throw new CheckoutValidationError(
-          "Nominal uang diterima cash wajib dikirim dari POS.",
+          "Cash: uang diterima tidak boleh lebih kecil dari nominal pembayaran.",
         );
       }
 
-      if (!Number.isSafeInteger(receivedAmount) || receivedAmount < amount) {
-        throw new CheckoutValidationError(
-          "Nominal uang diterima cash tidak valid.",
-        );
-      }
+      const expectedChangeAmount = Math.max(receivedAmount - amount, 0);
 
-      const expectedChange = Math.max(receivedAmount - amount, 0);
-
-      if (changeAmount !== expectedChange) {
+      if (!Number.isSafeInteger(changeAmount) || changeAmount !== expectedChangeAmount) {
         throw new CheckoutValidationError(
-          "Nominal kembalian cash tidak sesuai dengan uang diterima.",
+          "Cash: nominal kembalian tidak sesuai dengan uang diterima.",
         );
       }
 
@@ -134,90 +113,82 @@ export function normalizeCheckoutPayments({
         manualPaymentProfileName: null,
         manualPaymentProfileCode: null,
         manualPaymentProfileRegisterId: null,
-        verificationDetails: {},
+        verificationDetails: {} as Record<string, string | null>,
         normalizedProvider: null,
         normalizedReference: null,
       };
     }
 
-    if (changeAmount > 0 || receivedAmount !== null) {
+    if (receivedAmount !== null || changeAmount !== 0) {
       throw new CheckoutValidationError(
-        "Kembalian hanya boleh untuk pembayaran cash.",
+        `${methodLabel}: kembalian hanya boleh digunakan untuk Cash.`,
       );
     }
 
-    try {
-      const profileId = String(payment.manualPaymentProfileId ?? "").trim();
+    const profileId = String(payment.manualPaymentProfileId ?? "").trim();
 
-      if (!UUID_PATTERN.test(profileId)) {
-        throw new Error("Pilih akun/terminal pembayaran yang sudah dikonfigurasi.");
-      }
-
-      const profile = paymentProfilesById.get(profileId);
-
-      if (!profile) {
-        throw new Error(
-          "Akun/terminal pembayaran tidak aktif atau bukan milik outlet ini.",
-        );
-      }
-
-      if (profile.profileType !== getManualPaymentProfileType(method)) {
-        throw new Error("Akun/terminal tidak mendukung metode pembayaran ini.");
-      }
-
-      const verification = normalizeAndValidateManualPaymentVerification({
-        payment: {
-          ...payment,
-          method,
-          amount,
-          manualPaymentProfileId: profile.id,
-          verificationConfirmed: payment.verificationConfirmed === true,
-          provider: profile.provider,
-          reference,
-          verificationSource: normalizeVerificationSource(
-            profile.verificationSource,
-          ),
-          providerPaidAtIso: payment.providerPaidAtIso ?? verificationNowIso,
-          verificationDetails: {
-            ...payment.verificationDetails,
-            merchantId: profile.merchantId,
-            terminalId: profile.terminalId,
-            destinationAccount: profile.destinationAccount,
-          },
-        },
-        organizationId,
-        policy: policies[method],
-      });
-
-      return {
-        method,
-        amount,
-        receivedAmount: null,
-        changeAmount: 0,
-        provider: profile.provider,
-        reference,
-        note,
-        verificationSource: verification.verificationSource,
-        providerPaidAt: verification.providerPaidAt,
-        providerPaidAtIso: verification.providerPaidAt.toISOString(),
-        evidenceKey: verification.evidenceKey,
-        manualPaymentProfileId: profile.id,
-        manualPaymentProfileName: profile.name,
-        manualPaymentProfileCode: profile.code,
-        manualPaymentProfileRegisterId: profile.registerId,
-        verificationDetails: verification.details as Record<
-          string,
-          string | null
-        >,
-        normalizedProvider: verification.normalizedProvider,
-        normalizedReference: verification.normalizedReference,
-      };
-    } catch (error) {
+    if (!UUID_PATTERN.test(profileId)) {
       throw new CheckoutValidationError(
-        `${methodLabel}: ${
-          error instanceof Error ? error.message : "data verifikasi tidak valid"
-        }`,
+        `${methodLabel}: pilih akun/terminal pembayaran yang sudah dikonfigurasi.`,
       );
     }
+
+    const profile = paymentProfilesById.get(profileId);
+
+    if (!profile) {
+      throw new CheckoutValidationError(
+        `${methodLabel}: akun/terminal pembayaran tidak ditemukan atau tidak aktif.`,
+      );
+    }
+
+    if (profile.profileType !== getManualPaymentProfileType(method)) {
+      throw new CheckoutValidationError(
+        `${methodLabel}: preset pembayaran tidak sesuai dengan metode yang dipilih.`,
+      );
+    }
+
+    if (method === "debit_card" && !profile.terminalId) {
+      throw new CheckoutValidationError(
+        "EDC: Terminal ID pada preset belum dikonfigurasi.",
+      );
+    }
+
+    if (method === "bank_transfer" && !profile.destinationAccount) {
+      throw new CheckoutValidationError(
+        "Transfer: rekening tujuan pada preset belum dikonfigurasi.",
+      );
+    }
+
+    const provider = normalizeNullableText(profile.provider, 80);
+
+    if (!provider) {
+      throw new CheckoutValidationError(
+        `${methodLabel}: provider/bank pada preset belum dikonfigurasi.`,
+      );
+    }
+
+    return {
+      method,
+      amount,
+      receivedAmount: null,
+      changeAmount: 0,
+      provider,
+      reference: null,
+      note,
+      verificationSource: null,
+      providerPaidAt: null,
+      providerPaidAtIso: null,
+      evidenceKey: null,
+      manualPaymentProfileId: profile.id,
+      manualPaymentProfileName: profile.name,
+      manualPaymentProfileCode: profile.code,
+      manualPaymentProfileRegisterId: profile.registerId,
+      verificationDetails: {
+        terminalId: profile.terminalId,
+        destinationAccount: profile.destinationAccount,
+      } as Record<string, string | null>,
+      normalizedProvider: provider.toUpperCase().replace(/\s+/g, " "),
+      normalizedReference: null,
+    };
   });
 }

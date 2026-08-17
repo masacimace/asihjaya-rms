@@ -120,6 +120,13 @@
       "when": 1786372360863,
       "tag": "0016_product_batch_import_staging",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786995035673,
+      "tag": "0017_pos_simple_payments",
+      "breakpoints": true
     }
   ]
 }

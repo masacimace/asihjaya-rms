@@ -5,8 +5,8 @@ export const manualPaymentMethodLabels: Record<
   string
 > = {
   cash: "Cash",
-  debit_card: "Debit Card EDC",
-  credit_card: "Credit Card EDC",
+  debit_card: "EDC",
+  bank_transfer: "Transfer",
 };
 
 const manualPaymentMethods = Object.keys(

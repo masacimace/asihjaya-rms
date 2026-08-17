@@ -307,13 +307,10 @@ export function createCheckoutPayload(input: {
       submission.customerDepositInAmount > 0
         ? submission.customerDepositInAmount
         : null,
-    manualPaymentApprovalId: submission.manualPaymentApproval?.id ?? null,
+    manualPaymentApprovalId: null,
     customerId: submission.customerId,
     note: null,
-    discountApprovalId:
-      submission.discountApproval?.status === "approved"
-        ? submission.discountApproval.id
-        : null,
+    discountApprovalId: null,
     discountAmount:
       submission.approvedDiscountAmount > 0
         ? submission.approvedDiscountAmount

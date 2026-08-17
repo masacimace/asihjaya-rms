@@ -96,6 +96,9 @@ export function PosCartContent({
   const hasCustomers = customers.length > 0;
   const hasCustomerSearchQuery = customerQuery.trim().length > 0;
 
+  void isDiscountPending;
+  void onRefreshDiscountApproval;
+
   return (
     <div className="flex min-h-full flex-col bg-white p-4 sm:p-5">
       {hasCartItems ? (
@@ -339,56 +342,25 @@ export function PosCartContent({
               <div className="mt-3 rounded-xl border border-[var(--border)] bg-white p-3 text-xs leading-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p
-                      className={cn(
-                        "font-semibold",
-                        discountApproval.status === "approved"
-                          ? "text-emerald-700"
-                          : discountApproval.status === "rejected"
-                            ? "text-red-700"
-                            : "text-amber-700",
-                      )}
-                    >
-                      {discountApproval.status === "approved"
-                        ? "Diskon disetujui"
-                        : discountApproval.status === "rejected"
-                          ? "Diskon ditolak"
-                          : "Menunggu approval"}
+                    <p className="font-semibold text-emerald-700">
+                      Diskon aktif
                     </p>
                     <p className="mt-1 text-[var(--muted)]">
-                      {discountApproval.reason || "Tidak ada alasan tambahan."}
+                      {discountApproval.reason || "Tanpa catatan tambahan."}
                     </p>
-                    {discountApproval.responseNotes ? (
-                      <p className="mt-1 text-neutral-700">
-                        Catatan manager: {discountApproval.responseNotes}
-                      </p>
-                    ) : null}
                   </div>
-                  <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-1 font-semibold text-neutral-700">
-                    {discountApproval.id.slice(0, 8).toUpperCase()}
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">
+                    AKTIF
                   </span>
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {discountApproval.status === "pending" ? (
-                    <button
-                      type="button"
-                      onClick={onRefreshDiscountApproval}
-                      disabled={isDiscountPending}
-                      className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {isDiscountPending ? "Mengecek..." : "Cek Status"}
-                    </button>
-                  ) : null}
-
                   <button
                     type="button"
                     onClick={onClearDiscountApproval}
                     className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 font-semibold text-neutral-700 transition hover:bg-neutral-50"
                   >
-                    {discountApproval.status === "approved"
-                      ? "Hapus Diskon"
-                      : "Reset Request"}
+                    Hapus Diskon
                   </button>
                 </div>
               </div>
@@ -406,7 +378,7 @@ export function PosCartContent({
                 )}
               >
                 <BadgePercent className="size-4" />
-                Minta Diskon
+                Tambah Diskon
               </button>
             )}
 

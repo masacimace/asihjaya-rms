@@ -1,52 +1,33 @@
 import {
   ArrowLeft,
-  Banknote,
   CheckCircle2,
-  ChevronDown,
   CreditCard,
+  Landmark,
   Settings2,
-  ShieldCheck,
-  Store,
 } from "lucide-react";
 import Link from "next/link";
 
-import { IdrCurrencyInput } from "@/components/settings/idr-currency-input";
-import {
-  saveManualPaymentPolicyAction,
-  saveManualPaymentProfileAction,
-} from "@/app/actions/manual-payment-settings";
+import { saveManualPaymentProfileAction } from "@/app/actions/manual-payment-settings";
 import type {
   ManualPaymentSettingsData,
   ManualPaymentSettingsProfile,
 } from "@/features/settings/manual-payment-contracts";
 import { getManualPaymentSettingsData } from "@/features/settings/manual-payment-queries";
-import type { NonCashManualPaymentMethod } from "@/features/pos/manual-payment-verification";
+import type { PosManualPaymentProfileType } from "@/features/pos/contracts";
 import { requirePermission } from "@/lib/auth/session";
 
 export const metadata = {
-  title: "Manual EDC Payment",
+  title: "Metode & Akun Pembayaran",
 };
 
 const inputClassName =
   "h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]";
 const labelClassName = "mb-1.5 block text-xs font-semibold text-neutral-700";
 
-const methodLabels: Record<NonCashManualPaymentMethod, string> = {
-  debit_card: "Debit EDC",
-  credit_card: "Credit EDC",
-};
-
-const profileTypeLabels = {
+const profileTypeLabels: Record<PosManualPaymentProfileType, string> = {
   edc: "Terminal EDC",
-} as const;
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
+  bank_account: "Rekening Transfer",
+};
 
 function ProfileFields({
   data,
@@ -55,13 +36,13 @@ function ProfileFields({
 }: {
   data: ManualPaymentSettingsData;
   profile?: ManualPaymentSettingsProfile;
-  profileType: "edc";
+  profileType: PosManualPaymentProfileType;
 }) {
+  const isEdc = profileType === "edc";
+
   return (
     <>
-      {profile ? (
-        <input type="hidden" name="profileId" value={profile.id} />
-      ) : null}
+      {profile ? <input type="hidden" name="profileId" value={profile.id} /> : null}
       <input type="hidden" name="profileType" value={profileType} />
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -73,9 +54,7 @@ function ProfileFields({
             defaultValue={profile?.outletId ?? data.outlets[0]?.id ?? ""}
             className={inputClassName}
           >
-            <option value="" disabled>
-              Pilih outlet
-            </option>
+            <option value="" disabled>Pilih outlet</option>
             {data.outlets.map((outlet) => (
               <option key={outlet.id} value={outlet.id}>
                 {outlet.name} · {outlet.code}
@@ -91,7 +70,7 @@ function ProfileFields({
             required
             maxLength={40}
             defaultValue={profile?.code ?? ""}
-            placeholder="EDC-BCA-01"
+            placeholder={isEdc ? "EDC-BCA-01" : "TRF-BCA-01"}
             className={inputClassName}
           />
         </label>
@@ -103,13 +82,13 @@ function ProfileFields({
             required
             maxLength={120}
             defaultValue={profile?.name ?? ""}
-            placeholder="BCA EDC — Kasir 1"
+            placeholder={isEdc ? "BCA EDC — Kasir 1" : "BCA — Rekening Toko"}
             className={inputClassName}
           />
         </label>
 
         <label>
-          <span className={labelClassName}>Provider / bank / acquirer</span>
+          <span className={labelClassName}>Bank / provider</span>
           <input
             name="provider"
             required
@@ -120,35 +99,50 @@ function ProfileFields({
           />
         </label>
 
-        <label>
-          <span className={labelClassName}>Terminal ID</span>
-          <input
-            name="terminalId"
-            required
-            maxLength={80}
-            defaultValue={profile?.terminalId ?? ""}
-            placeholder="Terminal ID dari EDC"
-            className={inputClassName}
-          />
-        </label>
-        <label>
-          <span className={labelClassName}>Mapping register</span>
-          <select
-            name="registerId"
-            defaultValue={profile?.registerId ?? ""}
-            className={inputClassName}
-          >
-            <option value="">Semua register pada outlet</option>
-            {data.outlets.flatMap((outlet) =>
-              outlet.registers.map((register) => (
-                <option key={register.id} value={register.id}>
-                  {outlet.name} · {register.name}
-                </option>
-              )),
-            )}
-          </select>
-          <input type="hidden" name="verificationSource" value="edc_terminal" />
-        </label>
+        {isEdc ? (
+          <>
+            <label>
+              <span className={labelClassName}>Terminal ID</span>
+              <input
+                name="terminalId"
+                required
+                maxLength={80}
+                defaultValue={profile?.terminalId ?? ""}
+                placeholder="Terminal ID dari EDC"
+                className={inputClassName}
+              />
+            </label>
+            <label>
+              <span className={labelClassName}>Mapping register</span>
+              <select
+                name="registerId"
+                defaultValue={profile?.registerId ?? ""}
+                className={inputClassName}
+              >
+                <option value="">Semua register pada outlet</option>
+                {data.outlets.flatMap((outlet) =>
+                  outlet.registers.map((register) => (
+                    <option key={register.id} value={register.id}>
+                      {outlet.name} · {register.name}
+                    </option>
+                  )),
+                )}
+              </select>
+            </label>
+          </>
+        ) : (
+          <label className="sm:col-span-2">
+            <span className={labelClassName}>Nomor rekening tujuan</span>
+            <input
+              name="destinationAccount"
+              required
+              maxLength={120}
+              defaultValue={profile?.destinationAccount ?? ""}
+              placeholder="Contoh: 1234567890 a.n. Asihjaya"
+              className={inputClassName}
+            />
+          </label>
+        )}
 
         <label>
           <span className={labelClassName}>Urutan pilihan POS</span>
@@ -177,11 +171,79 @@ function ProfileFields({
         type="submit"
         className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
       >
-        {profile
-          ? "Simpan perubahan"
-          : `Tambah ${profileTypeLabels[profileType]}`}
+        {profile ? "Simpan perubahan" : `Tambah ${profileTypeLabels[profileType]}`}
       </button>
     </>
+  );
+}
+
+function ProfileSection({
+  data,
+  profileType,
+}: {
+  data: ManualPaymentSettingsData;
+  profileType: PosManualPaymentProfileType;
+}) {
+  const profiles = data.profiles.filter((profile) => profile.profileType === profileType);
+  const isEdc = profileType === "edc";
+  const Icon = isEdc ? CreditCard : Landmark;
+
+  return (
+    <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+          <Icon className="size-5" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-neutral-950">{profileTypeLabels[profileType]}</h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+            {isEdc
+              ? "Terminal yang dapat dipilih kasir untuk metode pembayaran EDC."
+              : "Rekening tujuan yang dapat dipilih kasir untuk metode pembayaran Transfer."}
+          </p>
+        </div>
+      </div>
+
+      <details className="mt-5 rounded-2xl border border-[var(--border)] bg-neutral-50 p-4" open={profiles.length === 0}>
+        <summary className="cursor-pointer text-sm font-semibold text-neutral-900">
+          Tambah {profileTypeLabels[profileType]}
+        </summary>
+        <form action={saveManualPaymentProfileAction} className="mt-4">
+          <ProfileFields data={data} profileType={profileType} />
+        </form>
+      </details>
+
+      <div className="mt-4 grid gap-3">
+        {profiles.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-[var(--border)] px-4 py-5 text-sm text-[var(--muted)]">
+            Belum ada {profileTypeLabels[profileType].toLowerCase()} yang dikonfigurasi.
+          </p>
+        ) : (
+          profiles.map((profile) => (
+            <details key={profile.id} className="rounded-2xl border border-[var(--border)] p-4">
+              <summary className="cursor-pointer list-none">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-neutral-950">{profile.name}</p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {profile.outletName} · {profile.provider}
+                      {profile.terminalId ? ` · ${profile.terminalId}` : ""}
+                      {profile.destinationAccount ? ` · ${profile.destinationAccount}` : ""}
+                    </p>
+                  </div>
+                  <span className={profile.isActive ? "text-xs font-semibold text-emerald-700" : "text-xs font-semibold text-neutral-400"}>
+                    {profile.isActive ? "Aktif" : "Nonaktif"}
+                  </span>
+                </div>
+              </summary>
+              <form action={saveManualPaymentProfileAction} className="mt-4 border-t border-[var(--border)] pt-4">
+                <ProfileFields data={data} profile={profile} profileType={profileType} />
+              </form>
+            </details>
+          ))
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -209,232 +271,33 @@ export default async function SettingsPage({
           <ArrowLeft className="size-4" />
           Kembali ke Pengaturan
         </Link>
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-              <Settings2 className="size-3.5" />
-              Pengaturan pembayaran
-            </div>
-            <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
-              Manual EDC Payment
-            </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Simpan terminal EDC outlet sebagai preset. Kasir cukup memilih
-              terminal BCA, BRI, BNI, atau Mandiri, memasukkan approval code,
-              lalu mengonfirmasi bahwa pembayaran terlihat berhasil.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
-            <p className="flex items-center gap-2 font-semibold text-neutral-950">
-              <ShieldCheck className="size-4 text-emerald-600" />
-              Safety tetap aktif
-            </p>
-            <p className="mt-1 max-w-sm text-xs leading-5">
-              Duplicate reference, evidence threshold, co-verification, dan
-              audit trail tetap diperiksa oleh system.
-            </p>
-          </div>
+        <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+          <Settings2 className="size-3.5" />
+          Pengaturan pembayaran
         </div>
+        <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
+          Metode & Akun Pembayaran
+        </h1>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+          Atur terminal EDC dan rekening Transfer yang dapat dipilih kasir. Tidak ada approval code, evidence, co-verification, atau settlement verification pada transaksi POS.
+        </p>
+        <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-emerald-700">
+          <CheckCircle2 className="size-4" />
+          Metode POS: Cash, EDC, Transfer. Split payment tetap didukung.
+        </p>
       </section>
 
       {message ? (
-        <div
-          className={
-            messageType === "error"
-              ? "rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-              : "rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-          }
+        <div className={messageType === "error"
+          ? "rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          : "rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"}
         >
           {message}
         </div>
       ) : null}
 
-      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
-        <div className="flex items-start gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
-            <Banknote className="size-5" />
-          </div>
-          <div>
-            <h2 className="font-semibold text-neutral-950">Threshold risiko</h2>
-            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              Evidence dan co-verification hanya muncul ketika nominal mencapai
-              threshold. Reference duplikat tetap selalu memerlukan review.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-4 xl:grid-cols-2">
-          {data.policies.map((policy) => (
-            <form
-              key={policy.method}
-              action={saveManualPaymentPolicyAction}
-              className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-4"
-            >
-              <input type="hidden" name="method" value={policy.method} />
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-neutral-950">
-                    {methodLabels[policy.method]}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    Evidence {formatCurrency(policy.evidenceThreshold)} ·
-                    approval {formatCurrency(policy.coVerificationThreshold)}
-                  </p>
-                </div>
-                <label className="flex items-center gap-2 text-xs font-semibold text-neutral-700">
-                  <input
-                    type="checkbox"
-                    name="isEnabled"
-                    defaultChecked={policy.isEnabled}
-                    className="size-4 accent-[var(--accent)]"
-                  />
-                  Aktif
-                </label>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <label>
-                  <span className={labelClassName}>Bukti wajib mulai</span>
-                  <IdrCurrencyInput
-                    name="evidenceThreshold"
-                    defaultValue={policy.evidenceThreshold}
-                    required
-                    ariaLabel={`Bukti wajib mulai untuk ${methodLabels[policy.method]}`}
-                    className={inputClassName}
-                  />
-                </label>
-                <label>
-                  <span className={labelClassName}>Co-verification mulai</span>
-                  <IdrCurrencyInput
-                    name="coVerificationThreshold"
-                    defaultValue={policy.coVerificationThreshold}
-                    required
-                    ariaLabel={`Co-verification mulai untuk ${methodLabels[policy.method]}`}
-                    className={inputClassName}
-                  />
-                </label>
-                <label>
-                  <span className={labelClassName}>Cek duplikat (hari)</span>
-                  <input
-                    name="duplicateLookbackDays"
-                    type="number"
-                    min={1}
-                    max={3650}
-                    defaultValue={policy.duplicateLookbackDays}
-                    className={inputClassName}
-                  />
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                className="mt-4 inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-900 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
-              >
-                Simpan kebijakan
-              </button>
-            </form>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
-        <div className="flex items-start gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-blue-50 text-blue-700">
-            <Store className="size-5" />
-          </div>
-          <div>
-            <h2 className="font-semibold text-neutral-950">
-              Preset pembayaran outlet
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              Data terminal EDC disimpan sekali di sini, bukan diketik berulang
-              pada setiap transaksi.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-4 xl:grid-cols-1">
-          <details className="group rounded-2xl border border-[var(--border)] bg-neutral-50 p-4 transition open:bg-white open:shadow-sm">
-            <summary className="flex w-full cursor-pointer list-none items-center gap-2 font-semibold text-neutral-950 select-none marker:content-none [&::-webkit-details-marker]:hidden">
-              <CreditCard className="size-4 text-blue-700" />
-              <span>Tambah terminal EDC</span>
-              <span className="ml-auto grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--border)] bg-white text-neutral-500 transition group-open:border-blue-200 group-open:bg-blue-50 group-open:text-blue-700">
-                <ChevronDown className="size-4 transition-transform duration-200 group-open:rotate-180" />
-              </span>
-            </summary>
-            <form action={saveManualPaymentProfileAction} className="mt-4">
-              <ProfileFields data={data} profileType="edc" />
-            </form>
-          </details>
-        </div>
-      </section>
-
-      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-semibold text-neutral-950">Profil tersimpan</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              {data.profiles.length} profil ditemukan pada organisasi ini.
-            </p>
-          </div>
-          <CheckCircle2 className="size-5 text-emerald-600" />
-        </div>
-
-        {data.profiles.length > 0 ? (
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
-            {data.profiles.map((profile) => (
-              <details
-                key={profile.id}
-                className="rounded-2xl border border-[var(--border)] bg-white p-4"
-              >
-                <summary className="cursor-pointer marker:content-none">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-neutral-950">
-                        {profile.name}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {profileTypeLabels[profile.profileType]} ·{" "}
-                        {profile.provider} · {profile.outletName}
-                      </p>
-                      {profile.registerName ? (
-                        <p className="mt-1 text-xs text-blue-700">
-                          Register: {profile.registerName}
-                        </p>
-                      ) : null}
-                    </div>
-                    <span
-                      className={
-                        profile.isActive
-                          ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
-                          : "rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600"
-                      }
-                    >
-                      {profile.isActive ? "Aktif" : "Nonaktif"}
-                    </span>
-                  </div>
-                </summary>
-                <form
-                  action={saveManualPaymentProfileAction}
-                  className="mt-4 border-t border-[var(--border)] pt-4"
-                >
-                  <ProfileFields
-                    data={data}
-                    profile={profile}
-                    profileType={profile.profileType}
-                  />
-                </form>
-              </details>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-5 rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 p-6 text-center text-sm text-[var(--muted)]">
-            Belum ada preset. Tambahkan minimal satu profil untuk metode
-            non-tunai yang digunakan toko.
-          </div>
-        )}
-      </section>
+      <ProfileSection data={data} profileType="edc" />
+      <ProfileSection data={data} profileType="bank_account" />
     </div>
   );
 }

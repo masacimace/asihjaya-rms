@@ -53,13 +53,8 @@ export function getPosPaymentPanelState({
   const selectedPolicy =
     paymentPolicies.find((policy) => policy.method === selectedMethod) ?? null;
   const parsedInputAmount = parsePaymentAmountInput(amountInput);
-  const evidenceRequired = Boolean(
-    selectedPolicy && parsedInputAmount >= selectedPolicy.evidenceThreshold,
-  );
-  const coVerificationRequired = Boolean(
-    selectedPolicy &&
-      parsedInputAmount >= selectedPolicy.coVerificationThreshold,
-  );
+  const evidenceRequired = false;
+  const coVerificationRequired = false;
   const recognizedCashAmount =
     selectedMethod === "cash"
       ? Math.min(Math.max(parsedInputAmount, 0), remainingAmount)

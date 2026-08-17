@@ -173,7 +173,7 @@ export function usePosPayment({
       setPaymentEvidenceFile(null);
       setPaymentFeedback(
         profile
-          ? `${profile.name} dipilih. Masukkan reference dan konfirmasi pembayaran.`
+          ? `${profile.name} dipilih.`
           : "Pilih akun atau terminal pembayaran yang valid.",
       );
     },

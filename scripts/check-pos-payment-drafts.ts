@@ -34,15 +34,13 @@ const edcProfile: PosManualPaymentProfile = {
 
 assert.deepEqual(
   paymentMethodConfigs.map((config) => config.method),
-  ["cash", "debit_card", "credit_card"],
+  ["cash", "debit_card", "bank_transfer"],
 );
 assert.equal(getPaymentConfig("cash").allowOverpayment, true);
-assert.equal(getPaymentConfig("debit_card").requiresReference, true);
+assert.equal(getPaymentConfig("debit_card").requiresReference, false);
 assert.equal(profileSupportsMethod(edcProfile, "cash"), false);
 assert.equal(profileSupportsMethod(edcProfile, "debit_card"), true);
-assert.deepEqual(getProfilesForMethod([edcProfile], "credit_card"), [
-  edcProfile,
-]);
+assert.deepEqual(getProfilesForMethod([edcProfile], "bank_transfer"), []);
 
 const verificationForm = createPaymentVerificationForm(
   "debit_card",
@@ -97,22 +95,21 @@ assert.equal(
 const debitDraft: PosPaymentDraft = {
   id: "pay-debit-1",
   method: "debit_card",
-  methodLabel: "Debit Card EDC",
+  methodLabel: "EDC",
   amount: 500_000,
   manualPaymentProfileId: edcProfile.id,
   manualPaymentProfileName: edcProfile.name,
-  verificationConfirmed: true,
+  verificationConfirmed: false,
   receivedAmount: null,
   changeAmount: 0,
   provider: edcProfile.provider,
-  reference: "APPROVAL-001",
+  reference: null,
   note: null,
   verificationSource: "edc_terminal",
-  providerPaidAtIso: "2026-08-02T04:00:00.000Z",
+  providerPaidAtIso: null,
   evidenceKey: null,
   evidenceFileName: null,
   verificationDetails: {
-    merchantId: edcProfile.merchantId,
     terminalId: edcProfile.terminalId,
   },
 };
@@ -129,12 +126,12 @@ assert.equal(
     payments: [
       {
         ...debitDraft,
-        verificationDetails: { merchantId: "MID-001", terminalId: null },
+        verificationDetails: { terminalId: null },
       },
     ],
     totalAmount: 500_000,
   }),
-  "Terminal ID pada preset EDC belum lengkap.",
+  null,
 );
 
 assert.equal(isStoredCheckoutPayment(cashDraft), true);

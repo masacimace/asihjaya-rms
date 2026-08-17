@@ -11,7 +11,6 @@ import {
   holdPosCartAction,
   lookupPosScanValueAction,
   requestPosDiscountApprovalAction,
-  uploadPosPaymentEvidenceAction,
 } from "@/app/actions/pos";
 import type { PosPanelMode } from "@/components/pos/workspace/pos-mobile-side-panel";
 import {
@@ -356,10 +355,7 @@ export function PosWorkspace({
   }
 
   function refreshDiscountApprovalStatus() {
-    refreshDiscountApprovalStatusState({
-      resetPaymentFlow,
-      refreshWorkspace: () => router.refresh(),
-    });
+    refreshDiscountApprovalStatusState();
   }
 
   function selectCustomer(customer: PosCustomerOption) {
@@ -530,13 +526,7 @@ export function PosWorkspace({
         profile.id === selectedPaymentProfileId &&
         profileSupportsMethod(profile, selectedMethod),
     );
-    const selectedPolicy = paymentPolicies.find(
-      (policy) => policy.method === selectedMethod,
-    );
     const inputAmount = parsePaymentAmountInput(paymentAmountInput);
-    const provider =
-      selectedProfile?.provider.trim() ?? paymentProviderInput.trim();
-    const reference = paymentReferenceInput.trim();
     const note = paymentNoteInput.trim();
 
     if (rawCustomerDepositUsedAmount !== customerDepositUsedAmount) {
@@ -546,7 +536,7 @@ export function PosWorkspace({
       return;
     }
 
-    if (!Number.isFinite(inputAmount) || inputAmount <= 0) {
+    if (!Number.isSafeInteger(inputAmount) || inputAmount <= 0) {
       setPaymentFeedback("Nominal pembayaran harus lebih dari Rp0.");
       return;
     }
@@ -560,43 +550,10 @@ export function PosWorkspace({
 
     if (selectedMethod !== "cash" && !selectedProfile) {
       setPaymentFeedback(
-        "Pilih akun atau terminal pembayaran yang sudah dikonfigurasi.",
+        selectedMethod === "bank_transfer"
+          ? "Pilih rekening Transfer yang sudah dikonfigurasi."
+          : "Pilih terminal EDC yang sudah dikonfigurasi.",
       );
-      return;
-    }
-
-    if (selectedMethod !== "cash" && !paymentVerificationConfirmed) {
-      setPaymentFeedback(
-        "Konfirmasi bahwa pembayaran sudah terlihat berhasil di terminal EDC outlet.",
-      );
-      return;
-    }
-
-    if (
-      selectedMethod !== "cash" &&
-      selectedPolicy &&
-      !selectedPolicy.isEnabled
-    ) {
-      setPaymentFeedback(
-        "Metode pembayaran ini sedang dinonaktifkan oleh manager.",
-      );
-      return;
-    }
-
-    if (config.requiresReference && !reference) {
-      setPaymentFeedback(
-        `${config.referenceLabel ?? "Reference"} wajib diisi.`,
-      );
-      return;
-    }
-
-    if (provider.length > 80) {
-      setPaymentFeedback("Provider/bank maksimal 80 karakter.");
-      return;
-    }
-
-    if (reference.length > 160) {
-      setPaymentFeedback("Reference number maksimal 160 karakter.");
       return;
     }
 
@@ -605,49 +562,7 @@ export function PosWorkspace({
       return;
     }
 
-    if (selectedMethod !== "cash") {
-      if (!paymentVerificationForm.providerPaidAtLocal) {
-        setPaymentFeedback("Waktu pembayaran dari provider wajib diisi.");
-        return;
-      }
-
-      if (
-        paymentVerificationForm.cardLast4 &&
-        !/^\d{4}$/.test(paymentVerificationForm.cardLast4)
-      ) {
-        setPaymentFeedback("Last 4 kartu harus terdiri dari empat angka.");
-        return;
-      }
-
-      if (
-        selectedPolicy &&
-        inputAmount >= selectedPolicy.evidenceThreshold &&
-        !paymentEvidenceFile
-      ) {
-        setPaymentFeedback(
-          `Bukti pembayaran wajib untuk nominal minimal ${formatCurrency(selectedPolicy.evidenceThreshold)}.`,
-        );
-        return;
-      }
-    }
-
     startAddingPaymentTransition(async () => {
-      let evidenceKey: string | null = null;
-
-      if (selectedMethod !== "cash" && paymentEvidenceFile) {
-        setPaymentFeedback("Mengunggah bukti pembayaran...");
-        const formData = new FormData();
-        formData.set("file", paymentEvidenceFile);
-        const uploadResult = await uploadPosPaymentEvidenceAction(formData);
-
-        if (uploadResult.status === "error") {
-          setPaymentFeedback(uploadResult.message);
-          return;
-        }
-
-        evidenceKey = uploadResult.evidenceKey;
-      }
-
       const recognizedAmount =
         selectedMethod === "cash"
           ? Math.min(inputAmount, remainingAmount)
@@ -660,10 +575,6 @@ export function PosWorkspace({
         remainingAmount - recognizedAmount,
         0,
       );
-      const providerPaidAtIso =
-        selectedMethod === "cash"
-          ? null
-          : new Date(paymentVerificationForm.providerPaidAtLocal).toISOString();
 
       invalidateCheckoutAttempt();
       setManualPaymentApproval(null);
@@ -678,36 +589,23 @@ export function PosWorkspace({
             selectedMethod === "cash" ? null : (selectedProfile?.id ?? null),
           manualPaymentProfileName:
             selectedMethod === "cash" ? null : (selectedProfile?.name ?? null),
-          verificationConfirmed:
-            selectedMethod === "cash" ? false : paymentVerificationConfirmed,
+          verificationConfirmed: false,
           receivedAmount: selectedMethod === "cash" ? inputAmount : null,
           changeAmount,
-          provider: provider || null,
-          reference: reference || null,
+          provider:
+            selectedMethod === "cash" ? null : (selectedProfile?.provider ?? null),
+          reference: null,
           note: note || null,
-          verificationSource:
-            selectedMethod === "cash"
-              ? null
-              : paymentVerificationForm.verificationSource,
-          providerPaidAtIso,
-          evidenceKey,
-          evidenceFileName: paymentEvidenceFile?.name ?? null,
+          verificationSource: null,
+          providerPaidAtIso: null,
+          evidenceKey: null,
+          evidenceFileName: null,
           verificationDetails:
             selectedMethod === "cash"
               ? {}
               : {
-                  merchantId: paymentVerificationForm.merchantId.trim() || null,
-                  terminalId: paymentVerificationForm.terminalId.trim() || null,
-                  batchNumber:
-                    paymentVerificationForm.batchNumber.trim() || null,
-                  traceNumber:
-                    paymentVerificationForm.traceNumber.trim() || null,
-                  cardNetwork:
-                    paymentVerificationForm.cardNetwork.trim() || null,
-                  cardLast4: paymentVerificationForm.cardLast4.trim() || null,
-                  senderName: paymentVerificationForm.senderName.trim() || null,
-                  destinationAccount:
-                    paymentVerificationForm.destinationAccount.trim() || null,
+                  terminalId: selectedProfile?.terminalId ?? null,
+                  destinationAccount: selectedProfile?.destinationAccount ?? null,
                 },
         },
       ]);
@@ -761,7 +659,7 @@ export function PosWorkspace({
       payments,
       customerDepositUsedAmount,
       customerDepositInAmount,
-      manualPaymentApproval,
+      manualPaymentApproval: null,
       customerId: selectedCustomer?.id ?? null,
       discountApproval,
       approvedDiscountAmount,

@@ -2970,20 +2970,6 @@ export const payments = pgTable(
       )`,
     ),
     check(
-      "payments_manual_noncash_verification_ck",
-      sql`${table.method} not in ('qris_manual', 'debit_card', 'credit_card', 'bank_transfer') or (
-        btrim(${table.provider}) <> ''
-        and lower(btrim(${table.provider})) <> 'manual'
-        and ${table.providerReference} is not null
-        and btrim(${table.providerReference}) <> ''
-        and ${table.normalizedReference} is not null
-        and length(${table.normalizedReference}) >= 4
-        and ${table.verificationSource} in ('merchant_app', 'edc_terminal', 'bank_app', 'bank_statement')
-        and ${table.providerPaidAt} is not null
-        and ${table.settlementStatus} <> 'not_applicable'
-      )`,
-    ),
-    check(
       "payments_co_verified_state_ck",
       sql`${table.verificationStatus} <> 'co_verified' or (
         ${table.verificationApprovalId} is not null

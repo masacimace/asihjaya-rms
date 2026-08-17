@@ -126,8 +126,6 @@ export function PosPaymentPanel({
     eligibleProfiles,
     selectedProfile,
     parsedInputAmount,
-    evidenceRequired,
-    coVerificationRequired,
     recognizedCashAmount,
     cashChangeAmount,
     hasPayments,
@@ -151,6 +149,20 @@ export function PosPaymentPanel({
     isCheckoutPending,
     isAddingPayment,
   });
+
+  // Kontrak legacy ini tetap diterima sementara agar recovery state lama tidak
+  // putus sebelum cleanup final. R1 tidak lagi menampilkan atau memakainya.
+  void verificationConfirmed;
+  void referenceInput;
+  void verificationForm;
+  void evidenceFileName;
+  void manualPaymentApproval;
+  void isApprovalChecking;
+  void onVerificationConfirmedChange;
+  void onReferenceInputChange;
+  void onVerificationFormChange;
+  void onEvidenceFileChange;
+  void onCheckManualPaymentApproval;
 
   return (
     <div className="flex min-h-full flex-col bg-white p-4 sm:p-5">
@@ -329,43 +341,6 @@ export function PosPaymentPanel({
         </div>
       ) : null}
 
-      {manualPaymentApproval ? (
-        <div
-          className={cn(
-            "mt-4 rounded-2xl border p-3 text-xs leading-5",
-            manualPaymentApproval.status === "approved"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-              : manualPaymentApproval.status === "rejected"
-                ? "border-red-200 bg-red-50 text-red-700"
-                : "border-amber-200 bg-amber-50 text-amber-800",
-          )}
-        >
-          <p className="font-semibold">
-            Co-verification:{" "}
-            {manualPaymentApproval.status === "approved"
-              ? "Disetujui"
-              : manualPaymentApproval.status === "rejected"
-                ? "Ditolak"
-                : "Menunggu"}
-          </p>
-          <p className="mt-1">{manualPaymentApproval.reason}</p>
-          {manualPaymentApproval.responseNotes ? (
-            <p className="mt-1">
-              Catatan: {manualPaymentApproval.responseNotes}
-            </p>
-          ) : null}
-          {manualPaymentApproval.status === "pending" ? (
-            <button
-              type="button"
-              onClick={onCheckManualPaymentApproval}
-              disabled={isApprovalChecking || isCheckoutPending}
-              className="mt-2 inline-flex h-9 items-center justify-center rounded-xl bg-neutral-950 px-3 font-semibold text-white disabled:opacity-50"
-            >
-              {isApprovalChecking ? "Mengecek..." : "Cek status verifikasi"}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
 
       {remainingAmount > 0 ? (
         <>
@@ -496,229 +471,21 @@ export function PosPaymentPanel({
                       <p className="font-semibold text-neutral-950">
                         {selectedProfile.provider}
                       </p>
-                      <p>Terminal: {selectedProfile.terminalId ?? "-"}</p>
+                      <p>
+                        {selectedMethod === "bank_transfer"
+                          ? `Rekening: ${selectedProfile.destinationAccount ?? "-"}`
+                          : `Terminal: ${selectedProfile.terminalId ?? "-"}`}
+                      </p>
                     </div>
                   ) : eligibleProfiles.length === 0 ? (
                     <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
-                      Belum ada preset aktif untuk metode ini. Manager perlu
-                      menambahkannya dari Pengaturan → Pembayaran Manual.
+                      Belum ada preset aktif untuk metode ini. Tambahkan dari
+                      Pengaturan → Metode & Akun Pembayaran.
                     </div>
                   ) : null}
                 </div>
               ) : null}
 
-              {selectedConfig.referenceLabel ? (
-                <label className="block text-sm">
-                  <span className="mb-2 flex items-center justify-between gap-3 font-medium text-neutral-800">
-                    {selectedConfig.referenceLabel}
-                    {selectedConfig.requiresReference ? (
-                      <span className="text-xs font-semibold text-[var(--accent)]">
-                        Wajib
-                      </span>
-                    ) : null}
-                  </span>
-                  <input
-                    value={referenceInput}
-                    disabled={isCheckoutPending || isAddingPayment}
-                    onChange={(event) =>
-                      onReferenceInputChange(event.target.value)
-                    }
-                    maxLength={160}
-                    required={selectedConfig.requiresReference}
-                    placeholder={
-                      selectedConfig.referencePlaceholder ?? "Nomor referensi"
-                    }
-                    className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                  />
-                </label>
-              ) : null}
-
-              {selectedMethod !== "cash" ? (
-                <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/60 p-3">
-                  <div>
-                    <p className="text-sm font-semibold text-neutral-950">
-                      Konfirmasi pembayaran
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-amber-800">
-                      Pastikan status berhasil terlihat di terminal EDC outlet,
-                      bukan hanya dari screenshot customer.
-                    </p>
-                  </div>
-
-                  <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-white px-3 py-3 text-sm text-neutral-800">
-                    <input
-                      type="checkbox"
-                      checked={verificationConfirmed}
-                      disabled={isCheckoutPending || isAddingPayment}
-                      onChange={(event) =>
-                        onVerificationConfirmedChange(event.target.checked)
-                      }
-                      className="mt-0.5 size-4 accent-[var(--accent)]"
-                    />
-                    <span>
-                      <span className="block font-semibold text-neutral-950">
-                        Pembayaran sudah terlihat berhasil
-                      </span>
-                      <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
-                        Sumber verifikasi dan waktu transaksi diisi otomatis
-                        dari preset serta waktu perangkat POS.
-                      </span>
-                    </span>
-                  </label>
-
-                  {evidenceRequired || coVerificationRequired ? (
-                    <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
-                      {evidenceRequired ? (
-                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
-                          Bukti wajib
-                        </span>
-                      ) : null}
-                      {coVerificationRequired ? (
-                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">
-                          Approval manager/finance
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  <details className="rounded-xl border border-[var(--border)] bg-white p-3">
-                    <summary className="cursor-pointer text-xs font-semibold text-neutral-700 marker:content-none">
-                      Detail tambahan & bukti
-                    </summary>
-
-                    <div className="mt-3 space-y-3 border-t border-[var(--border)] pt-3">
-                      <label className="block text-sm">
-                        <span className="mb-2 block font-medium text-neutral-800">
-                          Waktu berhasil di provider
-                        </span>
-                        <input
-                          type="datetime-local"
-                          value={verificationForm.providerPaidAtLocal}
-                          disabled={isCheckoutPending || isAddingPayment}
-                          onChange={(event) =>
-                            onVerificationFormChange(
-                              "providerPaidAtLocal",
-                              event.target.value,
-                            )
-                          }
-                          className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                        />
-                      </label>
-
-                      {selectedMethod === "debit_card" ||
-                      selectedMethod === "credit_card" ? (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <label className="block text-sm">
-                            <span className="mb-2 block font-medium text-neutral-800">
-                              Trace / STAN
-                            </span>
-                            <input
-                              value={verificationForm.traceNumber}
-                              disabled={isCheckoutPending || isAddingPayment}
-                              onChange={(event) =>
-                                onVerificationFormChange(
-                                  "traceNumber",
-                                  event.target.value,
-                                )
-                              }
-                              maxLength={40}
-                              placeholder="Opsional"
-                              className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                            />
-                          </label>
-                          <label className="block text-sm">
-                            <span className="mb-2 block font-medium text-neutral-800">
-                              Batch number
-                            </span>
-                            <input
-                              value={verificationForm.batchNumber}
-                              disabled={isCheckoutPending || isAddingPayment}
-                              onChange={(event) =>
-                                onVerificationFormChange(
-                                  "batchNumber",
-                                  event.target.value,
-                                )
-                              }
-                              maxLength={40}
-                              placeholder="Opsional"
-                              className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white px-4 text-sm outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                            />
-                          </label>
-                          <label className="block text-sm sm:col-span-2">
-                            <span className="mb-2 block font-medium text-neutral-800">
-                              Network & last 4 kartu
-                            </span>
-                            <div className="grid gap-3">
-                              <input
-                                value={verificationForm.cardNetwork}
-                                disabled={isCheckoutPending || isAddingPayment}
-                                onChange={(event) =>
-                                  onVerificationFormChange(
-                                    "cardNetwork",
-                                    event.target.value,
-                                  )
-                                }
-                                maxLength={40}
-                                placeholder="Visa / GPN (opsional)"
-                                className="h-11 rounded-2xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
-                              />
-                              <input
-                                value={verificationForm.cardLast4}
-                                disabled={isCheckoutPending || isAddingPayment}
-                                onChange={(event) =>
-                                  onVerificationFormChange(
-                                    "cardLast4",
-                                    event.target.value
-                                      .replace(/\D/g, "")
-                                      .slice(0, 4),
-                                  )
-                                }
-                                inputMode="numeric"
-                                maxLength={4}
-                                placeholder="1234"
-                                className="h-11 rounded-2xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
-                              />
-                            </div>
-                          </label>
-                        </div>
-                      ) : null}
-
-                      <label className="block text-sm">
-                        <span className="mb-2 block font-medium text-neutral-800">
-                          Foto bukti pembayaran
-                          {evidenceRequired ? (
-                            <span className="ml-1 text-xs font-semibold text-[var(--accent)]">
-                              Wajib
-                            </span>
-                          ) : (
-                            <span className="ml-1 text-xs text-[var(--muted)]">
-                              Opsional
-                            </span>
-                          )}
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          disabled={isCheckoutPending || isAddingPayment}
-                          onChange={(event) =>
-                            onEvidenceFileChange(
-                              event.target.files?.[0] ?? null,
-                            )
-                          }
-                          className="block w-full rounded-2xl border border-dashed border-amber-300 bg-white px-3 py-2 text-xs text-neutral-700 file:mr-3 file:rounded-xl file:border-0 file:bg-neutral-950 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                        />
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {evidenceFileName
-                            ? `Dipilih: ${evidenceFileName}`
-                            : evidenceRequired
-                              ? "Bukti diperlukan karena nominal melewati threshold."
-                              : "Gunakan hanya jika pembayaran perlu bukti tambahan."}
-                        </p>
-                      </label>
-                    </div>
-                  </details>
-                </div>
-              ) : null}
 
               <label className="block text-sm">
                 <span className="mb-2 block font-medium text-neutral-800">
@@ -797,11 +564,9 @@ export function PosPaymentPanel({
                       {payment.methodLabel}
                     </p>
                     <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                      {payment.reference
-                        ? `Ref: ${payment.reference}`
-                        : payment.provider
-                          ? payment.provider
-                          : "Manual verified"}
+                      {payment.manualPaymentProfileName ??
+                        payment.provider ??
+                        payment.methodLabel}
                     </p>
                   </div>
 

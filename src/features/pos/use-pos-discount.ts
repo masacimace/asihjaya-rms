@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
 import type {
   PosAvailableItem,
@@ -23,10 +23,10 @@ type UsePosDiscountInput = {
   paymentCount: number;
   hasRegister: boolean;
   hasActiveShift: boolean;
-  requestDiscountApproval: (
+  requestDiscountApproval?: (
     payload: PosDiscountApprovalPayload,
   ) => Promise<PosDiscountApprovalActionResult>;
-  getDiscountApprovalStatus: (
+  getDiscountApprovalStatus?: (
     approvalId: string,
   ) => Promise<PosDiscountApprovalStatusResult>;
 };
@@ -36,30 +36,13 @@ type PosDiscountSideEffects = {
   refreshWorkspace: () => void;
 };
 
-function getDiscountApprovalErrorMessage(
-  result: Extract<PosDiscountApprovalActionResult, { status: "error" }>,
-) {
-  const fieldErrorMessages = Object.values(result.fieldErrors ?? {}).filter(
-    Boolean,
-  );
-
-  if (fieldErrorMessages.length === 0) {
-    return result.message;
-  }
-
-  return `${result.message} ${fieldErrorMessages.join(" ")}`;
-}
-
 export function usePosDiscount({
   cartItems,
   subtotalAmount,
-  selectedCustomerId,
   panelMode,
   paymentCount,
   hasRegister,
   hasActiveShift,
-  requestDiscountApproval,
-  getDiscountApprovalStatus,
 }: UsePosDiscountInput) {
   const [discountApproval, setDiscountApproval] =
     useState<PosDiscountApproval | null>(null);
@@ -67,7 +50,6 @@ export function usePosDiscount({
   const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
   const [discountAmountInput, setDiscountAmountInput] = useState("");
   const [discountReasonInput, setDiscountReasonInput] = useState("");
-  const [isDiscountPending, startDiscountTransition] = useTransition();
   const { canRequestDiscount, discountDisabledReason } =
     getPosDiscountAvailability({
       panelMode,
@@ -103,16 +85,11 @@ export function usePosDiscount({
   }
 
   function closeDiscountDialog() {
-    if (isDiscountPending) {
-      return;
-    }
-
     setIsDiscountDialogOpen(false);
   }
 
   function submitDiscountApproval({
     resetPaymentFlow,
-    refreshWorkspace,
   }: PosDiscountSideEffects) {
     if (!canRequestDiscount) {
       setDiscountFeedback(discountDisabledReason);
@@ -128,64 +105,26 @@ export function usePosDiscount({
     }
 
     if (discountAmount >= subtotalAmount) {
-      setDiscountFeedback(
-        "Nominal diskon harus lebih kecil dari subtotal transaksi.",
-      );
+      setDiscountFeedback("Nominal diskon harus lebih kecil dari subtotal transaksi.");
       return;
     }
 
-    if (reason.length < 5) {
-      setDiscountFeedback("Alasan diskon minimal 5 karakter.");
-      return;
-    }
-
-    setDiscountFeedback("Mengirim request diskon...");
-
-    startDiscountTransition(async () => {
-      const result = await requestDiscountApproval({
-        itemIds: cartItems.map((item) => item.id),
-        discountAmount,
-        reason,
-        customerId: selectedCustomerId,
-      });
-
-      if (result.status === "error") {
-        setDiscountFeedback(getDiscountApprovalErrorMessage(result));
-        return;
-      }
-
-      setDiscountApproval(result.approval);
-      setDiscountFeedback(result.message);
-      setIsDiscountDialogOpen(false);
-      resetPaymentFlow();
-      refreshWorkspace();
+    setDiscountApproval({
+      id: crypto.randomUUID(),
+      status: "approved",
+      discountAmount,
+      reason,
+      responseNotes: null,
+      createdAtIso: new Date().toISOString(),
+      resolvedAtIso: new Date().toISOString(),
     });
+    setDiscountFeedback("Diskon diterapkan langsung ke transaksi.");
+    setIsDiscountDialogOpen(false);
+    resetPaymentFlow();
   }
 
-  function refreshDiscountApprovalStatus({
-    resetPaymentFlow,
-    refreshWorkspace,
-  }: PosDiscountSideEffects) {
-    if (!discountApproval) {
-      setDiscountFeedback("Belum ada approval diskon yang perlu dicek.");
-      return;
-    }
-
-    setDiscountFeedback("Mengecek status approval diskon...");
-
-    startDiscountTransition(async () => {
-      const result = await getDiscountApprovalStatus(discountApproval.id);
-
-      if (result.status !== "found") {
-        setDiscountFeedback(result.message);
-        return;
-      }
-
-      setDiscountApproval(result.approval);
-      setDiscountFeedback(result.message);
-      resetPaymentFlow();
-      refreshWorkspace();
-    });
+  function refreshDiscountApprovalStatus() {
+    setDiscountFeedback("Diskon langsung aktif dan tidak memerlukan approval.");
   }
 
   return {
@@ -200,7 +139,7 @@ export function usePosDiscount({
     setDiscountAmountInput,
     discountReasonInput,
     setDiscountReasonInput,
-    isDiscountPending,
+    isDiscountPending: false,
     clearDiscountApproval,
     openDiscountDialog,
     closeDiscountDialog,

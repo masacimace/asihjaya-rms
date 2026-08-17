@@ -16,11 +16,11 @@ function expectError(run: () => unknown, pattern: RegExp) {
 }
 
 assert.deepEqual(Object.keys(DEFAULT_MANUAL_PAYMENT_POLICIES).sort(), [
-  "credit_card",
+  "bank_transfer",
   "debit_card",
 ]);
 assert.equal(getManualPaymentProfileType("debit_card"), "edc");
-assert.equal(getManualPaymentProfileType("credit_card"), "edc");
+assert.equal(getManualPaymentProfileType("bank_transfer"), "bank_account");
 assert.equal(
   DEFAULT_MANUAL_PAYMENT_POLICIES.debit_card.evidenceThreshold,
   20_000_000,
@@ -30,11 +30,11 @@ assert.equal(
   30_000_000,
 );
 assert.equal(
-  DEFAULT_MANUAL_PAYMENT_POLICIES.credit_card.evidenceThreshold,
+  DEFAULT_MANUAL_PAYMENT_POLICIES.bank_transfer.evidenceThreshold,
   20_000_000,
 );
 assert.equal(
-  DEFAULT_MANUAL_PAYMENT_POLICIES.credit_card.coVerificationThreshold,
+  DEFAULT_MANUAL_PAYMENT_POLICIES.bank_transfer.coVerificationThreshold,
   30_000_000,
 );
 
@@ -69,27 +69,29 @@ assert.equal(normalizedDebit.normalizedReference, "APPROVAL9911");
 assert.equal(normalizedDebit.verificationSource, "edc_terminal");
 assert.equal(normalizedDebit.details.terminalId, "TID-01");
 
-const validCreditEdc: PosCheckoutPaymentInput = {
+const validBankTransfer: PosCheckoutPaymentInput = {
   ...validDebitEdc,
-  method: "credit_card",
-  provider: "Mandiri EDC",
-  reference: "APPROVAL-CC-1001",
+  method: "bank_transfer",
+  provider: "BCA",
+  reference: "TRX-TRANSFER-1001",
+  verificationSource: "bank_app",
   verificationDetails: {
-    ...validDebitEdc.verificationDetails,
-    terminalId: "TID-MANDIRI-01",
-    cardNetwork: "VISA",
-    cardLast4: "4321",
+    destinationAccount: "1234567890 a.n. Asihjaya",
+    senderName: "Customer",
   },
 };
 
-const normalizedCredit = normalizeAndValidateManualPaymentVerification({
-  payment: validCreditEdc,
+const normalizedBankTransfer = normalizeAndValidateManualPaymentVerification({
+  payment: validBankTransfer,
   organizationId,
-  policy: DEFAULT_MANUAL_PAYMENT_POLICIES.credit_card,
+  policy: DEFAULT_MANUAL_PAYMENT_POLICIES.bank_transfer,
   now,
 });
-assert.equal(normalizedCredit.normalizedProvider, "MANDIRI EDC");
-assert.equal(normalizedCredit.details.cardLast4, "4321");
+assert.equal(normalizedBankTransfer.normalizedProvider, "BCA");
+assert.equal(
+  normalizedBankTransfer.details.destinationAccount,
+  "1234567890 a.n. Asihjaya",
+);
 
 expectError(
   () =>
@@ -152,14 +154,14 @@ const fingerprintA = createManualPaymentVerificationFingerprint({
   outletId: "33333333-3333-4333-8333-333333333333",
   cashierId: "44444444-4444-4444-8444-444444444444",
   itemIds: ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
-  payments: [validDebitEdc, validCreditEdc],
+  payments: [validDebitEdc, validBankTransfer],
 });
 const fingerprintB = createManualPaymentVerificationFingerprint({
   organizationId,
   outletId: "33333333-3333-4333-8333-333333333333",
   cashierId: "44444444-4444-4444-8444-444444444444",
   itemIds: ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
-  payments: [validCreditEdc, validDebitEdc],
+  payments: [validBankTransfer, validDebitEdc],
 });
 assert.equal(fingerprintA, fingerprintB);
 

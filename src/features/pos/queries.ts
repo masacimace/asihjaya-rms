@@ -562,8 +562,11 @@ export async function getPosInitialData({
   const paymentProfiles = paymentProfileRows
     .filter(
       (row) =>
-        row.profileType === "edc" &&
-        row.verificationSource === "edc_terminal",
+        (row.profileType === "edc" &&
+          row.verificationSource === "edc_terminal") ||
+        (row.profileType === "bank_account" &&
+          (row.verificationSource === "bank_app" ||
+            row.verificationSource === "bank_statement")),
     )
     .map((row) => ({
       ...row,

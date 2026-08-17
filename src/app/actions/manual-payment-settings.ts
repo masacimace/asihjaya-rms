@@ -51,14 +51,13 @@ function redirectWithMessage(type: "success" | "error", message: string): never 
 }
 
 function isProfileType(value: string): value is PosManualPaymentProfileType {
-  return value === "edc";
+  return value === "edc" || value === "bank_account";
 }
 
 function resolveVerificationSource(
   profileType: PosManualPaymentProfileType,
 ): PosManualPaymentVerificationSource {
-  void profileType;
-  return "edc_terminal";
+  return profileType === "bank_account" ? "bank_statement" : "edc_terminal";
 }
 
 function isUniqueViolation(error: unknown, constraintName: string) {
@@ -220,6 +219,8 @@ export async function saveManualPaymentProfileAction(formData: FormData) {
   const name = readText(formData, "name", 120);
   const provider = readText(formData, "provider", 80);
   const terminalId = readText(formData, "terminalId", 80) || null;
+  const destinationAccount =
+    readText(formData, "destinationAccount", 120) || null;
   const displayOrder = parseIntegerInput(formData.get("displayOrder"));
   const isActive = formData.get("isActive") === "on";
 
@@ -261,6 +262,10 @@ export async function saveManualPaymentProfileAction(formData: FormData) {
 
   if (profileTypeValue === "edc" && !terminalId) {
     redirectWithMessage("error", "Terminal ID EDC wajib diisi.");
+  }
+
+  if (profileTypeValue === "bank_account" && !destinationAccount) {
+    redirectWithMessage("error", "Nomor rekening Transfer wajib diisi.");
   }
 
   const registerId =
@@ -343,8 +348,9 @@ export async function saveManualPaymentProfileAction(formData: FormData) {
         provider,
         verificationSource,
         merchantId: null,
-        terminalId,
-        destinationAccount: null,
+        terminalId: profileTypeValue === "edc" ? terminalId : null,
+        destinationAccount:
+          profileTypeValue === "bank_account" ? destinationAccount : null,
         displayOrder,
         isActive,
         updatedAt: now,
