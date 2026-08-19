@@ -427,9 +427,6 @@ export function ProductItemForm({
         </section>
 
         <input type="hidden" name="submitIntent" value="available" />
-        <input type="hidden" name="size" value="" />
-        <input type="hidden" name="gemstone" value="" />
-        <input type="hidden" name="locationCode" value="" />
         <input type="hidden" name="internalNotes" value="" />
 
         {outlets.length === 0 ? (

@@ -29,6 +29,11 @@ import { notFound } from "next/navigation";
 
 import { ProductImage } from "@/components/media/product-image";
 import { getProductItemDetail } from "@/features/inventory/product-item-queries";
+import {
+  calculateJewelryBasePrice,
+  getActiveGoldPriceRateMap,
+  normalizePurityKey,
+} from "@/features/pricing/metal-price-rates";
 import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 import { getImageUrl } from "@/lib/storage/image-storage";
 import { cn } from "@/lib/utils";
@@ -115,7 +120,7 @@ function getConditionClass(condition: keyof typeof conditionLabels) {
   return "border-red-200 bg-red-50 text-red-700";
 }
 
-function formatMoney(value: string | null) {
+function formatMoney(value: string | number | null) {
   if (!value) {
     return "Belum diisi";
   }
@@ -316,9 +321,14 @@ export default async function ProductItemDetailPage({
     notFound();
   }
 
-  const canViewCost =
-    hasPermission(auth, "pricing.view_cost") ||
-    hasPermission(auth, "pricing.manage");
+  const activePriceRates = await getActiveGoldPriceRateMap(auth.organization.id);
+  const purityKey = normalizePurityKey(item.purityPercent);
+  const activePriceRate = purityKey ? activePriceRates.get(purityKey) : null;
+  const currentPricePerGram = activePriceRate?.ratePerGram ?? null;
+  const currentBasePrice = calculateJewelryBasePrice({
+    weightGram: item.weightGram,
+    ratePerGram: currentPricePerGram,
+  });
   const canEdit =
     ["draft", "available"].includes(item.availability) &&
     ["inventory.receive", "inventory.adjust", "inventory.manage"].some(
@@ -427,7 +437,7 @@ export default async function ProductItemDetailPage({
 
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
                   Item fisik dari master product <strong>{item.productName}</strong>{" "}
-                  dengan lokasi saat ini di <strong>{locationName}</strong>.
+                  dan saat ini berada di outlet <strong>{locationName}</strong>.
                   Gunakan halaman ini untuk memverifikasi identitas, harga,
                   kesiapan stok, dan audit movement inventaris.
                 </p>
@@ -436,10 +446,6 @@ export default async function ProductItemDetailPage({
                   <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700">
                     <Store className="size-3.5 text-[var(--accent)]" />
                     {item.outletName ?? "Tanpa outlet"}
-                  </span>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700">
-                    <MapPin className="size-3.5 text-[var(--accent)]" />
-                    {item.locationCode ?? "Tanpa kode lokasi"}
                   </span>
                   <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700">
                     <ImageIcon className="size-3.5 text-[var(--accent)]" />
@@ -470,7 +476,7 @@ export default async function ProductItemDetailPage({
                   Kesiapan Operasional
                 </p>
                 <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                  Kondisi item berdasarkan status stok, lokasi, dan kelayakan.
+                  Kondisi item berdasarkan status stok, outlet, dan kelayakan.
                 </p>
               </div>
               <div
@@ -494,7 +500,6 @@ export default async function ProductItemDetailPage({
                 ["Status stok", availabilityLabels[item.availability]],
                 ["Kondisi", conditionLabels[item.condition]],
                 ["Outlet", item.outletName ?? "Belum ditempatkan"],
-                ["Lokasi rak", item.locationCode ?? "Belum diatur"],
                 ["Item aktif", item.isActive ? "Ya" : "Tidak"],
                 ["Siap dijual", isReadyToSell ? "Ya" : "Belum"],
               ].map(([label, value]) => (
@@ -523,7 +528,7 @@ export default async function ProductItemDetailPage({
               </p>
               <p className="mt-1 text-xs leading-5 opacity-90">
                 {isReadyToSell
-                  ? "Item aktif, tersedia, berkondisi baik, dan sudah ditempatkan pada outlet."
+                  ? "Item aktif, tersedia, berkondisi jual, dan sudah ditempatkan pada outlet."
                   : "Periksa status stok, kondisi, status aktif, serta penempatan outlet sebelum item digunakan pada POS."}
               </p>
             </div>
@@ -586,9 +591,13 @@ export default async function ProductItemDetailPage({
 
         <div className="grid min-w-0 grid-cols-2 gap-4">
           <SummaryCard
-            title="Harga Label"
-            value={formatMoney(item.sellingAmount)}
-            helper="Harga jual yang tercetak pada label item."
+            title="Harga Dasar Saat Ini"
+            value={formatMoney(currentBasePrice)}
+            helper={
+              currentBasePrice === null
+                ? "Harga/Gram aktif untuk kadar item belum tersedia."
+                : "Dihitung dari berat × Harga/Gram aktif."
+            }
             icon={<CircleDollarSign className="size-5" />}
           />
           <SummaryCard
@@ -599,14 +608,18 @@ export default async function ProductItemDetailPage({
           />
           <SummaryCard
             title="Harga per Gram"
-            value={formatMoney(item.pricePerGram)}
-            helper="Nilai referensi harga berdasarkan berat item."
+            value={formatMoney(currentPricePerGram)}
+            helper={
+              currentPricePerGram
+                ? `Harga aktif untuk kadar ${purityKey ?? "-"}%.`
+                : "Belum ada Harga/Gram aktif untuk kadar item."
+            }
             icon={<Tag className="size-5" />}
           />
           <SummaryCard
             title="Lokasi Saat Ini"
             value={locationName}
-            helper={item.locationCode ?? "Kode lokasi belum diatur."}
+            helper={item.outletCode ? `Kode outlet ${item.outletCode}` : "Outlet belum tersedia."}
             icon={<MapPin className="size-5" />}
           />
         </div>
@@ -683,14 +696,8 @@ export default async function ProductItemDetailPage({
               label="Kadar tukar"
               value={formatDecimal(item.exchangePurityPercent, "%")}
             />
-            <DetailTile label="Ukuran" value={item.size ?? "Belum diisi"} />
-            <DetailTile label="Warna" value={item.color ?? "Belum diisi"} />
             <div className="col-span-2">
-              <DetailTile
-                label="Batu / Gemstone"
-                value={item.gemstone ?? "Belum diisi"}
-                icon={<Gem className="size-4" />}
-              />
+              <DetailTile label="Warna" value={item.color ?? "Belum diisi"} />
             </div>
           </dl>
         </article>
@@ -700,49 +707,35 @@ export default async function ProductItemDetailPage({
         <article className="min-w-0 rounded-2xl border border-[var(--border)] bg-white p-5 sm:p-6">
           <SectionHeader
             icon={<CircleDollarSign className="size-5" />}
-            title="Harga & Nilai Persediaan"
-            description="Ringkasan nilai komersial item sesuai akses pricing pengguna."
+            title="Harga Produk"
+            description="Ringkasan harga aktif berdasarkan kadar dan berat item."
           />
 
           <dl className="mt-5 grid grid-cols-2 gap-3">
-            <DetailTile
-              label="Harga label"
-              value={formatMoney(item.sellingAmount)}
-              helper="Harga jual yang tampil pada label."
-            />
-            {canViewCost ? (
+            <div className="col-span-2">
               <DetailTile
-                label="Harga modal"
-                value={formatMoney(item.costAmount)}
-                helper="Nilai modal item pada persediaan."
+                label="Harga dasar saat ini"
+                value={formatMoney(currentBasePrice)}
+                helper={
+                  currentBasePrice === null
+                    ? "Harga/Gram aktif untuk kadar item belum tersedia."
+                    : "Dihitung dari berat × Harga/Gram aktif."
+                }
               />
-            ) : (
-              <div className="min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
-                <div className="flex items-start gap-3">
-                  <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-700" />
-                  <div className="min-w-0">
-                    <dt className="text-xs font-medium text-amber-700">
-                      Harga modal
-                    </dt>
-                    <dd className="mt-1 text-sm font-semibold text-amber-900">
-                      Akses terbatas
-                    </dd>
-                    <p className="mt-1.5 text-xs leading-5 text-amber-700">
-                      Memerlukan permission pricing.view_cost atau pricing.manage.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
             <DetailTile
               label="Harga per gram"
-              value={formatMoney(item.pricePerGram)}
-              helper="Referensi harga berdasarkan berat."
+              value={formatMoney(currentPricePerGram)}
+              helper={
+                currentPricePerGram
+                  ? `Harga aktif untuk kadar ${purityKey ?? "-"}%.`
+                  : "Belum ada Harga/Gram aktif untuk kadar item."
+              }
             />
             <DetailTile
               label="Potongan per gram"
               value={formatMoney(item.deductionPerGram)}
-              helper="Nilai potongan yang tersimpan pada item."
+              helper="Informasi potongan yang tersimpan pada item dan tidak dihitung ke harga jual."
             />
           </dl>
         </article>
@@ -750,8 +743,8 @@ export default async function ProductItemDetailPage({
         <article className="min-w-0 rounded-2xl border border-[var(--border)] bg-white p-5 sm:p-6">
           <SectionHeader
             icon={<MapPin className="size-5" />}
-            title="Lokasi & Status Inventaris"
-            description="Posisi operasional dan state stok item pada jaringan outlet."
+            title="Status Inventaris"
+            description="Outlet dan state operasional item pada jaringan toko."
           />
 
           <dl className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
@@ -760,13 +753,6 @@ export default async function ProductItemDetailPage({
               value={item.outletName ?? "Belum ditempatkan"}
               helper={item.outletCode ?? "Kode outlet belum tersedia."}
               icon={<Store className="size-4" />}
-            />
-            <DetailTile
-              label="Kode lokasi"
-              value={item.locationCode ?? "Belum diatur"}
-              helper="Rak, etalase, atau area penyimpanan item."
-              icon={<MapPin className="size-4" />}
-              mono
             />
             <DetailTile
               label="Location state"

@@ -150,7 +150,6 @@ export async function getProductItemOverview(organizationId: string) {
       condition: productItems.condition,
       total: count(),
       totalWeightGram: sql<string>`coalesce(sum(${productItems.weightGram}), 0)`,
-      totalCostAmount: sql<string>`coalesce(sum(${productItems.costAmount}), 0)`,
     })
     .from(productItems)
     .where(
@@ -168,10 +167,9 @@ export async function getProductItemOverview(organizationId: string) {
       .filter((row) => row.availability === availability)
       .reduce((sum, row) => sum + Number(row.total), 0);
 
-  const sumForAvailable = (field: "totalWeightGram" | "totalCostAmount") =>
-    rows
-      .filter((row) => row.availability === "available")
-      .reduce((sum, row) => sum + Number(row[field] ?? 0), 0);
+  const availableWeightGram = rows
+    .filter((row) => row.availability === "available")
+    .reduce((sum, row) => sum + Number(row.totalWeightGram ?? 0), 0);
 
   const attention = rows
     .filter((row) => !["good", "used"].includes(row.condition))
@@ -183,8 +181,7 @@ export async function getProductItemOverview(organizationId: string) {
     available: totalFor("available"),
     reserved: totalFor("reserved"),
     sold: totalFor("sold"),
-    availableWeightGram: sumForAvailable("totalWeightGram"),
-    availableCostAmount: sumForAvailable("totalCostAmount"),
+    availableWeightGram,
     attention,
   };
 }
@@ -245,10 +242,9 @@ export async function getProductItemList(
       barcode: productItems.barcode,
       displayName: productItems.displayName,
       weightGram: productItems.weightGram,
-      sellingAmount: productItems.sellingAmount,
+      purityPercent: productItems.purityPercent,
       availability: productItems.availability,
       condition: productItems.condition,
-      locationCode: productItems.locationCode,
       imageKey: productItems.imageKey,
       updatedAt: productItems.updatedAt,
       productId: productMasters.id,
@@ -294,17 +290,11 @@ export async function getProductItemDetail(
       weightGram: productItems.weightGram,
       purityPercent: productItems.purityPercent,
       exchangePurityPercent: productItems.exchangePurityPercent,
-      size: productItems.size,
       color: productItems.color,
-      gemstone: productItems.gemstone,
-      costAmount: productItems.costAmount,
-      sellingAmount: productItems.sellingAmount,
-      pricePerGram: productItems.pricePerGram,
       deductionPerGram: productItems.deductionPerGram,
       availability: productItems.availability,
       condition: productItems.condition,
       locationState: productItems.locationState,
-      locationCode: productItems.locationCode,
       imageKey: productItems.imageKey,
       internalNotes: productItems.internalNotes,
       isActive: productItems.isActive,
@@ -313,7 +303,6 @@ export async function getProductItemDetail(
       productId: productMasters.id,
       productCode: productMasters.code,
       productName: productMasters.name,
-      productImageKey: productMasters.imageKey,
       productStatus: productMasters.status,
       currentOutletId: productItems.currentOutletId,
       outletId: outlets.id,

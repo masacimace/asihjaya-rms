@@ -273,12 +273,9 @@ export async function createProductItemAction(
   const weightRaw = readText(formData, "weightGram");
   const purityPercentRaw = readText(formData, "purityPercent");
   const exchangePurityRaw = readText(formData, "exchangePurityPercent");
-  const itemSize = readText(formData, "size");
   const itemColor = readText(formData, "color");
-  const itemGemstone = readText(formData, "gemstone");
   const conditionRaw = readText(formData, "condition");
   const outletId = readText(formData, "currentOutletId");
-  const locationCode = readText(formData, "locationCode");
   const internalNotes = readText(formData, "internalNotes");
   const rawDeductionPerGram = readText(formData, "deductionPerGram");
   const image = readImage(formData);
@@ -321,10 +318,6 @@ export async function createProductItemAction(
     fieldErrors.deductionPerGram = "Potongan per gram wajib diisi. Gunakan 0 jika tidak ada.";
   }
 
-  if (itemSize.length > 64) {
-    fieldErrors.size = "Ukuran maksimal 64 karakter.";
-  }
-
   if (itemColor.length > 64) {
     fieldErrors.color = "Warna maksimal 64 karakter.";
   }
@@ -332,19 +325,11 @@ export async function createProductItemAction(
     fieldErrors.color = "Warna wajib diisi.";
   }
 
-  if (itemGemstone.length > 160) {
-    fieldErrors.gemstone = "Informasi batu maksimal 160 karakter.";
-  }
-
   if (
     !isItemCondition(conditionRaw) ||
     !["good", "used", "damaged"].includes(conditionRaw)
   ) {
     fieldErrors.condition = "Pilih kondisi awal yang valid.";
-  }
-
-  if (locationCode.length > 80) {
-    fieldErrors.locationCode = "Kode lokasi maksimal 80 karakter.";
   }
 
   if (internalNotes.length > 4000) {
@@ -456,9 +441,9 @@ export async function createProductItemAction(
         weightGram: weight.value,
         purityPercent: purityPercent.value,
         exchangePurityPercent: exchangePurity.value,
-        size: normalizeNullable(itemSize),
+        size: null,
         color: itemColor,
-        gemstone: normalizeNullable(itemGemstone),
+        gemstone: null,
         costAmount: null,
         sellingAmount:
           compatibilitySellingAmount === null
@@ -469,7 +454,7 @@ export async function createProductItemAction(
         availability: targetAvailability,
         condition: conditionRaw as "good" | "used" | "damaged",
         locationState: "outlet",
-        locationCode: normalizeNullable(locationCode),
+        locationCode: null,
         imageKey,
         internalNotes: normalizeNullable(internalNotes),
         isActive: true,

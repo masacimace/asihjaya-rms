@@ -5,7 +5,6 @@ import {
   Barcode,
   Boxes,
   CircleDot,
-  DollarSign,
   Filter,
   PackageCheck,
   Plus,
@@ -97,28 +96,20 @@ function getConditionClass(condition: ItemCondition) {
   return "border-red-200 bg-red-50 text-red-700";
 }
 
-function formatMoney(value: number | string | null) {
-  const amount = typeof value === "string" ? Number(value) : (value ?? 0);
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return "—";
+function formatPurity(value: string | null) {
+  if (!value) {
+    return "Belum diisi";
   }
 
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+  const amount = Number(value);
 
-function formatMetricMoney(value: number | string | null) {
-  const amount = typeof value === "string" ? Number(value) : (value ?? 0);
+  if (!Number.isFinite(amount)) {
+    return "Belum diisi";
+  }
 
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(Number.isFinite(amount) ? amount : 0);
+  return `${new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 3,
+  }).format(amount)}%`;
 }
 
 function formatNumber(value: number | string | null) {
@@ -325,10 +316,10 @@ export default async function InventoryPage({
           icon={<PackageCheck className="size-5" />}
         />
         <SummaryCard
-          title="Nilai inventory"
-          value={formatMetricMoney(overview.availableCostAmount)}
-          helper="Estimasi berdasarkan modal item tersedia"
-          icon={<DollarSign className="size-5" />}
+          title="Total berat tersedia"
+          value={formatWeight(overview.availableWeightGram)}
+          helper="Akumulasi berat item yang berstatus Tersedia"
+          icon={<Scale className="size-5" />}
         />
         <SummaryCard
           title="Reserved & draft"
@@ -509,7 +500,7 @@ export default async function InventoryPage({
                     <div>SKU / Barcode</div>
                     <div>Outlet</div>
                     <div>Spesifikasi</div>
-                    <div>Harga label</div>
+                    <div>Kadar</div>
                     <div>Status</div>
                     <div className="text-right">Aksi</div>
                   </div>
@@ -564,9 +555,7 @@ export default async function InventoryPage({
                               {item.outletName ?? "Belum ditempatkan"}
                             </p>
                             <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                              {item.locationCode ||
-                                item.outletCode ||
-                                "Lokasi belum diatur"}
+                              {item.outletCode || "Kode outlet belum tersedia"}
                             </p>
                           </div>
 
@@ -591,10 +580,10 @@ export default async function InventoryPage({
 
                           <div className="self-center">
                             <p className="text-sm font-semibold text-neutral-950">
-                              {formatMoney(item.sellingAmount)}
+                              {formatPurity(item.purityPercent)}
                             </p>
                             <p className="mt-1 text-xs text-[var(--muted)]">
-                              Harga jual
+                              Pricing key
                             </p>
                           </div>
 
@@ -673,9 +662,9 @@ export default async function InventoryPage({
                             </p>
                           </div>
                           <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
-                            <p className="text-neutral-500">Harga</p>
+                            <p className="text-neutral-500">Kadar</p>
                             <p className="mt-1 font-semibold text-neutral-950">
-                              {formatMoney(item.sellingAmount)}
+                              {formatPurity(item.purityPercent)}
                             </p>
                           </div>
                         </div>
