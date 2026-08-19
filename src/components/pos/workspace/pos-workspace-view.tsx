@@ -6,7 +6,7 @@ import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
 import { PosCartContent } from "@/components/pos/workspace/pos-cart-content";
 import { PosCatalogPanel } from "@/components/pos/workspace/pos-catalog-panel";
 import { PosCheckoutSuccessContent } from "@/components/pos/workspace/pos-checkout-success-content";
-import { PosDiscountApprovalDialog } from "@/components/pos/workspace/pos-discount-approval-dialog";
+import { PosItemPricingDialog } from "@/components/pos/workspace/pos-item-pricing-dialog";
 import { PosHoldCartDialog } from "@/components/pos/workspace/pos-hold-cart-dialog";
 import {
   PosMobileSidePanel,
@@ -30,7 +30,7 @@ type PosCatalogProps = Omit<
 
 type PosWorkspaceDialogs = {
   quickCustomer: ComponentProps<typeof PosQuickCustomerDialog> | null;
-  discountApproval: ComponentProps<typeof PosDiscountApprovalDialog> | null;
+  itemPricing: ComponentProps<typeof PosItemPricingDialog> | null;
   holdCart: ComponentProps<typeof PosHoldCartDialog> | null;
 };
 
@@ -89,8 +89,8 @@ export function PosWorkspaceView({
         <PosQuickCustomerDialog {...dialogs.quickCustomer} />
       ) : null}
 
-      {dialogs.discountApproval ? (
-        <PosDiscountApprovalDialog {...dialogs.discountApproval} />
+      {dialogs.itemPricing ? (
+        <PosItemPricingDialog {...dialogs.itemPricing} />
       ) : null}
 
       {dialogs.holdCart ? <PosHoldCartDialog {...dialogs.holdCart} /> : null}

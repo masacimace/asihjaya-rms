@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import type {
-  PosAvailableItem,
+  PosCartItem,
   PosCustomerOption,
   PosHeldCartSummary,
 } from "@/features/pos/contracts";
@@ -39,8 +39,8 @@ function createCustomer(
 }
 
 function createItem(
-  overrides: Partial<PosAvailableItem> = {},
-): PosAvailableItem {
+  overrides: Partial<PosCartItem> = {},
+): PosCartItem {
   return {
     id: "item-1",
     sku: "SKU-001",
@@ -58,12 +58,20 @@ function createItem(
     size: "17",
     color: "Kuning",
     gemstone: null,
+    deductionPerGram: "25000",
     sellingAmount: "2500000",
+    activePricePerGram: "1000000",
     imageKey: null,
     productImageKey: null,
     outletId: "outlet-1",
     outletCode: "OUT-001",
     outletName: "Asihjaya Utama",
+    pricePerGram: "1000000",
+    basePriceAmount: "2500000",
+    discountAmount: "0",
+    laborAmount: "0",
+    adjustmentAmount: "0",
+    finalPriceAmount: "2500000",
     ...overrides,
   };
 }
@@ -188,7 +196,6 @@ assert.deepEqual(
     panelMode: "cart",
     itemCount: 1,
     paymentCount: 0,
-    hasDiscountApproval: false,
     hasRegister: true,
     hasActiveShift: true,
   }),
@@ -202,7 +209,6 @@ assert.equal(
     panelMode: "cart",
     itemCount: 0,
     paymentCount: 0,
-    hasDiscountApproval: false,
     hasRegister: true,
     hasActiveShift: true,
   }).disabledReason,
@@ -213,7 +219,6 @@ assert.equal(
     panelMode: "cart",
     itemCount: 1,
     paymentCount: 1,
-    hasDiscountApproval: false,
     hasRegister: true,
     hasActiveShift: true,
   }).disabledReason,
@@ -224,7 +229,6 @@ assert.equal(
     panelMode: "payment",
     itemCount: 1,
     paymentCount: 0,
-    hasDiscountApproval: false,
     hasRegister: true,
     hasActiveShift: true,
   }).canHoldCart,

@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  BadgePercent,
   ChevronRight,
+  PencilLine,
   Pause,
   Plus,
   Search,
@@ -14,9 +14,8 @@ import {
 import { PosItemImage } from "@/components/pos/workspace/pos-item-image";
 import { getPosItemDetail } from "@/features/pos/catalog-state";
 import type {
-  PosAvailableItem,
+  PosCartItem,
   PosCustomerOption,
-  PosDiscountApproval,
 } from "@/features/pos/contracts";
 import {
   getCustomerCode,
@@ -26,15 +25,12 @@ import { formatCurrency } from "@/features/pos/payment-draft";
 import { cn } from "@/lib/utils";
 
 export type PosCartContentProps = {
-  cartItems: PosAvailableItem[];
+  cartItems: PosCartItem[];
   subtotalAmount: number;
   discountAmount: number;
+  laborAmount: number;
+  adjustmentAmount: number;
   totalAmount: number;
-  discountApproval: PosDiscountApproval | null;
-  isDiscountPending: boolean;
-  discountFeedback: string | null;
-  canRequestDiscount: boolean;
-  discountDisabledReason: string;
   canCheckout: boolean;
   checkoutDisabledReason: string;
   customers: PosCustomerOption[];
@@ -48,12 +44,11 @@ export type PosCartContentProps = {
   onOpenQuickCustomer: () => void;
   onSelectCustomer: (customer: PosCustomerOption) => void;
   onClearCustomer: () => void;
+  onEditItemPricing: (item: PosCartItem) => void;
   onRemoveItem: (itemId: string) => void;
   onClearCart: () => void;
-  onOpenDiscountDialog: () => void;
-  onRefreshDiscountApproval: () => void;
-  onClearDiscountApproval: () => void;
   onContinueToPayment: () => void;
+  isPricingRefreshing: boolean;
   canHoldCart: boolean;
   holdCartDisabledReason: string;
   onOpenHoldDialog: () => void;
@@ -63,12 +58,9 @@ export function PosCartContent({
   cartItems,
   subtotalAmount,
   discountAmount,
+  laborAmount,
+  adjustmentAmount,
   totalAmount,
-  discountApproval,
-  isDiscountPending,
-  discountFeedback,
-  canRequestDiscount,
-  discountDisabledReason,
   canCheckout,
   checkoutDisabledReason,
   customers,
@@ -82,12 +74,11 @@ export function PosCartContent({
   onOpenQuickCustomer,
   onSelectCustomer,
   onClearCustomer,
+  onEditItemPricing,
   onRemoveItem,
   onClearCart,
-  onOpenDiscountDialog,
-  onRefreshDiscountApproval,
-  onClearDiscountApproval,
   onContinueToPayment,
+  isPricingRefreshing,
   canHoldCart,
   holdCartDisabledReason,
   onOpenHoldDialog,
@@ -96,8 +87,6 @@ export function PosCartContent({
   const hasCustomers = customers.length > 0;
   const hasCustomerSearchQuery = customerQuery.trim().length > 0;
 
-  void isDiscountPending;
-  void onRefreshDiscountApproval;
 
   return (
     <div className="flex min-h-full flex-col bg-white p-4 sm:p-5">
@@ -147,9 +136,33 @@ export function PosCartContent({
                     {getPosItemDetail(item)}
                   </p>
 
-                  <p className="mt-2 text-sm font-semibold text-neutral-950">
-                    {formatCurrency(item.sellingAmount)}
-                  </p>
+                  <div className="mt-2 flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-950">
+                        {formatCurrency(item.finalPriceAmount)}
+                      </p>
+                      <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">
+                        Dasar {formatCurrency(item.basePriceAmount)}
+                        {Number(item.discountAmount) > 0
+                          ? ` · Diskon -${formatCurrency(item.discountAmount)}`
+                          : ""}
+                        {Number(item.laborAmount) > 0
+                          ? ` · Ongkos +${formatCurrency(item.laborAmount)}`
+                          : ""}
+                        {Number(item.adjustmentAmount) > 0
+                          ? ` · Round +${formatCurrency(item.adjustmentAmount)}`
+                          : ""}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onEditItemPricing(item)}
+                      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-2.5 text-[11px] font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                    >
+                      <PencilLine className="size-3.5" />
+                      Edit Harga
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -323,70 +336,25 @@ export function PosCartContent({
             </span>
           </div>
 
-          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[var(--muted)]">Diskon</span>
-              <span
-                className={cn(
-                  "font-semibold",
-                  discountAmount > 0 ? "text-red-600" : "text-neutral-800",
-                )}
-              >
-                {discountAmount > 0
-                  ? `-${formatCurrency(discountAmount)}`
-                  : formatCurrency(0)}
+          <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-[var(--muted)]">Diskon item</span>
+              <span className={cn("font-semibold", discountAmount > 0 ? "text-red-600" : "text-neutral-800")}>
+                {discountAmount > 0 ? `-${formatCurrency(discountAmount)}` : formatCurrency(0)}
               </span>
             </div>
-
-            {discountApproval ? (
-              <div className="mt-3 rounded-xl border border-[var(--border)] bg-white p-3 text-xs leading-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-emerald-700">
-                      Diskon aktif
-                    </p>
-                    <p className="mt-1 text-[var(--muted)]">
-                      {discountApproval.reason || "Tanpa catatan tambahan."}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">
-                    AKTIF
-                  </span>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={onClearDiscountApproval}
-                    className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                  >
-                    Hapus Diskon
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled={!canRequestDiscount}
-                onClick={onOpenDiscountDialog}
-                title={discountDisabledReason}
-                className={cn(
-                  "mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition",
-                  canRequestDiscount
-                    ? "border-[var(--accent)] bg-white text-[var(--accent)] hover:bg-[var(--accent-soft)]"
-                    : "cursor-not-allowed border-[var(--border)] bg-neutral-100 text-neutral-400",
-                )}
-              >
-                <BadgePercent className="size-4" />
-                Tambah Diskon
-              </button>
-            )}
-
-            {discountFeedback ? (
-              <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-                {discountFeedback}
-              </p>
-            ) : null}
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-[var(--muted)]">Ongkos</span>
+              <span className="font-semibold text-neutral-800">
+                {laborAmount > 0 ? `+${formatCurrency(laborAmount)}` : formatCurrency(0)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-[var(--muted)]">Round</span>
+              <span className="font-semibold text-neutral-800">
+                {adjustmentAmount > 0 ? `+${formatCurrency(adjustmentAmount)}` : formatCurrency(0)}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center justify-between border-t border-[var(--border)] pt-4">
@@ -403,16 +371,16 @@ export function PosCartContent({
         <div className="mt-5 grid gap-2">
           <button
             type="button"
-            disabled={!canCheckout}
+            disabled={!canCheckout || isPricingRefreshing}
             onClick={onContinueToPayment}
             className={cn(
               "flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 font-semibold transition",
-              canCheckout
+              canCheckout && !isPricingRefreshing
                 ? "bg-[var(--accent)] text-white hover:bg-[var(--accent)]/90"
                 : "cursor-not-allowed bg-neutral-200 text-neutral-500",
             )}
           >
-            Lanjut ke Pembayaran
+            {isPricingRefreshing ? "Refresh Harga..." : "Lanjut ke Pembayaran"}
             <ChevronRight className="size-4" />
           </button>
 

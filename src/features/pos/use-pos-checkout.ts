@@ -193,7 +193,6 @@ export function usePosCheckout({
       const nextAttempt = createStoredCheckoutAttempt({
         payload: checkoutPayload,
         payments: submission.payments,
-        discountApproval: submission.discountApproval,
         existingAttempt: checkoutAttempt,
       });
 

@@ -24,13 +24,50 @@ export type PosAvailableItem = {
   size: string | null;
   color: string | null;
   gemstone: string | null;
+  deductionPerGram: string | null;
   sellingAmount: string | null;
+  activePricePerGram: string | null;
   imageKey: string | null;
   productImageKey: string | null;
   outletId: string | null;
   outletCode: string | null;
   outletName: string | null;
 };
+
+export type PosCartItem = PosAvailableItem & {
+  pricePerGram: string;
+  basePriceAmount: string;
+  discountAmount: string;
+  laborAmount: string;
+  adjustmentAmount: string;
+  finalPriceAmount: string;
+};
+
+export type PosCartPricingInput = {
+  itemId: string;
+  pricePerGram: string;
+  discountAmount: number;
+  laborAmount: number;
+  adjustmentAmount: number;
+};
+
+export type PosCartPricingRefreshResult =
+  | {
+      status: "success";
+      message: string;
+      changed: boolean;
+      items: Array<{
+        itemId: string;
+        pricePerGram: string;
+        basePriceAmount: string;
+        finalPriceAmount: string;
+      }>;
+    }
+  | {
+      status: "error";
+      message: string;
+      fieldErrors?: Record<string, string>;
+    };
 
 export type PosRegisterContext = {
   id: string;
@@ -175,6 +212,7 @@ export type PosCheckoutPaymentInput = {
 
 export type PosCheckoutPayload = {
   itemIds: string[];
+  itemPricing: PosCartPricingInput[];
   payments: PosCheckoutPaymentInput[];
   idempotencyKey: string;
   customerDepositUsedAmount?: number | null;
@@ -199,7 +237,7 @@ export type PosDiscountApproval = {
 };
 
 export type PosHoldCartPayload = {
-  itemIds: string[];
+  items: PosCartPricingInput[];
   customerId?: string | null;
   title?: string | null;
   note?: string | null;
@@ -228,11 +266,9 @@ export type PosHeldCartSummary = {
   registerId: string;
 };
 
-export type PosHeldCartItem = PosAvailableItem & {
+export type PosHeldCartItem = PosCartItem & {
   lineNumber: number;
   listPriceAmount: string;
-  discountAmount: string;
-  finalPriceAmount: string;
 };
 
 export type PosHeldCartListItem = PosHeldCartSummary & {

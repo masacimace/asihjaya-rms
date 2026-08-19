@@ -1,4 +1,3 @@
-import type { PosDiscountApproval } from "@/features/pos/contracts";
 import type { PosPaymentDraft } from "@/features/pos/payment-draft";
 
 export type PosWorkspacePanelMode = "cart" | "payment" | "success";
@@ -6,9 +5,8 @@ export type PosWorkspacePanelMode = "cart" | "payment" | "success";
 export type PosWorkspaceStateInput = {
   panelMode: PosWorkspacePanelMode;
   itemCount: number;
-  subtotalAmount: number;
+  totalAmount: number;
   payments: PosPaymentDraft[];
-  discountApproval: PosDiscountApproval | null;
   rawCustomerDepositUsedAmount: number;
   rawCustomerDepositInAmount: number;
   customerDepositBalance: number;
@@ -17,59 +15,7 @@ export type PosWorkspaceStateInput = {
   hasActiveShift: boolean;
 };
 
-export type PosDiscountAvailabilityInput = {
-  panelMode: PosWorkspacePanelMode;
-  itemCount: number;
-  paymentCount: number;
-  subtotalAmount: number;
-  discountApproval: PosDiscountApproval | null;
-  hasRegister: boolean;
-  hasActiveShift: boolean;
-};
-
-export type PosDiscountAvailability = {
-  canRequestDiscount: boolean;
-  discountDisabledReason: string;
-};
-
-export function getPosDiscountAvailability({
-  panelMode,
-  itemCount,
-  paymentCount,
-  subtotalAmount,
-  discountApproval,
-  hasRegister,
-  hasActiveShift,
-}: PosDiscountAvailabilityInput): PosDiscountAvailability {
-  const canRequestDiscount =
-    panelMode === "cart" &&
-    itemCount > 0 &&
-    paymentCount === 0 &&
-    subtotalAmount > 0 &&
-    !discountApproval &&
-    hasRegister &&
-    hasActiveShift;
-  const discountDisabledReason = !itemCount
-    ? "Tambahkan item sebelum menerapkan diskon."
-    : paymentCount > 0
-      ? "Diskon harus diterapkan sebelum payment ditambahkan."
-      : !hasRegister
-        ? "Register aktif belum tersedia untuk outlet ini."
-        : !hasActiveShift
-          ? "Shift aktif belum dibuka, diskon belum bisa diterapkan."
-          : discountApproval
-            ? "Hapus diskon aktif terlebih dahulu jika ingin menggantinya."
-            : "Diskon siap diterapkan langsung.";
-
-  return { canRequestDiscount, discountDisabledReason };
-}
-
 export type PosWorkspaceState = {
-  approvedDiscountAmount: number;
-  totalAmount: number;
-  hasPendingDiscountApproval: boolean;
-  canRequestDiscount: boolean;
-  discountDisabledReason: string;
   customerDepositUsedAmount: number;
   customerDepositInAmount: number;
   externalPaymentDueAmount: number;
@@ -82,11 +28,9 @@ export type PosWorkspaceState = {
 };
 
 export function getPosWorkspaceState({
-  panelMode,
   itemCount,
-  subtotalAmount,
+  totalAmount,
   payments,
-  discountApproval,
   rawCustomerDepositUsedAmount,
   rawCustomerDepositInAmount,
   customerDepositBalance,
@@ -94,22 +38,6 @@ export function getPosWorkspaceState({
   hasRegister,
   hasActiveShift,
 }: PosWorkspaceStateInput): PosWorkspaceState {
-  const approvedDiscountAmount =
-    discountApproval?.status === "approved"
-      ? discountApproval.discountAmount
-      : 0;
-  const totalAmount = Math.max(subtotalAmount - approvedDiscountAmount, 0);
-  const hasPendingDiscountApproval = discountApproval?.status === "pending";
-  const { canRequestDiscount, discountDisabledReason } =
-    getPosDiscountAvailability({
-      panelMode,
-      itemCount,
-      paymentCount: payments.length,
-      subtotalAmount,
-      discountApproval,
-      hasRegister,
-      hasActiveShift,
-    });
   const customerDepositUsedAmount = hasSelectedCustomer
     ? Math.min(
         rawCustomerDepositUsedAmount,
@@ -133,16 +61,15 @@ export function getPosWorkspaceState({
     (total, payment) => total + payment.changeAmount,
     0,
   );
-  const canCheckout =
-    itemCount > 0 && hasRegister && hasActiveShift && !hasPendingDiscountApproval;
+  const canCheckout = itemCount > 0 && totalAmount > 0 && hasRegister && hasActiveShift;
   const checkoutDisabledReason = !itemCount
     ? "Tambahkan minimal satu item sebelum lanjut ke pembayaran."
-    : !hasRegister
-      ? "Register aktif belum tersedia untuk outlet ini."
-      : !hasActiveShift
-        ? "Shift aktif belum dibuka, checkout belum bisa dilanjutkan."
-        : hasPendingDiscountApproval
-          ? "Status diskon tidak valid. Hapus diskon lalu terapkan kembali."
+    : totalAmount <= 0
+      ? "Total transaksi belum valid. Periksa pricing setiap item."
+      : !hasRegister
+        ? "Register aktif belum tersedia untuk outlet ini."
+        : !hasActiveShift
+          ? "Shift aktif belum dibuka, checkout belum bisa dilanjutkan."
           : "Lanjutkan ke pembayaran.";
   const canFinalizePayment =
     canCheckout &&
@@ -151,11 +78,6 @@ export function getPosWorkspaceState({
     rawCustomerDepositUsedAmount === customerDepositUsedAmount;
 
   return {
-    approvedDiscountAmount,
-    totalAmount,
-    hasPendingDiscountApproval,
-    canRequestDiscount,
-    discountDisabledReason,
     customerDepositUsedAmount,
     customerDepositInAmount,
     externalPaymentDueAmount,

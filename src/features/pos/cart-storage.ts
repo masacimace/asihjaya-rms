@@ -1,5 +1,5 @@
 import type {
-  PosAvailableItem,
+  PosCartItem,
   PosCustomerOption,
 } from "@/features/pos/contracts";
 
@@ -7,8 +7,8 @@ export const POS_ACTIVE_CART_STORAGE_KEY =
   "asihjaya:pos-workspace-active-cart";
 
 export type StoredPosCartState = {
-  version: 1;
-  items: PosAvailableItem[];
+  version: 2;
+  items: PosCartItem[];
   customer: PosCustomerOption | null;
   updatedAt: string;
 };
@@ -17,9 +17,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
 }
 
-export function isStoredPosAvailableItem(
-  value: unknown,
-): value is PosAvailableItem {
+export function isStoredPosCartItem(value: unknown): value is PosCartItem {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
@@ -29,7 +27,13 @@ export function isStoredPosAvailableItem(
     typeof value.productCode === "string" &&
     typeof value.productName === "string" &&
     typeof value.categoryId === "string" &&
-    typeof value.categoryName === "string"
+    typeof value.categoryName === "string" &&
+    typeof value.pricePerGram === "string" &&
+    typeof value.basePriceAmount === "string" &&
+    typeof value.discountAmount === "string" &&
+    typeof value.laborAmount === "string" &&
+    typeof value.adjustmentAmount === "string" &&
+    typeof value.finalPriceAmount === "string"
   );
 }
 
@@ -47,19 +51,27 @@ export function parseStoredPosCartStateValue(
   value: unknown,
   fallbackUpdatedAt = new Date().toISOString(),
 ): StoredPosCartState | null {
-  if (!isRecord(value) || !Array.isArray(value.items)) {
+  if (
+    !isRecord(value) ||
+    value.version !== 2 ||
+    !Array.isArray(value.items)
+  ) {
     return null;
   }
 
-  const items = value.items.filter(isStoredPosAvailableItem);
+  const items = value.items.filter(isStoredPosCartItem);
   const customer = isStoredPosCustomer(value.customer) ? value.customer : null;
+
+  if (items.length !== value.items.length) {
+    return null;
+  }
 
   if (items.length === 0 && !customer) {
     return null;
   }
 
   return {
-    version: 1,
+    version: 2,
     items,
     customer,
     updatedAt:
@@ -74,12 +86,12 @@ export function createStoredPosCartState({
   customer,
   updatedAt = new Date().toISOString(),
 }: {
-  items: PosAvailableItem[];
+  items: PosCartItem[];
   customer: PosCustomerOption | null;
   updatedAt?: string;
 }): StoredPosCartState {
   return {
-    version: 1,
+    version: 2,
     items,
     customer,
     updatedAt,
@@ -98,7 +110,13 @@ export function getStoredPosCartState(): StoredPosCartState | null {
       return null;
     }
 
-    return parseStoredPosCartStateValue(JSON.parse(rawValue) as unknown);
+    const state = parseStoredPosCartStateValue(JSON.parse(rawValue) as unknown);
+
+    if (!state) {
+      window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
+    }
+
+    return state;
   } catch {
     window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
     return null;
@@ -109,7 +127,7 @@ export function saveStoredPosCartState({
   items,
   customer,
 }: {
-  items: PosAvailableItem[];
+  items: PosCartItem[];
   customer: PosCustomerOption | null;
 }) {
   if (typeof window === "undefined") {

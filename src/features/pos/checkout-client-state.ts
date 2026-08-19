@@ -1,36 +1,30 @@
 import type {
+  PosCartItem,
   PosCheckoutActionResult,
   PosCheckoutPayload,
   PosCheckoutRecoveryStatusResult,
-  PosDiscountApproval,
 } from "@/features/pos/contracts";
 import {
   createCheckoutIdempotencyKey,
   isStoredCheckoutPayment,
   type PosPaymentDraft,
 } from "@/features/pos/payment-draft";
-
-export type ActiveDiscountApproval = PosDiscountApproval & {
-  appliedAtIso?: string | null;
-};
+import { getPosCartPricingInput } from "@/features/pos/transaction-pricing";
 
 export type StoredCheckoutAttemptState = {
-  version: 3;
+  version: 4;
   payload: PosCheckoutPayload;
   payments: PosPaymentDraft[];
-  discountApproval: ActiveDiscountApproval | null;
   createdAt: string;
   updatedAt: string;
 };
 
 export type CheckoutSubmissionInput = {
-  itemIds: string[];
+  items: PosCartItem[];
   payments: PosPaymentDraft[];
   customerDepositUsedAmount: number;
   customerDepositInAmount: number;
   customerId: string | null;
-  discountApproval: ActiveDiscountApproval | null;
-  approvedDiscountAmount: number;
 };
 
 export const POS_CHECKOUT_ATTEMPT_STORAGE_KEY =
@@ -45,6 +39,7 @@ function isStoredCheckoutPayload(value: unknown): value is PosCheckoutPayload {
   if (
     !isRecord(value) ||
     !Array.isArray(value.itemIds) ||
+    !Array.isArray(value.itemPricing) ||
     !Array.isArray(value.payments)
   ) {
     return false;
@@ -52,6 +47,15 @@ function isStoredCheckoutPayload(value: unknown): value is PosCheckoutPayload {
 
   return (
     value.itemIds.every((itemId) => typeof itemId === "string") &&
+    value.itemPricing.every(
+      (item) =>
+        isRecord(item) &&
+        typeof item.itemId === "string" &&
+        typeof item.pricePerGram === "string" &&
+        typeof item.discountAmount === "number" &&
+        typeof item.laborAmount === "number" &&
+        typeof item.adjustmentAmount === "number",
+    ) &&
     value.payments.every(
       (payment) =>
         isRecord(payment) &&
@@ -69,7 +73,7 @@ export function parseStoredCheckoutAttemptState(
 ): StoredCheckoutAttemptState | null {
   if (
     !isRecord(value) ||
-    value.version !== 3 ||
+    value.version !== 4 ||
     !isStoredCheckoutPayload(value.payload) ||
     !Array.isArray(value.payments)
   ) {
@@ -83,12 +87,9 @@ export function parseStoredCheckoutAttemptState(
   }
 
   return {
-    version: 3,
+    version: 4,
     payload: value.payload,
     payments: storedPayments,
-    discountApproval: isRecord(value.discountApproval)
-      ? (value.discountApproval as ActiveDiscountApproval)
-      : null,
     createdAt:
       typeof value.createdAt === "string" ? value.createdAt : fallbackIso,
     updatedAt:
@@ -155,9 +156,7 @@ export async function fetchCheckoutRecoveryStatus(
     {
       method: "GET",
       cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
+      headers: { Accept: "application/json" },
     },
   );
 
@@ -184,24 +183,15 @@ export type CheckoutRecoveryDecision =
       status: "completed";
       sale: Extract<PosCheckoutRecoveryStatusResult, { status: "completed" }>["sale"];
     }
-  | {
-      status: "stop";
-      message: string;
-    }
-  | {
-      status: "wait";
-      retryAfterMs: number;
-    };
+  | { status: "stop"; message: string }
+  | { status: "wait"; retryAfterMs: number };
 
 export function getCheckoutRecoveryDecision(
   recoveryStatus: PosCheckoutRecoveryStatusResult,
   pollIndex: number,
 ): CheckoutRecoveryDecision {
   if (recoveryStatus.status === "completed") {
-    return {
-      status: "completed",
-      sale: recoveryStatus.sale,
-    };
+    return { status: "completed", sale: recoveryStatus.sale };
   }
 
   if (recoveryStatus.status === "failed") {
@@ -275,7 +265,8 @@ export function createCheckoutPayload(input: {
   const { submission, existingAttempt } = input;
 
   return {
-    itemIds: submission.itemIds,
+    itemIds: submission.items.map((item) => item.id),
+    itemPricing: submission.items.map(getPosCartPricingInput),
     payments: submission.payments.map((payment) => ({
       method: payment.method,
       amount: payment.amount,
@@ -304,31 +295,23 @@ export function createCheckoutPayload(input: {
     customerId: submission.customerId,
     note: null,
     discountApprovalId: null,
-    discountAmount:
-      submission.approvedDiscountAmount > 0
-        ? submission.approvedDiscountAmount
-        : null,
-    discountReason:
-      submission.discountApproval?.status === "approved"
-        ? submission.discountApproval.reason
-        : null,
+    discountAmount: null,
+    discountReason: null,
   };
 }
 
 export function createStoredCheckoutAttempt(input: {
   payload: PosCheckoutPayload;
   payments: PosPaymentDraft[];
-  discountApproval: ActiveDiscountApproval | null;
   existingAttempt: StoredCheckoutAttemptState | null;
   nowIso?: string;
 }): StoredCheckoutAttemptState {
   const nowIso = input.nowIso ?? new Date().toISOString();
 
   return {
-    version: 3,
+    version: 4,
     payload: input.payload,
     payments: input.payments,
-    discountApproval: input.discountApproval,
     createdAt: input.existingAttempt?.createdAt ?? nowIso,
     updatedAt: nowIso,
   };

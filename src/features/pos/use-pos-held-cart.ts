@@ -3,6 +3,7 @@
 import { useCallback, useState, useTransition } from "react";
 
 import type {
+  PosCartPricingInput,
   PosHeldCartActionResult,
   PosHoldCartPayload,
 } from "@/features/pos/contracts";
@@ -60,13 +61,13 @@ export function usePosHeldCart({ holdCart }: { holdCart: HoldCart }) {
     ({
       canHoldCart,
       disabledReason,
-      itemIds,
+      items,
       customerId,
       onSuccess,
     }: {
       canHoldCart: boolean;
       disabledReason: string;
-      itemIds: string[];
+      items: PosCartPricingInput[];
       customerId: string | null;
       onSuccess: (result: Extract<PosHeldCartActionResult, { status: "success" }>) => void;
     }) => {
@@ -89,7 +90,7 @@ export function usePosHeldCart({ holdCart }: { holdCart: HoldCart }) {
 
       startHoldTransition(async () => {
         const result = await holdCart({
-          itemIds,
+          items,
           customerId,
           title: holdTitleInput,
           note: holdNoteInput,

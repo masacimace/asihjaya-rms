@@ -2812,7 +2812,11 @@ export const saleItems = pgTable(
     ),
     check(
       "sale_items_final_price_formula_ck",
-      sql`${table.finalPriceAmount} = ${table.listPriceAmount} - ${table.discountAmount}`,
+      sql`${table.finalPriceAmount} = ${table.listPriceAmount} - ${table.discountAmount} + coalesce(nullif(${table.snapshot}->>'laborAmount', '')::numeric, 0) + coalesce(nullif(${table.snapshot}->>'adjustmentAmount', '')::numeric, 0)`,
+    ),
+    check(
+      "sale_items_final_price_positive_ck",
+      sql`${table.finalPriceAmount} > 0`,
     ),
     check(
       "sale_items_cost_snapshot_nonnegative_ck",

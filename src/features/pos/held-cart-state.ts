@@ -3,7 +3,7 @@ import type {
   PosHeldCartItem,
   PosHeldCartSummary,
 } from "@/features/pos/contracts";
-import { isStoredPosAvailableItem } from "@/features/pos/cart-storage";
+import { isStoredPosCartItem } from "@/features/pos/cart-storage";
 
 export const POS_PENDING_HELD_CART_RESUME_STORAGE_KEY =
   "asihjaya:pos-workspace-pending-held-cart-resume";
@@ -54,7 +54,7 @@ export function parsePendingHeldCartResumeState(
   }
 
   const heldCart = value.heldCart as PosHeldCartSummary;
-  const items = value.items.filter(isStoredPosAvailableItem) as PosHeldCartItem[];
+  const items = value.items.filter(isStoredPosCartItem) as PosHeldCartItem[];
 
   if (items.length === 0 || typeof heldCart.holdNumber !== "string") {
     return null;
@@ -121,14 +121,12 @@ export function getHeldCartAvailability({
   panelMode,
   itemCount,
   paymentCount,
-  hasDiscountApproval,
   hasRegister,
   hasActiveShift,
 }: {
   panelMode: "cart" | "payment" | "success";
   itemCount: number;
   paymentCount: number;
-  hasDiscountApproval: boolean;
   hasRegister: boolean;
   hasActiveShift: boolean;
 }): PosHeldCartAvailability {
@@ -136,7 +134,6 @@ export function getHeldCartAvailability({
     panelMode === "cart" &&
     itemCount > 0 &&
     paymentCount === 0 &&
-    !hasDiscountApproval &&
     hasRegister &&
     hasActiveShift;
 
@@ -145,9 +142,7 @@ export function getHeldCartAvailability({
       ? "Tambahkan minimal satu item sebelum transaksi bisa ditahan."
       : paymentCount > 0
         ? "Transaksi yang sudah memiliki payment tidak bisa ditahan. Reset payment terlebih dahulu."
-        : hasDiscountApproval
-          ? "Transaksi dengan request diskon tidak bisa ditahan. Reset request diskon terlebih dahulu."
-          : !hasRegister
+        : !hasRegister
             ? "Register aktif belum tersedia untuk outlet ini."
             : !hasActiveShift
               ? "Shift aktif belum dibuka, hold cart belum bisa dibuat."

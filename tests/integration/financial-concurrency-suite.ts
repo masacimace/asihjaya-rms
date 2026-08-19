@@ -322,12 +322,24 @@ function checkoutPayload(
   idempotencyKey: string,
   overrides: Partial<PosCheckoutPayload> = {},
 ): PosCheckoutPayload {
+  const itemIds = overrides.itemIds ?? [fixture.itemIds[0]!];
+  const itemPricing =
+    overrides.itemPricing ??
+    itemIds.map((itemId) => ({
+      itemId,
+      pricePerGram: "1000000",
+      discountAmount: 0,
+      laborAmount: 0,
+      adjustmentAmount: 0,
+    }));
+
   return {
-    itemIds: [fixture.itemIds[0]!],
     payments: [{ method: "cash", amount: 1_000_000 }],
     idempotencyKey,
     customerId: fixture.customerId,
     ...overrides,
+    itemIds,
+    itemPricing,
   };
 }
 

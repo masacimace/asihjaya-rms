@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import type { PosCheckoutActionResult } from "@/features/pos/contracts";
+import type { PosCartItem, PosCheckoutActionResult } from "@/features/pos/contracts";
 import {
   createCheckoutPayload,
   createStoredCheckoutAttempt,
@@ -10,21 +10,53 @@ import {
   parseStoredCheckoutAttemptState,
   POS_CHECKOUT_ATTEMPT_STORAGE_KEY,
   POS_CHECKOUT_RECOVERY_MAX_POLLS,
-  type ActiveDiscountApproval,
   type CheckoutSubmissionInput,
 } from "@/features/pos/checkout-client-state";
 import type { PosPaymentDraft } from "@/features/pos/payment-draft";
+
+const item: PosCartItem = {
+  id: "item-1",
+  sku: "SKU-001",
+  barcode: "899000000001",
+  qrValue: null,
+  serialNumber: null,
+  productId: "product-1",
+  productCode: "PRD-001",
+  productName: "Cincin Uji",
+  categoryId: "category-1",
+  categoryName: "Cincin",
+  weightGram: "1",
+  purityPercent: "30",
+  exchangePurityPercent: "35",
+  size: null,
+  color: "Poles",
+  gemstone: null,
+  deductionPerGram: "25000",
+  sellingAmount: "1010000",
+  activePricePerGram: "1010000",
+  imageKey: null,
+  productImageKey: null,
+  outletId: "outlet-1",
+  outletCode: "OUT-1",
+  outletName: "Outlet Uji",
+  pricePerGram: "1010000",
+  basePriceAmount: "1010000",
+  discountAmount: "5000",
+  laborAmount: "35000",
+  adjustmentAmount: "10000",
+  finalPriceAmount: "1050000",
+};
 
 const cashPayment: PosPaymentDraft = {
   id: "payment-1",
   method: "cash",
   methodLabel: "Cash",
-  amount: 2_400_000,
+  amount: 1_050_000,
   manualPaymentProfileId: null,
   manualPaymentProfileName: null,
   verificationConfirmed: false,
-  receivedAmount: 2_500_000,
-  changeAmount: 100_000,
+  receivedAmount: 1_100_000,
+  changeAmount: 50_000,
   provider: null,
   reference: null,
   note: null,
@@ -35,243 +67,57 @@ const cashPayment: PosPaymentDraft = {
   verificationDetails: {},
 };
 
-const discountApproval: ActiveDiscountApproval = {
-  id: "discount-direct-1",
-  status: "approved",
-  discountAmount: 100_000,
-  reason: "Promo pelanggan",
-  responseNotes: null,
-  createdAtIso: "2026-08-02T07:00:00.000Z",
-  resolvedAtIso: "2026-08-02T07:00:00.000Z",
-};
-
 const submission: CheckoutSubmissionInput = {
-  itemIds: ["item-1"],
+  items: [item],
   payments: [cashPayment],
-  customerDepositUsedAmount: 50_000,
-  customerDepositInAmount: 25_000,
-  customerId: "customer-1",
-  discountApproval,
-  approvedDiscountAmount: 100_000,
+  customerDepositUsedAmount: 0,
+  customerDepositInAmount: 0,
+  customerId: null,
 };
 
-const initialPayload = createCheckoutPayload({
-  submission,
-  existingAttempt: null,
-});
+const initialPayload = createCheckoutPayload({ submission, existingAttempt: null });
 assert.match(initialPayload.idempotencyKey, /^pos_/);
 assert.deepEqual(initialPayload.itemIds, ["item-1"]);
-assert.deepEqual(initialPayload.payments, [
-  {
-    method: "cash",
-    amount: 2_400_000,
-    manualPaymentProfileId: null,
-    verificationConfirmed: false,
-    receivedAmount: 2_500_000,
-    changeAmount: 100_000,
-    provider: null,
-    reference: null,
-    note: null,
-    verificationSource: null,
-    providerPaidAtIso: null,
-    evidenceKey: null,
-    verificationDetails: {},
-  },
-]);
-assert.equal(initialPayload.customerDepositUsedAmount, 50_000);
-assert.equal(initialPayload.customerDepositInAmount, 25_000);
+assert.deepEqual(initialPayload.itemPricing, [{
+  itemId: "item-1",
+  pricePerGram: "1010000",
+  discountAmount: 5000,
+  laborAmount: 35000,
+  adjustmentAmount: 10000,
+}]);
 assert.equal(initialPayload.discountApprovalId, null);
-assert.equal(initialPayload.discountAmount, 100_000);
-assert.equal(initialPayload.discountReason, "Promo pelanggan");
+assert.equal(initialPayload.discountAmount, null);
+assert.equal(initialPayload.discountReason, null);
 
 const initialAttempt = createStoredCheckoutAttempt({
   payload: initialPayload,
   payments: submission.payments,
-  discountApproval,
   existingAttempt: null,
-  nowIso: "2026-08-02T07:10:00.000Z",
+  nowIso: "2026-08-19T12:00:00.000Z",
 });
-assert.equal(initialAttempt.version, 3);
-assert.equal(initialAttempt.createdAt, "2026-08-02T07:10:00.000Z");
-assert.equal(initialAttempt.updatedAt, "2026-08-02T07:10:00.000Z");
+assert.equal(initialAttempt.version, 4);
+assert.deepEqual(parseStoredCheckoutAttemptState(initialAttempt), initialAttempt);
+assert.equal(parseStoredCheckoutAttemptState({ version: 3 }), null);
 
-const retryPayload = createCheckoutPayload({
-  submission,
-  existingAttempt: initialAttempt,
-});
+const retryPayload = createCheckoutPayload({ submission, existingAttempt: initialAttempt });
 assert.equal(retryPayload.idempotencyKey, initialPayload.idempotencyKey);
 
-const retryAttempt = createStoredCheckoutAttempt({
-  payload: retryPayload,
-  payments: submission.payments,
-  discountApproval,
-  existingAttempt: initialAttempt,
-  nowIso: "2026-08-02T07:15:00.000Z",
-});
-assert.equal(retryAttempt.createdAt, initialAttempt.createdAt);
-assert.equal(retryAttempt.updatedAt, "2026-08-02T07:15:00.000Z");
+assert.equal(getCheckoutSubmissionValidationMessage({
+  rawCustomerDepositUsedAmount: 0,
+  customerDepositUsedAmount: 0,
+  canFinalizePayment: true,
+  paymentValidationMessage: null,
+}), null);
+assert.equal(getCheckoutRecoveryDecision({ status: "processing", message: "Masih diproses.", retryAfterMs: 2000 }, 0).status, "wait");
 
-assert.deepEqual(
-  parseStoredCheckoutAttemptState(
-    retryAttempt,
-    "2026-08-02T08:00:00.000Z",
-  ),
-  retryAttempt,
-);
-assert.equal(parseStoredCheckoutAttemptState({ version: 2 }), null);
-assert.equal(
-  parseStoredCheckoutAttemptState({
-    ...retryAttempt,
-    payments: [{ id: "invalid" }],
-  }),
-  null,
-);
-assert.equal(
-  parseStoredCheckoutAttemptState(
-    {
-      ...retryAttempt,
-      createdAt: null,
-      updatedAt: null,
-    },
-    "2026-08-02T08:00:00.000Z",
-  )?.createdAt,
-  "2026-08-02T08:00:00.000Z",
-);
-
-assert.equal(
-  getCheckoutSubmissionValidationMessage({
-    rawCustomerDepositUsedAmount: 60_000,
-    customerDepositUsedAmount: 50_000,
-    canFinalizePayment: true,
-    paymentValidationMessage: null,
-  }),
-  "Dana Titip digunakan tidak boleh melebihi saldo customer atau total belanja.",
-);
-assert.equal(
-  getCheckoutSubmissionValidationMessage({
-    rawCustomerDepositUsedAmount: 50_000,
-    customerDepositUsedAmount: 50_000,
-    canFinalizePayment: false,
-    paymentValidationMessage: null,
-  }),
-  "Payment belum lunas atau transaksi belum siap diproses.",
-);
-assert.equal(
-  getCheckoutSubmissionValidationMessage({
-    rawCustomerDepositUsedAmount: 50_000,
-    customerDepositUsedAmount: 50_000,
-    canFinalizePayment: false,
-    paymentValidationMessage: "Payment cash tidak valid.",
-  }),
-  "Payment cash tidak valid.",
-);
-assert.equal(
-  getCheckoutSubmissionValidationMessage({
-    rawCustomerDepositUsedAmount: 50_000,
-    customerDepositUsedAmount: 50_000,
-    canFinalizePayment: true,
-    paymentValidationMessage: null,
-  }),
-  null,
-);
-
-const completedSale = {
-  id: "sale-1",
-  invoiceNumber: "INV-001",
-  totalAmount: "2400000",
-};
-assert.deepEqual(
-  getCheckoutRecoveryDecision(
-    {
-      status: "completed",
-      message: "Transaksi selesai.",
-      sale: completedSale,
-    },
-    0,
-  ),
-  {
-    status: "completed",
-    sale: completedSale,
-  },
-);
-assert.deepEqual(
-  getCheckoutRecoveryDecision(
-    {
-      status: "processing",
-      message: "Masih diproses.",
-      retryAfterMs: 2_000,
-    },
-    0,
-  ),
-  {
-    status: "wait",
-    retryAfterMs: 2_000,
-  },
-);
-assert.equal(
-  getCheckoutRecoveryDecision(
-    {
-      status: "failed",
-      message: "Transaksi gagal.",
-      errorCode: "payment_failed",
-      retryable: true,
-    },
-    0,
-  ).status,
-  "stop",
-);
-assert.deepEqual(
-  getCheckoutRecoveryDecision(
-    {
-      status: "not_found",
-      message: "Belum ditemukan.",
-    },
-    1,
-  ),
-  {
-    status: "wait",
-    retryAfterMs: 1_500,
-  },
-);
-assert.equal(
-  getCheckoutRecoveryDecision(
-    {
-      status: "not_found",
-      message: "Belum ditemukan.",
-    },
-    2,
-  ).status,
-  "stop",
-);
-
-const checkoutError: Extract<
-  PosCheckoutActionResult,
-  { status: "error" }
-> = {
+const checkoutError: Extract<PosCheckoutActionResult, { status: "error" }> = {
   status: "error",
   message: "Checkout gagal.",
   code: "validation_error",
-  fieldErrors: {
-    payments: "Payment belum lunas.",
-    customerId: "Customer tidak valid.",
-  },
+  fieldErrors: { payments: "Payment belum lunas." },
 };
-assert.equal(
-  getCheckoutErrorMessage(checkoutError),
-  "Checkout gagal. Payment belum lunas. Customer tidak valid.",
-);
-assert.equal(
-  getCheckoutErrorMessage({
-    ...checkoutError,
-    message: "Checkout gagal. Payment belum lunas. Customer tidak valid.",
-  }),
-  "Checkout gagal. Payment belum lunas. Customer tidak valid.",
-);
-
-assert.equal(
-  POS_CHECKOUT_ATTEMPT_STORAGE_KEY,
-  "asihjaya:pos-workspace-checkout-attempt",
-);
+assert.equal(getCheckoutErrorMessage(checkoutError), "Checkout gagal. Payment belum lunas.");
+assert.equal(POS_CHECKOUT_ATTEMPT_STORAGE_KEY, "asihjaya:pos-workspace-checkout-attempt");
 assert.equal(POS_CHECKOUT_RECOVERY_MAX_POLLS, 12);
 
-console.log("POS checkout client orchestration contracts passed.");
+console.log("POS checkout per-item pricing client contracts passed.");

@@ -1,46 +1,29 @@
-import type { PosAvailableItem } from "@/features/pos/contracts";
+import type { PosAvailableItem, PosCartItem } from "@/features/pos/contracts";
+import { getPosCartPricingTotals } from "@/features/pos/transaction-pricing";
 
-export type PosCartAddIssue =
-  | {
-      type: "invalid_price";
-      message: string;
-    }
-  | {
-      type: "duplicate";
-      message: string;
-    };
+export type PosCartAddIssue = {
+  type: "duplicate";
+  message: string;
+};
 
 export type RemovePosCartItemResult =
   | {
       status: "removed";
-      items: PosAvailableItem[];
-      removedItem: PosAvailableItem;
+      items: PosCartItem[];
+      removedItem: PosCartItem;
     }
   | {
       status: "not_found";
-      items: PosAvailableItem[];
+      items: PosCartItem[];
       removedItem: null;
     };
 
-function parseCartAmount(amount: string | null) {
-  if (!amount) {
-    return 0;
-  }
-
-  const parsedAmount = Number(amount);
-
-  return Number.isFinite(parsedAmount) ? parsedAmount : 0;
-}
-
-export function getPosCartItemIds(items: PosAvailableItem[]) {
+export function getPosCartItemIds(items: readonly PosCartItem[]) {
   return new Set(items.map((item) => item.id));
 }
 
-export function getPosCartSubtotal(items: PosAvailableItem[]) {
-  return items.reduce(
-    (total, item) => total + parseCartAmount(item.sellingAmount),
-    0,
-  );
+export function getPosCartSummary(items: readonly PosCartItem[]) {
+  return getPosCartPricingTotals(items);
 }
 
 export function getPosCartAddIssue({
@@ -50,17 +33,10 @@ export function getPosCartAddIssue({
   item: PosAvailableItem;
   itemIds: ReadonlySet<string>;
 }): PosCartAddIssue | null {
-  if (parseCartAmount(item.sellingAmount) <= 0) {
-    return {
-      type: "invalid_price",
-      message: `${item.sku} belum memiliki harga jual. Lengkapi harga sebelum transaksi.`,
-    };
-  }
-
   if (itemIds.has(item.id)) {
     return {
       type: "duplicate",
-      message: `${item.sku} sudah ada di keranjang.`,
+      message: `${item.sku} sudah ada di keranjang. Gunakan Edit Harga jika ingin mengubah Diskon, Ongkos, atau Round.`,
     };
   }
 
@@ -68,7 +44,7 @@ export function getPosCartAddIssue({
 }
 
 export function removePosCartItem(
-  items: PosAvailableItem[],
+  items: PosCartItem[],
   itemId: string,
 ): RemovePosCartItemResult {
   const removedItem = items.find((item) => item.id === itemId) ?? null;

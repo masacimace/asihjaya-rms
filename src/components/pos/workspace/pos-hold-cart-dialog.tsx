@@ -2,14 +2,11 @@
 
 import { LoaderCircle, Pause, X } from "lucide-react";
 
-import type {
-  PosAvailableItem,
-  PosCustomerOption,
-} from "@/features/pos/contracts";
+import type { PosCartItem, PosCustomerOption } from "@/features/pos/contracts";
 import { formatCurrency } from "@/features/pos/payment-draft";
 
 export type PosHoldCartDialogProps = {
-  cartItems: PosAvailableItem[];
+  cartItems: PosCartItem[];
   totalAmount: number;
   selectedCustomer: PosCustomerOption | null;
   titleInput: string;
@@ -149,7 +146,7 @@ export function PosHoldCartDialog({
                     </p>
                   </div>
                   <span className="shrink-0 text-xs font-semibold text-neutral-950">
-                    {formatCurrency(item.sellingAmount)}
+                    {formatCurrency(item.finalPriceAmount)}
                   </span>
                 </div>
               ))}

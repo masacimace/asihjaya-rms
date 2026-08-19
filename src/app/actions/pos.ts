@@ -43,6 +43,8 @@ import {
 } from "@/db/schema";
 import {
   type PosCheckoutActionResult,
+  type PosCartPricingInput,
+  type PosCartPricingRefreshResult,
   type PosCheckoutPayload,
   type PosHeldCartActionResult,
   type PosHeldCartItem,
@@ -71,11 +73,8 @@ import {
   checkoutSuccess,
 } from "@/features/pos/checkout/action-results";
 import {
-  allocateLineDiscounts,
-  createPosCartFingerprint,
   formatServerCurrency,
   generateInvoiceNumber,
-  getDiscountPercent,
 } from "@/features/pos/checkout/calculations";
 import { CheckoutValidationError } from "@/features/pos/checkout/errors";
 import {
@@ -88,6 +87,11 @@ import {
 } from "@/features/pos/checkout/payment-normalization";
 import type { NormalizedCheckoutPayment } from "@/features/pos/checkout/types";
 import { claimProductItemsForSale } from "@/features/pos/inventory-sale-claim";
+import {
+  normalizePosCartPricingInputs,
+  PosTransactionPricingError,
+  resolvePosTransactionPricing,
+} from "@/features/pos/transaction-pricing-server";
 import { lockManualPaymentReference } from "@/features/pos/manual-payment-reference-lock";
 import {
   DEFAULT_POS_REGISTER_MISSING_MESSAGE,
@@ -367,6 +371,22 @@ function parseDbAmount(amount: string | null) {
   const parsedAmount = Number(amount);
 
   return Number.isSafeInteger(parsedAmount) ? parsedAmount : 0;
+}
+
+function readSnapshotText(
+  snapshot: Record<string, unknown> | null | undefined,
+  key: string,
+) {
+  const value = snapshot?.[key];
+  return typeof value === "string" ? value : null;
+}
+
+function readSnapshotMoney(
+  snapshot: Record<string, unknown> | null | undefined,
+  key: string,
+) {
+  const value = readSnapshotText(snapshot, key);
+  return value ? parseDbAmount(value) : 0;
 }
 
 function normalizeNullableText(value: string | null | undefined, maxLength: number) {
@@ -963,6 +983,128 @@ export async function lookupPosScanValueAction(
   });
 }
 
+export async function refreshPosCartPricingAction(
+  pricingInput: PosCartPricingInput[],
+): Promise<PosCartPricingRefreshResult> {
+  const auth = await requirePermission("sales.create");
+
+  if (!auth.permissionCodes.includes("pos.access")) {
+    return { status: "error", message: "User ini belum memiliki akses POS." };
+  }
+
+  try {
+    const pricingInputs = normalizePosCartPricingInputs(pricingInput);
+    const primaryOutlet =
+      auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
+
+    if (!primaryOutlet) {
+      return {
+        status: "error",
+        message:
+          "Outlet aktif tidak ditemukan. Hubungi manager/admin untuk mengatur akses outlet staff ini.",
+      };
+    }
+
+    const itemIds = pricingInputs.map((input) => input.itemId);
+
+    return await db.transaction(async (transaction) => {
+      const now = new Date();
+      const itemRows = await transaction
+        .select({
+          id: productItems.id,
+          sku: productItems.sku,
+          weightGram: productItems.weightGram,
+          purityPercent: productItems.purityPercent,
+          currentOutletId: productItems.currentOutletId,
+          availability: productItems.availability,
+          condition: productItems.condition,
+          locationState: productItems.locationState,
+          isActive: productItems.isActive,
+          productStatus: productMasters.status,
+          categoryIsActive: productCategories.isActive,
+        })
+        .from(productItems)
+        .innerJoin(
+          productMasters,
+          eq(productItems.productMasterId, productMasters.id),
+        )
+        .innerJoin(
+          productCategories,
+          eq(productMasters.categoryId, productCategories.id),
+        )
+        .where(
+          and(
+            eq(productItems.organizationId, auth.organization.id),
+            inArray(productItems.id, itemIds),
+          ),
+        );
+
+      if (itemRows.length !== itemIds.length) {
+        return {
+          status: "error" as const,
+          message: "Sebagian item tidak ditemukan. Refresh POS lalu coba ulang.",
+        };
+      }
+
+      const itemMap = new Map(itemRows.map((item) => [item.id, item]));
+      const orderedItems = itemIds.map((itemId) => itemMap.get(itemId));
+
+      for (const item of orderedItems) {
+        if (!item) {
+          throw new PosTransactionPricingError(
+            "Ada item transaksi yang tidak ditemukan.",
+          );
+        }
+
+        if (
+          !item.isActive ||
+          item.productStatus !== "active" ||
+          !item.categoryIsActive ||
+          item.currentOutletId !== primaryOutlet.id ||
+          item.availability !== "available" ||
+          !["good", "used"].includes(item.condition) ||
+          item.locationState !== "outlet"
+        ) {
+          throw new PosTransactionPricingError(
+            `${item.sku} sudah tidak tersedia untuk dijual. Refresh POS lalu cek ulang.`,
+          );
+        }
+      }
+
+      const resolved = await resolvePosTransactionPricing({
+        transaction,
+        organizationId: auth.organization.id,
+        at: now,
+        items: orderedItems as NonNullable<(typeof orderedItems)[number]>[],
+        pricingInputs,
+      });
+
+      return {
+        status: "success" as const,
+        message: resolved.some((item) => item.rateChanged)
+          ? "Harga/Gram aktif berubah dan pricing item sudah diperbarui."
+          : "Pricing item sudah menggunakan Harga/Gram aktif terbaru.",
+        changed: resolved.some((item) => item.rateChanged),
+        items: resolved.map((item) => ({
+          itemId: item.itemId,
+          pricePerGram: item.pricePerGram,
+          basePriceAmount: String(item.basePriceAmount),
+          finalPriceAmount: String(item.finalPriceAmount),
+        })),
+      };
+    });
+  } catch (error) {
+    if (error instanceof PosTransactionPricingError) {
+      return { status: "error", message: error.message };
+    }
+
+    return {
+      status: "error",
+      message: "Harga cart belum bisa diperbarui karena terjadi kendala sistem.",
+    };
+  }
+}
+
 type HeldCartActionItemRow = {
   id: string;
   sku: string;
@@ -976,6 +1118,7 @@ type HeldCartActionItemRow = {
   size: string | null;
   color: string | null;
   gemstone: string | null;
+  deductionPerGram: string | null;
   sellingAmount: string | null;
   imageKey: string | null;
   outletId: string | null;
@@ -998,7 +1141,12 @@ type HeldCartActionItemRow = {
   categoryIsActive: boolean;
   lineNumber?: number;
   listPriceAmount?: string;
+  activePricePerGram?: string | null;
+  pricePerGram?: string;
+  basePriceAmount?: string;
   discountAmount?: string;
+  laborAmount?: string;
+  adjustmentAmount?: string;
   finalPriceAmount?: string;
 };
 
@@ -1022,7 +1170,11 @@ function mapHeldCartActionItem(row: HeldCartActionItemRow): PosHeldCartItem {
     size: row.size,
     color: row.color,
     gemstone: row.gemstone,
+    deductionPerGram: row.deductionPerGram,
     sellingAmount: row.sellingAmount,
+    activePricePerGram: row.activePricePerGram ?? row.pricePerGram ?? null,
+    pricePerGram: row.pricePerGram ?? row.activePricePerGram ?? "0",
+    basePriceAmount: row.basePriceAmount ?? row.listPriceAmount ?? finalPriceAmount,
     imageKey: row.imageKey,
     productImageKey: row.productImageKey,
     outletId: row.outletId,
@@ -1031,6 +1183,8 @@ function mapHeldCartActionItem(row: HeldCartActionItemRow): PosHeldCartItem {
     lineNumber: row.lineNumber ?? 1,
     listPriceAmount: row.listPriceAmount ?? finalPriceAmount,
     discountAmount: row.discountAmount ?? "0",
+    laborAmount: row.laborAmount ?? "0",
+    adjustmentAmount: row.adjustmentAmount ?? "0",
     finalPriceAmount,
   };
 }
@@ -1076,7 +1230,19 @@ export async function holdPosCartAction(
   }
 
   const fieldErrors: Record<string, string> = {};
-  const itemIds = Array.from(new Set(payload.itemIds ?? []));
+  let pricingInputs: PosCartPricingInput[];
+
+  try {
+    pricingInputs = normalizePosCartPricingInputs(payload.items);
+  } catch (error) {
+    return heldCartFailure(
+      error instanceof PosTransactionPricingError
+        ? error.message
+        : "Pricing item hold tidak valid.",
+    );
+  }
+
+  const itemIds = pricingInputs.map((input) => input.itemId);
   const customerId = normalizeNullableText(payload.customerId, 36);
   const title = normalizeNullableText(payload.title, 160);
   const note = normalizeNullableText(payload.note, 500);
@@ -1275,16 +1441,30 @@ export async function holdPosCartAction(
           );
         }
 
-        if (parseDbAmount(item.sellingAmount) <= 0) {
-          throw new CheckoutValidationError(`${item.sku} belum memiliki harga jual.`);
-        }
       }
 
-      const subtotalAmount = orderedItems.reduce(
-        (total, item) => total + parseDbAmount(item!.sellingAmount),
+      const resolvedPricing = await resolvePosTransactionPricing({
+        transaction,
+        organizationId: auth.organization.id,
+        at: now,
+        items: orderedItems as NonNullable<(typeof orderedItems)[number]>[],
+        pricingInputs,
+      });
+      const pricingMap = new Map(
+        resolvedPricing.map((pricing) => [pricing.itemId, pricing]),
+      );
+      const subtotalAmount = resolvedPricing.reduce(
+        (total, pricing) => total + pricing.basePriceAmount,
         0,
       );
-      const totalAmount = subtotalAmount;
+      const discountAmount = resolvedPricing.reduce(
+        (total, pricing) => total + pricing.discountAmount,
+        0,
+      );
+      const totalAmount = resolvedPricing.reduce(
+        (total, pricing) => total + pricing.finalPriceAmount,
+        0,
+      );
       const holdNumber = generateHoldNumber({
         outletCode: primaryOutlet.code,
         date: now,
@@ -1310,7 +1490,7 @@ export async function holdPosCartAction(
           status: "active",
           itemCount: orderedItems.length,
           subtotalAmount: String(subtotalAmount),
-          discountAmount: "0",
+          discountAmount: String(discountAmount),
           totalAmount: String(totalAmount),
           createdAt: now,
           updatedAt: now,
@@ -1339,15 +1519,21 @@ export async function holdPosCartAction(
 
       await transaction.insert(posHeldCartItems).values(
         orderedItems.map((item, index) => {
-          const finalPriceAmount = parseDbAmount(item!.sellingAmount);
+          const pricing = pricingMap.get(item!.id);
+
+          if (!pricing) {
+            throw new PosTransactionPricingError(
+              `Pricing ${item!.sku} tidak ditemukan saat hold cart.`,
+            );
+          }
 
           return {
             heldCartId: heldCart.id,
             productItemId: item!.id,
             lineNumber: index + 1,
-            listPriceAmount: String(finalPriceAmount),
-            discountAmount: "0",
-            finalPriceAmount: String(finalPriceAmount),
+            listPriceAmount: String(pricing.basePriceAmount),
+            discountAmount: String(pricing.discountAmount),
+            finalPriceAmount: String(pricing.finalPriceAmount),
             snapshot: {
               sku: item!.sku,
               barcode: item!.barcode,
@@ -1369,6 +1555,12 @@ export async function holdPosCartAction(
               gemstone: item!.gemstone,
               sellingAmount: item!.sellingAmount,
               deductionPerGram: item!.deductionPerGram,
+              pricePerGram: pricing.pricePerGram,
+              basePriceAmount: String(pricing.basePriceAmount),
+              discountAmount: String(pricing.discountAmount),
+              laborAmount: String(pricing.laborAmount),
+              adjustmentAmount: String(pricing.adjustmentAmount),
+              finalPriceAmount: String(pricing.finalPriceAmount),
               imageKey: item!.imageKey,
               productImageKey: item!.productImageKey,
             },
@@ -1394,7 +1586,8 @@ export async function holdPosCartAction(
             registerId: register.id,
             shiftId: activeShift.id,
             heldByUserId: auth.user.id,
-            sellingAmount: item!.sellingAmount,
+            pricePerGram: pricingMap.get(item!.id)?.pricePerGram ?? null,
+            finalPriceAmount: pricingMap.get(item!.id)?.finalPriceAmount ?? null,
           },
           performedBy: auth.user.id,
           approvedBy: null,
@@ -1441,15 +1634,28 @@ export async function holdPosCartAction(
           heldByUserId: auth.user.id,
           heldByName: auth.user.fullName,
         }),
-        items: orderedItems.map((item, index) =>
-          mapHeldCartActionItem({
+        items: orderedItems.map((item, index) => {
+          const pricing = pricingMap.get(item!.id);
+
+          if (!pricing) {
+            throw new PosTransactionPricingError(
+              `Pricing ${item!.sku} tidak ditemukan saat menyusun hold cart.`,
+            );
+          }
+
+          return mapHeldCartActionItem({
             ...item!,
             lineNumber: index + 1,
-            listPriceAmount: item!.sellingAmount ?? "0",
-            discountAmount: "0",
-            finalPriceAmount: item!.sellingAmount ?? "0",
-          }),
-        ),
+            listPriceAmount: String(pricing.basePriceAmount),
+            activePricePerGram: pricing.pricePerGram,
+            pricePerGram: pricing.pricePerGram,
+            basePriceAmount: String(pricing.basePriceAmount),
+            discountAmount: String(pricing.discountAmount),
+            laborAmount: String(pricing.laborAmount),
+            adjustmentAmount: String(pricing.adjustmentAmount),
+            finalPriceAmount: String(pricing.finalPriceAmount),
+          });
+        }),
       };
     });
 
@@ -1462,7 +1668,7 @@ export async function holdPosCartAction(
       items: createdHeldCart.items,
     });
   } catch (error) {
-    if (error instanceof CheckoutValidationError) {
+    if (error instanceof CheckoutValidationError || error instanceof PosTransactionPricingError) {
       return heldCartFailure(error.message);
     }
 
@@ -1734,6 +1940,7 @@ export async function resumePosHeldCartAction({
           size: productItems.size,
           color: productItems.color,
           gemstone: productItems.gemstone,
+          deductionPerGram: productItems.deductionPerGram,
           sellingAmount: productItems.sellingAmount,
           imageKey: productItems.imageKey,
           outletId: outlets.id,
@@ -1758,6 +1965,7 @@ export async function resumePosHeldCartAction({
           listPriceAmount: posHeldCartItems.listPriceAmount,
           discountAmount: posHeldCartItems.discountAmount,
           finalPriceAmount: posHeldCartItems.finalPriceAmount,
+          snapshot: posHeldCartItems.snapshot,
         })
         .from(posHeldCartItems)
         .innerJoin(productItems, eq(posHeldCartItems.productItemId, productItems.id))
@@ -1805,6 +2013,24 @@ export async function resumePosHeldCartAction({
           );
         }
       }
+
+      const pricingInputs = itemRows.map((item) => ({
+        itemId: item.id,
+        pricePerGram: readSnapshotText(item.snapshot, "pricePerGram") ?? "0",
+        discountAmount: parseDbAmount(item.discountAmount),
+        laborAmount: readSnapshotMoney(item.snapshot, "laborAmount"),
+        adjustmentAmount: readSnapshotMoney(item.snapshot, "adjustmentAmount"),
+      }));
+      const resolvedPricing = await resolvePosTransactionPricing({
+        transaction,
+        organizationId: auth.organization.id,
+        at: now,
+        items: itemRows,
+        pricingInputs,
+      });
+      const pricingMap = new Map(
+        resolvedPricing.map((pricing) => [pricing.itemId, pricing]),
+      );
 
       await transaction
         .update(posHeldCarts)
@@ -1877,7 +2103,27 @@ export async function resumePosHeldCartAction({
           status: "resumed",
           updatedAt: now,
         }),
-        items: itemRows.map(mapHeldCartActionItem),
+        items: itemRows.map((item) => {
+          const pricing = pricingMap.get(item.id);
+
+          if (!pricing) {
+            throw new PosTransactionPricingError(
+              `Pricing ${item.sku} tidak ditemukan saat resume hold.`,
+            );
+          }
+
+          return mapHeldCartActionItem({
+            ...item,
+            activePricePerGram: pricing.pricePerGram,
+            pricePerGram: pricing.pricePerGram,
+            basePriceAmount: String(pricing.basePriceAmount),
+            listPriceAmount: String(pricing.basePriceAmount),
+            discountAmount: String(pricing.discountAmount),
+            laborAmount: String(pricing.laborAmount),
+            adjustmentAmount: String(pricing.adjustmentAmount),
+            finalPriceAmount: String(pricing.finalPriceAmount),
+          });
+        }),
       };
     });
 
@@ -1890,7 +2136,7 @@ export async function resumePosHeldCartAction({
       items: result.items,
     });
   } catch (error) {
-    if (error instanceof CheckoutValidationError) {
+    if (error instanceof CheckoutValidationError || error instanceof PosTransactionPricingError) {
       return heldCartFailure(error.message);
     }
 
@@ -1921,18 +2167,23 @@ export async function completePosCheckoutAction(
   }
 
   const fieldErrors: Record<string, string> = {};
-  const itemIds = Array.from(new Set(payload.itemIds ?? []));
+  let pricingInputs: PosCartPricingInput[];
+
+  try {
+    pricingInputs = normalizePosCartPricingInputs(payload.itemPricing);
+  } catch (error) {
+    return checkoutFailure(
+      error instanceof PosTransactionPricingError
+        ? error.message
+        : "Pricing item transaksi tidak valid.",
+    );
+  }
+
+  const itemIds = pricingInputs.map((input) => input.itemId);
+  const submittedItemIds = payload.itemIds ?? [];
   const idempotencyKey = String(payload.idempotencyKey ?? "").trim();
   const customerId = normalizeNullableText(payload.customerId, 36);
   const saleNote = normalizeNullableText(payload.note, 240);
-  const submittedDiscountAmount =
-    payload.discountAmount === null || payload.discountAmount === undefined
-      ? 0
-      : Number(payload.discountAmount);
-  const submittedDiscountReason = normalizeNullableText(
-    payload.discountReason,
-    500,
-  );
   const customerDepositUsedAmount = Number(payload.customerDepositUsedAmount ?? 0);
   const customerDepositInAmount = Number(payload.customerDepositInAmount ?? 0);
 
@@ -1948,6 +2199,13 @@ export async function completePosCheckoutAction(
     fieldErrors.items = "Ada item transaksi yang tidak valid.";
   }
 
+  if (
+    submittedItemIds.length !== itemIds.length ||
+    submittedItemIds.some((itemId, index) => itemId !== itemIds[index])
+  ) {
+    fieldErrors.items = "Item cart dan pricing transaksi tidak sinkron. Kembali ke cart lalu coba lagi.";
+  }
+
   if (!isValidPosCheckoutIdempotencyKey(idempotencyKey)) {
     fieldErrors.idempotencyKey = "Kode transaksi POS tidak valid.";
   }
@@ -1955,11 +2213,6 @@ export async function completePosCheckoutAction(
   if (customerId && !UUID_PATTERN.test(customerId)) {
     fieldErrors.customerId = "Customer yang dipilih tidak valid.";
   }
-
-  if (!Number.isSafeInteger(submittedDiscountAmount) || submittedDiscountAmount < 0) {
-    fieldErrors.discountAmount = "Nominal diskon tidak valid.";
-  }
-
 
   if (
     !Number.isSafeInteger(customerDepositUsedAmount) ||
@@ -2048,6 +2301,7 @@ export async function completePosCheckoutAction(
 
   const normalizedCheckoutPayload: PosCheckoutPayload = {
     itemIds,
+    itemPricing: pricingInputs,
     payments: normalizedPayments.map((payment) => ({
       method: payment.method,
       amount: payment.amount,
@@ -2068,8 +2322,8 @@ export async function completePosCheckoutAction(
     customerId,
     note: saleNote,
     discountApprovalId: null,
-    discountAmount: submittedDiscountAmount || null,
-    discountReason: submittedDiscountReason,
+    discountAmount: null,
+    discountReason: null,
     customerDepositUsedAmount: customerDepositUsedAmount || null,
     customerDepositInAmount: customerDepositInAmount || null,
   };
@@ -2424,6 +2678,7 @@ export async function completePosCheckoutAction(
           size: productItems.size,
           color: productItems.color,
           gemstone: productItems.gemstone,
+          deductionPerGram: productItems.deductionPerGram,
           sellingAmount: productItems.sellingAmount,
           costAmount: productItems.costAmount,
           imageKey: productItems.imageKey,
@@ -2531,38 +2786,42 @@ export async function completePosCheckoutAction(
           );
         }
 
-        if (parseDbAmount(item.sellingAmount) <= 0) {
-          throw new CheckoutValidationError(
-            `${item.sku} belum memiliki harga jual.`,
-          );
-        }
       }
 
-      const itemAmounts = orderedItems.map((item) =>
-        parseDbAmount(item!.sellingAmount),
-      );
-      const subtotalAmount = itemAmounts.reduce((total, amount) => total + amount, 0);
-      let approvedDiscountAmount = 0;
-      let approvedDiscountReason: string | null = null;
-
-      if (submittedDiscountAmount > 0) {
-        if (submittedDiscountAmount >= subtotalAmount) {
-          throw new CheckoutValidationError(
-            "Nominal diskon harus lebih kecil dari subtotal transaksi.",
-          );
-        }
-
-        approvedDiscountAmount = submittedDiscountAmount;
-        approvedDiscountReason = submittedDiscountReason;
-      }
-
-      const lineDiscounts = allocateLineDiscounts({
-        itemAmounts,
-        discountAmount: approvedDiscountAmount,
+      const resolvedPricing = await resolvePosTransactionPricing({
+        transaction,
+        organizationId: auth.organization.id,
+        at: now,
+        items: orderedItems as NonNullable<(typeof orderedItems)[number]>[],
+        pricingInputs,
       });
+
+      if (resolvedPricing.some((pricing) => pricing.rateChanged)) {
+        throw new CheckoutValidationError(
+          "Harga/Gram aktif berubah setelah pembayaran disiapkan. Kembali ke cart lalu klik Lanjut ke Pembayaran lagi agar total menggunakan harga terbaru.",
+        );
+      }
+
+      const pricingMap = new Map(
+        resolvedPricing.map((pricing) => [pricing.itemId, pricing]),
+      );
+      const subtotalAmount = resolvedPricing.reduce(
+        (total, pricing) => total + pricing.basePriceAmount,
+        0,
+      );
+      const approvedDiscountAmount = resolvedPricing.reduce(
+        (total, pricing) => total + pricing.discountAmount,
+        0,
+      );
+      const additionalFeeAmount = resolvedPricing.reduce(
+        (total, pricing) =>
+          total + pricing.laborAmount + pricing.adjustmentAmount,
+        0,
+      );
       const financialReconciliation = reconcileCheckoutFinancials({
         subtotalAmount,
         discountAmount: approvedDiscountAmount,
+        additionalFeeAmount,
         customerDepositUsedAmount,
         customerDepositInAmount,
         paymentAmounts: normalizedPayments.map((payment) => payment.amount),
@@ -2571,7 +2830,7 @@ export async function completePosCheckoutAction(
       if (!financialReconciliation.ok) {
         if (financialReconciliation.code === "non_positive_total") {
           throw new CheckoutValidationError(
-            "Total transaksi tidak valid. Periksa harga jual item dan diskon.",
+            "Total transaksi tidak valid. Periksa pricing setiap item.",
           );
         }
 
@@ -2615,8 +2874,8 @@ export async function completePosCheckoutAction(
           status: "completed",
           subtotalAmount: String(subtotalAmount),
           discountAmount: String(approvedDiscountAmount),
-          discountReason: approvedDiscountReason,
-          additionalFeeAmount: "0",
+          discountReason: null,
+          additionalFeeAmount: String(additionalFeeAmount),
           totalAmount: String(totalAmount),
           completedAt: now,
           notes: saleNote,
@@ -2637,17 +2896,21 @@ export async function completePosCheckoutAction(
 
       await transaction.insert(saleItems).values(
         orderedItems.map((item, index) => {
-          const listPriceAmount = parseDbAmount(item!.sellingAmount);
-          const lineDiscountAmount = lineDiscounts[index] ?? 0;
-          const finalPriceAmount = Math.max(listPriceAmount - lineDiscountAmount, 0);
+          const pricing = pricingMap.get(item!.id);
+
+          if (!pricing) {
+            throw new PosTransactionPricingError(
+              `Pricing ${item!.sku} tidak ditemukan saat checkout.`,
+            );
+          }
 
           return {
             saleId: sale.id,
             productItemId: item!.id,
             lineNumber: index + 1,
-            listPriceAmount: String(listPriceAmount),
-            discountAmount: String(lineDiscountAmount),
-            finalPriceAmount: String(finalPriceAmount),
+            listPriceAmount: String(pricing.basePriceAmount),
+            discountAmount: String(pricing.discountAmount),
+            finalPriceAmount: String(pricing.finalPriceAmount),
             costAmountSnapshot: item!.costAmount,
             snapshot: {
               sku: item!.sku,
@@ -2668,6 +2931,13 @@ export async function completePosCheckoutAction(
               size: item!.size,
               color: item!.color,
               gemstone: item!.gemstone,
+              deductionPerGram: item!.deductionPerGram,
+              pricePerGram: pricing.pricePerGram,
+              basePriceAmount: String(pricing.basePriceAmount),
+              discountAmount: String(pricing.discountAmount),
+              laborAmount: String(pricing.laborAmount),
+              adjustmentAmount: String(pricing.adjustmentAmount),
+              finalPriceAmount: String(pricing.finalPriceAmount),
               sellingAmount: item!.sellingAmount,
               costAmountSnapshot: item!.costAmount,
               imageKey: item!.imageKey,
@@ -2706,7 +2976,8 @@ export async function completePosCheckoutAction(
             registerId: register.id,
             shiftId: activeShift.id,
             cashierId: auth.user.id,
-            sellingAmount: item!.sellingAmount,
+            pricePerGram: pricingMap.get(item!.id)?.pricePerGram ?? null,
+            finalPriceAmount: pricingMap.get(item!.id)?.finalPriceAmount ?? null,
           },
           performedBy: auth.user.id,
           approvedBy: null,
@@ -2812,6 +3083,7 @@ export async function completePosCheckoutAction(
             invoiceNumber,
             subtotalAmount: String(subtotalAmount),
             discountAmount: String(approvedDiscountAmount),
+            additionalFeeAmount: String(additionalFeeAmount),
             totalAmount: String(totalAmount),
             externalPaymentDueAmount: String(externalPaymentDueAmount),
           },
@@ -2847,6 +3119,7 @@ export async function completePosCheckoutAction(
             invoiceNumber,
             subtotalAmount: String(subtotalAmount),
             discountAmount: String(approvedDiscountAmount),
+            additionalFeeAmount: String(additionalFeeAmount),
             totalAmount: String(totalAmount),
             externalPaymentDueAmount: String(externalPaymentDueAmount),
           },
@@ -2879,8 +3152,9 @@ export async function completePosCheckoutAction(
           itemCount: itemIds.length,
           subtotalAmount: String(subtotalAmount),
           discountAmount: String(approvedDiscountAmount),
-          discountReason: approvedDiscountReason,
+          discountReason: null,
           discountApprovalId: null,
+          additionalFeeAmount: String(additionalFeeAmount),
           totalAmount: String(totalAmount),
           customerDepositUsedAmount: String(customerDepositUsedAmount),
           customerDepositInAmount: String(customerDepositInAmount),
@@ -3043,7 +3317,7 @@ export async function completePosCheckoutAction(
       }
     }
 
-    if (error instanceof CheckoutValidationError) {
+    if (error instanceof CheckoutValidationError || error instanceof PosTransactionPricingError) {
       if (claimedAttemptId && claimedAttemptCount !== null) {
         await markPosCheckoutAttemptFailed({
           attemptId: claimedAttemptId,

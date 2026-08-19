@@ -22,6 +22,7 @@ export type CheckoutFinancialReconciliation =
 export type ReconcileCheckoutFinancialsInput = {
   subtotalAmount: number;
   discountAmount: number;
+  additionalFeeAmount: number;
   customerDepositUsedAmount: number;
   customerDepositInAmount: number;
   paymentAmounts: readonly number[];
@@ -39,6 +40,7 @@ function isNonNegativeSafeInteger(value: number) {
 export function reconcileCheckoutFinancials({
   subtotalAmount,
   discountAmount,
+  additionalFeeAmount,
   customerDepositUsedAmount,
   customerDepositInAmount,
   paymentAmounts,
@@ -46,6 +48,7 @@ export function reconcileCheckoutFinancials({
   if (
     !isNonNegativeSafeInteger(subtotalAmount) ||
     !isNonNegativeSafeInteger(discountAmount) ||
+    !isNonNegativeSafeInteger(additionalFeeAmount) ||
     !isNonNegativeSafeInteger(customerDepositUsedAmount) ||
     !isNonNegativeSafeInteger(customerDepositInAmount) ||
     paymentAmounts.some(
@@ -55,7 +58,7 @@ export function reconcileCheckoutFinancials({
     return { ok: false, code: "invalid_amount" };
   }
 
-  const totalAmount = subtotalAmount - discountAmount;
+  const totalAmount = subtotalAmount - discountAmount + additionalFeeAmount;
 
   if (!Number.isSafeInteger(totalAmount) || totalAmount <= 0) {
     return { ok: false, code: "non_positive_total" };

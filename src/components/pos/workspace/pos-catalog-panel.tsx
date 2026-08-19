@@ -24,10 +24,8 @@ import {
   type PosAvailableItem,
   type PosCategoryOption,
 } from "@/features/pos/contracts";
-import {
-  formatCurrency,
-  parseAmount,
-} from "@/features/pos/payment-draft";
+import { formatCurrency } from "@/features/pos/payment-draft";
+import { calculatePosBasePrice } from "@/features/pos/transaction-pricing";
 import { cn } from "@/lib/utils";
 
 type PosCatalogPanelProps = {
@@ -393,7 +391,11 @@ export function PosCatalogPanel({
         <div className="mt-2 grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-3 2xl:grid-cols-4">
           {filteredItems.map((item) => {
             const isInCart = cartItemIds.has(item.id);
-            const hasSellingAmount = parseAmount(item.sellingAmount) > 0;
+            const basePriceAmount = calculatePosBasePrice({
+              weightGram: item.weightGram,
+              pricePerGram: item.activePricePerGram,
+            });
+            const hasActivePricing = Boolean(basePriceAmount);
             const specChips = getPosItemSpecChips(item);
 
             return (
@@ -477,10 +479,12 @@ export function PosCatalogPanel({
                   <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--accent-soft)] bg-[var(--accent-soft)]/70 p-2.5 sm:items-end sm:gap-3 sm:rounded-2xl sm:p-3">
                     <div className="min-w-0">
                       <p className="hidden text-[10px] font-semibold uppercase text-[var(--muted)] sm:block">
-                        Harga jual
+                        Harga dasar saat ini
                       </p>
                       <p className="truncate text-xs font-semibold text-neutral-950 sm:mt-1 sm:text-[15px]">
-                        {formatCurrency(item.sellingAmount)}
+                        {basePriceAmount
+                          ? formatCurrency(basePriceAmount)
+                          : "Harga/Gram belum diatur"}
                       </p>
                     </div>
 
@@ -492,14 +496,14 @@ export function PosCatalogPanel({
                           : `Tambahkan ${item.productName}`
                       }
                       onClick={() => onAddItem(item)}
-                      disabled={isInCart || !hasSellingAmount}
+                      disabled={isInCart}
                       className={cn(
                         "grid size-9 shrink-0 place-items-center rounded-xl border bg-white transition sm:size-10 sm:rounded-2xl",
                         isInCart
                           ? "cursor-not-allowed border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                          : hasSellingAmount
+                          : hasActivePricing
                             ? "border-[var(--border)] text-[var(--accent)] hover:border-[var(--accent)] hover:bg-white"
-                            : "cursor-not-allowed border-neutral-200 text-neutral-300",
+                            : "border-amber-200 text-amber-600 hover:border-amber-300 hover:bg-amber-50",
                       )}
                     >
                       <ShoppingBag className="size-4" />

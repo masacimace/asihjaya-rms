@@ -43,6 +43,10 @@ import {
   getDefaultPosRegisterCondition,
 } from "@/features/pos/context";
 import {
+  getActiveGoldPriceRateMap,
+  normalizePurityKey,
+} from "@/features/pricing/metal-price-rates";
+import {
   POS_INITIAL_ITEM_LIMIT,
   type PosAvailableItem,
   type PosCustomerOption,
@@ -59,7 +63,8 @@ import {
   type PosTransactionRange,
 } from "@/features/pos/contracts";
 
-type ScannedPosItemRow = PosAvailableItem & {
+type ScannedPosItemRow = Omit<PosAvailableItem, "activePricePerGram"> & {
+  activePricePerGram?: string | null;
   isActive: boolean;
   availability: "draft" | "migration_hold" | "available" | "reserved" | "inspection" | "sold";
   condition: "good" | "used" | "damaged" | "lost" | "returned";
@@ -116,7 +121,9 @@ function mapScannedRowToAvailableItem(
     size: row.size,
     color: row.color,
     gemstone: row.gemstone,
+    deductionPerGram: row.deductionPerGram,
     sellingAmount: row.sellingAmount,
+    activePricePerGram: row.activePricePerGram ?? null,
     imageKey: row.imageKey,
     productImageKey: row.productImageKey,
     outletId: row.outletId,
@@ -156,7 +163,9 @@ function mapHeldCartItemRow(row: HeldCartItemRow): PosHeldCartItem {
     size: row.size,
     color: row.color,
     gemstone: row.gemstone,
+    deductionPerGram: row.deductionPerGram,
     sellingAmount: row.sellingAmount,
+    activePricePerGram: row.activePricePerGram,
     imageKey: row.imageKey,
     productImageKey: row.productImageKey,
     outletId: row.outletId,
@@ -164,7 +173,11 @@ function mapHeldCartItemRow(row: HeldCartItemRow): PosHeldCartItem {
     outletName: row.outletName,
     lineNumber: row.lineNumber,
     listPriceAmount: row.listPriceAmount,
+    pricePerGram: row.pricePerGram,
+    basePriceAmount: row.basePriceAmount,
     discountAmount: row.discountAmount,
+    laborAmount: row.laborAmount,
+    adjustmentAmount: row.adjustmentAmount,
     finalPriceAmount: row.finalPriceAmount,
   };
 }
@@ -212,10 +225,6 @@ function getScannedItemUnavailableMessage({
 
   if (row.locationState !== "outlet") {
     return `${row.sku} tidak berada di area jual outlet karena lokasi item ${itemLocationLabels[row.locationState]}.`;
-  }
-
-  if (parseAmount(row.sellingAmount) <= 0) {
-    return `${row.sku} belum memiliki harga jual. Lengkapi harga sebelum transaksi.`;
   }
 
   return `${row.sku} belum memenuhi syarat untuk masuk transaksi POS.`;
@@ -278,7 +287,7 @@ export async function getPosInitialData({
     };
   }
 
-  const [registerRows, categoryRows, itemRows, customerRows] =
+  const [registerRows, categoryRows, itemRows, customerRows, activeRateMap] =
     await Promise.all([
       db
         .select({
@@ -351,6 +360,7 @@ export async function getPosInitialData({
           size: productItems.size,
           color: productItems.color,
           gemstone: productItems.gemstone,
+          deductionPerGram: productItems.deductionPerGram,
           sellingAmount: productItems.sellingAmount,
           imageKey: productItems.imageKey,
           productImageKey: productMasters.imageKey,
@@ -406,6 +416,7 @@ export async function getPosInitialData({
         )
         .orderBy(asc(customers.fullName), desc(customers.createdAt))
         .limit(80),
+      getActiveGoldPriceRateMap(organizationId),
     ]);
 
   const customerIds = customerRows.map((customer) => customer.id);
@@ -576,7 +587,12 @@ export async function getPosInitialData({
       ...category,
       totalAvailableItems: Number(category.totalAvailableItems),
     })),
-    items: itemRows,
+    items: itemRows.map((item) => ({
+      ...item,
+      activePricePerGram:
+        activeRateMap.get(normalizePurityKey(item.purityPercent) ?? "")?.ratePerGram ??
+        null,
+    })),
     customers: customerRows.map((customer): PosCustomerOption => {
       const latestDeposit = latestDepositByCustomerId.get(customer.id) ?? null;
       const balanceAmount = latestDeposit?.balanceAfter ?? "0";
@@ -677,6 +693,7 @@ export async function lookupPosItemByScanValue({
       size: productItems.size,
       color: productItems.color,
       gemstone: productItems.gemstone,
+      deductionPerGram: productItems.deductionPerGram,
       sellingAmount: productItems.sellingAmount,
       imageKey: productItems.imageKey,
       productImageKey: productMasters.imageKey,
@@ -753,8 +770,7 @@ export async function lookupPosItemByScanValue({
     row.outletId === outletId &&
     row.availability === "available" &&
     ["good", "used"].includes(row.condition) &&
-    row.locationState === "outlet" &&
-    parseAmount(row.sellingAmount) > 0;
+    row.locationState === "outlet";
 
   if (!isAvailableForPos) {
     return {
@@ -763,10 +779,20 @@ export async function lookupPosItemByScanValue({
     };
   }
 
+  const activeRateMap = await getActiveGoldPriceRateMap(organizationId);
+  const activePricePerGram =
+    activeRateMap.get(normalizePurityKey(row.purityPercent) ?? "")?.ratePerGram ??
+    null;
+
   return {
     status: "found",
-    item: mapScannedRowToAvailableItem(row),
-    message: `${row.sku} ditemukan dan siap ditambahkan ke keranjang.`,
+    item: mapScannedRowToAvailableItem({
+      ...row,
+      activePricePerGram,
+    }),
+    message: activePricePerGram
+      ? `${row.sku} ditemukan. Tentukan Diskon, Ongkos, dan Round sebelum masuk keranjang.`
+      : `${row.sku} ditemukan, tetapi Harga/Gram aktif untuk kadar ${row.purityPercent ?? "-"}% belum diatur.`,
   };
 }
 
@@ -1574,7 +1600,13 @@ export async function getPosHeldCartListData({
             size: productItems.size,
             color: productItems.color,
             gemstone: productItems.gemstone,
+            deductionPerGram: productItems.deductionPerGram,
             sellingAmount: productItems.sellingAmount,
+            activePricePerGram: sql<string | null>`nullif(${posHeldCartItems.snapshot}->>'pricePerGram', '')`,
+            pricePerGram: sql<string>`coalesce(${posHeldCartItems.snapshot}->>'pricePerGram', '0')`,
+            basePriceAmount: posHeldCartItems.listPriceAmount,
+            laborAmount: sql<string>`coalesce(${posHeldCartItems.snapshot}->>'laborAmount', '0')`,
+            adjustmentAmount: sql<string>`coalesce(${posHeldCartItems.snapshot}->>'adjustmentAmount', '0')`,
             imageKey: productItems.imageKey,
             productImageKey: productMasters.imageKey,
             productId: productMasters.id,

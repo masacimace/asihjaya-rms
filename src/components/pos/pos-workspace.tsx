@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -8,6 +8,7 @@ import {
   createPosQuickCustomerAction,
   holdPosCartAction,
   lookupPosScanValueAction,
+  refreshPosCartPricingAction,
 } from "@/app/actions/pos";
 import type { PosPanelMode } from "@/components/pos/workspace/pos-mobile-side-panel";
 import {
@@ -16,6 +17,7 @@ import {
 } from "@/components/pos/workspace/pos-workspace-view";
 import {
   type PosAvailableItem,
+  type PosCartItem,
   type PosCategoryOption,
   type PosCustomerOption,
   type PosManualPaymentProfile,
@@ -44,11 +46,14 @@ import { usePosCart } from "@/features/pos/use-pos-cart";
 import { usePosCartSession } from "@/features/pos/use-pos-cart-session";
 import { usePosCheckout } from "@/features/pos/use-pos-checkout";
 import { usePosCustomer } from "@/features/pos/use-pos-customer";
-import { usePosDiscount } from "@/features/pos/use-pos-discount";
 import { usePosHeldCart } from "@/features/pos/use-pos-held-cart";
 import { usePosPayment } from "@/features/pos/use-pos-payment";
 import { usePosScanner } from "@/features/pos/use-pos-scanner";
 import { getPosWorkspaceState } from "@/features/pos/workspace-state";
+import {
+  getPosCartPricingInput,
+  getPosCartPricingTotals,
+} from "@/features/pos/transaction-pricing";
 
 type PosWorkspaceProps = {
   categories: PosCategoryOption[];
@@ -79,6 +84,10 @@ export function PosWorkspace({
     setCartItems,
     cartItemIds,
     subtotalAmount,
+    discountAmount,
+    laborAmount,
+    adjustmentAmount,
+    totalAmount,
     setCartFeedback,
   } = usePosCart();
   const {
@@ -115,7 +124,7 @@ export function PosWorkspace({
     lookupScannedItem,
   } = usePosScanner({
     lookupScanValue: lookupPosScanValueAction,
-    onItemFound: addItemToCart,
+    onItemFound: openItemPricing,
     onFeedback: setCartFeedback,
   });
   const [panelMode, setPanelMode] = useState<PosPanelMode>("cart");
@@ -155,37 +164,13 @@ export function PosWorkspace({
     closeHoldDialog,
     holdCurrentCart: holdCurrentCartState,
   } = usePosHeldCart({ holdCart: holdPosCartAction });
-  const {
-    discountApproval,
-    canRequestDiscount,
-    discountDisabledReason,
-    setDiscountApproval,
-    discountFeedback,
-    setDiscountFeedback,
-    isDiscountDialogOpen,
-    discountAmountInput,
-    setDiscountAmountInput,
-    discountReasonInput,
-    setDiscountReasonInput,
-    isDiscountPending,
-    clearDiscountApproval: clearDiscountApprovalState,
-    openDiscountDialog,
-    closeDiscountDialog,
-    submitDiscountApproval: submitDiscountApprovalState,
-    refreshDiscountApprovalStatus: refreshDiscountApprovalStatusState,
-  } = usePosDiscount({
-    cartItems,
-    subtotalAmount,
-    selectedCustomerId: selectedCustomer?.id ?? null,
-    panelMode,
-    paymentCount: payments.length,
-    hasRegister: Boolean(context.register),
-    hasActiveShift: Boolean(context.activeShift),
-  });
+  const [pricingTarget, setPricingTarget] = useState<PosAvailableItem | null>(null);
+  const [pricingExistingItem, setPricingExistingItem] = useState<PosCartItem | null>(null);
+  const [isPricingRefreshPending, startPricingRefreshTransition] = useTransition();
+
 
   const restoreCheckoutAttempt = useCallback(
     (attempt: StoredCheckoutAttemptState) => {
-      setDiscountApproval(attempt.discountApproval);
       restoreCheckoutPaymentState({
         payments: attempt.payments,
         customerDepositUsedAmount:
@@ -195,12 +180,7 @@ export function PosWorkspace({
       setPanelMode("payment");
       setIsMobileCartOpen(true);
     },
-    [
-      restoreCheckoutPaymentState,
-      setDiscountApproval,
-      setIsMobileCartOpen,
-      setPanelMode,
-    ],
+    [restoreCheckoutPaymentState, setIsMobileCartOpen, setPanelMode],
   );
 
   const handleCheckoutSuccess = useCallback(() => {
@@ -210,8 +190,6 @@ export function PosWorkspace({
     setCartItems([]);
     clearCustomerState();
     resetPaymentState();
-    setDiscountApproval(null);
-    setDiscountFeedback(null);
     setPanelMode("success");
     setIsMobileCartOpen(true);
     router.refresh();
@@ -222,8 +200,6 @@ export function PosWorkspace({
     router,
     setCartFeedback,
     setCartItems,
-    setDiscountApproval,
-    setDiscountFeedback,
     setIsMobileCartOpen,
     setPanelMode,
     setPaymentFeedback,
@@ -266,8 +242,6 @@ export function PosWorkspace({
     customerDepositInInput,
   );
   const {
-    approvedDiscountAmount,
-    totalAmount,
     customerDepositUsedAmount,
     customerDepositInAmount,
     externalPaymentDueAmount,
@@ -280,9 +254,8 @@ export function PosWorkspace({
   } = getPosWorkspaceState({
     panelMode,
     itemCount: cartItems.length,
-    subtotalAmount,
+    totalAmount,
     payments,
-    discountApproval,
     rawCustomerDepositUsedAmount,
     rawCustomerDepositInAmount,
     customerDepositBalance:
@@ -298,7 +271,6 @@ export function PosWorkspace({
     panelMode,
     itemCount: cartItems.length,
     paymentCount: payments.length,
-    hasDiscountApproval: Boolean(discountApproval),
     hasRegister: Boolean(context.register),
     hasActiveShift: Boolean(context.activeShift),
   });
@@ -315,31 +287,11 @@ export function PosWorkspace({
     resetCustomerDepositDraft();
   }
 
-  function clearDiscountApproval(message?: string) {
-    clearDiscountApprovalState(message, resetPaymentFlow);
-  }
-
-  function requestDiscountApproval() {
-    submitDiscountApprovalState({
-      resetPaymentFlow,
-      refreshWorkspace: () => router.refresh(),
-    });
-  }
-
-  function refreshDiscountApprovalStatus() {
-    refreshDiscountApprovalStatusState();
-  }
 
   function selectCustomer(customer: PosCustomerOption) {
     selectCustomerState(customer);
     clearCheckoutResult();
     resetPaymentFlow();
-    if (discountApproval) {
-      setDiscountApproval(null);
-      setDiscountFeedback(
-        "Request diskon direset karena customer transaksi berubah.",
-      );
-    }
     setCartFeedback(
       `Customer ${customer.fullName} dipilih untuk transaksi ini.`,
     );
@@ -365,12 +317,6 @@ export function PosWorkspace({
     clearCustomerState();
     clearCheckoutResult();
     resetPaymentFlow();
-    if (discountApproval) {
-      setDiscountApproval(null);
-      setDiscountFeedback(
-        "Request diskon direset karena customer transaksi berubah.",
-      );
-    }
 
     if (customerName) {
       setCartFeedback(`Customer ${customerName} dihapus dari transaksi.`);
@@ -385,12 +331,6 @@ export function PosWorkspace({
     }
 
     resetPaymentFlow();
-    if (discountApproval) {
-      setDiscountApproval(null);
-      setDiscountFeedback(
-        "Request diskon direset karena customer transaksi berubah.",
-      );
-    }
   }
 
   function clearCart() {
@@ -398,10 +338,6 @@ export function PosWorkspace({
     clearCustomerState();
     clearCheckoutResult();
     resetPaymentFlow();
-    if (discountApproval) {
-      setDiscountApproval(null);
-      setDiscountFeedback(null);
-    }
     setCartFeedback("Keranjang transaksi direset.");
   }
 
@@ -418,7 +354,7 @@ export function PosWorkspace({
     holdCurrentCartState({
       canHoldCart,
       disabledReason: holdCartDisabledReason,
-      itemIds: cartItems.map((item) => item.id),
+      items: cartItems.map(getPosCartPricingInput),
       customerId: selectedCustomer?.id ?? null,
       onSuccess: (result) => {
         setCartItems([]);
@@ -432,7 +368,7 @@ export function PosWorkspace({
     });
   }
 
-  function addItemToCart(item: PosAvailableItem) {
+  function openItemPricing(item: PosAvailableItem) {
     const addIssue = getPosCartAddIssue({ item, itemIds: cartItemIds });
 
     if (addIssue) {
@@ -440,14 +376,40 @@ export function PosWorkspace({
       return;
     }
 
-    setCartItems((currentItems) => [...currentItems, item]);
+    setPricingExistingItem(null);
+    setPricingTarget(item);
+    setCartFeedback(null);
+  }
+
+  function editItemPricing(item: PosCartItem) {
+    setPricingExistingItem(item);
+    setPricingTarget(item);
+    setCartFeedback(null);
+  }
+
+  function closeItemPricing() {
+    setPricingTarget(null);
+    setPricingExistingItem(null);
+  }
+
+  function confirmItemPricing(item: PosCartItem) {
+    const isEditing = Boolean(pricingExistingItem);
+
+    setCartItems((currentItems) =>
+      isEditing
+        ? currentItems.map((currentItem) =>
+            currentItem.id === item.id ? item : currentItem,
+          )
+        : [...currentItems, item],
+    );
+    closeItemPricing();
     clearCheckoutResult();
     resetPaymentFlow();
-    if (discountApproval) {
-      setDiscountApproval(null);
-      setDiscountFeedback("Request diskon direset karena cart berubah.");
-    }
-    setCartFeedback(`${item.sku} ditambahkan ke keranjang.`);
+    setCartFeedback(
+      isEditing
+        ? `Harga transaksi ${item.sku} diperbarui.`
+        : `${item.sku} ditambahkan ke keranjang.`,
+    );
   }
 
   function removeItemFromCart(itemId: string) {
@@ -456,10 +418,6 @@ export function PosWorkspace({
 
       if (result.status === "removed") {
         resetPaymentFlow();
-        if (discountApproval) {
-          setDiscountApproval(null);
-          setDiscountFeedback("Request diskon direset karena cart berubah.");
-        }
         setCartFeedback(`${result.removedItem.sku} dihapus dari keranjang.`);
       }
 
@@ -473,10 +431,49 @@ export function PosWorkspace({
       return;
     }
 
-    setPanelMode("payment");
-    setPaymentFeedback(null);
-    setPaymentAmountInput(formatRupiahInput(remainingAmount || totalAmount));
-    setCartFeedback(null);
+    startPricingRefreshTransition(async () => {
+      const result = await refreshPosCartPricingAction(
+        cartItems.map(getPosCartPricingInput),
+      );
+
+      if (result.status === "error") {
+        setCartFeedback(result.message);
+        return;
+      }
+
+      const resultMap = new Map(result.items.map((item) => [item.itemId, item]));
+      const nextItems = cartItems.map((item) => {
+        const refreshed = resultMap.get(item.id);
+
+        return refreshed
+          ? {
+              ...item,
+              activePricePerGram: refreshed.pricePerGram,
+              pricePerGram: refreshed.pricePerGram,
+              basePriceAmount: refreshed.basePriceAmount,
+              finalPriceAmount: refreshed.finalPriceAmount,
+            }
+          : item;
+      });
+      const nextTotals = getPosCartPricingTotals(nextItems);
+
+      if (result.changed) {
+        setCartItems(nextItems);
+      }
+
+      invalidateCheckoutAttempt();
+      resetPaymentState();
+      resetCustomerDepositDraft();
+      clearCheckoutResult();
+      setPanelMode("payment");
+      setPaymentFeedback(
+        result.changed
+          ? "Harga/Gram aktif berubah dan cart sudah dihitung ulang dengan harga terbaru."
+          : null,
+      );
+      setPaymentAmountInput(formatRupiahInput(nextTotals.totalAmount));
+      setCartFeedback(null);
+    });
   }
 
   function addPayment() {
@@ -621,13 +618,11 @@ export function PosWorkspace({
     }
 
     processCheckout({
-      itemIds: cartItems.map((item) => item.id),
+      items: cartItems,
       payments,
       customerDepositUsedAmount,
       customerDepositInAmount,
       customerId: selectedCustomer?.id ?? null,
-      discountApproval,
-      approvedDiscountAmount,
     });
   }
 
@@ -681,19 +676,12 @@ export function PosWorkspace({
             onUseDuplicate: useExistingQuickCustomer,
           }
         : null,
-      discountApproval: isDiscountDialogOpen
+      itemPricing: pricingTarget
         ? {
-            cartItems,
-            subtotalAmount,
-            selectedCustomer,
-            amountInput: discountAmountInput,
-            reasonInput: discountReasonInput,
-            feedback: discountFeedback,
-            isPending: isDiscountPending,
-            onAmountInputChange: setDiscountAmountInput,
-            onReasonInputChange: setDiscountReasonInput,
-            onCancel: closeDiscountDialog,
-            onSubmit: requestDiscountApproval,
+            item: pricingTarget,
+            existingItem: pricingExistingItem,
+            onCancel: closeItemPricing,
+            onConfirm: confirmItemPricing,
           }
         : null,
       holdCart: isHoldDialogOpen
@@ -723,7 +711,7 @@ export function PosWorkspace({
       onCategoryPickerOpenChange: setIsCategoryPickerOpen,
       onSearchQueryChange: setSearchQuery,
       onOpenScanner: () => setIsScannerOpen(true),
-      onAddItem: addItemToCart,
+      onAddItem: openItemPricing,
     },
     shifts: {
       context,
@@ -742,13 +730,10 @@ export function PosWorkspace({
       cart: {
         cartItems,
         subtotalAmount,
-        discountAmount: approvedDiscountAmount,
+        discountAmount,
+        laborAmount,
+        adjustmentAmount,
         totalAmount,
-        discountApproval,
-        isDiscountPending,
-        discountFeedback,
-        canRequestDiscount,
-        discountDisabledReason,
         canCheckout,
         checkoutDisabledReason,
         customers: customerOptions,
@@ -762,13 +747,11 @@ export function PosWorkspace({
         onOpenQuickCustomer: openQuickCustomerDialog,
         onSelectCustomer: selectCustomer,
         onClearCustomer: clearSelectedCustomer,
+        onEditItemPricing: editItemPricing,
         onRemoveItem: removeItemFromCart,
         onClearCart: clearCart,
-        onOpenDiscountDialog: openDiscountDialog,
-        onRefreshDiscountApproval: refreshDiscountApprovalStatus,
-        onClearDiscountApproval: () =>
-          clearDiscountApproval("Request diskon direset dari cart."),
         onContinueToPayment: continueToPayment,
+        isPricingRefreshing: isPricingRefreshPending,
         canHoldCart,
         holdCartDisabledReason,
         onOpenHoldDialog: openHoldDialog,

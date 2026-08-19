@@ -16,6 +16,10 @@ const context = {
 
 const basePayload: PosCheckoutPayload = {
   itemIds: ["item-b", "item-a"],
+  itemPricing: [
+    { itemId: "item-b", pricePerGram: "1000000", discountAmount: 0, laborAmount: 0, adjustmentAmount: 0 },
+    { itemId: "item-a", pricePerGram: "1000000", discountAmount: 0, laborAmount: 0, adjustmentAmount: 0 },
+  ],
   payments: [
     {
       method: "cash",

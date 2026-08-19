@@ -4,7 +4,7 @@ import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 
 import type {
-  PosAvailableItem,
+  PosCartItem,
   PosCustomerOption,
 } from "@/features/pos/contracts";
 import {
@@ -20,10 +20,10 @@ import type { PosPaymentDraft } from "@/features/pos/payment-draft";
 import type { PosWorkspacePanelMode } from "@/features/pos/workspace-state";
 
 type UsePosCartSessionInput = {
-  cartItems: PosAvailableItem[];
+  cartItems: PosCartItem[];
   selectedCustomer: PosCustomerOption | null;
   panelMode: PosWorkspacePanelMode;
-  setCartItems: Dispatch<SetStateAction<PosAvailableItem[]>>;
+  setCartItems: Dispatch<SetStateAction<PosCartItem[]>>;
   restoreCustomer: (customer: PosCustomerOption | null) => void;
   setPayments: Dispatch<SetStateAction<PosPaymentDraft[]>>;
   setPaymentFeedback: Dispatch<SetStateAction<string | null>>;

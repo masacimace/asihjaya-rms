@@ -22,9 +22,11 @@ export function formatPosItemDecimal(value: string | null, suffix: string) {
     return null;
   }
 
-  return `${new Intl.NumberFormat("id-ID", {
+  const formatted = new Intl.NumberFormat("id-ID", {
     maximumFractionDigits: 3,
-  }).format(parsedValue)} ${suffix}`;
+  }).format(parsedValue);
+
+  return suffix ? `${formatted} ${suffix}` : formatted;
 }
 
 export function getPosItemBackground(item: PosAvailableItem) {
@@ -39,25 +41,24 @@ export function getPosItemBackground(item: PosAvailableItem) {
 export function getPosItemDetail(item: PosAvailableItem) {
   const details = [
     formatPosItemDecimal(item.weightGram, "gr"),
-    item.exchangePurityPercent
-      ? `Kadar ${formatPosItemDecimal(item.exchangePurityPercent, "%")}`
-      : item.purityPercent
-        ? `Kadar ${formatPosItemDecimal(item.purityPercent, "%")}`
-        : null,
+    item.purityPercent
+      ? `Kadar ${formatPosItemDecimal(item.purityPercent, "%")}`
+      : null,
   ].filter(Boolean);
 
   return details.length > 0 ? details.join(" · ") : "Detail item belum lengkap";
 }
 
 export function getPosItemSpecChips(item: PosAvailableItem) {
-  const primaryPurity = item.exchangePurityPercent ?? item.purityPercent;
-
   return [
     item.weightGram
       ? `${formatPosItemDecimal(item.weightGram, "gr")}`
       : null,
-    primaryPurity
-      ? `Kadar ${formatPosItemDecimal(primaryPurity, "%")}`
+    item.purityPercent
+      ? `Kadar ${formatPosItemDecimal(item.purityPercent, "%")}`
+      : null,
+    item.exchangePurityPercent
+      ? `Tukaran ${formatPosItemDecimal(item.exchangePurityPercent, "")}`
       : null,
     item.size ? `Uk. ${item.size}` : null,
     item.color ? item.color : null,

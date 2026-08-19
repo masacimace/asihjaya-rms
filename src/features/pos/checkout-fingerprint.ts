@@ -40,10 +40,20 @@ function canonicalizeCheckoutPayload(payload: PosCheckoutPayload) {
       JSON.stringify(left).localeCompare(JSON.stringify(right)),
     );
 
+  const itemPricing = payload.itemPricing
+    .map((item) => ({
+      itemId: item.itemId,
+      pricePerGram: item.pricePerGram,
+      discountAmount: item.discountAmount,
+      laborAmount: item.laborAmount,
+      adjustmentAmount: item.adjustmentAmount,
+    }))
+    .sort((left, right) => left.itemId.localeCompare(right.itemId));
   const customerDepositUsedAmount = payload.customerDepositUsedAmount ?? 0;
   const customerDepositInAmount = payload.customerDepositInAmount ?? 0;
   return {
     itemIds: [...new Set(payload.itemIds)].sort(),
+    itemPricing,
     payments,
     customerId: normalizeFingerprintText(payload.customerId),
     note: normalizeFingerprintText(payload.note),
