@@ -548,7 +548,7 @@ export async function getAdminDashboardData(
           inArray(productItems.currentOutletId, outletIds),
           eq(productItems.isActive, true),
           eq(productItems.availability, "available"),
-          eq(productItems.condition, "good"),
+          inArray(productItems.condition, ["good", "used"]),
           eq(productItems.locationState, "outlet"),
         ),
       ),

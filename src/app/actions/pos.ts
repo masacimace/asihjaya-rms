@@ -982,7 +982,7 @@ type HeldCartActionItemRow = {
   outletCode: string | null;
   outletName: string | null;
   availability: "draft" | "migration_hold" | "available" | "reserved" | "inspection" | "sold";
-  condition: "good" | "damaged" | "lost" | "returned";
+  condition: "good" | "used" | "damaged" | "lost" | "returned";
   locationState: "outlet" | "warehouse" | "in_transit" | "customer" | "repair";
   isActive: boolean;
   productMasterId: string;
@@ -1267,7 +1267,7 @@ export async function holdPosCartAction(
 
         if (
           item.availability !== "available" ||
-          item.condition !== "good" ||
+          !["good", "used"].includes(item.condition) ||
           item.locationState !== "outlet"
         ) {
           throw new CheckoutValidationError(
@@ -1797,7 +1797,7 @@ export async function resumePosHeldCartAction({
 
         if (
           item.availability !== "available" ||
-          item.condition !== "good" ||
+          !["good", "used"].includes(item.condition) ||
           item.locationState !== "outlet"
         ) {
           throw new CheckoutValidationError(
@@ -2523,7 +2523,7 @@ export async function completePosCheckoutAction(
 
         if (
           item.availability !== "available" ||
-          item.condition !== "good" ||
+          !["good", "used"].includes(item.condition) ||
           item.locationState !== "outlet"
         ) {
           throw new CheckoutValidationError(

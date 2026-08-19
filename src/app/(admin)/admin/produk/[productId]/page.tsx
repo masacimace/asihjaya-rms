@@ -10,9 +10,10 @@ import {
   Tag,
 } from "lucide-react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 import { ProductImage } from "@/components/media/product-image";
+import { notFound } from "next/navigation";
+
 import { ProductMasterForm } from "@/components/products/product-master-form";
 import { getRecentProductItems } from "@/features/inventory/product-item-queries";
 import { getProductInventoryAccess } from "@/features/products/access";
@@ -75,20 +76,6 @@ function formatInteger(value: number) {
   }).format(value);
 }
 
-function formatMoney(value: string | number | null) {
-  if (value === null) return "—";
-
-  const numericValue = Number(value);
-
-  if (!Number.isFinite(numericValue)) return "—";
-
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(numericValue);
-}
-
 function formatWeight(value: string | number | null) {
   if (value === null) return "—";
 
@@ -140,7 +127,6 @@ export default async function ProductDetailPage({
   const recentItems = access.canAccessInventory
     ? await getRecentProductItems(auth.organization.id, product.id)
     : [];
-  const productImageUrl = getImageUrl(product.imageKey);
   const shouldScrollRecentItems = recentItems.length > 6;
 
   return (
@@ -151,23 +137,17 @@ export default async function ProductDetailPage({
           className="inline-flex h-10 w-fit items-center gap-2 bg-white px-3 text-sm font-medium text-neutral-700"
         >
           <ArrowLeft className="size-4" />
-          Kembali ke katalog produk
+          Kembali ke Product Master
         </Link>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
           <div className="min-w-0">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <ProductImage
-                src={productImageUrl}
-                alt={product.name}
-                className="size-64 shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] sm:size-64"
-              />
-
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
                     <Gem className="size-3.5" />
-                    Detail produk master
+                    Reference Product Master
                   </span>
 
                   <span
@@ -186,18 +166,17 @@ export default async function ProductDetailPage({
 
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
                   {product.code} · {product.categoryName}
-                  {product.material ? ` · ${product.material}` : ""}
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2 text-xs text-neutral-700">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5">
                     <Tag className="size-3.5 text-[var(--accent)]" />
-                    {product.brand ?? "Brand belum diatur"}
+                    {product.categoryName}
                   </span>
 
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5">
                     <PackageCheck className="size-3.5 text-[var(--accent)]" />
-                    {product.collection ?? "Koleksi belum diatur"}
+                    {formatInteger(product.totalItems)} item fisik
                   </span>
                 </div>
               </div>
@@ -209,8 +188,7 @@ export default async function ProductDetailPage({
               Status pengelolaan
             </p>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Kelola model produk, lalu tambahkan item fisik serialized untuk
-              stok outlet dan barcode.
+              Halaman ini hanya untuk reference dan pengelompokan. Produk fisik baru bisa ditambahkan langsung dari sini atau dari menu Tambah Produk.
             </p>
 
             <div className="mt-4 flex flex-col gap-2">
@@ -218,13 +196,13 @@ export default async function ProductDetailPage({
                 {canManage ? "Dapat dikelola" : "Akses lihat"}
               </span>
 
-              {access.canReceiveInventory && product.status !== "inactive" ? (
+              {access.canReceiveInventory && product.status === "active" ? (
                 <Link
                   href={`/admin/produk/${product.id}/item/tambah`}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
                 >
                   <Plus className="size-4" />
-                  Tambah Item
+                  Tambah Produk
                 </Link>
               ) : null}
             </div>
@@ -331,7 +309,7 @@ export default async function ProductDetailPage({
               <div className="hidden min-w-[760px] divide-y divide-[var(--border)] lg:block">
                 {recentItems.map((item) => {
                   const itemImageUrl = getImageUrl(
-                    item.imageKey ?? product.imageKey,
+                    item.imageKey,
                   );
 
                   return (
@@ -344,11 +322,6 @@ export default async function ProductDetailPage({
                           src={itemImageUrl}
                           alt={`${product.name} ${item.sku}`}
                           className="size-14 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]"
-                          badge={
-                            !item.imageKey && product.imageKey
-                              ? "Katalog"
-                              : undefined
-                          }
                         />
 
                         <div className="min-w-0">
@@ -388,7 +361,7 @@ export default async function ProductDetailPage({
                           {availabilityLabels[item.availability]}
                         </span>
                         <p className="mt-2 text-xs text-[var(--muted)]">
-                          {formatMoney(item.sellingAmount)}
+                          {item.condition === "used" ? "Bekas" : item.condition === "good" ? "Baru" : "Perlu perhatian"}
                         </p>
                       </div>
 
@@ -407,7 +380,7 @@ export default async function ProductDetailPage({
               <div className="divide-y divide-[var(--border)] lg:hidden">
                 {recentItems.map((item) => {
                   const itemImageUrl = getImageUrl(
-                    item.imageKey ?? product.imageKey,
+                    item.imageKey,
                   );
 
                   return (
@@ -421,11 +394,6 @@ export default async function ProductDetailPage({
                           src={itemImageUrl}
                           alt={`${product.name} ${item.sku}`}
                           className="size-14 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]"
-                          badge={
-                            !item.imageKey && product.imageKey
-                              ? "Katalog"
-                              : undefined
-                          }
                         />
 
                         <div className="min-w-0 flex-1">
@@ -492,13 +460,9 @@ export default async function ProductDetailPage({
 
             <dl className="mt-5 space-y-4">
               {[
-                [
-                  "Kategori",
-                  `${product.categoryName} · ${product.categoryCode}`,
-                ],
-                ["Brand", product.brand ?? "—"],
-                ["Koleksi", product.collection ?? "—"],
-                ["Material", product.material ?? "—"],
+                ["Kode Master", product.code],
+                ["Kategori", `${product.categoryName} · ${product.categoryCode}`],
+                ["Total item", `${formatInteger(product.totalItems)} item`],
                 ["Dibuat", formatDateTime(product.createdAt)],
                 ["Diperbarui", formatDateTime(product.updatedAt)],
               ].map(([label, value]) => (
@@ -515,12 +479,6 @@ export default async function ProductDetailPage({
             </dl>
           </section>
 
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
-            <h2 className="font-semibold text-neutral-950">Deskripsi</h2>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--muted)]">
-              {product.description ?? "Belum ada deskripsi produk."}
-            </p>
-          </section>
         </aside>
       </section>
 
@@ -536,8 +494,7 @@ export default async function ProductDetailPage({
                 Edit data produk
               </h2>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Buka panel ini hanya saat perlu mengubah nama, kategori, brand,
-                koleksi, atau deskripsi produk master.
+                Ubah kategori, nama, atau status Product Master. Data fisik dan pricing tetap dikelola pada item produk.
               </p>
             </div>
 
@@ -548,7 +505,7 @@ export default async function ProductDetailPage({
             <ProductMasterForm
               key={product.updatedAt.toISOString()}
               mode="edit"
-              product={{ ...product, imageUrl: productImageUrl }}
+              product={product}
               categories={categoryOptions}
             />
           </div>

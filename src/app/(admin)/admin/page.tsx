@@ -44,7 +44,7 @@ const quickActions = [
   {
     label: "Tambah Item",
     description: "Registrasi barang baru",
-    href: "/admin/inventaris",
+    href: "/admin/produk/tambah",
     icon: Boxes,
   },
   {

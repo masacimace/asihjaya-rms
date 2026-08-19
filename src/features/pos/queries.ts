@@ -62,7 +62,7 @@ import {
 type ScannedPosItemRow = PosAvailableItem & {
   isActive: boolean;
   availability: "draft" | "migration_hold" | "available" | "reserved" | "inspection" | "sold";
-  condition: "good" | "damaged" | "lost" | "returned";
+  condition: "good" | "used" | "damaged" | "lost" | "returned";
   locationState: "outlet" | "warehouse" | "in_transit" | "customer" | "repair";
   productStatus: "draft" | "active" | "inactive";
   categoryIsActive: boolean;
@@ -81,7 +81,8 @@ const itemAvailabilityLabels: Record<
 };
 
 const itemConditionLabels: Record<ScannedPosItemRow["condition"], string> = {
-  good: "baik",
+  good: "baru",
+  used: "bekas",
   damaged: "rusak",
   lost: "hilang",
   returned: "retur",
@@ -205,7 +206,7 @@ function getScannedItemUnavailableMessage({
     return `${row.sku} tidak tersedia untuk dijual karena status item ${itemAvailabilityLabels[row.availability]}.`;
   }
 
-  if (row.condition !== "good") {
+  if (!["good", "used"].includes(row.condition)) {
     return `${row.sku} tidak bisa dijual karena kondisi item ${itemConditionLabels[row.condition]}.`;
   }
 
@@ -315,7 +316,7 @@ export async function getPosInitialData({
             eq(productItems.currentOutletId, outlet.id),
             eq(productItems.isActive, true),
             eq(productItems.availability, "available"),
-            eq(productItems.condition, "good"),
+            inArray(productItems.condition, ["good", "used"]),
             eq(productItems.locationState, "outlet"),
             activeHeldItemNotExistsCondition(),
           ),
@@ -378,7 +379,7 @@ export async function getPosInitialData({
             eq(productItems.currentOutletId, outlet.id),
             eq(productItems.isActive, true),
             eq(productItems.availability, "available"),
-            eq(productItems.condition, "good"),
+            inArray(productItems.condition, ["good", "used"]),
             eq(productItems.locationState, "outlet"),
             eq(productMasters.status, "active"),
             eq(productCategories.isActive, true),
@@ -751,7 +752,7 @@ export async function lookupPosItemByScanValue({
     row.categoryIsActive &&
     row.outletId === outletId &&
     row.availability === "available" &&
-    row.condition === "good" &&
+    ["good", "used"].includes(row.condition) &&
     row.locationState === "outlet" &&
     parseAmount(row.sellingAmount) > 0;
 

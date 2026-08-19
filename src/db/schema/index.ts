@@ -154,6 +154,7 @@ export const itemAvailabilityEnum = pgEnum("item_availability", [
 
 export const itemConditionEnum = pgEnum("item_condition", [
   "good",
+  "used",
   "damaged",
   "lost",
   "returned",

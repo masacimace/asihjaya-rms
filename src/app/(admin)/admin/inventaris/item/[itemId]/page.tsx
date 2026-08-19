@@ -50,7 +50,8 @@ const availabilityLabels = {
 
 const conditionLabels = {
   good: "Baru",
-  damaged: "Bekas",
+  used: "Bekas",
+  damaged: "Rusak",
   lost: "Hilang",
   returned: "Retur",
 } as const;
@@ -99,7 +100,7 @@ function getAvailabilityClass(
 }
 
 function getConditionClass(condition: keyof typeof conditionLabels) {
-  if (condition === "good") {
+  if (condition === "good" || condition === "used") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
@@ -328,14 +329,14 @@ export default async function ProductItemDetailPage({
     ["draft", "available", "reserved"].includes(item.availability) &&
     item.isActive &&
     Boolean(item.outletId);
-  const imageUrl = getImageUrl(item.imageKey ?? item.productImageKey);
-  const usesCatalogPhoto = !item.imageKey && Boolean(item.productImageKey);
-  const hasPhoto = Boolean(item.imageKey ?? item.productImageKey);
+  const imageUrl = getImageUrl(item.imageKey);
+  const usesCatalogPhoto = false;
+  const hasPhoto = Boolean(item.imageKey);
   const itemDisplayName = item.displayName ?? item.productName;
   const isReadyToSell =
     item.isActive &&
     item.availability === "available" &&
-    item.condition === "good" &&
+    ["good", "used"].includes(item.condition) &&
     Boolean(item.outletId);
   const locationName = item.outletName ?? "Belum ditempatkan";
   const editRestriction =

@@ -1,36 +1,27 @@
 "use client";
 
-import {
-  AlertTriangle,
-  Calculator,
-  CircleDollarSign,
-  Gem,
-  ImageIcon,
-  Info,
-  MapPin,
-  PackageCheck,
-  Save,
-  Scale,
-  Tag,
-} from "lucide-react";
-import { useActionState, useMemo, useState } from "react";
+import { ImageIcon, PackageCheck, Plus, Scale } from "lucide-react";
+import { useActionState, useCallback, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { createProductItemAction } from "@/app/actions/product-items";
 import { SingleImageInput } from "@/components/media/single-image-input";
+import { QuickProductMasterDialog } from "@/components/products/quick-product-master-dialog";
 import {
   initialProductItemActionState,
   type ProductItemActionState,
 } from "@/features/inventory/product-item-contracts";
 import type { ProductItemOutletOption } from "@/features/inventory/product-item-queries";
+import type {
+  ProductMasterCategoryOption,
+  ProductMasterOption,
+} from "@/features/products/product-master-queries";
 
 const inputClassName =
-  "h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]";
+  "h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)] disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500";
 
 function ActionMessage({ state }: { state: ProductItemActionState }) {
-  if (state.status === "idle" || !state.message) {
-    return null;
-  }
+  if (state.status === "idle" || !state.message) return null;
 
   return (
     <div
@@ -43,11 +34,9 @@ function ActionMessage({ state }: { state: ProductItemActionState }) {
 }
 
 function FieldError({ message }: { message?: string }) {
-  if (!message) {
-    return null;
-  }
-
-  return <p className="mt-1.5 text-xs text-red-600">{message}</p>;
+  return message ? (
+    <p className="mt-1.5 text-xs text-red-600">{message}</p>
+  ) : null;
 }
 
 function normalizeRupiahDigits(value: string): string {
@@ -58,403 +47,353 @@ function normalizeRupiahDigits(value: string): string {
 }
 
 function formatRupiahDigits(value: string): string {
-  if (!value) {
-    return "";
-  }
-
-  return new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 0,
-  }).format(BigInt(value));
+  if (!value) return "";
+  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(
+    BigInt(value),
+  );
 }
 
-function formatMoney(value: number | string | null): string {
-  if (value === null || value === "") {
-    return "—";
-  }
+function formatMoney(value: number | string | null) {
+  if (value === null || value === "") return "Belum diatur";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "Belum diatur";
 
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
-  }).format(Number(value));
+  }).format(numeric);
 }
 
-function MoneyInput({
-  name,
-  label,
-  value,
-  onChange,
-  placeholder,
-  error,
-}: {
-  name: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  error?: string;
-}) {
-  return (
-    <label className="block text-sm">
-      <span className="mb-2 block font-medium text-neutral-800">{label}</span>
-      <input type="hidden" name={name} value={value} />
-      <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-neutral-500">
-          Rp
-        </span>
-        <input
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          value={formatRupiahDigits(value)}
-          onChange={(event) =>
-            onChange(normalizeRupiahDigits(event.target.value))
-          }
-          className={`${inputClassName} pl-11 tabular-nums`}
-          placeholder={placeholder}
-        />
-      </div>
-      <FieldError message={error} />
-    </label>
-  );
+function normalizePurityKey(value: string) {
+  if (!value.trim()) return null;
+  const numeric = Number(value.replace(",", "."));
+  if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 100) return null;
+  return numeric.toFixed(3).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 }
 
-function SubmitButtons({ canMakeAvailable }: { canMakeAvailable: boolean }) {
+
+function ProductSubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
 
   return (
-    <div className="grid gap-3">
-      {canMakeAvailable ? (
-        <button
-          type="submit"
-          name="submitIntent"
-          value="available"
-          disabled={pending}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800 disabled:cursor-wait disabled:opacity-60 [&_svg]:!text-white"
-        >
-          <PackageCheck className="size-4" />
-          {pending ? "Menyimpan..." : "Simpan dan Jadikan Tersedia"}
-        </button>
-      ) : null}
-
-      <button
-        type="submit"
-        name="submitIntent"
-        value="draft"
-        disabled={pending}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-wait disabled:opacity-60"
-      >
-        <Save className="size-4" />
-        {pending ? "Menyimpan..." : "Simpan sebagai Draft"}
-      </button>
-    </div>
+    <button
+      type="submit"
+      disabled={disabled || pending}
+      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-5 text-sm font-semibold !text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:!text-white"
+    >
+      <PackageCheck className="size-4" />
+      {pending ? "Menyimpan..." : "Simpan Produk"}
+    </button>
   );
 }
 
-function FormSection({
-  children,
-}: {
-  icon: typeof Gem;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-      <div className="mt-5">{children}</div>
-    </section>
-  );
-}
+export type ProductItemPriceRateOption = {
+  purityKey: string;
+  ratePerGram: string;
+};
 
 export function ProductItemForm({
-  product,
+  categories,
+  productMasters: initialProductMasters,
   outlets,
-  canManagePricing,
+  priceRates,
+  initialProductMasterId,
+  canCreateProductMaster,
 }: {
-  product: {
-    id: string;
-    code: string;
-    name: string;
-    status: "draft" | "active" | "inactive";
-  };
+  categories: ProductMasterCategoryOption[];
+  productMasters: ProductMasterOption[];
   outlets: ProductItemOutletOption[];
-  canManagePricing: boolean;
+  priceRates: ProductItemPriceRateOption[];
+  initialProductMasterId?: string;
+  canCreateProductMaster: boolean;
 }) {
-  const [weightGram, setWeightGram] = useState("");
-  const [pricePerGram, setPricePerGram] = useState("");
-  const [costAmount, setCostAmount] = useState("");
-  const [sellingAmount, setSellingAmount] = useState("");
-  const [deductionPerGram, setDeductionPerGram] = useState("");
+  const initialMaster = initialProductMasterId
+    ? initialProductMasters.find((master) => master.id === initialProductMasterId)
+    : undefined;
 
-  const action = createProductItemAction.bind(null, product.id);
+  const [productMasters, setProductMasters] = useState(initialProductMasters);
+  const [categoryId, setCategoryId] = useState(initialMaster?.categoryId ?? "");
+  const [productMasterId, setProductMasterId] = useState(
+    initialMaster?.id ?? "",
+  );
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  const [purityPercent, setPurityPercent] = useState("");
+  const [weightGram, setWeightGram] = useState("");
+  const [deductionPerGram, setDeductionPerGram] = useState("0");
+
   const [state, formAction] = useActionState(
-    action,
+    createProductItemAction,
     initialProductItemActionState,
   );
 
-  const recommendedPrice = useMemo(() => {
-    const weight = Number(weightGram.replace(",", "."));
-    const rate = Number(pricePerGram || "0");
+  const filteredMasters = useMemo(
+    () => productMasters.filter((master) => master.categoryId === categoryId),
+    [categoryId, productMasters],
+  );
 
-    if (!Number.isFinite(weight) || weight <= 0 || rate <= 0) {
+  const selectedCategory = categories.find((category) => category.id === categoryId);
+  const rateMap = useMemo(
+    () => new Map(priceRates.map((rate) => [rate.purityKey, rate.ratePerGram])),
+    [priceRates],
+  );
+  const purityKey = normalizePurityKey(purityPercent);
+  const activeRate = purityKey ? rateMap.get(purityKey) ?? null : null;
+  const estimatedBasePrice = useMemo(() => {
+    const weight = Number(weightGram.replace(",", "."));
+    const rate = Number(activeRate ?? "0");
+    if (!Number.isFinite(weight) || weight <= 0 || !Number.isFinite(rate) || rate <= 0) {
       return null;
     }
-
     return Math.round(weight * rate);
-  }, [pricePerGram, weightGram]);
+  }, [activeRate, weightGram]);
 
-  const canMakeAvailable =
-    canManagePricing && product.status === "active" && outlets.length > 0;
+  const handleQuickCreated = useCallback((master: ProductMasterOption) => {
+    setProductMasters((current) =>
+      current.some((entry) => entry.id === master.id) ? current : [...current, master],
+    );
+    setCategoryId(master.categoryId);
+    setProductMasterId(master.id);
+    setQuickCreateOpen(false);
+  }, []);
+
+  const defaultOutletId = outlets.length === 1 ? outlets[0]?.id ?? "" : "";
 
   return (
-    <form
-      action={formAction}
-      className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start"
-    >
-      <div className="min-w-0 space-y-5">
+    <>
+      <form action={formAction} className="space-y-5">
         <ActionMessage state={state} />
 
-        <FormSection
-          icon={Gem}
-          title="Master Produk"
-          description="Item fisik akan terhubung ke master produk ini. SKU dan barcode dibuat otomatis setelah item disimpan."
-        >
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-            <p className="text-xs text-[var(--muted)]">Produk master</p>
-            <p className="mt-1 text-sm font-semibold text-neutral-950">
-              {product.code} · {product.name}
+        <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+          <div>
+            <h2 className="font-semibold text-neutral-950">Identitas Produk</h2>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+              Pilih kategori dan Product Master. Jika belum tersedia, buat langsung dari tombol + tanpa meninggalkan form.
             </p>
           </div>
-        </FormSection>
 
-        <FormSection
-          icon={Tag}
-          title="Identitas & Detail Fisik"
-          description="Catat nama tampilan, berat, kadar, ukuran, warna, batu, dan kondisi awal item."
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm sm:col-span-2">
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
-                Nama item di POS
+                Kategori <span className="text-red-500">*</span>
               </span>
-              <input
-                name="displayName"
-                maxLength={220}
+              <select
+                value={categoryId}
+                onChange={(event) => {
+                  setCategoryId(event.target.value);
+                  setProductMasterId("");
+                }}
                 className={inputClassName}
-                placeholder={`Opsional, contoh: ${product.name} 2.75g Size 17`}
+                required
+              >
+                <option value="">Pilih kategori</option>
+                {categories
+                  .filter((category) => category.isActive)
+                  .map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.label}
+                    </option>
+                  ))}
+              </select>
+            </label>
+
+            <div className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Product Master <span className="text-red-500">*</span>
+              </span>
+              <div className="flex gap-2">
+                <select
+                  name="productMasterId"
+                  value={productMasterId}
+                  onChange={(event) => setProductMasterId(event.target.value)}
+                  disabled={!categoryId}
+                  required
+                  className={`${inputClassName} min-w-0 flex-1`}
+                >
+                  <option value="">
+                    {categoryId
+                      ? filteredMasters.length > 0
+                        ? "Pilih Product Master"
+                        : "Belum ada Product Master"
+                      : "Pilih kategori terlebih dahulu"}
+                  </option>
+                  {filteredMasters.map((master) => (
+                    <option key={master.id} value={master.id}>
+                      {master.code} — {master.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setQuickCreateOpen(true)}
+                  disabled={!categoryId || !canCreateProductMaster}
+                  className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
+                  aria-label="Tambah Product Master"
+                  title={canCreateProductMaster ? "Tambah Product Master" : "Tidak memiliki permission membuat Product Master"}
+                >
+                  <Plus className="size-5" />
+                </button>
+              </div>
+              <FieldError message={state.fieldErrors?.productMasterId} />
+            </div>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">Kode Produk</span>
+              <input
+                value="Dibuat otomatis setelah disimpan"
+                readOnly
+                className={`${inputClassName} cursor-not-allowed bg-neutral-50 text-neutral-500`}
               />
-              <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
-                Jika dikosongkan, POS tetap memakai nama master produk.
-              </p>
-              <FieldError message={state.fieldErrors?.displayName} />
             </label>
 
             <label className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
-                Berat aktual (gram)
+                Nama Produk <span className="text-red-500">*</span>
+              </span>
+              <input
+                name="displayName"
+                required
+                minLength={2}
+                maxLength={220}
+                className={inputClassName}
+                placeholder="Nama produk per SKU"
+              />
+              <FieldError message={state.fieldErrors?.displayName} />
+            </label>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+          <div>
+            <h2 className="font-semibold text-neutral-950">Detail Fisik & Harga / Gram</h2>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+              Harga / Gram otomatis mengikuti Kadar Persen aktif. Harga jual final baru dihitung saat transaksi POS.
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Kadar Persen <span className="text-red-500">*</span>
+              </span>
+              <div className="relative">
+                <input
+                  name="purityPercent"
+                  required
+                  inputMode="decimal"
+                  value={purityPercent}
+                  onChange={(event) => setPurityPercent(event.target.value)}
+                  className={`${inputClassName} pr-10`}
+                  placeholder="Contoh: 40"
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-neutral-500">%</span>
+              </div>
+              <FieldError message={state.fieldErrors?.purityPercent} />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Kadar Tukaran <span className="text-red-500">*</span>
+              </span>
+              <input
+                name="exchangePurityPercent"
+                required
+                inputMode="decimal"
+                className={inputClassName}
+                placeholder="Contoh: 35"
+              />
+              <FieldError message={state.fieldErrors?.exchangePurityPercent} />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">Harga / Gram</span>
+              <input
+                value={activeRate ? formatMoney(activeRate) : "Belum diatur untuk kadar ini"}
+                readOnly
+                className={`${inputClassName} cursor-not-allowed bg-neutral-50 font-semibold`}
+              />
+              <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
+                {activeRate
+                  ? "Mengikuti Harga / Gram Aktif dan tidak disimpan sebagai harga jual final."
+                  : "Produk tetap boleh dibuat. Atur rate kadar ini dari Pengaturan → Harga / Gram Aktif sebelum transaksi."}
+              </p>
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Potongan / Gram <span className="text-red-500">*</span>
+              </span>
+              <input type="hidden" name="deductionPerGram" value={deductionPerGram} />
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-neutral-500">Rp</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={formatRupiahDigits(deductionPerGram)}
+                  onChange={(event) => setDeductionPerGram(normalizeRupiahDigits(event.target.value) || "0")}
+                  className={`${inputClassName} pl-11`}
+                  placeholder="0"
+                />
+              </div>
+              <FieldError message={state.fieldErrors?.deductionPerGram} />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Berat <span className="text-red-500">*</span>
               </span>
               <div className="relative">
                 <Scale className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
                 <input
                   name="weightGram"
+                  required
                   inputMode="decimal"
                   value={weightGram}
                   onChange={(event) => setWeightGram(event.target.value)}
-                  className={`${inputClassName} pl-10`}
-                  placeholder="2,750"
+                  className={`${inputClassName} pl-10 pr-12`}
+                  placeholder="Contoh: 3,05"
                 />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-neutral-500">gr</span>
               </div>
               <FieldError message={state.fieldErrors?.weightGram} />
             </label>
 
             <label className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
-                Kadar (%)
-              </span>
-              <input
-                name="purityPercent"
-                inputMode="decimal"
-                className={inputClassName}
-                placeholder="Contoh: 75.5"
-              />
-              <FieldError message={state.fieldErrors?.purityPercent} />
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-2 block font-medium text-neutral-800">
-                Ukuran
-              </span>
-              <input
-                name="size"
-                maxLength={64}
-                className={inputClassName}
-                placeholder="Contoh: 17"
-              />
-              <FieldError message={state.fieldErrors?.size} />
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-2 block font-medium text-neutral-800">
-                Warna
+                Warna <span className="text-red-500">*</span>
               </span>
               <input
                 name="color"
+                required
                 maxLength={64}
                 className={inputClassName}
-                placeholder="Kuning, putih, rose gold"
+                placeholder="Contoh: Poles, Kombinasi, Kuning"
               />
               <FieldError message={state.fieldErrors?.color} />
             </label>
 
             <label className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
-                Batu
+                Kondisi <span className="text-red-500">*</span>
               </span>
-              <input
-                name="gemstone"
-                maxLength={160}
-                className={inputClassName}
-                placeholder="Zircon, berlian, ruby, atau tanpa batu"
-              />
-              <FieldError message={state.fieldErrors?.gemstone} />
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-2 block font-medium text-neutral-800">
-                Kadar tukar (%)
-              </span>
-              <input
-                name="exchangePurityPercent"
-                inputMode="decimal"
-                className={inputClassName}
-                placeholder="Opsional"
-              />
-              <FieldError message={state.fieldErrors?.exchangePurityPercent} />
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-2 block font-medium text-neutral-800">
-                Kondisi awal
-              </span>
-              <select
-                name="condition"
-                defaultValue="good"
-                className={inputClassName}
-              >
+              <select name="condition" defaultValue="good" className={inputClassName}>
                 <option value="good">Baru</option>
-                <option value="damaged">Bekas</option>
+                <option value="used">Bekas</option>
               </select>
               <FieldError message={state.fieldErrors?.condition} />
             </label>
-          </div>
-        </FormSection>
 
-        <FormSection
-          icon={ImageIcon}
-          title="Foto Item Fisik"
-          description="Gunakan satu foto aktual dari angle yang paling jelas. Foto wajib sebelum item dijadikan tersedia."
-        >
-          <SingleImageInput
-            label="Foto Item Fisik"
-            description="Foto item membantu sales membedakan barang fisik yang mirip di POS dan inventaris."
-          />
-          <FieldError message={state.fieldErrors?.image} />
-        </FormSection>
-
-        <FormSection
-          icon={Calculator}
-          title="Harga Aktual"
-          description="Setiap item memiliki harga sendiri. Harga label wajib diisi sebelum item dijadikan tersedia."
-        >
-          {canManagePricing ? (
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <MoneyInput
-                  name="pricePerGram"
-                  label="Harga logam per gram"
-                  value={pricePerGram}
-                  onChange={setPricePerGram}
-                  placeholder="1.250.000"
-                  error={state.fieldErrors?.pricePerGram}
-                />
-                <MoneyInput
-                  name="deductionPerGram"
-                  label="Potongan per gram"
-                  value={deductionPerGram}
-                  onChange={setDeductionPerGram}
-                  placeholder="0"
-                  error={state.fieldErrors?.deductionPerGram}
-                />
-                <MoneyInput
-                  name="costAmount"
-                  label="Harga modal"
-                  value={costAmount}
-                  onChange={setCostAmount}
-                  placeholder="3.500.000"
-                  error={state.fieldErrors?.costAmount}
-                />
-                <MoneyInput
-                  name="sellingAmount"
-                  label="Harga label final"
-                  value={sellingAmount}
-                  onChange={setSellingAmount}
-                  placeholder="5.050.000"
-                  error={state.fieldErrors?.sellingAmount}
-                />
-              </div>
-
-              {recommendedPrice !== null ? (
-                <div className="rounded-xl border border-[var(--border)] bg-neutral-50 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-xs text-[var(--muted)]">
-                        Estimasi berat × harga per gram
-                      </p>
-                      <p className="mt-1 text-xl font-semibold text-neutral-950">
-                        {formatMoney(recommendedPrice)}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setSellingAmount(String(recommendedPrice))}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                    >
-                      <CircleDollarSign className="size-4" />
-                      Gunakan sebagai harga label
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-              <p className="text-xs leading-5">
-                Akun ini tidak memiliki permission pricing.manage. Item tetap
-                dapat disimpan sebagai draft, lalu harga dilengkapi oleh admin
-                pricing.
-              </p>
-            </div>
-          )}
-        </FormSection>
-
-        <FormSection
-          icon={MapPin}
-          title="Penempatan Stok"
-          description="Outlet wajib ketika item langsung dijadikan tersedia. Lokasi rak membantu staff menemukan barang fisik."
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
-                Outlet awal
+                Outlet <span className="text-red-500">*</span>
               </span>
               <select
                 name="currentOutletId"
-                defaultValue=""
+                required
+                defaultValue={defaultOutletId}
                 className={inputClassName}
               >
-                <option value="">Belum ditempatkan</option>
+                <option value="">Pilih outlet</option>
                 {outlets.map((outlet) => (
                   <option key={outlet.id} value={outlet.id}>
                     {outlet.name} · {outlet.code}
@@ -463,122 +402,60 @@ export function ProductItemForm({
               </select>
               <FieldError message={state.fieldErrors?.currentOutletId} />
             </label>
-
-            <label className="block text-sm">
-              <span className="mb-2 block font-medium text-neutral-800">
-                Kode lokasi etalase / rak
-              </span>
-              <input
-                name="locationCode"
-                maxLength={80}
-                className={inputClassName}
-                placeholder="Contoh: ETALASE-A-03"
-              />
-              <FieldError message={state.fieldErrors?.locationCode} />
-            </label>
-
-            <label className="block text-sm sm:col-span-2">
-              <span className="mb-2 block font-medium text-neutral-800">
-                Catatan internal
-              </span>
-              <textarea
-                name="internalNotes"
-                rows={4}
-                maxLength={4000}
-                className="w-full resize-y rounded-xl border border-[var(--border)] bg-white px-3 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                placeholder="Catatan penerimaan, kondisi khusus, atau informasi internal lainnya"
-              />
-              <FieldError message={state.fieldErrors?.internalNotes} />
-            </label>
           </div>
-        </FormSection>
 
-        {product.status !== "active" ? (
-          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <p className="text-xs leading-5">
-              Produk masih draft. Item dapat disimpan sebagai draft, tetapi
-              belum dapat dijadikan tersedia sampai produk berstatus aktif.
-            </p>
-          </div>
-        ) : null}
+          {estimatedBasePrice !== null ? (
+            <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
+              <p className="text-xs text-[var(--muted)]">Estimasi harga dasar saat ini</p>
+              <p className="mt-1 text-lg font-semibold text-neutral-950">
+                {formatMoney(estimatedBasePrice)}
+              </p>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Berat × Harga / Gram aktif. Ini bukan harga final transaksi.
+              </p>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+          <SingleImageInput
+            name="image"
+            label="Foto Produk Fisik"
+            description="Foto bersifat opsional. Produk tetap dapat aktif jika foto belum tersedia dan bisa dilengkapi kemudian."
+          />
+          <FieldError message={state.fieldErrors?.image} />
+        </section>
+
+        <input type="hidden" name="submitIntent" value="available" />
+        <input type="hidden" name="size" value="" />
+        <input type="hidden" name="gemstone" value="" />
+        <input type="hidden" name="locationCode" value="" />
+        <input type="hidden" name="internalNotes" value="" />
 
         {outlets.length === 0 ? (
           <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
             <ImageIcon className="mt-0.5 size-4 shrink-0" />
             <p className="text-xs leading-5">
-              Akun ini belum memiliki outlet aktif. Item hanya dapat disimpan
-              sebagai draft sampai penugasan outlet tersedia.
+              Akun ini belum mempunyai outlet aktif. Tambahkan akses outlet sebelum membuat produk fisik.
             </p>
           </div>
         ) : null}
 
         <FieldError message={state.fieldErrors?.submitIntent} />
-      </div>
 
-      <aside className="min-w-0 space-y-5 xl:sticky xl:top-5">
-        <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-          <div className="flex items-start gap-3">
-            <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-              <PackageCheck className="size-5" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="font-semibold text-neutral-950">Simpan Item</h2>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Pilih draft jika data belum lengkap, atau jadikan tersedia untuk
-                langsung masuk stok outlet.
-              </p>
-            </div>
-          </div>
+        <div className="flex justify-end">
+          <ProductSubmitButton disabled={outlets.length === 0} />
+        </div>
+      </form>
 
-          <div className="mt-5 space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-xs leading-5 text-[var(--muted)]">
-            <div className="flex items-start gap-2">
-              <Info className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
-              <p>
-                Item tersedia membutuhkan produk aktif, outlet aktif, foto, dan
-                harga label.
-              </p>
-            </div>
-            <div className="flex items-start gap-2">
-              <Info className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
-              <p>
-                Draft tetap menyimpan identitas item tanpa muncul sebagai stok
-                siap jual.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5">
-            <SubmitButtons canMakeAvailable={canMakeAvailable} />
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-          <h2 className="font-semibold text-neutral-950">Ringkasan Kesiapan</h2>
-          <dl className="mt-4 space-y-3 text-sm">
-            <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-3">
-              <dt className="text-[var(--muted)]">Produk</dt>
-              <dd className="font-semibold text-neutral-950">
-                {product.status === "active" ? "Aktif" : "Draft"}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-3">
-              <dt className="text-[var(--muted)]">Pricing</dt>
-              <dd className="font-semibold text-neutral-950">
-                {canManagePricing ? "Bisa diatur" : "Butuh admin"}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-[var(--muted)]">Outlet</dt>
-              <dd className="font-semibold text-neutral-950">
-                {outlets.length > 0
-                  ? `${outlets.length} tersedia`
-                  : "Belum ada"}
-              </dd>
-            </div>
-          </dl>
-        </section>
-      </aside>
-    </form>
+      <QuickProductMasterDialog
+        key={`${categoryId}:${quickCreateOpen ? "open" : "closed"}`}
+        open={quickCreateOpen && canCreateProductMaster}
+        categoryId={categoryId}
+        categoryLabel={selectedCategory?.label ?? "Kategori belum dipilih"}
+        onClose={() => setQuickCreateOpen(false)}
+        onCreated={handleQuickCreated}
+      />
+    </>
   );
 }

@@ -37,6 +37,38 @@ export type ProductItemOutletOption = {
   name: string;
 };
 
+
+export async function getProductItemCreateOutletOptions({
+  organizationId,
+  allowedOutletIds,
+}: {
+  organizationId: string;
+  allowedOutletIds: string[];
+}): Promise<ProductItemOutletOption[]> {
+  const outletConditions: SQL[] = [
+    eq(outlets.organizationId, organizationId),
+    eq(outlets.isActive, true),
+  ];
+
+  if (allowedOutletIds.length > 0) {
+    outletConditions.push(inArray(outlets.id, allowedOutletIds));
+  } else {
+    outletConditions.push(
+      eq(outlets.id, "00000000-0000-0000-0000-000000000000"),
+    );
+  }
+
+  return db
+    .select({
+      id: outlets.id,
+      code: outlets.code,
+      name: outlets.name,
+    })
+    .from(outlets)
+    .where(and(...outletConditions))
+    .orderBy(asc(outlets.name));
+}
+
 export async function getProductItemCreateContext({
   organizationId,
   productId,
@@ -142,7 +174,7 @@ export async function getProductItemOverview(organizationId: string) {
       .reduce((sum, row) => sum + Number(row[field] ?? 0), 0);
 
   const attention = rows
-    .filter((row) => row.condition !== "good")
+    .filter((row) => !["good", "used"].includes(row.condition))
     .reduce((sum, row) => sum + Number(row.total), 0);
 
   return {

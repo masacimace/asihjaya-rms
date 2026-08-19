@@ -28,8 +28,7 @@ export function PosItemImage({
   const [hasImageError, setHasImageError] = useState(false);
   const imageUrl = getPosItemImageUrl(item);
   const shouldShowImage = Boolean(imageUrl) && !hasImageError;
-  const usesCatalogPhoto =
-    shouldShowImage && !item.imageKey && Boolean(item.productImageKey);
+  const usesCatalogPhoto = false;
 
   return (
     <div

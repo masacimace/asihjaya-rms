@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  BadgeDollarSign,
   CreditCard,
   Send,
   Settings2,
@@ -20,12 +21,27 @@ const settingsGroups = [
       "Konfigurasi metode pembayaran dan perangkat pembayaran manual yang digunakan outlet.",
     items: [
       {
-        title: "Manual EDC Payment",
+        title: "Metode & Akun Pembayaran",
         description:
-          "Kelola threshold risiko, terminal EDC, mapping register, dan preset pembayaran non-tunai untuk POS.",
+          "Kelola terminal EDC dan rekening transfer yang tersedia di POS.",
         href: "/admin/pengaturan/pembayaran/manual-edc",
         icon: CreditCard,
         badge: "Pembayaran",
+      },
+    ],
+  },
+  {
+    title: "Harga Jewelry",
+    description:
+      "Kelola Harga/Gram aktif yang menjadi sumber harga jual berdasarkan Kadar Persen.",
+    items: [
+      {
+        title: "Harga / Gram Aktif",
+        description:
+          "Satu rate berlaku untuk seluruh item dengan Kadar Persen yang sama dan histori harga tetap tersimpan.",
+        href: "/admin/pengaturan/harga-gram",
+        icon: BadgeDollarSign,
+        badge: "Dynamic Pricing",
       },
     ],
   },

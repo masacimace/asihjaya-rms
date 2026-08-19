@@ -1,7 +1,5 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
-
 import { and, count, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
@@ -18,17 +16,13 @@ import {
   isProductStatus,
   isUuid,
   type ProductMasterActionState,
+  type QuickProductMasterActionState,
 } from "@/features/products/product-master-contracts";
 import type { ProductStatus } from "@/features/products/contracts";
 import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission } from "@/lib/auth/session";
-import {
-  deleteImageFile,
-  storeImageFile,
-} from "@/lib/storage/image-storage";
-import { validateImageFile } from "@/lib/storage/image-validation";
 
-const PRODUCT_CODE_PATTERN = /^[A-Z0-9][A-Z0-9_-]{1,63}$/;
+const PRODUCT_CODE_PATTERN = /^[A-Z0-9][A-Z0-9_\/-]{1,63}$/;
 const OPERATIONAL_ITEM_AVAILABILITIES: Array<
   "draft" | "migration_hold" | "available" | "reserved"
 > = ["draft", "migration_hold", "available", "reserved"];
@@ -55,11 +49,6 @@ function readText(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
 
-function readImage(formData: FormData): File | null {
-  const value = formData.get("image");
-
-  return value instanceof File && value.size > 0 ? value : null;
-}
 
 function normalizeNullable(value: string): string | null {
   return value.length > 0 ? value : null;
@@ -193,7 +182,6 @@ export async function createProductMasterAction(
   const collection = readText(formData, "collection");
   const description = readText(formData, "description");
   const rawStatus = readText(formData, "status");
-  const image = readImage(formData);
 
   const fieldErrors = validateCommonFields({
     name,
@@ -205,7 +193,7 @@ export async function createProductMasterAction(
 
   if (!PRODUCT_CODE_PATTERN.test(code)) {
     fieldErrors.code =
-      "Gunakan 2–64 karakter: huruf kapital, angka, garis bawah, atau tanda hubung.";
+      "Gunakan 2–64 karakter: huruf kapital, angka, garis miring, garis bawah, atau tanda hubung.";
   }
 
   if (!isUuid(categoryId)) {
@@ -215,18 +203,6 @@ export async function createProductMasterAction(
   if (rawStatus === "inactive") {
     fieldErrors.status =
       "Produk baru hanya dapat dibuat sebagai Draft atau Aktif.";
-  }
-
-  if (image) {
-    const imageValidation = validateImageFile(image);
-
-    if (!imageValidation.valid) {
-      fieldErrors.image = imageValidation.message;
-    }
-  }
-
-  if (rawStatus === "active" && !image) {
-    fieldErrors.image = "Foto katalog wajib untuk Produk Aktif.";
   }
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -268,50 +244,39 @@ export async function createProductMasterAction(
     });
   }
 
-  const createdProductId = randomUUID();
-  let imageKey: string | null = null;
-
-  try {
-    if (image) {
-      imageKey = await storeImageFile({
-        file: image,
-        organizationId: auth.organization.id,
-        entityType: "products",
-        entityId: createdProductId,
-      });
-    }
-  } catch (error) {
-    return failure("Foto produk gagal diproses.", {
-      image:
-        error instanceof Error
-          ? error.message
-          : "Foto tidak dapat disimpan. Silakan pilih file lain.",
-    });
-  }
-
   const requestMetadata = await getRequestMetadata();
+  let createdProductId: string | null = null;
 
   try {
     await db.transaction(async (transaction) => {
-      await transaction.insert(productMasters).values({
-        id: createdProductId,
-        organizationId: auth.organization.id,
-        categoryId,
-        code,
-        name,
-        brand: normalizeNullable(brand),
-        collection: normalizeNullable(collection),
-        description: normalizeNullable(description),
-        imageKey,
-        status,
-      });
+      const createdRows = await transaction
+        .insert(productMasters)
+        .values({
+          organizationId: auth.organization.id,
+          categoryId,
+          code,
+          name,
+          brand: normalizeNullable(brand),
+          collection: normalizeNullable(collection),
+          description: normalizeNullable(description),
+          status,
+        })
+        .returning({ id: productMasters.id });
+
+      const created = createdRows[0];
+
+      if (!created) {
+        throw new Error("PRODUCT_MASTER_CREATE_FAILED");
+      }
+
+      createdProductId = created.id;
 
       await transaction.insert(auditLogs).values({
         organizationId: auth.organization.id,
         actorUserId: auth.user.id,
         action: "product_master.create",
         entityType: "product_master",
-        entityId: createdProductId,
+        entityId: created.id,
         afterData: {
           code,
           name,
@@ -321,7 +286,6 @@ export async function createProductMasterAction(
           brand: normalizeNullable(brand),
           collection: normalizeNullable(collection),
           description: normalizeNullable(description),
-          imageKey,
           status,
         },
         ipAddress: requestMetadata.ipAddress,
@@ -329,8 +293,6 @@ export async function createProductMasterAction(
       });
     });
   } catch (error) {
-    await deleteImageFile(imageKey);
-
     if (isUniqueViolation(error)) {
       return failure("Kode produk sudah digunakan.", {
         code: "Gunakan kode produk yang berbeda.",
@@ -338,13 +300,137 @@ export async function createProductMasterAction(
     }
 
     console.error("Gagal membuat Product Master:", error);
+    return failure("Produk gagal dibuat. Silakan coba kembali.");
+  }
 
+  if (!createdProductId) {
     return failure("Produk gagal dibuat. Silakan coba kembali.");
   }
 
   revalidateProductPages(createdProductId);
-
   redirect(`/admin/produk/${createdProductId}?created=1`);
+}
+
+export async function quickCreateProductMasterAction(
+  _previousState: QuickProductMasterActionState,
+  formData: FormData,
+): Promise<QuickProductMasterActionState> {
+  const auth = await requirePermission("products.manage");
+
+  const code = readText(formData, "code").toUpperCase();
+  const name = readText(formData, "name");
+  const categoryId = readText(formData, "categoryId");
+  const fieldErrors: Record<string, string> = {};
+
+  if (!PRODUCT_CODE_PATTERN.test(code)) {
+    fieldErrors.code =
+      "Gunakan 2–64 karakter: huruf kapital, angka, garis miring, garis bawah, atau tanda hubung.";
+  }
+
+  if (name.length < 2 || name.length > 200) {
+    fieldErrors.name = "Nama Product Master harus terdiri dari 2–200 karakter.";
+  }
+
+  if (!isUuid(categoryId)) {
+    fieldErrors.categoryId = "Pilih kategori terlebih dahulu.";
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return {
+      status: "error",
+      message: "Periksa kembali data Product Master.",
+      fieldErrors,
+    };
+  }
+
+  const category = await getCategoryForProduct({
+    organizationId: auth.organization.id,
+    categoryId,
+  });
+
+  if (!category || !category.isActive) {
+    return {
+      status: "error",
+      message: "Kategori tidak tersedia untuk Product Master baru.",
+      fieldErrors: { categoryId: "Gunakan kategori aktif." },
+    };
+  }
+
+  const requestMetadata = await getRequestMetadata();
+
+  try {
+    const createdRows = await db.transaction(async (transaction) => {
+      const rows = await transaction
+        .insert(productMasters)
+        .values({
+          organizationId: auth.organization.id,
+          categoryId,
+          code,
+          name,
+          status: "active",
+        })
+        .returning({
+          id: productMasters.id,
+          categoryId: productMasters.categoryId,
+          code: productMasters.code,
+          name: productMasters.name,
+        });
+
+      const created = rows[0];
+      if (!created) {
+        throw new Error("PRODUCT_MASTER_QUICK_CREATE_FAILED");
+      }
+
+      await transaction.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        actorUserId: auth.user.id,
+        action: "product_master.quick_create",
+        entityType: "product_master",
+        entityId: created.id,
+        afterData: {
+          code,
+          name,
+          categoryId,
+          categoryCode: category.code,
+          categoryName: category.name,
+          status: "active",
+          source: "product_item_form",
+        },
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+      });
+
+      return rows;
+    });
+
+    const created = createdRows[0];
+    if (!created) {
+      return { status: "error", message: "Product Master gagal dibuat." };
+    }
+
+    revalidatePath("/admin/produk");
+    revalidatePath("/admin/produk/tambah");
+
+    return {
+      status: "success",
+      message: "Product Master berhasil dibuat dan langsung dipilih.",
+      createdMaster: created,
+    };
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return {
+        status: "error",
+        message: "Kode Product Master sudah digunakan.",
+        fieldErrors: { code: "Gunakan kode Product Master yang berbeda." },
+      };
+    }
+
+    console.error("Gagal quick-create Product Master:", error);
+    return {
+      status: "error",
+      message: "Product Master gagal dibuat. Silakan coba kembali.",
+    };
+  }
 }
 
 export async function updateProductMasterAction(
@@ -369,7 +455,6 @@ export async function updateProductMasterAction(
       description: productMasters.description,
       status: productMasters.status,
       material: productMasters.material,
-      imageKey: productMasters.imageKey,
       attributes: productMasters.attributes,
     })
     .from(productMasters)
@@ -393,8 +478,6 @@ export async function updateProductMasterAction(
   const collection = readText(formData, "collection");
   const description = readText(formData, "description");
   const rawStatus = readText(formData, "status");
-  const image = readImage(formData);
-  const removeImage = readText(formData, "removeImage") === "1";
 
   const fieldErrors = validateCommonFields({
     name,
@@ -411,20 +494,6 @@ export async function updateProductMasterAction(
   if (existing.status === "active" && rawStatus === "draft") {
     fieldErrors.status =
       "Produk aktif tidak dapat dikembalikan ke Draft. Gunakan status Nonaktif.";
-  }
-
-  if (image) {
-    const imageValidation = validateImageFile(image);
-
-    if (!imageValidation.valid) {
-      fieldErrors.image = imageValidation.message;
-    }
-  }
-
-  const hasEffectiveImage = Boolean(image) || (!removeImage && Boolean(existing.imageKey));
-
-  if (rawStatus === "active" && !hasEffectiveImage) {
-    fieldErrors.image = "Foto katalog wajib untuk Produk Aktif.";
   }
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -479,27 +548,6 @@ export async function updateProductMasterAction(
     }
   }
 
-  let uploadedImageKey: string | null = null;
-
-  try {
-    if (image) {
-      uploadedImageKey = await storeImageFile({
-        file: image,
-        organizationId: auth.organization.id,
-        entityType: "products",
-        entityId: productId,
-      });
-    }
-  } catch (error) {
-    return failure("Foto produk gagal diproses.", {
-      image:
-        error instanceof Error
-          ? error.message
-          : "Foto tidak dapat disimpan. Silakan pilih file lain.",
-    });
-  }
-
-  const nextImageKey = uploadedImageKey ?? (removeImage ? null : existing.imageKey);
   const requestMetadata = await getRequestMetadata();
 
   try {
@@ -512,7 +560,6 @@ export async function updateProductMasterAction(
           brand: normalizeNullable(brand),
           collection: normalizeNullable(collection),
           description: normalizeNullable(description),
-          imageKey: nextImageKey,
           status,
           updatedAt: new Date(),
         })
@@ -538,7 +585,6 @@ export async function updateProductMasterAction(
           description: existing.description,
           status: existing.status,
           material: existing.material,
-          imageKey: existing.imageKey,
           attributes: existing.attributes,
         },
         afterData: {
@@ -552,7 +598,6 @@ export async function updateProductMasterAction(
           description: normalizeNullable(description),
           status,
           material: existing.material,
-          imageKey: nextImageKey,
           attributes: existing.attributes,
         },
         ipAddress: requestMetadata.ipAddress,
@@ -560,15 +605,11 @@ export async function updateProductMasterAction(
       });
     });
   } catch (error) {
-    await deleteImageFile(uploadedImageKey);
     console.error("Gagal memperbarui Product Master:", error);
 
     return failure("Produk gagal diperbarui. Silakan coba kembali.");
   }
 
-  if (existing.imageKey && existing.imageKey !== nextImageKey) {
-    await deleteImageFile(existing.imageKey);
-  }
 
   revalidateProductPages(productId);
 

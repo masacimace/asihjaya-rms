@@ -83,7 +83,7 @@ export function getPosMediaUrl(imageKey: string | null) {
 }
 
 export function getPosItemImageUrl(item: PosAvailableItem) {
-  return getPosMediaUrl(item.imageKey ?? item.productImageKey);
+  return getPosMediaUrl(item.imageKey);
 }
 
 export function filterPosCatalogItems({

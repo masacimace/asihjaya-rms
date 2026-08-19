@@ -1,7 +1,7 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { productCategories } from "@/db/schema";
+import { productCategories, productMasters } from "@/db/schema";
 
 export type ProductMasterCategoryOption = {
   id: string;
@@ -50,4 +50,34 @@ export async function getProductMasterCategoryOptions(
         isActive: row.isActive,
       };
     });
+}
+
+
+export type ProductMasterOption = {
+  id: string;
+  categoryId: string;
+  code: string;
+  name: string;
+  status: "draft" | "active" | "inactive";
+};
+
+export async function getActiveProductMasterOptions(
+  organizationId: string,
+): Promise<ProductMasterOption[]> {
+  return db
+    .select({
+      id: productMasters.id,
+      categoryId: productMasters.categoryId,
+      code: productMasters.code,
+      name: productMasters.name,
+      status: productMasters.status,
+    })
+    .from(productMasters)
+    .where(
+      and(
+        eq(productMasters.organizationId, organizationId),
+        eq(productMasters.status, "active"),
+      ),
+    )
+    .orderBy(asc(productMasters.name), asc(productMasters.code));
 }

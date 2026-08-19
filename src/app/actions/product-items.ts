@@ -22,8 +22,13 @@ import {
   type ProductItemActionState,
 } from "@/features/inventory/product-item-contracts";
 import { getNextProductItemIdentifiers } from "@/features/inventory/product-item-identifiers";
+import {
+  calculateJewelryBasePrice,
+  getActiveGoldPriceRateMap,
+  normalizePurityKey,
+} from "@/features/pricing/metal-price-rates";
 import { getClientIp } from "@/lib/http/client-ip";
-import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
+import { requireAnyPermission } from "@/lib/auth/session";
 import { deleteImageFile, storeImageFile } from "@/lib/storage/image-storage";
 import { validateImageFile } from "@/lib/storage/image-validation";
 
@@ -121,6 +126,33 @@ function parseOptionalPercent(
   return { value: normalized, error: null };
 }
 
+function parseExchangePurity(
+  value: string,
+): { value: string | null; error: string | null } {
+  if (!value) {
+    return { value: null, error: null };
+  }
+
+  if (!/^\d{1,3}(?:[.,]\d{1,3})?$/.test(value)) {
+    return {
+      value: null,
+      error: "Kadar Tukaran harus berupa angka dengan maksimal 3 desimal.",
+    };
+  }
+
+  const normalized = value.replace(",", ".");
+  const numericValue = Number(normalized);
+
+  if (!Number.isFinite(numericValue) || numericValue <= 0 || numericValue > 999.999) {
+    return {
+      value: null,
+      error: "Kadar Tukaran harus lebih besar dari 0 dan maksimal 999,999.",
+    };
+  }
+
+  return { value: normalized, error: null };
+}
+
 function parseMoney(
   value: string,
   label: string,
@@ -205,7 +237,6 @@ async function getProductContext(
 }
 
 export async function createProductItemAction(
-  productId: string,
   _previousState: ProductItemActionState,
   formData: FormData,
 ): Promise<ProductItemActionState> {
@@ -213,27 +244,31 @@ export async function createProductItemAction(
     "inventory.receive",
     "inventory.manage",
   ]);
-  const canManagePricing = hasPermission(auth, "pricing.manage");
 
+  const productId = readText(formData, "productMasterId");
   if (!isUuid(productId)) {
-    return failure("ID produk tidak valid.");
+    return failure("Pilih Product Master yang valid.", {
+      productMasterId: "Pilih Product Master terlebih dahulu.",
+    });
   }
 
   const product = await getProductContext(auth.organization.id, productId);
 
   if (!product) {
-    return failure("Produk tidak ditemukan.");
+    return failure("Product Master tidak ditemukan.", {
+      productMasterId: "Pilih Product Master yang tersedia.",
+    });
   }
 
-  if (product.status === "inactive") {
+  if (product.status !== "active") {
     return failure("Item fisik belum dapat dibuat.", {
-      submitIntent: "Produk nonaktif tidak dapat menerima item baru.",
+      productMasterId: "Gunakan Product Master yang berstatus Aktif.",
     });
   }
 
   const submitIntent = readText(formData, "submitIntent");
   const targetAvailability =
-    submitIntent === "available" ? "available" : "draft";
+    submitIntent === "draft" ? "draft" : "available";
   const displayName = readText(formData, "displayName");
   const weightRaw = readText(formData, "weightGram");
   const purityPercentRaw = readText(formData, "purityPercent");
@@ -245,66 +280,56 @@ export async function createProductItemAction(
   const outletId = readText(formData, "currentOutletId");
   const locationCode = readText(formData, "locationCode");
   const internalNotes = readText(formData, "internalNotes");
+  const rawDeductionPerGram = readText(formData, "deductionPerGram");
   const image = readImage(formData);
 
-  const rawCostAmount = canManagePricing
-    ? readText(formData, "costAmount")
-    : "";
-  const rawSellingAmount = canManagePricing
-    ? readText(formData, "sellingAmount")
-    : "";
-  const rawPricePerGram = canManagePricing
-    ? readText(formData, "pricePerGram")
-    : "";
-  const rawDeductionPerGram = canManagePricing
-    ? readText(formData, "deductionPerGram")
-    : "";
-
   const fieldErrors: Record<string, string> = {};
-  const weight = parseDecimal(weightRaw, "Berat aktual");
-  const purityPercent = parseOptionalPercent(purityPercentRaw, "Kadar");
-  const exchangePurity = parseOptionalPercent(exchangePurityRaw, "Kadar tukar");
-  const costAmount = parseMoney(rawCostAmount, "Harga modal", {
-    allowZero: true,
-  });
-  const sellingAmount = parseMoney(rawSellingAmount, "Harga label");
-  const pricePerGram = parseMoney(rawPricePerGram, "Harga per gram", {
-    allowZero: true,
-  });
+  const weight = parseDecimal(weightRaw, "Berat");
+  const purityPercent = parseOptionalPercent(purityPercentRaw, "Kadar Persen");
+  const exchangePurity = parseExchangePurity(exchangePurityRaw);
   const deductionPerGram = parseMoney(
     rawDeductionPerGram,
     "Potongan per gram",
     { allowZero: true },
   );
 
-  if (displayName.length > 220) {
-    fieldErrors.displayName = "Nama item maksimal 220 karakter.";
+  if (displayName.length < 2 || displayName.length > 220) {
+    fieldErrors.displayName = "Nama produk harus terdiri dari 2–220 karakter.";
   }
 
   if (weight.error) fieldErrors.weightGram = weight.error;
+  if (!weight.value && targetAvailability === "available") {
+    fieldErrors.weightGram = "Berat wajib diisi.";
+  }
+
   if (purityPercent.error) fieldErrors.purityPercent = purityPercent.error;
+  if (!purityPercent.value && targetAvailability === "available") {
+    fieldErrors.purityPercent = "Kadar Persen wajib diisi.";
+  }
+
   if (exchangePurity.error) {
     fieldErrors.exchangePurityPercent = exchangePurity.error;
   }
-  if (canManagePricing && costAmount.error) {
-    fieldErrors.costAmount = costAmount.error;
+  if (!exchangePurity.value && targetAvailability === "available") {
+    fieldErrors.exchangePurityPercent = "Kadar Tukaran wajib diisi.";
   }
-  if (canManagePricing && sellingAmount.error) {
-    fieldErrors.sellingAmount = sellingAmount.error;
-  }
-  if (canManagePricing && pricePerGram.error) {
-    fieldErrors.pricePerGram = pricePerGram.error;
-  }
-  if (canManagePricing && deductionPerGram.error) {
+
+  if (deductionPerGram.error) {
     fieldErrors.deductionPerGram = deductionPerGram.error;
+  }
+  if (!rawDeductionPerGram && targetAvailability === "available") {
+    fieldErrors.deductionPerGram = "Potongan per gram wajib diisi. Gunakan 0 jika tidak ada.";
   }
 
   if (itemSize.length > 64) {
-    fieldErrors.size = "Ukuran aktual maksimal 64 karakter.";
+    fieldErrors.size = "Ukuran maksimal 64 karakter.";
   }
 
   if (itemColor.length > 64) {
-    fieldErrors.color = "Warna aktual maksimal 64 karakter.";
+    fieldErrors.color = "Warna maksimal 64 karakter.";
+  }
+  if (!itemColor && targetAvailability === "available") {
+    fieldErrors.color = "Warna wajib diisi.";
   }
 
   if (itemGemstone.length > 160) {
@@ -313,7 +338,7 @@ export async function createProductItemAction(
 
   if (
     !isItemCondition(conditionRaw) ||
-    !["good", "damaged"].includes(conditionRaw)
+    !["good", "used", "damaged"].includes(conditionRaw)
   ) {
     fieldErrors.condition = "Pilih kondisi awal yang valid.";
   }
@@ -328,7 +353,6 @@ export async function createProductItemAction(
 
   if (image) {
     const imageValidation = validateImageFile(image);
-
     if (!imageValidation.valid) {
       fieldErrors.image = imageValidation.message;
     }
@@ -357,7 +381,6 @@ export async function createProductItemAction(
         .limit(1);
 
       validOutlet = outletRows[0] ?? null;
-
       if (!validOutlet) {
         fieldErrors.currentOutletId = "Outlet tidak tersedia.";
       }
@@ -365,40 +388,32 @@ export async function createProductItemAction(
   }
 
   if (targetAvailability === "available") {
-    if (product.status !== "active") {
-      fieldErrors.submitIntent =
-        "Produk harus berstatus Aktif sebelum item dapat dijadikan Tersedia.";
-    }
-
-    if (!weight.value) {
-      fieldErrors.weightGram = "Berat aktual wajib untuk item Tersedia.";
-    }
-
-    if (!canManagePricing) {
-      fieldErrors.sellingAmount =
-        "Permission pricing.manage diperlukan untuk menetapkan harga label dan menjadikan item Tersedia.";
-    } else if (!sellingAmount.value) {
-      fieldErrors.sellingAmount = "Harga label wajib untuk item Tersedia.";
-    }
-
     if (!validOutlet) {
-      fieldErrors.currentOutletId = "Outlet awal wajib untuk item Tersedia.";
+      fieldErrors.currentOutletId = "Outlet wajib dipilih.";
     }
 
-    if (!image && !product.imageKey) {
-      fieldErrors.image =
-        "Item Tersedia wajib memiliki foto aktual atau foto katalog Product Master.";
-    }
-
-    if (conditionRaw !== "good") {
+    if (!["good", "used"].includes(conditionRaw)) {
       fieldErrors.condition =
-        "Hanya item berkondisi Baik yang dapat langsung dijadikan Tersedia.";
+        "Hanya barang Baru atau Bekas yang dapat langsung dijual.";
     }
   }
 
   if (Object.keys(fieldErrors).length > 0) {
-    return failure("Periksa kembali data item fisik.", fieldErrors);
+    return failure("Periksa kembali data produk fisik.", fieldErrors);
   }
+
+  const activePriceRates = await getActiveGoldPriceRateMap(
+    auth.organization.id,
+  );
+  const purityKey = normalizePurityKey(purityPercent.value);
+  const activeRate = purityKey ? activePriceRates.get(purityKey) : null;
+  const pricePerGram = activeRate?.ratePerGram ?? null;
+  const compatibilitySellingAmount = activeRate
+    ? calculateJewelryBasePrice({
+        weightGram: weight.value,
+        ratePerGram: activeRate.ratePerGram,
+      })
+    : null;
 
   const itemId = randomUUID();
   let imageKey: string | null = null;
@@ -433,7 +448,7 @@ export async function createProductItemAction(
         id: itemId,
         organizationId: auth.organization.id,
         productMasterId: productId,
-        displayName: normalizeNullable(displayName),
+        displayName,
         currentOutletId: validOutlet?.id ?? null,
         sku: identifiers.sku,
         barcode: identifiers.barcode,
@@ -442,14 +457,17 @@ export async function createProductItemAction(
         purityPercent: purityPercent.value,
         exchangePurityPercent: exchangePurity.value,
         size: normalizeNullable(itemSize),
-        color: normalizeNullable(itemColor),
+        color: itemColor,
         gemstone: normalizeNullable(itemGemstone),
-        costAmount: canManagePricing ? costAmount.value : null,
-        sellingAmount: canManagePricing ? sellingAmount.value : null,
-        pricePerGram: canManagePricing ? pricePerGram.value : null,
-        deductionPerGram: canManagePricing ? deductionPerGram.value : null,
+        costAmount: null,
+        sellingAmount:
+          compatibilitySellingAmount === null
+            ? null
+            : String(compatibilitySellingAmount),
+        pricePerGram,
+        deductionPerGram: deductionPerGram.value ?? "0",
         availability: targetAvailability,
-        condition: conditionRaw as "good" | "damaged",
+        condition: conditionRaw as "good" | "used" | "damaged",
         locationState: "outlet",
         locationCode: normalizeNullable(locationCode),
         imageKey,
@@ -501,25 +519,23 @@ export async function createProductItemAction(
           productMasterId: productId,
           productCode: product.code,
           productName: product.name,
-          displayName: normalizeNullable(displayName),
+          displayName,
           currentOutletId: validOutlet?.id ?? null,
           outletCode: validOutlet?.code ?? null,
           outletName: validOutlet?.name ?? null,
           weightGram: weight.value,
           purityPercent: purityPercent.value,
           exchangePurityPercent: exchangePurity.value,
-          size: normalizeNullable(itemSize),
-          color: normalizeNullable(itemColor),
-          gemstone: normalizeNullable(itemGemstone),
-          costAmount: canManagePricing ? costAmount.value : null,
-          sellingAmount: canManagePricing ? sellingAmount.value : null,
-          pricePerGram: canManagePricing ? pricePerGram.value : null,
-          deductionPerGram: canManagePricing ? deductionPerGram.value : null,
-          availability: targetAvailability,
+          color: itemColor,
           condition: conditionRaw,
-          locationCode: normalizeNullable(locationCode),
+          pricePerGram,
+          priceRatePurityKey: purityKey,
+          activePriceRateFound: Boolean(activeRate),
+          compatibilitySellingAmount,
+          deductionPerGram: deductionPerGram.value ?? "0",
+          availability: targetAvailability,
           imageKey,
-          pricingManagedByActor: canManagePricing,
+          source: "simple_product_create_v2",
         },
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
@@ -529,7 +545,6 @@ export async function createProductItemAction(
     await deleteImageFile(imageKey);
 
     const databaseError = getDatabaseError(error);
-
     if (databaseError.code === "23505") {
       return failure(
         "Identitas item bertabrakan dengan data lain. Silakan coba kembali.",
@@ -537,11 +552,11 @@ export async function createProductItemAction(
     }
 
     console.error("Gagal membuat item fisik:", error);
-
-    return failure("Item fisik gagal dibuat. Silakan coba kembali.");
+    return failure("Produk fisik gagal dibuat. Silakan coba kembali.");
   }
 
   revalidatePath("/admin/produk");
+  revalidatePath("/admin/produk/tambah");
   revalidatePath(`/admin/produk/${productId}`);
   revalidatePath("/admin/inventaris");
   revalidatePath(`/admin/inventaris/item/${itemId}`);
@@ -559,7 +574,6 @@ export async function updateProductItemAction(
     "inventory.adjust",
     "inventory.manage",
   ]);
-  const canManagePricing = hasPermission(auth, "pricing.manage");
 
   if (!isUuid(itemId)) {
     return failure("ID item fisik tidak valid.");
@@ -576,23 +590,18 @@ export async function updateProductItemAction(
       weightGram: productItems.weightGram,
       purityPercent: productItems.purityPercent,
       exchangePurityPercent: productItems.exchangePurityPercent,
-      size: productItems.size,
       color: productItems.color,
-      gemstone: productItems.gemstone,
       costAmount: productItems.costAmount,
       sellingAmount: productItems.sellingAmount,
       pricePerGram: productItems.pricePerGram,
       deductionPerGram: productItems.deductionPerGram,
       availability: productItems.availability,
       condition: productItems.condition,
-      locationCode: productItems.locationCode,
       imageKey: productItems.imageKey,
-      internalNotes: productItems.internalNotes,
       isActive: productItems.isActive,
       productCode: productMasters.code,
       productName: productMasters.name,
       productStatus: productMasters.status,
-      productImageKey: productMasters.imageKey,
     })
     .from(productItems)
     .innerJoin(
@@ -627,94 +636,70 @@ export async function updateProductItemAction(
   const isActivation =
     existing.availability === "draft" && submitIntent === "available";
   const targetAvailability = isActivation ? "available" : existing.availability;
+
   const displayName = readText(formData, "displayName");
   const weightRaw = readText(formData, "weightGram");
+  const purityPercentRaw = readText(formData, "purityPercent");
   const exchangePurityRaw = readText(formData, "exchangePurityPercent");
-  const itemSize = readText(formData, "size");
   const itemColor = readText(formData, "color");
-  const itemGemstone = readText(formData, "gemstone");
   const conditionRaw = readText(formData, "condition");
   const requestedOutletId = readText(formData, "currentOutletId");
-  const locationCode = readText(formData, "locationCode");
-  const internalNotes = readText(formData, "internalNotes");
+  const rawDeductionPerGram = readText(formData, "deductionPerGram");
   const image = readImage(formData);
   const removeImage = readText(formData, "removeImage") === "1";
 
-  const rawCostAmount = canManagePricing
-    ? readText(formData, "costAmount")
-    : (existing.costAmount ?? "");
-  const rawSellingAmount = canManagePricing
-    ? readText(formData, "sellingAmount")
-    : (existing.sellingAmount ?? "");
-  const rawPricePerGram = canManagePricing
-    ? readText(formData, "pricePerGram")
-    : (existing.pricePerGram ?? "");
-  const rawDeductionPerGram = canManagePricing
-    ? readText(formData, "deductionPerGram")
-    : (existing.deductionPerGram ?? "");
-
   const fieldErrors: Record<string, string> = {};
-  const weight = parseDecimal(weightRaw, "Berat aktual");
-  const exchangePurity = parseOptionalPercent(exchangePurityRaw, "Kadar tukar");
-  const costAmount = parseMoney(rawCostAmount, "Harga modal", {
-    allowZero: true,
-  });
-  const sellingAmount = parseMoney(rawSellingAmount, "Harga label");
-  const pricePerGram = parseMoney(rawPricePerGram, "Harga per gram", {
-    allowZero: true,
-  });
+  const weight = parseDecimal(weightRaw, "Berat");
+  const purityPercent = parseOptionalPercent(purityPercentRaw, "Kadar Persen");
+  const exchangePurity = parseExchangePurity(exchangePurityRaw);
   const deductionPerGram = parseMoney(
     rawDeductionPerGram,
     "Potongan per gram",
     { allowZero: true },
   );
 
-  if (displayName.length > 220) {
-    fieldErrors.displayName = "Nama item maksimal 220 karakter.";
+  if (displayName.length < 2 || displayName.length > 220) {
+    fieldErrors.displayName = "Nama produk harus terdiri dari 2–220 karakter.";
   }
 
   if (weight.error) fieldErrors.weightGram = weight.error;
+  if (!weight.value) fieldErrors.weightGram = "Berat wajib diisi.";
+
+  if (purityPercent.error) fieldErrors.purityPercent = purityPercent.error;
+  if (!purityPercent.value) {
+    fieldErrors.purityPercent = "Kadar Persen wajib diisi.";
+  }
+
   if (exchangePurity.error) {
     fieldErrors.exchangePurityPercent = exchangePurity.error;
   }
-  if (canManagePricing && costAmount.error) {
-    fieldErrors.costAmount = costAmount.error;
-  }
-  if (canManagePricing && sellingAmount.error) {
-    fieldErrors.sellingAmount = sellingAmount.error;
-  }
-  if (canManagePricing && pricePerGram.error) {
-    fieldErrors.pricePerGram = pricePerGram.error;
-  }
-  if (canManagePricing && deductionPerGram.error) {
-    fieldErrors.deductionPerGram = deductionPerGram.error;
+  if (!exchangePurity.value) {
+    fieldErrors.exchangePurityPercent = "Kadar Tukaran wajib diisi.";
   }
 
-  if (itemSize.length > 64) {
-    fieldErrors.size = "Ukuran aktual maksimal 64 karakter.";
+  if (deductionPerGram.error) {
+    fieldErrors.deductionPerGram = deductionPerGram.error;
   }
-  if (itemColor.length > 64) {
-    fieldErrors.color = "Warna aktual maksimal 64 karakter.";
+  if (!rawDeductionPerGram) {
+    fieldErrors.deductionPerGram =
+      "Potongan per gram wajib diisi. Gunakan 0 jika tidak ada.";
   }
-  if (itemGemstone.length > 160) {
-    fieldErrors.gemstone = "Informasi batu maksimal 160 karakter.";
+
+  if (!itemColor) {
+    fieldErrors.color = "Warna wajib diisi.";
+  } else if (itemColor.length > 64) {
+    fieldErrors.color = "Warna maksimal 64 karakter.";
   }
+
   if (
     !isItemCondition(conditionRaw) ||
-    !["good", "damaged"].includes(conditionRaw)
+    !["good", "used", "damaged"].includes(conditionRaw)
   ) {
     fieldErrors.condition = "Pilih kondisi item yang valid.";
-  }
-  if (locationCode.length > 80) {
-    fieldErrors.locationCode = "Kode lokasi maksimal 80 karakter.";
-  }
-  if (internalNotes.length > 4000) {
-    fieldErrors.internalNotes = "Catatan internal maksimal 4.000 karakter.";
   }
 
   if (image) {
     const imageValidation = validateImageFile(image);
-
     if (!imageValidation.valid) {
       fieldErrors.image = imageValidation.message;
     }
@@ -739,7 +724,6 @@ export async function updateProductItemAction(
           ),
         )
         .limit(1);
-
       finalOutlet = outletRows[0] ?? null;
     }
   } else if (requestedOutletId) {
@@ -761,7 +745,6 @@ export async function updateProductItemAction(
           ),
         )
         .limit(1);
-
       finalOutlet = outletRows[0] ?? null;
 
       if (!finalOutlet) {
@@ -770,38 +753,36 @@ export async function updateProductItemAction(
     }
   }
 
-  const willHaveEffectiveImage =
-    Boolean(image) ||
-    Boolean(existing.imageKey && !removeImage) ||
-    Boolean(existing.productImageKey);
-
   if (targetAvailability === "available") {
     if (existing.productStatus !== "active") {
       fieldErrors.submitIntent =
-        "Produk harus berstatus Aktif sebelum item dapat dijadikan Tersedia.";
-    }
-    if (!weight.value) {
-      fieldErrors.weightGram = "Berat aktual wajib untuk item Tersedia.";
-    }
-    if (!sellingAmount.value) {
-      fieldErrors.sellingAmount = "Harga label wajib untuk item Tersedia.";
+        "Product Master harus Aktif sebelum item dapat dijadikan Tersedia.";
     }
     if (!finalOutlet) {
-      fieldErrors.currentOutletId = "Outlet awal wajib untuk item Tersedia.";
+      fieldErrors.currentOutletId = "Outlet wajib dipilih.";
     }
-    if (!willHaveEffectiveImage) {
-      fieldErrors.image =
-        "Item Tersedia wajib memiliki foto aktual atau foto katalog Product Master.";
-    }
-    if (conditionRaw !== "good") {
+    if (!["good", "used"].includes(conditionRaw)) {
       fieldErrors.condition =
-        "Hanya item berkondisi Baik yang dapat berstatus Tersedia.";
+        "Hanya barang Baru atau Bekas yang dapat berstatus Tersedia.";
     }
   }
 
   if (Object.keys(fieldErrors).length > 0) {
-    return failure("Periksa kembali data item fisik.", fieldErrors);
+    return failure("Periksa kembali data produk fisik.", fieldErrors);
   }
+
+  const activePriceRates = await getActiveGoldPriceRateMap(
+    auth.organization.id,
+  );
+  const purityKey = normalizePurityKey(purityPercent.value);
+  const activeRate = purityKey ? activePriceRates.get(purityKey) : null;
+  const pricePerGram = activeRate?.ratePerGram ?? null;
+  const compatibilitySellingAmount = activeRate
+    ? calculateJewelryBasePrice({
+        weightGram: weight.value,
+        ratePerGram: activeRate.ratePerGram,
+      })
+    : null;
 
   let newImageKey: string | null = null;
 
@@ -832,28 +813,24 @@ export async function updateProductItemAction(
       await transaction
         .update(productItems)
         .set({
-          displayName: normalizeNullable(displayName),
+          displayName,
           currentOutletId: finalOutlet?.id ?? null,
           weightGram: weight.value,
+          purityPercent: purityPercent.value,
           exchangePurityPercent: exchangePurity.value,
-          size: normalizeNullable(itemSize),
-          color: normalizeNullable(itemColor),
-          gemstone: normalizeNullable(itemGemstone),
-          costAmount: canManagePricing ? costAmount.value : existing.costAmount,
-          sellingAmount: canManagePricing
-            ? sellingAmount.value
-            : existing.sellingAmount,
-          pricePerGram: canManagePricing
-            ? pricePerGram.value
-            : existing.pricePerGram,
-          deductionPerGram: canManagePricing
-            ? deductionPerGram.value
-            : existing.deductionPerGram,
+          color: itemColor,
+          // Kolom lama ini masih dipertahankan sementara sampai schema cleanup R4.
+          // Harga transaksi final tidak lagi diedit dari Product Item.
+          costAmount: existing.costAmount,
+          sellingAmount:
+            compatibilitySellingAmount === null
+              ? null
+              : String(compatibilitySellingAmount),
+          pricePerGram,
+          deductionPerGram: deductionPerGram.value ?? "0",
           availability: targetAvailability,
-          condition: conditionRaw as "good" | "damaged",
-          locationCode: normalizeNullable(locationCode),
+          condition: conditionRaw as "good" | "used" | "damaged",
           imageKey: nextImageKey,
-          internalNotes: normalizeNullable(internalNotes),
           updatedAt,
         })
         .where(
@@ -892,20 +869,16 @@ export async function updateProductItemAction(
         beforeData: {
           displayName: existing.displayName,
           weightGram: existing.weightGram,
+          purityPercent: existing.purityPercent,
           exchangePurityPercent: existing.exchangePurityPercent,
-          size: existing.size,
           color: existing.color,
-          gemstone: existing.gemstone,
-          costAmount: existing.costAmount,
           sellingAmount: existing.sellingAmount,
           pricePerGram: existing.pricePerGram,
           deductionPerGram: existing.deductionPerGram,
           currentOutletId: existing.currentOutletId,
           availability: existing.availability,
           condition: existing.condition,
-          locationCode: existing.locationCode,
           imageKey: existing.imageKey,
-          internalNotes: existing.internalNotes,
         },
         afterData: {
           sku: existing.sku,
@@ -913,32 +886,23 @@ export async function updateProductItemAction(
           productMasterId: existing.productMasterId,
           productCode: existing.productCode,
           productName: existing.productName,
-          displayName: normalizeNullable(displayName),
+          displayName,
           weightGram: weight.value,
-          purityPercent: existing.purityPercent,
+          purityPercent: purityPercent.value,
           exchangePurityPercent: exchangePurity.value,
-          size: normalizeNullable(itemSize),
-          color: normalizeNullable(itemColor),
-          gemstone: normalizeNullable(itemGemstone),
-          costAmount: canManagePricing ? costAmount.value : existing.costAmount,
-          sellingAmount: canManagePricing
-            ? sellingAmount.value
-            : existing.sellingAmount,
-          pricePerGram: canManagePricing
-            ? pricePerGram.value
-            : existing.pricePerGram,
-          deductionPerGram: canManagePricing
-            ? deductionPerGram.value
-            : existing.deductionPerGram,
+          color: itemColor,
+          pricePerGram,
+          priceRatePurityKey: purityKey,
+          activePriceRateFound: Boolean(activeRate),
+          compatibilitySellingAmount,
+          deductionPerGram: deductionPerGram.value ?? "0",
           currentOutletId: finalOutlet?.id ?? null,
           outletCode: finalOutlet?.code ?? null,
           outletName: finalOutlet?.name ?? null,
           availability: targetAvailability,
           condition: conditionRaw,
-          locationCode: normalizeNullable(locationCode),
           imageKey: nextImageKey,
-          internalNotes: normalizeNullable(internalNotes),
-          pricingManagedByActor: canManagePricing,
+          source: "simple_product_update_v2",
         },
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
@@ -948,7 +912,7 @@ export async function updateProductItemAction(
     await deleteImageFile(newImageKey);
 
     console.error("Gagal memperbarui item fisik:", error);
-    return failure("Item fisik gagal diperbarui. Silakan coba kembali.");
+    return failure("Produk fisik gagal diperbarui. Silakan coba kembali.");
   }
 
   if ((newImageKey || removeImage) && existing.imageKey !== nextImageKey) {
@@ -962,8 +926,8 @@ export async function updateProductItemAction(
 
   return success(
     isActivation
-      ? "Item fisik berhasil dijadikan Tersedia."
-      : "Perubahan item fisik berhasil disimpan.",
+      ? "Produk fisik berhasil dijadikan Tersedia."
+      : "Perubahan produk fisik berhasil disimpan.",
   );
 }
 

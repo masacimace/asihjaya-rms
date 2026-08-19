@@ -9,7 +9,20 @@ export type ProductMasterActionState = {
   fieldErrors?: Record<string, string>;
 };
 
+export type QuickProductMasterActionState = ProductMasterActionState & {
+  createdMaster?: {
+    id: string;
+    categoryId: string;
+    code: string;
+    name: string;
+  };
+};
+
 export const initialProductMasterActionState: ProductMasterActionState = {
+  status: "idle",
+};
+
+export const initialQuickProductMasterActionState: QuickProductMasterActionState = {
   status: "idle",
 };
 

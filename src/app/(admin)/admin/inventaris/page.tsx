@@ -46,7 +46,8 @@ const availabilityLabels: Record<ItemAvailability, string> = {
 };
 
 const conditionLabels: Record<ItemCondition, string> = {
-  good: "Baik",
+  good: "Baru",
+  used: "Bekas",
   damaged: "Rusak",
   lost: "Hilang",
   returned: "Retur",
@@ -81,7 +82,7 @@ function getAvailabilityClass(availability: ItemAvailability) {
 }
 
 function getConditionClass(condition: ItemCondition) {
-  if (condition === "good") {
+  if (condition === "good" || condition === "used") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
@@ -305,11 +306,11 @@ export default async function InventoryPage({
               </Link>
 
               <Link
-                href="/admin/produk"
+                href="/admin/produk/tambah"
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-xs font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
               >
                 <Plus className="size-4" />
-                Tambah Product
+                Tambah Produk
               </Link>
             </div>
           </div>
@@ -516,10 +517,9 @@ export default async function InventoryPage({
                   <div className="max-h-[680px] divide-y divide-[var(--border)] overflow-y-auto">
                     {itemList.rows.map((item) => {
                       const imageUrl = getImageUrl(
-                        item.imageKey ?? item.productImageKey,
+                        item.imageKey,
                       );
-                      const usesCatalogPhoto =
-                        !item.imageKey && Boolean(item.productImageKey);
+                      const usesCatalogPhoto = false;
 
                       return (
                         <Link
@@ -626,10 +626,9 @@ export default async function InventoryPage({
             <div className="divide-y divide-[var(--border)] lg:hidden">
               {itemList.rows.map((item) => {
                 const imageUrl = getImageUrl(
-                  item.imageKey ?? item.productImageKey,
+                  item.imageKey,
                 );
-                const usesCatalogPhoto =
-                  !item.imageKey && Boolean(item.productImageKey);
+                const usesCatalogPhoto = false;
 
                 return (
                   <Link

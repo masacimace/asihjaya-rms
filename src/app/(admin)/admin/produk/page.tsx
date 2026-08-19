@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import { ProductImage } from "@/components/media/product-image";
 import {
   parseProductListFilters,
   type ProductListFilters,
@@ -28,7 +27,6 @@ import {
   getProductOverview,
 } from "@/features/products/queries";
 import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
-import { getImageUrl } from "@/lib/storage/image-storage";
 
 export const metadata = {
   title: "Produk Master",
@@ -148,23 +146,6 @@ function ProductStatusBadge({ status }: { status: ProductStatus }) {
 
 type ProductRow = Awaited<ReturnType<typeof getProductList>>["rows"][number];
 
-function ProductPriceRange({ product }: { product: ProductRow }) {
-  if (product.minSellingAmount <= 0 && product.maxSellingAmount <= 0) {
-    return <span className="text-[var(--muted)]">Belum ada harga</span>;
-  }
-
-  if (product.minSellingAmount === product.maxSellingAmount) {
-    return <span>{formatMoney(product.minSellingAmount)}</span>;
-  }
-
-  return (
-    <span>
-      {formatMoney(product.minSellingAmount)} -{" "}
-      {formatMoney(product.maxSellingAmount)}
-    </span>
-  );
-}
-
 function ProductMobileCard({ product }: { product: ProductRow }) {
   return (
     <Link
@@ -172,12 +153,6 @@ function ProductMobileCard({ product }: { product: ProductRow }) {
       className="group block rounded-2xl border border-[var(--border)] bg-white p-4 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/30"
     >
       <div className="flex gap-3">
-        <ProductImage
-          src={getImageUrl(product.imageKey)}
-          alt={product.name}
-          className="size-16 shrink-0 rounded-2xl border border-[var(--border)] bg-neutral-50"
-        />
-
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -192,9 +167,7 @@ function ProductMobileCard({ product }: { product: ProductRow }) {
           </div>
 
           <p className="mt-2 line-clamp-1 text-xs text-[var(--muted)]">
-            {[product.brand, product.material, product.collection]
-              .filter(Boolean)
-              .join(" · ") || "Brand, material, dan koleksi belum dilengkapi"}
+            Master reference untuk {formatInteger(product.itemCount)} item fisik.
           </p>
         </div>
       </div>
@@ -216,9 +189,9 @@ function ProductMobileCard({ product }: { product: ProductRow }) {
 
       <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4 text-sm">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[var(--muted)]">Harga label</span>
+          <span className="text-[var(--muted)]">Terjual</span>
           <span className="text-right font-semibold text-neutral-950">
-            <ProductPriceRange product={product} />
+            {formatInteger(product.soldItemCount)} item
           </span>
         </div>
         <div className="flex items-center justify-between gap-3">
@@ -244,6 +217,8 @@ export default async function ProductCatalogPage({
 }) {
   const auth = await requireAnyPermission(["products.view", "products.manage"]);
   const canManage = hasPermission(auth, "products.manage");
+  const canCreatePhysicalProduct =
+    hasPermission(auth, "inventory.receive") || hasPermission(auth, "inventory.manage");
   const canBatchImport = hasPermission(auth, "products.batch_import");
   const filters = parseProductListFilters(await searchParams);
 
@@ -276,9 +251,7 @@ export default async function ProductCatalogPage({
             </h1>
 
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Kelola katalog model perhiasan, kategori, brand, material, status
-              produk, dan relasi item fisik yang tersambung ke inventaris
-              serialized.
+              Product Master sekarang berfungsi sebagai administrasi/reference untuk mengelompokkan produk fisik. Staff dapat membuat master langsung saat menambahkan produk baru tanpa harus masuk ke halaman ini terlebih dahulu.
             </p>
           </div>
 
@@ -287,7 +260,7 @@ export default async function ProductCatalogPage({
               <div className="min-w-0">
                 <p className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-700 ring-1 ring-[var(--border)]">
                   <Gem className="size-3.5 text-[var(--accent)]" />
-                  Product aktif
+                  Master aktif
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-neutral-950">
                   {formatInteger(overview.activeProducts)} produk
@@ -310,13 +283,13 @@ export default async function ProductCatalogPage({
                 </Link>
               ) : null}
 
-              {canManage ? (
+              {canCreatePhysicalProduct ? (
                 <Link
                   href="/admin/produk/tambah"
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-xs font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
                 >
                   <Plus className="size-4" />
-                  Produk Master
+                  Tambah Produk
                 </Link>
               ) : null}
             </div>
@@ -356,10 +329,20 @@ export default async function ProductCatalogPage({
           <div>
             <h2 className="font-semibold text-neutral-950">Filter Produk</h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              Cari master produk berdasarkan nama, kode, brand, koleksi,
-              kategori, atau status katalog.
+              Cari Product Master berdasarkan kode, nama, kategori, atau status.
             </p>
           </div>
+
+          <div className="flex flex-wrap gap-2">
+            {canManage ? (
+              <Link
+                href="/admin/produk/master/tambah"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/50 hover:text-[var(--accent)]"
+              >
+                <Plus className="size-4" />
+                Tambah Product Master
+              </Link>
+            ) : null}
 
           <Link
             href="/admin/produk/kategori"
@@ -368,6 +351,7 @@ export default async function ProductCatalogPage({
             <FolderTree className="size-4" />
             Kelola Kategori
           </Link>
+          </div>
         </div>
 
         <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_180px_auto]">
@@ -377,7 +361,7 @@ export default async function ProductCatalogPage({
               name="q"
               type="search"
               defaultValue={filters.search}
-              placeholder="Cari kode, nama, brand, atau koleksi..."
+              placeholder="Cari kode atau nama Product Master..."
               className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
             />
           </label>
@@ -453,11 +437,10 @@ export default async function ProductCatalogPage({
               Tidak ada produk yang cocok
             </h3>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-              Coba ubah kata kunci, kategori, atau status produk. Jika katalog
-              masih kosong, tambahkan produk master terlebih dahulu.
+              Coba ubah kata kunci, kategori, atau status. Jika masih kosong, kamu bisa langsung membuat produk fisik dan quick-create Product Master dari form.
             </p>
 
-            {canManage ? (
+            {canCreatePhysicalProduct ? (
               <Link
                 href="/admin/produk/tambah"
                 className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
@@ -470,12 +453,11 @@ export default async function ProductCatalogPage({
         ) : (
           <>
             <div className="hidden lg:block">
-              <div className="grid min-w-[74rem] grid-cols-[minmax(18rem,1.4fr)_12rem_10rem_10rem_14rem_10rem_3rem] gap-4 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-xs font-semibold text-neutral-500">
+              <div className="grid min-w-[74rem] grid-cols-[minmax(18rem,1.4fr)_12rem_10rem_12rem_12rem_3rem] gap-4 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-xs font-semibold text-neutral-500">
                 <span>Produk</span>
                 <span>Kategori</span>
                 <span>Status</span>
                 <span>Item fisik</span>
-                <span>Harga label</span>
                 <span>Update</span>
                 <span className="sr-only">Detail</span>
               </div>
@@ -486,27 +468,15 @@ export default async function ProductCatalogPage({
                     <Link
                       key={product.id}
                       href={`/admin/produk/${product.id}`}
-                      className="group grid grid-cols-[minmax(18rem,1.4fr)_12rem_10rem_10rem_14rem_10rem_3rem] gap-4 px-5 py-4 transition hover:bg-neutral-50"
+                      className="group grid grid-cols-[minmax(18rem,1.4fr)_12rem_10rem_12rem_12rem_3rem] gap-4 px-5 py-4 transition hover:bg-neutral-50"
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <ProductImage
-                          src={getImageUrl(product.imageKey)}
-                          alt={product.name}
-                          className="size-14 shrink-0 rounded-2xl border border-[var(--border)] bg-neutral-50"
-                        />
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-neutral-950">
                             {product.name}
                           </p>
                           <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                            {product.code}
-                            {product.brand ? ` · ${product.brand}` : ""}
-                            {product.collection
-                              ? ` · ${product.collection}`
-                              : ""}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                            {product.material || "Material belum diatur"}
+                            {product.code} · Reference Product Master
                           </p>
                         </div>
                       </div>
@@ -531,15 +501,6 @@ export default async function ProductCatalogPage({
                         <p className="mt-1 text-xs text-[var(--muted)]">
                           {formatInteger(product.availableItemCount)} tersedia ·{" "}
                           {formatInteger(product.soldItemCount)} terjual
-                        </p>
-                      </div>
-
-                      <div className="self-center text-sm">
-                        <p className="font-semibold text-neutral-950">
-                          <ProductPriceRange product={product} />
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {formatGram(product.totalWeightGram)} gr aktif
                         </p>
                       </div>
 
