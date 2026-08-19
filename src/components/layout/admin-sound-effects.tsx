@@ -3,18 +3,15 @@
 import { useEffect, useRef } from "react";
 
 type AdminLiveCounts = {
-  approvalPendingCount: number;
   notificationUnreadCount: number;
 };
 
 type AdminSoundEffectsProps = {
-  initialApprovalPendingCount: number;
   initialNotificationUnreadCount: number;
   onCountsChange?: (counts: AdminLiveCounts) => void;
 };
 
 const POLL_INTERVAL_MS = 20_000;
-const APPROVAL_SOUND_PATH = "/sounds/admin-approval.mp3";
 const NOTIFICATION_SOUND_PATH = "/sounds/admin-notification.mp3";
 
 function isValidCount(value: unknown): value is number {
@@ -23,26 +20,18 @@ function isValidCount(value: unknown): value is number {
 
 function playAudio(audio: HTMLAudioElement | null) {
   if (!audio) return;
-
   audio.currentTime = 0;
-
   void audio.play().catch(() => {
-    // Browser autoplay policy can block sound until the user interacts with the page.
-    // The drawer badges still update through polling, so this can fail silently.
+    // Autoplay dapat diblokir sampai user berinteraksi; badge tetap ter-update.
   });
 }
 
 export function AdminSoundEffects({
-  initialApprovalPendingCount,
   initialNotificationUnreadCount,
   onCountsChange,
 }: AdminSoundEffectsProps) {
-  const countsRef = useRef<AdminLiveCounts>({
-    approvalPendingCount: initialApprovalPendingCount,
-    notificationUnreadCount: initialNotificationUnreadCount,
-  });
+  const countRef = useRef(initialNotificationUnreadCount);
   const hasUserInteractionRef = useRef(false);
-  const approvalAudioRef = useRef<HTMLAudioElement | null>(null);
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
   const onCountsChangeRef = useRef(onCountsChange);
 
@@ -51,33 +40,22 @@ export function AdminSoundEffects({
   }, [onCountsChange]);
 
   useEffect(() => {
-    countsRef.current = {
-      approvalPendingCount: initialApprovalPendingCount,
-      notificationUnreadCount: initialNotificationUnreadCount,
-    };
-  }, [initialApprovalPendingCount, initialNotificationUnreadCount]);
+    countRef.current = initialNotificationUnreadCount;
+  }, [initialNotificationUnreadCount]);
 
   useEffect(() => {
-    const approvalAudio = new Audio(APPROVAL_SOUND_PATH);
-    approvalAudio.preload = "auto";
-    approvalAudio.volume = 0.75;
-
     const notificationAudio = new Audio(NOTIFICATION_SOUND_PATH);
     notificationAudio.preload = "auto";
     notificationAudio.volume = 0.65;
-
-    approvalAudioRef.current = approvalAudio;
     notificationAudioRef.current = notificationAudio;
 
     const activateAudio = () => {
       hasUserInteractionRef.current = true;
     };
-
     window.addEventListener("pointerdown", activateAudio, { once: true });
     window.addEventListener("keydown", activateAudio, { once: true });
 
     let isDisposed = false;
-    let notificationTimer: ReturnType<typeof setTimeout> | null = null;
 
     const pollCounts = async () => {
       try {
@@ -85,61 +63,29 @@ export function AdminSoundEffects({
           cache: "no-store",
           credentials: "same-origin",
         });
-
         if (!response.ok) return;
-
         const payload = (await response.json()) as Partial<AdminLiveCounts>;
+        if (!isValidCount(payload.notificationUnreadCount) || isDisposed) return;
 
-        if (
-          !isValidCount(payload.approvalPendingCount) ||
-          !isValidCount(payload.notificationUnreadCount)
-        ) {
-          return;
-        }
+        const previous = countRef.current;
+        const next = payload.notificationUnreadCount;
+        countRef.current = next;
+        onCountsChangeRef.current?.({ notificationUnreadCount: next });
 
-        if (isDisposed) return;
-
-        const nextCounts: AdminLiveCounts = {
-          approvalPendingCount: payload.approvalPendingCount,
-          notificationUnreadCount: payload.notificationUnreadCount,
-        };
-        const previousCounts = countsRef.current;
-        const hasNewApproval =
-          nextCounts.approvalPendingCount > previousCounts.approvalPendingCount;
-        const hasNewNotification =
-          nextCounts.notificationUnreadCount > previousCounts.notificationUnreadCount;
-
-        countsRef.current = nextCounts;
-        onCountsChangeRef.current?.(nextCounts);
-
-        if (!hasUserInteractionRef.current) return;
-
-        if (hasNewApproval) {
-          playAudio(approvalAudioRef.current);
-        }
-
-        if (hasNewNotification) {
-          notificationTimer = setTimeout(
-            () => playAudio(notificationAudioRef.current),
-            hasNewApproval ? 650 : 0,
-          );
+        if (hasUserInteractionRef.current && next > previous) {
+          playAudio(notificationAudioRef.current);
         }
       } catch {
-        // Keep polling resilient; a temporary network or auth refresh issue should not break admin UI.
+        // Polling tetap resilien jika jaringan/auth refresh sementara bermasalah.
       }
     };
 
     const interval = window.setInterval(pollCounts, POLL_INTERVAL_MS);
-
     return () => {
       isDisposed = true;
       window.clearInterval(interval);
-      if (notificationTimer) {
-        window.clearTimeout(notificationTimer);
-      }
       window.removeEventListener("pointerdown", activateAudio);
       window.removeEventListener("keydown", activateAudio);
-      approvalAudioRef.current = null;
       notificationAudioRef.current = null;
     };
   }, []);

@@ -55,7 +55,6 @@ export type TelegramDailyFinanceSnapshot = {
     transactionCount: number;
     itemsSoldCount: number;
     heldTransactionCount: number;
-    pendingApprovalCount: number;
   };
 };
 
@@ -313,10 +312,6 @@ export function buildTelegramDailyFinanceSnapshot(
         input.operations.heldTransactionCount,
         "TELEGRAM_HELD_COUNT_INVALID",
       ),
-      pendingApprovalCount: assertCount(
-        input.operations.pendingApprovalCount,
-        "TELEGRAM_PENDING_APPROVAL_COUNT_INVALID",
-      ),
     },
   };
 }
@@ -408,7 +403,6 @@ export function formatTelegramDailyFinanceMessage(
     `Transaksi: ${snapshot.operations.transactionCount}`,
     `Produk terjual: ${snapshot.operations.itemsSoldCount}`,
     `Hold cart tersisa: ${snapshot.operations.heldTransactionCount}`,
-    `Approval pending: ${snapshot.operations.pendingApprovalCount}`,
     "",
     `Status: ${status}`,
   ].join("\n");

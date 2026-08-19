@@ -122,21 +122,12 @@ export type PosManualPaymentProfile = {
   registerName: string | null;
 };
 
-export type PosManualPaymentPolicy = {
-  method: Exclude<PosManualPaymentMethod, "cash">;
-  coVerificationThreshold: number;
-  evidenceThreshold: number;
-  duplicateLookbackDays: number;
-  isEnabled: boolean;
-};
-
 export type PosInitialData = {
   context: PosOperationalContext;
   categories: PosCategoryOption[];
   items: PosAvailableItem[];
   customers: PosCustomerOption[];
   paymentProfiles: PosManualPaymentProfile[];
-  paymentPolicies: PosManualPaymentPolicy[];
 };
 
 export type PosScanLookupResult =
@@ -193,38 +184,6 @@ export type PosCheckoutPayload = {
   discountApprovalId?: string | null;
   discountAmount?: number | null;
   discountReason?: string | null;
-  manualPaymentApprovalId?: string | null;
-};
-
-export type PosManualPaymentApproval = {
-  id: string;
-  status: "pending" | "approved" | "rejected";
-  reason: string;
-  responseNotes: string | null;
-  createdAtIso: string;
-  resolvedAtIso: string | null;
-};
-
-export type PosManualPaymentApprovalStatusResult =
-  | {
-      status: "found";
-      message: string;
-      approval: PosManualPaymentApproval;
-    }
-  | {
-      status: "not_found" | "error";
-      message: string;
-    };
-
-export type PosPaymentEvidenceUploadResult =
-  | { status: "success"; message: string; evidenceKey: string }
-  | { status: "error"; message: string };
-
-export type PosDiscountApprovalPayload = {
-  itemIds: string[];
-  discountAmount: number;
-  reason: string;
-  customerId?: string | null;
 };
 
 export type PosDiscountApprovalStatus = "pending" | "approved" | "rejected";
@@ -238,29 +197,6 @@ export type PosDiscountApproval = {
   createdAtIso: string;
   resolvedAtIso: string | null;
 };
-
-export type PosDiscountApprovalActionResult =
-  | {
-      status: "success";
-      message: string;
-      approval: PosDiscountApproval;
-    }
-  | {
-      status: "error";
-      message: string;
-      fieldErrors?: Record<string, string>;
-    };
-
-export type PosDiscountApprovalStatusResult =
-  | {
-      status: "found";
-      message: string;
-      approval: PosDiscountApproval;
-    }
-  | {
-      status: "not_found" | "error";
-      message: string;
-    };
 
 export type PosHoldCartPayload = {
   itemIds: string[];
@@ -348,11 +284,6 @@ export type PosCheckoutActionResult =
       recovery: "created" | "replayed";
     }
   | {
-      status: "approval_required";
-      message: string;
-      approval: PosManualPaymentApproval;
-    }
-  | {
       status: "processing";
       message: string;
       idempotencyKey: string;
@@ -374,11 +305,6 @@ export type PosCheckoutRecoveryStatusResult =
       status: "completed";
       message: string;
       sale: PosCheckoutSaleResult;
-    }
-  | {
-      status: "approval_required";
-      message: string;
-      approval: PosManualPaymentApproval;
     }
   | {
       status: "processing";

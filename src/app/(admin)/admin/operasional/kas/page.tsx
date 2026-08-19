@@ -291,19 +291,8 @@ function MovementBadge({ movement }: { movement: AdminCashMovementRow }) {
 }
 
 function ReferenceLink({ movement }: { movement: AdminCashMovementRow }) {
-  if (
-    movement.referenceType === "customer_deposit_withdrawal" &&
-    movement.referenceId
-  ) {
-    return (
-      <Link
-        href="/admin/operasional/approval"
-        className="inline-flex items-center gap-1 font-medium text-[var(--accent)] hover:underline"
-      >
-        Penarikan Dana Titip
-        <ArrowRight className="size-3" />
-      </Link>
-    );
+  if (movement.referenceType === "customer_deposit_withdrawal") {
+    return <span className="font-medium text-neutral-700">Penarikan Dana Titip</span>;
   }
 
   if (movement.referenceType === "sale" && movement.referenceId) {
@@ -460,7 +449,7 @@ export default async function KasPage({ searchParams }: PageProps) {
         <SummaryCard
           title="Tarik Dana Titip"
           value={formatMoney(data.summary.customerDepositCashWithdrawals)}
-          helper="Kas keluar dari approval penarikan Dana Titip."
+          helper="Kas keluar langsung dari penarikan Dana Titip."
           icon={<MinusCircle className="size-5" />}
           tone="danger"
         />

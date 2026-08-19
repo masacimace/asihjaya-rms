@@ -1,30 +1,22 @@
 "use server";
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { db } from "@/db";
 import {
-  approvals,
   auditLogs,
   customers,
   hardwareAgents,
   outlets,
-  payments,
   registers,
-  saleItems,
   saleReturnCases,
   sales,
   shifts,
   users,
 } from "@/db/schema";
-import {
-  getSaleSensitivePermission,
-  PAYMENT_REFUND_REQUEST_PERMISSION,
-  SALE_VOID_REQUEST_PERMISSION,
-} from "@/features/approvals/authorization";
 import { getClientIp } from "@/lib/http/client-ip";
 import { requireAnyPermission, requirePermission } from "@/lib/auth/session";
 import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
@@ -38,9 +30,13 @@ import {
   type DeliveryAnswer,
   type PaymentAnswer,
 } from "@/features/sales/correction-eligibility";
-import { publishApprovalExecutionFailedNotification } from "@/features/notifications/approvals";
 import {
-  executeApprovedSaleReversal,
+  getSaleSensitivePermission,
+  PAYMENT_REFUND_EXECUTE_PERMISSION,
+  SALE_VOID_EXECUTE_PERMISSION,
+} from "@/features/sales/sensitive-permissions";
+import {
+  executeSaleReversal,
   SaleReversalTransactionError,
 } from "@/features/sales/transaction-service";
 
@@ -54,173 +50,68 @@ type HardwareQueueState = "online" | "stale" | "offline" | "not_configured";
 
 function readText(formData: FormData, key: string) {
   const value = formData.get(key);
-
   return typeof value === "string" ? value.trim() : "";
 }
 
 function getSafeAdminSaleReturnTo(returnTo: string, saleId: string) {
-  if (!UUID_PATTERN.test(saleId)) {
-    return "/admin/penjualan";
-  }
-
-  if (returnTo.startsWith(`/admin/penjualan/${saleId}`)) {
-    return returnTo;
-  }
-
+  if (!UUID_PATTERN.test(saleId)) return "/admin/penjualan";
+  if (returnTo.startsWith(`/admin/penjualan/${saleId}`)) return returnTo;
   return `/admin/penjualan/${saleId}`;
 }
 
 function redirectAdminSaleDetailWithFeedback({
-  saleId,
-  returnTo,
-  type,
-  message,
-}: {
-  saleId: string;
-  returnTo: string;
-  type: FeedbackType;
-  message: string;
-}): never {
+  saleId, returnTo, type, message,
+}: { saleId: string; returnTo: string; type: FeedbackType; message: string }): never {
   const safeReturnTo = getSafeAdminSaleReturnTo(returnTo, saleId);
   const queryStartIndex = safeReturnTo.indexOf("?");
-  const path =
-    queryStartIndex >= 0
-      ? safeReturnTo.slice(0, queryStartIndex)
-      : safeReturnTo;
-  const search =
-    queryStartIndex >= 0 ? safeReturnTo.slice(queryStartIndex + 1) : "";
+  const path = queryStartIndex >= 0 ? safeReturnTo.slice(0, queryStartIndex) : safeReturnTo;
+  const search = queryStartIndex >= 0 ? safeReturnTo.slice(queryStartIndex + 1) : "";
   const params = new URLSearchParams(search);
-
   params.set("feedbackType", type);
   params.set("feedbackMessage", message);
-
   redirect(`${path}?${params.toString()}`);
 }
 
 function getHardwareAgentQueueState(
-  agents: Array<{
-    status: "online" | "offline" | "disabled";
-    lastSeenAt: Date | null;
-  }>,
+  agents: Array<{ status: "online" | "offline" | "disabled"; lastSeenAt: Date | null }>,
   now: Date,
 ): HardwareQueueState {
   const activeAgents = agents.filter((agent) => agent.status !== "disabled");
-
-  if (activeAgents.length === 0) {
-    return "not_configured";
-  }
-
-  if (
-    activeAgents.some(
-      (agent) =>
-        agent.status === "online" &&
-        agent.lastSeenAt &&
-        now.getTime() - agent.lastSeenAt.getTime() <=
-          HARDWARE_AGENT_ONLINE_WINDOW_MS,
-    )
-  ) {
-    return "online";
-  }
-
-  if (
-    activeAgents.some(
-      (agent) =>
-        agent.lastSeenAt &&
-        now.getTime() - agent.lastSeenAt.getTime() <=
-          HARDWARE_AGENT_STALE_WINDOW_MS,
-    )
-  ) {
-    return "stale";
-  }
-
+  if (activeAgents.length === 0) return "not_configured";
+  if (activeAgents.some((agent) => agent.status === "online" && agent.lastSeenAt && now.getTime() - agent.lastSeenAt.getTime() <= HARDWARE_AGENT_ONLINE_WINDOW_MS)) return "online";
+  if (activeAgents.some((agent) => agent.lastSeenAt && now.getTime() - agent.lastSeenAt.getTime() <= HARDWARE_AGENT_STALE_WINDOW_MS)) return "stale";
   return "offline";
 }
 
 function getReprintQueuedMessage({
-  invoiceNumber,
-  duplicate,
-  queueState,
-}: {
-  invoiceNumber: string;
-  duplicate: boolean;
-  queueState: Exclude<HardwareQueueState, "not_configured">;
-}) {
-  if (duplicate) {
-    return `Job cetak ulang nota ${invoiceNumber} masih aktif di antrean. Cek status terbaru di bagian Print Jobs.`;
-  }
-
-  if (queueState === "online") {
-    return `Job cetak ulang nota ${invoiceNumber} sudah masuk antrean printer.`;
-  }
-
-  if (queueState === "stale") {
-    return `Job cetak ulang nota ${invoiceNumber} sudah masuk antrean, tetapi Hardware Hub terakhir terlihat beberapa menit lalu. Cek Mini PC jika belum tercetak.`;
-  }
-
+  invoiceNumber, duplicate, queueState,
+}: { invoiceNumber: string; duplicate: boolean; queueState: Exclude<HardwareQueueState, "not_configured"> }) {
+  if (duplicate) return `Job cetak ulang nota ${invoiceNumber} masih aktif di antrean. Cek status terbaru di bagian Print Jobs.`;
+  if (queueState === "online") return `Job cetak ulang nota ${invoiceNumber} sudah masuk antrean printer.`;
+  if (queueState === "stale") return `Job cetak ulang nota ${invoiceNumber} sudah masuk antrean, tetapi Hardware Hub terakhir terlihat beberapa menit lalu. Cek Mini PC jika belum tercetak.`;
   return `Job cetak ulang nota ${invoiceNumber} sudah masuk antrean, tetapi Hardware Hub sedang offline. Nyalakan Mini PC Hardware Hub agar job diproses.`;
 }
 
-
 async function getAdminRequestMetadata() {
   const headerStore = await headers();
-
-  return {
-    ipAddress: getClientIp(headerStore),
-    userAgent: headerStore.get("user-agent"),
-  };
+  return { ipAddress: getClientIp(headerStore), userAgent: headerStore.get("user-agent") };
 }
-
-type SaleSensitiveApprovalRequestType = "void" | "refund";
 
 function isDeliveryAnswer(value: string): value is DeliveryAnswer {
   return ["not_delivered", "delivered", "unsure"].includes(value);
 }
-
 function isPaymentAnswer(value: string): value is PaymentAnswer {
   return ["received", "not_received", "unsure"].includes(value);
 }
-
 function isCustomerPresenceAnswer(value: string): value is CustomerPresenceAnswer {
   return ["present", "left", "unsure"].includes(value);
 }
 
-function getSaleSensitiveApprovalConfig(
-  requestType: SaleSensitiveApprovalRequestType,
-) {
-  if (requestType === "void") {
-    return {
-      approvalType: "void_receipt" as const,
-      action: "sale.void_approval_requested",
-      label: "pembatalan transaksi",
-      successMessage: "Pengajuan pembatalan transaksi berhasil dibuat dan menunggu persetujuan manager/owner.",
-      duplicateMessage:
-        "Transaksi ini sudah memiliki pengajuan koreksi yang masih menunggu atau sudah disetujui.",
-    };
-  }
-
-  return {
-    approvalType: "refund_transaction" as const,
-    action: "sale.refund_approval_requested",
-    label: "retur dan pengembalian dana",
-    successMessage: "Pengajuan retur dan pengembalian dana berhasil dibuat dan menunggu persetujuan manager/owner.",
-    duplicateMessage:
-      "Transaksi ini sudah memiliki pengajuan koreksi yang masih menunggu atau sudah disetujui.",
-  };
-}
-
-function parseNumber(value: string | null | undefined) {
-  if (!value) return 0;
-
-  const parsedValue = Number(value);
-
-  return Number.isFinite(parsedValue) ? parsedValue : 0;
-}
-
-function formatPaymentMethodLabel(method: string) {
-  return method.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
+/**
+ * Koreksi transaksi sekarang dieksekusi langsung berdasarkan permission.
+ * Tidak ada lagi request/approve/execute approval workflow.
+ */
+export async function executeSaleCorrectionAction(formData: FormData) {
   const saleId = readText(formData, "saleId");
   const returnTo = readText(formData, "returnTo");
   const deliveryAnswerRaw = readText(formData, "deliveryAnswer");
@@ -230,67 +121,23 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
   const reasonDetails = readText(formData, "reasonDetails").slice(0, 1000);
 
   if (!UUID_PATTERN.test(saleId)) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo: "/admin/penjualan",
-      type: "error",
-      message: "Transaksi tidak valid untuk request void/refund.",
-    });
+    redirectAdminSaleDetailWithFeedback({ saleId, returnTo: "/admin/penjualan", type: "error", message: "Transaksi tidak valid untuk dikoreksi." });
+  }
+  if (!isDeliveryAnswer(deliveryAnswerRaw) || !isPaymentAnswer(paymentAnswerRaw) || !isCustomerPresenceAnswer(customerPresenceRaw)) {
+    redirectAdminSaleDetailWithFeedback({ saleId, returnTo, type: "error", message: "Jawaban kondisi transaksi belum lengkap atau tidak valid." });
   }
 
-  if (
-    !isDeliveryAnswer(deliveryAnswerRaw) ||
-    !isPaymentAnswer(paymentAnswerRaw) ||
-    !isCustomerPresenceAnswer(customerPresenceRaw)
-  ) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo,
-      type: "error",
-      message: "Jawaban kondisi transaksi belum lengkap atau tidak valid.",
-    });
-  }
-
-  const auth = await requireAnyPermission([
-    SALE_VOID_REQUEST_PERMISSION,
-    PAYMENT_REFUND_REQUEST_PERMISSION,
-  ]);
+  const auth = await requireAnyPermission([SALE_VOID_EXECUTE_PERMISSION, PAYMENT_REFUND_EXECUTE_PERMISSION]);
   const accessibleOutletIds = auth.outlets.map((outlet) => outlet.id);
-
   if (accessibleOutletIds.length === 0) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo,
-      type: "error",
-      message:
-        "Outlet yang bisa diakses tidak ditemukan. Hubungi owner/admin untuk mengatur akses outlet.",
-    });
+    redirectAdminSaleDetailWithFeedback({ saleId, returnTo, type: "error", message: "Outlet yang bisa diakses tidak ditemukan. Hubungi owner/admin untuk mengatur akses outlet." });
   }
 
   const [sale] = await db
     .select({
-      id: sales.id,
-      organizationId: sales.organizationId,
-      outletId: sales.outletId,
-      registerId: sales.registerId,
-      shiftId: sales.shiftId,
-      cashierId: sales.cashierId,
-      invoiceNumber: sales.invoiceNumber,
-      status: sales.status,
-      subtotalAmount: sales.subtotalAmount,
-      discountAmount: sales.discountAmount,
-      totalAmount: sales.totalAmount,
-      completedAt: sales.completedAt,
-      createdAt: sales.createdAt,
-      shiftStatus: shifts.status,
-      outletCode: outlets.code,
-      outletName: outlets.name,
-      registerCode: registers.code,
-      registerName: registers.name,
-      cashierName: users.fullName,
-      customerCode: customers.customerCode,
-      customerName: customers.fullName,
-      customerPhone: customers.phone,
+      id: sales.id, outletId: sales.outletId, invoiceNumber: sales.invoiceNumber, status: sales.status,
+      completedAt: sales.completedAt, shiftStatus: shifts.status,
+      outletName: outlets.name, registerName: registers.name, cashierName: users.fullName, customerName: customers.fullName,
     })
     .from(sales)
     .innerJoin(outlets, eq(sales.outletId, outlets.id))
@@ -298,419 +145,77 @@ export async function requestSaleVoidRefundApprovalAction(formData: FormData) {
     .innerJoin(users, eq(sales.cashierId, users.id))
     .leftJoin(shifts, eq(sales.shiftId, shifts.id))
     .leftJoin(customers, eq(sales.customerId, customers.id))
-    .where(
-      and(
-        eq(sales.id, saleId),
-        eq(sales.organizationId, auth.organization.id),
-        inArray(sales.outletId, accessibleOutletIds),
-      ),
-    )
+    .where(and(eq(sales.id, saleId), eq(sales.organizationId, auth.organization.id), inArray(sales.outletId, accessibleOutletIds)))
     .limit(1);
 
   if (!sale) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo,
-      type: "error",
-      message:
-        "Transaksi tidak ditemukan atau bukan bagian dari outlet yang bisa kamu akses.",
-    });
+    redirectAdminSaleDetailWithFeedback({ saleId, returnTo, type: "error", message: "Transaksi tidak ditemukan atau bukan bagian dari outlet yang bisa kamu akses." });
   }
-
   if (sale.status !== "completed") {
-    redirectAdminSaleDetailWithFeedback({
-      saleId: sale.id,
-      returnTo,
-      type: "error",
-      message: "Koreksi hanya bisa diajukan untuk transaksi yang sudah selesai.",
-    });
+    redirectAdminSaleDetailWithFeedback({ saleId, returnTo, type: "error", message: "Koreksi hanya bisa dilakukan untuk transaksi yang masih berstatus selesai." });
   }
 
-  const [existingReturnCase] = await db
-    .select({ id: saleReturnCases.id })
-    .from(saleReturnCases)
-    .where(eq(saleReturnCases.saleId, sale.id))
-    .limit(1);
-
+  const [existingReturnCase] = await db.select({ id: saleReturnCases.id }).from(saleReturnCases).where(eq(saleReturnCases.saleId, sale.id)).limit(1);
   const eligibility = getSaleCorrectionEligibility({
-    saleStatus: sale.status,
-    shiftStatus: sale.shiftStatus,
-    completedAt: sale.completedAt,
-    hasReturnCase: Boolean(existingReturnCase),
-    timeZone: auth.organization.timezone,
+    saleStatus: sale.status, shiftStatus: sale.shiftStatus, completedAt: sale.completedAt,
+    hasReturnCase: Boolean(existingReturnCase), timeZone: auth.organization.timezone,
   });
-
   if (!eligibility.canRequestCorrection) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId: sale.id,
-      returnTo,
-      type: "error",
-      message: eligibility.blockers[0] ?? "Transaksi ini tidak dapat dikoreksi.",
-    });
+    redirectAdminSaleDetailWithFeedback({ saleId, returnTo, type: "error", message: eligibility.blockers[0] ?? "Transaksi ini tidak dapat dikoreksi." });
   }
 
-  const requestTypeRaw = classifySaleCorrection({
-    eligibility,
-    deliveryAnswer: deliveryAnswerRaw,
-  });
-  const requiredPermission = getSaleSensitivePermission(requestTypeRaw, "request");
-
+  const kind = classifySaleCorrection({ eligibility, deliveryAnswer: deliveryAnswerRaw });
+  const requiredPermission = getSaleSensitivePermission(kind);
   if (!auth.permissionCodes.includes(requiredPermission)) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId: sale.id,
-      returnTo,
-      type: "error",
-      message: "Akun ini tidak memiliki izin untuk mengajukan jenis koreksi yang ditentukan sistem.",
-    });
+    redirectAdminSaleDetailWithFeedback({ saleId, returnTo, type: "error", message: `Akun ini tidak memiliki izin untuk ${kind === "void" ? "membatalkan transaksi" : "memproses refund"}.` });
   }
 
-  const reasonLabel = getCorrectionReasonLabel(requestTypeRaw, reasonCode);
+  const reasonLabel = getCorrectionReasonLabel(kind, reasonCode);
   if (!reasonLabel) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId: sale.id,
-      returnTo,
-      type: "error",
-      message: "Alasan koreksi tidak valid.",
-    });
+    redirectAdminSaleDetailWithFeedback({ saleId, returnTo, type: "error", message: "Alasan koreksi tidak valid." });
   }
-
   if (reasonCode === "other" && reasonDetails.length < 8) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId: sale.id,
-      returnTo,
-      type: "error",
-      message: "Jelaskan alasan lainnya minimal 8 karakter.",
-    });
+    redirectAdminSaleDetailWithFeedback({ saleId, returnTo, type: "error", message: "Jelaskan alasan lainnya minimal 8 karakter." });
   }
 
   const reason = reasonDetails ? `${reasonLabel}: ${reasonDetails}` : reasonLabel;
-  const config = getSaleSensitiveApprovalConfig(requestTypeRaw);
-
-  const existingApprovalRows = await db
-    .select({
-      id: approvals.id,
-      status: approvals.status,
-      createdAt: approvals.createdAt,
-    })
-    .from(approvals)
-    .where(
-      and(
-        eq(approvals.organizationId, auth.organization.id),
-        inArray(approvals.type, ["void_receipt", "refund_transaction"]),
-        eq(approvals.referenceType, "sale"),
-        eq(approvals.referenceId, sale.id),
-        inArray(approvals.status, ["pending", "approved"]),
-      ),
-    )
-    .orderBy(desc(approvals.createdAt))
-    .limit(1);
-
-  if (existingApprovalRows[0]) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId: sale.id,
-      returnTo,
-      type: "info",
-      message: config.duplicateMessage,
-    });
-  }
-
-  const [paymentRows, itemRows] = await Promise.all([
-    db
-      .select({
-        method: payments.method,
-        amount: payments.amount,
-        status: payments.status,
-      })
-      .from(payments)
-      .where(eq(payments.saleId, sale.id)),
-    db
-      .select({
-        id: saleItems.id,
-      })
-      .from(saleItems)
-      .where(eq(saleItems.saleId, sale.id)),
-  ]);
-
-  const paidPayments = paymentRows.filter((payment) => payment.status === "paid");
-  const paidAmount = paidPayments.reduce(
-    (total, payment) => total + parseNumber(payment.amount),
-    0,
-  );
-  const paymentMethods = Array.from(
-    new Set(paidPayments.map((payment) => payment.method)),
-  );
-  const now = new Date();
   const requestMetadata = await getAdminRequestMetadata();
-
-  const [approval] = await db
-    .insert(approvals)
-    .values({
-      organizationId: auth.organization.id,
-      outletId: sale.outletId,
-      type: config.approvalType,
-      status: "pending",
-      requestedBy: auth.user.id,
-      referenceType: "sale",
-      referenceId: sale.id,
-      requestData: {
-        requestType: requestTypeRaw,
-        correctionUxVersion: "p1-b.1",
-        deliveryAnswer: deliveryAnswerRaw,
-        paymentAnswer: paymentAnswerRaw,
-        customerPresence: customerPresenceRaw,
-        reasonCode,
-        reasonLabel,
-        reasonDetails: reasonDetails || null,
-        eligibility: {
-          voidEligibleBySystem: eligibility.voidEligibleBySystem,
-          blockers: eligibility.blockers,
-        },
-        saleId: sale.id,
-        invoiceNumber: sale.invoiceNumber,
-        saleStatus: sale.status,
-        outletId: sale.outletId,
-        outletCode: sale.outletCode,
-        outletName: sale.outletName,
-        registerId: sale.registerId,
-        registerCode: sale.registerCode,
-        registerName: sale.registerName,
-        cashierId: sale.cashierId,
-        cashierName: sale.cashierName,
-        customerCode: sale.customerCode,
-        customerName: sale.customerName,
-        customerPhone: sale.customerPhone,
-        requesterName: auth.user.fullName,
-        subtotalAmount: parseNumber(sale.subtotalAmount),
-        discountAmount: parseNumber(sale.discountAmount),
-        totalAmount: parseNumber(sale.totalAmount),
-        paidAmount,
-        impactAmount: requestTypeRaw === "refund" ? paidAmount : parseNumber(sale.totalAmount),
-        itemCount: itemRows.length,
-        paymentMethods,
-        paymentMethodsLabel:
-          paymentMethods.length > 0
-            ? paymentMethods.map(formatPaymentMethodLabel).join(", ")
-            : "Belum ada payment paid",
-        completedAt: sale.completedAt?.toISOString() ?? null,
-        requestedAt: now.toISOString(),
-        reason,
-        executionStatus: "awaiting_r3c_2",
-      },
-      notes: reason,
-      createdAt: now,
-    })
-    .returning({ id: approvals.id });
-
-  if (!approval) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId: sale.id,
-      returnTo,
-      type: "error",
-      message: "Approval belum bisa dibuat karena terjadi kendala sistem.",
-    });
-  }
-
-  await db.insert(auditLogs).values({
-    organizationId: auth.organization.id,
-    outletId: sale.outletId,
-    actorUserId: auth.user.id,
-    action: config.action,
-    entityType: "sale",
-    entityId: sale.id,
-    beforeData: {
-      status: sale.status,
-      totalAmount: sale.totalAmount,
-      paidAmount,
-    },
-    afterData: {
-      approvalId: approval.id,
-      approvalType: config.approvalType,
-      requestType: requestTypeRaw,
-      status: "pending",
-      reason,
-    },
-    reason,
-    ipAddress: requestMetadata.ipAddress,
-    userAgent: requestMetadata.userAgent,
-    metadata: {
-      source: "admin.sales.detail",
-      approvalId: approval.id,
-      invoiceNumber: sale.invoiceNumber,
-      executionStatus: "awaiting_r3c_2",
-    },
-    createdAt: now,
-  });
-
-  revalidatePath("/admin");
-  revalidatePath("/admin/penjualan");
-  revalidatePath(`/admin/penjualan/${sale.id}`);
-  revalidatePath("/admin/operasional/approval");
-
-  redirectAdminSaleDetailWithFeedback({
-    saleId: sale.id,
-    returnTo,
-    type: "success",
-    message: config.successMessage,
-  });
-}
-
-
-async function executeApprovedSaleReversalAction({
-  formData,
-  kind,
-}: {
-  formData: FormData;
-  kind: "void" | "refund";
-}) {
-  const auth = await requirePermission(
-    getSaleSensitivePermission(kind, "execute"),
-  );
-  const saleId = readText(formData, "saleId");
-  const approvalId = readText(formData, "approvalId");
-  const returnTo = readText(formData, "returnTo");
-  const executionNote = readText(formData, "executionNote").slice(0, 1000);
-
-  if (!UUID_PATTERN.test(saleId) || !UUID_PATTERN.test(approvalId)) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo: "/admin/penjualan",
-      type: "error",
-      message: `Transaksi atau approval ${kind === "void" ? "void" : "refund"} tidak valid untuk dieksekusi.`,
-    });
-  }
-
-  const accessibleOutletIds = auth.outlets.map((outlet) => outlet.id);
-
-  if (accessibleOutletIds.length === 0) {
-    redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo,
-      type: "error",
-      message:
-        "Outlet yang bisa diakses tidak ditemukan. Hubungi owner/admin untuk mengatur akses outlet.",
-    });
-  }
-
-  const requestMetadata = await getAdminRequestMetadata();
-
-  let result: Awaited<ReturnType<typeof executeApprovedSaleReversal>>;
 
   try {
-    result = await executeApprovedSaleReversal({
-      kind,
-      saleId,
-      approvalId,
-      organizationId: auth.organization.id,
-      accessibleOutletIds,
-      actor: {
-        id: auth.user.id,
-        fullName: auth.user.fullName,
-      },
-      executionNote,
-      requestMetadata,
-    });
-  } catch (error) {
-    const message =
-      error instanceof SaleReversalTransactionError
-        ? error.message
-        : `Eksekusi ${kind === "void" ? "void" : "refund"} gagal karena kendala sistem. Tidak ada perubahan finansial yang disimpan.`;
-
-    console.error(`Failed to execute approved sale ${kind}`, {
-      saleId,
-      approvalId,
-      error,
+    const result = await executeSaleReversal({
+      kind, saleId, organizationId: auth.organization.id, accessibleOutletIds,
+      actor: { id: auth.user.id, fullName: auth.user.fullName },
+      executionNote: reason, requestMetadata,
     });
 
-    try {
-      const [failureContext] = await db
-        .select({
-          outletId: sales.outletId,
-          invoiceNumber: sales.invoiceNumber,
-          requestedById: approvals.requestedBy,
-          approvedById: approvals.approvedBy,
-        })
-        .from(approvals)
-        .innerJoin(sales, eq(approvals.referenceId, sales.id))
-        .where(
-          and(
-            eq(approvals.id, approvalId),
-            eq(approvals.organizationId, auth.organization.id),
-            eq(approvals.referenceType, "sale"),
-            eq(sales.id, saleId),
-            eq(sales.organizationId, auth.organization.id),
-          ),
-        )
-        .limit(1);
+    revalidatePath("/admin");
+    revalidatePath("/admin/penjualan");
+    revalidatePath(`/admin/penjualan/${saleId}`);
+    revalidatePath("/admin/inventaris");
+    revalidatePath("/admin/operasional/kas");
+    revalidatePath("/admin/operasional/shift");
+    revalidatePath("/pos");
 
-      if (failureContext) {
-        await publishApprovalExecutionFailedNotification({
-          organizationId: auth.organization.id,
-          outletId: failureContext.outletId,
-          approvalId,
-          kind,
-          requestedById: failureContext.requestedById,
-          approvedById: failureContext.approvedById,
-          executedById: auth.user.id,
-          saleId,
-          invoiceNumber: failureContext.invoiceNumber,
-          errorMessage: message,
-        });
-      }
-    } catch (notificationError) {
-      console.error("Failed to create reversal execution failure notification", {
-        saleId,
-        approvalId,
-        notificationError,
-      });
-    }
+    const shiftMessage = result.cashRefundAmount > 0 && result.refundShiftId
+      ? " Refund cash dicatat pada shift register yang sedang open."
+      : "";
+    const returnWorkflowMessage = kind === "refund" && result.returnCaseId
+      ? ` ${result.pendingReturnItemCount} item menunggu penerimaan fisik dan pemeriksaan retur.`
+      : "";
 
     redirectAdminSaleDetailWithFeedback({
-      saleId,
-      returnTo,
-      type: "error",
-      message,
+      saleId, returnTo, type: "success",
+      message: kind === "void"
+        ? `Transaksi ${result.invoiceNumber} berhasil dibatalkan.${shiftMessage}`
+        : `Refund penuh ${result.invoiceNumber} berhasil diproses.${shiftMessage}${returnWorkflowMessage}`,
     });
+  } catch (error) {
+    const message = error instanceof SaleReversalTransactionError
+      ? error.message
+      : `Koreksi transaksi gagal karena kendala sistem. Tidak ada perubahan finansial yang disimpan.`;
+    console.error("Failed to execute direct sale correction", { saleId, error });
+    redirectAdminSaleDetailWithFeedback({ saleId, returnTo, type: "error", message });
   }
-
-  revalidatePath("/admin");
-  revalidatePath("/admin/penjualan");
-  revalidatePath(`/admin/penjualan/${saleId}`);
-  revalidatePath("/admin/inventaris");
-  revalidatePath("/admin/operasional/kas");
-  revalidatePath("/admin/operasional/shift");
-  revalidatePath("/admin/operasional/approval");
-  revalidatePath("/pos");
-
-  const replayMessage = result.idempotentReplay
-    ? " Request sebelumnya sudah berhasil dan hasil yang sama dikembalikan tanpa membuat reversal kedua."
-    : "";
-  const shiftMessage =
-    result.cashRefundAmount > 0 && result.refundShiftId
-      ? " Refund cash dicatat pada shift register yang sedang open, bukan shift transaksi lama."
-      : "";
-
-  const returnWorkflowMessage =
-    kind === "refund" && result.returnCaseId
-      ? ` ${result.pendingReturnItemCount} item menunggu penerimaan fisik dan pemeriksaan sebelum dapat kembali ke stok.`
-      : "";
-
-  redirectAdminSaleDetailWithFeedback({
-    saleId,
-    returnTo,
-    type: "success",
-    message:
-      kind === "void"
-        ? `Void ${result.invoiceNumber} berhasil dieksekusi secara atomik.${shiftMessage}${replayMessage}`
-        : `Refund penuh ${result.invoiceNumber} berhasil dieksekusi secara atomik.${shiftMessage}${returnWorkflowMessage}${replayMessage}`,
-  });
-}
-
-export async function executeApprovedSaleVoidAction(formData: FormData) {
-  return executeApprovedSaleReversalAction({ formData, kind: "void" });
-}
-
-export async function executeApprovedSaleRefundAction(formData: FormData) {
-  return executeApprovedSaleReversalAction({ formData, kind: "refund" });
 }
 
 export async function reprintAdminReceiptCertificateAction(

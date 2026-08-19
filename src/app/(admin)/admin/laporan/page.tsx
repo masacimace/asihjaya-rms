@@ -585,7 +585,7 @@ function OperationalSnapshot({ data }: { data: ReportSummaryData }) {
         Status hari ini
       </h2>
       <p className="mt-1 text-sm text-[var(--muted)]">
-        Snapshot cepat dari shift, approval, stok, dan retur.
+        Snapshot cepat dari shift, stok, dan retur.
       </p>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -595,12 +595,6 @@ function OperationalSnapshot({ data }: { data: ReportSummaryData }) {
             value: formatInteger(data.summary.activeShiftCount),
             icon: Landmark,
             href: "/admin/operasional/shift",
-          },
-          {
-            label: "Approval pending",
-            value: formatInteger(data.summary.pendingApprovalCount),
-            icon: ShieldCheck,
-            href: "/admin/operasional/approval",
           },
           {
             label: "Stok tersedia",

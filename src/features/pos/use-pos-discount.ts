@@ -5,9 +5,6 @@ import { useState } from "react";
 import type {
   PosAvailableItem,
   PosDiscountApproval,
-  PosDiscountApprovalActionResult,
-  PosDiscountApprovalPayload,
-  PosDiscountApprovalStatusResult,
 } from "@/features/pos/contracts";
 import { parsePaymentAmountInput } from "@/features/pos/payment-draft";
 import {
@@ -23,12 +20,6 @@ type UsePosDiscountInput = {
   paymentCount: number;
   hasRegister: boolean;
   hasActiveShift: boolean;
-  requestDiscountApproval?: (
-    payload: PosDiscountApprovalPayload,
-  ) => Promise<PosDiscountApprovalActionResult>;
-  getDiscountApprovalStatus?: (
-    approvalId: string,
-  ) => Promise<PosDiscountApprovalStatusResult>;
 };
 
 type PosDiscountSideEffects = {

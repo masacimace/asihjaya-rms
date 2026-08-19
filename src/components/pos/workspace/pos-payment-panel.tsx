@@ -10,16 +10,13 @@ import {
 
 import type {
   PosCustomerOption,
-  PosManualPaymentApproval,
   PosManualPaymentMethod,
-  PosManualPaymentPolicy,
   PosManualPaymentProfile,
 } from "@/features/pos/contracts";
 import {
   formatCurrency,
   formatRupiahInput,
   paymentMethodConfigs,
-  type PaymentVerificationFormState,
   type PosPaymentDraft,
 } from "@/features/pos/payment-draft";
 import { getPosPaymentPanelState } from "@/features/pos/payment-panel-state";
@@ -38,36 +35,21 @@ export type PosPaymentPanelProps = {
   customerDepositUsedInput: string;
   customerDepositInInput: string;
   paymentProfiles: PosManualPaymentProfile[];
-  paymentPolicies: PosManualPaymentPolicy[];
   selectedMethod: PosManualPaymentMethod;
   selectedProfileId: string;
-  verificationConfirmed: boolean;
   amountInput: string;
-  referenceInput: string;
   noteInput: string;
-  verificationForm: PaymentVerificationFormState;
-  evidenceFileName: string | null;
-  manualPaymentApproval: PosManualPaymentApproval | null;
   paymentFeedback: string | null;
   canFinalizePayment: boolean;
   isCheckoutPending: boolean;
   isAddingPayment: boolean;
-  isApprovalChecking: boolean;
   onBackToCart: () => void;
   onMethodChange: (method: PosManualPaymentMethod) => void;
   onProfileChange: (profileId: string) => void;
-  onVerificationConfirmedChange: (confirmed: boolean) => void;
   onAmountInputChange: (value: string) => void;
   onCustomerDepositUsedInputChange: (value: string) => void;
   onCustomerDepositInInputChange: (value: string) => void;
-  onReferenceInputChange: (value: string) => void;
   onNoteInputChange: (value: string) => void;
-  onVerificationFormChange: (
-    field: keyof PaymentVerificationFormState,
-    value: string,
-  ) => void;
-  onEvidenceFileChange: (file: File | null) => void;
-  onCheckManualPaymentApproval: () => void;
   onAddPayment: () => void;
   onRemovePayment: (paymentId: string) => void;
   onResetPayments: () => void;
@@ -88,33 +70,21 @@ export function PosPaymentPanel({
   customerDepositUsedInput,
   customerDepositInInput,
   paymentProfiles,
-  paymentPolicies,
   selectedMethod,
   selectedProfileId,
-  verificationConfirmed,
   amountInput,
-  referenceInput,
   noteInput,
-  verificationForm,
-  evidenceFileName,
-  manualPaymentApproval,
   paymentFeedback,
   canFinalizePayment,
   isCheckoutPending,
   isAddingPayment,
-  isApprovalChecking,
   onBackToCart,
   onMethodChange,
   onProfileChange,
-  onVerificationConfirmedChange,
   onAmountInputChange,
   onCustomerDepositUsedInputChange,
   onCustomerDepositInInputChange,
-  onReferenceInputChange,
   onNoteInputChange,
-  onVerificationFormChange,
-  onEvidenceFileChange,
-  onCheckManualPaymentApproval,
   onAddPayment,
   onRemovePayment,
   onResetPayments,
@@ -142,27 +112,14 @@ export function PosPaymentPanel({
     paymentsCount: payments.length,
     customerDepositBalance,
     paymentProfiles,
-    paymentPolicies,
-    selectedMethod,
+      selectedMethod,
     selectedProfileId,
     amountInput,
     isCheckoutPending,
     isAddingPayment,
   });
 
-  // Kontrak legacy ini tetap diterima sementara agar recovery state lama tidak
-  // putus sebelum cleanup final. R1 tidak lagi menampilkan atau memakainya.
-  void verificationConfirmed;
-  void referenceInput;
-  void verificationForm;
-  void evidenceFileName;
-  void manualPaymentApproval;
-  void isApprovalChecking;
-  void onVerificationConfirmedChange;
-  void onReferenceInputChange;
-  void onVerificationFormChange;
-  void onEvidenceFileChange;
-  void onCheckManualPaymentApproval;
+
 
   return (
     <div className="flex min-h-full flex-col bg-white p-4 sm:p-5">

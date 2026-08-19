@@ -66,7 +66,6 @@ export type ReportSummaryData = {
     voidRefundImpact: number;
     voidRefundCount: number;
     activeShiftCount: number;
-    pendingApprovalCount: number;
     availableStockCount: number;
     stockReturnCount: number;
   };

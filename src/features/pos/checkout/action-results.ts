@@ -1,7 +1,4 @@
-import type {
-  PosCheckoutActionResult,
-  PosManualPaymentApproval,
-} from "@/features/pos/contracts";
+import type { PosCheckoutActionResult } from "@/features/pos/contracts";
 import { POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS } from "@/features/pos/checkout/constants";
 
 export function checkoutFailure(
@@ -47,16 +44,5 @@ export function checkoutProcessing(
     message,
     idempotencyKey,
     retryAfterMs: POS_CHECKOUT_RECOVERY_RETRY_AFTER_MS,
-  };
-}
-
-export function checkoutApprovalRequired(
-  approval: PosManualPaymentApproval,
-  message: string,
-): PosCheckoutActionResult {
-  return {
-    status: "approval_required",
-    message,
-    approval,
   };
 }

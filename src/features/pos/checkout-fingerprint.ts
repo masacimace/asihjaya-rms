@@ -42,10 +42,6 @@ function canonicalizeCheckoutPayload(payload: PosCheckoutPayload) {
 
   const customerDepositUsedAmount = payload.customerDepositUsedAmount ?? 0;
   const customerDepositInAmount = payload.customerDepositInAmount ?? 0;
-  const manualPaymentApprovalId = normalizeFingerprintText(
-    payload.manualPaymentApprovalId,
-  );
-
   return {
     itemIds: [...new Set(payload.itemIds)].sort(),
     payments,
@@ -56,7 +52,6 @@ function canonicalizeCheckoutPayload(payload: PosCheckoutPayload) {
     discountReason: normalizeFingerprintText(payload.discountReason),
     ...(customerDepositUsedAmount > 0 ? { customerDepositUsedAmount } : {}),
     ...(customerDepositInAmount > 0 ? { customerDepositInAmount } : {}),
-    ...(manualPaymentApprovalId ? { manualPaymentApprovalId } : {}),
   };
 }
 

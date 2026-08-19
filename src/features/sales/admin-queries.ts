@@ -17,7 +17,6 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db";
 import {
-  approvals,
   auditLogs,
   customers,
   customerDepositLedger,
@@ -50,9 +49,6 @@ import {
   getStartOfBusinessMonth,
 } from "@/lib/time/business-time";
 
-const approvalRequestedByUsers = alias(users, "sales_detail_approval_requested_by_users");
-const approvalApprovedByUsers = alias(users, "sales_detail_approval_approved_by_users");
-const approvalExecutedByUsers = alias(users, "sales_detail_approval_executed_by_users");
 const paymentCoVerifiedByUsers = alias(users, "sales_detail_payment_co_verified_by_users");
 
 function createSalesPeriod(
@@ -160,52 +156,6 @@ function getPaymentMetadataNumber(metadata: PaymentMetadata, key: string) {
   return null;
 }
 
-
-function getApprovalRequestDataString(
-  requestData: Record<string, unknown>,
-  key: string,
-) {
-  const value = requestData[key];
-
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : null;
-}
-
-function getSensitiveApprovalExecutionStatus({
-  approvalType,
-  columnStatus,
-  requestData,
-}: {
-  approvalType: "void_receipt" | "refund_transaction";
-  columnStatus: "not_started" | "executing" | "completed" | "failed" | "cancelled";
-  requestData: Record<string, unknown>;
-}) {
-  if (columnStatus === "executing") return "executing" as const;
-  if (columnStatus === "failed") return "failed" as const;
-  if (columnStatus === "cancelled") return "cancelled" as const;
-
-  if (columnStatus === "completed") {
-    return approvalType === "void_receipt"
-      ? ("void_executed" as const)
-      : ("refund_executed" as const);
-  }
-
-  const legacyValue = getApprovalRequestDataString(
-    requestData,
-    "executionStatus",
-  );
-
-  if (
-    legacyValue === "void_executed" ||
-    legacyValue === "refund_executed" ||
-    legacyValue === "cancelled"
-  ) {
-    return legacyValue;
-  }
-
-  return "awaiting_r3c_2" as const;
-}
 
 function getPaymentMetadataStringRecord(
   metadata: PaymentMetadata,
@@ -1059,7 +1009,6 @@ export async function getAdminSaleDetailData({
     customerDepositRows,
     itemRows,
     hardwareJobRows,
-    approvalRows,
     auditLogRows,
   ] = await Promise.all([
     db
@@ -1165,47 +1114,6 @@ export async function getAdminSaleDetailData({
 
     db
       .select({
-        id: approvals.id,
-        type: approvals.type,
-        status: approvals.status,
-        requestedByName: approvalRequestedByUsers.fullName,
-        approvedByName: approvalApprovedByUsers.fullName,
-        notes: approvals.notes,
-        responseNotes: approvals.responseNotes,
-        createdAt: approvals.createdAt,
-        resolvedAt: approvals.resolvedAt,
-        requestData: approvals.requestData,
-        executionStatus: approvals.executionStatus,
-        executionError: approvals.executionError,
-        executedAt: approvals.executedAt,
-        executedByName: approvalExecutedByUsers.fullName,
-      })
-      .from(approvals)
-      .innerJoin(
-        approvalRequestedByUsers,
-        eq(approvals.requestedBy, approvalRequestedByUsers.id),
-      )
-      .leftJoin(
-        approvalApprovedByUsers,
-        eq(approvals.approvedBy, approvalApprovedByUsers.id),
-      )
-      .leftJoin(
-        approvalExecutedByUsers,
-        eq(approvals.executedBy, approvalExecutedByUsers.id),
-      )
-      .where(
-        and(
-          eq(approvals.organizationId, auth.organization.id),
-          eq(approvals.referenceType, "sale"),
-          eq(approvals.referenceId, sale.id),
-          inArray(approvals.type, ["void_receipt", "refund_transaction"]),
-        ),
-      )
-      .orderBy(desc(approvals.createdAt))
-      .limit(8),
-
-    db
-      .select({
         id: auditLogs.id,
         action: auditLogs.action,
         entityType: auditLogs.entityType,
@@ -1287,7 +1195,7 @@ export async function getAdminSaleDetailData({
           {
             id: "voided",
             label: "Transaksi void",
-            description: "Transaksi sudah dibatalkan penuh setelah approval void disetujui.",
+            description: "Transaksi sudah dibatalkan penuh melalui koreksi langsung.",
             createdAt: sale.cancelledAt,
             tone: "danger" as const,
           },
@@ -1426,28 +1334,6 @@ export async function getAdminSaleDetailData({
       cancelledAt: job.cancelledAt,
     })),
     auditLogs: auditLogRows,
-    sensitiveApprovals: approvalRows.map((approval) => ({
-      id: approval.id,
-      type: approval.type as "void_receipt" | "refund_transaction",
-      status: approval.status,
-      requestedByName: approval.requestedByName,
-      approvedByName: approval.approvedByName,
-      notes: approval.notes,
-      responseNotes: approval.responseNotes,
-      createdAt: approval.createdAt,
-      resolvedAt: approval.resolvedAt,
-      requestData: approval.requestData,
-      executionStatus: getSensitiveApprovalExecutionStatus({
-        approvalType: approval.type as "void_receipt" | "refund_transaction",
-        columnStatus: approval.executionStatus,
-        requestData: approval.requestData,
-      }),
-      executionError: approval.executionError,
-      executedAt: approval.executedAt,
-      executedByName:
-        approval.executedByName ??
-        getApprovalRequestDataString(approval.requestData, "executedByName"),
-    })),
     timeline,
     receiptCertificate: {
       isReady: sale.status === "completed",

@@ -5,11 +5,9 @@ import {
   Boxes,
   ChevronDown,
   ChevronRight,
-  ClipboardCheck,
   FileSpreadsheet,
   Gem,
   LayoutDashboard,
-  Landmark,
   Menu,
   ReceiptText,
   ScanBarcode,
@@ -35,9 +33,7 @@ import {
 import { UserMenu } from "@/components/auth/user-menu";
 import { AdminSoundEffects } from "@/components/layout/admin-sound-effects";
 import { CameraScannerModal } from "@/components/scanner/camera-scanner-modal";
-import { ApprovalDrawer } from "@/components/layout/approval-drawer";
 import { NotificationDrawer } from "@/components/layout/notification-drawer";
-import type { AdminApprovalDrawerData } from "@/features/approvals/contracts";
 import type { AdminNotificationDrawerData } from "@/features/notifications/contracts";
 import { cn } from "@/lib/utils";
 
@@ -49,10 +45,7 @@ type AdminShellUser = {
   canAccessProducts: boolean;
   canAccessInventory: boolean;
   canAccessMigration: boolean;
-  canAccessApprovals: boolean;
   canAccessSettings: boolean;
-  canAccessReconciliation: boolean;
-  canImportReconciliation: boolean;
 };
 
 type NavigationItem = {
@@ -64,8 +57,7 @@ type NavigationItem = {
     | "products"
     | "inventory"
     | "migration"
-    | "settings"
-    | "reconciliation";
+    | "settings";
   children?: { label: string; href: string }[];
 };
 
@@ -104,27 +96,11 @@ const navigation: NavigationItem[] = [
     icon: UsersRound,
   },
   {
-    label: "Outlet Financial",
-    icon: Landmark,
-    access: "reconciliation",
-    children: [
-      {
-        label: "Status Pembayaran",
-        href: "/admin/keuangan/rekonsiliasi",
-      },
-      {
-        label: "Import Settlement",
-        href: "/admin/keuangan/rekonsiliasi/import",
-      },
-    ],
-  },
-  {
     label: "Operasional",
     icon: Store,
     children: [
       { label: "Shift Kasir", href: "/admin/operasional/shift" },
       { label: "Laporan Outlet", href: "/admin/laporan" },
-      //{ label: "Riwayat Approval", href: "/admin/operasional/approval" },
       { label: "Pergerakan Kas", href: "/admin/operasional/kas" },
       { label: "Hardware Hub", href: "/admin/operasional/hardware" },
     ],
@@ -228,10 +204,7 @@ type SidebarContentProps = {
   canAccessProducts: boolean;
   canAccessInventory: boolean;
   canAccessMigration: boolean;
-  canAccessApprovals: boolean;
   canAccessSettings: boolean;
-  canAccessReconciliation: boolean;
-  canImportReconciliation: boolean;
   onNavigate?: () => void;
   showBrand?: boolean;
   showPosCta?: boolean;
@@ -250,10 +223,7 @@ function SidebarContent({
   canAccessProducts,
   canAccessInventory,
   canAccessMigration,
-  canAccessApprovals,
   canAccessSettings,
-  canAccessReconciliation,
-  canImportReconciliation,
   onNavigate,
   showBrand = true,
   showPosCta = true,
@@ -279,9 +249,6 @@ function SidebarContent({
       return canAccessSettings;
     }
 
-    if (item.access === "reconciliation") {
-      return canAccessReconciliation;
-    }
 
     return true;
   });
@@ -292,21 +259,7 @@ function SidebarContent({
       <nav className="space-y-1">
         {visibleNavigation.map(({ label, href, icon: Icon, children }) => {
           if (children) {
-            const visibleChildren = children.filter((child) => {
-              if (
-                child.href === "/admin/operasional/approval" &&
-                !canAccessApprovals
-              ) {
-                return false;
-              }
-              if (
-                child.href === "/admin/keuangan/rekonsiliasi/import" &&
-                !canImportReconciliation
-              ) {
-                return false;
-              }
-              return true;
-            });
+            const visibleChildren = children;
             const isChildActive = visibleChildren.some((child) =>
               isNavigationActive(pathname, child.href),
             );
@@ -396,12 +349,10 @@ function SidebarContent({
 export function AdminShell({
   children,
   user,
-  approvalDrawerData,
   notificationDrawerData,
 }: {
   children: ReactNode;
   user: AdminShellUser;
-  approvalDrawerData: AdminApprovalDrawerData;
   notificationDrawerData: AdminNotificationDrawerData;
 }) {
   const pathname = usePathname();
@@ -410,11 +361,7 @@ export function AdminShell({
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [isApprovalOpen, setIsApprovalOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [approvalPendingCount, setApprovalPendingCount] = useState(
-    approvalDrawerData.pendingCount,
-  );
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(
     notificationDrawerData.unreadCount,
   );
@@ -467,10 +414,7 @@ export function AdminShell({
           canAccessProducts={user.canAccessProducts}
           canAccessInventory={user.canAccessInventory}
           canAccessMigration={user.canAccessMigration}
-          canAccessApprovals={user.canAccessApprovals}
           canAccessSettings={user.canAccessSettings}
-          canAccessReconciliation={user.canAccessReconciliation}
-          canImportReconciliation={user.canImportReconciliation}
         />
       </aside>
 
@@ -509,11 +453,8 @@ export function AdminShell({
                 canAccessProducts={user.canAccessProducts}
                 canAccessInventory={user.canAccessInventory}
                 canAccessMigration={user.canAccessMigration}
-                canAccessApprovals={user.canAccessApprovals}
-                canAccessSettings={user.canAccessSettings}
-                canAccessReconciliation={user.canAccessReconciliation}
-                canImportReconciliation={user.canImportReconciliation}
-                onNavigate={() => setIsMobileMenuOpen(false)}
+                      canAccessSettings={user.canAccessSettings}
+                            onNavigate={() => setIsMobileMenuOpen(false)}
                 showBrand={false}
                 showPosCta={false}
               />
@@ -585,22 +526,6 @@ export function AdminShell({
           </Link>
 
           <div className="relative z-[60] ml-auto flex min-w-0 shrink-0 items-center sm:gap-1">
-            {user.canAccessApprovals ? (
-              <button
-                type="button"
-                aria-label="Persetujuan"
-                onClick={() => setIsApprovalOpen(true)}
-                className="relative grid size-9 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
-              >
-                <ClipboardCheck className="size-5" />
-                {approvalPendingCount > 0 ? (
-                  <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-red-600 text-[10px] font-bold text-white">
-                    {approvalPendingCount > 9 ? "9+" : approvalPendingCount}
-                  </span>
-                ) : null}
-              </button>
-            ) : null}
-
             <button
               type="button"
               aria-label="Notifikasi"
@@ -631,13 +556,8 @@ export function AdminShell({
       </div>
 
       <AdminSoundEffects
-        initialApprovalPendingCount={approvalDrawerData.pendingCount}
         initialNotificationUnreadCount={notificationDrawerData.unreadCount}
-        onCountsChange={({
-          approvalPendingCount: nextApprovalCount,
-          notificationUnreadCount: nextNotificationCount,
-        }) => {
-          setApprovalPendingCount(nextApprovalCount);
+        onCountsChange={({ notificationUnreadCount: nextNotificationCount }) => {
           setNotificationUnreadCount(nextNotificationCount);
           refreshDrawerData();
         }}
@@ -651,14 +571,6 @@ export function AdminShell({
           setIsScannerOpen(false);
         }}
       />
-
-      {user.canAccessApprovals ? (
-        <ApprovalDrawer
-          isOpen={isApprovalOpen}
-          onClose={() => setIsApprovalOpen(false)}
-          data={approvalDrawerData}
-        />
-      ) : null}
 
       <NotificationDrawer
         key={notificationDrawerVersion}

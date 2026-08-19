@@ -20,7 +20,6 @@ import {
   hardwareAgents,
   hardwareJobs,
   itemBarcodes,
-  manualPaymentPolicies,
   manualPaymentProfiles,
   outlets,
   payments,
@@ -40,10 +39,6 @@ import {
   getStartOfBusinessDay,
 } from "@/lib/time/business-time";
 import {
-  DEFAULT_MANUAL_PAYMENT_POLICIES,
-  isNonCashManualPaymentMethod,
-} from "@/features/pos/manual-payment-verification";
-import {
   DEFAULT_POS_REGISTER_MISSING_MESSAGE,
   getDefaultPosRegisterCondition,
 } from "@/features/pos/context";
@@ -55,7 +50,6 @@ import {
   type PosHeldCartItem,
   type PosHeldCartListData,
   type PosInitialData,
-  type PosManualPaymentPolicy,
   type PosManualPaymentProfile,
   type PosManualPaymentVerificationSource,
   type PosScanLookupResult,
@@ -247,7 +241,6 @@ export async function getPosInitialData({
       items: [],
       customers: [],
       paymentProfiles: [],
-      paymentPolicies: Object.values(DEFAULT_MANUAL_PAYMENT_POLICIES),
     };
   }
 
@@ -281,7 +274,6 @@ export async function getPosInitialData({
       items: [],
       customers: [],
       paymentProfiles: [],
-      paymentPolicies: Object.values(DEFAULT_MANUAL_PAYMENT_POLICIES),
     };
   }
 
@@ -452,7 +444,7 @@ export async function getPosInitialData({
   const register = registerRows[0] ?? null;
   const currentBusinessDate = getBusinessDateKey(new Date(), timezone);
 
-  const [activeShiftRows, reopenCandidateRows, paymentProfileRows, paymentPolicyRows] =
+  const [activeShiftRows, reopenCandidateRows, paymentProfileRows] =
     await Promise.all([
       register
         ? db
@@ -532,32 +524,9 @@ export async function getPosInitialData({
           asc(manualPaymentProfiles.displayOrder),
           asc(manualPaymentProfiles.name),
         ),
-      db
-        .select({
-          method: manualPaymentPolicies.method,
-          coVerificationThreshold:
-            manualPaymentPolicies.coVerificationThreshold,
-          evidenceThreshold: manualPaymentPolicies.evidenceThreshold,
-          duplicateLookbackDays: manualPaymentPolicies.duplicateLookbackDays,
-          isEnabled: manualPaymentPolicies.isEnabled,
-        })
-        .from(manualPaymentPolicies)
-        .where(eq(manualPaymentPolicies.organizationId, organizationId)),
     ]);
 
-  const paymentPolicies = structuredClone(DEFAULT_MANUAL_PAYMENT_POLICIES);
 
-  for (const row of paymentPolicyRows) {
-    if (!isNonCashManualPaymentMethod(row.method)) continue;
-
-    paymentPolicies[row.method] = {
-      method: row.method,
-      coVerificationThreshold: Number(row.coVerificationThreshold),
-      evidenceThreshold: Number(row.evidenceThreshold),
-      duplicateLookbackDays: row.duplicateLookbackDays,
-      isEnabled: row.isEnabled,
-    };
-  }
 
   const paymentProfiles = paymentProfileRows
     .filter(
@@ -619,9 +588,6 @@ export async function getPosInitialData({
       };
     }),
     paymentProfiles,
-    paymentPolicies: Object.values(
-      paymentPolicies,
-    ) satisfies PosManualPaymentPolicy[],
   } satisfies PosInitialData;
 }
 

@@ -2,7 +2,6 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
-  manualPaymentPolicies,
   manualPaymentProfiles,
   outlets,
   registers,
@@ -11,10 +10,6 @@ import type {
   ManualPaymentSettingsData,
   ManualPaymentSettingsProfile,
 } from "@/features/settings/manual-payment-contracts";
-import {
-  DEFAULT_MANUAL_PAYMENT_POLICIES,
-  isNonCashManualPaymentMethod,
-} from "@/features/pos/manual-payment-verification";
 import type {
   PosManualPaymentProfileType,
   PosManualPaymentVerificationSource,
@@ -37,7 +32,7 @@ function isVerificationSource(
 export async function getManualPaymentSettingsData(
   organizationId: string,
 ): Promise<ManualPaymentSettingsData> {
-  const [outletRows, registerRows, profileRows, policyRows] = await Promise.all([
+  const [outletRows, registerRows, profileRows] = await Promise.all([
     db
       .select({
         id: outlets.id,
@@ -97,17 +92,6 @@ export async function getManualPaymentSettingsData(
         asc(manualPaymentProfiles.displayOrder),
         asc(manualPaymentProfiles.name),
       ),
-    db
-      .select({
-        method: manualPaymentPolicies.method,
-        coVerificationThreshold:
-          manualPaymentPolicies.coVerificationThreshold,
-        evidenceThreshold: manualPaymentPolicies.evidenceThreshold,
-        duplicateLookbackDays: manualPaymentPolicies.duplicateLookbackDays,
-        isEnabled: manualPaymentPolicies.isEnabled,
-      })
-      .from(manualPaymentPolicies)
-      .where(eq(manualPaymentPolicies.organizationId, organizationId)),
   ]);
 
   const profiles = profileRows
@@ -126,19 +110,7 @@ export async function getManualPaymentSettingsData(
         }) satisfies ManualPaymentSettingsProfile,
     );
 
-  const policyMap = structuredClone(DEFAULT_MANUAL_PAYMENT_POLICIES);
 
-  for (const row of policyRows) {
-    if (!isNonCashManualPaymentMethod(row.method)) continue;
-
-    policyMap[row.method] = {
-      method: row.method,
-      coVerificationThreshold: Number(row.coVerificationThreshold),
-      evidenceThreshold: Number(row.evidenceThreshold),
-      duplicateLookbackDays: row.duplicateLookbackDays,
-      isEnabled: row.isEnabled,
-    };
-  }
 
   return {
     outlets: outletRows.map((outlet) => ({
@@ -148,6 +120,5 @@ export async function getManualPaymentSettingsData(
         .map(({ id, code, name }) => ({ id, code, name })),
     })),
     profiles,
-    policies: Object.values(policyMap),
   };
 }

@@ -44,7 +44,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
       disabled={disabled || pending}
       className="mt-5 inline-flex h-10 items-center justify-center rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
     >
-      {pending ? "Mengajukan..." : "Ajukan"}
+      {pending ? "Memproses..." : "Tarik tunai"}
     </button>
   );
 }
@@ -54,7 +54,7 @@ export function CustomerDepositWithdrawalRequestForm({
   customerId,
   maxAmount,
   outletId,
-  title = "Ajukan tarik tunai",
+  title = "Tarik tunai",
 }: CustomerDepositWithdrawalRequestFormProps) {
   const [amountInput, setAmountInput] = useState("");
   const amount = Number(amountInput || 0);
@@ -68,7 +68,7 @@ export function CustomerDepositWithdrawalRequestForm({
     }
 
     if (amount > 0) {
-      return `Nominal yang diajukan: ${formatMoney(amount)}.`;
+      return `Nominal yang akan ditarik: ${formatMoney(amount)}.`;
     }
 
     return "Ketik nominal tanpa titik/koma, sistem akan memformat otomatis.";
@@ -124,8 +124,7 @@ export function CustomerDepositWithdrawalRequestForm({
         />
       </label>
       <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-        Approval ini belum mengubah saldo. Saldo baru berkurang setelah approval
-        disetujui dan dieksekusi.
+        Penarikan akan langsung mengurangi saldo Dana Titip dan expected cash pada shift outlet yang sedang terbuka. Tidak ada approval lanjutan.
       </p>
     </form>
   );

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import {
-  checkoutApprovalRequired,
   checkoutFailure,
   checkoutProcessing,
   checkoutSuccess,
@@ -17,7 +16,6 @@ import {
   isManualPaymentMethod,
 } from "@/features/pos/checkout/payment-methods";
 import { normalizeCheckoutPayments } from "@/features/pos/checkout/payment-normalization";
-import { DEFAULT_MANUAL_PAYMENT_POLICIES } from "@/features/pos/manual-payment-verification";
 
 const firstFingerprint = createPosCartFingerprint({
   outletId: "outlet-1",
@@ -72,9 +70,6 @@ const normalizedCash = normalizeCheckoutPayments({
     },
   ],
   paymentProfilesById: new Map(),
-  organizationId: "organization-1",
-  policies: structuredClone(DEFAULT_MANUAL_PAYMENT_POLICIES),
-  verificationNowIso: "2026-08-02T00:00:00.000Z",
 });
 
 assert.deepEqual(normalizedCash, [
@@ -112,14 +107,11 @@ assert.throws(
         },
       ],
       paymentProfilesById: new Map(),
-      organizationId: "organization-1",
-      policies: structuredClone(DEFAULT_MANUAL_PAYMENT_POLICIES),
-      verificationNowIso: "2026-08-02T00:00:00.000Z",
     }),
   (error: unknown) =>
     error instanceof CheckoutValidationError &&
     error.message ===
-      "Nominal kembalian cash tidak sesuai dengan uang diterima.",
+      "Cash: nominal kembalian tidak sesuai dengan uang diterima.",
 );
 
 assert.deepEqual(checkoutFailure("Tidak valid", { payments: "Periksa" }), {
@@ -150,23 +142,6 @@ const success = checkoutSuccess({
 });
 assert.equal(success.status, "success");
 
-const approvalRequired = checkoutApprovalRequired(
-  {
-    id: "approval-1",
-    status: "pending",
-    reason: "Perlu verifikasi",
-    responseNotes: null,
-    createdAtIso: "2026-08-02T00:00:00.000Z",
-    resolvedAtIso: null,
-  },
-  "Menunggu approval",
-);
-if (approvalRequired.status !== "approval_required") {
-  throw new Error(
-    `Expected approval_required result, received ${approvalRequired.status}.`,
-  );
-}
 
-assert.equal(approvalRequired.approval.id, "approval-1");
 
 console.log("POS checkout service boundary checks passed.");

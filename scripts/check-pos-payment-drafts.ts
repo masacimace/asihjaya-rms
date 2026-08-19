@@ -4,7 +4,6 @@ import type { PosManualPaymentProfile } from "@/features/pos/contracts";
 import {
   createCheckoutIdempotencyKey,
   createPaymentDraftId,
-  createPaymentVerificationForm,
   formatCurrency,
   formatRupiahInput,
   getPaymentConfig,
@@ -41,15 +40,6 @@ assert.equal(getPaymentConfig("debit_card").requiresReference, false);
 assert.equal(profileSupportsMethod(edcProfile, "cash"), false);
 assert.equal(profileSupportsMethod(edcProfile, "debit_card"), true);
 assert.deepEqual(getProfilesForMethod([edcProfile], "bank_transfer"), []);
-
-const verificationForm = createPaymentVerificationForm(
-  "debit_card",
-  edcProfile,
-);
-assert.equal(verificationForm.verificationSource, "edc_terminal");
-assert.equal(verificationForm.merchantId, "MID-001");
-assert.equal(verificationForm.terminalId, "TID-001");
-assert.match(verificationForm.providerPaidAtLocal, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
 
 assert.equal(parseAmount("1500000"), 1_500_000);
 assert.equal(parseAmount("invalid"), 0);
@@ -105,7 +95,7 @@ const debitDraft: PosPaymentDraft = {
   provider: edcProfile.provider,
   reference: null,
   note: null,
-  verificationSource: "edc_terminal",
+  verificationSource: null,
   providerPaidAtIso: null,
   evidenceKey: null,
   evidenceFileName: null,

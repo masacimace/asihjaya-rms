@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import { requestCustomerDepositWithdrawalApprovalAction } from "@/app/actions/customer-deposits";
+import { withdrawCustomerDepositAction } from "@/app/actions/customer-deposits";
 import { CustomerDepositWithdrawalRequestForm } from "@/components/customer-deposits/customer-deposit-withdrawal-request-form";
 import { CustomerHistoryAccessCard } from "@/components/customers/customer-history-access-card";
 import {
@@ -486,8 +486,8 @@ function CustomerDepositPanel({ data }: { data: AdminCustomerDetailData }) {
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
             Saldo ditampilkan per outlet dan tidak dapat dipakai lintas outlet.
-            Pengajuan tarik tunai Dana Titip wajib melalui approval admin sebelum
-            saldo dan kas outlet berubah.
+            User berizin dapat menarik saldo langsung; sistem akan mencatat cash out
+            pada shift outlet yang sedang terbuka.
           </p>
         </div>
 
@@ -542,32 +542,17 @@ function CustomerDepositPanel({ data }: { data: AdminCustomerDetailData }) {
                     Mutasi terakhir: {formatDateTime(balance.lastLedgerEntryAt)}
                   </p>
 
-                  {balance.pendingWithdrawalApproval ? (
-                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">
-                      <p className="font-semibold">Tarik tunai menunggu approval</p>
-                      <p className="mt-1">
-                        {formatMoney(balance.pendingWithdrawalApproval.amount)} diajukan
-                        oleh {balance.pendingWithdrawalApproval.requestedByName} pada{" "}
-                        {formatDateTime(balance.pendingWithdrawalApproval.createdAt)}.
-                      </p>
-                      <Link
-                        href="/admin/operasional/approval?type=customer_deposit_withdrawal"
-                        className="mt-2 inline-flex font-semibold text-amber-900 underline-offset-4 hover:underline"
-                      >
-                        Buka halaman approval
-                      </Link>
-                    </div>
-                  ) : balance.balance > 0 ? (
+                  {balance.balance > 0 ? (
                     <CustomerDepositWithdrawalRequestForm
-                      action={requestCustomerDepositWithdrawalApprovalAction}
+                      action={withdrawCustomerDepositAction}
                       customerId={data.customer.id}
                       outletId={balance.outletId}
                       maxAmount={Math.floor(balance.balance)}
-                      title="Ajukan tarik tunai"
+                      title="Tarik tunai"
                     />
                   ) : (
                     <p className="mt-3 rounded-xl border border-dashed border-neutral-200 bg-neutral-50 px-3 py-2 text-xs leading-5 text-[var(--muted)]">
-                      Saldo outlet ini masih Rp 0, sehingga belum bisa diajukan tarik tunai.
+                      Saldo outlet ini masih Rp 0, sehingga belum bisa ditarik tunai.
                     </p>
                   )}
                 </article>

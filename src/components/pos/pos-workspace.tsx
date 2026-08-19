@@ -6,11 +6,8 @@ import { useRouter } from "next/navigation";
 import {
   completePosCheckoutAction,
   createPosQuickCustomerAction,
-  getPosDiscountApprovalStatusAction,
-  getPosManualPaymentApprovalStatusAction,
   holdPosCartAction,
   lookupPosScanValueAction,
-  requestPosDiscountApprovalAction,
 } from "@/app/actions/pos";
 import type { PosPanelMode } from "@/components/pos/workspace/pos-mobile-side-panel";
 import {
@@ -21,7 +18,6 @@ import {
   type PosAvailableItem,
   type PosCategoryOption,
   type PosCustomerOption,
-  type PosManualPaymentPolicy,
   type PosManualPaymentProfile,
   type PosOperationalContext,
 } from "@/features/pos/contracts";
@@ -59,7 +55,6 @@ type PosWorkspaceProps = {
   items: PosAvailableItem[];
   customers: PosCustomerOption[];
   paymentProfiles: PosManualPaymentProfile[];
-  paymentPolicies: PosManualPaymentPolicy[];
   context: PosOperationalContext;
   canManageShifts: boolean;
   canReopenShifts: boolean;
@@ -70,7 +65,6 @@ export function PosWorkspace({
   items,
   customers,
   paymentProfiles,
-  paymentPolicies,
   context,
   canManageShifts,
   canReopenShifts,
@@ -130,25 +124,14 @@ export function PosWorkspace({
     setPayments,
     selectedMethod,
     selectedPaymentProfileId,
-    paymentVerificationConfirmed,
-    setPaymentVerificationConfirmed,
     paymentAmountInput,
     setPaymentAmountInput,
     customerDepositUsedInput,
     setCustomerDepositUsedInput,
     customerDepositInInput,
     setCustomerDepositInInput,
-    paymentProviderInput,
-    setPaymentProviderInput,
-    paymentReferenceInput,
-    setPaymentReferenceInput,
     paymentNoteInput,
     setPaymentNoteInput,
-    paymentVerificationForm,
-    paymentEvidenceFile,
-    setPaymentEvidenceFile,
-    manualPaymentApproval,
-    setManualPaymentApproval,
     paymentFeedback,
     setPaymentFeedback,
     isAddingPayment,
@@ -159,7 +142,6 @@ export function PosWorkspace({
     restoreCheckoutPaymentState,
     selectPaymentProfile,
     changePaymentMethod,
-    updatePaymentVerificationForm,
   } = usePosPayment({ paymentProfiles });
   const {
     isHoldDialogOpen,
@@ -199,8 +181,6 @@ export function PosWorkspace({
     paymentCount: payments.length,
     hasRegister: Boolean(context.register),
     hasActiveShift: Boolean(context.activeShift),
-    requestDiscountApproval: requestPosDiscountApprovalAction,
-    getDiscountApprovalStatus: getPosDiscountApprovalStatusAction,
   });
 
   const restoreCheckoutAttempt = useCallback(
@@ -211,7 +191,6 @@ export function PosWorkspace({
         customerDepositUsedAmount:
           attempt.payload.customerDepositUsedAmount,
         customerDepositInAmount: attempt.payload.customerDepositInAmount,
-        manualPaymentApproval: attempt.manualPaymentApproval,
       });
       setPanelMode("payment");
       setIsMobileCartOpen(true);
@@ -260,8 +239,6 @@ export function PosWorkspace({
     setPaymentFeedback,
     setPaymentAmountInput,
     resetCustomerDepositDraft,
-    setPaymentProviderInput,
-    setPaymentReferenceInput,
     setPaymentNoteInput,
     setPanelMode,
     setIsMobileCartOpen,
@@ -272,18 +249,13 @@ export function PosWorkspace({
     checkoutResult,
     isCheckoutPending,
     isCheckoutRecovering,
-    isManualApprovalChecking,
     clearCheckoutResult,
     invalidateCheckoutAttempt,
     processCheckout,
-    checkManualPaymentApproval: checkManualPaymentApprovalState,
   } = usePosCheckout({
     completeCheckout: completePosCheckoutAction,
-    getManualPaymentApprovalStatus:
-      getPosManualPaymentApprovalStatusAction,
     restoreCheckoutAttempt,
     onCheckoutSuccess: handleCheckoutSuccess,
-    setManualPaymentApproval,
     setPaymentFeedback,
   });
 
@@ -577,7 +549,6 @@ export function PosWorkspace({
       );
 
       invalidateCheckoutAttempt();
-      setManualPaymentApproval(null);
       setPayments((currentPayments) => [
         ...currentPayments,
         {
@@ -626,15 +597,10 @@ export function PosWorkspace({
 
   function removePayment(paymentId: string) {
     invalidateCheckoutAttempt();
-    setManualPaymentApproval(null);
     setPayments((currentPayments) =>
       currentPayments.filter((payment) => payment.id !== paymentId),
     );
     setPaymentFeedback("Payment dihapus. Periksa kembali sisa bayar.");
-  }
-
-  function checkManualPaymentApproval() {
-    checkManualPaymentApprovalState(manualPaymentApproval);
   }
 
   function finalizePayment() {
@@ -659,7 +625,6 @@ export function PosWorkspace({
       payments,
       customerDepositUsedAmount,
       customerDepositInAmount,
-      manualPaymentApproval: null,
       customerId: selectedCustomer?.id ?? null,
       discountApproval,
       approvedDiscountAmount,
@@ -821,34 +786,22 @@ export function PosWorkspace({
         customerDepositUsedInput,
         customerDepositInInput,
         paymentProfiles,
-        paymentPolicies,
-        selectedMethod,
+              selectedMethod,
         selectedProfileId: selectedPaymentProfileId,
-        verificationConfirmed: paymentVerificationConfirmed,
         amountInput: paymentAmountInput,
-        referenceInput: paymentReferenceInput,
         noteInput: paymentNoteInput,
-        verificationForm: paymentVerificationForm,
-        evidenceFileName: paymentEvidenceFile?.name ?? null,
-        manualPaymentApproval,
         paymentFeedback,
         canFinalizePayment,
         isCheckoutPending: isCheckoutPending || isCheckoutRecovering,
         isAddingPayment,
-        isApprovalChecking: isManualApprovalChecking,
         onBackToCart: () => setPanelMode("cart"),
         onMethodChange: (method) =>
           changePaymentMethod(method, remainingAmount),
         onProfileChange: selectPaymentProfile,
-        onVerificationConfirmedChange: setPaymentVerificationConfirmed,
         onAmountInputChange: setPaymentAmountInput,
         onCustomerDepositUsedInputChange: changeCustomerDepositUsed,
         onCustomerDepositInInputChange: changeCustomerDepositIn,
-        onReferenceInputChange: setPaymentReferenceInput,
         onNoteInputChange: setPaymentNoteInput,
-        onVerificationFormChange: updatePaymentVerificationForm,
-        onEvidenceFileChange: setPaymentEvidenceFile,
-        onCheckManualPaymentApproval: checkManualPaymentApproval,
         onAddPayment: addPayment,
         onRemovePayment: removePayment,
         onResetPayments: resetPayments,

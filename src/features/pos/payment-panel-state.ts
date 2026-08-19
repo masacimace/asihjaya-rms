@@ -1,6 +1,5 @@
 import type {
   PosManualPaymentMethod,
-  PosManualPaymentPolicy,
   PosManualPaymentProfile,
 } from "@/features/pos/contracts";
 import {
@@ -18,7 +17,6 @@ export type PosPaymentPanelStateInput = {
   paymentsCount: number;
   customerDepositBalance: number;
   paymentProfiles: PosManualPaymentProfile[];
-  paymentPolicies: PosManualPaymentPolicy[];
   selectedMethod: PosManualPaymentMethod;
   selectedProfileId: string;
   amountInput: string;
@@ -35,7 +33,6 @@ export function getPosPaymentPanelState({
   paymentsCount,
   customerDepositBalance,
   paymentProfiles,
-  paymentPolicies,
   selectedMethod,
   selectedProfileId,
   amountInput,
@@ -50,11 +47,7 @@ export function getPosPaymentPanelState({
   const selectedProfile =
     eligibleProfiles.find((profile) => profile.id === selectedProfileId) ??
     null;
-  const selectedPolicy =
-    paymentPolicies.find((policy) => policy.method === selectedMethod) ?? null;
   const parsedInputAmount = parsePaymentAmountInput(amountInput);
-  const evidenceRequired = false;
-  const coVerificationRequired = false;
   const recognizedCashAmount =
     selectedMethod === "cash"
       ? Math.min(Math.max(parsedInputAmount, 0), remainingAmount)
@@ -79,10 +72,7 @@ export function getPosPaymentPanelState({
     selectedConfig,
     eligibleProfiles,
     selectedProfile,
-    selectedPolicy,
     parsedInputAmount,
-    evidenceRequired,
-    coVerificationRequired,
     recognizedCashAmount,
     cashChangeAmount,
     hasPayments,

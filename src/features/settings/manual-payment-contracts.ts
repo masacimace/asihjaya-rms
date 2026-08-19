@@ -2,7 +2,6 @@ import type {
   PosManualPaymentProfileType,
   PosManualPaymentVerificationSource,
 } from "@/features/pos/contracts";
-import type { NonCashManualPaymentMethod } from "@/features/pos/manual-payment-verification";
 
 export type ManualPaymentSettingsOutlet = {
   id: string;
@@ -35,16 +34,7 @@ export type ManualPaymentSettingsProfile = {
   isActive: boolean;
 };
 
-export type ManualPaymentSettingsPolicy = {
-  method: NonCashManualPaymentMethod;
-  coVerificationThreshold: number;
-  evidenceThreshold: number;
-  duplicateLookbackDays: number;
-  isEnabled: boolean;
-};
-
 export type ManualPaymentSettingsData = {
   outlets: ManualPaymentSettingsOutlet[];
   profiles: ManualPaymentSettingsProfile[];
-  policies: ManualPaymentSettingsPolicy[];
 };

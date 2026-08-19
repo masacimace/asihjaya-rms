@@ -1027,10 +1027,10 @@ export default async function AdminDashboardPage({
               </h2>
 
               <Link
-                href="/admin/operasional/approval"
+                href="/admin/operasional/shift"
                 className="text-xs font-medium text-[var(--accent)] hover:underline"
               >
-                Lihat approval
+                Lihat operasional
               </Link>
             </div>
 

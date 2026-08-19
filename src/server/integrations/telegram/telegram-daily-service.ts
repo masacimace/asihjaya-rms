@@ -1,7 +1,6 @@
 import { and, count, desc, eq, gte, isNull, lt, lte, sql } from "drizzle-orm";
 
 import {
-  approvals,
   customerDepositLedger,
   financeClosingSnapshots,
   payments,
@@ -65,7 +64,7 @@ async function calculateFinanceMetrics(
   transaction: TelegramRepositoryTransaction,
   input: FinalizeTelegramDailyFinanceInput,
 ) {
-  const [salesRows, itemRows, paymentRows, openingDepositRows, depositRows, heldRows, approvalRows] =
+  const [salesRows, itemRows, paymentRows, openingDepositRows, depositRows, heldRows] =
     await Promise.all([
       transaction
         .select({
@@ -134,16 +133,6 @@ async function calculateFinanceMetrics(
         .from(posHeldCarts)
         .where(and(eq(posHeldCarts.shiftId, input.shiftId), eq(posHeldCarts.status, "active"))),
 
-      transaction
-        .select({ total: count() })
-        .from(approvals)
-        .where(
-          and(
-            eq(approvals.organizationId, input.organizationId),
-            eq(approvals.outletId, input.outletId),
-            eq(approvals.status, "pending"),
-          ),
-        ),
     ]);
 
   const salesSummary = salesRows[0] ?? {
@@ -211,7 +200,7 @@ async function calculateFinanceMetrics(
     transactionCount: salesSummary.transactionCount,
     itemsSoldCount: itemSummary.itemCount,
     heldTransactionCount: heldRows[0]?.total ?? 0,
-    pendingApprovalCount: approvalRows[0]?.total ?? 0,
+    pendingApprovalCount: 0,
   };
 }
 
@@ -361,7 +350,6 @@ function buildPayloadFromPersistedSnapshot(
       transactionCount: snapshot.transactionCount,
       itemsSoldCount: snapshot.itemsSoldCount,
       heldTransactionCount: snapshot.heldTransactionCount,
-      pendingApprovalCount: snapshot.pendingApprovalCount,
     },
   });
 }

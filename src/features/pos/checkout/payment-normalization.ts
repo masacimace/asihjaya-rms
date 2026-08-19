@@ -1,8 +1,6 @@
 import type { PosCheckoutPayload } from "@/features/pos/contracts";
 import {
   getManualPaymentProfileType,
-  type ManualPaymentPolicy,
-  type NonCashManualPaymentMethod,
 } from "@/features/pos/manual-payment-verification";
 import { CheckoutValidationError } from "@/features/pos/checkout/errors";
 import {
@@ -38,22 +36,10 @@ function normalizeNullableText(
 export function normalizeCheckoutPayments({
   submittedPayments,
   paymentProfilesById,
-  organizationId,
-  policies,
-  verificationNowIso,
 }: {
   submittedPayments: PosCheckoutPayload["payments"];
   paymentProfilesById: ReadonlyMap<string, CheckoutPaymentProfile>;
-  organizationId: string;
-  policies: Record<NonCashManualPaymentMethod, ManualPaymentPolicy>;
-  verificationNowIso: string;
 }): NormalizedCheckoutPayment[] {
-  // Parameter legacy ini tetap diterima sementara sampai schema cleanup R4.
-  // Runtime POS R1 tidak lagi memakai policy/evidence/co-verification.
-  void organizationId;
-  void policies;
-  void verificationNowIso;
-
   return submittedPayments.map<NormalizedCheckoutPayment>((payment, index) => {
     const method = String(payment.method ?? "");
 

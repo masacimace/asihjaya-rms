@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 
-import type {
-  PosCheckoutActionResult,
-  PosManualPaymentApproval,
-} from "@/features/pos/contracts";
+import type { PosCheckoutActionResult } from "@/features/pos/contracts";
 import {
-  applyManualPaymentApprovalToAttempt,
   createCheckoutPayload,
   createStoredCheckoutAttempt,
   getCheckoutErrorMessage,
@@ -40,13 +36,13 @@ const cashPayment: PosPaymentDraft = {
 };
 
 const discountApproval: ActiveDiscountApproval = {
-  id: "discount-1",
+  id: "discount-direct-1",
   status: "approved",
   discountAmount: 100_000,
   reason: "Promo pelanggan",
-  responseNotes: "Disetujui",
+  responseNotes: null,
   createdAtIso: "2026-08-02T07:00:00.000Z",
-  resolvedAtIso: "2026-08-02T07:05:00.000Z",
+  resolvedAtIso: "2026-08-02T07:00:00.000Z",
 };
 
 const submission: CheckoutSubmissionInput = {
@@ -54,7 +50,6 @@ const submission: CheckoutSubmissionInput = {
   payments: [cashPayment],
   customerDepositUsedAmount: 50_000,
   customerDepositInAmount: 25_000,
-  manualPaymentApproval: null,
   customerId: "customer-1",
   discountApproval,
   approvedDiscountAmount: 100_000,
@@ -85,7 +80,7 @@ assert.deepEqual(initialPayload.payments, [
 ]);
 assert.equal(initialPayload.customerDepositUsedAmount, 50_000);
 assert.equal(initialPayload.customerDepositInAmount, 25_000);
-assert.equal(initialPayload.discountApprovalId, "discount-1");
+assert.equal(initialPayload.discountApprovalId, null);
 assert.equal(initialPayload.discountAmount, 100_000);
 assert.equal(initialPayload.discountReason, "Promo pelanggan");
 
@@ -93,10 +88,10 @@ const initialAttempt = createStoredCheckoutAttempt({
   payload: initialPayload,
   payments: submission.payments,
   discountApproval,
-  manualPaymentApproval: null,
   existingAttempt: null,
   nowIso: "2026-08-02T07:10:00.000Z",
 });
+assert.equal(initialAttempt.version, 3);
 assert.equal(initialAttempt.createdAt, "2026-08-02T07:10:00.000Z");
 assert.equal(initialAttempt.updatedAt, "2026-08-02T07:10:00.000Z");
 
@@ -110,42 +105,23 @@ const retryAttempt = createStoredCheckoutAttempt({
   payload: retryPayload,
   payments: submission.payments,
   discountApproval,
-  manualPaymentApproval: null,
   existingAttempt: initialAttempt,
   nowIso: "2026-08-02T07:15:00.000Z",
 });
 assert.equal(retryAttempt.createdAt, initialAttempt.createdAt);
 assert.equal(retryAttempt.updatedAt, "2026-08-02T07:15:00.000Z");
 
-const manualApproval: PosManualPaymentApproval = {
-  id: "approval-1",
-  status: "pending",
-  reason: "Reference pembayaran perlu diverifikasi",
-  responseNotes: null,
-  createdAtIso: "2026-08-02T07:16:00.000Z",
-  resolvedAtIso: null,
-};
-const approvalAttempt = applyManualPaymentApprovalToAttempt({
-  attempt: retryAttempt,
-  approval: manualApproval,
-  nowIso: "2026-08-02T07:17:00.000Z",
-});
-assert.equal(approvalAttempt.payload.manualPaymentApprovalId, "approval-1");
-assert.equal(approvalAttempt.manualPaymentApproval?.id, "approval-1");
-assert.equal(approvalAttempt.createdAt, initialAttempt.createdAt);
-assert.equal(approvalAttempt.updatedAt, "2026-08-02T07:17:00.000Z");
-
 assert.deepEqual(
   parseStoredCheckoutAttemptState(
-    approvalAttempt,
+    retryAttempt,
     "2026-08-02T08:00:00.000Z",
   ),
-  approvalAttempt,
+  retryAttempt,
 );
-assert.equal(parseStoredCheckoutAttemptState({ version: 1 }), null);
+assert.equal(parseStoredCheckoutAttemptState({ version: 2 }), null);
 assert.equal(
   parseStoredCheckoutAttemptState({
-    ...approvalAttempt,
+    ...retryAttempt,
     payments: [{ id: "invalid" }],
   }),
   null,
@@ -153,7 +129,7 @@ assert.equal(
 assert.equal(
   parseStoredCheckoutAttemptState(
     {
-      ...approvalAttempt,
+      ...retryAttempt,
       createdAt: null,
       updatedAt: null,
     },
@@ -230,20 +206,6 @@ assert.deepEqual(
   {
     status: "wait",
     retryAfterMs: 2_000,
-  },
-);
-assert.deepEqual(
-  getCheckoutRecoveryDecision(
-    {
-      status: "approval_required",
-      message: "Approval diperlukan.",
-      approval: manualApproval,
-    },
-    0,
-  ),
-  {
-    status: "wait",
-    retryAfterMs: 1_500,
   },
 );
 assert.equal(

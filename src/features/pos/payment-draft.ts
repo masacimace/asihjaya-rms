@@ -25,19 +25,6 @@ export type PosPaymentDraft = {
   verificationDetails: PosManualPaymentVerificationDetails;
 };
 
-export type PaymentVerificationFormState = {
-  verificationSource: PosManualPaymentVerificationSource;
-  providerPaidAtLocal: string;
-  merchantId: string;
-  terminalId: string;
-  batchNumber: string;
-  traceNumber: string;
-  cardNetwork: string;
-  cardLast4: string;
-  senderName: string;
-  destinationAccount: string;
-};
-
 export type PaymentMethodConfig = {
   method: PosManualPaymentMethod;
   label: string;
@@ -125,15 +112,6 @@ export function isStoredCheckoutPayment(
   );
 }
 
-export function formatLocalDateTimeInput(date = new Date()) {
-  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
-}
-
-export function getDefaultVerificationSource(): PosManualPaymentVerificationSource {
-  return "edc_terminal";
-}
-
 export function profileSupportsMethod(
   profile: PosManualPaymentProfile,
   method: PosManualPaymentMethod,
@@ -154,25 +132,6 @@ export function getProfilesForMethod(
   method: PosManualPaymentMethod,
 ) {
   return profiles.filter((profile) => profileSupportsMethod(profile, method));
-}
-
-export function createPaymentVerificationForm(
-  method: PosManualPaymentMethod,
-  profile?: PosManualPaymentProfile | null,
-): PaymentVerificationFormState {
-  return {
-    verificationSource:
-      profile?.verificationSource ?? getDefaultVerificationSource(),
-    providerPaidAtLocal: formatLocalDateTimeInput(),
-    merchantId: profile?.merchantId ?? "",
-    terminalId: profile?.terminalId ?? "",
-    batchNumber: "",
-    traceNumber: "",
-    cardNetwork: "",
-    cardLast4: "",
-    senderName: "",
-    destinationAccount: profile?.destinationAccount ?? "",
-  };
 }
 
 export function getPaymentConfig(

@@ -21,7 +21,6 @@ import { redirect } from "next/navigation";
 
 import { db } from "@/db";
 import {
-  approvals,
   auditLogs,
   cashMovements,
   customerDepositLedger,
@@ -29,7 +28,6 @@ import {
   hardwareAgents,
   inventoryMovements,
   manualPaymentProfiles,
-  paymentEvidenceUploads,
   outlets,
   payments,
   posHeldCartItems,
@@ -46,12 +44,6 @@ import {
 import {
   type PosCheckoutActionResult,
   type PosCheckoutPayload,
-  type PosDiscountApproval,
-  type PosDiscountApprovalActionResult,
-  type PosDiscountApprovalPayload,
-  type PosDiscountApprovalStatusResult,
-  type PosManualPaymentApprovalStatusResult,
-  type PosPaymentEvidenceUploadResult,
   type PosHeldCartActionResult,
   type PosHeldCartItem,
   type PosHeldCartSummary,
@@ -74,7 +66,6 @@ import {
 import { isValidPosCheckoutIdempotencyKey } from "@/features/pos/checkout-fingerprint";
 import { reconcileCheckoutFinancials } from "@/features/pos/checkout-financials";
 import {
-  checkoutApprovalRequired,
   checkoutFailure,
   checkoutProcessing,
   checkoutSuccess,
@@ -87,12 +78,6 @@ import {
   getDiscountPercent,
 } from "@/features/pos/checkout/calculations";
 import { CheckoutValidationError } from "@/features/pos/checkout/errors";
-import {
-  assessManualPaymentReviewRequirement,
-  getManualPaymentPolicyMap,
-  getOrCreateManualPaymentApproval,
-  mapPosManualPaymentApproval,
-} from "@/features/pos/checkout/manual-payment-review-service";
 import {
   getPaymentProvider,
   manualPaymentMethodLabels,
@@ -121,10 +106,6 @@ import {
   publishSaleRecoveryNotification,
   publishSaleRecoveryNotificationInTransaction,
 } from "@/features/notifications/sales";
-import {
-  isNonCashManualPaymentMethod,
-  type NonCashManualPaymentMethod,
-} from "@/features/pos/manual-payment-verification";
 import { requirePermission } from "@/lib/auth/session";
 import { isPostgresUniqueViolation } from "@/lib/db/postgres-errors";
 import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
@@ -133,10 +114,6 @@ import {
   createHardwareJobV2,
   createHardwareJobV2InTransaction,
 } from "@/lib/hardware/job-producer-v2";
-import {
-  deletePaymentEvidenceFile,
-  storePaymentEvidenceFile,
-} from "@/lib/storage/payment-evidence-storage";
 import {
   closeShiftWithReconciliation,
   parseShiftClosingActualCash,
@@ -362,45 +339,6 @@ function getSystemErrorMessage(error: unknown) {
   return String(error);
 }
 
-function posDiscountFailure(
-  message: string,
-  fieldErrors?: Record<string, string>,
-): PosDiscountApprovalActionResult {
-  return {
-    status: "error",
-    message,
-    fieldErrors,
-  };
-}
-
-function mapPosDiscountApproval(row: {
-  id: string;
-  status: "pending" | "approved" | "rejected";
-  requestData: Record<string, unknown>;
-  notes: string | null;
-  responseNotes: string | null;
-  createdAt: Date;
-  resolvedAt: Date | null;
-}): PosDiscountApproval {
-  const rawAmount = row.requestData.discountAmount;
-  const discountAmount =
-    typeof rawAmount === "number"
-      ? rawAmount
-      : typeof rawAmount === "string"
-        ? Number(rawAmount)
-        : 0;
-
-  return {
-    id: row.id,
-    status: row.status,
-    discountAmount: Number.isSafeInteger(discountAmount) ? discountAmount : 0,
-    reason: String(row.requestData.reason ?? row.notes ?? "").slice(0, 500),
-    responseNotes: row.responseNotes,
-    createdAtIso: row.createdAt.toISOString(),
-    resolvedAtIso: row.resolvedAt?.toISOString() ?? null,
-  };
-}
-
 function readText(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
@@ -568,535 +506,6 @@ async function getRequestMetadata() {
   return {
     ipAddress,
     userAgent: headerStore.get("user-agent"),
-  };
-}
-
-export async function uploadPosPaymentEvidenceAction(
-  formData: FormData,
-): Promise<PosPaymentEvidenceUploadResult> {
-  const auth = await requirePermission("sales.create");
-
-  if (!auth.permissionCodes.includes("pos.access")) {
-    return { status: "error", message: "User ini belum memiliki akses POS." };
-  }
-
-  const file = formData.get("file");
-
-  if (!(file instanceof File)) {
-    return { status: "error", message: "Pilih foto bukti pembayaran." };
-  }
-
-  const primaryOutlet =
-    auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
-
-  if (!primaryOutlet) {
-    return { status: "error", message: "Outlet POS tidak tersedia." };
-  }
-
-  let storedEvidence: Awaited<ReturnType<typeof storePaymentEvidenceFile>> | null =
-    null;
-
-  try {
-    storedEvidence = await storePaymentEvidenceFile({
-      file,
-      organizationId: auth.organization.id,
-    });
-
-    await db.insert(paymentEvidenceUploads).values({
-      organizationId: auth.organization.id,
-      outletId: primaryOutlet.id,
-      uploadedBy: auth.user.id,
-      storageKey: storedEvidence.key,
-      originalFilename: file.name.slice(0, 255) || null,
-      sizeBytes: storedEvidence.sizeBytes,
-      saleId: null,
-      attachedAt: null,
-      createdAt: new Date(),
-    });
-
-    return {
-      status: "success",
-      message: "Bukti pembayaran berhasil diunggah.",
-      evidenceKey: storedEvidence.key,
-    };
-  } catch (error) {
-    if (storedEvidence) {
-      await deletePaymentEvidenceFile(storedEvidence.key).catch(() => undefined);
-    }
-
-    return {
-      status: "error",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Bukti pembayaran gagal diunggah.",
-    };
-  }
-}
-
-export async function getPosManualPaymentApprovalStatusAction(
-  approvalId: string,
-): Promise<PosManualPaymentApprovalStatusResult> {
-  const auth = await requirePermission("pos.access");
-  const normalizedApprovalId = String(approvalId ?? "").trim();
-
-  if (!UUID_PATTERN.test(normalizedApprovalId)) {
-    return { status: "error", message: "ID approval pembayaran tidak valid." };
-  }
-
-  const primaryOutlet =
-    auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
-  const [approval] = await db
-    .select({
-      id: approvals.id,
-      status: approvals.status,
-      requestData: approvals.requestData,
-      notes: approvals.notes,
-      responseNotes: approvals.responseNotes,
-      createdAt: approvals.createdAt,
-      resolvedAt: approvals.resolvedAt,
-    })
-    .from(approvals)
-    .where(
-      and(
-        eq(approvals.id, normalizedApprovalId),
-        eq(approvals.organizationId, auth.organization.id),
-        eq(approvals.requestedBy, auth.user.id),
-        eq(approvals.type, "manual_payment_verification"),
-        primaryOutlet ? eq(approvals.outletId, primaryOutlet.id) : sql`true`,
-      ),
-    )
-    .limit(1);
-
-  if (!approval) {
-    return {
-      status: "not_found",
-      message: "Approval pembayaran manual tidak ditemukan untuk akun POS ini.",
-    };
-  }
-
-  const mappedApproval = mapPosManualPaymentApproval(approval);
-
-  return {
-    status: "found",
-    message:
-      mappedApproval.status === "approved"
-        ? "Pembayaran manual sudah diverifikasi. Proses checkout kembali."
-        : mappedApproval.status === "rejected"
-          ? "Verifikasi pembayaran ditolak. Perbaiki data payment sebelum mencoba lagi."
-          : "Pembayaran masih menunggu verifikasi manager/finance.",
-    approval: mappedApproval,
-  };
-}
-
-export async function requestPosDiscountApprovalAction(
-  payload: PosDiscountApprovalPayload,
-): Promise<PosDiscountApprovalActionResult> {
-  const auth = await requirePermission("sales.create");
-
-  if (!auth.permissionCodes.includes("pos.access")) {
-    return posDiscountFailure("User ini belum memiliki akses POS.");
-  }
-
-  const primaryOutlet =
-    auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
-
-  if (!primaryOutlet) {
-    return posDiscountFailure(
-      "Outlet aktif tidak ditemukan. Hubungi manager/admin untuk mengatur akses outlet staff ini.",
-    );
-  }
-
-  const fieldErrors: Record<string, string> = {};
-  const itemIds = Array.from(new Set(payload.itemIds ?? []));
-  const discountAmount = Number(payload.discountAmount);
-  const reason = normalizeRequiredText(payload.reason, 500);
-  const customerId = normalizeNullableText(payload.customerId, 36);
-
-  if (itemIds.length === 0) {
-    fieldErrors.items = "Tambahkan minimal satu item sebelum meminta diskon.";
-  }
-
-  if (itemIds.length > 50) {
-    fieldErrors.items = "Maksimal 50 item dalam satu request diskon.";
-  }
-
-  if (itemIds.some((itemId) => !UUID_PATTERN.test(itemId))) {
-    fieldErrors.items = "Ada item diskon yang tidak valid.";
-  }
-
-  if (!Number.isSafeInteger(discountAmount) || discountAmount <= 0) {
-    fieldErrors.discountAmount = "Nominal diskon harus lebih dari Rp0.";
-  }
-
-  if (reason.length < 5) {
-    fieldErrors.reason = "Alasan diskon minimal 5 karakter.";
-  }
-
-  if (customerId && !UUID_PATTERN.test(customerId)) {
-    fieldErrors.customerId = "Customer yang dipilih tidak valid.";
-  }
-
-  if (Object.keys(fieldErrors).length > 0) {
-    return posDiscountFailure("Periksa kembali request diskon POS.", fieldErrors);
-  }
-
-  const requestMetadata = await getRequestMetadata();
-
-  try {
-    const approval = await db.transaction(async (transaction) => {
-      const now = new Date();
-
-      const registerRows = await transaction
-        .select({
-          id: registers.id,
-          code: registers.code,
-          name: registers.name,
-          outletId: registers.outletId,
-        })
-        .from(registers)
-        .where(getDefaultPosRegisterCondition(primaryOutlet.id))
-        .orderBy(registers.name)
-        .limit(1);
-
-      const register = registerRows[0];
-
-      if (!register) {
-        throw new CheckoutValidationError(DEFAULT_POS_REGISTER_MISSING_MESSAGE);
-      }
-
-      const activeShiftRows = await transaction
-        .select({ id: shifts.id, status: shifts.status })
-        .from(shifts)
-        .where(
-          and(
-            eq(shifts.outletId, primaryOutlet.id),
-            eq(shifts.registerId, register.id),
-            eq(shifts.status, "open"),
-          ),
-        )
-        .orderBy(sql`${shifts.openedAt} desc`)
-        .limit(1);
-
-      const activeShift = activeShiftRows[0];
-
-      if (!activeShift) {
-        throw new CheckoutValidationError(
-          "Shift aktif belum dibuka. Buka shift terlebih dahulu sebelum meminta diskon.",
-        );
-      }
-
-      const selectedCustomer = customerId
-        ? (
-            await transaction
-              .select({
-                id: customers.id,
-                customerCode: customers.customerCode,
-                fullName: customers.fullName,
-                phone: customers.phone,
-                email: customers.email,
-              })
-              .from(customers)
-              .where(
-                and(
-                  eq(customers.id, customerId),
-                  eq(customers.organizationId, auth.organization.id),
-                  eq(customers.isActive, true),
-                ),
-              )
-              .limit(1)
-          )[0]
-        : null;
-
-      if (customerId && !selectedCustomer) {
-        throw new CheckoutValidationError(
-          "Customer yang dipilih tidak ditemukan atau sudah tidak aktif.",
-        );
-      }
-
-      const itemRows = await transaction
-        .select({
-          id: productItems.id,
-          sku: productItems.sku,
-          barcode: productItems.barcode,
-          serialNumber: productItems.serialNumber,
-          currentOutletId: productItems.currentOutletId,
-          sellingAmount: productItems.sellingAmount,
-          availability: productItems.availability,
-          condition: productItems.condition,
-          locationState: productItems.locationState,
-          isActive: productItems.isActive,
-          productCode: productMasters.code,
-          productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
-          productStatus: productMasters.status,
-          categoryName: productCategories.name,
-          categoryIsActive: productCategories.isActive,
-        })
-        .from(productItems)
-        .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
-        .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
-        .where(
-          and(
-            eq(productItems.organizationId, auth.organization.id),
-            inArray(productItems.id, itemIds),
-          ),
-        );
-
-      if (itemRows.length !== itemIds.length) {
-        throw new CheckoutValidationError(
-          "Sebagian item tidak ditemukan. Refresh POS lalu coba ulang.",
-        );
-      }
-
-      const itemMap = new Map(itemRows.map((item) => [item.id, item]));
-      const orderedItems = itemIds.map((itemId) => itemMap.get(itemId));
-
-      for (const item of orderedItems) {
-        if (!item) {
-          throw new CheckoutValidationError("Ada item diskon yang tidak ditemukan.");
-        }
-
-        if (
-          !item.isActive ||
-          item.productStatus !== "active" ||
-          !item.categoryIsActive ||
-          item.currentOutletId !== primaryOutlet.id ||
-          item.availability !== "available" ||
-          item.condition !== "good" ||
-          item.locationState !== "outlet"
-        ) {
-          throw new CheckoutValidationError(
-            `${item.sku} belum memenuhi syarat untuk request diskon POS. Refresh POS lalu coba ulang.`,
-          );
-        }
-
-        if (parseDbAmount(item.sellingAmount) <= 0) {
-          throw new CheckoutValidationError(`${item.sku} belum memiliki harga jual.`);
-        }
-      }
-
-      const subtotalAmount = orderedItems.reduce(
-        (total, item) => total + parseDbAmount(item!.sellingAmount),
-        0,
-      );
-
-      if (discountAmount >= subtotalAmount) {
-        throw new CheckoutValidationError(
-          "Nominal diskon harus lebih kecil dari subtotal transaksi.",
-        );
-      }
-
-      const cartFingerprint = createPosCartFingerprint({
-        outletId: primaryOutlet.id,
-        itemIds,
-        subtotalAmount,
-        discountAmount,
-      });
-
-      const existingRows = await transaction
-        .select({
-          id: approvals.id,
-          status: approvals.status,
-          requestData: approvals.requestData,
-          notes: approvals.notes,
-          responseNotes: approvals.responseNotes,
-          createdAt: approvals.createdAt,
-          resolvedAt: approvals.resolvedAt,
-        })
-        .from(approvals)
-        .where(
-          and(
-            eq(approvals.organizationId, auth.organization.id),
-            eq(approvals.outletId, primaryOutlet.id),
-            eq(approvals.requestedBy, auth.user.id),
-            eq(approvals.type, "discount"),
-            eq(approvals.status, "pending"),
-            sql`${approvals.requestData}->>'cartFingerprint' = ${cartFingerprint}`,
-          ),
-        )
-        .orderBy(sql`${approvals.createdAt} desc`)
-        .limit(1);
-
-      const existingApproval = existingRows[0];
-
-      if (existingApproval) {
-        return mapPosDiscountApproval(existingApproval);
-      }
-
-      const requestData = {
-        source: "pos.discount_request",
-        reason,
-        cartFingerprint,
-        outletId: primaryOutlet.id,
-        outletCode: primaryOutlet.code,
-        outletName: primaryOutlet.name,
-        registerId: register.id,
-        registerCode: register.code,
-        registerName: register.name,
-        shiftId: activeShift.id,
-        requestedBy: auth.user.id,
-        requesterName: auth.user.fullName,
-        customerId: selectedCustomer?.id ?? null,
-        customerCode: selectedCustomer?.customerCode ?? null,
-        customerName: selectedCustomer?.fullName ?? null,
-        itemCount: orderedItems.length,
-        subtotal: subtotalAmount,
-        subtotalAmount,
-        discountAmount,
-        requestedTotalAmount: subtotalAmount - discountAmount,
-        discountPercent: getDiscountPercent(discountAmount, subtotalAmount),
-        items: orderedItems.map((item) => ({
-          id: item!.id,
-          sku: item!.sku,
-          barcode: item!.barcode,
-          serialNumber: item!.serialNumber,
-          productCode: item!.productCode,
-          productName: item!.productName,
-          categoryName: item!.categoryName,
-          price: parseDbAmount(item!.sellingAmount),
-        })),
-      };
-
-      const insertedRows = await transaction
-        .insert(approvals)
-        .values({
-          organizationId: auth.organization.id,
-          outletId: primaryOutlet.id,
-          type: "discount",
-          status: "pending",
-          requestedBy: auth.user.id,
-          approvedBy: null,
-          referenceType: "pos_cart",
-          referenceId: null,
-          requestData,
-          notes: reason,
-          responseNotes: null,
-          createdAt: now,
-          resolvedAt: null,
-        })
-        .returning({
-          id: approvals.id,
-          status: approvals.status,
-          requestData: approvals.requestData,
-          notes: approvals.notes,
-          responseNotes: approvals.responseNotes,
-          createdAt: approvals.createdAt,
-          resolvedAt: approvals.resolvedAt,
-        });
-
-      const insertedApproval = insertedRows[0];
-
-      if (!insertedApproval) {
-        throw new Error("POS_DISCOUNT_APPROVAL_INSERT_FAILED");
-      }
-
-      await transaction.insert(auditLogs).values({
-        organizationId: auth.organization.id,
-        outletId: primaryOutlet.id,
-        actorUserId: auth.user.id,
-        action: "approval.request_discount",
-        entityType: "approval",
-        entityId: insertedApproval.id,
-        beforeData: null,
-        afterData: {
-          status: "pending",
-          type: "discount",
-          requestData,
-        },
-        reason,
-        ipAddress: requestMetadata.ipAddress,
-        userAgent: requestMetadata.userAgent,
-        metadata: {
-          source: "pos.discount_request",
-          cartFingerprint,
-          discountAmount,
-          subtotalAmount,
-        },
-        createdAt: now,
-      });
-
-      return mapPosDiscountApproval(insertedApproval);
-    });
-
-    revalidatePath("/admin");
-    revalidatePath("/admin/operasional/approval");
-    revalidatePath("/pos");
-
-    return {
-      status: "success",
-      message:
-        approval.status === "pending"
-          ? "Request diskon dikirim. Tunggu manager/owner memproses approval."
-          : "Request diskon ditemukan.",
-      approval,
-    };
-  } catch (error) {
-    if (error instanceof CheckoutValidationError) {
-      return posDiscountFailure(error.message);
-    }
-
-    throw error;
-  }
-}
-
-export async function getPosDiscountApprovalStatusAction(
-  approvalId: string,
-): Promise<PosDiscountApprovalStatusResult> {
-  const auth = await requirePermission("pos.access");
-  const normalizedApprovalId = String(approvalId ?? "").trim();
-
-  if (!UUID_PATTERN.test(normalizedApprovalId)) {
-    return {
-      status: "error",
-      message: "ID approval diskon tidak valid.",
-    };
-  }
-
-  const primaryOutlet =
-    auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
-
-  const rows = await db
-    .select({
-      id: approvals.id,
-      status: approvals.status,
-      requestData: approvals.requestData,
-      notes: approvals.notes,
-      responseNotes: approvals.responseNotes,
-      createdAt: approvals.createdAt,
-      resolvedAt: approvals.resolvedAt,
-    })
-    .from(approvals)
-    .where(
-      and(
-        eq(approvals.id, normalizedApprovalId),
-        eq(approvals.organizationId, auth.organization.id),
-        eq(approvals.requestedBy, auth.user.id),
-        eq(approvals.type, "discount"),
-        primaryOutlet ? eq(approvals.outletId, primaryOutlet.id) : sql`true`,
-      ),
-    )
-    .limit(1);
-
-  const approval = rows[0];
-
-  if (!approval) {
-    return {
-      status: "not_found",
-      message: "Approval diskon tidak ditemukan untuk akun POS ini.",
-    };
-  }
-
-  const mappedApproval = mapPosDiscountApproval(approval);
-
-  return {
-    status: "found",
-    message:
-      mappedApproval.status === "approved"
-        ? "Diskon sudah disetujui. Diskon bisa diterapkan ke cart."
-        : mappedApproval.status === "rejected"
-          ? "Request diskon ditolak. Gunakan harga normal atau ajukan ulang."
-          : "Request diskon masih menunggu approval manager/owner.",
-    approval: mappedApproval,
   };
 }
 
@@ -2589,9 +1998,6 @@ export async function completePosCheckoutAction(
   }
 
   let normalizedPayments: NormalizedCheckoutPayment[] = [];
-  const manualPaymentPolicyMap = await getManualPaymentPolicyMap(
-    auth.organization.id,
-  );
   const submittedProfileIds = Array.from(
     new Set(
       submittedPayments
@@ -2627,15 +2033,10 @@ export async function completePosCheckoutAction(
   const paymentProfilesById = new Map<string, CheckoutPaymentProfile>(
     profileRows.map((profile: CheckoutPaymentProfile) => [profile.id, profile]),
   );
-  const verificationNowIso = new Date().toISOString();
-
   try {
     normalizedPayments = normalizeCheckoutPayments({
       submittedPayments,
       paymentProfilesById,
-      organizationId: auth.organization.id,
-      policies: manualPaymentPolicyMap,
-      verificationNowIso,
     });
   } catch (error) {
     if (error instanceof CheckoutValidationError) {
@@ -2671,7 +2072,6 @@ export async function completePosCheckoutAction(
     discountReason: submittedDiscountReason,
     customerDepositUsedAmount: customerDepositUsedAmount || null,
     customerDepositInAmount: customerDepositInAmount || null,
-    manualPaymentApprovalId: null,
   };
 
   const requestMetadata = await getRequestMetadata();

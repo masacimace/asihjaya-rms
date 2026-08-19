@@ -101,14 +101,11 @@ const criticalFiles = [
   "src/features/sales/admin-queries.ts",
   "src/features/reports/queries.ts",
   "src/features/admin/dashboard/queries.ts",
-  "src/features/reconciliation/queries.ts",
   "src/features/cash-movements/queries.ts",
   "src/features/approvals/queries.ts",
   "src/features/customers/queries.ts",
   "src/features/notifications/queries.ts",
   "src/features/sales/correction-eligibility.ts",
-  "src/app/actions/payment-reconciliation.ts",
-  "src/features/reconciliation/csv-parser.ts",
 ];
 
 for (const relativePath of criticalFiles) {

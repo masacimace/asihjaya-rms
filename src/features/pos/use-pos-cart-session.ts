@@ -29,8 +29,6 @@ type UsePosCartSessionInput = {
   setPaymentFeedback: Dispatch<SetStateAction<string | null>>;
   setPaymentAmountInput: Dispatch<SetStateAction<string>>;
   resetCustomerDepositDraft: () => void;
-  setPaymentProviderInput: Dispatch<SetStateAction<string>>;
-  setPaymentReferenceInput: Dispatch<SetStateAction<string>>;
   setPaymentNoteInput: Dispatch<SetStateAction<string>>;
   setPanelMode: Dispatch<SetStateAction<PosWorkspacePanelMode>>;
   setIsMobileCartOpen: Dispatch<SetStateAction<boolean>>;
@@ -47,8 +45,6 @@ export function usePosCartSession({
   setPaymentFeedback,
   setPaymentAmountInput,
   resetCustomerDepositDraft,
-  setPaymentProviderInput,
-  setPaymentReferenceInput,
   setPaymentNoteInput,
   setPanelMode,
   setIsMobileCartOpen,
@@ -74,8 +70,6 @@ export function usePosCartSession({
         setPaymentFeedback(null);
         setPaymentAmountInput("");
         resetCustomerDepositDraft();
-        setPaymentProviderInput("");
-        setPaymentReferenceInput("");
         setPaymentNoteInput("");
         setPanelMode("cart");
         setIsMobileCartOpen(true);
@@ -110,8 +104,6 @@ export function usePosCartSession({
     setPaymentAmountInput,
     setPaymentFeedback,
     setPaymentNoteInput,
-    setPaymentProviderInput,
-    setPaymentReferenceInput,
     setPayments,
   ]);
 

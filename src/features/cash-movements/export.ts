@@ -75,7 +75,7 @@ export function buildCashMovementSheets({
         [
           "Tarik tunai Dana Titip",
           roundAmount(data.summary.customerDepositCashWithdrawals),
-          "Kas keluar dari approval penarikan Dana Titip",
+          "Kas keluar langsung dari penarikan Dana Titip",
         ],
         ["Refund cash", roundAmount(data.summary.cashRefunds), ""],
         ["Koreksi closing", roundAmount(data.summary.closingAdjustments), ""],

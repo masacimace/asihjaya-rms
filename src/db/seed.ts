@@ -7,7 +7,6 @@ import { getBootstrapEnvironment } from "../lib/env";
 import { db, pool } from "./index";
 import {
   metalPurities,
-  manualPaymentPolicies,
   manualPaymentProfiles,
   metals,
   organizations,
@@ -174,58 +173,13 @@ const permissionSeeds = [
     module: "payments",
   },
   {
-    code: "payments.verify.manual",
-    name: "Memverifikasi pembayaran manual berisiko tinggi",
-    module: "payments",
-  },
-  {
-    code: "payments.reconciliation.view",
-    name: "Melihat rekonsiliasi pembayaran",
-    module: "payments",
-  },
-  {
-    code: "payments.reconciliation.manage",
-    name: "Mencatat rekonsiliasi pembayaran",
-    module: "payments",
-  },
-  {
-    code: "payments.reconciliation.resolve",
-    name: "Menyelesaikan mismatch rekonsiliasi",
-    module: "payments",
-  },
-  {
-    code: "payments.reconciliation.import",
-    name: "Mengimpor settlement dan menjalankan auto-matching",
-    module: "payments",
-  },
-  {
-    code: "sales.void.request",
-    name: "Mengajukan void transaksi",
-    module: "sales",
-  },
-  {
-    code: "sales.void.approve",
-    name: "Menyetujui atau menolak void transaksi",
-    module: "sales",
-  },
-  {
     code: "sales.void.execute",
-    name: "Mengeksekusi void transaksi yang disetujui",
+    name: "Membatalkan transaksi secara langsung",
     module: "sales",
-  },
-  {
-    code: "payments.refund.request",
-    name: "Mengajukan refund pembayaran",
-    module: "payments",
-  },
-  {
-    code: "payments.refund.approve",
-    name: "Menyetujui atau menolak refund pembayaran",
-    module: "payments",
   },
   {
     code: "payments.refund.execute",
-    name: "Mengeksekusi refund pembayaran yang disetujui",
+    name: "Menjalankan refund pembayaran secara langsung",
     module: "payments",
   },
   {
@@ -358,7 +312,7 @@ const roleSeeds = [
   {
     code: "manager",
     name: "Manager",
-    description: "Mengelola operasional outlet dan approval.",
+    description: "Mengelola operasional outlet dan tindakan sensitif.",
     isSystem: true,
   },
   {
@@ -416,16 +370,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "sales.view",
     "sales.create",
     "payments.manage",
-    "payments.verify.manual",
-    "payments.reconciliation.view",
-    "payments.reconciliation.manage",
-    "payments.reconciliation.resolve",
-    "payments.reconciliation.import",
-    "sales.void.request",
-    "sales.void.approve",
     "sales.void.execute",
-    "payments.refund.request",
-    "payments.refund.approve",
     "payments.refund.execute",
     "returns.view",
     "returns.receive",
@@ -446,8 +391,6 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "sales.view",
     "sales.create",
     "payments.manage",
-    "sales.void.request",
-    "payments.refund.request",
     "returns.view",
     "returns.receive",
     "shifts.manage",
@@ -487,12 +430,6 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "pricing.view_cost",
     "sales.view",
     "payments.manage",
-    "payments.verify.manual",
-    "payments.reconciliation.view",
-    "payments.reconciliation.manage",
-    "payments.reconciliation.resolve",
-    "payments.reconciliation.import",
-    "payments.refund.approve",
     "payments.refund.execute",
     "returns.view",
     "reports.view",
@@ -650,47 +587,6 @@ async function seed() {
             destinationAccount: null,
             displayOrder: (index + 1) * 10,
             isActive: true,
-            updatedAt: now,
-          },
-        });
-    }
-
-    const manualEdcPolicies = [
-      {
-        method: "debit_card" as const,
-        coVerificationThreshold: 30_000_000,
-        evidenceThreshold: 20_000_000,
-        duplicateLookbackDays: 7,
-      },
-      {
-        method: "credit_card" as const,
-        coVerificationThreshold: 30_000_000,
-        evidenceThreshold: 20_000_000,
-        duplicateLookbackDays: 7,
-      },
-    ];
-
-    for (const policy of manualEdcPolicies) {
-      await tx
-        .insert(manualPaymentPolicies)
-        .values({
-          organizationId: organization.id,
-          method: policy.method,
-          coVerificationThreshold: String(policy.coVerificationThreshold),
-          evidenceThreshold: String(policy.evidenceThreshold),
-          duplicateLookbackDays: policy.duplicateLookbackDays,
-          isEnabled: true,
-        })
-        .onConflictDoUpdate({
-          target: [
-            manualPaymentPolicies.organizationId,
-            manualPaymentPolicies.method,
-          ],
-          set: {
-            coVerificationThreshold: String(policy.coVerificationThreshold),
-            evidenceThreshold: String(policy.evidenceThreshold),
-            duplicateLookbackDays: policy.duplicateLookbackDays,
-            isEnabled: true,
             updatedAt: now,
           },
         });

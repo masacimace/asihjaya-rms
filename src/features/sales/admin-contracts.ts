@@ -35,7 +35,7 @@ export type AdminPaymentMethod = (typeof adminPaymentMethods)[number];
 export const activeAdminPaymentMethodOptions = [
   "cash",
   "debit_card",
-  "credit_card",
+  "bank_transfer",
 ] as const satisfies readonly AdminPaymentMethod[];
 export type AdminSalesDateRange = (typeof adminSalesDateRanges)[number];
 
@@ -251,32 +251,6 @@ export type AdminSaleHardwareJob = {
 };
 
 
-export type AdminSaleSensitiveApprovalExecutionStatus =
-  | "awaiting_r3c_2"
-  | "void_executed"
-  | "refund_executed"
-  | "executing"
-  | "failed"
-  | "cancelled"
-  | null;
-
-export type AdminSaleSensitiveApproval = {
-  id: string;
-  type: "void_receipt" | "refund_transaction";
-  status: "pending" | "approved" | "rejected";
-  requestedByName: string;
-  approvedByName: string | null;
-  notes: string | null;
-  responseNotes: string | null;
-  createdAt: Date;
-  resolvedAt: Date | null;
-  requestData: Record<string, unknown>;
-  executionStatus: AdminSaleSensitiveApprovalExecutionStatus;
-  executionError: string | null;
-  executedAt: Date | null;
-  executedByName: string | null;
-};
-
 export type AdminSaleAuditLog = {
   id: string;
   action: string;
@@ -344,7 +318,6 @@ export type AdminSaleDetailData = {
   payments: AdminSaleDetailPayment[];
   hardwareJobs: AdminSaleHardwareJob[];
   auditLogs: AdminSaleAuditLog[];
-  sensitiveApprovals: AdminSaleSensitiveApproval[];
   timeline: AdminSaleTimelineEvent[];
   receiptCertificate: {
     isReady: boolean;

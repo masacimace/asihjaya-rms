@@ -25,7 +25,7 @@ import {
 } from "@/features/pos/inventory-sale-claim";
 import { lockManualPaymentReference } from "@/features/pos/manual-payment-reference-lock";
 import {
-  executeApprovedSaleReversal,
+  executeSaleReversal,
   SaleReversalTransactionError,
 } from "@/features/sales/transaction-service";
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
@@ -391,15 +391,6 @@ test("checkout idempotency claims once and rejects changed financial intent", as
   });
   assert.equal(changedDepositIn.status, "conflict");
 
-  const changedApproval = await claimPosCheckoutAttempt({
-    context,
-    payload: checkoutPayload(organizationA, idempotencyKey, {
-      customerDepositUsedAmount: 100_000,
-      manualPaymentApprovalId: id(),
-    }),
-  });
-  assert.equal(changedApproval.status, "conflict");
-
   const claimed = concurrent.find((result) => result.status === "claimed");
   if (!claimed || claimed.status !== "claimed") {
     throw new Error("Concurrent checkout claim tidak memiliki owner.");
@@ -706,7 +697,7 @@ test("manual payment reference lock serializes duplicate detection", async ({ or
   );
 });
 
-test("approved refund is idempotent, maker-checker protected, and tenant scoped", async ({
+test("direct refund is concurrency-safe and tenant scoped without approval", async ({
   organizationA,
   organizationB,
 }) => {
@@ -727,52 +718,28 @@ test("approved refund is idempotent, maker-checker protected, and tenant scoped"
   );
   await pool.query(
     `insert into payments (
-       id, sale_id, method, provider, amount, status, provider_reference,
-       normalized_reference, verification_status, verification_source,
-       provider_paid_at, manual_payment_profile_id, settlement_status,
-       verified_by, verified_at, paid_at, metadata
-     ) values ($1, $2, 'debit_card', 'BCA', 1000000, 'paid', $3, $3,
-       'self_verified', 'edc_terminal', $4, $5, 'unreconciled', $6, $4, $4,
-       '{}'::jsonb)`,
+       id, sale_id, method, provider, amount, status, verification_status,
+       manual_payment_profile_id, settlement_status, verified_by, verified_at,
+       paid_at, metadata
+     ) values ($1, $2, 'debit_card', 'BCA', 1000000, 'paid', 'self_verified',
+       $3, 'not_applicable', $4, $5, $5, '{}'::jsonb)`,
     [
       id(),
       sale.saleId,
-      `REF-${randomUUID().slice(0, 10)}`,
-      TEST_NOW,
       organizationA.paymentProfileId,
       organizationA.makerId,
-    ],
-  );
-
-  const approvalId = id();
-  await pool.query(
-    `insert into approvals (
-       id, organization_id, outlet_id, type, status, requested_by, approved_by,
-       reference_type, reference_id, request_data, notes, response_notes,
-       execution_status, created_at, resolved_at
-     ) values ($1, $2, $3, 'refund_transaction', 'approved', $4, $5,
-       'sale', $6, '{}'::jsonb, 'Financial test refund', 'Approved',
-       'not_started', $7, $7)`,
-    [
-      approvalId,
-      organizationA.organizationId,
-      organizationA.outletId,
-      organizationA.makerId,
-      organizationA.approverId,
-      sale.saleId,
       TEST_NOW,
     ],
   );
 
   const execute = () =>
-    executeApprovedSaleReversal({
+    executeSaleReversal({
       kind: "refund",
       saleId: sale.saleId,
-      approvalId,
       organizationId: organizationA.organizationId,
       accessibleOutletIds: [organizationA.outletId],
       actor: { id: organizationA.executorId, fullName: "A executor" },
-      executionNote: "Concurrent financial test refund",
+      executionNote: "Concurrent direct financial test refund",
       requestMetadata: { ipAddress: "127.0.0.1", userAgent: "financial-test" },
       now: new Date(TEST_NOW.getTime() + 5_000),
     });
@@ -782,21 +749,19 @@ test("approved refund is idempotent, maker-checker protected, and tenant scoped"
     (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof execute>>> =>
       result.status === "fulfilled",
   );
-  assert.equal(fulfilled.length >= 1, true);
-  assert.equal(fulfilled.filter((result) => !result.value.idempotentReplay).length, 1);
+  assert.equal(fulfilled.length, 1);
 
   for (const result of concurrent) {
     if (result.status === "rejected") {
       assert.equal(result.reason instanceof SaleReversalTransactionError, true);
       assert.equal(
-        ["EXECUTION_IN_PROGRESS", "CONCURRENT_STATE_CHANGE"].includes(result.reason.code),
+        ["INVALID_STATE", "CONCURRENT_STATE_CHANGE"].includes(result.reason.code),
         true,
       );
     }
   }
 
-  const replay = await execute();
-  assert.equal(replay.idempotentReplay, true);
+  assert.equal(await queryCount("approvals"), 0, "Refund langsung tidak boleh membuat approval.");
   assert.equal(await queryCount("payment_refunds", "where sale_id = $1", [sale.saleId]), 1);
   assert.equal(await queryCount("sale_return_cases", "where sale_id = $1", [sale.saleId]), 1);
   assert.equal(await queryCount("sale_return_items", "where product_item_id = $1", [itemId]), 1);
@@ -808,10 +773,15 @@ test("approved refund is idempotent, maker-checker protected, and tenant scoped"
   assert.equal(saleState.status, "refunded");
 
   await assert.rejects(
-    executeApprovedSaleReversal({
+    execute(),
+    (error: unknown) =>
+      error instanceof SaleReversalTransactionError && error.code === "INVALID_STATE",
+  );
+
+  await assert.rejects(
+    executeSaleReversal({
       kind: "refund",
       saleId: sale.saleId,
-      approvalId,
       organizationId: organizationB.organizationId,
       accessibleOutletIds: [organizationB.outletId],
       actor: { id: organizationB.executorId, fullName: "B executor" },
@@ -820,40 +790,6 @@ test("approved refund is idempotent, maker-checker protected, and tenant scoped"
     }),
     (error: unknown) =>
       error instanceof SaleReversalTransactionError && error.code === "NOT_FOUND",
-  );
-
-  const makerCheckerSale = await createSale(organizationA);
-  const makerCheckerApprovalId = id();
-  await pool.query(
-    `insert into approvals (
-       id, organization_id, outlet_id, type, status, requested_by, approved_by,
-       reference_type, reference_id, request_data, execution_status,
-       created_at, resolved_at
-     ) values ($1, $2, $3, 'refund_transaction', 'approved', $4, $4,
-       'sale', $5, '{}'::jsonb, 'not_started', $6, $6)`,
-    [
-      makerCheckerApprovalId,
-      organizationA.organizationId,
-      organizationA.outletId,
-      organizationA.makerId,
-      makerCheckerSale.saleId,
-      TEST_NOW,
-    ],
-  );
-
-  await assert.rejects(
-    executeApprovedSaleReversal({
-      kind: "refund",
-      saleId: makerCheckerSale.saleId,
-      approvalId: makerCheckerApprovalId,
-      organizationId: organizationA.organizationId,
-      accessibleOutletIds: [organizationA.outletId],
-      actor: { id: organizationA.executorId, fullName: "A executor" },
-      requestMetadata: { ipAddress: null, userAgent: null },
-      now: new Date(TEST_NOW.getTime() + 7_000),
-    }),
-    (error: unknown) =>
-      error instanceof SaleReversalTransactionError && error.code === "APPROVAL_NOT_READY",
   );
 });
 

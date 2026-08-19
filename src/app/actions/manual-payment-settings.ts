@@ -8,7 +8,6 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import {
   auditLogs,
-  manualPaymentPolicies,
   manualPaymentProfiles,
   outlets,
   registers,
@@ -17,9 +16,6 @@ import type {
   PosManualPaymentProfileType,
   PosManualPaymentVerificationSource,
 } from "@/features/pos/contracts";
-import {
-  isNonCashManualPaymentMethod,
-} from "@/features/pos/manual-payment-verification";
 import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission } from "@/lib/auth/session";
 
@@ -32,12 +28,6 @@ function readText(formData: FormData, name: string, maxLength: number) {
     .trim()
     .replace(/\s+/g, " ")
     .slice(0, maxLength);
-}
-
-function parseMoneyInput(value: FormDataEntryValue | null) {
-  const normalized = String(value ?? "").replace(/\D/g, "");
-  const amount = Number(normalized);
-  return Number.isSafeInteger(amount) ? amount : Number.NaN;
 }
 
 function parseIntegerInput(value: FormDataEntryValue | null) {
@@ -88,125 +78,6 @@ function revalidatePaymentSettings() {
   revalidatePath("/admin/pengaturan");
   revalidatePath(SETTINGS_PATH);
   revalidatePath("/pos");
-}
-
-export async function saveManualPaymentPolicyAction(formData: FormData) {
-  const auth = await requirePermission("settings.manage");
-  const method = readText(formData, "method", 40);
-
-  if (!isNonCashManualPaymentMethod(method)) {
-    redirectWithMessage("error", "Metode kebijakan pembayaran tidak valid.");
-  }
-
-  const evidenceThreshold = parseMoneyInput(formData.get("evidenceThreshold"));
-  const coVerificationThreshold = parseMoneyInput(
-    formData.get("coVerificationThreshold"),
-  );
-  const duplicateLookbackDays = parseIntegerInput(
-    formData.get("duplicateLookbackDays"),
-  );
-  const isEnabled = formData.get("isEnabled") === "on";
-
-  if (
-    !Number.isSafeInteger(evidenceThreshold) ||
-    evidenceThreshold < 0 ||
-    !Number.isSafeInteger(coVerificationThreshold) ||
-    coVerificationThreshold < 0
-  ) {
-    redirectWithMessage("error", "Threshold harus berupa nominal rupiah yang valid.");
-  }
-
-  if (
-    !Number.isSafeInteger(duplicateLookbackDays) ||
-    duplicateLookbackDays < 1 ||
-    duplicateLookbackDays > 3650
-  ) {
-    redirectWithMessage(
-      "error",
-      "Periode pencarian reference duplikat harus 1–3650 hari.",
-    );
-  }
-
-  const requestMetadata = await getRequestMetadata();
-  const now = new Date();
-
-  await db.transaction(async (transaction) => {
-    const [before] = await transaction
-      .select({
-        id: manualPaymentPolicies.id,
-        evidenceThreshold: manualPaymentPolicies.evidenceThreshold,
-        coVerificationThreshold:
-          manualPaymentPolicies.coVerificationThreshold,
-        duplicateLookbackDays: manualPaymentPolicies.duplicateLookbackDays,
-        isEnabled: manualPaymentPolicies.isEnabled,
-      })
-      .from(manualPaymentPolicies)
-      .where(
-        and(
-          eq(manualPaymentPolicies.organizationId, auth.organization.id),
-          eq(manualPaymentPolicies.method, method),
-        ),
-      )
-      .limit(1);
-
-    const [saved] = await transaction
-      .insert(manualPaymentPolicies)
-      .values({
-        organizationId: auth.organization.id,
-        method,
-        evidenceThreshold: String(evidenceThreshold),
-        coVerificationThreshold: String(coVerificationThreshold),
-        duplicateLookbackDays,
-        isEnabled,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [
-          manualPaymentPolicies.organizationId,
-          manualPaymentPolicies.method,
-        ],
-        set: {
-          evidenceThreshold: String(evidenceThreshold),
-          coVerificationThreshold: String(coVerificationThreshold),
-          duplicateLookbackDays,
-          isEnabled,
-          updatedAt: now,
-        },
-      })
-      .returning({ id: manualPaymentPolicies.id });
-
-    await transaction.insert(auditLogs).values({
-      organizationId: auth.organization.id,
-      outletId: null,
-      actorUserId: auth.user.id,
-      action: "settings.manual_payment_policy.update",
-      entityType: "manual_payment_policy",
-      entityId: saved?.id ?? method,
-      beforeData: before
-        ? {
-            evidenceThreshold: Number(before.evidenceThreshold),
-            coVerificationThreshold: Number(before.coVerificationThreshold),
-            duplicateLookbackDays: before.duplicateLookbackDays,
-            isEnabled: before.isEnabled,
-          }
-        : null,
-      afterData: {
-        method,
-        evidenceThreshold,
-        coVerificationThreshold,
-        duplicateLookbackDays,
-        isEnabled,
-      },
-      ipAddress: requestMetadata.ipAddress,
-      userAgent: requestMetadata.userAgent,
-      metadata: { source: "admin.settings.manual_payments" },
-      createdAt: now,
-    });
-  });
-
-  revalidatePaymentSettings();
-  redirectWithMessage("success", "Kebijakan pembayaran manual berhasil disimpan.");
 }
 
 export async function saveManualPaymentProfileAction(formData: FormData) {

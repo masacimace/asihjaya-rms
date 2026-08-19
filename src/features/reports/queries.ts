@@ -6,7 +6,6 @@ import {
   gte,
   ilike,
   inArray,
-  isNull,
   lt,
   or,
   sql,
@@ -15,7 +14,6 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db";
 import {
-  approvals,
   cashMovements,
   customerDepositLedger,
   customers,
@@ -30,7 +28,6 @@ import {
   shifts,
   users,
 } from "@/db/schema";
-import { getVisibleApprovalTypes } from "@/features/approvals/authorization";
 import type { AuthContext } from "@/lib/auth/session";
 import {
   addBusinessDays,
@@ -160,7 +157,7 @@ function createPeriodMetadata({
   return {
     range: "today",
     label: "Hari ini",
-    description: "Ringkasan performa outlet hari ini berdasarkan penjualan, stok, approval, dan kas.",
+    description: "Ringkasan performa outlet hari ini berdasarkan penjualan, stok, shift, dan kas.",
     comparisonLabel: "dari kemarin",
     currentStart: todayStart,
     currentEnd: tomorrowStart,
@@ -229,7 +226,6 @@ function createEmptyData(
       voidRefundImpact: 0,
       voidRefundCount: 0,
       activeShiftCount: 0,
-      pendingApprovalCount: 0,
       availableStockCount: 0,
       stockReturnCount: 0,
     },
@@ -297,12 +293,6 @@ export async function getReportSummaryData(
   );
 
   const trendBucketSql = sql<string>`to_char(${sales.completedAt} at time zone ${auth.organization.timezone}, 'YYYY-MM-DD')`;
-  const visibleApprovalTypes = getVisibleApprovalTypes(auth);
-  const approvalTypeCondition =
-    visibleApprovalTypes.length > 0
-      ? inArray(approvals.type, visibleApprovalTypes)
-      : sql`false`;
-
   const [
     currentSalesRows,
     previousSalesRows,
@@ -317,7 +307,6 @@ export async function getReportSummaryData(
     customerDepositRows,
     voidRefundRows,
     activeShiftRows,
-    pendingApprovalRows,
     availableStockRows,
     stockReturnRows,
   ] = await Promise.all([
@@ -538,18 +527,6 @@ export async function getReportSummaryData(
 
     db
       .select({ total: count() })
-      .from(approvals)
-      .where(
-        and(
-          eq(approvals.organizationId, auth.organization.id),
-          or(isNull(approvals.outletId), inArray(approvals.outletId, outletIds)),
-          approvalTypeCondition,
-          eq(approvals.status, "pending"),
-        ),
-      ),
-
-    db
-      .select({ total: count() })
       .from(productItems)
       .where(
         and(
@@ -723,7 +700,6 @@ export async function getReportSummaryData(
       voidRefundImpact: voidRefundRows[0]?.amount ?? 0,
       voidRefundCount: voidRefundRows[0]?.transactionCount ?? 0,
       activeShiftCount: activeShiftRows[0]?.total ?? 0,
-      pendingApprovalCount: pendingApprovalRows[0]?.total ?? 0,
       availableStockCount: availableStockRows[0]?.total ?? 0,
       stockReturnCount: stockReturnRows[0]?.total ?? 0,
     },

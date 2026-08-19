@@ -9,21 +9,17 @@ import {
 } from "react";
 
 import type {
-  PosManualPaymentApproval,
   PosManualPaymentMethod,
   PosManualPaymentProfile,
-  PosManualPaymentVerificationSource,
 } from "@/features/pos/contracts";
 import {
   createRecoveredCheckoutPaymentState,
   type RestoreCheckoutPaymentStateInput,
 } from "@/features/pos/payment-state";
 import {
-  createPaymentVerificationForm,
   formatRupiahInput,
   getProfilesForMethod,
   profileSupportsMethod,
-  type PaymentVerificationFormState,
   type PosPaymentDraft,
 } from "@/features/pos/payment-draft";
 
@@ -36,27 +32,14 @@ export type UsePosPaymentResult = {
   setPayments: Dispatch<SetStateAction<PosPaymentDraft[]>>;
   selectedMethod: PosManualPaymentMethod;
   selectedPaymentProfileId: string;
-  paymentVerificationConfirmed: boolean;
-  setPaymentVerificationConfirmed: Dispatch<SetStateAction<boolean>>;
   paymentAmountInput: string;
   setPaymentAmountInput: Dispatch<SetStateAction<string>>;
   customerDepositUsedInput: string;
   setCustomerDepositUsedInput: Dispatch<SetStateAction<string>>;
   customerDepositInInput: string;
   setCustomerDepositInInput: Dispatch<SetStateAction<string>>;
-  paymentProviderInput: string;
-  setPaymentProviderInput: Dispatch<SetStateAction<string>>;
-  paymentReferenceInput: string;
-  setPaymentReferenceInput: Dispatch<SetStateAction<string>>;
   paymentNoteInput: string;
   setPaymentNoteInput: Dispatch<SetStateAction<string>>;
-  paymentVerificationForm: PaymentVerificationFormState;
-  paymentEvidenceFile: File | null;
-  setPaymentEvidenceFile: Dispatch<SetStateAction<File | null>>;
-  manualPaymentApproval: PosManualPaymentApproval | null;
-  setManualPaymentApproval: Dispatch<
-    SetStateAction<PosManualPaymentApproval | null>
-  >;
   paymentFeedback: string | null;
   setPaymentFeedback: Dispatch<SetStateAction<string | null>>;
   isAddingPayment: boolean;
@@ -72,10 +55,6 @@ export type UsePosPaymentResult = {
     method: PosManualPaymentMethod,
     remainingAmount: number,
   ) => void;
-  updatePaymentVerificationForm: (
-    field: keyof PaymentVerificationFormState,
-    value: string,
-  ) => void;
 };
 
 export function usePosPayment({
@@ -85,23 +64,10 @@ export function usePosPayment({
   const [selectedMethod, setSelectedMethod] =
     useState<PosManualPaymentMethod>("cash");
   const [selectedPaymentProfileId, setSelectedPaymentProfileId] = useState("");
-  const [paymentVerificationConfirmed, setPaymentVerificationConfirmed] =
-    useState(false);
   const [paymentAmountInput, setPaymentAmountInput] = useState("");
   const [customerDepositUsedInput, setCustomerDepositUsedInput] = useState("");
   const [customerDepositInInput, setCustomerDepositInInput] = useState("");
-  const [paymentProviderInput, setPaymentProviderInput] = useState("");
-  const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
   const [paymentNoteInput, setPaymentNoteInput] = useState("");
-  const [paymentVerificationForm, setPaymentVerificationForm] =
-    useState<PaymentVerificationFormState>(() =>
-      createPaymentVerificationForm("cash"),
-    );
-  const [paymentEvidenceFile, setPaymentEvidenceFile] = useState<File | null>(
-    null,
-  );
-  const [manualPaymentApproval, setManualPaymentApproval] =
-    useState<PosManualPaymentApproval | null>(null);
   const [paymentFeedback, setPaymentFeedback] = useState<string | null>(null);
   const [isAddingPayment, startAddingPaymentTransition] = useTransition();
 
@@ -119,22 +85,14 @@ export function usePosPayment({
 
       setSelectedMethod(nextMethod);
       setSelectedPaymentProfileId(defaultProfile?.id ?? "");
-      setPaymentVerificationConfirmed(false);
       setPaymentAmountInput("");
-      setPaymentProviderInput(defaultProfile?.provider ?? "");
-      setPaymentReferenceInput("");
       setPaymentNoteInput("");
-      setPaymentVerificationForm(
-        createPaymentVerificationForm(nextMethod, defaultProfile),
-      );
-      setPaymentEvidenceFile(null);
     },
     [paymentProfiles, selectedMethod],
   );
 
   const resetPaymentState = useCallback(() => {
     setPayments([]);
-    setManualPaymentApproval(null);
     setPaymentFeedback(null);
     resetPaymentForm();
   }, [resetPaymentForm]);
@@ -144,14 +102,10 @@ export function usePosPayment({
       const recoveredState = createRecoveredCheckoutPaymentState(input);
 
       setPayments(recoveredState.payments);
-      setManualPaymentApproval(recoveredState.manualPaymentApproval);
       setSelectedMethod(recoveredState.selectedMethod);
       setSelectedPaymentProfileId(recoveredState.selectedPaymentProfileId);
       setCustomerDepositUsedInput(recoveredState.customerDepositUsedInput);
       setCustomerDepositInInput(recoveredState.customerDepositInInput);
-      setPaymentVerificationConfirmed(
-        recoveredState.paymentVerificationConfirmed,
-      );
     },
     [],
   );
@@ -165,12 +119,6 @@ export function usePosPayment({
       );
 
       setSelectedPaymentProfileId(profile?.id ?? "");
-      setPaymentProviderInput(profile?.provider ?? "");
-      setPaymentVerificationConfirmed(false);
-      setPaymentVerificationForm(
-        createPaymentVerificationForm(selectedMethod, profile),
-      );
-      setPaymentEvidenceFile(null);
       setPaymentFeedback(
         profile
           ? `${profile.name} dipilih.`
@@ -192,43 +140,19 @@ export function usePosPayment({
     [resetPaymentForm],
   );
 
-  const updatePaymentVerificationForm = useCallback(
-    (field: keyof PaymentVerificationFormState, value: string) => {
-      setPaymentVerificationForm((current) => ({
-        ...current,
-        [field]:
-          field === "verificationSource"
-            ? (value as PosManualPaymentVerificationSource)
-            : value,
-      }));
-    },
-    [],
-  );
-
   return {
     payments,
     setPayments,
     selectedMethod,
     selectedPaymentProfileId,
-    paymentVerificationConfirmed,
-    setPaymentVerificationConfirmed,
     paymentAmountInput,
     setPaymentAmountInput,
     customerDepositUsedInput,
     setCustomerDepositUsedInput,
     customerDepositInInput,
     setCustomerDepositInInput,
-    paymentProviderInput,
-    setPaymentProviderInput,
-    paymentReferenceInput,
-    setPaymentReferenceInput,
     paymentNoteInput,
     setPaymentNoteInput,
-    paymentVerificationForm,
-    paymentEvidenceFile,
-    setPaymentEvidenceFile,
-    manualPaymentApproval,
-    setManualPaymentApproval,
     paymentFeedback,
     setPaymentFeedback,
     isAddingPayment,
@@ -239,6 +163,5 @@ export function usePosPayment({
     restoreCheckoutPaymentState,
     selectPaymentProfile,
     changePaymentMethod,
-    updatePaymentVerificationForm,
   };
 }

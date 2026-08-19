@@ -28,7 +28,6 @@ assert.equal(
 );
 assert.ok(scripts["check:product-batch-regression"]?.includes("check:xlsx-security"));
 assert.ok(scripts["check:product-batch-regression"]?.includes("check:legacy-product-migration"));
-assert.ok(scripts["check:product-batch-regression"]?.includes("check:settlement-import"));
 assert.ok(scripts["check:product-batch-regression"]?.includes("check:inventory-label"));
 assert.ok(scripts["check:product-batch-regression"]?.includes("check:camera-scanner"));
 assert.ok(scripts["check:product-batch-regression"]?.includes("check:pos-stage-1c"));

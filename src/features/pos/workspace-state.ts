@@ -50,16 +50,16 @@ export function getPosDiscountAvailability({
     hasRegister &&
     hasActiveShift;
   const discountDisabledReason = !itemCount
-    ? "Tambahkan item sebelum meminta diskon."
+    ? "Tambahkan item sebelum menerapkan diskon."
     : paymentCount > 0
-      ? "Diskon harus diajukan sebelum payment ditambahkan."
+      ? "Diskon harus diterapkan sebelum payment ditambahkan."
       : !hasRegister
         ? "Register aktif belum tersedia untuk outlet ini."
         : !hasActiveShift
-          ? "Shift aktif belum dibuka, request diskon belum bisa dibuat."
+          ? "Shift aktif belum dibuka, diskon belum bisa diterapkan."
           : discountApproval
-            ? "Selesaikan atau reset request diskon yang sedang aktif."
-            : "Minta approval diskon manager/owner.";
+            ? "Hapus diskon aktif terlebih dahulu jika ingin menggantinya."
+            : "Diskon siap diterapkan langsung.";
 
   return { canRequestDiscount, discountDisabledReason };
 }
@@ -142,8 +142,8 @@ export function getPosWorkspaceState({
       : !hasActiveShift
         ? "Shift aktif belum dibuka, checkout belum bisa dilanjutkan."
         : hasPendingDiscountApproval
-          ? "Request diskon masih pending. Cek status approval atau reset request."
-          : "Lanjutkan ke pembayaran manual.";
+          ? "Status diskon tidak valid. Hapus diskon lalu terapkan kembali."
+          : "Lanjutkan ke pembayaran.";
   const canFinalizePayment =
     canCheckout &&
     remainingAmount === 0 &&

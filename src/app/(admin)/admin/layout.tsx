@@ -2,25 +2,15 @@ import type { ReactNode } from "react";
 
 import { AdminShell } from "@/components/layout/admin-shell";
 import { getAdministrationAccess } from "@/features/administration/access";
-import { canAccessApprovalInbox } from "@/features/approvals/authorization";
-import { getAdminApprovalDrawerData } from "@/features/approvals/queries";
 import { getAdminNotificationDrawerData } from "@/features/notifications/queries";
 import { getProductInventoryAccess } from "@/features/products/access";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default async function AdminLayout({ children }: { children: ReactNode }) {
   const auth = await requirePermission("admin.access");
-
   const administrationAccess = getAdministrationAccess(auth);
   const productInventoryAccess = getProductInventoryAccess(auth);
-  const [approvalDrawerData, notificationDrawerData] = await Promise.all([
-    getAdminApprovalDrawerData(auth),
-    getAdminNotificationDrawerData(auth),
-  ]);
+  const notificationDrawerData = await getAdminNotificationDrawerData(auth);
 
   return (
     <AdminShell
@@ -39,18 +29,8 @@ export default async function AdminLayout({
           hasPermission(auth, "migration.verification.review") ||
           hasPermission(auth, "migration.verification.approve") ||
           hasPermission(auth, "migration.cutover.execute"),
-        canAccessApprovals: canAccessApprovalInbox(auth),
         canAccessSettings: hasPermission(auth, "settings.manage"),
-        canAccessReconciliation: hasPermission(
-          auth,
-          "payments.reconciliation.view",
-        ),
-        canImportReconciliation: hasPermission(
-          auth,
-          "payments.reconciliation.import",
-        ),
       }}
-      approvalDrawerData={approvalDrawerData}
       notificationDrawerData={notificationDrawerData}
     >
       {children}

@@ -148,7 +148,6 @@ const snapshot = buildTelegramDailyFinanceSnapshot({
     transactionCount: 18,
     itemsSoldCount: 22,
     heldTransactionCount: 0,
-    pendingApprovalCount: 0,
   },
 });
 
@@ -208,7 +207,6 @@ async function checkDatabase() {
   const { eq } = await import("drizzle-orm");
   const { db } = await import("@/db");
   const {
-    approvals,
     customerDepositLedger,
     customers,
     financeClosingSnapshots,
@@ -474,14 +472,6 @@ async function checkDatabase() {
       discountAmount: "0",
       totalAmount: "100000",
     });
-    await transaction.insert(approvals).values({
-      organizationId,
-      outletId,
-      type: "other",
-      status: "pending",
-      requestedBy: userId,
-      requestData: { source: "telegram-daily-test" },
-    });
     await transaction.insert(telegramDestinations).values({
       id: destinationId,
       organizationId,
@@ -553,7 +543,7 @@ async function checkDatabase() {
   assert.equal(finance.transactionCount, 1);
   assert.equal(finance.itemsSoldCount, 2);
   assert.equal(finance.heldTransactionCount, 1);
-  assert.equal(finance.pendingApprovalCount, 1);
+  assert.equal(finance.pendingApprovalCount, 0);
   assert.equal(finance.expectedCash, "3300000");
   assert.equal(finance.actualCash, "3250000");
   assert.equal(finance.cashVariance, "-50000");

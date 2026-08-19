@@ -3,7 +3,6 @@ import type {
   PosCheckoutPayload,
   PosCheckoutRecoveryStatusResult,
   PosDiscountApproval,
-  PosManualPaymentApproval,
 } from "@/features/pos/contracts";
 import {
   createCheckoutIdempotencyKey,
@@ -16,11 +15,10 @@ export type ActiveDiscountApproval = PosDiscountApproval & {
 };
 
 export type StoredCheckoutAttemptState = {
-  version: 2;
+  version: 3;
   payload: PosCheckoutPayload;
   payments: PosPaymentDraft[];
   discountApproval: ActiveDiscountApproval | null;
-  manualPaymentApproval: PosManualPaymentApproval | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -30,7 +28,6 @@ export type CheckoutSubmissionInput = {
   payments: PosPaymentDraft[];
   customerDepositUsedAmount: number;
   customerDepositInAmount: number;
-  manualPaymentApproval: PosManualPaymentApproval | null;
   customerId: string | null;
   discountApproval: ActiveDiscountApproval | null;
   approvedDiscountAmount: number;
@@ -72,7 +69,7 @@ export function parseStoredCheckoutAttemptState(
 ): StoredCheckoutAttemptState | null {
   if (
     !isRecord(value) ||
-    value.version !== 2 ||
+    value.version !== 3 ||
     !isStoredCheckoutPayload(value.payload) ||
     !Array.isArray(value.payments)
   ) {
@@ -86,14 +83,11 @@ export function parseStoredCheckoutAttemptState(
   }
 
   return {
-    version: 2,
+    version: 3,
     payload: value.payload,
     payments: storedPayments,
     discountApproval: isRecord(value.discountApproval)
       ? (value.discountApproval as ActiveDiscountApproval)
-      : null,
-    manualPaymentApproval: isRecord(value.manualPaymentApproval)
-      ? (value.manualPaymentApproval as PosManualPaymentApproval)
       : null,
     createdAt:
       typeof value.createdAt === "string" ? value.createdAt : fallbackIso,
@@ -307,7 +301,6 @@ export function createCheckoutPayload(input: {
       submission.customerDepositInAmount > 0
         ? submission.customerDepositInAmount
         : null,
-    manualPaymentApprovalId: null,
     customerId: submission.customerId,
     note: null,
     discountApprovalId: null,
@@ -326,35 +319,17 @@ export function createStoredCheckoutAttempt(input: {
   payload: PosCheckoutPayload;
   payments: PosPaymentDraft[];
   discountApproval: ActiveDiscountApproval | null;
-  manualPaymentApproval: PosManualPaymentApproval | null;
   existingAttempt: StoredCheckoutAttemptState | null;
   nowIso?: string;
 }): StoredCheckoutAttemptState {
   const nowIso = input.nowIso ?? new Date().toISOString();
 
   return {
-    version: 2,
+    version: 3,
     payload: input.payload,
     payments: input.payments,
     discountApproval: input.discountApproval,
-    manualPaymentApproval: input.manualPaymentApproval,
     createdAt: input.existingAttempt?.createdAt ?? nowIso,
     updatedAt: nowIso,
-  };
-}
-
-export function applyManualPaymentApprovalToAttempt(input: {
-  attempt: StoredCheckoutAttemptState;
-  approval: PosManualPaymentApproval;
-  nowIso?: string;
-}): StoredCheckoutAttemptState {
-  return {
-    ...input.attempt,
-    payload: {
-      ...input.attempt.payload,
-      manualPaymentApprovalId: input.approval.id,
-    },
-    manualPaymentApproval: input.approval,
-    updatedAt: input.nowIso ?? new Date().toISOString(),
   };
 }

@@ -1,16 +1,7 @@
-import {
-  and,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
-  approvals,
   auditLogs,
   cashMovements,
   inventoryMovements,
@@ -24,7 +15,7 @@ import {
   sales,
   shifts,
 } from "@/db/schema";
-import { publishSaleReversalCompletedNotificationInTransaction } from "@/features/notifications/approvals";
+import { publishSaleReversalCompletedNotificationInTransaction } from "@/features/notifications/sale-reversals";
 import { publishReturnAwaitingReceiptNotificationInTransaction } from "@/features/notifications/returns";
 
 export type SaleReversalKind = "void" | "refund";
@@ -34,10 +25,9 @@ type RequestMetadata = {
   userAgent: string | null;
 };
 
-export type ExecuteApprovedSaleReversalInput = {
+export type ExecuteSaleReversalInput = {
   kind: SaleReversalKind;
   saleId: string;
-  approvalId: string;
   organizationId: string;
   accessibleOutletIds: string[];
   actor: {
@@ -49,7 +39,7 @@ export type ExecuteApprovedSaleReversalInput = {
   now?: Date;
 };
 
-export type ExecuteApprovedSaleReversalResult = {
+export type ExecuteSaleReversalResult = {
   invoiceNumber: string;
   returnedItemCount: number;
   cashRefundAmount: number;
@@ -65,8 +55,6 @@ export class SaleReversalTransactionError extends Error {
   readonly code:
     | "NOT_FOUND"
     | "INVALID_STATE"
-    | "APPROVAL_NOT_READY"
-    | "EXECUTION_IN_PROGRESS"
     | "ACTIVE_SHIFT_REQUIRED"
     | "PAYMENT_MISMATCH"
     | "INVENTORY_STATE_CONFLICT"
@@ -84,44 +72,35 @@ export class SaleReversalTransactionError extends Error {
 
 const REVERSAL_CONFIG = {
   void: {
-    approvalType: "void_receipt" as const,
     finalSaleStatus: "voided" as const,
     inventoryMovementType: "reversal" as const,
     inventoryReferenceType: "sale_void",
     cashReferenceType: "sale_void",
     auditAction: "sale.void_executed",
-    legacyExecutionStatus: "void_executed",
     notePrefix: "VOID",
-    defaultReason: "Void transaksi setelah approval manager/owner.",
-    responseNotePrefix: "Eksekusi void",
-    source: "admin.sales.void_execution",
+    defaultReason: "Void transaksi langsung oleh user berizin.",
+    source: "admin.sales.void_direct",
   },
   refund: {
-    approvalType: "refund_transaction" as const,
     finalSaleStatus: "refunded" as const,
     inventoryMovementType: "sale_return" as const,
     inventoryReferenceType: "sale_refund",
     cashReferenceType: "sale_refund",
     auditAction: "sale.refund_executed",
-    legacyExecutionStatus: "refund_executed",
     notePrefix: "REFUND",
-    defaultReason: "Refund penuh setelah approval manager/owner.",
-    responseNotePrefix: "Eksekusi refund penuh",
-    source: "admin.sales.refund_execution",
+    defaultReason: "Refund penuh langsung oleh user berizin.",
+    source: "admin.sales.refund_direct",
   },
 } satisfies Record<
   SaleReversalKind,
   {
-    approvalType: "void_receipt" | "refund_transaction";
     finalSaleStatus: "voided" | "refunded";
     inventoryMovementType: "reversal" | "sale_return";
     inventoryReferenceType: "sale_void" | "sale_refund";
     cashReferenceType: "sale_void" | "sale_refund";
     auditAction: "sale.void_executed" | "sale.refund_executed";
-    legacyExecutionStatus: "void_executed" | "refund_executed";
     notePrefix: "VOID" | "REFUND";
     defaultReason: string;
-    responseNotePrefix: string;
     source: string;
   }
 >;
@@ -141,90 +120,30 @@ function parseMoney(value: string | null | undefined): number {
   return amount;
 }
 
-function getRequestDataNumber(
-  requestData: Record<string, unknown>,
-  key: string,
-): number {
-  const value = requestData[key];
-
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  return 0;
-}
-
-function getRequestDataString(
-  requestData: Record<string, unknown>,
-  key: string,
-): string | null {
-  const value = requestData[key];
-
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : null;
-}
-
-function createExecutionIdempotencyKey(
-  kind: SaleReversalKind,
-  approvalId: string,
-) {
-  return `sale-${kind}:${approvalId}`;
+function createExecutionIdempotencyKey(kind: SaleReversalKind, saleId: string) {
+  return `sale-${kind}:${saleId}`;
 }
 
 function createPaymentRefundIdempotencyKey(
   kind: SaleReversalKind,
-  approvalId: string,
+  saleId: string,
   paymentId: string,
 ) {
-  return `sale-${kind}:${approvalId}:${paymentId}`;
-}
-
-function buildReplayResult({
-  invoiceNumber,
-  requestData,
-}: {
-  invoiceNumber: string;
-  requestData: Record<string, unknown>;
-}): ExecuteApprovedSaleReversalResult {
-  return {
-    invoiceNumber,
-    returnedItemCount: getRequestDataNumber(requestData, "returnedItemCount"),
-    cashRefundAmount: getRequestDataNumber(requestData, "cashRefundAmount"),
-    paidAmount: getRequestDataNumber(requestData, "paidAmount"),
-    paymentRefundCount: getRequestDataNumber(
-      requestData,
-      "paymentRefundCount",
-    ),
-    refundShiftId: getRequestDataString(requestData, "refundShiftId"),
-    returnCaseId: getRequestDataString(requestData, "returnCaseId"),
-    pendingReturnItemCount: getRequestDataNumber(
-      requestData,
-      "pendingReturnItemCount",
-    ),
-    idempotentReplay: true,
-  };
+  return `sale-${kind}:${saleId}:${paymentId}`;
 }
 
 /**
- * Atomically executes an approved full-sale void/refund.
- *
- * All financial and inventory mutations are committed together. Any business
- * conflict throws and rolls the transaction back, including the approval claim.
+ * Menjalankan full-sale void/refund secara atomik tanpa approval workflow.
+ * Permission diperiksa oleh server action sebelum service ini dipanggil.
  */
-export async function executeApprovedSaleReversal(
-  input: ExecuteApprovedSaleReversalInput,
-): Promise<ExecuteApprovedSaleReversalResult> {
+export async function executeSaleReversal(
+  input: ExecuteSaleReversalInput,
+): Promise<ExecuteSaleReversalResult> {
   const config = REVERSAL_CONFIG[input.kind];
   const now = input.now ?? new Date();
   const executionIdempotencyKey = createExecutionIdempotencyKey(
     input.kind,
-    input.approvalId,
+    input.saleId,
   );
 
   if (input.accessibleOutletIds.length === 0) {
@@ -267,92 +186,6 @@ export async function executeApprovedSaleReversal(
       );
     }
 
-    const [approval] = await tx
-      .select({
-        id: approvals.id,
-        status: approvals.status,
-        requestedBy: approvals.requestedBy,
-        approvedBy: approvals.approvedBy,
-        requestData: approvals.requestData,
-        notes: approvals.notes,
-        responseNotes: approvals.responseNotes,
-        resolvedAt: approvals.resolvedAt,
-        createdAt: approvals.createdAt,
-        executionStatus: approvals.executionStatus,
-        executionIdempotencyKey: approvals.executionIdempotencyKey,
-      })
-      .from(approvals)
-      .where(
-        and(
-          eq(approvals.id, input.approvalId),
-          eq(approvals.organizationId, input.organizationId),
-          eq(approvals.outletId, sale.outletId),
-          eq(approvals.type, config.approvalType),
-          eq(approvals.referenceType, "sale"),
-          eq(approvals.referenceId, sale.id),
-        ),
-      )
-      .limit(1);
-
-    if (!approval) {
-      throw new SaleReversalTransactionError(
-        "APPROVAL_NOT_READY",
-        `Approval ${input.kind === "void" ? "void" : "refund"} tidak ditemukan untuk transaksi ini.`,
-      );
-    }
-
-    if (approval.status !== "approved" || !approval.approvedBy) {
-      throw new SaleReversalTransactionError(
-        "APPROVAL_NOT_READY",
-        `Approval ${input.kind === "void" ? "void" : "refund"} belum disetujui. Tunggu manager/owner approve sebelum eksekusi.`,
-      );
-    }
-
-    if (approval.requestedBy === approval.approvedBy) {
-      throw new SaleReversalTransactionError(
-        "APPROVAL_NOT_READY",
-        "Approval tidak memenuhi aturan maker-checker karena requester dan approver adalah user yang sama. Buat request baru dan minta user lain yang berwenang untuk memprosesnya.",
-      );
-    }
-
-    if (approval.executionStatus === "completed") {
-      const completedOperation = getRequestDataString(
-        approval.requestData,
-        "executionStatus",
-      );
-
-      if (
-        approval.executionIdempotencyKey === executionIdempotencyKey ||
-        completedOperation === config.legacyExecutionStatus
-      ) {
-        return buildReplayResult({
-          invoiceNumber: sale.invoiceNumber,
-          requestData: approval.requestData,
-        });
-      }
-
-      throw new SaleReversalTransactionError(
-        "INVALID_STATE",
-        "Approval ini sudah selesai dieksekusi oleh operasi yang berbeda.",
-      );
-    }
-
-    if (approval.executionStatus === "executing") {
-      throw new SaleReversalTransactionError(
-        "EXECUTION_IN_PROGRESS",
-        "Eksekusi sedang diproses oleh request lain. Muat ulang halaman untuk melihat status terbaru.",
-      );
-    }
-
-    if (
-      approval.executionStatus === "cancelled" ||
-      !["not_started", "failed"].includes(approval.executionStatus)
-    ) {
-      throw new SaleReversalTransactionError(
-        "INVALID_STATE",
-        "Approval tidak berada pada status yang dapat dieksekusi.",
-      );
-    }
 
     if (sale.status !== "completed") {
       throw new SaleReversalTransactionError(
@@ -457,42 +290,9 @@ export async function executeApprovedSaleReversal(
       }
     }
 
+
     const reason =
-      input.executionNote?.trim() ||
-      approval.notes ||
-      approval.responseNotes ||
-      config.defaultReason;
-
-    const [claimedApproval] = await tx
-      .update(approvals)
-      .set({
-        executionStatus: "executing",
-        executionIdempotencyKey,
-        executionStartedAt: now,
-        executionError: null,
-      })
-      .where(
-        and(
-          eq(approvals.id, approval.id),
-          eq(approvals.status, "approved"),
-          inArray(approvals.executionStatus, ["not_started", "failed"]),
-          or(
-            isNull(approvals.executionIdempotencyKey),
-            eq(
-              approvals.executionIdempotencyKey,
-              executionIdempotencyKey,
-            ),
-          ),
-        ),
-      )
-      .returning({ id: approvals.id });
-
-    if (!claimedApproval) {
-      throw new SaleReversalTransactionError(
-        "EXECUTION_IN_PROGRESS",
-        "Approval sudah diklaim atau dieksekusi oleh request lain. Muat ulang halaman untuk melihat status terbaru.",
-      );
-    }
+      input.executionNote?.trim() || config.defaultReason;
 
     const [transitionedSale] = await tx
       .update(sales)
@@ -576,11 +376,10 @@ export async function executeApprovedSaleReversal(
             previousAvailability: item.availability,
             previousLocationState: item.locationState,
             previousOutletId: item.currentOutletId,
-            approvalId: approval.id,
             executionIdempotencyKey,
           },
           performedBy: input.actor.id,
-          approvedBy: approval.approvedBy,
+          approvedBy: null,
           occurredAt: now,
           createdAt: now,
         })),
@@ -615,7 +414,7 @@ export async function executeApprovedSaleReversal(
           organizationId: input.organizationId,
           outletId: sale.outletId,
           saleId: sale.id,
-          approvalId: approval.id,
+          approvalId: null,
           status: "awaiting_receipt",
           expectedItemCount: itemRows.length,
           receivedItemCount: 0,
@@ -660,7 +459,6 @@ export async function executeApprovedSaleReversal(
               invoiceNumber: sale.invoiceNumber,
               lineNumber: item.lineNumber,
               finalPriceAmount: parseMoney(item.finalPriceAmount),
-              approvalId: approval.id,
               executionIdempotencyKey,
             },
             createdAt: now,
@@ -688,7 +486,7 @@ export async function executeApprovedSaleReversal(
           outletId: sale.outletId,
           saleId: sale.id,
           paymentId: payment.id,
-          approvalId: approval.id,
+          approvalId: null,
           originalShiftId: sale.originalShiftId,
           refundShiftId:
             payment.method === "cash" ? (refundShift?.id ?? null) : null,
@@ -698,17 +496,13 @@ export async function executeApprovedSaleReversal(
           providerReference: null,
           reason,
           status: "confirmed" as const,
-          idempotencyKey: createPaymentRefundIdempotencyKey(
-            input.kind,
-            approval.id,
-            payment.id,
-          ),
-          requestedBy: approval.requestedBy,
-          approvedBy: approval.approvedBy,
+          idempotencyKey: createPaymentRefundIdempotencyKey(input.kind, sale.id, payment.id),
+          requestedBy: input.actor.id,
+          approvedBy: null,
           executedBy: input.actor.id,
           confirmedBy: input.actor.id,
-          requestedAt: approval.createdAt,
-          approvedAt: approval.resolvedAt,
+          requestedAt: now,
+          approvedAt: null,
           executedAt: now,
           confirmedAt: now,
           metadata: {
@@ -747,7 +541,7 @@ export async function executeApprovedSaleReversal(
           reversalOperation: input.kind,
           reversedAt: now.toISOString(),
           reversedBy: input.actor.id,
-          reversalApprovalId: approval.id,
+          reversalOperationId: executionIdempotencyKey,
           reversalReason: reason,
           reversalMode: "full",
           executionIdempotencyKey,
@@ -804,57 +598,6 @@ export async function executeApprovedSaleReversal(
       }
     }
 
-    const completedRequestData = {
-      ...approval.requestData,
-      executionStatus: config.legacyExecutionStatus,
-      executedAt: now.toISOString(),
-      executedBy: input.actor.id,
-      executedByName: input.actor.fullName,
-      executionNote: reason,
-      executionIdempotencyKey,
-      saleStatusBefore: sale.status,
-      saleStatusAfter: config.finalSaleStatus,
-      cashRefundAmount: cashPaidAmount,
-      paidAmount,
-      refundMode: "full",
-      returnedItemCount,
-      pendingReturnItemCount,
-      returnCaseId,
-      paymentRefundCount: insertedRefunds.length,
-      originalShiftId: sale.originalShiftId,
-      refundShiftId: refundShift?.id ?? null,
-    };
-
-    const completedApprovals = await tx
-      .update(approvals)
-      .set({
-        executionStatus: "completed",
-        executedAt: now,
-        executedBy: input.actor.id,
-        executionError: null,
-        requestData: completedRequestData,
-        responseNotes: approval.responseNotes
-          ? `${approval.responseNotes}\n\n${config.responseNotePrefix}: ${reason}`
-          : `${config.responseNotePrefix}: ${reason}`,
-      })
-      .where(
-        and(
-          eq(approvals.id, approval.id),
-          eq(approvals.executionStatus, "executing"),
-          eq(
-            approvals.executionIdempotencyKey,
-            executionIdempotencyKey,
-          ),
-        ),
-      )
-      .returning({ id: approvals.id });
-
-    if (completedApprovals.length !== 1) {
-      throw new SaleReversalTransactionError(
-        "CONCURRENT_STATE_CHANGE",
-        "Approval berubah saat finalisasi. Seluruh eksekusi dibatalkan.",
-      );
-    }
 
     await tx.insert(auditLogs).values({
       organizationId: input.organizationId,
@@ -884,7 +627,6 @@ export async function executeApprovedSaleReversal(
       },
       afterData: {
         status: config.finalSaleStatus,
-        approvalId: approval.id,
         refundMode: "full",
         returnedItemCount,
         pendingReturnItemCount,
@@ -898,11 +640,10 @@ export async function executeApprovedSaleReversal(
       ipAddress: input.requestMetadata.ipAddress,
       userAgent: input.requestMetadata.userAgent,
       metadata: {
-        source: "admin.sales.detail",
+        source: config.source,
         operation: input.kind,
-        approvalId: approval.id,
         invoiceNumber: sale.invoiceNumber,
-        executionStatus: config.legacyExecutionStatus,
+        executionStatus: "direct_execution",
         executionIdempotencyKey,
         originalShiftId: sale.originalShiftId,
         refundShiftId: refundShift?.id ?? null,
@@ -913,10 +654,7 @@ export async function executeApprovedSaleReversal(
     await publishSaleReversalCompletedNotificationInTransaction(tx, {
       organizationId: input.organizationId,
       outletId: sale.outletId,
-      approvalId: approval.id,
       kind: input.kind,
-      requestedById: approval.requestedBy,
-      approvedById: approval.approvedBy,
       executedById: input.actor.id,
       saleId: sale.id,
       invoiceNumber: sale.invoiceNumber,
