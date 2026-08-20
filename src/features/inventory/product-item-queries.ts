@@ -243,6 +243,7 @@ export async function getProductItemList(
       displayName: productItems.displayName,
       weightGram: productItems.weightGram,
       purityPercent: productItems.purityPercent,
+      color: productItems.color,
       availability: productItems.availability,
       condition: productItems.condition,
       imageKey: productItems.imageKey,

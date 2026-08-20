@@ -1,7 +1,6 @@
 import {
   AlertTriangle,
   ArrowLeft,
-  ArrowRight,
   Barcode,
   Boxes,
   CircleDot,
@@ -27,6 +26,10 @@ import {
   getProductItemList,
   getProductItemOverview,
 } from "@/features/inventory/product-item-queries";
+import {
+  getActiveGoldPriceRateMap,
+  normalizePurityKey,
+} from "@/features/pricing/metal-price-rates";
 import { requireAnyPermission } from "@/lib/auth/session";
 import { getImageUrl } from "@/lib/storage/image-storage";
 import { cn } from "@/lib/utils";
@@ -110,6 +113,36 @@ function formatPurity(value: string | null) {
   return `${new Intl.NumberFormat("id-ID", {
     maximumFractionDigits: 3,
   }).format(amount)}%`;
+}
+
+function formatPricePerGram(value: string | null | undefined) {
+  if (!value) {
+    return "Belum diatur";
+  }
+
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return "Belum diatur";
+  }
+
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function formatWeightValue(value: number | string | null) {
+  const amount = typeof value === "string" ? Number(value) : (value ?? 0);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 3,
+  }).format(amount);
 }
 
 function formatNumber(value: number | string | null) {
@@ -231,11 +264,13 @@ export default async function InventoryPage({
     "inventory.manage",
   ]);
   const filters = parseProductItemListFilters(await searchParams);
-  const [overview, outletOptions, itemList] = await Promise.all([
-    getProductItemOverview(auth.organization.id),
-    getInventoryOutletOptions(auth.organization.id),
-    getProductItemList(auth.organization.id, filters),
-  ]);
+  const [overview, outletOptions, itemList, activePriceRateMap] =
+    await Promise.all([
+      getProductItemOverview(auth.organization.id),
+      getInventoryOutletOptions(auth.organization.id),
+      getProductItemList(auth.organization.id, filters),
+      getActiveGoldPriceRateMap(auth.organization.id),
+    ]);
   const isFiltered = Boolean(
     filters.search ||
     filters.outletId ||
@@ -492,56 +527,63 @@ export default async function InventoryPage({
           </div>
         ) : (
           <>
-            <div className="hidden lg:block">
+            <div className="hidden xl:block">
               <div className="overflow-x-auto">
-                <div className="min-w-[1080px]">
-                  <div className="grid grid-cols-[minmax(280px,1.35fr)_180px_170px_190px_160px_150px_110px] gap-4 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-xs font-semibold text-neutral-500">
+                <div className="min-w-[1560px]">
+                  <div className="grid grid-cols-[minmax(300px,1.55fr)_180px_190px_110px_175px_150px_165px_130px] gap-4 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-xs font-semibold text-neutral-500">
                     <div>Item</div>
-                    <div>SKU / Barcode</div>
-                    <div>Outlet</div>
-                    <div>Spesifikasi</div>
-                    <div>Kadar</div>
-                    <div>Status</div>
-                    <div className="text-right">Aksi</div>
+                    <div className="min-w-0 self-center pl-5">
+                      SKU / Barcode
+                    </div>
+                    <div className="min-w-0 self-center pl-10">
+                      Stock Tersedia
+                    </div>
+                    <div className="min-w-0 self-center pl-13">Kadar %</div>
+                    <div className="min-w-0 self-center pl-20">
+                      Harga / Gram
+                    </div>
+                    <div className="min-w-0 self-center pl-15">
+                      Berat (Gram)
+                    </div>
+                    <div className="min-w-0 self-center pl-15">Warna</div>
+                    <div className="min-w-0 self-center pl-6">Status</div>
                   </div>
 
-                  <div className="max-h-[680px] divide-y divide-[var(--border)] overflow-y-auto">
+                  <div className="divide-y divide-[var(--border)]">
                     {itemList.rows.map((item) => {
-                      const imageUrl = getImageUrl(
-                        item.imageKey,
-                      );
-                      const usesCatalogPhoto = false;
+                      const imageUrl = getImageUrl(item.imageKey);
+                      const purityKey = normalizePurityKey(item.purityPercent);
+                      const activeRate = purityKey
+                        ? activePriceRateMap.get(purityKey)
+                        : null;
 
                       return (
                         <Link
                           key={item.id}
                           href={`/admin/inventaris/item/${item.id}`}
                           aria-label={`Buka detail item ${item.productName} ${item.sku}`}
-                          className="group grid grid-cols-[minmax(280px,1.35fr)_180px_170px_190px_160px_150px_110px] gap-4 px-5 py-4 text-inherit no-underline transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+                          className="group grid grid-cols-[minmax(300px,1.55fr)_180px_190px_110px_175px_150px_165px_130px] gap-4 px-5 py-4 text-inherit no-underline transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
                         >
                           <div className="flex min-w-0 items-center gap-3">
                             <ProductImage
                               src={imageUrl}
                               alt={`${item.productName} ${item.sku}`}
-                              className="size-16 shrink-0 rounded-2xl border border-[var(--border)]"
-                              badge={
-                                usesCatalogPhoto ? "Foto katalog" : undefined
-                              }
+                              className="size-14 shrink-0 rounded-xl border border-[var(--border)]"
                             />
                             <div className="min-w-0">
-                              <p className="truncate font-semibold text-neutral-950 transition group-hover:text-[var(--accent)]">
+                              <p className="truncate text-sm font-semibold text-neutral-950 transition group-hover:text-[var(--accent)]">
                                 {item.productName}
                               </p>
                               <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                                Master: {item.masterProductName}
+                                {item.masterProductName}
                               </p>
-                              <p className="mt-1 truncate text-xs text-neutral-500">
+                              <p className="mt-1 truncate text-[11px] text-neutral-400">
                                 Update {formatDateTime(item.updatedAt)}
                               </p>
                             </div>
                           </div>
 
-                          <div className="min-w-0 self-center">
+                          <div className="min-w-0 self-center pl-6">
                             <p className="truncate font-mono text-xs font-semibold text-neutral-900">
                               {item.sku}
                             </p>
@@ -550,7 +592,7 @@ export default async function InventoryPage({
                             </p>
                           </div>
 
-                          <div className="min-w-0 self-center">
+                          <div className="min-w-0 self-center pl-5">
                             <p className="truncate text-sm font-semibold text-neutral-950">
                               {item.outletName ?? "Belum ditempatkan"}
                             </p>
@@ -559,35 +601,36 @@ export default async function InventoryPage({
                             </p>
                           </div>
 
-                          <div className="self-center text-sm text-neutral-900">
-                            <div className="flex items-center gap-2">
-                              <Scale className="size-4 text-neutral-400" />
-                              <span className="font-semibold">
-                                {formatWeight(item.weightGram)}
-                              </span>
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              <span
-                                className={cn(
-                                  "inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold",
-                                  getConditionClass(item.condition),
-                                )}
-                              >
-                                {conditionLabels[item.condition]}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="self-center">
-                            <p className="text-sm font-semibold text-neutral-950">
+                          <div className="min-w-0 self-center pl-16">
+                            <p className="text-sm font-semibold tabular-nums text-neutral-950">
                               {formatPurity(item.purityPercent)}
                             </p>
-                            <p className="mt-1 text-xs text-[var(--muted)]">
-                              Pricing key
+                          </div>
+
+                          <div className="self-center text-right">
+                            <p className="text-sm font-semibold tabular-nums text-neutral-950">
+                              {formatPricePerGram(activeRate?.ratePerGram)}
+                            </p>
+                            {!activeRate ? (
+                              <p className="mt-1 text-[11px] text-amber-600">
+                                Rate belum tersedia
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="min-w-0 self-center pl-22">
+                            <p className="text-sm font-semibold tabular-nums text-neutral-950">
+                              {formatWeightValue(item.weightGram)}
                             </p>
                           </div>
 
-                          <div className="self-center">
+                          <div className="min-w-0 self-center pl-15">
+                            <p className="truncate text-sm font-medium text-neutral-900">
+                              {item.color || "—"}
+                            </p>
+                          </div>
+
+                          <div className="min-w-0 self-center pl-5">
                             <span
                               className={cn(
                                 "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
@@ -595,13 +638,6 @@ export default async function InventoryPage({
                               )}
                             >
                               {availabilityLabels[item.availability]}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-end self-center">
-                            <span className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent)] transition group-hover:text-neutral-950">
-                              Detail
-                              <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
                             </span>
                           </div>
                         </Link>
@@ -614,10 +650,11 @@ export default async function InventoryPage({
 
             <div className="divide-y divide-[var(--border)] lg:hidden">
               {itemList.rows.map((item) => {
-                const imageUrl = getImageUrl(
-                  item.imageKey,
-                );
-                const usesCatalogPhoto = false;
+                const imageUrl = getImageUrl(item.imageKey);
+                const purityKey = normalizePurityKey(item.purityPercent);
+                const activeRate = purityKey
+                  ? activePriceRateMap.get(purityKey)
+                  : null;
 
                 return (
                   <Link
@@ -631,7 +668,6 @@ export default async function InventoryPage({
                         src={imageUrl}
                         alt={`${item.productName} ${item.sku}`}
                         className="size-20 shrink-0 rounded-2xl border border-[var(--border)]"
-                        badge={usesCatalogPhoto ? "Foto katalog" : undefined}
                       />
 
                       <div className="min-w-0 flex-1">
@@ -656,15 +692,27 @@ export default async function InventoryPage({
 
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                           <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
-                            <p className="text-neutral-500">Berat</p>
+                            <p className="text-neutral-500">Kadar %</p>
                             <p className="mt-1 font-semibold text-neutral-950">
-                              {formatWeight(item.weightGram)}
+                              {formatPurity(item.purityPercent)}
                             </p>
                           </div>
                           <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
-                            <p className="text-neutral-500">Kadar</p>
+                            <p className="text-neutral-500">Harga / Gram</p>
                             <p className="mt-1 font-semibold text-neutral-950">
-                              {formatPurity(item.purityPercent)}
+                              {formatPricePerGram(activeRate?.ratePerGram)}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
+                            <p className="text-neutral-500">Berat (Gram)</p>
+                            <p className="mt-1 font-semibold text-neutral-950">
+                              {formatWeightValue(item.weightGram)}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
+                            <p className="text-neutral-500">Warna</p>
+                            <p className="mt-1 truncate font-semibold text-neutral-950">
+                              {item.color || "—"}
                             </p>
                           </div>
                         </div>
@@ -695,13 +743,9 @@ export default async function InventoryPage({
                           </div>
                         </div>
 
-                        <div className="mt-4 flex items-center justify-between border-t border-[var(--border)] pt-3">
+                        <div className="mt-4 border-t border-[var(--border)] pt-3">
                           <span className="text-xs text-[var(--muted)]">
                             Update {formatDateTime(item.updatedAt)}
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--accent)]">
-                            Detail
-                            <ArrowRight className="size-4" />
                           </span>
                         </div>
                       </div>
