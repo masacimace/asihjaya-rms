@@ -11,8 +11,8 @@ import {
   PackageCheck,
   Plus,
   Search,
+  Scale,
   Sparkles,
-  Tag,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -47,14 +47,6 @@ function formatInteger(value: number) {
 function formatGram(value: number) {
   return new Intl.NumberFormat("id-ID", {
     maximumFractionDigits: 3,
-  }).format(Number.isFinite(value) ? value : 0);
-}
-
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
   }).format(Number.isFinite(value) ? value : 0);
 }
 
@@ -146,65 +138,78 @@ function ProductStatusBadge({ status }: { status: ProductStatus }) {
 
 type ProductRow = Awaited<ReturnType<typeof getProductList>>["rows"][number];
 
-function ProductMobileCard({ product }: { product: ProductRow }) {
+function ProductMasterListItem({ product }: { product: ProductRow }) {
+  const hasAvailableStock = product.availableItemCount > 0;
+
   return (
     <Link
       href={`/admin/produk/${product.id}`}
-      className="group block rounded-2xl border border-[var(--border)] bg-white p-4 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/30"
+      className="group block px-5 py-5 text-inherit no-underline transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] sm:px-6"
     >
-      <div className="flex gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate font-semibold text-neutral-950">
-                {product.name}
-              </p>
-              <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                {product.code} · {product.categoryName}
-              </p>
-            </div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="min-w-0 truncate text-base font-semibold text-neutral-950 transition group-hover:text-[var(--accent)]">
+              {product.name}
+            </h3>
             <ProductStatusBadge status={product.status} />
           </div>
 
-          <p className="mt-2 line-clamp-1 text-xs text-[var(--muted)]">
-            Master reference untuk {formatInteger(product.itemCount)} item fisik.
+          <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
+            <span className="font-mono text-neutral-600">{product.code}</span>
+            <span className="mx-1.5 text-neutral-300">•</span>
+            <span>{product.categoryName}</span>
+            <span className="mx-1.5 text-neutral-300">/</span>
+            <span>{product.categoryCode}</span>
           </p>
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between gap-3 text-xs text-[var(--muted)] lg:justify-end">
+          <span>Update {formatDate(product.updatedAt)}</span>
+          <ArrowRight className="size-4 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-        <div className="rounded-xl border border-[var(--border)] bg-neutral-50 p-3">
-          <p className="text-xs text-[var(--muted)]">Item fisik</p>
-          <p className="mt-1 font-semibold text-neutral-950">
-            {formatInteger(product.itemCount)} item
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="rounded-xl border border-[var(--border)] bg-neutral-50 px-3 py-3 sm:px-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Total Item
+          </p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-neutral-950">
+            {formatInteger(product.itemCount)}
           </p>
         </div>
-        <div className="rounded-xl border border-[var(--border)] bg-neutral-50 p-3">
-          <p className="text-xs text-[var(--muted)]">Tersedia</p>
-          <p className="mt-1 font-semibold text-neutral-950">
-            {formatInteger(product.availableItemCount)} item
+
+        <div className="rounded-xl border border-[var(--border)] bg-neutral-50 px-3 py-3 sm:px-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Tersedia
+          </p>
+          <p
+            className={`mt-1 text-lg font-semibold tabular-nums ${
+              hasAvailableStock ? "text-emerald-700" : "text-neutral-950"
+            }`}
+          >
+            {formatInteger(product.availableItemCount)}
           </p>
         </div>
-      </div>
 
-      <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4 text-sm">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[var(--muted)]">Terjual</span>
-          <span className="text-right font-semibold text-neutral-950">
-            {formatInteger(product.soldItemCount)} item
-          </span>
+        <div className="rounded-xl border border-[var(--border)] bg-neutral-50 px-3 py-3 sm:px-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Terjual
+          </p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-neutral-950">
+            {formatInteger(product.soldItemCount)}
+          </p>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[var(--muted)]">Gramasi aktif</span>
-          <span className="font-semibold text-neutral-950">
-            {formatGram(product.totalWeightGram)} gr
-          </span>
-        </div>
-      </div>
 
-      <div className="mt-4 flex items-center justify-between gap-3 text-xs font-semibold text-[var(--accent)]">
-        <span>Lihat detail produk</span>
-        <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+        <div className="rounded-xl border border-[var(--border)] bg-neutral-50 px-3 py-3 sm:px-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Berat Tersedia
+          </p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-neutral-950">
+            {formatGram(product.availableWeightGram)} gr
+          </p>
+        </div>
       </div>
     </Link>
   );
@@ -311,15 +316,15 @@ export default async function ProductCatalogPage({
           icon={<Boxes className="size-5" />}
         />
         <SummaryCard
-          title="Nilai Inventory"
-          value={formatMoney(overview.availableCostAmount)}
-          helper={`${formatGram(overview.availableWeightGram)} gr ready stock`}
-          icon={<Tag className="size-5" />}
+          title="Berat Tersedia"
+          value={`${formatGram(overview.availableWeightGram)} gr`}
+          helper={`${formatInteger(overview.availableItems)} item ready stock`}
+          icon={<Scale className="size-5" />}
         />
         <SummaryCard
           title="Tanpa Stok"
           value={formatInteger(overview.activeProductsWithoutAvailableStock)}
-          helper={`${formatInteger(overview.activeCategories)} kategori aktif`}
+          helper="Product Master aktif tanpa item tersedia"
           icon={<Sparkles className="size-5" />}
         />
       </section>
@@ -451,83 +456,11 @@ export default async function ProductCatalogPage({
             ) : null}
           </div>
         ) : (
-          <>
-            <div className="hidden lg:block">
-              <div className="grid min-w-[74rem] grid-cols-[minmax(18rem,1.4fr)_12rem_10rem_12rem_12rem_3rem] gap-4 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-xs font-semibold text-neutral-500">
-                <span>Produk</span>
-                <span>Kategori</span>
-                <span>Status</span>
-                <span>Item fisik</span>
-                <span>Update</span>
-                <span className="sr-only">Detail</span>
-              </div>
-
-              <div className="overflow-x-auto">
-                <div className="min-w-[74rem] divide-y divide-[var(--border)]">
-                  {productList.rows.map((product) => (
-                    <Link
-                      key={product.id}
-                      href={`/admin/produk/${product.id}`}
-                      className="group grid grid-cols-[minmax(18rem,1.4fr)_12rem_10rem_12rem_12rem_3rem] gap-4 px-5 py-4 transition hover:bg-neutral-50"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-neutral-950">
-                            {product.name}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                            {product.code} · Reference Product Master
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="min-w-0 self-center">
-                        <p className="truncate text-sm font-semibold text-neutral-950">
-                          {product.categoryName}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {product.categoryCode}
-                        </p>
-                      </div>
-
-                      <div className="self-center">
-                        <ProductStatusBadge status={product.status} />
-                      </div>
-
-                      <div className="self-center text-sm">
-                        <p className="font-semibold text-neutral-950">
-                          {formatInteger(product.itemCount)} item
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {formatInteger(product.availableItemCount)} tersedia ·{" "}
-                          {formatInteger(product.soldItemCount)} terjual
-                        </p>
-                      </div>
-
-                      <div className="self-center text-sm">
-                        <p className="font-semibold text-neutral-950">
-                          {formatDate(product.updatedAt)}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          Terakhir diperbarui
-                        </p>
-                      </div>
-
-                      <div className="self-center justify-self-end text-neutral-400 transition group-hover:translate-x-0.5 group-hover:text-[var(--accent)]">
-                        <ArrowRight className="size-4" />
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-3 p-4 lg:hidden">
-              {productList.rows.map((product) => (
-                <ProductMobileCard key={product.id} product={product} />
-              ))}
-            </div>
-          </>
+          <div className="divide-y divide-[var(--border)]">
+            {productList.rows.map((product) => (
+              <ProductMasterListItem key={product.id} product={product} />
+            ))}
+          </div>
         )}
       </section>
 

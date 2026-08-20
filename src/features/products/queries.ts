@@ -50,7 +50,6 @@ export async function getProductOverview(organizationId: string) {
           availability: productItems.availability,
           total: count(),
           totalWeight: sum(productItems.weightGram),
-          totalCost: sum(productItems.costAmount),
         })
         .from(productItems)
         .where(eq(productItems.organizationId, organizationId))
@@ -94,13 +93,6 @@ export async function getProductOverview(organizationId: string) {
         ?.totalWeight ?? 0,
     );
 
-  const itemCost = (
-    availability: "draft" | "migration_hold" | "available" | "reserved" | "inspection" | "sold",
-  ) =>
-    Number(
-      itemStatusRows.find((row) => row.availability === availability)
-        ?.totalCost ?? 0,
-    );
 
   const activeProductsWithoutAvailableStock = productStockRows.filter(
     (row) => row.status === "active" && Number(row.availableItems) === 0,
@@ -123,12 +115,7 @@ export async function getProductOverview(organizationId: string) {
     reservedItems: itemCount("reserved"),
     soldItems: itemCount("sold"),
     availableWeightGram: itemWeight("available"),
-    availableCostAmount: itemCost("available"),
     activeProductsWithoutAvailableStock,
-    totalWeightGram: itemStatusRows.reduce(
-      (total, row) => total + Number(row.totalWeight ?? 0),
-      0,
-    ),
   };
 }
 
@@ -210,9 +197,7 @@ export async function getProductList(
       reservedItemCount: sql<number>`count(distinct case when ${productItems.availability} = 'reserved' and ${productItems.isActive} = true then ${productItems.id} end)`.mapWith(Number),
       soldItemCount: sql<number>`count(distinct case when ${productItems.availability} = 'sold' and ${productItems.isActive} = true then ${productItems.id} end)`.mapWith(Number),
       draftItemCount: sql<number>`count(distinct case when ${productItems.availability} = 'draft' and ${productItems.isActive} = true then ${productItems.id} end)`.mapWith(Number),
-      totalWeightGram: sql<number>`coalesce(sum(case when ${productItems.isActive} = true then ${productItems.weightGram} else 0 end), 0)`.mapWith(Number),
-      minSellingAmount: sql<number>`coalesce(min(case when ${productItems.isActive} = true then ${productItems.sellingAmount} end), 0)`.mapWith(Number),
-      maxSellingAmount: sql<number>`coalesce(max(case when ${productItems.isActive} = true then ${productItems.sellingAmount} end), 0)`.mapWith(Number),
+      availableWeightGram: sql<number>`coalesce(sum(case when ${productItems.availability} = 'available' and ${productItems.isActive} = true then ${productItems.weightGram} else 0 end), 0)`.mapWith(Number),
     })
     .from(productMasters)
     .innerJoin(
@@ -244,9 +229,7 @@ export async function getProductList(
       reservedItemCount: Number(row.reservedItemCount),
       soldItemCount: Number(row.soldItemCount),
       draftItemCount: Number(row.draftItemCount),
-      totalWeightGram: Number(row.totalWeightGram),
-      minSellingAmount: Number(row.minSellingAmount),
-      maxSellingAmount: Number(row.maxSellingAmount),
+      availableWeightGram: Number(row.availableWeightGram),
     })),
     total,
     page,
