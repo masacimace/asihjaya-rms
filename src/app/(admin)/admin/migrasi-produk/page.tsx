@@ -3,7 +3,8 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   History,
-  LockKeyhole,
+  ImageIcon,
+  PackageCheck,
   PackageSearch,
   ShieldCheck,
   UploadCloud,
@@ -18,7 +19,7 @@ import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
-  title: "Migrasi Produk Legacy",
+  title: "Import Produk Legacy",
 };
 
 export const runtime = "nodejs";
@@ -61,9 +62,9 @@ function FlashMessage({ type, message }: { type?: string; message?: string }) {
 function BatchStatusBadge({ status }: { status: string }) {
   const label =
     status === "ready"
-      ? "Review"
+      ? "Selesai"
       : status === "processing"
-        ? "Diproses"
+        ? "Mengimport"
         : status === "failed"
           ? "Gagal"
           : "Diarsipkan";
@@ -89,10 +90,7 @@ export default async function LegacyProductMigrationPage({
 }: {
   searchParams: Promise<{ type?: string; message?: string }>;
 }) {
-  const auth = await requireAnyPermission([
-    "migration.view",
-    "migration.import",
-  ]);
+  const auth = await requireAnyPermission(["migration.view", "migration.import"]);
   const [data, query] = await Promise.all([
     getLegacyMigrationOverview(auth),
     searchParams,
@@ -100,28 +98,33 @@ export default async function LegacyProductMigrationPage({
   const canImport = hasPermission(auth, "migration.import");
   const overviewCards: Array<{
     label: string;
+    helper: string;
     value: number;
     Icon: LucideIcon;
   }> = [
     {
-      label: "Batch staging",
+      label: "Batch selesai",
+      helper: "Import XLSX yang sudah diproses",
       value: data.totals.batchCount,
       Icon: FileSpreadsheet,
     },
     {
-      label: "Baris referensi",
-      value: data.totals.stagedRows,
-      Icon: PackageSearch,
+      label: "Item diimport",
+      helper: "Langsung aktif di inventaris",
+      value: data.totals.importedRows,
+      Icon: PackageCheck,
     },
     {
-      label: "Perlu perhatian",
-      value: data.totals.warningRows,
+      label: "Perlu dirapikan",
+      helper: "Tidak memblokir operasional",
+      value: data.totals.cleanupRows,
       Icon: AlertTriangle,
     },
     {
-      label: "Data invalid",
-      value: data.totals.invalidRows,
-      Icon: ShieldCheck,
+      label: "URL foto sumber",
+      helper: "Disalin ke internal storage",
+      value: data.totals.imageUrlRows,
+      Icon: ImageIcon,
     },
   ];
 
@@ -134,33 +137,33 @@ export default async function LegacyProductMigrationPage({
           <div>
             <p className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
               <PackageSearch className="size-3.5" />
-              Import produk legacy
+              Direct import produk legacy
             </p>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
-              Migrasi Produk Legacy
+              Import Produk Legacy
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Import export XLSX dari sistem lama sebagai referensi staging.
-              Tidak ada baris yang otomatis menjadi stok aktif atau dapat dijual
-              melalui POS pada tahap ini.
+              Upload XLSX dari sistem lama dan seluruh baris langsung dibuat sebagai
+              Product Item aktif. Tidak ada stock opname, review, migration hold,
+              reconciliation, atau cutover.
             </p>
           </div>
 
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
-              <LockKeyhole className="size-4" />
-              Guardrail aktif
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <p className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
+              <CheckCircle2 className="size-4" />
+              Import dibuat non-blocking
             </p>
-            <p className="mt-2 text-sm leading-6 text-amber-800">
-              Stok aktif tetap bersumber dari verifikasi barang fisik. Harga
-              lama hanya disimpan sebagai referensi.
+            <p className="mt-2 text-sm leading-6 text-emerald-800">
+              Data yang kurang rapi tetap masuk. Warning dicatat untuk cleanup
+              sambil berjalan, sedangkan foto disalin otomatis setelah item aktif.
             </p>
           </div>
         </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {overviewCards.map(({ label, value, Icon }) => (
+        {overviewCards.map(({ label, helper, value, Icon }) => (
           <div
             key={label}
             className="rounded-3xl border border-[var(--border)] bg-white p-5"
@@ -171,22 +174,23 @@ export default async function LegacyProductMigrationPage({
             <p className="mt-4 text-2xl font-semibold text-neutral-950">
               {formatNumber(value)}
             </p>
-            <p className="mt-1 text-sm text-[var(--muted)]">{label}</p>
+            <p className="mt-1 text-sm font-semibold text-neutral-800">{label}</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">{helper}</p>
           </div>
         ))}
       </section>
 
-      <section className="grid w-full min-w-0 max-w-full gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)]">
+      <section className="grid w-full min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
         {canImport ? (
           <form
             action={uploadLegacyProductWorkbookAction}
-            className="w-full min-w-0 max-w-full rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6"
+            className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6"
           >
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex items-center gap-3">
               <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
                 <UploadCloud className="size-5" />
               </div>
-              <div className="min-w-0">
+              <div>
                 <h2 className="font-semibold text-neutral-950">
                   Upload export master produk
                 </h2>
@@ -197,12 +201,12 @@ export default async function LegacyProductMigrationPage({
             </div>
 
             <div className="mt-6 grid gap-4">
-              <label className="grid min-w-0 gap-2 text-sm font-semibold text-neutral-800">
-                Outlet tujuan verifikasi
+              <label className="grid gap-2 text-sm font-semibold text-neutral-800">
+                Outlet tujuan stok
                 <select
                   name="outletId"
                   required
-                  className="h-11 w-full min-w-0 max-w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
+                  className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
                 >
                   <option value="">Pilih outlet</option>
                   {data.outlets.map((outlet) => (
@@ -220,86 +224,54 @@ export default async function LegacyProductMigrationPage({
                   type="file"
                   accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   required
-                  className="block w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-3 py-4 text-xs text-neutral-700 file:mr-3 file:max-w-full file:rounded-lg file:border-0 file:bg-neutral-950 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white sm:text-sm"
+                  className="block w-full overflow-hidden rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-3 py-4 text-xs text-neutral-700 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-950 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white sm:text-sm"
                 />
               </label>
             </div>
 
-            <div className="mt-5 min-w-0 break-words rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
-              <p className="font-semibold">Yang dilakukan sistem</p>
+            <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+              <p className="font-semibold">Sekali upload langsung aktif</p>
               <p className="mt-1">
-                Mempertahankan barcode enam digit termasuk nol di depan,
-                mengekstrak URL foto, mendeteksi duplikasi dan anomali, lalu
-                menyimpan seluruh baris ke staging.
+                Kategori dan Product Master dipetakan/dibuat otomatis, identitas
+                internal dibuat aman, barcode legacy tetap dapat dipindai jika unik,
+                dan semua item masuk ke status Tersedia. Harga legacy hanya disimpan
+                sebagai referensi; POS tetap memakai Harga/Gram aktif berdasarkan Kadar %.
               </p>
             </div>
 
             <FormSubmitButton
-              pendingText="Menganalisis dan menyimpan staging..."
-              className="mt-6 w-full min-w-0 max-w-full bg-neutral-950 hover:bg-neutral-800"
+              pendingText="Mengimport produk..."
+              className="mt-6 w-full bg-neutral-950 hover:bg-neutral-800"
             >
               <FileSpreadsheet className="size-4" />
-              Upload dan analisis XLSX
+              Import XLSX ke Inventaris
             </FormSubmitButton>
           </form>
         ) : (
-          <section className="w-full min-w-0 max-w-full rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
+          <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
             <ShieldCheck className="size-10 text-neutral-500" />
-            <h2 className="mt-4 font-semibold text-neutral-950">
-              Akses lihat saja
-            </h2>
+            <h2 className="mt-4 font-semibold text-neutral-950">Akses lihat saja</h2>
             <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              Akun ini dapat melihat hasil staging, tetapi membutuhkan
-              permission
-              <strong> migration.import</strong> untuk mengunggah workbook.
+              Permission <strong>migration.import</strong> diperlukan untuk direct import.
             </p>
           </section>
         )}
 
         <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-neutral-100 text-neutral-700">
-              <ShieldCheck className="size-5" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="font-semibold text-neutral-950">
-                Batas aman import
-              </h2>
-              <p className="text-xs leading-5 text-[var(--muted)]">
-                Import ini belum mengubah operasional outlet.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-3">
+          <h2 className="font-semibold text-neutral-950">Aturan import baru</h2>
+          <div className="mt-5 grid gap-3">
             {[
-              [
-                "Tidak membuat stok aktif",
-                "Workbook hanya disimpan pada tabel staging terpisah dari product_items.",
-              ],
-              [
-                "Hash file anti-duplikat",
-                "File yang sama tidak dapat diimpor dua kali untuk outlet yang sama.",
-              ],
-              [
-                "Harga lama bukan pricing aktif",
-                "Nilai harga dan potongan hanya menjadi referensi saat verifikasi fisik.",
-              ],
-              [
-                "Status stok tidak diasumsikan",
-                "Export lama tidak memiliki status yang dapat dipercaya, sehingga keberadaan fisik tetap wajib dipindai.",
-              ],
+              ["Semua row tetap masuk", "Warning/invalid hanya menjadi penanda cleanup."],
+              ["Langsung Tersedia", "Tidak ada verification session atau stock opname."],
+              ["Barcode duplicate-safe", "Barcode legacy yang bentrok tidak memblokir item; item tetap punya barcode internal unik."],
+              ["Foto non-blocking", "URL foto disalin ke storage internal setelah commit. Gagal download tidak mematikan item."],
             ].map(([title, description]) => (
-              <div
-                key={title}
-                className="min-w-0 rounded-2xl bg-neutral-50 p-4"
-              >
-                <p className="flex min-w-0 items-start gap-2 text-sm font-semibold text-neutral-900">
+              <div key={title} className="rounded-2xl bg-neutral-50 p-4">
+                <p className="flex items-start gap-2 text-sm font-semibold text-neutral-900">
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
-                  <span className="min-w-0 break-words">{title}</span>
+                  {title}
                 </p>
-
-                <p className="mt-1 break-words pl-6 text-xs leading-5 text-[var(--muted)]">
+                <p className="mt-1 pl-6 text-xs leading-5 text-[var(--muted)]">
                   {description}
                 </p>
               </div>
@@ -308,15 +280,13 @@ export default async function LegacyProductMigrationPage({
         </section>
       </section>
 
-      <section className="w-full min-w-0 max-w-full rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
+      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
         <div className="flex items-center gap-3">
           <div className="grid size-10 place-items-center rounded-xl bg-neutral-100 text-neutral-700">
             <History className="size-5" />
           </div>
           <div>
-            <h2 className="font-semibold text-neutral-950">
-              Batch migrasi terbaru
-            </h2>
+            <h2 className="font-semibold text-neutral-950">Import terbaru</h2>
             <p className="text-xs leading-5 text-[var(--muted)]">
               Dua puluh batch terbaru yang dapat diakses akun ini.
             </p>
@@ -325,65 +295,33 @@ export default async function LegacyProductMigrationPage({
 
         {data.recentBatches.length === 0 ? (
           <div className="mt-6 rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 px-5 py-10 text-center text-sm text-[var(--muted)]">
-            Belum ada workbook legacy yang diimpor.
+            Belum ada workbook legacy yang diimport.
           </div>
         ) : (
-          <div className="mt-6 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[var(--border)] text-xs uppercase text-[var(--muted)]">
-                <tr>
-                  <th className="px-3 py-3 font-semibold">File dan outlet</th>
-                  <th className="px-3 py-3 font-semibold">Ringkasan</th>
-                  <th className="px-3 py-3 font-semibold">Status</th>
-                  <th className="px-3 py-3 font-semibold">Waktu</th>
-                  <th className="px-3 py-3 text-right font-semibold">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {data.recentBatches.map((batch) => (
-                  <tr key={batch.id} className="align-top">
-                    <td className="px-3 py-4">
-                      <p className="max-w-xs truncate font-semibold text-neutral-950">
-                        {batch.fileName}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {batch.outletName} · {batch.outletCode}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        oleh {batch.uploadedByName}
-                      </p>
-                    </td>
-                    <td className="px-3 py-4 text-xs leading-5 text-neutral-700">
-                      <p>{formatNumber(batch.totalRows)} baris</p>
-                      <p>{formatNumber(batch.uniqueMasterCount)} master</p>
-                      <p className="text-amber-700">
-                        {formatNumber(batch.warningRows)} warning
-                      </p>
-                      <p className="text-red-700">
-                        {formatNumber(batch.invalidRows)} invalid
-                      </p>
-                    </td>
-                    <td className="px-3 py-4">
-                      <BatchStatusBadge status={batch.status} />
-                    </td>
-                    <td className="px-3 py-4 text-xs leading-5 text-[var(--muted)]">
-                      {formatDateTime(
-                        batch.completedAt ?? batch.createdAt,
-                        auth.organization.timezone,
-                      )}
-                    </td>
-                    <td className="px-3 py-4 text-right">
-                      <Link
-                        href={`/admin/migrasi-produk/${batch.id}`}
-                        className="inline-flex h-9 items-center rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-900 transition hover:bg-neutral-50"
-                      >
-                        Detail
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-6 space-y-3">
+            {data.recentBatches.map((batch) => (
+              <Link
+                key={batch.id}
+                href={`/admin/migrasi-produk/${batch.id}`}
+                className="group grid gap-4 rounded-2xl border border-[var(--border)] p-4 text-inherit no-underline transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate font-semibold text-neutral-950">{batch.fileName}</p>
+                    <BatchStatusBadge status={batch.status} />
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {batch.outletName} · {batch.outletCode} · {formatNumber(batch.totalRows)} item · {formatNumber(batch.uniqueMasterCount)} master
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {formatNumber(batch.warningRows + batch.invalidRows)} perlu dirapikan · oleh {batch.uploadedByName}
+                  </p>
+                </div>
+                <div className="text-xs text-[var(--muted)] md:text-right">
+                  {formatDateTime(batch.completedAt ?? batch.createdAt, auth.organization.timezone)}
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </section>

@@ -7,7 +7,6 @@ import {
   Clock3,
   LayoutDashboard,
   Pause,
-  PackageSearch,
   Printer,
   ReceiptText,
   ScanBarcode,
@@ -115,12 +114,6 @@ const navigation = [
   },
   { label: "Pelanggan", href: "/pos/pelanggan", icon: UsersRound },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
-  {
-    label: "Migrasi Barang",
-    href: "/pos/migrasi-barang",
-    icon: PackageSearch,
-    access: "migration",
-  },
 ] as const;
 
 const mobilePrimaryNavigation = [
@@ -132,12 +125,6 @@ const mobilePrimaryNavigation = [
 const mobileMoreNavigation = [
   { label: "Transaksi Tertahan", href: "/pos/ditahan", icon: Pause },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
-  {
-    label: "Migrasi Barang",
-    href: "/pos/migrasi-barang",
-    icon: PackageSearch,
-    access: "migration",
-  },
 ] as const;
 
 const mobileBottomNavigationItemClassName =

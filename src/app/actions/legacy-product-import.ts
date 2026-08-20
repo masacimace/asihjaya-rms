@@ -2,7 +2,7 @@
 
 import { createHash } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -19,6 +19,11 @@ import {
   type ParsedLegacyProductRow,
   type ParsedLegacyProductWorkbook,
 } from "@/features/legacy-migration/contracts";
+import {
+  importLegacyBatchDirectlyToInventory,
+  LegacyDirectImportError,
+} from "@/features/legacy-migration/direct-import-service";
+import { syncNextLegacyImageBatch } from "@/features/legacy-migration/image-sync-service";
 import { collectLegacyMasterMappingSeeds } from "@/features/legacy-migration/master-mapping";
 import { isLegacyMigrationUuid } from "@/features/legacy-migration/safety";
 import {
@@ -123,13 +128,36 @@ async function getRequestMetadata() {
   };
 }
 
+async function markBatchFailed(batchId: string, error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message.slice(0, 4_000)
+      : "Direct import produk legacy gagal.";
+
+  await db
+    .update(legacyProductImportBatches)
+    .set({
+      status: "failed",
+      errorMessage: message,
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(legacyProductImportBatches.id, batchId),
+        ne(legacyProductImportBatches.status, "ready"),
+      ),
+    )
+    .catch(() => undefined);
+}
+
 export async function uploadLegacyProductWorkbookAction(formData: FormData) {
   const auth = await requirePermission("migration.import");
   const outletId = readText(formData, "outletId", 36);
   const file = formData.get("file");
 
   if (!isLegacyMigrationUuid(outletId)) {
-    redirectImport("error", "Pilih outlet tujuan migrasi yang valid.");
+    redirectImport("error", "Pilih outlet tujuan import yang valid.");
   }
 
   if (!auth.outlets.some((outlet) => outlet.id === outletId)) {
@@ -153,14 +181,11 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
   const fileHash = createHash("sha256").update(buffer).digest("hex");
 
   const [existingBatch] = await db
-    .select({ id: legacyProductImportBatches.id })
+    .select({ id: legacyProductImportBatches.id, status: legacyProductImportBatches.status })
     .from(legacyProductImportBatches)
     .where(
       and(
-        eq(
-          legacyProductImportBatches.organizationId,
-          auth.organization.id,
-        ),
+        eq(legacyProductImportBatches.organizationId, auth.organization.id),
         eq(legacyProductImportBatches.outletId, outletId),
         eq(legacyProductImportBatches.fileHash, fileHash),
       ),
@@ -170,8 +195,10 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
   if (existingBatch) {
     redirectBatch(
       existingBatch.id,
-      "error",
-      "File yang sama sudah pernah dianalisis untuk outlet ini.",
+      existingBatch.status === "failed" ? "error" : "success",
+      existingBatch.status === "failed"
+        ? "File yang sama sudah pernah diproses tetapi import gagal. Gunakan tombol Coba Import Lagi pada detail batch."
+        : "File yang sama sudah pernah diimport untuk outlet ini.",
     );
   }
 
@@ -195,7 +222,6 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
   }
 
   const requestMetadata = await getRequestMetadata();
-  const now = new Date();
   let createdBatchId: string | null = null;
 
   try {
@@ -209,10 +235,7 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
         .from(legacyProductImportBatches)
         .where(
           and(
-            eq(
-              legacyProductImportBatches.organizationId,
-              auth.organization.id,
-            ),
+            eq(legacyProductImportBatches.organizationId, auth.organization.id),
             eq(legacyProductImportBatches.outletId, outletId),
             eq(legacyProductImportBatches.fileHash, fileHash),
           ),
@@ -248,7 +271,7 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
         })
         .returning({ id: legacyProductImportBatches.id });
 
-      if (!batch) throw new Error("Batch staging gagal dibuat.");
+      if (!batch) throw new Error("Batch import gagal dibuat.");
 
       const context = {
         batchId: batch.id,
@@ -278,41 +301,25 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
         );
       }
 
-      await transaction
-        .update(legacyProductImportBatches)
-        .set({
-          status: "ready",
-          completedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(legacyProductImportBatches.id, batch.id));
-
       await transaction.insert(auditLogs).values({
         organizationId: auth.organization.id,
         outletId,
         actorUserId: auth.user.id,
-        action: "legacy_product_import.staged",
+        action: "legacy_product_import.uploaded",
         entityType: "legacy_product_import_batch",
         entityId: batch.id,
         afterData: {
           fileName: file.name.trim().slice(0, 255),
           fileHash,
           totalRows: parsed.summary.totalRows,
-          validRows: parsed.summary.validRows,
           warningRows: parsed.summary.warningRows,
           invalidRows: parsed.summary.invalidRows,
           uniqueMasterCount: parsed.summary.uniqueMasterCount,
         },
         reason:
-          "Workbook legacy dianalisis dan disimpan ke staging tanpa mengubah inventaris aktif.",
+          "Workbook legacy diunggah untuk direct import. Warning sumber tidak memblokir aktivasi item.",
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
-        metadata: {
-          worksheetName: parsed.worksheetName,
-          duplicateBarcodeCount: parsed.summary.duplicateBarcodeCount,
-          leadingZeroBarcodeCount: parsed.summary.leadingZeroBarcodeCount,
-          imageUrlCount: parsed.summary.imageUrlCount,
-        },
       });
 
       return batch.id;
@@ -321,8 +328,8 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
     if (error instanceof Error && error.message.startsWith("DUPLICATE:")) {
       redirectBatch(
         error.message.slice("DUPLICATE:".length),
-        "error",
-        "File yang sama sudah pernah dianalisis untuk outlet ini.",
+        "success",
+        "File yang sama sudah pernah diproses untuk outlet ini.",
       );
     }
 
@@ -332,23 +339,93 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
       fileHash,
       error,
     });
-    redirectImport(
-      "error",
-      "Import staging gagal disimpan. Tidak ada stok aktif yang berubah.",
-    );
+    redirectImport("error", "Workbook gagal disimpan untuk proses import.");
   }
 
   if (!createdBatchId) {
-    redirectImport(
+    redirectImport("error", "Batch import tidak berhasil dibuat.");
+  }
+
+  let result;
+  try {
+    result = await importLegacyBatchDirectlyToInventory({
+      auth,
+      batchId: createdBatchId,
+      requestMetadata,
+    });
+  } catch (error) {
+    await markBatchFailed(createdBatchId, error);
+    console.error("Legacy direct import failed", {
+      organizationId: auth.organization.id,
+      batchId: createdBatchId,
+      error,
+    });
+    redirectBatch(
+      createdBatchId,
       "error",
-      "Batch staging tidak terbentuk. Tidak ada stok aktif yang berubah.",
+      error instanceof LegacyDirectImportError || error instanceof Error
+        ? error.message
+        : "Direct import produk legacy gagal.",
     );
   }
 
   revalidatePath(IMPORT_PATH);
+  revalidatePath("/admin/produk");
+  revalidatePath("/admin/inventaris");
   redirectBatch(
     createdBatchId,
     "success",
-    "Workbook berhasil dianalisis ke staging. Belum ada item yang masuk inventaris aktif.",
+    `${result.importedItemCount.toLocaleString("id-ID")} item berhasil diimport dan langsung aktif. ${result.cleanupItemCount.toLocaleString("id-ID")} item ditandai untuk dirapikan sambil berjalan. Foto legacy akan disalin otomatis di halaman ini.`,
   );
+}
+
+export async function retryLegacyProductImportBatchAction(formData: FormData) {
+  const auth = await requirePermission("migration.import");
+  const batchId = readText(formData, "batchId", 36);
+
+  if (!isLegacyMigrationUuid(batchId)) {
+    redirectImport("error", "Batch import tidak valid.");
+  }
+
+  const requestMetadata = await getRequestMetadata();
+  let result;
+  try {
+    result = await importLegacyBatchDirectlyToInventory({
+      auth,
+      batchId,
+      requestMetadata,
+    });
+  } catch (error) {
+    await markBatchFailed(batchId, error);
+    redirectBatch(
+      batchId,
+      "error",
+      error instanceof Error ? error.message : "Import ulang gagal.",
+    );
+  }
+
+  revalidatePath(IMPORT_PATH);
+  revalidatePath(`/admin/migrasi-produk/${batchId}`);
+  revalidatePath("/admin/produk");
+  revalidatePath("/admin/inventaris");
+  redirectBatch(
+    batchId,
+    "success",
+    `${result.importedItemCount.toLocaleString("id-ID")} item berhasil diimport dan langsung aktif.`,
+  );
+}
+
+export async function syncLegacyProductImagesAction(batchId: string) {
+  const auth = await requirePermission("migration.import");
+  if (!isLegacyMigrationUuid(batchId)) {
+    throw new Error("Batch import tidak valid.");
+  }
+
+  const result = await syncNextLegacyImageBatch({ auth, batchId });
+  if (result.pendingCount === 0) {
+    revalidatePath(`/admin/migrasi-produk/${batchId}`);
+    revalidatePath("/admin/inventaris");
+    revalidatePath("/admin/produk");
+  }
+  return result;
 }

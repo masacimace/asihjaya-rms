@@ -23,12 +23,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         canAccessInventory: productInventoryAccess.canAccessInventory,
         canAccessMigration:
           hasPermission(auth, "migration.view") ||
-          hasPermission(auth, "migration.import") ||
-          hasPermission(auth, "migration.mapping.manage") ||
-          hasPermission(auth, "migration.session.manage") ||
-          hasPermission(auth, "migration.verification.review") ||
-          hasPermission(auth, "migration.verification.approve") ||
-          hasPermission(auth, "migration.cutover.execute"),
+          hasPermission(auth, "migration.import"),
         canAccessSettings: hasPermission(auth, "settings.manage"),
       }}
       notificationDrawerData={notificationDrawerData}

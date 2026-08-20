@@ -19,6 +19,7 @@ import {
   users,
 } from "@/db/schema";
 import { isLegacyMigrationUuid } from "@/features/legacy-migration/safety";
+import { getLegacyImageSyncSummary } from "@/features/legacy-migration/image-sync-service";
 import type { AuthContext } from "@/lib/auth/session";
 
 export type LegacyRowStatusFilter = "all" | "valid" | "warning" | "invalid";
@@ -32,9 +33,9 @@ export async function getLegacyMigrationOverview(auth: AuthContext) {
       recentBatches: [],
       totals: {
         batchCount: 0,
-        stagedRows: 0,
-        warningRows: 0,
-        invalidRows: 0,
+        importedRows: 0,
+        cleanupRows: 0,
+        imageUrlRows: 0,
       },
     };
   }
@@ -76,16 +77,16 @@ export async function getLegacyMigrationOverview(auth: AuthContext) {
     db
       .select({
         batchCount: count(),
-        stagedRows:
+        importedRows:
           sql<number>`coalesce(sum(${legacyProductImportBatches.totalRows}), 0)::int`.mapWith(
             Number,
           ),
-        warningRows:
-          sql<number>`coalesce(sum(${legacyProductImportBatches.warningRows}), 0)::int`.mapWith(
+        cleanupRows:
+          sql<number>`coalesce(sum(${legacyProductImportBatches.warningRows} + ${legacyProductImportBatches.invalidRows}), 0)::int`.mapWith(
             Number,
           ),
-        invalidRows:
-          sql<number>`coalesce(sum(${legacyProductImportBatches.invalidRows}), 0)::int`.mapWith(
+        imageUrlRows:
+          sql<number>`coalesce(sum(${legacyProductImportBatches.imageUrlCount}), 0)::int`.mapWith(
             Number,
           ),
       })
@@ -104,9 +105,9 @@ export async function getLegacyMigrationOverview(auth: AuthContext) {
 
   const totals = totalsRows[0] ?? {
     batchCount: 0,
-    stagedRows: 0,
-    warningRows: 0,
-    invalidRows: 0,
+    importedRows: 0,
+    cleanupRows: 0,
+    imageUrlRows: 0,
   };
 
   return {
@@ -114,9 +115,9 @@ export async function getLegacyMigrationOverview(auth: AuthContext) {
     recentBatches,
     totals: {
       batchCount: Number(totals.batchCount),
-      stagedRows: Number(totals.stagedRows),
-      warningRows: Number(totals.warningRows),
-      invalidRows: Number(totals.invalidRows),
+      importedRows: Number(totals.importedRows),
+      cleanupRows: Number(totals.cleanupRows),
+      imageUrlRows: Number(totals.imageUrlRows),
     },
   };
 }
@@ -257,8 +258,21 @@ export async function getLegacyMigrationBatchDetail(
     statusCounts[row.status] = Number(row.total);
   }
 
+  const imageSync =
+    batch.status === "ready"
+      ? await getLegacyImageSyncSummary({ auth, batchId: batch.id })
+      : {
+          batchId: batch.id,
+          pendingCount: 0,
+          syncedCount: 0,
+          totalFailedCount: 0,
+          missingCount: 0,
+          totalWithSourceCount: batch.imageUrlCount,
+        };
+
   return {
     batch,
+    imageSync,
     rows,
     pagination: {
       page,

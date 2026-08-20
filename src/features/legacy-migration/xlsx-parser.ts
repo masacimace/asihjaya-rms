@@ -396,7 +396,7 @@ function validateBaseRow(row: MutableParsedRow): void {
       severity: "warning",
       code: "WEIGHT_OUTLIER",
       field: "weightGram",
-      message: "Berat di atas 100 gram perlu diverifikasi pada barang fisik.",
+      message: "Berat di atas 100 gram ditandai untuk dirapikan setelah import.",
     });
   }
 
@@ -414,7 +414,7 @@ function validateBaseRow(row: MutableParsedRow): void {
       severity: "warning",
       code: "PURITY_OUTLIER",
       field: "purity",
-      message: "Kadar di atas 100 perlu diverifikasi.",
+      message: "Kadar di atas 100 ditandai untuk dirapikan setelah import.",
     });
   }
 
@@ -430,7 +430,7 @@ function validateBaseRow(row: MutableParsedRow): void {
       severity: "warning",
       code: "EXCHANGE_PURITY_OUTLIER",
       field: "exchangePurity",
-      message: "Kadar tukaran di atas 100 perlu diverifikasi.",
+      message: "Kadar tukaran di atas 100 ditandai untuk dirapikan setelah import.",
     });
   }
 
@@ -446,7 +446,7 @@ function validateBaseRow(row: MutableParsedRow): void {
       severity: "warning",
       code: "PRICE_OUTLIER_LOW",
       field: "pricePerGram",
-      message: "Harga legacy sangat rendah dan perlu diperiksa.",
+      message: "Harga legacy sangat rendah dan hanya disimpan sebagai referensi.",
     });
   }
 
@@ -747,8 +747,9 @@ export function parseLegacyProductWorkbook(
       imageUrlCount: finalizedRows.filter((row) => row.legacyImageUrl).length,
       validationCodeCounts,
       sourceWarnings: [
-        "Export legacy tidak memiliki status stok. Semua baris hanya menjadi referensi staging dan tidak boleh otomatis menjadi inventaris aktif.",
-        "Harga dan potongan legacy hanya disimpan sebagai referensi. Pricing aktif harus ditentukan pada sistem baru.",
+        "Semua baris workbook diimport langsung sebagai item aktif. Warning dan data kurang lengkap tidak memblokir import, tetapi tetap ditandai agar dapat dirapikan sambil operasional berjalan.",
+        "Harga/Gram legacy hanya disimpan sebagai referensi historis. Harga jual POS memakai Harga/Gram aktif berdasarkan Kadar Persen.",
+        "Foto legacy disalin ke internal storage setelah item aktif. URL kosong atau download gagal tidak memblokir item di POS.",
       ],
     },
   };

@@ -74,7 +74,7 @@ const navigation: NavigationItem[] = [
     access: "products",
   },
   {
-    label: "Migrasi Produk",
+    label: "Import Produk Legacy",
     href: "/admin/migrasi-produk",
     icon: FileSpreadsheet,
     access: "migration",
