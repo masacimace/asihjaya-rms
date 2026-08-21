@@ -51,24 +51,15 @@ export type LegacyDirectImportResult = {
 };
 
 
-function readStoredDirectImportResult(
+function readDirectImportResultData(
   batchId: string,
-  validationSummary: unknown,
+  value: unknown,
 ): LegacyDirectImportResult | null {
-  if (
-    !validationSummary ||
-    typeof validationSummary !== "object" ||
-    Array.isArray(validationSummary)
-  ) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
 
-  const prior = (validationSummary as Record<string, unknown>).directImport;
-  if (!prior || typeof prior !== "object" || Array.isArray(prior)) {
-    return null;
-  }
-
-  const data = prior as Record<string, unknown>;
+  const data = value as Record<string, unknown>;
   const importedItemCount = Number(data.importedItemCount ?? 0);
   if (!Number.isFinite(importedItemCount) || importedItemCount <= 0) {
     return null;
@@ -85,6 +76,38 @@ function readStoredDirectImportResult(
     systemOnlyBarcodeCount: Number(data.systemOnlyBarcodeCount ?? 0),
     imagePendingCount: Number(data.imagePendingCount ?? 0),
     imageMissingCount: Number(data.imageMissingCount ?? 0),
+  };
+}
+
+function readStoredDirectImportResult(
+  batchId: string,
+  validationSummary: unknown,
+): LegacyDirectImportResult | null {
+  if (
+    !validationSummary ||
+    typeof validationSummary !== "object" ||
+    Array.isArray(validationSummary)
+  ) {
+    return null;
+  }
+
+  return readDirectImportResultData(
+    batchId,
+    (validationSummary as Record<string, unknown>).directImport,
+  );
+}
+
+function readLegacyImportMetadata(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const legacyImport = (value as Record<string, unknown>).legacyImport;
+  if (!legacyImport || typeof legacyImport !== "object" || Array.isArray(legacyImport)) {
+    return null;
+  }
+
+  const data = legacyImport as Record<string, unknown>;
+  return {
+    rowId: typeof data.rowId === "string" ? data.rowId : null,
+    needsCleanup: data.needsCleanup === true,
   };
 }
 
@@ -346,42 +369,6 @@ export async function importLegacyBatchDirectlyToInventory({
         batchId,
         batch.validationSummary,
       );
-      if (storedResult) {
-        if (batch.status !== "ready") {
-          await transaction
-            .update(legacyProductImportBatches)
-            .set({
-              status: "ready",
-              errorMessage: null,
-              completedAt: now,
-              updatedAt: now,
-            })
-            .where(eq(legacyProductImportBatches.id, batchId));
-
-          await transaction.insert(auditLogs).values({
-            organizationId: auth.organization.id,
-            outletId: batch.outletId,
-            actorUserId: auth.user.id,
-            action: "legacy_product_import.status_recovered",
-            entityType: "legacy_product_import_batch",
-            entityId: batchId,
-            afterData: storedResult,
-            reason:
-              "Status batch dipulihkan menjadi ready karena direct import sebelumnya sudah committed dan memiliki summary final.",
-            ipAddress: requestMetadata.ipAddress ?? null,
-            userAgent: requestMetadata.userAgent?.slice(0, 500) ?? null,
-          });
-        }
-
-        return storedResult;
-      }
-      if (batch.status !== "processing" && batch.status !== "failed") {
-        throw directImportError(
-          "BATCH_STATUS_INVALID",
-          `Batch dengan status ${batch.status} tidak dapat diimport langsung.`,
-          409,
-        );
-      }
 
       const rows = await transaction
         .select({
@@ -413,6 +400,181 @@ export async function importLegacyBatchDirectlyToInventory({
         throw directImportError(
           "BATCH_EMPTY",
           "Batch import tidak memiliki baris produk.",
+          409,
+        );
+      }
+
+      // Idempotency source of truth is the committed Product Item rows, not only
+      // the batch status/summary. A previous Server Action may fail after the DB
+      // transaction commits (for example during redirect), so retry must never
+      // create a second Physical Item for the same batch + source row.
+      const existingImportedItems = await transaction
+        .select({
+          id: productItems.id,
+          legacyUrl: productItems.legacyUrl,
+          attributes: productItems.attributes,
+        })
+        .from(productItems)
+        .where(
+          and(
+            eq(productItems.organizationId, auth.organization.id),
+            sql`${productItems.attributes}->'legacyImport'->>'batchId' = ${batchId}`,
+          ),
+        );
+
+      if (existingImportedItems.length > 0) {
+        const expectedRowIds = new Set(rows.map((row) => row.id));
+        const itemCountByRowId = new Map<string, number>();
+        let unknownMetadataCount = 0;
+
+        for (const item of existingImportedItems) {
+          const metadata = readLegacyImportMetadata(item.attributes);
+          if (!metadata?.rowId || !expectedRowIds.has(metadata.rowId)) {
+            unknownMetadataCount += 1;
+            continue;
+          }
+          itemCountByRowId.set(
+            metadata.rowId,
+            (itemCountByRowId.get(metadata.rowId) ?? 0) + 1,
+          );
+        }
+
+        const duplicateRowCount = Array.from(itemCountByRowId.values()).filter(
+          (count) => count > 1,
+        ).length;
+        const missingRowCount = rows.reduce(
+          (total, row) => total + (itemCountByRowId.has(row.id) ? 0 : 1),
+          0,
+        );
+        const completeCommittedImport =
+          existingImportedItems.length === rows.length &&
+          unknownMetadataCount === 0 &&
+          duplicateRowCount === 0 &&
+          missingRowCount === 0;
+
+        if (!completeCommittedImport) {
+          throw directImportError(
+            "DIRECT_IMPORT_EXISTING_ITEMS_INCONSISTENT",
+            `Batch sudah memiliki ${existingImportedItems.length.toLocaleString("id-ID")} item hasil import, tetapi identitas source row tidak konsisten (duplicate ${duplicateRowCount.toLocaleString("id-ID")}, missing ${missingRowCount.toLocaleString("id-ID")}, metadata tidak dikenal ${unknownMetadataCount.toLocaleString("id-ID")}). Import dihentikan agar retry tidak membuat duplikat baru.`,
+            409,
+          );
+        }
+
+        let recoveredResult = storedResult;
+        if (!recoveredResult) {
+          const [firstCommitAudit] = await transaction
+            .select({ afterData: auditLogs.afterData })
+            .from(auditLogs)
+            .where(
+              and(
+                eq(auditLogs.organizationId, auth.organization.id),
+                eq(auditLogs.action, "legacy_product_import.direct_commit"),
+                eq(auditLogs.entityType, "legacy_product_import_batch"),
+                eq(auditLogs.entityId, batchId),
+              ),
+            )
+            .orderBy(asc(auditLogs.createdAt))
+            .limit(1);
+
+          recoveredResult = readDirectImportResultData(
+            batchId,
+            firstCommitAudit?.afterData,
+          );
+        }
+
+        if (!recoveredResult) {
+          const cleanupItemCount = existingImportedItems.reduce((total, item) => {
+            return total + (readLegacyImportMetadata(item.attributes)?.needsCleanup ? 1 : 0);
+          }, 0);
+          const imagePendingCount = existingImportedItems.filter(
+            (item) => Boolean(item.legacyUrl),
+          ).length;
+          const [aliasCountRow] = await transaction
+            .select({
+              count: sql<number>`count(*)::int`,
+            })
+            .from(itemBarcodes)
+            .innerJoin(productItems, eq(itemBarcodes.itemId, productItems.id))
+            .where(
+              and(
+                eq(productItems.organizationId, auth.organization.id),
+                eq(itemBarcodes.source, "legacy_import"),
+                eq(itemBarcodes.isActive, true),
+                sql`${productItems.attributes}->'legacyImport'->>'batchId' = ${batchId}`,
+              ),
+            );
+          const legacyBarcodeAliasCount = Number(aliasCountRow?.count ?? 0);
+
+          recoveredResult = {
+            batchId,
+            importedItemCount: existingImportedItems.length,
+            createdMasterCount: 0,
+            reusedMasterCount: 0,
+            createdCategoryCount: 0,
+            cleanupItemCount,
+            legacyBarcodeAliasCount,
+            systemOnlyBarcodeCount:
+              existingImportedItems.length - legacyBarcodeAliasCount,
+            imagePendingCount,
+            imageMissingCount: existingImportedItems.length - imagePendingCount,
+          };
+        }
+
+        const previousSummary =
+          batch.validationSummary &&
+          typeof batch.validationSummary === "object" &&
+          !Array.isArray(batch.validationSummary)
+            ? (batch.validationSummary as Record<string, unknown>)
+            : {};
+
+        await transaction
+          .update(legacyProductImportBatches)
+          .set({
+            status: "ready",
+            validationSummary: {
+              ...previousSummary,
+              directImport: {
+                ...recoveredResult,
+                recoveredAt: now.toISOString(),
+              },
+            },
+            errorMessage: null,
+            completedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(legacyProductImportBatches.id, batchId));
+
+        if (batch.status !== "ready" || !storedResult) {
+          await transaction.insert(auditLogs).values({
+            organizationId: auth.organization.id,
+            outletId: batch.outletId,
+            actorUserId: auth.user.id,
+            action: "legacy_product_import.status_recovered",
+            entityType: "legacy_product_import_batch",
+            entityId: batchId,
+            afterData: recoveredResult,
+            reason:
+              "Retry menemukan satu Product Item committed untuk setiap source row. Batch dipulihkan tanpa membuat item baru.",
+            ipAddress: requestMetadata.ipAddress ?? null,
+            userAgent: requestMetadata.userAgent?.slice(0, 500) ?? null,
+          });
+        }
+
+        return recoveredResult;
+      }
+
+      if (storedResult) {
+        throw directImportError(
+          "DIRECT_IMPORT_SUMMARY_WITHOUT_ITEMS",
+          "Batch memiliki summary direct import tetapi Product Item hasil batch tidak ditemukan. Import dihentikan untuk mencegah duplikasi atau kehilangan jejak data.",
+          409,
+        );
+      }
+
+      if (batch.status !== "processing" && batch.status !== "failed") {
+        throw directImportError(
+          "BATCH_STATUS_INVALID",
+          `Batch dengan status ${batch.status} tidak dapat diimport langsung.`,
           409,
         );
       }

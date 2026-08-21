@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
@@ -56,6 +58,9 @@ for (const required of [
   'status: "ready"',
   "legacyPricePerGram",
   "needsCleanup",
+  "DIRECT_IMPORT_EXISTING_ITEMS_INCONSISTENT",
+  "completeCommittedImport",
+  "source row",
 ]) {
   assert.ok(
     directServiceSource.includes(required),
