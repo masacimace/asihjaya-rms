@@ -100,6 +100,26 @@ if (manualOverrideExample.status === "success") {
   assert.equal(manualOverrideExample.item.basePriceAmount, "2200000");
 }
 
+const manualThenResetToGlobalExample = buildPosCartItem(
+  createItem({
+    weightGram: "2",
+    purityPercent: "30",
+    activePricePerGram: "1000000",
+  }),
+  {
+    priceSource: "manual_override",
+    pricePerGram: "1000000",
+    discountAmount: 0,
+    laborAmount: 0,
+    adjustmentAmount: 0,
+  },
+);
+assert.equal(manualThenResetToGlobalExample.status, "success");
+if (manualThenResetToGlobalExample.status === "success") {
+  assert.equal(manualThenResetToGlobalExample.item.priceSource, "global");
+  assert.equal(manualThenResetToGlobalExample.item.pricePerGram, "1000000");
+}
+
 const missingGlobalRateExample = buildPosCartItem(
   createItem({
     weightGram: "1.5",

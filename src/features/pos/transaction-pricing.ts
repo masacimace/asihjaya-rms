@@ -185,13 +185,10 @@ export function buildPosCartItem(
     status: "success",
     item: {
       ...item,
-      priceSource:
-        values.priceSource === "manual_override"
-          ? "manual_override"
-          : getPosPriceSource({
-              activePricePerGram: item.activePricePerGram,
-              transactionPricePerGram: pricePerGram,
-            }),
+      priceSource: getPosPriceSource({
+        activePricePerGram: item.activePricePerGram,
+        transactionPricePerGram: pricePerGram,
+      }),
       pricePerGram,
       basePriceAmount: String(basePriceAmount),
       discountAmount: String(values.discountAmount),

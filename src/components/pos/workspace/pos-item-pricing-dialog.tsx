@@ -14,6 +14,7 @@ import type { PosAvailableItem, PosCartItem } from "@/features/pos/contracts";
 import {
   buildPosCartItem,
   calculatePosBasePrice,
+  getPosPriceSource,
 } from "@/features/pos/transaction-pricing";
 import {
   formatCurrency,
@@ -36,7 +37,6 @@ export function PosItemPricingDialog({
   onConfirm,
 }: PosItemPricingDialogProps) {
   const [pricePerGramInput, setPricePerGramInput] = useState("");
-  const [useManualPrice, setUseManualPrice] = useState(false);
   const [discountInput, setDiscountInput] = useState("");
   const [laborInput, setLaborInput] = useState("");
   const [adjustmentInput, setAdjustmentInput] = useState("");
@@ -50,11 +50,6 @@ export function PosItemPricingDialog({
       Number(initialPricePerGram) > 0
         ? formatRupiahInput(initialPricePerGram)
         : "",
-    );
-    setUseManualPrice(
-      existingItem
-        ? existingItem.priceSource === "manual_override"
-        : !item.activePricePerGram,
     );
     setDiscountInput(
       existingItem && Number(existingItem.discountAmount) > 0
@@ -80,10 +75,10 @@ export function PosItemPricingDialog({
   const discountAmount = parsePaymentAmountInput(discountInput);
   const laborAmount = parsePaymentAmountInput(laborInput);
   const adjustmentAmount = parsePaymentAmountInput(adjustmentInput);
-  const priceSource =
-    useManualPrice || !item.activePricePerGram
-      ? ("manual_override" as const)
-      : ("global" as const);
+  const priceSource = getPosPriceSource({
+    activePricePerGram: item.activePricePerGram,
+    transactionPricePerGram: transactionPricePerGramText,
+  });
   const basePriceAmount = useMemo(
     () =>
       calculatePosBasePrice({
@@ -111,7 +106,6 @@ export function PosItemPricingDialog({
     }
 
     setPricePerGramInput(formatRupiahInput(item.activePricePerGram));
-    setUseManualPrice(false);
     setFeedback(null);
   }
 
@@ -253,7 +247,6 @@ export function PosItemPricingDialog({
               value={pricePerGramInput}
               onChange={(event) => {
                 setPricePerGramInput(formatRupiahInput(event.target.value));
-                setUseManualPrice(true);
                 setFeedback(null);
               }}
               inputMode="numeric"
