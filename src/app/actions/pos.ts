@@ -46,6 +46,8 @@ import {
   type PosCartPricingInput,
   type PosCartPricingRefreshResult,
   type PosCheckoutPayload,
+  type PosCatalogCursor,
+  type PosCatalogPageActionResult,
   type PosHeldCartActionResult,
   type PosHeldCartItem,
   type PosHeldCartSummary,
@@ -99,7 +101,10 @@ import {
   DEFAULT_POS_REGISTER_SHIFT_MESSAGE,
   getDefaultPosRegisterCondition,
 } from "@/features/pos/context";
-import { lookupPosItemByScanValue } from "@/features/pos/queries";
+import {
+  getPosCatalogPage,
+  lookupPosItemByScanValue,
+} from "@/features/pos/queries";
 import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
 import { getClientIp } from "@/lib/http/client-ip";
 import {
@@ -967,6 +972,46 @@ function buildPosCustomerCreatedReturnTo(returnTo: string, fullName?: string | n
   params.set("q", fullName);
 
   return `${path}?${params.toString()}`;
+}
+
+export async function getPosCatalogPageAction(
+  input: {
+    cursor?: PosCatalogCursor | null;
+    searchQuery?: string | null;
+    categoryId?: string | null;
+  } = {},
+): Promise<PosCatalogPageActionResult> {
+  const auth = await requirePermission("pos.access");
+  const primaryOutlet =
+    auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
+
+  if (!primaryOutlet) {
+    return {
+      status: "error",
+      message:
+        "Outlet aktif tidak ditemukan. Hubungi manager/admin untuk mengatur akses outlet staff ini.",
+    };
+  }
+
+  try {
+    const page = await getPosCatalogPage({
+      organizationId: auth.organization.id,
+      outletId: primaryOutlet.id,
+      cursor: input.cursor ?? null,
+      searchQuery: input.searchQuery ?? null,
+      categoryId: input.categoryId ?? null,
+    });
+
+    return { status: "success", ...page };
+  } catch (error) {
+    console.error("Failed to load POS catalog page", error);
+
+    return {
+      status: "error",
+      message:
+        "Produk berikutnya belum bisa dimuat. Scroll lagi atau ubah pencarian untuk mencoba ulang.",
+    };
+  }
 }
 
 export async function lookupPosScanValueAction(

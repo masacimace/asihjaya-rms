@@ -356,14 +356,18 @@ export async function listImageKeysForEntity({
       .slice(0, boundedMax);
   }
 
-  const directory = path.join(
-    getStorageRoot(),
+  const storageRoot = getStorageRoot().replace(/[\\/]+$/, "");
+  const directory = [
+    storageRoot,
     "organizations",
     organizationId,
     entityType,
     entityId,
-  );
-  const entries = await readdir(directory, { withFileTypes: true }).catch(
+  ].join(path.sep);
+  const entries = await readdir(
+    /* turbopackIgnore: true */ directory,
+    { withFileTypes: true },
+  ).catch(
     (error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return [];
       throw error;

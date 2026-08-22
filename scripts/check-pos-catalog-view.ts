@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import {
   filterPosCatalogItems,
@@ -12,6 +14,42 @@ import {
 } from "@/features/pos/catalog-state";
 import type { PosAvailableItem, PosCategoryOption } from "@/features/pos/contracts";
 import { calculatePosBasePrice } from "@/features/pos/transaction-pricing";
+
+const contractsSource = readFileSync(
+  resolve("src/features/pos/contracts.ts"),
+  "utf8",
+);
+const querySource = readFileSync(
+  resolve("src/features/pos/queries.ts"),
+  "utf8",
+);
+const catalogHookSource = readFileSync(
+  resolve("src/features/pos/use-pos-catalog.ts"),
+  "utf8",
+);
+const catalogPanelSource = readFileSync(
+  resolve("src/components/pos/workspace/pos-catalog-panel.tsx"),
+  "utf8",
+);
+const itemImageSource = readFileSync(
+  resolve("src/components/pos/workspace/pos-item-image.tsx"),
+  "utf8",
+);
+
+assert.match(contractsSource, /POS_CATALOG_PAGE_SIZE = 120/);
+assert.match(querySource, /export async function getPosCatalogPage/);
+assert.match(querySource, /limit\(POS_CATALOG_PAGE_SIZE \+ 1\)/);
+assert.match(querySource, /lt\(productItems\.updatedAt, cursorUpdatedAt\)/);
+assert.match(querySource, /gt\(productItems\.sku, cursor\.sku\)/);
+assert.match(querySource, /ilike\(productItems\.sku, searchPattern\)/);
+assert.match(querySource, /eq\(productCategories\.id, normalizedCategoryId\)/);
+assert.match(catalogHookSource, /POS_CATALOG_SEARCH_DEBOUNCE_MS = 300/);
+assert.match(catalogHookSource, /requestVersionRef/);
+assert.match(catalogHookSource, /mergeUniqueCatalogItems/);
+assert.match(catalogPanelSource, /new IntersectionObserver/);
+assert.match(catalogPanelSource, /rootMargin: "600px 0px"/);
+assert.match(itemImageSource, /loading="lazy"/);
+assert.match(itemImageSource, /decoding="async"/);
 
 function createItem(overrides: Partial<PosAvailableItem> = {}): PosAvailableItem {
   return {
@@ -63,4 +101,6 @@ assert.equal(getPosMediaUrl(" items / sku cincin-001.jpg "), "/media/items/sku%2
 assert.equal(getPosItemImageUrl(ring), "/media/items/sku%20cincin-001.jpg");
 assert.equal(getPosItemBackground(ring), getPosItemBackground(ring));
 
-console.log("POS catalog dynamic pricing view-state checks passed.");
+console.log(
+  "POS catalog dynamic pricing + infinite-scroll contracts passed.",
+);

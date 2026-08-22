@@ -4,8 +4,10 @@ import {
   count,
   desc,
   eq,
+  gt,
   gte,
   ilike,
+  lt,
   inArray,
   or,
   sql,
@@ -47,8 +49,10 @@ import {
   normalizePurityKey,
 } from "@/features/pricing/metal-price-rates";
 import {
-  POS_INITIAL_ITEM_LIMIT,
+  POS_CATALOG_PAGE_SIZE,
   type PosAvailableItem,
+  type PosCatalogCursor,
+  type PosCatalogPage,
   type PosCustomerOption,
   type PosCustomerListData,
   type PosHeldCartItem,
@@ -251,6 +255,7 @@ export async function getPosInitialData({
       },
       categories: [],
       items: [],
+      catalogPage: { nextCursor: null, hasMore: false },
       customers: [],
       paymentProfiles: [],
     };
@@ -284,6 +289,7 @@ export async function getPosInitialData({
       },
       categories: [],
       items: [],
+      catalogPage: { nextCursor: null, hasMore: false },
       customers: [],
       paymentProfiles: [],
     };
@@ -374,6 +380,7 @@ export async function getPosInitialData({
           outletId: outlets.id,
           outletCode: outlets.code,
           outletName: outlets.name,
+          updatedAt: productItems.updatedAt,
         })
         .from(productItems)
         .innerJoin(
@@ -399,7 +406,7 @@ export async function getPosInitialData({
           ),
         )
         .orderBy(desc(productItems.updatedAt), asc(productItems.sku))
-        .limit(POS_INITIAL_ITEM_LIMIT),
+        .limit(POS_CATALOG_PAGE_SIZE + 1),
 
       db
         .select({
@@ -558,6 +565,10 @@ export async function getPosInitialData({
         row.verificationSource as PosManualPaymentVerificationSource,
     }));
 
+  const initialItemRows = itemRows.slice(0, POS_CATALOG_PAGE_SIZE);
+  const initialHasMore = itemRows.length > POS_CATALOG_PAGE_SIZE;
+  const initialLastItem = initialItemRows.at(-1) ?? null;
+
   return {
     context: {
       outlet,
@@ -589,12 +600,27 @@ export async function getPosInitialData({
       ...category,
       totalAvailableItems: Number(category.totalAvailableItems),
     })),
-    items: itemRows.map((item) => ({
-      ...item,
-      activePricePerGram:
-        activeRateMap.get(normalizePurityKey(item.purityPercent) ?? "")?.ratePerGram ??
-        null,
-    })),
+    items: initialItemRows.map((item) => {
+      const { updatedAt, ...availableItem } = item;
+      void updatedAt;
+
+      return {
+        ...availableItem,
+        activePricePerGram:
+          activeRateMap.get(normalizePurityKey(item.purityPercent) ?? "")
+            ?.ratePerGram ?? null,
+      };
+    }),
+    catalogPage: {
+      hasMore: initialHasMore,
+      nextCursor:
+        initialHasMore && initialLastItem
+          ? {
+              updatedAtIso: initialLastItem.updatedAt.toISOString(),
+              sku: initialLastItem.sku,
+            }
+          : null,
+    },
     customers: customerRows.map((customer): PosCustomerOption => {
       const latestDeposit = latestDepositByCustomerId.get(customer.id) ?? null;
       const balanceAmount = latestDeposit?.balanceAfter ?? "0";
@@ -608,6 +634,146 @@ export async function getPosInitialData({
     }),
     paymentProfiles,
   } satisfies PosInitialData;
+}
+
+export async function getPosCatalogPage({
+  organizationId,
+  outletId,
+  cursor,
+  searchQuery,
+  categoryId,
+}: {
+  organizationId: string;
+  outletId: string;
+  cursor?: PosCatalogCursor | null;
+  searchQuery?: string | null;
+  categoryId?: string | null;
+}): Promise<PosCatalogPage> {
+  const normalizedSearch = searchQuery?.trim().slice(0, 160) ?? "";
+  const normalizedCategoryId = categoryId?.trim() || null;
+  const conditions: SQL[] = [
+    eq(productItems.organizationId, organizationId),
+    eq(productMasters.organizationId, organizationId),
+    eq(productCategories.organizationId, organizationId),
+    eq(productItems.currentOutletId, outletId),
+    eq(productItems.isActive, true),
+    eq(productItems.availability, "available"),
+    inArray(productItems.condition, ["good", "used"]),
+    eq(productItems.locationState, "outlet"),
+    eq(productMasters.status, "active"),
+    eq(productCategories.isActive, true),
+    activeHeldItemNotExistsCondition(),
+  ];
+
+  if (normalizedCategoryId) {
+    conditions.push(eq(productCategories.id, normalizedCategoryId));
+  }
+
+  if (normalizedSearch) {
+    const searchPattern = `%${normalizedSearch}%`;
+    const searchCondition = or(
+      ilike(productItems.sku, searchPattern),
+      ilike(productItems.barcode, searchPattern),
+      ilike(productItems.qrValue, searchPattern),
+      ilike(productItems.serialNumber, searchPattern),
+      ilike(productItems.displayName, searchPattern),
+      ilike(productMasters.code, searchPattern),
+      ilike(productMasters.name, searchPattern),
+      ilike(productCategories.name, searchPattern),
+    );
+
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
+  }
+
+  if (cursor) {
+    const cursorUpdatedAt = new Date(cursor.updatedAtIso);
+
+    if (Number.isNaN(cursorUpdatedAt.getTime()) || !cursor.sku.trim()) {
+      throw new Error("Cursor katalog POS tidak valid.");
+    }
+
+    const cursorCondition = or(
+      lt(productItems.updatedAt, cursorUpdatedAt),
+      and(
+        eq(productItems.updatedAt, cursorUpdatedAt),
+        gt(productItems.sku, cursor.sku),
+      ),
+    );
+
+    if (cursorCondition) {
+      conditions.push(cursorCondition);
+    }
+  }
+
+  const rows = await db
+    .select({
+      id: productItems.id,
+      sku: productItems.sku,
+      barcode: productItems.barcode,
+      qrValue: productItems.qrValue,
+      serialNumber: productItems.serialNumber,
+      weightGram: productItems.weightGram,
+      purityPercent: productItems.purityPercent,
+      exchangePurityPercent: productItems.exchangePurityPercent,
+      size: productItems.size,
+      color: productItems.color,
+      gemstone: productItems.gemstone,
+      deductionPerGram: productItems.deductionPerGram,
+      sellingAmount: productItems.sellingAmount,
+      imageKey: productItems.imageKey,
+      productImageKey: productMasters.imageKey,
+      productId: productMasters.id,
+      productCode: productMasters.code,
+      productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
+      categoryId: productCategories.id,
+      categoryName: productCategories.name,
+      outletId: outlets.id,
+      outletCode: outlets.code,
+      outletName: outlets.name,
+      updatedAt: productItems.updatedAt,
+    })
+    .from(productItems)
+    .innerJoin(
+      productMasters,
+      eq(productItems.productMasterId, productMasters.id),
+    )
+    .innerJoin(
+      productCategories,
+      eq(productMasters.categoryId, productCategories.id),
+    )
+    .leftJoin(outlets, eq(productItems.currentOutletId, outlets.id))
+    .where(and(...conditions))
+    .orderBy(desc(productItems.updatedAt), asc(productItems.sku))
+    .limit(POS_CATALOG_PAGE_SIZE + 1);
+
+  const pageRows = rows.slice(0, POS_CATALOG_PAGE_SIZE);
+  const hasMore = rows.length > POS_CATALOG_PAGE_SIZE;
+  const lastItem = pageRows.at(-1) ?? null;
+  const activeRateMap = await getActiveGoldPriceRateMap(organizationId);
+
+  return {
+    items: pageRows.map((item) => {
+      const { updatedAt, ...availableItem } = item;
+      void updatedAt;
+
+      return {
+        ...availableItem,
+        activePricePerGram:
+          activeRateMap.get(normalizePurityKey(item.purityPercent) ?? "")
+            ?.ratePerGram ?? null,
+      };
+    }),
+    hasMore,
+    nextCursor:
+      hasMore && lastItem
+        ? {
+            updatedAtIso: lastItem.updatedAt.toISOString(),
+            sku: lastItem.sku,
+          }
+        : null,
+  };
 }
 
 export async function lookupPosItemByScanValue({

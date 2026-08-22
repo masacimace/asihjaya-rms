@@ -1,4 +1,4 @@
-export const POS_INITIAL_ITEM_LIMIT = 120;
+export const POS_CATALOG_PAGE_SIZE = 120;
 
 export type PosCategoryOption = {
   id: string;
@@ -6,6 +6,24 @@ export type PosCategoryOption = {
   name: string;
   totalAvailableItems: number;
 };
+
+export type PosCatalogCursor = {
+  updatedAtIso: string;
+  sku: string;
+};
+
+export type PosCatalogPage = {
+  items: PosAvailableItem[];
+  nextCursor: PosCatalogCursor | null;
+  hasMore: boolean;
+};
+
+export type PosCatalogPageActionResult =
+  | ({ status: "success" } & PosCatalogPage)
+  | {
+      status: "error";
+      message: string;
+    };
 
 export type PosAvailableItem = {
   id: string;
@@ -169,6 +187,7 @@ export type PosInitialData = {
   context: PosOperationalContext;
   categories: PosCategoryOption[];
   items: PosAvailableItem[];
+  catalogPage: Pick<PosCatalogPage, "nextCursor" | "hasMore">;
   customers: PosCustomerOption[];
   paymentProfiles: PosManualPaymentProfile[];
 };

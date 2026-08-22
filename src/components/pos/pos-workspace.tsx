@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   completePosCheckoutAction,
   createPosQuickCustomerAction,
+  getPosCatalogPageAction,
   holdPosCartAction,
   lookupPosScanValueAction,
   refreshPosCartPricingAction,
@@ -20,6 +21,7 @@ import {
   type PosCartItem,
   type PosCategoryOption,
   type PosCustomerOption,
+  type PosInitialData,
   type PosManualPaymentProfile,
   type PosOperationalContext,
 } from "@/features/pos/contracts";
@@ -43,6 +45,7 @@ import {
   profileSupportsMethod,
 } from "@/features/pos/payment-draft";
 import { usePosCart } from "@/features/pos/use-pos-cart";
+import { usePosCatalog } from "@/features/pos/use-pos-catalog";
 import { usePosCartSession } from "@/features/pos/use-pos-cart-session";
 import { usePosCheckout } from "@/features/pos/use-pos-checkout";
 import { usePosCustomer } from "@/features/pos/use-pos-customer";
@@ -60,6 +63,7 @@ type PosWorkspaceProps = {
   items: PosAvailableItem[];
   customers: PosCustomerOption[];
   paymentProfiles: PosManualPaymentProfile[];
+  catalogPage: PosInitialData["catalogPage"];
   context: PosOperationalContext;
   canManageShifts: boolean;
   canReopenShifts: boolean;
@@ -70,6 +74,7 @@ export function PosWorkspace({
   items,
   customers,
   paymentProfiles,
+  catalogPage,
   context,
   canManageShifts,
   canReopenShifts,
@@ -126,6 +131,21 @@ export function PosWorkspace({
     lookupScanValue: lookupPosScanValueAction,
     onItemFound: openItemPricing,
     onFeedback: setCartFeedback,
+  });
+  const {
+    catalogItems,
+    hasMore: catalogHasMore,
+    isRefreshing: isCatalogRefreshing,
+    isLoadingMore: isCatalogLoadingMore,
+    catalogError,
+    loadMore: loadMoreCatalogItems,
+  } = usePosCatalog({
+    initialItems: items,
+    initialCursor: catalogPage.nextCursor,
+    initialHasMore: catalogPage.hasMore,
+    searchQuery,
+    activeCategoryId,
+    loadPage: getPosCatalogPageAction,
   });
   const [panelMode, setPanelMode] = useState<PosPanelMode>("cart");
   const {
@@ -701,16 +721,21 @@ export function PosWorkspace({
     },
     catalog: {
       categories,
-      items,
+      items: catalogItems,
       cartItemIds,
       activeCategoryId,
       isCategoryPickerOpen,
       searchQuery,
+      hasMore: catalogHasMore,
+      isRefreshing: isCatalogRefreshing,
+      isLoadingMore: isCatalogLoadingMore,
+      catalogError,
       onActiveCategoryChange: setActiveCategoryId,
       onCategoryPickerOpenChange: setIsCategoryPickerOpen,
       onSearchQueryChange: setSearchQuery,
       onOpenScanner: () => setIsScannerOpen(true),
       onAddItem: openItemPricing,
+      onLoadMore: loadMoreCatalogItems,
     },
     shifts: {
       context,

@@ -5,24 +5,23 @@ import {
   ChevronDown,
   Gem,
   ListFilter,
+  LoaderCircle,
   ScanBarcode,
   Search,
   ShoppingBag,
   X,
 } from "lucide-react";
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { PosItemImage } from "@/components/pos/workspace/pos-item-image";
 import {
-  filterPosCatalogItems,
   getPosActiveCategoryLabel,
   getPosItemDetail,
   getPosItemSpecChips,
 } from "@/features/pos/catalog-state";
-import {
-  POS_INITIAL_ITEM_LIMIT,
-  type PosAvailableItem,
-  type PosCategoryOption,
+import type {
+  PosAvailableItem,
+  PosCategoryOption,
 } from "@/features/pos/contracts";
 import { formatCurrency } from "@/features/pos/payment-draft";
 import { calculatePosBasePrice } from "@/features/pos/transaction-pricing";
@@ -35,12 +34,17 @@ type PosCatalogPanelProps = {
   activeCategoryId: string;
   isCategoryPickerOpen: boolean;
   searchQuery: string;
+  hasMore: boolean;
+  isRefreshing: boolean;
+  isLoadingMore: boolean;
+  catalogError: string | null;
   children?: ReactNode;
   onActiveCategoryChange: (categoryId: string) => void;
   onCategoryPickerOpenChange: (isOpen: boolean) => void;
   onSearchQueryChange: (value: string) => void;
   onOpenScanner: () => void;
   onAddItem: (item: PosAvailableItem) => void;
+  onLoadMore: () => void;
 };
 
 export function PosCatalogPanel({
@@ -50,27 +54,72 @@ export function PosCatalogPanel({
   activeCategoryId,
   isCategoryPickerOpen,
   searchQuery,
+  hasMore,
+  isRefreshing,
+  isLoadingMore,
+  catalogError,
   children,
   onActiveCategoryChange,
   onCategoryPickerOpenChange,
   onSearchQueryChange,
   onOpenScanner,
   onAddItem,
+  onLoadMore,
 }: PosCatalogPanelProps) {
-  const filteredItems = useMemo(
-    () =>
-      filterPosCatalogItems({
-        items,
-        activeCategoryId,
-        searchQuery,
-      }),
-    [activeCategoryId, items, searchQuery],
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const retryAfterExitRef = useRef(false);
+  const totalAvailableItems = categories.reduce(
+    (total, category) => total + category.totalAvailableItems,
+    0,
   );
-  const totalAvailableItems = items.length;
+  const activeAvailableItems =
+    activeCategoryId === "all"
+      ? totalAvailableItems
+      : (categories.find((category) => category.id === activeCategoryId)
+          ?.totalAvailableItems ?? 0);
+  const isSearchActive = Boolean(searchQuery.trim());
   const activeCategoryLabel = getPosActiveCategoryLabel({
     categories,
     activeCategoryId,
   });
+
+  useEffect(() => {
+    retryAfterExitRef.current = false;
+  }, [catalogError]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+
+    if (!sentinel || !hasMore || isRefreshing || isLoadingMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry) {
+          return;
+        }
+
+        if (!entry.isIntersecting) {
+          if (catalogError) {
+            retryAfterExitRef.current = true;
+          }
+          return;
+        }
+
+        if (catalogError && !retryAfterExitRef.current) {
+          return;
+        }
+
+        retryAfterExitRef.current = false;
+        onLoadMore();
+      },
+      { rootMargin: "600px 0px" },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [catalogError, hasMore, isLoadingMore, isRefreshing, onLoadMore]);
 
   return (
     <section className="min-w-0 p-4 pb-22 sm:p-5 sm:pb-36 lg:overflow-y-auto lg:border-r lg:border-[var(--border)] lg:p-6">
@@ -145,9 +194,15 @@ export function PosCatalogPanel({
 
               <span
                 className="shrink-0 rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-semibold text-neutral-600 sm:hidden"
-                title={`${filteredItems.length} dari ${totalAvailableItems} item tersedia`}
+                title={
+                  isSearchActive
+                    ? `${items.length} hasil dimuat`
+                    : `${items.length} dari ${activeAvailableItems} item tersedia`
+                }
               >
-                {filteredItems.length}/{totalAvailableItems}
+                {isSearchActive
+                  ? `${items.length} hasil`
+                  : `${items.length}/${activeAvailableItems}`}
               </span>
 
               <ChevronDown
@@ -160,10 +215,15 @@ export function PosCatalogPanel({
 
             <span
               className="hidden shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--muted)] sm:inline-flex"
-              title={`${filteredItems.length} dari ${totalAvailableItems} item tersedia`}
+              title={
+                isSearchActive
+                  ? `${items.length} hasil dimuat`
+                  : `${items.length} dari ${activeAvailableItems} item tersedia`
+              }
             >
-              {filteredItems.length} dari {totalAvailableItems} item
-              tersedia
+              {isSearchActive
+                ? `${items.length} hasil dimuat`
+                : `${items.length} dari ${activeAvailableItems} item tersedia`}
             </span>
 
             {isCategoryPickerOpen ? (
@@ -378,18 +438,19 @@ export function PosCatalogPanel({
         </div>
       ) : null}
 
-      {totalAvailableItems >= POS_INITIAL_ITEM_LIMIT ? (
-        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Menampilkan {POS_INITIAL_ITEM_LIMIT} item terbaru. Gunakan search
-          atau scan barcode lama/internal untuk menemukan item yang lebih
-          spesifik.
-        </p>
-      ) : null}
-
       {/* Product grid */}
-      {filteredItems.length > 0 ? (
+      {isRefreshing && items.length === 0 ? (
+        <div className="mt-5 grid min-h-56 place-items-center rounded-3xl border border-[var(--border)] bg-white p-8 text-center">
+          <div>
+            <LoaderCircle className="mx-auto size-6 animate-spin text-[var(--accent)]" />
+            <p className="mt-3 text-sm font-medium text-neutral-700">
+              Memuat katalog produk...
+            </p>
+          </div>
+        </div>
+      ) : items.length > 0 ? (
         <div className="mt-2 grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-3 2xl:grid-cols-4">
-          {filteredItems.map((item) => {
+          {items.map((item) => {
             const isInCart = cartItemIds.has(item.id);
             const basePriceAmount = calculatePosBasePrice({
               weightGram: item.weightGram,
@@ -532,6 +593,35 @@ export function PosCatalogPanel({
           </div>
         </div>
       )}
+
+      {catalogError ? (
+        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {catalogError}
+        </p>
+      ) : null}
+
+      {hasMore || isLoadingMore ? (
+        <div
+          ref={loadMoreSentinelRef}
+          className="mt-4 grid min-h-16 place-items-center text-center"
+          aria-live="polite"
+        >
+          {isLoadingMore ? (
+            <span className="inline-flex items-center gap-2 text-xs font-medium text-[var(--muted)]">
+              <LoaderCircle className="size-4 animate-spin" />
+              Memuat produk lainnya...
+            </span>
+          ) : catalogError ? (
+            <span className="text-xs text-[var(--muted)]">
+              Scroll sedikit ke atas lalu kembali ke bawah untuk mencoba lagi.
+            </span>
+          ) : (
+            <span className="text-xs text-[var(--muted)]">
+              Produk berikutnya akan dimuat otomatis.
+            </span>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }

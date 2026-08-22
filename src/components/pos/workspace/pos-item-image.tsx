@@ -44,6 +44,8 @@ export function PosItemImage({
         <img
           src={imageUrl ?? undefined}
           alt={alt}
+          loading="lazy"
+          decoding="async"
           onError={() => setHasImageError(true)}
           className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
