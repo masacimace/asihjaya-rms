@@ -142,7 +142,7 @@ export function PosCartContent({
                         {formatCurrency(item.finalPriceAmount)}
                       </p>
                       <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">
-                        Dasar {formatCurrency(item.basePriceAmount)}
+                        {item.priceSource === "manual_override" ? "Harga khusus" : "Harga standar"} {formatCurrency(item.pricePerGram)} / gr · Dasar {formatCurrency(item.basePriceAmount)}
                         {Number(item.discountAmount) > 0
                           ? ` · Diskon -${formatCurrency(item.discountAmount)}`
                           : ""}

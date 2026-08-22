@@ -2,6 +2,7 @@ import type {
   PosAvailableItem,
   PosCartItem,
   PosCartPricingInput,
+  PosPriceSource,
 } from "@/features/pos/contracts";
 
 function toSafeMoney(value: string | number | null | undefined) {
@@ -93,7 +94,21 @@ export function calculatePosFinalPrice({
     : null;
 }
 
+export function getPosPriceSource({
+  activePricePerGram,
+  transactionPricePerGram,
+}: {
+  activePricePerGram: string | null | undefined;
+  transactionPricePerGram: string | null | undefined;
+}): PosPriceSource {
+  return activePricePerGram && activePricePerGram === transactionPricePerGram
+    ? "global"
+    : "manual_override";
+}
+
 export type PosPricingDraftValues = {
+  priceSource?: PosPriceSource;
+  pricePerGram?: string | number | null;
   discountAmount: number;
   laborAmount: number;
   adjustmentAmount: number;
@@ -107,7 +122,14 @@ export function buildPosCartItem(
   item: PosAvailableItem,
   values: PosPricingDraftValues,
 ): BuildPosCartItemResult {
-  const pricePerGram = item.activePricePerGram;
+  const submittedPricePerGram =
+    values.pricePerGram === null || values.pricePerGram === undefined
+      ? item.activePricePerGram
+      : String(values.pricePerGram).trim();
+  const pricePerGram =
+    submittedPricePerGram && /^\d+$/.test(submittedPricePerGram)
+      ? submittedPricePerGram
+      : null;
 
   if (!item.purityPercent) {
     return {
@@ -123,10 +145,10 @@ export function buildPosCartItem(
     };
   }
 
-  if (!pricePerGram) {
+  if (!pricePerGram || Number(pricePerGram) <= 0) {
     return {
       status: "error",
-      message: `Harga/Gram aktif untuk kadar ${item.purityPercent}% belum diatur. Atur Harga / Gram Aktif terlebih dahulu.`,
+      message: "Harga/Gram transaksi harus lebih dari Rp0.",
     };
   }
 
@@ -138,13 +160,15 @@ export function buildPosCartItem(
   if (!basePriceAmount) {
     return {
       status: "error",
-      message: `${item.sku} belum bisa dihitung karena berat atau Harga/Gram tidak valid.`,
+      message: `${item.sku} belum bisa dihitung karena berat atau Harga/Gram transaksi tidak valid.`,
     };
   }
 
   const finalPriceAmount = calculatePosFinalPrice({
     basePriceAmount,
-    ...values,
+    discountAmount: values.discountAmount,
+    laborAmount: values.laborAmount,
+    adjustmentAmount: values.adjustmentAmount,
   });
 
   if (!finalPriceAmount) {
@@ -153,7 +177,7 @@ export function buildPosCartItem(
       message:
         values.discountAmount > basePriceAmount
           ? "Diskon item tidak boleh lebih besar dari Harga Dasar."
-          : "Perhitungan harga item tidak valid. Periksa Diskon, Ongkos, dan Round.",
+          : "Perhitungan harga item tidak valid. Periksa Harga/Gram, Diskon, Ongkos, dan Round.",
     };
   }
 
@@ -161,6 +185,13 @@ export function buildPosCartItem(
     status: "success",
     item: {
       ...item,
+      priceSource:
+        values.priceSource === "manual_override"
+          ? "manual_override"
+          : getPosPriceSource({
+              activePricePerGram: item.activePricePerGram,
+              transactionPricePerGram: pricePerGram,
+            }),
       pricePerGram,
       basePriceAmount: String(basePriceAmount),
       discountAmount: String(values.discountAmount),
@@ -174,6 +205,12 @@ export function buildPosCartItem(
 export function getPosCartPricingInput(item: PosCartItem): PosCartPricingInput {
   return {
     itemId: item.id,
+    priceSource:
+      item.priceSource ??
+      getPosPriceSource({
+        activePricePerGram: item.activePricePerGram,
+        transactionPricePerGram: item.pricePerGram,
+      }),
     pricePerGram: item.pricePerGram,
     discountAmount: toSafeMoney(item.discountAmount) ?? 0,
     laborAmount: toSafeMoney(item.laborAmount) ?? 0,

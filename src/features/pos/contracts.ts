@@ -34,7 +34,10 @@ export type PosAvailableItem = {
   outletName: string | null;
 };
 
+export type PosPriceSource = "global" | "manual_override";
+
 export type PosCartItem = PosAvailableItem & {
+  priceSource: PosPriceSource;
   pricePerGram: string;
   basePriceAmount: string;
   discountAmount: string;
@@ -45,6 +48,7 @@ export type PosCartItem = PosAvailableItem & {
 
 export type PosCartPricingInput = {
   itemId: string;
+  priceSource?: PosPriceSource;
   pricePerGram: string;
   discountAmount: number;
   laborAmount: number;
@@ -58,6 +62,8 @@ export type PosCartPricingRefreshResult =
       changed: boolean;
       items: Array<{
         itemId: string;
+        priceSource: PosPriceSource;
+        activePricePerGram: string | null;
         pricePerGram: string;
         basePriceAmount: string;
         finalPriceAmount: string;

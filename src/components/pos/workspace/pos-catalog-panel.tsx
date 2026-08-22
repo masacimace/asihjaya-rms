@@ -395,7 +395,6 @@ export function PosCatalogPanel({
               weightGram: item.weightGram,
               pricePerGram: item.activePricePerGram,
             });
-            const hasActivePricing = Boolean(basePriceAmount);
             const specChips = getPosItemSpecChips(item);
 
             return (
@@ -484,7 +483,12 @@ export function PosCatalogPanel({
                       <p className="truncate text-xs font-semibold text-neutral-950 sm:mt-1 sm:text-[15px]">
                         {basePriceAmount
                           ? formatCurrency(basePriceAmount)
-                          : "Harga/Gram belum diatur"}
+                          : "Harga dinamis"}
+                      </p>
+                      <p className="mt-0.5 truncate text-[9px] font-medium text-[var(--muted)] sm:text-[10px]">
+                        {item.activePricePerGram
+                          ? `Standar ${formatCurrency(item.activePricePerGram)} / gr`
+                          : "Atur saat transaksi"}
                       </p>
                     </div>
 
@@ -501,9 +505,7 @@ export function PosCatalogPanel({
                         "grid size-9 shrink-0 place-items-center rounded-xl border bg-white transition sm:size-10 sm:rounded-2xl",
                         isInCart
                           ? "cursor-not-allowed border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                          : hasActivePricing
-                            ? "border-[var(--border)] text-[var(--accent)] hover:border-[var(--accent)] hover:bg-white"
-                            : "border-amber-200 text-amber-600 hover:border-amber-300 hover:bg-amber-50",
+                          : "border-[var(--border)] text-[var(--accent)] hover:border-[var(--accent)] hover:bg-white",
                       )}
                     >
                       <ShoppingBag className="size-4" />

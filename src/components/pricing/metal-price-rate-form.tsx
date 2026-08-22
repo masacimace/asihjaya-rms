@@ -69,7 +69,7 @@ export function MetalPriceRateForm({ rows }: { rows: MetalPriceRateSettingRow[] 
             <div>
               <h2 className="font-semibold text-neutral-950">Harga / Gram Aktif</h2>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Satu harga berlaku untuk semua item dengan Kadar Persen yang sama. Perubahan harga lama tetap tersimpan sebagai histori.
+                Rate ini menjadi harga standar/default untuk item dengan Kadar Persen yang sama. Override Harga/Gram di POS hanya berlaku pada transaksi tersebut dan tidak mengubah histori rate global.
               </p>
             </div>
           </div>

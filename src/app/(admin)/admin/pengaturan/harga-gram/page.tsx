@@ -31,7 +31,7 @@ export default async function MetalPriceSettingsPage() {
             </div>
             <h1 className="mt-3 text-2xl font-semibold text-neutral-950 sm:text-3xl">Harga / Gram Aktif</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Harga jual jewelry akan menggunakan Kadar Persen sebagai kunci harga. Admin cukup mengubah satu rate dan seluruh item dengan kadar yang sama akan mengikuti harga aktif tersebut.
+              Kadar Persen tetap menjadi kunci harga standar POS. Rate di halaman ini menjadi default global; kasir tetap bisa memakai Harga/Gram khusus untuk satu item transaksi tanpa mengubah rate standar ini.
             </p>
           </div>
 
@@ -39,7 +39,7 @@ export default async function MetalPriceSettingsPage() {
             <Scale className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
             <div>
               <p className="font-semibold text-neutral-950">Formula dasar</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Berat × Harga/Gram aktif berdasarkan Kadar Persen.</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Berat × Harga/Gram transaksi. Secara default mengikuti rate aktif berdasarkan Kadar Persen.</p>
             </div>
           </div>
         </div>

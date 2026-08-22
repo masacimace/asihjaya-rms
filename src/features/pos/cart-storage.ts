@@ -28,6 +28,9 @@ export function isStoredPosCartItem(value: unknown): value is PosCartItem {
     typeof value.productName === "string" &&
     typeof value.categoryId === "string" &&
     typeof value.categoryName === "string" &&
+    (value.priceSource === undefined ||
+      value.priceSource === "global" ||
+      value.priceSource === "manual_override") &&
     typeof value.pricePerGram === "string" &&
     typeof value.basePriceAmount === "string" &&
     typeof value.discountAmount === "string" &&
@@ -59,12 +62,21 @@ export function parseStoredPosCartStateValue(
     return null;
   }
 
-  const items = value.items.filter(isStoredPosCartItem);
+  const parsedItems = value.items.filter(isStoredPosCartItem);
   const customer = isStoredPosCustomer(value.customer) ? value.customer : null;
 
-  if (items.length !== value.items.length) {
+  if (parsedItems.length !== value.items.length) {
     return null;
   }
+
+  const items = parsedItems.map((item) => ({
+    ...item,
+    priceSource:
+      item.priceSource === "manual_override" ||
+      (!item.activePricePerGram || item.activePricePerGram !== item.pricePerGram)
+        ? ("manual_override" as const)
+        : ("global" as const),
+  }));
 
   if (items.length === 0 && !customer) {
     return null;

@@ -56,6 +56,7 @@ import {
   type PosInitialData,
   type PosManualPaymentProfile,
   type PosManualPaymentVerificationSource,
+  type PosPriceSource,
   type PosScanLookupResult,
   type PosShiftOverviewData,
   type PosTransactionDetailData,
@@ -166,6 +167,7 @@ function mapHeldCartItemRow(row: HeldCartItemRow): PosHeldCartItem {
     deductionPerGram: row.deductionPerGram,
     sellingAmount: row.sellingAmount,
     activePricePerGram: row.activePricePerGram,
+    priceSource: row.priceSource,
     imageKey: row.imageKey,
     productImageKey: row.productImageKey,
     outletId: row.outletId,
@@ -791,8 +793,8 @@ export async function lookupPosItemByScanValue({
       activePricePerGram,
     }),
     message: activePricePerGram
-      ? `${row.sku} ditemukan. Tentukan Diskon, Ongkos, dan Round sebelum masuk keranjang.`
-      : `${row.sku} ditemukan, tetapi Harga/Gram aktif untuk kadar ${row.purityPercent ?? "-"}% belum diatur.`,
+      ? `${row.sku} ditemukan. Harga standar sudah tersedia dan masih bisa disesuaikan khusus untuk transaksi ini.`
+      : `${row.sku} ditemukan. Harga dinamis dapat diatur langsung pada Pricing Item sebelum masuk keranjang.`,
   };
 }
 
@@ -1602,7 +1604,15 @@ export async function getPosHeldCartListData({
             gemstone: productItems.gemstone,
             deductionPerGram: productItems.deductionPerGram,
             sellingAmount: productItems.sellingAmount,
-            activePricePerGram: sql<string | null>`nullif(${posHeldCartItems.snapshot}->>'pricePerGram', '')`,
+            activePricePerGram: sql<string | null>`case
+              when ${posHeldCartItems.snapshot}->>'priceSource' = 'manual_override'
+                then nullif(${posHeldCartItems.snapshot}->>'globalPricePerGram', '')
+              else coalesce(
+                nullif(${posHeldCartItems.snapshot}->>'globalPricePerGram', ''),
+                nullif(${posHeldCartItems.snapshot}->>'pricePerGram', '')
+              )
+            end`,
+            priceSource: sql<PosPriceSource>`case when ${posHeldCartItems.snapshot}->>'priceSource' = 'manual_override' then 'manual_override' else 'global' end`,
             pricePerGram: sql<string>`coalesce(${posHeldCartItems.snapshot}->>'pricePerGram', '0')`,
             basePriceAmount: posHeldCartItems.listPriceAmount,
             laborAmount: sql<string>`coalesce(${posHeldCartItems.snapshot}->>'laborAmount', '0')`,

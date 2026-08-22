@@ -17,8 +17,8 @@ const context = {
 const basePayload: PosCheckoutPayload = {
   itemIds: ["item-b", "item-a"],
   itemPricing: [
-    { itemId: "item-b", pricePerGram: "1000000", discountAmount: 0, laborAmount: 0, adjustmentAmount: 0 },
-    { itemId: "item-a", pricePerGram: "1000000", discountAmount: 0, laborAmount: 0, adjustmentAmount: 0 },
+    { itemId: "item-b", priceSource: "global", pricePerGram: "1000000", discountAmount: 0, laborAmount: 0, adjustmentAmount: 0 },
+    { itemId: "item-a", priceSource: "global", pricePerGram: "1000000", discountAmount: 0, laborAmount: 0, adjustmentAmount: 0 },
   ],
   payments: [
     {
@@ -77,6 +77,22 @@ assert.notEqual(
     payload: basePayload,
   }),
   "Perubahan shift wajib mengubah fingerprint.",
+);
+
+assert.notEqual(
+  baseFingerprint,
+  createPosCheckoutRequestFingerprint({
+    context,
+    payload: {
+      ...basePayload,
+      itemPricing: basePayload.itemPricing.map((item, index) =>
+        index === 0
+          ? { ...item, priceSource: "manual_override", pricePerGram: "1050000" }
+          : item,
+      ),
+    },
+  }),
+  "Harga/Gram khusus transaksi wajib mengubah fingerprint checkout.",
 );
 
 assert.equal(isValidPosCheckoutIdempotencyKey("pos_12345678"), true);

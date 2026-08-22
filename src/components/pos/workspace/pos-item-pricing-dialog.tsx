@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { BadgePercent, CircleDollarSign, Hammer, RotateCcw, X } from "lucide-react";
+import {
+  BadgePercent,
+  CircleDollarSign,
+  Hammer,
+  RotateCcw,
+  X,
+} from "lucide-react";
 
 import { PosItemImage } from "@/components/pos/workspace/pos-item-image";
 import type { PosAvailableItem, PosCartItem } from "@/features/pos/contracts";
@@ -29,12 +35,27 @@ export function PosItemPricingDialog({
   onCancel,
   onConfirm,
 }: PosItemPricingDialogProps) {
+  const [pricePerGramInput, setPricePerGramInput] = useState("");
+  const [useManualPrice, setUseManualPrice] = useState(false);
   const [discountInput, setDiscountInput] = useState("");
   const [laborInput, setLaborInput] = useState("");
   const [adjustmentInput, setAdjustmentInput] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
+    const initialPricePerGram =
+      existingItem?.pricePerGram ?? item.activePricePerGram ?? "";
+
+    setPricePerGramInput(
+      Number(initialPricePerGram) > 0
+        ? formatRupiahInput(initialPricePerGram)
+        : "",
+    );
+    setUseManualPrice(
+      existingItem
+        ? existingItem.priceSource === "manual_override"
+        : !item.activePricePerGram,
+    );
     setDiscountInput(
       existingItem && Number(existingItem.discountAmount) > 0
         ? formatRupiahInput(existingItem.discountAmount)
@@ -51,28 +72,53 @@ export function PosItemPricingDialog({
         : "",
     );
     setFeedback(null);
-  }, [existingItem, item.id]);
+  }, [existingItem, item.activePricePerGram, item.id]);
 
+  const transactionPricePerGram = parsePaymentAmountInput(pricePerGramInput);
+  const transactionPricePerGramText =
+    transactionPricePerGram > 0 ? String(transactionPricePerGram) : null;
   const discountAmount = parsePaymentAmountInput(discountInput);
   const laborAmount = parsePaymentAmountInput(laborInput);
   const adjustmentAmount = parsePaymentAmountInput(adjustmentInput);
+  const priceSource =
+    useManualPrice || !item.activePricePerGram
+      ? ("manual_override" as const)
+      : ("global" as const);
   const basePriceAmount = useMemo(
     () =>
       calculatePosBasePrice({
         weightGram: item.weightGram,
-        pricePerGram: item.activePricePerGram,
+        pricePerGram: transactionPricePerGramText,
       }),
-    [item.activePricePerGram, item.weightGram],
+    [item.weightGram, transactionPricePerGramText],
   );
   const projectedFinalAmount = basePriceAmount
     ? basePriceAmount - discountAmount + laborAmount + adjustmentAmount
     : 0;
-  const hasPricingSource = Boolean(
-    item.weightGram && item.purityPercent && item.activePricePerGram && basePriceAmount,
+  const hasItemPricingData = Boolean(item.weightGram && item.purityPercent);
+  const hasValidTransactionPrice = Boolean(
+    hasItemPricingData && transactionPricePerGramText && basePriceAmount,
   );
+  const activePricePerGram = Number(item.activePricePerGram ?? 0);
+  const rateDifference =
+    activePricePerGram > 0 && transactionPricePerGram > 0
+      ? transactionPricePerGram - activePricePerGram
+      : null;
+
+  function useActiveRate() {
+    if (!item.activePricePerGram) {
+      return;
+    }
+
+    setPricePerGramInput(formatRupiahInput(item.activePricePerGram));
+    setUseManualPrice(false);
+    setFeedback(null);
+  }
 
   function submit() {
     const result = buildPosCartItem(item, {
+      priceSource,
+      pricePerGram: transactionPricePerGramText,
       discountAmount,
       laborAmount,
       adjustmentAmount,
@@ -107,7 +153,7 @@ export function PosItemPricingDialog({
                 {existingItem ? "Edit harga transaksi" : "Tambahkan produk"}
               </h2>
               <p className="mt-2 text-xs leading-5 text-[var(--muted)] sm:text-sm sm:leading-6">
-                Harga dasar dihitung otomatis dari Berat × Harga/Gram aktif berdasarkan Kadar Persen.
+                Harga standar berdasarkan kadar menjadi default. Harga/Gram transaksi bisa disesuaikan khusus untuk item ini tanpa mengubah rate global.
               </p>
             </div>
 
@@ -153,32 +199,104 @@ export function PosItemPricingDialog({
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-[var(--border)] bg-white p-3">
-              <p className="text-xs text-[var(--muted)]">Harga / Gram Aktif</p>
+              <p className="text-xs text-[var(--muted)]">
+                Harga Standar Kadar {item.purityPercent ?? "-"}%
+              </p>
               <p className="mt-1 text-base font-semibold text-neutral-950">
                 {item.activePricePerGram
                   ? `${formatCurrency(item.activePricePerGram)} / gr`
                   : "Belum diatur"}
               </p>
+              <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+                Default dari Pengaturan Harga / Gram.
+              </p>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-white p-3">
-              <p className="text-xs text-[var(--muted)]">Harga Dasar</p>
+              <p className="text-xs text-[var(--muted)]">Harga Dasar Transaksi</p>
               <p className="mt-1 text-base font-semibold text-neutral-950">
                 {basePriceAmount ? formatCurrency(basePriceAmount) : "Belum tersedia"}
               </p>
+              <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+                Berat × Harga/Gram transaksi.
+              </p>
             </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-[var(--accent-soft)] bg-[var(--accent-soft)]/35 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <label
+                  htmlFor="pos-transaction-price-per-gram"
+                  className="flex items-center gap-2 text-sm font-semibold text-neutral-900"
+                >
+                  <CircleDollarSign className="size-4 text-[var(--accent)]" />
+                  Harga / Gram Transaksi
+                </label>
+                <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+                  Nilai ini hanya digunakan untuk item pada transaksi ini.
+                </p>
+              </div>
+
+              {item.activePricePerGram && priceSource === "manual_override" ? (
+                <button
+                  type="button"
+                  onClick={useActiveRate}
+                  className="shrink-0 rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                >
+                  Gunakan standar
+                </button>
+              ) : null}
+            </div>
+
+            <input
+              id="pos-transaction-price-per-gram"
+              value={pricePerGramInput}
+              onChange={(event) => {
+                setPricePerGramInput(formatRupiahInput(event.target.value));
+                setUseManualPrice(true);
+                setFeedback(null);
+              }}
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="0"
+              className="mt-3 h-12 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-base font-semibold text-neutral-950 outline-none transition placeholder:font-normal placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+            />
+
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] leading-4">
+              {priceSource === "global" && transactionPricePerGram > 0 ? (
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">
+                  Mengikuti harga standar
+                </span>
+              ) : transactionPricePerGram > 0 ? (
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">
+                  Harga khusus transaksi
+                </span>
+              ) : null}
+
+              {rateDifference !== null && rateDifference !== 0 ? (
+                <span className="text-[var(--muted)]">
+                  {rateDifference > 0 ? "+" : "-"}
+                  {formatCurrency(Math.abs(rateDifference))} / gr dari standar
+                </span>
+              ) : null}
+            </div>
+
+            {!item.activePricePerGram ? (
+              <p className="mt-2 text-xs leading-5 text-amber-700">
+                Harga standar kadar ini belum diatur. Isi Harga/Gram transaksi di atas untuk melanjutkan penjualan; rate global tidak akan berubah.
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-3 rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-3 text-xs leading-5 text-[var(--muted)]">
             Potongan/Gram: <span className="font-semibold text-neutral-800">{formatCurrency(item.deductionPerGram ?? 0)}</span>. Nilai ini tetap disimpan sebagai data item dan tidak masuk perhitungan harga jual.
           </div>
 
-          {!hasPricingSource ? (
+          {!hasItemPricingData ? (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
               {!item.purityPercent
                 ? "Kadar Persen item belum diisi. Lengkapi data produk sebelum transaksi."
-                : !item.weightGram
-                  ? "Berat item belum diisi. Lengkapi data produk sebelum transaksi."
-                  : `Harga/Gram aktif untuk kadar ${item.purityPercent}% belum diatur di Pengaturan → Harga / Gram Aktif.`}
+                : "Berat item belum diisi. Lengkapi data produk sebelum transaksi."}
             </div>
           ) : null}
 
@@ -255,7 +373,7 @@ export function PosItemPricingDialog({
           <button
             type="button"
             onClick={submit}
-            disabled={!hasPricingSource || projectedFinalAmount <= 0}
+            disabled={!hasValidTransactionPrice || projectedFinalAmount <= 0}
             className="flex h-11 items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent)]/90 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
           >
             {existingItem ? "Simpan Harga" : "Tambahkan ke Keranjang"}

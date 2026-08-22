@@ -39,6 +39,7 @@ const item: PosCartItem = {
   outletId: "outlet-1",
   outletCode: "OUT-1",
   outletName: "Outlet Uji",
+  priceSource: "global",
   pricePerGram: "1010000",
   basePriceAmount: "1010000",
   discountAmount: "5000",
@@ -80,6 +81,7 @@ assert.match(initialPayload.idempotencyKey, /^pos_/);
 assert.deepEqual(initialPayload.itemIds, ["item-1"]);
 assert.deepEqual(initialPayload.itemPricing, [{
   itemId: "item-1",
+  priceSource: "global",
   pricePerGram: "1010000",
   discountAmount: 5000,
   laborAmount: 35000,

@@ -43,6 +43,7 @@ function createItem(overrides: Partial<PosCartItem> = {}): PosCartItem {
     outletId: "outlet-1",
     outletCode: "OUT-001",
     outletName: "Asihjaya Utama",
+    priceSource: "global",
     pricePerGram: "1000000",
     basePriceAmount: "2500000",
     discountAmount: "100000",
@@ -74,8 +75,48 @@ const pricingExample = buildPosCartItem(
 );
 assert.equal(pricingExample.status, "success");
 if (pricingExample.status === "success") {
+  assert.equal(pricingExample.item.priceSource, "global");
   assert.equal(pricingExample.item.basePriceAmount, "1010000");
   assert.equal(pricingExample.item.finalPriceAmount, "1050000");
+}
+
+const manualOverrideExample = buildPosCartItem(
+  createItem({
+    weightGram: "2",
+    purityPercent: "30",
+    activePricePerGram: "1000000",
+  }),
+  {
+    pricePerGram: "1100000",
+    discountAmount: 0,
+    laborAmount: 0,
+    adjustmentAmount: 0,
+  },
+);
+assert.equal(manualOverrideExample.status, "success");
+if (manualOverrideExample.status === "success") {
+  assert.equal(manualOverrideExample.item.priceSource, "manual_override");
+  assert.equal(manualOverrideExample.item.pricePerGram, "1100000");
+  assert.equal(manualOverrideExample.item.basePriceAmount, "2200000");
+}
+
+const missingGlobalRateExample = buildPosCartItem(
+  createItem({
+    weightGram: "1.5",
+    purityPercent: "38",
+    activePricePerGram: null,
+  }),
+  {
+    pricePerGram: "1200000",
+    discountAmount: 0,
+    laborAmount: 0,
+    adjustmentAmount: 0,
+  },
+);
+assert.equal(missingGlobalRateExample.status, "success");
+if (missingGlobalRateExample.status === "success") {
+  assert.equal(missingGlobalRateExample.item.priceSource, "manual_override");
+  assert.equal(missingGlobalRateExample.item.basePriceAmount, "1800000");
 }
 
 const firstItem = createItem();
@@ -92,6 +133,15 @@ const secondItem = createItem({
 
 assert.equal(isStoredPosCartItem(firstItem), true);
 assert.equal(isStoredPosCartItem({ id: "incomplete" }), false);
+const legacyStoredItem: Partial<PosCartItem> = { ...firstItem };
+delete legacyStoredItem.priceSource;
+const legacyStoredState = parseStoredPosCartStateValue({
+  version: 2,
+  items: [legacyStoredItem],
+  customer: null,
+  updatedAt: "2026-08-20T00:00:00.000Z",
+});
+assert.equal(legacyStoredState?.items[0]?.priceSource, "global");
 
 const itemIds = getPosCartItemIds([firstItem, secondItem]);
 assert.equal(itemIds.has("item-1"), true);
@@ -107,7 +157,7 @@ assert.deepEqual(getPosCartSummary([firstItem, secondItem]), {
 assert.deepEqual(getPosCartAddIssue({ item: firstItem, itemIds }), {
   type: "duplicate",
   message:
-    "SKU-001 sudah ada di keranjang. Gunakan Edit Harga jika ingin mengubah Diskon, Ongkos, atau Round.",
+    "SKU-001 sudah ada di keranjang. Gunakan Edit Harga jika ingin mengubah Harga/Gram, Diskon, Ongkos, atau Round.",
 });
 assert.equal(
   getPosCartAddIssue({

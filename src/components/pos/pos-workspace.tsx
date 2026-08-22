@@ -448,7 +448,8 @@ export function PosWorkspace({
         return refreshed
           ? {
               ...item,
-              activePricePerGram: refreshed.pricePerGram,
+              activePricePerGram: refreshed.activePricePerGram,
+              priceSource: refreshed.priceSource,
               pricePerGram: refreshed.pricePerGram,
               basePriceAmount: refreshed.basePriceAmount,
               finalPriceAmount: refreshed.finalPriceAmount,
@@ -457,9 +458,7 @@ export function PosWorkspace({
       });
       const nextTotals = getPosCartPricingTotals(nextItems);
 
-      if (result.changed) {
-        setCartItems(nextItems);
-      }
+      setCartItems(nextItems);
 
       invalidateCheckoutAttempt();
       resetPaymentState();
@@ -468,7 +467,7 @@ export function PosWorkspace({
       setPanelMode("payment");
       setPaymentFeedback(
         result.changed
-          ? "Harga/Gram aktif berubah dan cart sudah dihitung ulang dengan harga terbaru."
+          ? "Harga standar berubah dan item yang mengikuti rate global sudah dihitung ulang. Harga khusus transaksi tetap dipertahankan."
           : null,
       );
       setPaymentAmountInput(formatRupiahInput(nextTotals.totalAmount));

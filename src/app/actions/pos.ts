@@ -50,6 +50,7 @@ import {
   type PosHeldCartItem,
   type PosHeldCartSummary,
   type PosHoldCartPayload,
+  type PosPriceSource,
   type PosQuickCustomerActionResult,
   type PosQuickCustomerPayload,
   type PosScanLookupResult,
@@ -387,6 +388,14 @@ function readSnapshotMoney(
 ) {
   const value = readSnapshotText(snapshot, key);
   return value ? parseDbAmount(value) : 0;
+}
+
+function readSnapshotPriceSource(
+  snapshot: Record<string, unknown> | null | undefined,
+): PosPriceSource {
+  return readSnapshotText(snapshot, "priceSource") === "manual_override"
+    ? "manual_override"
+    : "global";
 }
 
 function normalizeNullableText(value: string | null | undefined, maxLength: number) {
@@ -1082,11 +1091,13 @@ export async function refreshPosCartPricingAction(
       return {
         status: "success" as const,
         message: resolved.some((item) => item.rateChanged)
-          ? "Harga/Gram aktif berubah dan pricing item sudah diperbarui."
-          : "Pricing item sudah menggunakan Harga/Gram aktif terbaru.",
+          ? "Harga standar berubah dan item yang mengikuti rate global sudah diperbarui."
+          : "Pricing item sudah tervalidasi. Harga khusus transaksi tetap dipertahankan.",
         changed: resolved.some((item) => item.rateChanged),
         items: resolved.map((item) => ({
           itemId: item.itemId,
+          priceSource: item.priceSource,
+          activePricePerGram: item.activePricePerGram,
           pricePerGram: item.pricePerGram,
           basePriceAmount: String(item.basePriceAmount),
           finalPriceAmount: String(item.finalPriceAmount),
@@ -1142,6 +1153,7 @@ type HeldCartActionItemRow = {
   lineNumber?: number;
   listPriceAmount?: string;
   activePricePerGram?: string | null;
+  priceSource?: PosPriceSource;
   pricePerGram?: string;
   basePriceAmount?: string;
   discountAmount?: string;
@@ -1172,7 +1184,8 @@ function mapHeldCartActionItem(row: HeldCartActionItemRow): PosHeldCartItem {
     gemstone: row.gemstone,
     deductionPerGram: row.deductionPerGram,
     sellingAmount: row.sellingAmount,
-    activePricePerGram: row.activePricePerGram ?? row.pricePerGram ?? null,
+    activePricePerGram: row.activePricePerGram ?? null,
+    priceSource: row.priceSource ?? "global",
     pricePerGram: row.pricePerGram ?? row.activePricePerGram ?? "0",
     basePriceAmount: row.basePriceAmount ?? row.listPriceAmount ?? finalPriceAmount,
     imageKey: row.imageKey,
@@ -1555,6 +1568,8 @@ export async function holdPosCartAction(
               gemstone: item!.gemstone,
               sellingAmount: item!.sellingAmount,
               deductionPerGram: item!.deductionPerGram,
+              priceSource: pricing.priceSource,
+              globalPricePerGram: pricing.activePricePerGram,
               pricePerGram: pricing.pricePerGram,
               basePriceAmount: String(pricing.basePriceAmount),
               discountAmount: String(pricing.discountAmount),
@@ -1586,6 +1601,8 @@ export async function holdPosCartAction(
             registerId: register.id,
             shiftId: activeShift.id,
             heldByUserId: auth.user.id,
+            priceSource: pricingMap.get(item!.id)?.priceSource ?? null,
+            globalPricePerGram: pricingMap.get(item!.id)?.activePricePerGram ?? null,
             pricePerGram: pricingMap.get(item!.id)?.pricePerGram ?? null,
             finalPriceAmount: pricingMap.get(item!.id)?.finalPriceAmount ?? null,
           },
@@ -1647,7 +1664,8 @@ export async function holdPosCartAction(
             ...item!,
             lineNumber: index + 1,
             listPriceAmount: String(pricing.basePriceAmount),
-            activePricePerGram: pricing.pricePerGram,
+            activePricePerGram: pricing.activePricePerGram,
+            priceSource: pricing.priceSource,
             pricePerGram: pricing.pricePerGram,
             basePriceAmount: String(pricing.basePriceAmount),
             discountAmount: String(pricing.discountAmount),
@@ -2016,6 +2034,7 @@ export async function resumePosHeldCartAction({
 
       const pricingInputs = itemRows.map((item) => ({
         itemId: item.id,
+        priceSource: readSnapshotPriceSource(item.snapshot),
         pricePerGram: readSnapshotText(item.snapshot, "pricePerGram") ?? "0",
         discountAmount: parseDbAmount(item.discountAmount),
         laborAmount: readSnapshotMoney(item.snapshot, "laborAmount"),
@@ -2114,7 +2133,8 @@ export async function resumePosHeldCartAction({
 
           return mapHeldCartActionItem({
             ...item,
-            activePricePerGram: pricing.pricePerGram,
+            activePricePerGram: pricing.activePricePerGram,
+            priceSource: pricing.priceSource,
             pricePerGram: pricing.pricePerGram,
             basePriceAmount: String(pricing.basePriceAmount),
             listPriceAmount: String(pricing.basePriceAmount),
@@ -2798,13 +2818,41 @@ export async function completePosCheckoutAction(
 
       if (resolvedPricing.some((pricing) => pricing.rateChanged)) {
         throw new CheckoutValidationError(
-          "Harga/Gram aktif berubah setelah pembayaran disiapkan. Kembali ke cart lalu klik Lanjut ke Pembayaran lagi agar total menggunakan harga terbaru.",
+          "Harga standar berubah setelah pembayaran disiapkan. Kembali ke cart lalu klik Lanjut ke Pembayaran lagi agar item yang mengikuti rate global menggunakan harga terbaru.",
         );
       }
 
       const pricingMap = new Map(
         resolvedPricing.map((pricing) => [pricing.itemId, pricing]),
       );
+      const pricingOverrides = orderedItems.flatMap((item) => {
+        const pricing = pricingMap.get(item!.id);
+
+        if (!pricing || pricing.priceSource !== "manual_override") {
+          return [];
+        }
+
+        const globalPrice = pricing.activePricePerGram
+          ? Number(pricing.activePricePerGram)
+          : null;
+        const transactionPrice = Number(pricing.pricePerGram);
+
+        return [
+          {
+            itemId: item!.id,
+            sku: item!.sku,
+            purityPercent: item!.purityPercent,
+            globalPricePerGram: pricing.activePricePerGram,
+            pricePerGram: pricing.pricePerGram,
+            differencePerGram:
+              globalPrice !== null &&
+              Number.isSafeInteger(globalPrice) &&
+              Number.isSafeInteger(transactionPrice)
+                ? String(transactionPrice - globalPrice)
+                : null,
+          },
+        ];
+      });
       const subtotalAmount = resolvedPricing.reduce(
         (total, pricing) => total + pricing.basePriceAmount,
         0,
@@ -2932,6 +2980,8 @@ export async function completePosCheckoutAction(
               color: item!.color,
               gemstone: item!.gemstone,
               deductionPerGram: item!.deductionPerGram,
+              priceSource: pricing.priceSource,
+              globalPricePerGram: pricing.activePricePerGram,
               pricePerGram: pricing.pricePerGram,
               basePriceAmount: String(pricing.basePriceAmount),
               discountAmount: String(pricing.discountAmount),
@@ -2976,6 +3026,8 @@ export async function completePosCheckoutAction(
             registerId: register.id,
             shiftId: activeShift.id,
             cashierId: auth.user.id,
+            priceSource: pricingMap.get(item!.id)?.priceSource ?? null,
+            globalPricePerGram: pricingMap.get(item!.id)?.activePricePerGram ?? null,
             pricePerGram: pricingMap.get(item!.id)?.pricePerGram ?? null,
             finalPriceAmount: pricingMap.get(item!.id)?.finalPriceAmount ?? null,
           },
@@ -3150,6 +3202,8 @@ export async function completePosCheckoutAction(
           customerCode: selectedCustomer?.customerCode ?? null,
           customerName: selectedCustomer?.fullName ?? null,
           itemCount: itemIds.length,
+          manualPriceOverrideCount: pricingOverrides.length,
+          pricingOverrides,
           subtotalAmount: String(subtotalAmount),
           discountAmount: String(approvedDiscountAmount),
           discountReason: null,
@@ -3172,6 +3226,7 @@ export async function completePosCheckoutAction(
         metadata: {
           source: "pos.checkout",
           idempotencyKey,
+          manualPriceOverrideCount: pricingOverrides.length,
           customerId: selectedCustomer?.id ?? null,
           discountApprovalId: null,
           customerDepositUsedAmount: String(customerDepositUsedAmount),

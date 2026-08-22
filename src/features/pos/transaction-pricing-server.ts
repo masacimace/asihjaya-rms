@@ -2,7 +2,10 @@ import { and, desc, eq, gt, isNull, lte, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import { metalPriceRates, metalPurities, metals } from "@/db/schema";
-import type { PosCartPricingInput } from "@/features/pos/contracts";
+import type {
+  PosCartPricingInput,
+  PosPriceSource,
+} from "@/features/pos/contracts";
 import {
   calculatePosBasePrice,
   calculatePosFinalPrice,
@@ -20,6 +23,8 @@ export type PosTransactionPricingSourceItem = {
 
 export type ResolvedPosTransactionPricing = {
   itemId: string;
+  priceSource: PosPriceSource;
+  activePricePerGram: string | null;
   pricePerGram: string;
   basePriceAmount: number;
   discountAmount: number;
@@ -40,6 +45,10 @@ function isSafeMoney(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) >= 0;
 }
 
+function normalizePriceSource(value: unknown): PosPriceSource {
+  return value === "manual_override" ? "manual_override" : "global";
+}
+
 export function normalizePosCartPricingInputs(
   values: readonly PosCartPricingInput[] | null | undefined,
 ): PosCartPricingInput[] {
@@ -58,6 +67,7 @@ export function normalizePosCartPricingInputs(
   return values.map((value) => {
     const itemId = String(value?.itemId ?? "").trim();
     const pricePerGram = String(value?.pricePerGram ?? "").trim();
+    const priceSource = normalizePriceSource(value?.priceSource);
 
     if (!itemId || seenItemIds.has(itemId)) {
       throw new PosTransactionPricingError(
@@ -65,9 +75,9 @@ export function normalizePosCartPricingInputs(
       );
     }
 
-    if (!/^\d+$/.test(pricePerGram)) {
+    if (!/^\d+$/.test(pricePerGram) || Number(pricePerGram) <= 0) {
       throw new PosTransactionPricingError(
-        "Snapshot Harga/Gram pada cart tidak valid. Kembali ke cart lalu refresh harga.",
+        "Harga/Gram transaksi tidak valid. Kembali ke cart lalu atur harga item.",
       );
     }
 
@@ -85,6 +95,7 @@ export function normalizePosCartPricingInputs(
 
     return {
       itemId,
+      priceSource,
       pricePerGram,
       discountAmount: value.discountAmount,
       laborAmount: value.laborAmount,
@@ -174,11 +185,22 @@ export async function resolvePosTransactionPricing({
       );
     }
 
-    const pricePerGram = activeRateMap.get(purityKey);
-    if (!pricePerGram) {
-      throw new PosTransactionPricingError(
-        `Harga/Gram aktif untuk kadar ${item.purityPercent}% belum diatur. Atur Harga / Gram Aktif terlebih dahulu.`,
-      );
+    const activePricePerGram = activeRateMap.get(purityKey) ?? null;
+    const priceSource = normalizePriceSource(input.priceSource);
+    let pricePerGram: string;
+    let rateChanged = false;
+
+    if (priceSource === "manual_override") {
+      pricePerGram = input.pricePerGram;
+    } else {
+      if (!activePricePerGram) {
+        throw new PosTransactionPricingError(
+          `Harga standar untuk kadar ${item.purityPercent}% belum tersedia. Edit Harga/Gram transaksi pada item ini agar penjualan tetap bisa dilanjutkan.`,
+        );
+      }
+
+      pricePerGram = activePricePerGram;
+      rateChanged = input.pricePerGram !== activePricePerGram;
     }
 
     const basePriceAmount = calculatePosBasePrice({
@@ -188,7 +210,7 @@ export async function resolvePosTransactionPricing({
 
     if (!basePriceAmount) {
       throw new PosTransactionPricingError(
-        `${item.sku} belum bisa dihitung karena berat item tidak valid.`,
+        `${item.sku} belum bisa dihitung karena berat item atau Harga/Gram transaksi tidak valid.`,
       );
     }
 
@@ -203,19 +225,21 @@ export async function resolvePosTransactionPricing({
       throw new PosTransactionPricingError(
         input.discountAmount > basePriceAmount
           ? `Diskon ${item.sku} tidak boleh lebih besar dari Harga Dasar.`
-          : `Perhitungan harga ${item.sku} tidak valid. Periksa Diskon, Ongkos, dan Round.`,
+          : `Perhitungan harga ${item.sku} tidak valid. Periksa Harga/Gram, Diskon, Ongkos, dan Round.`,
       );
     }
 
     return {
       itemId: item.id,
+      priceSource,
+      activePricePerGram,
       pricePerGram,
       basePriceAmount,
       discountAmount: input.discountAmount,
       laborAmount: input.laborAmount,
       adjustmentAmount: input.adjustmentAmount,
       finalPriceAmount,
-      rateChanged: input.pricePerGram !== pricePerGram,
+      rateChanged,
     };
   });
 }

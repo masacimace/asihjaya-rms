@@ -51,6 +51,9 @@ function isStoredCheckoutPayload(value: unknown): value is PosCheckoutPayload {
       (item) =>
         isRecord(item) &&
         typeof item.itemId === "string" &&
+        (item.priceSource === undefined ||
+          item.priceSource === "global" ||
+          item.priceSource === "manual_override") &&
         typeof item.pricePerGram === "string" &&
         typeof item.discountAmount === "number" &&
         typeof item.laborAmount === "number" &&
