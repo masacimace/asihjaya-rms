@@ -131,12 +131,23 @@ export function PosCatalogPanel({
           <Search className="size-4 shrink-0 text-neutral-400" />
 
           <input
-            type="search"
+            type="text"
             value={searchQuery}
             onChange={(event) => onSearchQueryChange(event.target.value)}
             placeholder="Scan atau cari barang..."
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
           />
+
+          {isSearchActive ? (
+            <button
+              type="button"
+              onClick={() => onSearchQueryChange("")}
+              aria-label="Hapus pencarian produk"
+              className="grid size-7 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700"
+            >
+              <X className="size-4" />
+            </button>
+          ) : null}
         </label>
 
         <button
@@ -153,12 +164,23 @@ export function PosCatalogPanel({
         <Search className="size-4 shrink-0 text-neutral-400" />
 
         <input
-          type="search"
+          type="text"
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.target.value)}
           placeholder="Cari SKU, barcode, nama produk..."
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
         />
+
+        {isSearchActive ? (
+          <button
+            type="button"
+            onClick={() => onSearchQueryChange("")}
+            aria-label="Hapus pencarian produk"
+            className="grid size-7 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700"
+          >
+            <X className="size-4" />
+          </button>
+        ) : null}
       </label>
 
       {/* Compact category dropdown / mobile sheet */}

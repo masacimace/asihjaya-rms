@@ -573,6 +573,14 @@ export function PosShell({
     sendPosWorkspaceCommand({ type: "search", value: topbarQuery });
   }
 
+  function clearTopbarSearch() {
+    setTopbarQuery("");
+
+    if (pathname === "/pos") {
+      sendPosWorkspaceCommand({ type: "search", value: "" });
+    }
+  }
+
   return (
     <div className="h-dvh max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
       {/* Sidebar desktop */}
@@ -742,12 +750,23 @@ export function PosShell({
             <Search className="size-4 shrink-0 text-neutral-400" />
 
             <input
-              type="search"
+              type="text"
               value={topbarQuery}
               onChange={(event) => setTopbarQuery(event.target.value)}
               placeholder="Cari SKU, barcode, nama, dan serial..."
               className="min-w-0 flex-1 bg-transparent text-neutral-950 outline-none placeholder:text-neutral-400"
             />
+
+            {topbarQuery.trim() ? (
+              <button
+                type="button"
+                onClick={clearTopbarSearch}
+                aria-label="Hapus pencarian produk"
+                className="grid size-7 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700"
+              >
+                <X className="size-4" />
+              </button>
+            ) : null}
 
             <kbd className="hidden rounded-md border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-1 text-[10px] text-[var(--muted)] xl:inline-flex">
               Enter

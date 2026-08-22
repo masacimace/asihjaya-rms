@@ -35,6 +35,14 @@ const itemImageSource = readFileSync(
   resolve("src/components/pos/workspace/pos-item-image.tsx"),
   "utf8",
 );
+const scannerHookSource = readFileSync(
+  resolve("src/features/pos/use-pos-scanner.ts"),
+  "utf8",
+);
+const posShellSource = readFileSync(
+  resolve("src/components/layout/pos-shell.tsx"),
+  "utf8",
+);
 
 assert.match(contractsSource, /POS_CATALOG_PAGE_SIZE = 120/);
 assert.match(querySource, /export async function getPosCatalogPage/);
@@ -50,6 +58,17 @@ assert.match(catalogPanelSource, /new IntersectionObserver/);
 assert.match(catalogPanelSource, /rootMargin: "600px 0px"/);
 assert.match(itemImageSource, /loading="lazy"/);
 assert.match(itemImageSource, /decoding="async"/);
+assert.doesNotMatch(
+  scannerHookSource,
+  /setSearchQuery\(normalizedScanValue\)/,
+);
+assert.match(scannerHookSource, /callbackRef\.current\.onItemFound\(result\.item\)/);
+assert.match(catalogPanelSource, /aria-label="Hapus pencarian produk"/);
+assert.match(catalogPanelSource, /onSearchQueryChange\(""\)/);
+assert.match(posShellSource, /function clearTopbarSearch\(\)/);
+assert.match(posShellSource, /sendPosWorkspaceCommand\(\{ type: "search", value: "" \}\)/);
+assert.doesNotMatch(posShellSource, /type="search"/);
+assert.doesNotMatch(catalogPanelSource, /type="search"/);
 
 function createItem(overrides: Partial<PosAvailableItem> = {}): PosAvailableItem {
   return {
@@ -102,5 +121,5 @@ assert.equal(getPosItemImageUrl(ring), "/media/items/sku%20cincin-001.jpg");
 assert.equal(getPosItemBackground(ring), getPosItemBackground(ring));
 
 console.log(
-  "POS catalog dynamic pricing + infinite-scroll contracts passed.",
+  "POS catalog infinite-scroll + scan/search UX contracts passed.",
 );

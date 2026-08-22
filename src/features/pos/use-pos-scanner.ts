@@ -50,7 +50,6 @@ export function usePosScanner({
       }
 
       setIsScannerOpen(false);
-      setSearchQuery(normalizedScanValue);
       callbackRef.current.onFeedback(
         `Mencari item ${normalizedScanValue}...`,
       );
