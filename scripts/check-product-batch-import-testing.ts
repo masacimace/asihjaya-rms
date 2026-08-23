@@ -34,6 +34,8 @@ assert.ok(scripts["check:product-batch-regression"]?.includes("check:pos-stage-1
 assert.ok(scripts["check:product-batch-import"]?.includes("check:product-batch-testing"));
 
 for (const marker of [
+  "PRODUCT_BATCH_IMPORT_LEGACY_TEMPLATE_VERSION",
+  "PRODUCT_BATCH_IMPORT_LEGACY_TYPE",
   "1 master + 1 draft item",
   "single XLSX Picture in Cell",
   "buildInCellImageWorkbookFixture",
@@ -91,5 +93,5 @@ for (const section of [
 
 console.log("Pemeriksaan Product Batch Import testing berhasil.");
 console.log("- Disposable PostgreSQL 17 integration runner + isolated local storage tersedia.");
-console.log("- ZIP + single XLSX DrawingML/Picture in Cell, valid/invalid, duplicate, tenant isolation, atomic failure/concurrency, POS dan label coverage terdaftar.");
+console.log("- Legacy V1 integration fixtures tetap eksplisit; ZIP + single XLSX DrawingML/Picture in Cell dan regression coverage tetap terdaftar.");
 console.log("- Regression matrix mengikat legacy migration, POS, inventory label dan database deployment checks.");

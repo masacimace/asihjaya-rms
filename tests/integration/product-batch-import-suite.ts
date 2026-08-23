@@ -31,8 +31,8 @@ import {
   PRODUCT_BATCH_IMPORT_ITEM_HEADERS,
   PRODUCT_BATCH_IMPORT_MASTER_HEADERS,
   PRODUCT_BATCH_IMPORT_METADATA_HEADERS,
-  PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION,
-  PRODUCT_BATCH_IMPORT_TYPE,
+  PRODUCT_BATCH_IMPORT_LEGACY_TEMPLATE_VERSION,
+  PRODUCT_BATCH_IMPORT_LEGACY_TYPE,
 } from "@/features/product-batch-import/contracts";
 import { printProductBatchImportLabels } from "@/features/product-batch-import/label-service";
 import { getProductBatchImportPreview } from "@/features/product-batch-import/preview-queries";
@@ -172,8 +172,8 @@ function buildWorkbook(masters: MasterInput[], items: ItemInput[]) {
       name: "METADATA",
       columns: [...PRODUCT_BATCH_IMPORT_METADATA_HEADERS],
       rows: [
-        ["template_version", PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION],
-        ["import_type", PRODUCT_BATCH_IMPORT_TYPE],
+        ["template_version", PRODUCT_BATCH_IMPORT_LEGACY_TEMPLATE_VERSION],
+        ["import_type", PRODUCT_BATCH_IMPORT_LEGACY_TYPE],
         ["generated_at", "2026-08-12"],
       ],
     },

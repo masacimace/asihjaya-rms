@@ -38,6 +38,107 @@ export async function GET(
     (item) => item.availability === "draft",
   ).length;
 
+  if (result.session.templateVersion === 2) {
+    const createdMasterCount = result.masters.filter(
+      (master) => master.resolution === "created",
+    ).length;
+    const reusedMasterCount = result.masters.filter(
+      (master) => master.resolution === "reused",
+    ).length;
+    const masterById = new Map(
+      result.masters.map((master) => [master.productMasterId, master] as const),
+    );
+
+    return createXlsxResponse({
+      filename: `product-batch-import-result-${sessionId.slice(0, 8)}-${buildExportTimestamp()}.xlsx`,
+      sheets: [
+        {
+          name: "SUMMARY",
+          columns: ["key", "value"],
+          rows: [
+            ["file_name", result.session.fileName],
+            ["template_version", result.session.templateVersion],
+            ["operator", result.session.createdByName],
+            ["committed_at", result.session.committedAt],
+            ["item_count", result.items.length],
+            ["created_product_master_count", createdMasterCount],
+            ["reused_product_master_count", reusedMasterCount],
+            ["available_count", availableCount],
+            ["warning_count", result.warnings.length],
+          ],
+          widths: [{ wch: 34 }, { wch: 72 }],
+        },
+        {
+          name: "PRODUCTS",
+          columns: [
+            "row_number",
+            "product_master",
+            "master_resolution",
+            "display_name",
+            "sku",
+            "barcode",
+            "outlet",
+            "availability",
+            "weight_gram",
+            "purity_percent",
+            "exchange_purity_percent",
+            "color",
+            "image",
+          ],
+          rows: result.items.map((item) => {
+            const master = masterById.get(item.productMasterId);
+            return [
+              item.rowNumber,
+              item.productName,
+              master?.resolution ?? "reused",
+              item.displayName ?? item.productName,
+              item.sku,
+              item.barcode,
+              item.outletCode ?? "",
+              item.availability,
+              item.weightGram ?? "",
+              item.purityPercent ?? "",
+              item.exchangePurityPercent ?? "",
+              item.color ?? "",
+              item.imageSource === "physical" ? "stored" : "none",
+            ];
+          }),
+          widths: [
+            { wch: 12 },
+            { wch: 36 },
+            { wch: 18 },
+            { wch: 38 },
+            { wch: 24 },
+            { wch: 24 },
+            { wch: 18 },
+            { wch: 16 },
+            { wch: 14 },
+            { wch: 16 },
+            { wch: 22 },
+            { wch: 18 },
+            { wch: 12 },
+          ],
+        },
+        {
+          name: "WARNINGS",
+          columns: ["row_number", "field", "code", "message"],
+          rows: result.warnings.map((warning) => [
+            warning.rowNumber,
+            warning.field ?? "",
+            warning.code,
+            warning.message,
+          ]),
+          widths: [
+            { wch: 12 },
+            { wch: 24 },
+            { wch: 36 },
+            { wch: 72 },
+          ],
+        },
+      ],
+    });
+  }
+
   return createXlsxResponse({
     filename: `product-batch-import-result-${sessionId.slice(0, 8)}-${buildExportTimestamp()}.xlsx`,
     sheets: [

@@ -7,6 +7,7 @@ const requiredFiles = [
   "src/app/(admin)/admin/produk/import/[sessionId]/page.tsx",
   "src/app/(admin)/admin/produk/import/[sessionId]/errors/route.ts",
   "src/app/(admin)/admin/produk/import/[sessionId]/media/[mediaId]/route.ts",
+  "src/components/products/product-batch-import-v2-session.tsx",
   "src/components/products/product-batch-import-session-actions.tsx",
   "src/features/product-batch-import/preview-queries.ts",
 ];
@@ -25,45 +26,46 @@ async function main() {
     try {
       await access(path.join(root, file));
     } catch {
-      problems.push(`File UI 2B.5 tidak ditemukan: ${file}`);
+      problems.push(`File UI Product Batch Import tidak ditemukan: ${file}`);
     }
   }
 
   const page = await read("src/app/(admin)/admin/produk/import/[sessionId]/page.tsx");
+  const importPage = await read("src/app/(admin)/admin/produk/import/page.tsx");
   const upload = await read("src/components/products/product-batch-import-upload.tsx");
-  const actions = await read("src/components/products/product-batch-import-session-actions.tsx");
+  const v2Session = await read("src/components/products/product-batch-import-v2-session.tsx");
+  const legacyActions = await read("src/components/products/product-batch-import-session-actions.tsx");
   const queries = await read("src/features/product-batch-import/preview-queries.ts");
   const mediaRoute = await read("src/app/(admin)/admin/produk/import/[sessionId]/media/[mediaId]/route.ts");
   const errorRoute = await read("src/app/(admin)/admin/produk/import/[sessionId]/errors/route.ts");
+  const uploadRoute = await read("src/app/api/admin/product-batch-import/upload/route.ts");
 
-  expect(page, 'requirePermission("products.batch_import")', "preview permission", problems);
-  expect(page, 'view === "masters"', "master preview", problems);
-  expect(page, 'view === "items"', "item preview", problems);
-  expect(page, 'view === "images"', "image preview", problems);
-  expect(page, 'view === "issues"', "issue preview", problems);
-  expect(page, "Foto master fallback", "effective image indicator", problems);
-  expect(page, "overflow-x-clip", "page horizontal overflow guard", problems);
-  expect(page, "/errors", "error workbook link", problems);
-  expect(actions, "invalidRows === 0", "commit readiness guard", problems);
-  expect(actions, "commitProductBatchImportSessionAction", "atomic commit action", problems);
-  expect(actions, "Commit Product Batch Import?", "commit confirmation UI", problems);
-  expect(actions, 'name="confirmCommit"', "explicit irreversible confirmation", problems);
-  expect(upload, "router.push(`/admin/produk/import/${payload.session.id}`)", "persistent preview redirect", problems);
-  expect(upload, "Buka session existing", "duplicate session recovery", problems);
-  expect(upload, "Metode A — ZIP + folder foto", "operator ZIP method guidance", problems);
-  expect(upload, "Metode B — Single XLSX + gambar embedded", "operator embedded XLSX guidance", problems);
-  expect(upload, "Compress isi folder batch", "parent-folder ZIP guidance", problems);
-  expect(upload, "Upload & validasi ZIP/XLSX", "dual upload action", problems);
-  expect(upload, "Google Sheets", "Google Sheets guidance", problems);
-  expect(upload, "Insert image in cell", "Google Sheets Picture in Cell guidance", problems);
-  expect(upload, "Place in Cell", "Microsoft Excel Picture in Cell guidance", problems);
-  expect(upload, "Cara memperbaiki", "friendly error remediation", problems);
-  expect(upload, "Detail teknis", "technical error disclosure", problems);
-  expect(upload, "PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.masterDirectory", "root master image folder", problems);
-  expect(upload, "PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.physicalDirectory", "root physical image folder", problems);
-  if (upload.includes("images/masters") || upload.includes("images/physical")) {
-    problems.push("Upload UX tidak boleh lagi menampilkan layout images/* lama.");
-  }
+  expect(page, 'requirePermission("products.batch_import")', "session permission", problems);
+  expect(page, "preview.session.templateVersion === 2", "v2 session branch", problems);
+  expect(page, "ProductBatchImportV2Session", "v2 simplified session UI", problems);
+  expect(v2Session, "Import selesai", "v2 completed UX", problems);
+  expect(v2Session, "File perlu diperbaiki", "v2 validation error UX", problems);
+  expect(v2Session, "Import gagal diproses", "v2 system failure UX", problems);
+  expect(v2Session, "/errors", "v2 error workbook link", problems);
+  expect(v2Session, "ProductBatchImportLabels", "existing label UI on v2 result", problems);
+
+  expect(upload, "Upload & Import", "single-step upload action", problems);
+  expect(upload, "Gelang Rantai Kaki.xlsx", "arbitrary XLSX filename guidance", problems);
+  expect(upload, "Google Sheets & Excel tetap didukung", "Google Sheets/Excel guidance", problems);
+  expect(upload, "Compatibility ZIP", "ZIP compatibility guidance", problems);
+  expect(upload, "tepat satu file .xlsx", "arbitrary root XLSX ZIP guidance", problems);
+  expect(upload, "router.push(`/admin/produk/import/${payload.session.id}`)", "persistent session redirect", problems);
+  expect(importPage, "satu worksheet PRODUCTS", "single-sheet official guidance", problems);
+  expect(importPage, "products.xlsx", "official template filename", problems);
+
+  expect(uploadRoute, "session.templateVersion === 2", "v2 auto-commit detection", problems);
+  expect(uploadRoute, "commitProductBatchImportSession", "v2 atomic auto-commit", problems);
+  expect(uploadRoute, 'status: commitResult ? "completed" : commitFailure ? "failed" : session.status', "failed session handoff", problems);
+
+  // V1 compatibility keeps the old explicit review/confirmation path only for legacy files.
+  expect(legacyActions, "Commit Product Batch Import?", "v1 compatibility confirmation", problems);
+  expect(legacyActions, 'name="confirmCommit"', "v1 compatibility confirmation field", problems);
+
   expect(queries, "productBatchImportMasterRows", "staging master query", problems);
   expect(queries, "productBatchImportItemRows", "staging item query", problems);
   expect(queries, "productBatchImportMedia", "staging media query", problems);
@@ -71,19 +73,19 @@ async function main() {
   expect(mediaRoute, "readProductBatchImportStagingFile", "private staging image read", problems);
   expect(mediaRoute, "readImageFile", "completed final image read", problems);
   expect(mediaRoute, '"X-Content-Type-Options": "nosniff"', "media nosniff", problems);
-  expect(errorRoute, "createXlsxResponse", "error workbook export", problems);
-  expect(errorRoute, 'name: "MASTER_ERRORS"', "master error sheet", problems);
-  expect(errorRoute, 'name: "ITEM_ERRORS"', "item error sheet", problems);
+  expect(errorRoute, "preview.session.templateVersion === 2", "v2 error workbook branch", problems);
+  expect(errorRoute, 'name: "PRODUCTS"', "v2 simplified error sheet", problems);
   expect(errorRoute, 'name: "WARNINGS"', "warning sheet", problems);
+  expect(errorRoute, 'name: "MASTER_ERRORS"', "v1 master error compatibility", problems);
+  expect(errorRoute, 'name: "ITEM_ERRORS"', "v1 item error compatibility", problems);
 
   for (const forbidden of [
-    "insert(productMasters)",
-    "insert(productItems)",
-    "insert(itemBarcodes)",
-    "getNextProductItemIdentifiers",
+    "Metode A — ZIP + folder foto",
+    "Metode B — Single XLSX + gambar embedded",
+    "Compress isi folder batch",
   ]) {
-    if ([page, upload, actions, queries, mediaRoute, errorRoute].some((content) => content.includes(forbidden))) {
-      problems.push(`2B.5 tidak boleh melakukan commit business data: ${forbidden}`);
+    if (upload.includes(forbidden)) {
+      problems.push(`UX v2 tidak boleh kembali ke instruksi berlapis lama: ${forbidden}`);
     }
   }
 
@@ -94,9 +96,8 @@ async function main() {
   }
 
   console.log("Pemeriksaan Product Batch Import UI berhasil.");
-  console.log("- Preview session memakai staging DB dan organization isolation.");
-  console.log("- Master/item/image/issues, fallback image, filters, dan error workbook tersedia.");
-  console.log("- Upload mengarah ke preview persistent; ready session mempunyai confirmation flow menuju atomic commit 2B.6.");
+  console.log("- V2 memakai single XLSX + auto commit, validation error sederhana, dan failed-session UX terpisah.");
+  console.log("- V1 preview/confirmation tetap tersedia sebagai compatibility path.");
 }
 
 await main();

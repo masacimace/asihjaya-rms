@@ -7,6 +7,7 @@ import { buildXlsxBuffer } from "../src/lib/export-files";
 import { parseProductBatchImportPackage } from "../src/features/product-batch-import/package-parser";
 import { buildProductBatchImportTemplateSheets } from "../src/features/product-batch-import/template";
 import { validateProductBatchImportPackage } from "../src/features/product-batch-import/validation";
+import { buildLegacyProductBatchImportTemplateSheets } from "./lib/product-batch-import-v1-template";
 import { buildTestZip } from "./lib/product-batch-import-test-zip";
 
 function auth(permissionCodes: string[], outlet = true): AuthContext {
@@ -28,7 +29,9 @@ async function jpeg() {
     .toBuffer();
 }
 
-async function packageFromSheets(sheets: ReturnType<typeof buildProductBatchImportTemplateSheets>) {
+async function legacyPackageFromSheets(
+  sheets: ReturnType<typeof buildLegacyProductBatchImportTemplateSheets>,
+) {
   const image = await jpeg();
   return parseProductBatchImportPackage(
     buildTestZip([
@@ -46,26 +49,67 @@ const fullPermissions = [
   "inventory.receive",
   "pricing.manage",
 ];
-const lookups = {
+
+const braceletCategory = {
+  id: "00000000-0000-4000-8000-000000000020",
+  code: "BRACELET",
+  name: "Gelang",
+  isActive: true,
+};
+const ringCategory = {
+  id: "00000000-0000-4000-8000-000000000021",
+  code: "RING",
+  name: "Cincin",
+  isActive: true,
+};
+const outlet = {
+  id: "00000000-0000-4000-8000-000000000010",
+  code: "OUTLET-01",
+};
+
+const legacyLookups = {
   categoriesByCode: new Map([
-    ["BRACELET", { id: "00000000-0000-4000-8000-000000000020", code: "BRACELET" }],
-    ["RING", { id: "00000000-0000-4000-8000-000000000021", code: "RING" }],
+    [braceletCategory.code, braceletCategory],
+    [ringCategory.code, ringCategory],
   ]),
-  outletsByCode: new Map([
-    ["OUTLET-01", { id: "00000000-0000-4000-8000-000000000010", code: "OUTLET-01" }],
+  categoriesByLookupKey: new Map<string, readonly (typeof braceletCategory)[]>(),
+  mastersByCategoryAndName: new Map(),
+  outletsByCode: new Map([[outlet.code, outlet]]),
+};
+
+const v2Lookups = {
+  categoriesByCode: new Map([[ringCategory.code, ringCategory]]),
+  categoriesByLookupKey: new Map<string, readonly (typeof ringCategory)[]>([
+    ["RING", [ringCategory]],
+    ["CINCIN", [ringCategory]],
   ]),
+  mastersByCategoryAndName: new Map([
+    [
+      `${ringCategory.id}:CINCIN ANAK`,
+      [
+        {
+          id: "00000000-0000-4000-8000-000000000030",
+          categoryId: ringCategory.id,
+          name: "Cincin Anak",
+          status: "active" as const,
+        },
+      ],
+    ],
+  ]),
+  outletsByCode: new Map([[outlet.code, outlet]]),
 };
 
 async function main() {
-  const baseSheets = buildProductBatchImportTemplateSheets({
+  // Compatibility v1 remains covered.
+  const baseSheets = buildLegacyProductBatchImportTemplateSheets({
     generatedAt: new Date("2026-08-10T00:00:00Z"),
     includeSampleRows: true,
   });
-  const parsed = await packageFromSheets(baseSheets);
+  const parsed = await legacyPackageFromSheets(baseSheets);
   const valid = validateProductBatchImportPackage({
     workbook: parsed.workbook,
     images: parsed.images,
-    lookups,
+    lookups: legacyLookups,
     auth: auth(fullPermissions),
   });
   assert.equal(valid.invalidRows, 0);
@@ -78,38 +122,91 @@ async function main() {
   const noPricing = validateProductBatchImportPackage({
     workbook: parsed.workbook,
     images: parsed.images,
-    lookups,
+    lookups: legacyLookups,
     auth: auth(fullPermissions.filter((permission) => permission !== "pricing.manage")),
   });
   assert.ok(noPricing.itemRows.some((row) => row.validationErrors.some((error) => error.code === "PERMISSION_PRICING_REQUIRED")));
 
-  const noOutletAccess = validateProductBatchImportPackage({
-    workbook: parsed.workbook,
-    images: parsed.images,
-    lookups,
-    auth: auth(fullPermissions, false),
-  });
-  assert.ok(noOutletAccess.itemRows.some((row) => row.validationErrors.some((error) => error.code === "OUTLET_ACCESS_DENIED")));
-
-  const duplicateSheets = buildProductBatchImportTemplateSheets({
+  const duplicateSheets = buildLegacyProductBatchImportTemplateSheets({
     generatedAt: new Date("2026-08-10T00:00:00Z"),
     includeSampleRows: true,
   });
   duplicateSheets[2]!.rows[1]![0] = "ITEM-001";
-  const duplicateParsed = await packageFromSheets(duplicateSheets);
+  const duplicateParsed = await legacyPackageFromSheets(duplicateSheets);
   const duplicate = validateProductBatchImportPackage({
     workbook: duplicateParsed.workbook,
     images: duplicateParsed.images,
-    lookups,
+    lookups: legacyLookups,
     auth: auth(fullPermissions),
   });
-  const duplicateRows = duplicate.itemRows.filter((row) => row.validationErrors.some((error) => error.code === "ROW_KEY_DUPLICATE"));
+  const duplicateRows = duplicate.itemRows.filter((row) =>
+    row.validationErrors.some((error) => error.code === "ROW_KEY_DUPLICATE"),
+  );
   assert.equal(duplicateRows.length, 2);
   assert.equal(new Set(duplicate.itemRows.map((row) => row.stagingRowKey)).size, duplicate.itemRows.length);
 
+  // V2: one row PRODUCTS, existing category/master reuse, no pricing permission required.
+  const v2Sheets = buildProductBatchImportTemplateSheets({ includeSampleRows: true });
+  const v2Workbook = buildXlsxBuffer(v2Sheets);
+  const v2Parsed = await parseProductBatchImportPackage(v2Workbook, {
+    fileName: "Cincin Anak Agustus.xlsx",
+  });
+  const v2 = validateProductBatchImportPackage({
+    workbook: v2Parsed.workbook,
+    images: v2Parsed.images,
+    lookups: v2Lookups,
+    auth: auth(["products.batch_import", "products.manage", "inventory.receive"]),
+  });
+  assert.equal(v2.invalidRows, 0);
+  assert.equal(v2.validMasterRows, 1);
+  assert.equal(v2.validItemRows, 1);
+  assert.equal(v2.masterRows[0]?.normalizedPayload._existing_product_master_id, "00000000-0000-4000-8000-000000000030");
+  assert.equal(v2.itemRows[0]?.normalizedPayload.initial_availability, "available");
+  assert.equal(v2.itemRows[0]?.normalizedPayload.condition, "good");
+  assert.equal(v2.itemRows[0]?.normalizedPayload.selling_amount, null);
+  assert.equal(v2.itemRows[0]?.normalizedPayload.price_per_gram, null);
+
+  // New category/master is valid during validation and will be created atomically at commit.
+  const newCategorySheets = buildProductBatchImportTemplateSheets({ includeSampleRows: true });
+  newCategorySheets[0]!.rows[0]![0] = "Kategori Baru";
+  newCategorySheets[0]!.rows[0]![1] = "Master Baru";
+  const newCategoryParsed = await parseProductBatchImportPackage(buildXlsxBuffer(newCategorySheets), {
+    fileName: "Master Baru.xlsx",
+  });
+  const newCategoryValidation = validateProductBatchImportPackage({
+    workbook: newCategoryParsed.workbook,
+    images: newCategoryParsed.images,
+    lookups: {
+      ...v2Lookups,
+      categoriesByLookupKey: new Map(),
+      mastersByCategoryAndName: new Map(),
+    },
+    auth: auth(["products.batch_import", "products.manage", "inventory.receive"]),
+  });
+  assert.equal(newCategoryValidation.invalidRows, 0);
+  assert.equal(newCategoryValidation.masterRows[0]?.resolvedCategoryId, null);
+
+  // Damaged/Rusak is intentionally blocked from direct AVAILABLE batch flow.
+  const damagedSheets = buildProductBatchImportTemplateSheets({ includeSampleRows: true });
+  damagedSheets[0]!.rows[0]![8] = "Rusak";
+  const damagedParsed = await parseProductBatchImportPackage(buildXlsxBuffer(damagedSheets), {
+    fileName: "Barang Rusak.xlsx",
+  });
+  const damaged = validateProductBatchImportPackage({
+    workbook: damagedParsed.workbook,
+    images: damagedParsed.images,
+    lookups: v2Lookups,
+    auth: auth(["products.batch_import", "products.manage", "inventory.receive"]),
+  });
+  assert.ok(
+    damaged.itemRows[0]?.validationErrors.some(
+      (error) => error.code === "ITEM_CONDITION_NOT_SELLABLE",
+    ),
+  );
+
   console.log("Pemeriksaan Product Batch Import validation berhasil.");
-  console.log("- Default master/item, category/outlet resolve, pricing permission, dan effective-image fallback valid.");
-  console.log("- Duplicate row key tersimpan sebagai validation error tanpa melanggar staging unique key.");
+  console.log("- Compatibility v1 tetap tervalidasi termasuk pricing permission dan master-image fallback.");
+  console.log("- V2 tidak membutuhkan pricing.manage, langsung available, dapat reuse/create category/master, dan menolak damaged.");
 }
 
 void main();

@@ -17,6 +17,11 @@ import {
   productMasters,
 } from "@/db/schema";
 import { getNextProductItemIdentifiers } from "@/features/inventory/product-item-identifiers";
+import {
+  calculateJewelryBasePrice,
+  getActiveGoldPriceRateMap,
+  normalizePurityKey,
+} from "@/features/pricing/metal-price-rates";
 import type { AuthContext } from "@/lib/auth/session";
 import {
   deleteImageFileStrict,
@@ -143,6 +148,38 @@ function uniqueStrings(values: Array<string | null>) {
   return Array.from(new Set(values.filter((value): value is string => !!value)));
 }
 
+function normalizeLookupText(value: string) {
+  return value
+    .normalize("NFKC")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleUpperCase("id-ID");
+}
+
+function categoryCodeBase(value: string) {
+  const normalized = value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleUpperCase("en-US")
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return normalized || "CATEGORY";
+}
+
+function uniqueCategoryCode(base: string, used: Set<string>) {
+  const normalizedBase = categoryCodeBase(base);
+  let candidate = normalizedBase;
+  let suffix = 2;
+  while (used.has(candidate.toLocaleUpperCase("id-ID"))) {
+    const suffixText = `-${suffix}`;
+    candidate = `${normalizedBase.slice(0, 48 - suffixText.length)}${suffixText}`;
+    suffix += 1;
+  }
+  used.add(candidate.toLocaleUpperCase("id-ID"));
+  return candidate;
+}
+
 type PlannedMasterRow = {
   id: string;
   rowNumber: number;
@@ -183,6 +220,7 @@ type PlannedMediaRow = {
 type CommitPlan = {
   sessionId: string;
   organizationId: string;
+  templateVersion: number;
   storageKey: string;
   fileSha256: string;
   totalMasterRows: number;
@@ -216,6 +254,7 @@ async function prepareCommitPlan({
         organizationId: productBatchImportSessions.organizationId,
         storageKey: productBatchImportSessions.storageKey,
         fileSha256: productBatchImportSessions.fileSha256,
+        templateVersion: productBatchImportSessions.templateVersion,
         status: productBatchImportSessions.status,
         totalMasterRows: productBatchImportSessions.totalMasterRows,
         totalItemRows: productBatchImportSessions.totalItemRows,
@@ -363,25 +402,27 @@ async function prepareCommitPlan({
       );
     }
 
+    const isV2 = session.templateVersion === 2;
+
     assertPermission(auth, "products.manage");
     if (itemRows.length > 0) {
       assertInventoryPermission(auth);
     }
-    if (itemRows.some((row) => hasFinancialInput(row.normalizedPayload))) {
+    if (!isV2 && itemRows.some((row) => hasFinancialInput(row.normalizedPayload))) {
       assertPermission(auth, "pricing.manage");
     }
 
     const categoryIds = uniqueStrings(
       masterRows.map((row) => row.resolvedCategoryId),
     );
-    if (masterRows.some((row) => !row.resolvedCategoryId)) {
+    if (!isV2 && masterRows.some((row) => !row.resolvedCategoryId)) {
       throw commitError(
         "CATEGORY_SNAPSHOT_MISSING",
         "Resolved category staging tidak lengkap.",
         409,
       );
     }
-    if (categoryIds.length > 0) {
+    if (!isV2 && categoryIds.length > 0) {
       const activeCategories = await transaction
         .select({ id: productCategories.id })
         .from(productCategories)
@@ -436,13 +477,15 @@ async function prepareCommitPlan({
         .filter((row) => row.entityKind === "master" && row.masterKey)
         .map((row) => row.masterKey as string),
     );
-    for (const row of masterRows) {
-      if (!masterMediaKeys.has(row.masterKey)) {
-        throw commitError(
-          "MASTER_MEDIA_SNAPSHOT_MISSING",
-          `Primary image staging untuk ${row.masterKey} tidak tersedia.`,
-          409,
-        );
+    if (!isV2) {
+      for (const row of masterRows) {
+        if (!masterMediaKeys.has(row.masterKey)) {
+          throw commitError(
+            "MASTER_MEDIA_SNAPSHOT_MISSING",
+            `Primary image staging untuk ${row.masterKey} tidak tersedia.`,
+            409,
+          );
+        }
       }
     }
     for (const row of itemRows) {
@@ -475,14 +518,25 @@ async function prepareCommitPlan({
         const parent = masterRows.find(
           (master) => master.masterKey === row.masterKey,
         );
-        if (
-          !parent ||
-          text(parent.normalizedPayload, "status") !== "active" ||
-          !row.resolvedOutletId ||
-          !nullableText(row.normalizedPayload, "weight_gram") ||
-          !nullableText(row.normalizedPayload, "selling_amount") ||
-          text(row.normalizedPayload, "condition") !== "good"
-        ) {
+        const condition = text(row.normalizedPayload, "condition");
+        const valid = isV2
+          ? Boolean(
+              parent &&
+                row.resolvedOutletId &&
+                nullableText(row.normalizedPayload, "weight_gram") &&
+                nullableText(row.normalizedPayload, "purity_percent") &&
+                nullableText(row.normalizedPayload, "exchange_purity_percent") &&
+                ["good", "used"].includes(condition),
+            )
+          : Boolean(
+              parent &&
+                text(parent.normalizedPayload, "status") === "active" &&
+                row.resolvedOutletId &&
+                nullableText(row.normalizedPayload, "weight_gram") &&
+                nullableText(row.normalizedPayload, "selling_amount") &&
+                condition === "good",
+            );
+        if (!valid) {
           throw commitError(
             "AVAILABLE_ITEM_SNAPSHOT_INVALID",
             `Business rule item available berubah/tidak lengkap pada ${row.rowKey}.`,
@@ -552,6 +606,7 @@ async function prepareCommitPlan({
     return {
       sessionId,
       organizationId: auth.organization.id,
+      templateVersion: session.templateVersion,
       storageKey: session.storageKey,
       fileSha256: session.fileSha256,
       totalMasterRows: session.totalMasterRows,
@@ -827,10 +882,22 @@ async function commitBusinessData({
   now: Date;
   testFailpoint?: ProductBatchImportCommitTestFailpoint;
 }): Promise<ProductBatchImportCommitResult> {
+  const activePriceRates =
+    plan.templateVersion === 2
+      ? await getActiveGoldPriceRateMap(plan.organizationId)
+      : new Map();
+
   return db.transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtext(${`product-batch-import-session:${plan.sessionId}`}))`,
     );
+    if (plan.templateVersion === 2) {
+      // Serialize V2 category/master auto-resolution per organization so two
+      // different batch files cannot create duplicate business groupings.
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`product-batch-import-v2-org:${plan.organizationId}`}))`,
+      );
+    }
 
     const [session] = await transaction
       .select({ status: productBatchImportSessions.status })
@@ -934,12 +1001,268 @@ async function commitBusinessData({
 
     const masterIdByKey = new Map<string, string>();
     const masterCodeByKey = new Map<string, string>();
+    let createdMasterCount = 0;
+    let reusedMasterCount = 0;
+    let createdCategoryCount = 0;
+
+    const v2Categories = plan.templateVersion === 2
+      ? await transaction
+          .select({
+            id: productCategories.id,
+            code: productCategories.code,
+            name: productCategories.name,
+            isActive: productCategories.isActive,
+          })
+          .from(productCategories)
+          .where(eq(productCategories.organizationId, plan.organizationId))
+      : [];
+    const v2Masters = plan.templateVersion === 2
+      ? await transaction
+          .select({
+            id: productMasters.id,
+            categoryId: productMasters.categoryId,
+            code: productMasters.code,
+            name: productMasters.name,
+            status: productMasters.status,
+          })
+          .from(productMasters)
+          .where(eq(productMasters.organizationId, plan.organizationId))
+      : [];
+    const usedCategoryCodes = new Set(
+      v2Categories.map((category) => category.code.toLocaleUpperCase("id-ID")),
+    );
 
     for (const row of masters) {
-      if (!row.plannedProductMasterId || !row.resolvedCategoryId) {
+      if (!row.plannedProductMasterId) {
         throw commitError(
           "MASTER_PLAN_INVALID",
           `Planned Product Master ${row.masterKey} tidak lengkap.`,
+          409,
+        );
+      }
+
+      if (plan.templateVersion === 2) {
+        const categoryInput = text(row.normalizedPayload, "category_code");
+        const masterName = text(row.normalizedPayload, "name");
+        const categoryLookupKey = normalizeLookupText(categoryInput);
+        const categoryCandidates = v2Categories.filter(
+          (category) =>
+            normalizeLookupText(category.code) === categoryLookupKey ||
+            normalizeLookupText(category.name) === categoryLookupKey,
+        );
+        const uniqueCategoryCandidates = Array.from(
+          new Map(categoryCandidates.map((category) => [category.id, category])).values(),
+        );
+        if (uniqueCategoryCandidates.length > 1) {
+          throw commitError(
+            "CATEGORY_AMBIGUOUS",
+            `Kategori ${categoryInput} menjadi ambigu saat commit. Tidak ada data parsial yang disimpan.`,
+            409,
+          );
+        }
+
+        let category = uniqueCategoryCandidates[0] ?? null;
+        if (!category) {
+          const id = randomUUID();
+          const code = uniqueCategoryCode(categoryInput, usedCategoryCodes);
+          const name = categoryInput.slice(0, 120);
+          await transaction.insert(productCategories).values({
+            id,
+            organizationId: plan.organizationId,
+            code,
+            name,
+            description: "Kategori otomatis dari Product Batch Import.",
+            displayOrder: 999,
+            attributeSchema: {},
+            isActive: true,
+          });
+          await transaction.insert(auditLogs).values({
+            organizationId: plan.organizationId,
+            actorUserId: auth.user.id,
+            action: "product_category.create",
+            entityType: "product_category",
+            entityId: id,
+            afterData: {
+              source: "product_batch_import_v2",
+              sessionId: plan.sessionId,
+              rowNumber: row.rowNumber,
+              code,
+              name,
+              isActive: true,
+            },
+            ipAddress: requestMetadata.ipAddress?.slice(0, 64) ?? null,
+            userAgent: requestMetadata.userAgent?.slice(0, 1_000) ?? null,
+            metadata: {
+              source: "admin.products.batch_import",
+              sessionId: plan.sessionId,
+            },
+            createdAt: now,
+          });
+          category = { id, code, name, isActive: true };
+          v2Categories.push(category);
+          createdCategoryCount += 1;
+        } else if (!category.isActive) {
+          await transaction
+            .update(productCategories)
+            .set({ isActive: true, updatedAt: now })
+            .where(eq(productCategories.id, category.id));
+          await transaction.insert(auditLogs).values({
+            organizationId: plan.organizationId,
+            actorUserId: auth.user.id,
+            action: "product_category.update",
+            entityType: "product_category",
+            entityId: category.id,
+            beforeData: { isActive: false },
+            afterData: {
+              source: "product_batch_import_v2",
+              sessionId: plan.sessionId,
+              isActive: true,
+            },
+            ipAddress: requestMetadata.ipAddress?.slice(0, 64) ?? null,
+            userAgent: requestMetadata.userAgent?.slice(0, 1_000) ?? null,
+            metadata: {
+              source: "admin.products.batch_import",
+              sessionId: plan.sessionId,
+            },
+            createdAt: now,
+          });
+          category.isActive = true;
+        }
+
+        const masterLookupKey = normalizeLookupText(masterName);
+        const masterCandidates = v2Masters.filter(
+          (master) =>
+            master.categoryId === category!.id &&
+            normalizeLookupText(master.name) === masterLookupKey,
+        );
+        if (masterCandidates.length > 1) {
+          throw commitError(
+            "PRODUCT_MASTER_AMBIGUOUS",
+            `Product Master ${masterName} pada kategori ${categoryInput} menjadi ambigu saat commit.`,
+            409,
+          );
+        }
+
+        let productMasterId: string;
+        let code: string;
+        const existingMaster = masterCandidates[0] ?? null;
+        if (existingMaster) {
+          productMasterId = existingMaster.id;
+          code = existingMaster.code;
+          if (existingMaster.status !== "active") {
+            const previousStatus = existingMaster.status;
+            await transaction
+              .update(productMasters)
+              .set({ status: "active", updatedAt: now })
+              .where(eq(productMasters.id, existingMaster.id));
+            await transaction.insert(auditLogs).values({
+              organizationId: plan.organizationId,
+              actorUserId: auth.user.id,
+              action: "product_master.update",
+              entityType: "product_master",
+              entityId: existingMaster.id,
+              beforeData: { status: previousStatus },
+              afterData: {
+                source: "product_batch_import_v2",
+                sessionId: plan.sessionId,
+                status: "active",
+              },
+              ipAddress: requestMetadata.ipAddress?.slice(0, 64) ?? null,
+              userAgent: requestMetadata.userAgent?.slice(0, 1_000) ?? null,
+              metadata: {
+                source: "admin.products.batch_import",
+                sessionId: plan.sessionId,
+              },
+              createdAt: now,
+            });
+            existingMaster.status = "active";
+          }
+          reusedMasterCount += 1;
+        } else {
+          productMasterId = row.plannedProductMasterId;
+          code = await getNextProductMasterCode({
+            execute: (query) => transaction.execute(query),
+            isCodeUsed: async (candidate) => {
+              const [existing] = await transaction
+                .select({ id: productMasters.id })
+                .from(productMasters)
+                .where(
+                  and(
+                    eq(productMasters.organizationId, plan.organizationId),
+                    eq(productMasters.code, candidate),
+                  ),
+                )
+                .limit(1);
+              return !!existing;
+            },
+          });
+          await transaction.insert(productMasters).values({
+            id: productMasterId,
+            organizationId: plan.organizationId,
+            categoryId: category.id,
+            code,
+            name: masterName,
+            brand: null,
+            material: null,
+            collection: null,
+            description: null,
+            imageKey: null,
+            attributes: {
+              productBatchImport: {
+                sessionId: plan.sessionId,
+                importedAt: now.toISOString(),
+              },
+            },
+            status: "active",
+          });
+          v2Masters.push({
+            id: productMasterId,
+            categoryId: category.id,
+            code,
+            name: masterName,
+            status: "active",
+          });
+          createdMasterCount += 1;
+
+          await transaction.insert(auditLogs).values({
+            organizationId: plan.organizationId,
+            actorUserId: auth.user.id,
+            action: "product_master.create",
+            entityType: "product_master",
+            entityId: productMasterId,
+            afterData: {
+              source: "product_batch_import_v2",
+              sessionId: plan.sessionId,
+              rowNumber: row.rowNumber,
+              code,
+              name: masterName,
+              categoryId: category.id,
+              status: "active",
+            },
+            ipAddress: requestMetadata.ipAddress?.slice(0, 64) ?? null,
+            userAgent: requestMetadata.userAgent?.slice(0, 1_000) ?? null,
+            metadata: {
+              source: "admin.products.batch_import",
+              sessionId: plan.sessionId,
+            },
+            createdAt: now,
+          });
+        }
+
+        await transaction
+          .update(productBatchImportMasterRows)
+          .set({ committedProductMasterId: productMasterId })
+          .where(eq(productBatchImportMasterRows.id, row.id));
+
+        masterIdByKey.set(row.masterKey, productMasterId);
+        masterCodeByKey.set(row.masterKey, code);
+        continue;
+      }
+
+      if (!row.resolvedCategoryId) {
+        throw commitError(
+          "MASTER_PLAN_INVALID",
+          `Resolved category Product Master ${row.masterKey} tidak lengkap.`,
           409,
         );
       }
@@ -999,7 +1322,10 @@ async function commitBusinessData({
         entityType: "product_master",
         entityId: row.plannedProductMasterId,
         afterData: {
-          source: "product_batch_import",
+          source:
+            plan.templateVersion === 2
+              ? "product_batch_import_v2"
+              : "product_batch_import",
           sessionId: plan.sessionId,
           rowNumber: row.rowNumber,
           masterKey: row.masterKey,
@@ -1022,6 +1348,7 @@ async function commitBusinessData({
         createdAt: now,
       });
 
+      createdMasterCount += 1;
       masterIdByKey.set(row.masterKey, row.plannedProductMasterId);
       masterCodeByKey.set(row.masterKey, code);
     }
@@ -1068,8 +1395,23 @@ async function commitBusinessData({
       ) as "draft" | "available";
       const condition = text(row.normalizedPayload, "condition") as
         | "good"
+        | "used"
         | "damaged";
       const imageKey = itemMediaByKey.get(row.rowKey) ?? null;
+      const purityPercent = nullableText(row.normalizedPayload, "purity_percent");
+      const weightGram = nullableText(row.normalizedPayload, "weight_gram");
+      const purityKey =
+        plan.templateVersion === 2 ? normalizePurityKey(purityPercent) : null;
+      const activeRate = purityKey ? activePriceRates.get(purityKey) ?? null : null;
+      const compatibilityPricePerGram =
+        plan.templateVersion === 2 ? activeRate?.ratePerGram ?? null : null;
+      const compatibilitySellingAmount =
+        plan.templateVersion === 2 && activeRate
+          ? calculateJewelryBasePrice({
+              weightGram,
+              ratePerGram: activeRate.ratePerGram,
+            })
+          : null;
 
       await transaction.insert(productItems).values({
         id: row.plannedProductItemId,
@@ -1080,18 +1422,35 @@ async function commitBusinessData({
         sku: identifiers.sku,
         barcode: identifiers.barcode,
         qrValue: identifiers.qrValue,
-        weightGram: nullableText(row.normalizedPayload, "weight_gram"),
-        purityPercent: nullableText(row.normalizedPayload, "purity_percent"),
+        weightGram,
+        purityPercent,
         exchangePurityPercent: nullableText(
           row.normalizedPayload,
           "exchange_purity_percent",
         ),
-        size: nullableText(row.normalizedPayload, "size"),
+        size:
+          plan.templateVersion === 2
+            ? null
+            : nullableText(row.normalizedPayload, "size"),
         color: nullableText(row.normalizedPayload, "color"),
-        gemstone: nullableText(row.normalizedPayload, "gemstone"),
-        costAmount: nullableText(row.normalizedPayload, "cost_amount"),
-        sellingAmount: nullableText(row.normalizedPayload, "selling_amount"),
-        pricePerGram: nullableText(row.normalizedPayload, "price_per_gram"),
+        gemstone:
+          plan.templateVersion === 2
+            ? null
+            : nullableText(row.normalizedPayload, "gemstone"),
+        costAmount:
+          plan.templateVersion === 2
+            ? null
+            : nullableText(row.normalizedPayload, "cost_amount"),
+        sellingAmount:
+          plan.templateVersion === 2
+            ? compatibilitySellingAmount === null
+              ? null
+              : String(compatibilitySellingAmount)
+            : nullableText(row.normalizedPayload, "selling_amount"),
+        pricePerGram:
+          plan.templateVersion === 2
+            ? compatibilityPricePerGram
+            : nullableText(row.normalizedPayload, "price_per_gram"),
         deductionPerGram: nullableText(
           row.normalizedPayload,
           "deduction_per_gram",
@@ -1099,7 +1458,10 @@ async function commitBusinessData({
         availability,
         condition,
         locationState: "outlet",
-        locationCode: nullableText(row.normalizedPayload, "location_code"),
+        locationCode:
+          plan.templateVersion === 2
+            ? null
+            : nullableText(row.normalizedPayload, "location_code"),
         imageKey,
         internalNotes: nullableText(row.normalizedPayload, "internal_notes"),
         isActive: true,
@@ -1190,12 +1552,22 @@ async function commitBusinessData({
           color: nullableText(row.normalizedPayload, "color"),
           gemstone: nullableText(row.normalizedPayload, "gemstone"),
           costAmount: nullableText(row.normalizedPayload, "cost_amount"),
-          sellingAmount: nullableText(row.normalizedPayload, "selling_amount"),
-          pricePerGram: nullableText(row.normalizedPayload, "price_per_gram"),
+          sellingAmount:
+            plan.templateVersion === 2
+              ? compatibilitySellingAmount
+              : nullableText(row.normalizedPayload, "selling_amount"),
+          pricePerGram:
+            plan.templateVersion === 2
+              ? compatibilityPricePerGram
+              : nullableText(row.normalizedPayload, "price_per_gram"),
           deductionPerGram: nullableText(
             row.normalizedPayload,
             "deduction_per_gram",
           ),
+          activePriceRateFound:
+            plan.templateVersion === 2 ? Boolean(activeRate) : undefined,
+          priceRatePurityKey:
+            plan.templateVersion === 2 ? purityKey : undefined,
           availability,
           condition,
           locationCode: nullableText(row.normalizedPayload, "location_code"),
@@ -1236,6 +1608,9 @@ async function commitBusinessData({
         committedItemCount: items.length,
         availableItemCount,
         draftItemCount,
+        createdCategoryCount,
+        createdMasterCount,
+        reusedMasterCount,
       },
       ipAddress: requestMetadata.ipAddress?.slice(0, 64) ?? null,
       userAgent: requestMetadata.userAgent?.slice(0, 1_000) ?? null,

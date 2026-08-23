@@ -110,9 +110,36 @@ assert.throws(
   (error: unknown) =>
     error instanceof ProductBatchArchiveError &&
     error.code === "ARCHIVE_PATH_UNSUPPORTED" &&
-    error.message.includes("masters/") &&
+    error.message.includes("tepat satu file .xlsx di root") &&
     error.message.includes("physical/") &&
-    error.message.includes("root ZIP"),
+    error.message.includes("masters/"),
+);
+
+const arbitraryWorkbookNameInspection = inspectProductBatchArchive(
+  buildTestZip([
+    { path: "Gelang Rantai Kaki.xlsx", data: workbook },
+    { path: "masters/MASTER-001.jpg", data: Buffer.from("legacy-master") },
+    { path: "physical/ITEM-001.jpg", data: Buffer.from("physical") },
+  ]),
+);
+assert.equal(
+  arbitraryWorkbookNameInspection.workbookEntry.path,
+  "Gelang Rantai Kaki.xlsx",
+  "ZIP V2 harus menerima nama workbook .xlsx bebas di root.",
+);
+assert.equal(
+  arbitraryWorkbookNameInspection.imageEntries.length,
+  2,
+  "Folder masters/ legacy dan physical/ harus tetap diterima sesuai compatibility contract.",
+);
+
+expectArchiveCode("ARCHIVE_WORKBOOK_DUPLICATE", () =>
+  inspectProductBatchArchive(
+    buildTestZip([
+      { path: "products.xlsx", data: workbook },
+      { path: "Produk Lain.xlsx", data: workbook },
+    ]),
+  ),
 );
 
 assert.throws(
@@ -123,4 +150,6 @@ assert.throws(
 console.log("Pemeriksaan Product Batch Import security berhasil.");
 console.log("- Corrupt ZIP, zip slip, duplicate entry/name, symlink, encryption, dan executable ditolak.");
 console.log("- Workbook oversize, too-many-entry, dan archive-bomb declarations ditolak sebelum extraction.");
+console.log("- Nama workbook .xlsx bebas di root diterima; multiple root workbook tetap ditolak.");
+console.log("- Folder physical/ dan masters/ legacy tetap mengikuti compatibility contract.");
 console.log("- Corrupt XLSX ditolak oleh bounded OOXML container guard.");

@@ -7,6 +7,10 @@ import {
   ProductBatchImportDuplicateError,
   ProductBatchImportServiceError,
 } from "@/features/product-batch-import/session-service";
+import {
+  commitProductBatchImportSession,
+  ProductBatchImportCommitError,
+} from "@/features/product-batch-import/commit-service";
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
 import { serverEnv } from "@/lib/env";
 import { getClientIp } from "@/lib/http/client-ip";
@@ -167,26 +171,60 @@ export async function POST(request: Request) {
       getProductBatchImportUploadLimit(fileName),
     );
 
+    const requestMetadata = {
+      ipAddress: getClientIp(request),
+      userAgent: request.headers.get("user-agent"),
+    };
     const session = await createProductBatchImportSession({
       auth,
       fileName,
       archiveBuffer: buffer,
-      requestMetadata: {
-        ipAddress: getClientIp(request),
-        userAgent: request.headers.get("user-agent"),
-      },
+      requestMetadata,
     });
+
+    const autoCommit = session.templateVersion === 2 && session.status === "ready";
+    let commitResult = null;
+    let commitFailure: ProductBatchImportCommitError | null = null;
+
+    if (autoCommit) {
+      try {
+        commitResult = await commitProductBatchImportSession({
+          auth,
+          sessionId: session.id,
+          requestMetadata,
+        });
+      } catch (error) {
+        if (error instanceof ProductBatchImportCommitError) {
+          commitFailure = error;
+        } else {
+          throw error;
+        }
+      }
+    }
 
     return NextResponse.json(
       {
-        message:
-          session.status === "ready"
-            ? "File berhasil divalidasi dan session siap untuk direview pada halaman preview."
-            : "File berhasil masuk staging, tetapi masih memiliki validation error.",
+        message: commitResult
+          ? `Import selesai. ${commitResult.committedItemCount} item berhasil dibuat dan langsung tersedia.`
+          : commitFailure
+            ? "Import atomic gagal diproses. Tidak ada data bisnis parsial yang disimpan."
+            : session.status === "ready"
+              ? "File template v1 berhasil divalidasi dan siap direview."
+              : "File berhasil diperiksa, tetapi masih memiliki validation error. Tidak ada produk yang dibuat.",
         session: {
           ...session,
+          status: commitResult ? "completed" : commitFailure ? "failed" : session.status,
           expiresAt: session.expiresAt.toISOString(),
         },
+        commitFailure: commitFailure
+          ? { code: commitFailure.code, message: commitFailure.message }
+          : null,
+        commitResult: commitResult
+          ? {
+              ...commitResult,
+              committedAt: commitResult.committedAt.toISOString(),
+            }
+          : null,
       },
       {
         status: 201,
@@ -201,6 +239,9 @@ export async function POST(request: Request) {
       });
     }
     if (error instanceof ProductBatchImportServiceError) {
+      return jsonError(error.statusCode, error.code, error.message);
+    }
+    if (error instanceof ProductBatchImportCommitError) {
       return jsonError(error.statusCode, error.code, error.message);
     }
     if (error instanceof Error && "code" in error) {

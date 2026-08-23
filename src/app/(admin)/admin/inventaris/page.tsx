@@ -529,7 +529,7 @@ export default async function InventoryPage({
           <>
             <div className="hidden xl:block">
               <div className="overflow-x-auto">
-                <div className="min-w-[1560px]">
+                <div className="min-w-[1520px]">
                   <div className="grid grid-cols-[minmax(300px,1.55fr)_180px_190px_110px_175px_150px_165px_130px] gap-4 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-xs font-semibold text-neutral-500">
                     <div>Item</div>
                     <div className="min-w-0 self-center pl-5">

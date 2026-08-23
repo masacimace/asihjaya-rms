@@ -11,6 +11,7 @@ import {
   productBatchImportMedia,
   productBatchImportSessions,
   productCategories,
+  productMasters,
 } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/session";
 import {
@@ -22,6 +23,7 @@ import {
 
 import {
   PRODUCT_BATCH_IMPORT_LIMITS,
+  PRODUCT_BATCH_IMPORT_LEGACY_TEMPLATE_VERSION,
   PRODUCT_BATCH_IMPORT_SESSION_TTL_MS,
   PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION,
 } from "./contracts";
@@ -61,6 +63,7 @@ export type ProductBatchImportRequestMetadata = {
 export type ProductBatchImportSessionSummary = {
   id: string;
   status: "invalid" | "ready";
+  templateVersion: number;
   fileName: string;
   fileSha256: string;
   totalMasterRows: number;
@@ -176,24 +179,38 @@ async function findDuplicateSession(
   return existing ?? null;
 }
 
+function normalizeLookupText(value: string) {
+  return value
+    .normalize("NFKC")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleUpperCase("id-ID");
+}
+
 async function buildLookups(
   organizationId: string,
-  categoryCodes: string[],
+  _categoryInputs: string[],
   outletCodes: string[],
 ): Promise<ProductBatchValidationLookups> {
-  const [categoryRows, outletRows] = await Promise.all([
-    categoryCodes.length
-      ? db
-          .select({ id: productCategories.id, code: productCategories.code })
-          .from(productCategories)
-          .where(
-            and(
-              eq(productCategories.organizationId, organizationId),
-              eq(productCategories.isActive, true),
-              inArray(productCategories.code, categoryCodes),
-            ),
-          )
-      : Promise.resolve([]),
+  const [categoryRows, masterRows, outletRows] = await Promise.all([
+    db
+      .select({
+        id: productCategories.id,
+        code: productCategories.code,
+        name: productCategories.name,
+        isActive: productCategories.isActive,
+      })
+      .from(productCategories)
+      .where(eq(productCategories.organizationId, organizationId)),
+    db
+      .select({
+        id: productMasters.id,
+        categoryId: productMasters.categoryId,
+        name: productMasters.name,
+        status: productMasters.status,
+      })
+      .from(productMasters)
+      .where(eq(productMasters.organizationId, organizationId)),
     outletCodes.length
       ? db
           .select({ id: outlets.id, code: outlets.code })
@@ -208,8 +225,35 @@ async function buildLookups(
       : Promise.resolve([]),
   ]);
 
+  const categoriesByCode = new Map(
+    categoryRows
+      .filter((row) => row.isActive)
+      .map((row) => [row.code, row] as const),
+  );
+  const categoriesByLookupKey = new Map<string, typeof categoryRows>();
+  for (const category of categoryRows) {
+    for (const key of new Set([
+      normalizeLookupText(category.code),
+      normalizeLookupText(category.name),
+    ])) {
+      const rows = categoriesByLookupKey.get(key) ?? [];
+      if (!rows.some((row) => row.id === category.id)) rows.push(category);
+      categoriesByLookupKey.set(key, rows);
+    }
+  }
+
+  const mastersByCategoryAndName = new Map<string, typeof masterRows>();
+  for (const master of masterRows) {
+    const key = `${master.categoryId}:${normalizeLookupText(master.name)}`;
+    const rows = mastersByCategoryAndName.get(key) ?? [];
+    rows.push(master);
+    mastersByCategoryAndName.set(key, rows);
+  }
+
   return {
-    categoriesByCode: new Map(categoryRows.map((row) => [row.code, row])),
+    categoriesByCode,
+    categoriesByLookupKey,
+    mastersByCategoryAndName,
     outletsByCode: new Map(outletRows.map((row) => [row.code, row])),
   };
 }
@@ -398,7 +442,10 @@ async function createProductBatchImportSessionInternal({
       500,
     );
   }
-  if (parsed.workbook.templateVersion !== PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION) {
+  if (
+    parsed.workbook.templateVersion !== PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION &&
+    parsed.workbook.templateVersion !== PRODUCT_BATCH_IMPORT_LEGACY_TEMPLATE_VERSION
+  ) {
     throw serviceError(
       "TEMPLATE_VERSION_UNSUPPORTED",
       `Template version ${parsed.workbook.templateVersion || "kosong"} tidak didukung.`,
@@ -479,7 +526,7 @@ async function createProductBatchImportSessionInternal({
         fileName: normalizedFileName,
         fileSha256,
         fileSizeBytes: archiveBuffer.length,
-        templateVersion: Number(PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION),
+        templateVersion: Number(parsed.workbook.templateVersion),
         status: "uploaded",
         storageKey: archiveStorageKey,
         totalMasterRows: parsed.workbook.masterRows.length,
@@ -591,7 +638,7 @@ async function createProductBatchImportSessionInternal({
           fileName: normalizedFileName,
           fileSha256,
           fileSizeBytes: archiveBuffer.length,
-          templateVersion: PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION,
+          templateVersion: parsed.workbook.templateVersion,
           packageKind: parsed.packageKind,
           status: finalStatus,
           totalMasterRows: parsed.workbook.masterRows.length,
@@ -620,6 +667,7 @@ async function createProductBatchImportSessionInternal({
   return {
     id: sessionId,
     status: validation.invalidRows > 0 ? "invalid" : "ready",
+    templateVersion: Number(parsed.workbook.templateVersion),
     fileName: normalizedFileName,
     fileSha256,
     totalMasterRows: parsed.workbook.masterRows.length,

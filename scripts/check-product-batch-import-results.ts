@@ -6,6 +6,7 @@ const requiredFiles = [
   "src/features/product-batch-import/result-queries.ts",
   "src/features/product-batch-import/label-service.ts",
   "src/components/products/product-batch-import-labels.tsx",
+  "src/components/products/product-batch-import-v2-session.tsx",
   "src/lib/hardware/label-target.ts",
   "src/app/(admin)/admin/produk/import/[sessionId]/result/route.ts",
   "src/app/(admin)/admin/produk/import/history/page.tsx",
@@ -43,10 +44,14 @@ async function main() {
   expect(resultQueries, "generatedBarcode", "generated identifier evidence", problems);
   expect(resultQueries, 'sourceType, "product_batch_import"', "session-scoped label jobs", problems);
   expect(resultRoute, "createXlsxResponse", "formula-safe result workbook", problems);
-  expect(resultRoute, 'name: "IMPORT_SUMMARY"', "result summary sheet", problems);
-  expect(resultRoute, 'name: "CREATED_MASTERS"', "created masters sheet", problems);
-  expect(resultRoute, 'name: "CREATED_ITEMS"', "created items sheet", problems);
+  expect(resultRoute, "result.session.templateVersion === 2", "v2 result workbook branch", problems);
+  expect(resultRoute, 'name: "SUMMARY"', "v2 result summary sheet", problems);
+  expect(resultRoute, 'name: "PRODUCTS"', "v2 simplified product result sheet", problems);
   expect(resultRoute, 'name: "WARNINGS"', "warning sheet", problems);
+  // V1 result workbook remains available only for legacy compatibility sessions.
+  expect(resultRoute, 'name: "IMPORT_SUMMARY"', "v1 result summary compatibility", problems);
+  expect(resultRoute, 'name: "CREATED_MASTERS"', "v1 created masters compatibility", problems);
+  expect(resultRoute, 'name: "CREATED_ITEMS"', "v1 created items compatibility", problems);
   expect(labelService, 'hasPermission(input.auth, "inventory.print_label")', "label permission", problems);
   expect(labelService, "buildInventoryLabelPayloadV2", "existing inventory label payload", problems);
   expect(labelService, "createHardwareJobV2InTransaction", "existing Hardware Hub producer", problems);
@@ -62,8 +67,12 @@ async function main() {
   expect(labels, "Print all eligible", "all labels", problems);
   expect(labels, "reprint", "reprint guidance", problems);
   expect(actions, "printProductBatchImportLabelsAction", "label server action", problems);
-  expect(sessionPage, "/result", "result workbook UI", problems);
-  expect(sessionPage, "ProductBatchImportLabels", "label UI on completed session", problems);
+  expect(sessionPage, "/result", "v1 result workbook UI", problems);
+  expect(sessionPage, "ProductBatchImportV2Session", "v2 simplified session branch", problems);
+  const v2Session = await read("src/components/products/product-batch-import-v2-session.tsx");
+  expect(v2Session, "/result", "v2 result workbook UI", problems);
+  expect(v2Session, "ProductBatchImportLabels", "label UI on v2 completed session", problems);
+  expect(sessionPage, "ProductBatchImportLabels", "label UI on v1 completed session", problems);
   expect(sessionPage, "/admin/inventaris/item/", "created item links", problems);
   expect(historyPage, "getProductBatchImportHistory", "history query", problems);
 
@@ -84,7 +93,7 @@ async function main() {
   }
 
   console.log("Pemeriksaan Product Batch Import result/label berhasil.");
-  console.log("- Result workbook memakai committed staging evidence dan formula-safe XLSX utility.");
+  console.log("- V2 result workbook disederhanakan menjadi SUMMARY + PRODUCTS + WARNINGS; V1 export tetap kompatibel.");
   console.log("- Print selected/all/reprint memakai print_label_sato + Hardware Hub contract existing.");
   console.log("- History/session completed dapat dibuka ulang tanpa membuat label system baru.");
 }

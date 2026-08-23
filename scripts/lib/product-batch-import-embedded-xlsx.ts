@@ -7,7 +7,7 @@ import {
 import { buildTestZip } from "./product-batch-import-test-zip";
 
 export type EmbeddedTestImage = {
-  sheetName: "PRODUCT_MASTERS" | "PHYSICAL_PRODUCTS";
+  sheetName: "PRODUCTS" | "PRODUCT_MASTERS" | "PHYSICAL_PRODUCTS";
   rowNumber: number;
   columnIndex: number;
   data: Buffer;
@@ -77,6 +77,7 @@ export function buildEmbeddedImageWorkbookFixture(
   const byPath = new Map(sourceEntries.map((entry) => [entry.path, entry]));
 
   const sheets = [
+    { sheetName: "PRODUCTS" as const, sheetPath: "xl/worksheets/sheet1.xml", drawingIndex: 3 },
     { sheetName: "PRODUCT_MASTERS" as const, sheetPath: "xl/worksheets/sheet2.xml", drawingIndex: 1 },
     { sheetName: "PHYSICAL_PRODUCTS" as const, sheetPath: "xl/worksheets/sheet3.xml", drawingIndex: 2 },
   ];
@@ -262,6 +263,7 @@ export function buildInCellImageWorkbookFixture(
   }
 
   const sheetPaths = {
+    PRODUCTS: "xl/worksheets/sheet1.xml",
     PRODUCT_MASTERS: "xl/worksheets/sheet2.xml",
     PHYSICAL_PRODUCTS: "xl/worksheets/sheet3.xml",
   } as const;

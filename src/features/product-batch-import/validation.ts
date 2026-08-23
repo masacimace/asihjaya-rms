@@ -24,6 +24,15 @@ export type ProductBatchValidationIssue = {
 export type ProductBatchResolvedCategory = {
   id: string;
   code: string;
+  name?: string;
+  isActive?: boolean;
+};
+
+export type ProductBatchResolvedMaster = {
+  id: string;
+  categoryId: string;
+  name: string;
+  status: "draft" | "active" | "inactive";
 };
 
 export type ProductBatchResolvedOutlet = {
@@ -33,6 +42,8 @@ export type ProductBatchResolvedOutlet = {
 
 export type ProductBatchValidationLookups = {
   categoriesByCode: ReadonlyMap<string, ProductBatchResolvedCategory>;
+  categoriesByLookupKey: ReadonlyMap<string, readonly ProductBatchResolvedCategory[]>;
+  mastersByCategoryAndName: ReadonlyMap<string, readonly ProductBatchResolvedMaster[]>;
   outletsByCode: ReadonlyMap<string, ProductBatchResolvedOutlet>;
 };
 
@@ -281,6 +292,21 @@ function normalizedImageName(value: unknown): string | null {
   return raw ? raw.normalize("NFKC").toLocaleLowerCase("en-US") : null;
 }
 
+
+function normalizeLookupText(value: unknown) {
+  return text(value)
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .toLocaleUpperCase("id-ID");
+}
+
+function normalizeV2Condition(value: unknown) {
+  const normalized = normalizeLookupText(value).toLocaleLowerCase("id-ID");
+  if (!normalized || normalized === "good" || normalized === "baru") return "good";
+  if (normalized === "used" || normalized === "bekas") return "used";
+  if (normalized === "damaged" || normalized === "rusak") return "damaged";
+  return normalized;
+}
 function validateMasterRows({
   workbook,
   images,
@@ -292,6 +318,7 @@ function validateMasterRows({
   lookups: ProductBatchValidationLookups;
   auth: AuthContext;
 }) {
+  const isV2 = workbook.templateVersion === "2";
   const { masterByName } = referenceMap(images);
   const normalizedKeys = workbook.masterRows.map((row) =>
     nullableText(row.normalizedPayload.master_key),
@@ -305,37 +332,53 @@ function validateMasterRows({
     const masterKey = normalizedKeys[index] ?? null;
     const name = text(row.normalizedPayload.name);
     const categoryCode = text(row.normalizedPayload.category_code);
-    const brand = nullableText(row.normalizedPayload.brand);
-    const material = nullableText(row.normalizedPayload.material);
-    const collection = nullableText(row.normalizedPayload.collection);
-    const description = nullableText(row.normalizedPayload.description);
-    const primaryImage = nullableText(row.normalizedPayload.primary_image);
-    const primaryImageLookup = normalizedImageName(row.normalizedPayload.primary_image);
+    const brand = isV2 ? null : nullableText(row.normalizedPayload.brand);
+    const material = isV2 ? null : nullableText(row.normalizedPayload.material);
+    const collection = isV2 ? null : nullableText(row.normalizedPayload.collection);
+    const description = isV2 ? null : nullableText(row.normalizedPayload.description);
+    const primaryImage = isV2 ? null : nullableText(row.normalizedPayload.primary_image);
+    const primaryImageLookup = isV2
+      ? null
+      : normalizedImageName(row.normalizedPayload.primary_image);
     const statusRaw = text(row.normalizedPayload.status).toLocaleLowerCase("en-US");
-    const status = statusRaw || "active";
+    const status = isV2 ? "active" : statusRaw || "active";
 
     if (!masterKey) {
-      errors.push(issue("error", "MASTER_KEY_REQUIRED", "master_key", "master_key wajib diisi."));
+      errors.push(issue("error", "MASTER_KEY_REQUIRED", "master_key", "Internal master key tidak tersedia."));
     } else if (masterKey.length > 80) {
-      errors.push(issue("error", "MASTER_KEY_TOO_LONG", "master_key", "master_key maksimal 80 karakter."));
+      errors.push(issue("error", "MASTER_KEY_TOO_LONG", "master_key", "Internal master key maksimal 80 karakter."));
     }
     if (masterKey && (occurrences.get(masterKey)?.length ?? 0) > 1) {
-      errors.push(issue("error", "MASTER_KEY_DUPLICATE", "master_key", `master_key ${masterKey} muncul lebih dari sekali di workbook.`));
+      errors.push(issue("error", "MASTER_KEY_DUPLICATE", "master_key", `Master group ${masterKey} muncul lebih dari sekali di workbook.`));
     }
 
     if (name.length < 2) {
-      errors.push(issue("error", "MASTER_NAME_REQUIRED", "name", "Nama Product Master minimal 2 karakter."));
+      errors.push(issue("error", "MASTER_NAME_REQUIRED", "product_master_name", "Nama Product Master minimal 2 karakter."));
     }
-    addLengthError(errors, "name", name, 200, "Nama Product Master");
+    addLengthError(errors, isV2 ? "product_master_name" : "name", name, 200, "Nama Product Master");
 
+    let category: ProductBatchResolvedCategory | null = null;
     if (!categoryCode) {
-      errors.push(issue("error", "CATEGORY_CODE_REQUIRED", "category_code", "category_code wajib diisi."));
-    }
-    addLengthError(errors, "category_code", categoryCode, 48, "Category code");
-
-    const category = categoryCode ? lookups.categoriesByCode.get(categoryCode) ?? null : null;
-    if (categoryCode && !category) {
-      errors.push(issue("error", "CATEGORY_NOT_FOUND_OR_INACTIVE", "category_code", `Category ${categoryCode} tidak ditemukan atau tidak aktif pada organization ini.`));
+      errors.push(issue("error", "CATEGORY_REQUIRED", isV2 ? "category" : "category_code", "Kategori wajib diisi."));
+    } else if (isV2) {
+      addLengthError(errors, "category", categoryCode, 120, "Kategori");
+      const candidates = lookups.categoriesByLookupKey.get(normalizeLookupText(categoryCode)) ?? [];
+      if (candidates.length > 1) {
+        errors.push(issue(
+          "error",
+          "CATEGORY_AMBIGUOUS",
+          "category",
+          `Kategori ${categoryCode} cocok ke lebih dari satu kategori existing. Gunakan nama atau code yang unik.`,
+        ));
+      } else {
+        category = candidates[0] ?? null;
+      }
+    } else {
+      addLengthError(errors, "category_code", categoryCode, 48, "Category code");
+      category = lookups.categoriesByCode.get(categoryCode) ?? null;
+      if (!category) {
+        errors.push(issue("error", "CATEGORY_NOT_FOUND_OR_INACTIVE", "category_code", `Category ${categoryCode} tidak ditemukan atau tidak aktif pada organization ini.`));
+      }
     }
 
     if (brand) addLengthError(errors, "brand", brand, 120, "Brand");
@@ -343,18 +386,35 @@ function validateMasterRows({
     if (collection) addLengthError(errors, "collection", collection, 120, "Collection");
     if (description) addLengthError(errors, "description", description, 4_000, "Description");
 
-    if (!primaryImage || !primaryImageLookup) {
-      errors.push(issue("error", "MASTER_IMAGE_REQUIRED", "primary_image", "Primary image Product Master wajib diisi pada template v1."));
-    } else if (!masterByName.has(primaryImageLookup)) {
-      errors.push(issue("error", "MASTER_IMAGE_NOT_STAGED", "primary_image", `Primary image ${primaryImage} tidak tersedia pada image manifest.`));
+    if (!isV2) {
+      if (!primaryImage || !primaryImageLookup) {
+        errors.push(issue("error", "MASTER_IMAGE_REQUIRED", "primary_image", "Primary image Product Master wajib diisi pada template v1."));
+      } else if (!masterByName.has(primaryImageLookup)) {
+        errors.push(issue("error", "MASTER_IMAGE_NOT_STAGED", "primary_image", `Primary image ${primaryImage} tidak tersedia pada image manifest.`));
+      }
+      if (!PRODUCT_BATCH_IMPORT_MASTER_STATUSES.includes(status as (typeof PRODUCT_BATCH_IMPORT_MASTER_STATUSES)[number])) {
+        errors.push(issue("error", "MASTER_STATUS_INVALID", "status", "Status Product Master hanya boleh draft atau active."));
+      }
     }
 
-    if (!PRODUCT_BATCH_IMPORT_MASTER_STATUSES.includes(status as (typeof PRODUCT_BATCH_IMPORT_MASTER_STATUSES)[number])) {
-      errors.push(issue("error", "MASTER_STATUS_INVALID", "status", "Status Product Master hanya boleh draft atau active."));
+    let existingMasterId: string | null = null;
+    if (isV2 && category && name) {
+      const key = `${category.id}:${normalizeLookupText(name)}`;
+      const masterCandidates = lookups.mastersByCategoryAndName.get(key) ?? [];
+      if (masterCandidates.length > 1) {
+        errors.push(issue(
+          "error",
+          "PRODUCT_MASTER_AMBIGUOUS",
+          "product_master_name",
+          `Product Master ${name} pada kategori ${categoryCode} memiliki lebih dari satu kandidat existing. Rapikan data Product Master terlebih dahulu.`,
+        ));
+      } else {
+        existingMasterId = masterCandidates[0]?.id ?? null;
+      }
     }
 
     if (!hasPermission(auth, "products.manage")) {
-      errors.push(issue("error", "PERMISSION_PRODUCTS_MANAGE_REQUIRED", null, "Permission products.manage diperlukan untuk membuat Product Master.", { scope: "permission" }));
+      errors.push(issue("error", "PERMISSION_PRODUCTS_MANAGE_REQUIRED", null, "Permission products.manage diperlukan untuk membuat/menggunakan Product Master.", { scope: "permission" }));
     }
 
     const normalizedPayload: Record<string, unknown> = {
@@ -368,6 +428,7 @@ function validateMasterRows({
       description,
       primary_image: primaryImage,
       status,
+      _existing_product_master_id: existingMasterId,
       _row_fingerprint: row.rowFingerprint,
     };
 
@@ -398,6 +459,7 @@ function validateItemRows({
   auth: AuthContext;
   masterRows: ProductBatchValidatedMasterRow[];
 }) {
+  const isV2 = workbook.templateVersion === "2";
   const { physicalByName } = referenceMap(images);
   const rowKeys = workbook.itemRows.map((row) => nullableText(row.normalizedPayload.row_key));
   const occurrences = keyOccurrences(rowKeys, (value) => value);
@@ -421,46 +483,53 @@ function validateItemRows({
     const masterKey = nullableText(row.normalizedPayload.master_key);
     const displayName = nullableText(row.normalizedPayload.display_name);
     const outletCode = nullableText(row.normalizedPayload.outlet_code);
-    const size = nullableText(row.normalizedPayload.size);
+    const size = isV2 ? null : nullableText(row.normalizedPayload.size);
     const color = nullableText(row.normalizedPayload.color);
-    const gemstone = nullableText(row.normalizedPayload.gemstone);
-    const locationCode = nullableText(row.normalizedPayload.location_code);
+    const gemstone = isV2 ? null : nullableText(row.normalizedPayload.gemstone);
+    const locationCode = isV2 ? null : nullableText(row.normalizedPayload.location_code);
     const physicalImage = nullableText(row.normalizedPayload.physical_image);
     const physicalImageLookup = normalizedImageName(row.normalizedPayload.physical_image);
     const internalNotes = nullableText(row.normalizedPayload.internal_notes);
     const availabilityRaw = text(row.normalizedPayload.initial_availability).toLocaleLowerCase("en-US");
-    const availability = availabilityRaw || "draft";
-    const conditionRaw = text(row.normalizedPayload.condition).toLocaleLowerCase("en-US");
-    const condition = conditionRaw || "good";
+    const availability = isV2 ? "available" : availabilityRaw || "draft";
+    const condition = isV2
+      ? normalizeV2Condition(row.normalizedPayload.condition)
+      : text(row.normalizedPayload.condition).toLocaleLowerCase("en-US") || "good";
 
     if (!rowKey) {
-      errors.push(issue("error", "ROW_KEY_REQUIRED", "row_key", "row_key wajib diisi."));
+      errors.push(issue("error", "ROW_KEY_REQUIRED", "row_key", "Internal row key tidak tersedia."));
     } else if (rowKey.length > 80) {
-      errors.push(issue("error", "ROW_KEY_TOO_LONG", "row_key", "row_key maksimal 80 karakter."));
+      errors.push(issue("error", "ROW_KEY_TOO_LONG", "row_key", "Internal row key maksimal 80 karakter."));
     }
     if (rowKey && (occurrences.get(rowKey)?.length ?? 0) > 1) {
-      errors.push(issue("error", "ROW_KEY_DUPLICATE", "row_key", `row_key ${rowKey} muncul lebih dari sekali di workbook.`));
-    }
-
-    if (!masterKey) {
-      errors.push(issue("error", "MASTER_KEY_REQUIRED", "master_key", "master_key parent wajib diisi."));
-    } else if (masterKey.length > 80) {
-      errors.push(issue("error", "MASTER_KEY_TOO_LONG", "master_key", "master_key parent maksimal 80 karakter."));
+      errors.push(issue("error", "ROW_KEY_DUPLICATE", "row_key", `Internal row ${rowKey} duplicate.`));
     }
 
     const matchingMasters = masterKey ? mastersByKey.get(masterKey) ?? [] : [];
     const parent = matchingMasters.length === 1 ? matchingMasters[0]! : null;
-    if (masterKey && matchingMasters.length === 0) {
-      errors.push(issue("error", "MASTER_KEY_NOT_FOUND", "master_key", `master_key ${masterKey} tidak ditemukan pada PRODUCT_MASTERS.`));
+    if (!masterKey || matchingMasters.length === 0) {
+      errors.push(issue("error", "MASTER_KEY_NOT_FOUND", "product_master_name", "Product Master parent tidak dapat dipetakan."));
     } else if (matchingMasters.length > 1) {
-      errors.push(issue("error", "MASTER_KEY_AMBIGUOUS", "master_key", `master_key ${masterKey} duplicate sehingga relasi item ambigu.`));
+      errors.push(issue("error", "MASTER_KEY_AMBIGUOUS", "product_master_name", "Relasi Product Master pada row ini ambigu."));
     } else if (parent?.validationStatus === "invalid") {
-      errors.push(issue("error", "PARENT_MASTER_INVALID", "master_key", `Parent master ${masterKey} memiliki validation error.`));
+      errors.push(issue("error", "PARENT_MASTER_INVALID", "product_master_name", "Product Master parent memiliki validation error."));
     }
 
-    if (displayName) addLengthError(errors, "display_name", displayName, 220, "Display name");
+    const effectiveDisplayName =
+      isV2 && !displayName && parent
+        ? nullableText(parent.normalizedPayload.name)
+        : displayName;
+    if (effectiveDisplayName) {
+      addLengthError(errors, "display_name", effectiveDisplayName, 220, "Display name");
+    }
+    if (!outletCode && isV2) {
+      errors.push(issue("error", "OUTLET_REQUIRED", "outlet_code", "outlet_code wajib diisi untuk item batch yang langsung AVAILABLE."));
+    }
     if (outletCode) addLengthError(errors, "outlet_code", outletCode, 24, "Outlet code");
     if (size) addLengthError(errors, "size", size, 64, "Size");
+    if (!color && isV2) {
+      errors.push(issue("error", "COLOR_REQUIRED", "color", "color wajib diisi."));
+    }
     if (color) addLengthError(errors, "color", color, 64, "Color");
     if (gemstone) addLengthError(errors, "gemstone", gemstone, 160, "Gemstone");
     if (locationCode) addLengthError(errors, "location_code", locationCode, 80, "Location code");
@@ -469,9 +538,9 @@ function validateItemRows({
     const weight = parsePositiveDecimal(row.normalizedPayload.weight_gram, "weight_gram");
     const purity = parsePercent(row.normalizedPayload.purity_percent, "purity_percent");
     const exchangePurity = parsePercent(row.normalizedPayload.exchange_purity_percent, "exchange_purity_percent");
-    const cost = parseMoney(row.normalizedPayload.cost_amount, "cost_amount", { allowZero: true });
-    const selling = parseMoney(row.normalizedPayload.selling_amount, "selling_amount", { allowZero: false });
-    const pricePerGram = parseMoney(row.normalizedPayload.price_per_gram, "price_per_gram", { allowZero: true });
+    const cost = isV2 ? { value: null, error: null } : parseMoney(row.normalizedPayload.cost_amount, "cost_amount", { allowZero: true });
+    const selling = isV2 ? { value: null, error: null } : parseMoney(row.normalizedPayload.selling_amount, "selling_amount", { allowZero: false });
+    const pricePerGram = isV2 ? { value: null, error: null } : parseMoney(row.normalizedPayload.price_per_gram, "price_per_gram", { allowZero: true });
     const deductionPerGram = parseMoney(row.normalizedPayload.deduction_per_gram, "deduction_per_gram", { allowZero: true });
 
     for (const [field, parsed] of [
@@ -483,16 +552,23 @@ function validateItemRows({
       ["price_per_gram", pricePerGram],
       ["deduction_per_gram", deductionPerGram],
     ] as const) {
-      if (parsed.error) {
-        errors.push(issue("error", "NUMERIC_VALUE_INVALID", field, parsed.error));
-      }
+      if (parsed.error) errors.push(issue("error", "NUMERIC_VALUE_INVALID", field, parsed.error));
     }
 
-    if (!PRODUCT_BATCH_IMPORT_ITEM_CONDITIONS.includes(condition as (typeof PRODUCT_BATCH_IMPORT_ITEM_CONDITIONS)[number])) {
-      errors.push(issue("error", "ITEM_CONDITION_INVALID", "condition", "Condition hanya boleh good atau damaged."));
-    }
-    if (!PRODUCT_BATCH_IMPORT_ITEM_AVAILABILITIES.includes(availability as (typeof PRODUCT_BATCH_IMPORT_ITEM_AVAILABILITIES)[number])) {
-      errors.push(issue("error", "ITEM_AVAILABILITY_INVALID", "initial_availability", "Availability hanya boleh draft atau available."));
+    if (isV2) {
+      if (!weight.value) errors.push(issue("error", "WEIGHT_REQUIRED", "weight_gram", "weight_gram > 0 wajib diisi."));
+      if (!purity.value) errors.push(issue("error", "PURITY_REQUIRED", "purity_percent", "purity_percent wajib diisi."));
+      if (!exchangePurity.value) errors.push(issue("error", "EXCHANGE_PURITY_REQUIRED", "exchange_purity_percent", "exchange_purity_percent wajib diisi."));
+      if (!(["good", "used"] as string[]).includes(condition)) {
+        errors.push(issue("error", "ITEM_CONDITION_NOT_SELLABLE", "condition", "Batch import langsung AVAILABLE hanya menerima Baru/good atau Bekas/used. Barang Rusak dibuat melalui flow manual."));
+      }
+    } else {
+      if (!PRODUCT_BATCH_IMPORT_ITEM_CONDITIONS.includes(condition as (typeof PRODUCT_BATCH_IMPORT_ITEM_CONDITIONS)[number])) {
+        errors.push(issue("error", "ITEM_CONDITION_INVALID", "condition", "Condition hanya boleh good, used, atau damaged."));
+      }
+      if (!PRODUCT_BATCH_IMPORT_ITEM_AVAILABILITIES.includes(availability as (typeof PRODUCT_BATCH_IMPORT_ITEM_AVAILABILITIES)[number])) {
+        errors.push(issue("error", "ITEM_AVAILABILITY_INVALID", "initial_availability", "Availability hanya boleh draft atau available."));
+      }
     }
 
     const outlet = outletCode ? lookups.outletsByCode.get(outletCode) ?? null : null;
@@ -502,11 +578,11 @@ function validateItemRows({
       errors.push(issue("error", "OUTLET_ACCESS_DENIED", "outlet_code", `Akun ini tidak memiliki akses ke outlet ${outletCode}.`, { scope: "permission" }));
     }
 
-    const hasFinancialInput = [cost.value, selling.value, pricePerGram.value, deductionPerGram.value].some((value) => value !== null) ||
+    const hasFinancialInput = !isV2 && ([cost.value, selling.value, pricePerGram.value, deductionPerGram.value].some((value) => value !== null) ||
       [row.normalizedPayload.cost_amount, row.normalizedPayload.selling_amount, row.normalizedPayload.price_per_gram, row.normalizedPayload.deduction_per_gram]
-        .some((value) => text(value) !== "");
+        .some((value) => text(value) !== ""));
     if (hasFinancialInput && !canManagePricing) {
-      errors.push(issue("error", "PERMISSION_PRICING_REQUIRED", null, "Permission pricing.manage diperlukan karena row mengisi field harga/nominal.", { scope: "permission" }));
+      errors.push(issue("error", "PERMISSION_PRICING_REQUIRED", null, "Permission pricing.manage diperlukan karena row template v1 mengisi field harga/nominal.", { scope: "permission" }));
     }
     if (!canManageInventory) {
       errors.push(issue("error", "PERMISSION_INVENTORY_REQUIRED", null, "Permission inventory.receive atau inventory.manage diperlukan untuk membuat Product Item.", { scope: "permission" }));
@@ -516,31 +592,21 @@ function validateItemRows({
       errors.push(issue("error", "PHYSICAL_IMAGE_NOT_STAGED", "physical_image", `Physical image ${physicalImage} tidak tersedia pada image manifest.`));
     }
 
-    const parentPrimaryImage = parent ? nullableText(parent.normalizedPayload.primary_image) : null;
+    const parentPrimaryImage = !isV2 && parent ? nullableText(parent.normalizedPayload.primary_image) : null;
     const effectiveImageSource = physicalImage ? "physical" : parentPrimaryImage ? "master_fallback" : null;
 
-    if (availability === "available") {
+    if (!isV2 && availability === "available") {
       if (!parent || parent.normalizedPayload.status !== "active") {
         errors.push(issue("error", "AVAILABLE_MASTER_NOT_ACTIVE", "initial_availability", "Item available hanya dapat memakai Product Master active."));
       }
-      if (!outlet || !allowedOutletIds.has(outlet.id)) {
-        errors.push(issue("error", "AVAILABLE_OUTLET_REQUIRED", "outlet_code", "Outlet aktif dan accessible wajib untuk item available."));
-      }
-      if (!weight.value) {
-        errors.push(issue("error", "AVAILABLE_WEIGHT_REQUIRED", "weight_gram", "weight_gram > 0 wajib untuk item available."));
-      }
-      if (!selling.value) {
-        errors.push(issue("error", "AVAILABLE_SELLING_REQUIRED", "selling_amount", "selling_amount > 0 wajib untuk item available."));
-      }
-      if (condition !== "good") {
-        errors.push(issue("error", "AVAILABLE_CONDITION_INVALID", "condition", "Item available wajib berkondisi good."));
-      }
-      if (!effectiveImageSource) {
-        errors.push(issue("error", "AVAILABLE_IMAGE_REQUIRED", "physical_image", "Item available wajib mempunyai physical image atau master fallback image."));
-      }
+      if (!outlet || !allowedOutletIds.has(outlet.id)) errors.push(issue("error", "AVAILABLE_OUTLET_REQUIRED", "outlet_code", "Outlet aktif dan accessible wajib untuk item available."));
+      if (!weight.value) errors.push(issue("error", "AVAILABLE_WEIGHT_REQUIRED", "weight_gram", "weight_gram > 0 wajib untuk item available."));
+      if (!selling.value) errors.push(issue("error", "AVAILABLE_SELLING_REQUIRED", "selling_amount", "selling_amount > 0 wajib untuk item available."));
+      if (condition !== "good") errors.push(issue("error", "AVAILABLE_CONDITION_INVALID", "condition", "Item available template v1 wajib berkondisi good."));
+      if (!effectiveImageSource) errors.push(issue("error", "AVAILABLE_IMAGE_REQUIRED", "physical_image", "Item available template v1 wajib mempunyai physical image atau master fallback image."));
     }
 
-    if (!physicalImage && parentPrimaryImage) {
+    if (!isV2 && !physicalImage && parentPrimaryImage) {
       warnings.push(issue("warning", "MASTER_IMAGE_FALLBACK", "physical_image", `Item ${rowKey ?? `row ${row.rowNumber}`} tidak memiliki physical image dan akan memakai primary image Product Master.`));
     }
 
@@ -548,7 +614,7 @@ function validateItemRows({
       ...row.normalizedPayload,
       row_key: rowKey,
       master_key: masterKey,
-      display_name: displayName,
+      display_name: effectiveDisplayName,
       outlet_code: outletCode,
       weight_gram: weight.value,
       purity_percent: purity.value,
@@ -559,7 +625,7 @@ function validateItemRows({
       cost_amount: cost.value,
       selling_amount: selling.value,
       price_per_gram: pricePerGram.value,
-      deduction_per_gram: deductionPerGram.value,
+      deduction_per_gram: deductionPerGram.value ?? (isV2 ? "0" : null),
       condition,
       location_code: locationCode,
       physical_image: physicalImage,

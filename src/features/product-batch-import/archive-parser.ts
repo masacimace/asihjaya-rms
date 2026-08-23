@@ -17,7 +17,7 @@ const ALLOWED_DIRECTORY_PATHS = new Set<string>([
   PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.physicalDirectory,
 ]);
 const ARCHIVE_STRUCTURE_GUIDANCE =
-  "Struktur ZIP harus menaruh products.xlsx, masters/, dan physical/ langsung di root ZIP. Jangan ZIP folder induknya.";
+  "Struktur ZIP harus mempunyai tepat satu file .xlsx di root. Folder physical/ opsional untuk foto item; masters/ tetap diterima untuk compatibility template v1.";
 const ALLOWED_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 
 export type ProductBatchArchiveImageKind = "master" | "physical";
@@ -117,17 +117,20 @@ export function inspectProductBatchArchive(
       continue;
     }
 
-    if (entry.path === PRODUCT_BATCH_IMPORT_ARCHIVE_LAYOUT.workbookPath) {
+    const rootWorkbook =
+      !entry.path.includes("/") &&
+      entry.path.toLocaleLowerCase("en-US").endsWith(".xlsx");
+    if (rootWorkbook) {
       if (workbookEntry) {
         throw archiveError(
           "ARCHIVE_WORKBOOK_DUPLICATE",
-          "Archive hanya boleh mempunyai satu products.xlsx.",
+          "Archive hanya boleh mempunyai satu file .xlsx di root.",
         );
       }
       if (entry.uncompressedSize > PRODUCT_BATCH_IMPORT_LIMITS.workbookBytes) {
         throw archiveError(
           "ARCHIVE_WORKBOOK_TOO_LARGE",
-          "products.xlsx melebihi batas 5 MB.",
+          "Workbook XLSX di dalam ZIP melebihi batas 5 MB.",
         );
       }
       workbookEntry = entry;
@@ -179,7 +182,7 @@ export function inspectProductBatchArchive(
   if (!workbookEntry) {
     throw archiveError(
       "ARCHIVE_WORKBOOK_MISSING",
-      `products.xlsx wajib tersedia tepat di root ZIP. ${ARCHIVE_STRUCTURE_GUIDANCE}`,
+      `File .xlsx wajib tersedia tepat satu di root ZIP. ${ARCHIVE_STRUCTURE_GUIDANCE}`,
     );
   }
 

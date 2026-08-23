@@ -16,8 +16,11 @@ import {
 } from "../src/features/product-batch-import/xlsx-parser";
 import {
   buildProductBatchImportTemplateBuffer,
-  buildProductBatchImportTemplateSheets,
 } from "../src/features/product-batch-import/template";
+import {
+  buildLegacyProductBatchImportTemplateBuffer,
+  buildLegacyProductBatchImportTemplateSheets,
+} from "./lib/product-batch-import-v1-template";
 import {
   buildEmbeddedImageWorkbookFixture,
   buildInCellImageWorkbookFixture,
@@ -229,7 +232,59 @@ function addGoogleSheetsEmptyDrawingContainers(workbookBuffer: Buffer) {
 
 async function main() {
   const jpeg = await makeJpeg();
-  const validWorkbook = buildProductBatchImportTemplateBuffer({
+  const v2Workbook = buildProductBatchImportTemplateBuffer({
+    includeSampleRows: true,
+  });
+  const v2Direct = await parseProductBatchImportPackage(v2Workbook, {
+    fileName: "Gelang Rantai Kaki.xlsx",
+  });
+  assert.equal(v2Direct.workbook.templateVersion, "2");
+  assert.equal(v2Direct.workbook.masterRows.length, 1);
+  assert.equal(v2Direct.workbook.itemRows.length, 1);
+  assert.equal(v2Direct.packageKind, "xlsx_embedded");
+
+  const v2BroadDeclaredRange = rewriteWorkbookEntry(
+    v2Workbook,
+    "xl/worksheets/sheet1.xml",
+    (xml) =>
+      xml.replace(
+        /<dimension\b[^>]*\bref=["'][^"']+["'][^>]*\/>/i,
+        '<dimension ref="A1:XFD1048576"/>',
+      ),
+  );
+  const v2BroadDeclaredRangeParsed = parseProductBatchWorkbook(v2BroadDeclaredRange);
+  assert.equal(v2BroadDeclaredRangeParsed.templateVersion, "2");
+  assert.equal(v2BroadDeclaredRangeParsed.itemRows.length, 1);
+
+  const v2Zip = await parseProductBatchImportPackage(
+    buildTestZip([{ path: "Stock Baru Agustus.xlsx", data: v2Workbook }]),
+    { fileName: "Batch Gelang.zip" },
+  );
+  assert.equal(v2Zip.workbook.templateVersion, "2");
+  assert.equal(v2Zip.archive?.workbookEntry.path, "Stock Baru Agustus.xlsx");
+
+  const v2BookForImage = XLSX.read(v2Workbook, { type: "buffer" });
+  const v2Sheet = v2BookForImage.Sheets.PRODUCTS;
+  assert.ok(v2Sheet);
+  delete v2Sheet.K2;
+  const v2ImageBase = XLSX.write(v2BookForImage, {
+    type: "buffer",
+    bookType: "xlsx",
+    compression: true,
+  }) as Buffer;
+  const v2Embedded = buildInCellImageWorkbookFixture(v2ImageBase, [
+    { sheetName: "PRODUCTS", rowNumber: 2, columnIndex: 10, data: jpeg, extension: ".jpg" },
+  ]);
+  const v2EmbeddedPackage = await parseProductBatchImportPackage(v2Embedded, {
+    fileName: "Produk Google Sheets.xlsx",
+  });
+  assert.equal(v2EmbeddedPackage.images.entries.length, 1);
+  assert.match(
+    String(v2EmbeddedPackage.workbook.itemRows[0]?.normalizedPayload.physical_image ?? ""),
+    /^EMBEDDED-PHYSICAL-ROW-0002\.jpg$/,
+  );
+
+  const validWorkbook = buildLegacyProductBatchImportTemplateBuffer({
     generatedAt: new Date("2026-08-10T00:00:00.000Z"),
     includeSampleRows: true,
   });
@@ -408,7 +463,7 @@ async function main() {
   const hiddenBuffer = XLSX.write(hiddenBook, { type: "buffer", bookType: "xlsx", compression: true }) as Buffer;
   expectWorkbookCode("WORKBOOK_HIDDEN_SHEET", () => parseProductBatchWorkbook(hiddenBuffer));
 
-  const unsupportedSheets = buildProductBatchImportTemplateSheets({
+  const unsupportedSheets = buildLegacyProductBatchImportTemplateSheets({
     generatedAt: new Date("2026-08-10T00:00:00.000Z"),
     includeSampleRows: false,
   });
@@ -416,7 +471,7 @@ async function main() {
   const unsupportedBuffer = buildXlsxBuffer(unsupportedSheets);
   expectWorkbookCode("WORKBOOK_TEMPLATE_UNSUPPORTED", () => parseProductBatchWorkbook(unsupportedBuffer));
 
-  const tooManySheets = buildProductBatchImportTemplateSheets({
+  const tooManySheets = buildLegacyProductBatchImportTemplateSheets({
     generatedAt: new Date("2026-08-10T00:00:00.000Z"),
     includeSampleRows: false,
   });
@@ -470,9 +525,11 @@ async function main() {
 
   assert.ok(ProductBatchImageError);
   console.log("Pemeriksaan Product Batch Import parser berhasil.");
+  console.log("- Template v2 single PRODUCTS menerima filename XLSX/ZIP bebas dan embedded Image in Cell.");
   console.log("- Valid package, SHA-256 row/archive, dan image manifest terbaca.");
   console.log("- Missing/invalid image ditolak; unused image menjadi warning.");
-  console.log("- Formula, external hyperlink, hidden sheet, unsupported template, dan over-row ditolak.");
+  console.log("- Formula, external hyperlink, hidden sheet, unsupported template, dan actual out-of-range cell ditolak.");
+  console.log("- Declared worksheet range yang melebar karena Excel tetap aman selama cell aktual masih di dalam contract template.");
   console.log("- XLSX valid dengan urutan atribut OOXML berbeda tetap diterima.");
   console.log("- ZIP existing tetap kompatibel; single XLSX DrawingML dan local Picture in Cell dipetakan ke row/cell yang exact.");
   console.log("- Picture in Cell wrong-column/_webimage serta embedded image bercampur filename text ditolak deterministic.");

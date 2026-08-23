@@ -78,10 +78,16 @@ function detectPackageKindFromContainer(buffer: Buffer): ProductBatchImportPacka
   }
 
   const paths = new Set(inspection.entries.map((entry) => entry.path));
-  if (paths.has("products.xlsx")) return "zip";
   if (paths.has("[Content_Types].xml") && paths.has("xl/workbook.xml")) {
     return "xlsx_embedded";
   }
+  const rootXlsxFiles = inspection.entries.filter(
+    (entry) =>
+      !entry.isDirectory &&
+      !entry.path.includes("/") &&
+      entry.path.toLocaleLowerCase("en-US").endsWith(".xlsx"),
+  );
+  if (rootXlsxFiles.length === 1) return "zip";
   throw packageError(
     "PACKAGE_TYPE_UNRECOGNIZED",
     "File bukan paket ZIP Product Batch Import atau workbook XLSX embedded yang didukung.",

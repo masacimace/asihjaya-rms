@@ -1,6 +1,9 @@
 import path from "node:path";
 
-import { PRODUCT_BATCH_IMPORT_LIMITS } from "./contracts";
+import {
+  PRODUCT_BATCH_IMPORT_LIMITS,
+  PRODUCT_BATCH_IMPORT_V2_SHEET_NAME,
+} from "./contracts";
 import {
   extractStrictZipEntry,
   inspectStrictZipArchive,
@@ -20,7 +23,7 @@ const LOCAL_IMAGE_TYPE = "_localImage";
 const LOCAL_IMAGE_IDENTIFIER_KEY = "_rvRel:LocalImageIdentifier";
 
 export type ProductBatchRichValueImage = {
-  sheetName: "PRODUCT_MASTERS" | "PHYSICAL_PRODUCTS";
+  sheetName: "PRODUCT_MASTERS" | "PHYSICAL_PRODUCTS" | "PRODUCTS";
   rowNumber: number;
   columnIndex: number;
   mediaPath: string;
@@ -602,11 +605,14 @@ export function resolveProductBatchRichValueImages(
   for (const cell of richValueCells) {
     const validTarget =
       (cell.sheetName === "PRODUCT_MASTERS" && cell.rowNumber > 1 && cell.columnIndex === 7) ||
-      (cell.sheetName === "PHYSICAL_PRODUCTS" && cell.rowNumber > 1 && cell.columnIndex === 16);
+      (cell.sheetName === "PHYSICAL_PRODUCTS" && cell.rowNumber > 1 && cell.columnIndex === 16) ||
+      (cell.sheetName === PRODUCT_BATCH_IMPORT_V2_SHEET_NAME &&
+        cell.rowNumber > 1 &&
+        cell.columnIndex === 10);
     if (!validTarget) {
       throw richValueError(
         "WORKBOOK_EMBEDDED_IMAGE_LOCATION_INVALID",
-        `Picture in Cell hanya boleh berada pada primary_image atau physical_image, bukan ${cell.sheetName}!${cell.address}.`,
+        `Picture in Cell hanya boleh berada pada kolom foto yang didukung template, bukan ${cell.sheetName}!${cell.address}.`,
       );
     }
   }
@@ -831,7 +837,10 @@ export function resolveProductBatchRichValueImages(
       );
     }
     result.push({
-      sheetName: cell.sheetName as "PRODUCT_MASTERS" | "PHYSICAL_PRODUCTS",
+      sheetName: cell.sheetName as
+        | "PRODUCT_MASTERS"
+        | "PHYSICAL_PRODUCTS"
+        | "PRODUCTS",
       rowNumber: cell.rowNumber,
       columnIndex: cell.columnIndex,
       mediaPath,

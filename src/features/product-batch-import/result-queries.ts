@@ -14,7 +14,7 @@ import {
 import type { AuthContext } from "@/lib/auth/session";
 
 export type ProductBatchImportResultWarning = {
-  sheet: "PRODUCT_MASTERS" | "PHYSICAL_PRODUCTS";
+  sheet: "PRODUCT_MASTERS" | "PHYSICAL_PRODUCTS" | "PRODUCTS";
   rowNumber: number;
   key: string;
   code: string;
@@ -30,6 +30,7 @@ export type ProductBatchImportResultMaster = {
   name: string;
   status: string;
   imageStatus: "stored" | "missing";
+  resolution: "created" | "reused";
 };
 
 export type ProductBatchImportResultItem = {
@@ -47,7 +48,7 @@ export type ProductBatchImportResultItem = {
   outletCode: string | null;
   outletName: string | null;
   availability: string;
-  imageSource: "physical" | "master-fallback";
+  imageSource: "physical" | "master-fallback" | "none";
   weightGram: string | null;
   purityPercent: string | null;
   exchangePurityPercent: string | null;
@@ -95,7 +96,7 @@ export type ProductBatchImportResult = {
 function readWarnings(
   value: Array<Record<string, unknown>>,
   context: {
-    sheet: "PRODUCT_MASTERS" | "PHYSICAL_PRODUCTS";
+    sheet: "PRODUCT_MASTERS" | "PHYSICAL_PRODUCTS" | "PRODUCTS";
     rowNumber: number;
     key: string;
   },
@@ -159,6 +160,8 @@ export async function getProductBatchImportResult(
         masterKey: productBatchImportMasterRows.masterKey,
         committedProductMasterId:
           productBatchImportMasterRows.committedProductMasterId,
+        plannedProductMasterId:
+          productBatchImportMasterRows.plannedProductMasterId,
         validationWarnings: productBatchImportMasterRows.validationWarnings,
         productMasterId: productMasters.id,
         code: productMasters.code,
@@ -260,6 +263,10 @@ export async function getProductBatchImportResult(
         name: row.name,
         status: row.status,
         imageStatus: row.imageKey ? "stored" : "missing",
+        resolution:
+          row.plannedProductMasterId === row.productMasterId
+            ? "created"
+            : "reused",
       },
     ];
   });
@@ -293,7 +300,11 @@ export async function getProductBatchImportResult(
         outletCode: row.outletCode,
         outletName: row.outletName,
         availability: row.availability,
-        imageSource: row.imageKey ? "physical" : "master-fallback",
+        imageSource: row.imageKey
+          ? "physical"
+          : session.templateVersion === 2
+            ? "none"
+            : "master-fallback",
         weightGram: row.weightGram,
         purityPercent: row.purityPercent,
         exchangePurityPercent: row.exchangePurityPercent,
@@ -309,14 +320,14 @@ export async function getProductBatchImportResult(
   const warnings = [
     ...masterRows.flatMap((row) =>
       readWarnings(row.validationWarnings, {
-        sheet: "PRODUCT_MASTERS",
+        sheet: session.templateVersion === 2 ? "PRODUCTS" : "PRODUCT_MASTERS",
         rowNumber: row.rowNumber,
         key: row.masterKey,
       }),
     ),
     ...itemRows.flatMap((row) =>
       readWarnings(row.validationWarnings, {
-        sheet: "PHYSICAL_PRODUCTS",
+        sheet: session.templateVersion === 2 ? "PRODUCTS" : "PHYSICAL_PRODUCTS",
         rowNumber: row.rowNumber,
         key: row.rowKey,
       }),

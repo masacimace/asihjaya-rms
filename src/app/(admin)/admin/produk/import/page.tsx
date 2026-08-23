@@ -44,16 +44,15 @@ export default async function ProductBatchImportPage() {
           <div className="min-w-0">
             <span className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
               <FileSpreadsheet className="size-3.5" />
-              Batch Produk Import
+              Product Batch Import
             </span>
             <h1 className="mt-3 text-2xl font-semibold text-neutral-950 sm:text-3xl">
-              Siapkan import produk dalam satu workbook
+              Import banyak produk dari satu XLSX
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Download template resmi, isi Product Master dan item fisik, lalu
-              pilih metode ZIP + folder foto atau satu file XLSX dengan gambar
-              embedded. Identifier teknis seperti kode master, SKU, barcode, dan
-              QR dibuat otomatis oleh sistem saat proses commit.
+              Template baru hanya mempunyai satu worksheet PRODUCTS. Satu row
+              berarti satu item fisik. Category, Product Master, SKU, barcode,
+              dan QR ditangani otomatis oleh sistem.
             </p>
           </div>
 
@@ -64,12 +63,15 @@ export default async function ProductBatchImportPage() {
             <p className="mt-2 break-all text-sm font-semibold text-neutral-950">
               {PRODUCT_BATCH_IMPORT_TEMPLATE_FILENAME}
             </p>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+              Nama file boleh diubah setelah download.
+            </p>
             <Link
               href="/admin/produk/import/template"
               className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
             >
               <Download className="size-4" />
-              Download template XLSX
+              Download products.xlsx
             </Link>
           </div>
         </div>
@@ -78,14 +80,12 @@ export default async function ProductBatchImportPage() {
       <section className="grid min-w-0 gap-4 md:grid-cols-3">
         <article className="min-w-0 rounded-2xl border border-[var(--border)] bg-white p-5">
           <div className="grid size-10 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-            <FileSpreadsheet className="size-5" />
+            <Download className="size-5" />
           </div>
-          <h2 className="mt-4 font-semibold text-neutral-950">
-            1. Isi workbook
-          </h2>
+          <h2 className="mt-4 font-semibold text-neutral-950">1. Download template</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            Gunakan sheet PRODUCT_MASTERS dan PHYSICAL_PRODUCTS. Ganti atau
-            hapus baris contoh sebelum membuat paket final.
+            Gunakan products.xlsx resmi. File boleh di-rename seperti Gelang
+            Rantai Kaki.xlsx selama tetap berformat .xlsx.
           </p>
         </article>
 
@@ -93,25 +93,21 @@ export default async function ProductBatchImportPage() {
           <div className="grid size-10 place-items-center rounded-xl bg-neutral-100 text-neutral-700">
             <ImageIcon className="size-5" />
           </div>
-          <h2 className="mt-4 font-semibold text-neutral-950">
-            2. Pilih sumber foto
-          </h2>
+          <h2 className="mt-4 font-semibold text-neutral-950">2. Isi worksheet PRODUCTS</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            Gunakan folder masters/ + physical/ pada metode ZIP, atau embed
-            gambar langsung pada cell image untuk metode single XLSX.
+            Isi data item per row. Foto boleh dimasukkan langsung memakai Image
+            in Cell di Google Sheets atau Place in Cell di Excel.
           </p>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div className="grid size-10 place-items-center rounded-xl bg-neutral-100 text-neutral-700">
-            <FolderArchive className="size-5" />
+          <div className="grid size-10 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+            <CheckCircle2 className="size-5" />
           </div>
-          <h2 className="mt-4 font-semibold text-neutral-950">
-            3. Upload satu file
-          </h2>
+          <h2 className="mt-4 font-semibold text-neutral-950">3. Upload & selesai</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            Upload paket .zip existing atau file .xlsx embedded langsung.
-            Keduanya memakai preview dan atomic commit yang sama.
+            Sistem memvalidasi file otomatis. Jika valid, seluruh batch langsung
+            diimport secara atomic dan item menjadi Tersedia.
           </p>
         </article>
       </section>
@@ -125,24 +121,22 @@ export default async function ProductBatchImportPage() {
               <ShieldCheck className="size-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="font-semibold text-neutral-950">
-                Contract penting v1
-              </h2>
+              <h2 className="font-semibold text-neutral-950">Flow sederhana, safety tetap ada</h2>
               <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                Template dibuat supaya staff cukup mengisi data bisnis dan tidak
-                perlu mengelola identifier teknis.
+                Staff hanya mengurus data bisnis. Validation, identifier,
+                duplicate guard, dan atomic commit tetap dikerjakan server.
               </p>
             </div>
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {[
-              "Product Master code dibuat otomatis oleh server.",
-              "SKU, barcode, dan QR Product Item dibuat saat commit.",
-              "Barcode legacy tetap memakai Legacy Product Migration.",
-              "Master default active bila status dikosongkan.",
-              "Item default draft bila availability dikosongkan.",
-              "Foto fisik item boleh kosong dan memakai foto master.",
+              "Satu row PRODUCTS = satu Physical Product Item.",
+              "Category dan Product Master existing dipakai ulang; yang belum ada dibuat otomatis.",
+              "SKU, barcode, QR, dan Product Master code dibuat otomatis oleh server.",
+              "Barang Baru dan Bekas langsung Tersedia; barang Rusak dibuat lewat flow manual.",
+              "Harga jual/Harga per Gram tidak diisi dari XLSX. POS tetap memakai global default + transaction pricing.",
+              "Foto hanya milik Physical Product Item dan boleh dikosongkan.",
             ].map((item) => (
               <div
                 key={item}
@@ -153,33 +147,40 @@ export default async function ProductBatchImportPage() {
               </div>
             ))}
           </div>
+
+          <details className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-neutral-900">
+              Compatibility Excel, Google Sheets, dan ZIP
+            </summary>
+            <div className="mt-3 space-y-3 text-sm leading-6 text-neutral-700">
+              <p>
+                Single XLSX adalah workflow utama. Google Sheets tetap didukung:
+                gunakan Insert → Image → Image in cell lalu download sebagai
+                Microsoft Excel (.xlsx). Excel modern dapat memakai Place in Cell.
+              </p>
+              <p className="flex items-start gap-2">
+                <FolderArchive className="mt-1 size-4 shrink-0" />
+                ZIP tetap didukung sebagai mode advanced/compatibility. ZIP boleh
+                memakai nama apa saja dan harus mempunyai tepat satu file .xlsx
+                di root. Folder physical/ bersifat opsional untuk foto terpisah.
+              </p>
+              <p>
+                Template lama v1 empat-sheet tetap dapat dibaca untuk compatibility,
+                tetapi workflow baru yang direkomendasikan adalah template satu-sheet.
+              </p>
+            </div>
+          </details>
         </div>
 
         <aside className="min-w-0 rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
-          <h2 className="font-semibold text-neutral-950">Batas template v1</h2>
+          <h2 className="font-semibold text-neutral-950">Batas import</h2>
           <dl className="mt-4 space-y-3 text-sm">
             {[
-              [
-                "ZIP upload",
-                formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes),
-              ],
-              [
-                "Single XLSX",
-                formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.xlsxUploadBytes),
-              ],
-              [
-                "Workbook dalam ZIP",
-                formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.workbookBytes),
-              ],
-              [
-                "Product Master",
-                `${PRODUCT_BATCH_IMPORT_LIMITS.masterRows} baris`,
-              ],
-              ["Item fisik", `${PRODUCT_BATCH_IMPORT_LIMITS.itemRows} baris`],
-              [
-                "Satu image",
-                formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.imageBytes),
-              ],
+              ["Single XLSX", formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.xlsxUploadBytes)],
+              ["ZIP", formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.zipUploadBytes)],
+              ["Item per batch", `${PRODUCT_BATCH_IMPORT_LIMITS.itemRows} row`],
+              ["Product Master unik", `${PRODUCT_BATCH_IMPORT_LIMITS.masterRows} group`],
+              ["Satu foto", formatMegabytes(PRODUCT_BATCH_IMPORT_LIMITS.imageBytes)],
             ].map(([label, value]) => (
               <div
                 key={label}
@@ -192,9 +193,8 @@ export default async function ProductBatchImportPage() {
           </dl>
 
           <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-            Upload, preview, atomic commit, result workbook, dan label Hardware
-            Hub sudah tersedia. Gunakan batch kecil terlebih dahulu sebelum
-            volume besar.
+            Jika ada error, tidak ada produk yang dibuat. Perbaiki row yang
+            ditunjukkan lalu upload ulang. Warning tidak memblokir import.
           </div>
         </aside>
       </section>
@@ -204,8 +204,7 @@ export default async function ProductBatchImportPage() {
           <div>
             <h2 className="font-semibold text-neutral-950">Import terbaru</h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-              Session tersimpan di database dan dapat dibuka kembali untuk
-              preview maupun result completed.
+              Session lama maupun template v2 tetap dapat dibuka kembali dari history.
             </p>
           </div>
           <Link
@@ -229,9 +228,7 @@ export default async function ProductBatchImportPage() {
                       {session.fileName}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {session.totalMasterRows} master · {session.totalItemRows}{" "}
-                      item · {session.invalidRows} invalid ·{" "}
-                      {session.warningCount} warning
+                      {session.totalItemRows} item · {session.invalidRows} invalid · {session.warningCount} warning
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
                       Operator: {session.createdByName}

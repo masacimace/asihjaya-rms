@@ -4,12 +4,12 @@ import * as XLSX from "xlsx";
 
 import {
   PRODUCT_BATCH_IMPORT_FORBIDDEN_OPERATOR_HEADERS,
-  PRODUCT_BATCH_IMPORT_ITEM_HEADERS,
   PRODUCT_BATCH_IMPORT_LIMITS,
-  PRODUCT_BATCH_IMPORT_MASTER_HEADERS,
-  PRODUCT_BATCH_IMPORT_SHEET_NAMES,
+  PRODUCT_BATCH_IMPORT_TEMPLATE_FILENAME,
   PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION,
   PRODUCT_BATCH_IMPORT_TYPE,
+  PRODUCT_BATCH_IMPORT_V2_HEADERS,
+  PRODUCT_BATCH_IMPORT_V2_SHEET_NAME,
 } from "../src/features/product-batch-import/contracts";
 import { buildProductBatchImportTemplateBuffer } from "../src/features/product-batch-import/template";
 
@@ -35,8 +35,16 @@ function getSheetRows(workbook: XLSX.WorkBook, name: string) {
 }
 
 function assertHeaders(actual: unknown[], expected: readonly string[], name: string) {
-  assert.deepEqual(actual.slice(0, expected.length), [...expected], `${name} headers tidak sesuai contract.`);
-  assert.equal(actual.length, expected.length, `${name} tidak boleh mempunyai header ekstra.`);
+  assert.deepEqual(
+    actual.slice(0, expected.length),
+    [...expected],
+    `${name} headers tidak sesuai contract.`,
+  );
+  assert.equal(
+    actual.length,
+    expected.length,
+    `${name} tidak boleh mempunyai header ekstra.`,
+  );
 }
 
 function assertNoFormulaOrHyperlink(workbook: XLSX.WorkBook, sheetName: string) {
@@ -60,66 +68,59 @@ function assertTemplate(buffer: Buffer, expectSamples: boolean) {
   const workbook = readWorkbook(buffer);
   assert.deepEqual(
     workbook.SheetNames,
-    [...PRODUCT_BATCH_IMPORT_SHEET_NAMES],
-    "Nama/urutan sheet harus exact sesuai template v1.",
+    [PRODUCT_BATCH_IMPORT_V2_SHEET_NAME],
+    "Template resmi v2 harus hanya mempunyai worksheet PRODUCTS.",
   );
 
-  const metadataRows = getSheetRows(workbook, "METADATA");
-  assertHeaders(metadataRows[0] ?? [], ["key", "value"], "METADATA");
-  const metadata = new Map(metadataRows.slice(1).map((row) => [String(row[0] ?? ""), String(row[1] ?? "")]));
-  assert.equal(metadata.get("template_version"), PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION);
-  assert.equal(metadata.get("import_type"), PRODUCT_BATCH_IMPORT_TYPE);
-  assert.match(metadata.get("generated_at") ?? "", /^\d{4}-\d{2}-\d{2}$/);
-
-  const masterRows = getSheetRows(workbook, "PRODUCT_MASTERS");
-  assertHeaders(masterRows[0] ?? [], PRODUCT_BATCH_IMPORT_MASTER_HEADERS, "PRODUCT_MASTERS");
-  assert.equal(masterRows.length > 1, expectSamples, "Sample row PRODUCT_MASTERS tidak sesuai mode generator.");
-
-  const itemRows = getSheetRows(workbook, "PHYSICAL_PRODUCTS");
-  assertHeaders(itemRows[0] ?? [], PRODUCT_BATCH_IMPORT_ITEM_HEADERS, "PHYSICAL_PRODUCTS");
-  assert.equal(itemRows.length > 1, expectSamples, "Sample row PHYSICAL_PRODUCTS tidak sesuai mode generator.");
+  const productRows = getSheetRows(workbook, PRODUCT_BATCH_IMPORT_V2_SHEET_NAME);
+  assertHeaders(
+    productRows[0] ?? [],
+    PRODUCT_BATCH_IMPORT_V2_HEADERS,
+    PRODUCT_BATCH_IMPORT_V2_SHEET_NAME,
+  );
+  assert.equal(
+    productRows.length > 1,
+    expectSamples,
+    "Sample row PRODUCTS tidak sesuai mode generator.",
+  );
 
   const normalizedHeaders = new Set(
-    [...(masterRows[0] ?? []), ...(itemRows[0] ?? [])].map((value) => String(value).toLowerCase()),
+    (productRows[0] ?? []).map((value) => String(value).toLowerCase()),
   );
   for (const forbiddenHeader of PRODUCT_BATCH_IMPORT_FORBIDDEN_OPERATOR_HEADERS) {
-    assert.ok(!normalizedHeaders.has(forbiddenHeader), `Template tidak boleh menyediakan kolom operator ${forbiddenHeader}.`);
+    assert.ok(
+      !normalizedHeaders.has(forbiddenHeader),
+      `Template v2 tidak boleh menyediakan kolom operator ${forbiddenHeader}.`,
+    );
+  }
+  for (const retired of [
+    "master_key",
+    "row_key",
+    "primary_image",
+    "cost_amount",
+    "selling_amount",
+    "price_per_gram",
+    "size",
+    "gemstone",
+    "location_code",
+    "initial_availability",
+  ]) {
+    assert.ok(!normalizedHeaders.has(retired), `Template v2 tidak boleh mengekspos ${retired}.`);
   }
 
-  const instructionRows = getSheetRows(workbook, "INSTRUCTIONS");
-  assertHeaders(instructionRows[0] ?? [], ["bagian", "panduan"], "INSTRUCTIONS");
-  assert.ok(instructionRows.length >= 8, "INSTRUCTIONS harus cukup lengkap untuk operator non-developer.");
-  const instructionText = instructionRows.flat().map((value) => String(value)).join("\n");
-  assert.ok(instructionText.includes("masters"), "INSTRUCTIONS harus menjelaskan folder masters/ di root ZIP.");
-  assert.ok(instructionText.includes("physical"), "INSTRUCTIONS harus menjelaskan folder physical/ di root ZIP.");
-  assert.ok(instructionText.includes("Google Sheets"), "INSTRUCTIONS harus menjelaskan workflow Google Sheets.");
-  assert.ok(instructionText.includes("single XLSX"), "INSTRUCTIONS harus menjelaskan metode single XLSX embedded.");
-  assert.ok(instructionText.includes("gambar embedded"), "INSTRUCTIONS harus menjelaskan gambar embedded.");
-  assert.ok(instructionText.includes("Picture in Cell"), "INSTRUCTIONS harus merekomendasikan Picture in Cell.");
-  assert.ok(instructionText.includes("Place in Cell"), "INSTRUCTIONS harus menjelaskan kompatibilitas Microsoft Excel modern.");
-  assert.ok(!instructionText.includes("images/masters"), "INSTRUCTIONS tidak boleh memakai layout images/masters lama.");
-  assert.ok(!instructionText.includes("images/physical"), "INSTRUCTIONS tidak boleh memakai layout images/physical lama.");
-
-  assertNoFormulaOrHyperlink(workbook, "PRODUCT_MASTERS");
-  assertNoFormulaOrHyperlink(workbook, "PHYSICAL_PRODUCTS");
+  assertNoFormulaOrHyperlink(workbook, PRODUCT_BATCH_IMPORT_V2_SHEET_NAME);
 }
 
-const deterministicDate = new Date("2026-08-10T00:00:00.000Z");
-const withSamples = buildProductBatchImportTemplateBuffer({
-  generatedAt: deterministicDate,
-  includeSampleRows: true,
-});
-const withoutSamples = buildProductBatchImportTemplateBuffer({
-  generatedAt: deterministicDate,
-  includeSampleRows: false,
-});
+const withSamples = buildProductBatchImportTemplateBuffer({ includeSampleRows: true });
+const withoutSamples = buildProductBatchImportTemplateBuffer({ includeSampleRows: false });
 
+assert.equal(PRODUCT_BATCH_IMPORT_TEMPLATE_FILENAME, "products.xlsx");
+assert.equal(PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION, "2");
+assert.equal(PRODUCT_BATCH_IMPORT_TYPE, "single_sheet_products_create");
 assertTemplate(withSamples, true);
 assertTemplate(withoutSamples, false);
 
 console.log("Pemeriksaan Product Batch Import template berhasil.");
-console.log("- 4 sheet exact dan metadata v1 valid.");
-console.log("- Header master/item exact tanpa identifier teknis operator.");
-console.log("- Workbook dengan dan tanpa sample row sama-sama valid.");
-console.log("- Data sheet bebas formula dan hyperlink.");
-console.log("- Ukuran template berada di bawah limit workbook v1.");
+console.log("- Template resmi bernama products.xlsx dan hanya mempunyai worksheet PRODUCTS.");
+console.log("- Header v2 exact tanpa pricing/cost/master_key/row_key dan baggage field lama.");
+console.log("- Workbook dengan dan tanpa sample row sama-sama valid serta bebas formula/hyperlink.");

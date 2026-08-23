@@ -1,7 +1,8 @@
-export const PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION = "1" as const;
-export const PRODUCT_BATCH_IMPORT_TYPE = "master_and_physical_create" as const;
-export const PRODUCT_BATCH_IMPORT_TEMPLATE_FILENAME =
-  "asihjaya-product-batch-template-v1.xlsx";
+export const PRODUCT_BATCH_IMPORT_TEMPLATE_VERSION = "2" as const;
+export const PRODUCT_BATCH_IMPORT_LEGACY_TEMPLATE_VERSION = "1" as const;
+export const PRODUCT_BATCH_IMPORT_TYPE = "single_sheet_products_create" as const;
+export const PRODUCT_BATCH_IMPORT_LEGACY_TYPE = "master_and_physical_create" as const;
+export const PRODUCT_BATCH_IMPORT_TEMPLATE_FILENAME = "products.xlsx";
 
 export const PRODUCT_BATCH_IMPORT_PACKAGE_KINDS = [
   "zip",
@@ -21,6 +22,22 @@ export const PRODUCT_BATCH_IMPORT_SHEET_NAMES = [
   "PRODUCT_MASTERS",
   "PHYSICAL_PRODUCTS",
   "INSTRUCTIONS",
+] as const;
+
+export const PRODUCT_BATCH_IMPORT_V2_SHEET_NAME = "PRODUCTS" as const;
+export const PRODUCT_BATCH_IMPORT_V2_HEADERS = [
+  "category",
+  "product_master_name",
+  "display_name",
+  "outlet_code",
+  "weight_gram",
+  "purity_percent",
+  "exchange_purity_percent",
+  "color",
+  "condition",
+  "deduction_per_gram",
+  "physical_image",
+  "internal_notes",
 ] as const;
 
 export const PRODUCT_BATCH_IMPORT_MASTER_HEADERS = [
@@ -64,7 +81,11 @@ export const PRODUCT_BATCH_IMPORT_INSTRUCTION_HEADERS = [
 ] as const;
 
 export const PRODUCT_BATCH_IMPORT_MASTER_STATUSES = ["draft", "active"] as const;
-export const PRODUCT_BATCH_IMPORT_ITEM_CONDITIONS = ["good", "damaged"] as const;
+export const PRODUCT_BATCH_IMPORT_ITEM_CONDITIONS = [
+  "good",
+  "used",
+  "damaged",
+] as const;
 export const PRODUCT_BATCH_IMPORT_ITEM_AVAILABILITIES = [
   "draft",
   "available",

@@ -3,7 +3,7 @@ import path from "node:path";
 
 import {
   PRODUCT_BATCH_IMPORT_LIMITS,
-  PRODUCT_BATCH_IMPORT_SHEET_NAMES,
+  PRODUCT_BATCH_IMPORT_V2_SHEET_NAME,
 } from "./contracts";
 import {
   ProductBatchImageError,
@@ -42,6 +42,12 @@ const IMAGE_TARGETS = {
   PHYSICAL_PRODUCTS: {
     entityKind: "physical" as const,
     columnIndex: 16,
+    field: "physical_image" as const,
+    keyField: "row_key" as const,
+  },
+  [PRODUCT_BATCH_IMPORT_V2_SHEET_NAME]: {
+    entityKind: "physical" as const,
+    columnIndex: 10,
     field: "physical_image" as const,
     keyField: "row_key" as const,
   },
@@ -403,8 +409,8 @@ function assertNoUnexpectedWorkbookDrawings(
   workbookSheetIds: Map<string, string>,
   workbookRelationships: Map<string, Relationship>,
 ) {
-  for (const sheetName of PRODUCT_BATCH_IMPORT_SHEET_NAMES) {
-    if (sheetName === "PRODUCT_MASTERS" || sheetName === "PHYSICAL_PRODUCTS") continue;
+  for (const sheetName of workbookSheetIds.keys()) {
+    if (Object.hasOwn(IMAGE_TARGETS, sheetName)) continue;
     const relationshipId = workbookSheetIds.get(sheetName);
     if (!relationshipId) continue;
     const relationship = workbookRelationships.get(relationshipId);
@@ -617,7 +623,8 @@ export async function attachProductBatchEmbeddedImages({
     await attachResolvedEmbeddedImage(picture);
   }
 
-  for (const sheetName of ["PRODUCT_MASTERS", "PHYSICAL_PRODUCTS"] as const) {
+  for (const sheetName of Object.keys(IMAGE_TARGETS) as SupportedImageSheetName[]) {
+    if (!workbookSheetIds.has(sheetName)) continue;
     const relationshipId = workbookSheetIds.get(sheetName);
     if (!relationshipId) {
       throw embeddedError(

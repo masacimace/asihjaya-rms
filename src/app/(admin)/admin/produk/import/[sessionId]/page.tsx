@@ -17,6 +17,7 @@ import { notFound } from "next/navigation";
 
 import { ProductBatchImportLabels } from "@/components/products/product-batch-import-labels";
 import { ProductBatchImportSessionActions } from "@/components/products/product-batch-import-session-actions";
+import { ProductBatchImportV2Session } from "@/components/products/product-batch-import-v2-session";
 import {
   getProductBatchImportPreview,
   type ProductBatchPreviewIssue,
@@ -336,6 +337,17 @@ export default async function ProductBatchImportPreviewPage({
       ? await getProductBatchImportResult(auth, sessionId)
       : null;
   const canPrintLabels = hasPermission(auth, "inventory.print_label");
+
+  if (preview.session.templateVersion === 2) {
+    return (
+      <ProductBatchImportV2Session
+        preview={preview}
+        result={result}
+        canPrintLabels={canPrintLabels}
+        timeZone={auth.organization.timezone}
+      />
+    );
+  }
 
   const view: ViewMode = ["masters", "items", "images", "issues"].includes(
     queryParams.view ?? "",

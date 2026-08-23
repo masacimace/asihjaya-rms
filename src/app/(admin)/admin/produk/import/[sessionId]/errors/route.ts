@@ -32,6 +32,104 @@ export async function GET(
     return NextResponse.json({ message: "Session import tidak ditemukan." }, { status: 404 });
   }
 
+  if (preview.session.templateVersion === 2) {
+    const errors = [
+      ...preview.masters.flatMap((row) =>
+        row.validationErrors.map((issue) => [
+          row.rowNumber,
+          issue.field ?? "",
+          issue.code,
+          issue.message,
+          issue.field ? valueText(row.normalizedPayload[issue.field]) : "",
+        ]),
+      ),
+      ...preview.items.flatMap((row) =>
+        row.validationErrors.map((issue) => [
+          row.rowNumber,
+          issue.field ?? "",
+          issue.code,
+          issue.message,
+          issue.field ? valueText(row.normalizedPayload[issue.field]) : "",
+        ]),
+      ),
+    ].sort((left, right) => Number(left[0]) - Number(right[0]));
+
+    const warnings = [
+      ...preview.masters.flatMap((row) =>
+        row.validationWarnings.map((issue) => [
+          row.rowNumber,
+          issue.field ?? "",
+          issue.code,
+          issue.message,
+          issue.archivePath ?? "",
+        ]),
+      ),
+      ...preview.items.flatMap((row) =>
+        row.validationWarnings.map((issue) => [
+          row.rowNumber,
+          issue.field ?? "",
+          issue.code,
+          issue.message,
+          issue.archivePath ?? "",
+        ]),
+      ),
+    ].sort((left, right) => Number(left[0]) - Number(right[0]));
+
+    return createXlsxResponse({
+      filename: `product-batch-import-errors-${sessionId.slice(0, 8)}.xlsx`,
+      sheets: [
+        {
+          name: "SUMMARY",
+          columns: ["key", "value"],
+          rows: [
+            ["file_name", preview.session.fileName],
+            ["template_version", preview.session.templateVersion],
+            ["item_rows", preview.session.totalItemRows],
+            ["invalid_rows", preview.session.invalidRows],
+            ["warning_count", preview.session.warningCount],
+          ],
+          widths: [{ wch: 24 }, { wch: 72 }],
+        },
+        {
+          name: "PRODUCTS",
+          columns: [
+            "row_number",
+            "field",
+            "code",
+            "message",
+            "current_value",
+          ],
+          rows: errors,
+          widths: [
+            { wch: 12 },
+            { wch: 24 },
+            { wch: 36 },
+            { wch: 72 },
+            { wch: 40 },
+          ],
+        },
+        {
+          name: "WARNINGS",
+          columns: [
+            "row_number",
+            "field",
+            "code",
+            "message",
+            "archive_path",
+          ],
+          rows: warnings,
+          widths: [
+            { wch: 12 },
+            { wch: 24 },
+            { wch: 36 },
+            { wch: 72 },
+            { wch: 44 },
+          ],
+        },
+      ],
+    });
+  }
+
   const masterErrors = preview.masters.flatMap((row) =>
     row.validationErrors.map((issue) => [
       row.rowNumber,
