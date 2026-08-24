@@ -70,7 +70,14 @@ export function AdminSoundEffects({
         const previous = countRef.current;
         const next = payload.notificationUnreadCount;
         countRef.current = next;
-        onCountsChangeRef.current?.({ notificationUnreadCount: next });
+
+        // Polling hanya perlu memperbarui Server Component/drawer ketika
+        // jumlah notifikasi benar-benar berubah. Memanggil router.refresh()
+        // melalui onCountsChange pada setiap poll membuat Next.js dev
+        // melakukan RSC refresh berkala walaupun tidak ada perubahan data.
+        if (next !== previous) {
+          onCountsChangeRef.current?.({ notificationUnreadCount: next });
+        }
 
         if (hasUserInteractionRef.current && next > previous) {
           playAudio(notificationAudioRef.current);

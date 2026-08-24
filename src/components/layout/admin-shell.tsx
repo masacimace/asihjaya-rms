@@ -74,16 +74,16 @@ const navigation: NavigationItem[] = [
     access: "products",
   },
   {
-    label: "Import Produk Legacy",
-    href: "/admin/migrasi-produk",
-    icon: FileSpreadsheet,
-    access: "migration",
-  },
-  {
     label: "Produk Inventaris",
     href: "/admin/inventaris",
     icon: Boxes,
     access: "inventory",
+  },
+  {
+    label: "Migrasi Data Produk",
+    href: "/admin/migrasi-produk",
+    icon: FileSpreadsheet,
+    access: "migration",
   },
   {
     label: "Riwayat Penjualan",
@@ -248,7 +248,6 @@ function SidebarContent({
     if (item.access === "settings") {
       return canAccessSettings;
     }
-
 
     return true;
   });
@@ -453,8 +452,8 @@ export function AdminShell({
                 canAccessProducts={user.canAccessProducts}
                 canAccessInventory={user.canAccessInventory}
                 canAccessMigration={user.canAccessMigration}
-                      canAccessSettings={user.canAccessSettings}
-                            onNavigate={() => setIsMobileMenuOpen(false)}
+                canAccessSettings={user.canAccessSettings}
+                onNavigate={() => setIsMobileMenuOpen(false)}
                 showBrand={false}
                 showPosCta={false}
               />
@@ -557,7 +556,9 @@ export function AdminShell({
 
       <AdminSoundEffects
         initialNotificationUnreadCount={notificationDrawerData.unreadCount}
-        onCountsChange={({ notificationUnreadCount: nextNotificationCount }) => {
+        onCountsChange={({
+          notificationUnreadCount: nextNotificationCount,
+        }) => {
           setNotificationUnreadCount(nextNotificationCount);
           refreshDrawerData();
         }}

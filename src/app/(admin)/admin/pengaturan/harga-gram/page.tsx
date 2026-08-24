@@ -16,7 +16,7 @@ export default async function MetalPriceSettingsPage() {
   const rows = await getMetalPriceRateSettingsData(auth.organization.id);
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 pb-6">
+    <div className="w-full min-w-0 space-y-6 overflow-x-clip pb-6">
       <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
         <Link href="/admin/pengaturan" className="inline-flex items-center gap-2 text-sm font-medium text-[var(--muted)] transition hover:text-neutral-950">
           <ArrowLeft className="size-4" />

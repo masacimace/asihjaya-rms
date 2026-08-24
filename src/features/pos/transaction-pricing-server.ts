@@ -5,10 +5,13 @@ import { metalPriceRates, metalPurities, metals } from "@/db/schema";
 import type {
   PosCartPricingInput,
   PosPriceSource,
+  PosWeightSource,
 } from "@/features/pos/contracts";
 import {
   calculatePosBasePrice,
   calculatePosFinalPrice,
+  getPosWeightSource,
+  normalizePosTransactionWeight,
 } from "@/features/pos/transaction-pricing";
 import { normalizePurityKey } from "@/features/pricing/metal-price-rates";
 
@@ -23,6 +26,9 @@ export type PosTransactionPricingSourceItem = {
 
 export type ResolvedPosTransactionPricing = {
   itemId: string;
+  storedWeightGram: string | null;
+  transactionWeightGram: string;
+  weightSource: PosWeightSource;
   priceSource: PosPriceSource;
   activePricePerGram: string | null;
   pricePerGram: string;
@@ -54,7 +60,7 @@ export function normalizePosCartPricingInputs(
 ): PosCartPricingInput[] {
   if (!Array.isArray(values) || values.length === 0) {
     throw new PosTransactionPricingError(
-      "Pricing item transaksi belum tersedia. Kembali ke cart lalu atur harga item.",
+      "Pricing item transaksi belum tersedia. Kembali ke cart lalu atur item.",
     );
   }
 
@@ -66,12 +72,23 @@ export function normalizePosCartPricingInputs(
 
   return values.map((value) => {
     const itemId = String(value?.itemId ?? "").trim();
+    const rawTransactionWeight = value?.transactionWeightGram;
+    const transactionWeightGram =
+      rawTransactionWeight === undefined || rawTransactionWeight === null || rawTransactionWeight === ""
+        ? undefined
+        : (normalizePosTransactionWeight(rawTransactionWeight) ?? undefined);
     const pricePerGram = String(value?.pricePerGram ?? "").trim();
     const priceSource = normalizePriceSource(value?.priceSource);
 
     if (!itemId || seenItemIds.has(itemId)) {
       throw new PosTransactionPricingError(
         "Pricing item transaksi mengandung item duplikat atau tidak valid.",
+      );
+    }
+
+    if (rawTransactionWeight !== undefined && rawTransactionWeight !== null && rawTransactionWeight !== "" && !transactionWeightGram) {
+      throw new PosTransactionPricingError(
+        "Berat transaksi tidak valid. Gunakan berat lebih dari 0 gr dengan maksimal 3 angka desimal.",
       );
     }
 
@@ -95,6 +112,7 @@ export function normalizePosCartPricingInputs(
 
     return {
       itemId,
+      transactionWeightGram,
       priceSource,
       pricePerGram,
       discountAmount: value.discountAmount,
@@ -174,9 +192,24 @@ export async function resolvePosTransactionPricing({
     const input = inputMap.get(item.id);
     if (!input) {
       throw new PosTransactionPricingError(
-        `Pricing ${item.sku} belum tersedia. Kembali ke cart lalu atur harga item.`,
+        `Pricing ${item.sku} belum tersedia. Kembali ke cart lalu atur item.`,
       );
     }
+
+    const storedWeightGram = normalizePosTransactionWeight(item.weightGram);
+    const transactionWeightGram =
+      normalizePosTransactionWeight(input.transactionWeightGram) ?? storedWeightGram;
+
+    if (!transactionWeightGram) {
+      throw new PosTransactionPricingError(
+        `${item.sku} belum memiliki Berat transaksi yang valid. Timbang item terlebih dahulu sebelum dijual.`,
+      );
+    }
+
+    const weightSource = getPosWeightSource({
+      storedWeightGram,
+      transactionWeightGram,
+    });
 
     const purityKey = normalizePurityKey(item.purityPercent);
     if (!purityKey) {
@@ -204,13 +237,13 @@ export async function resolvePosTransactionPricing({
     }
 
     const basePriceAmount = calculatePosBasePrice({
-      weightGram: item.weightGram,
+      weightGram: transactionWeightGram,
       pricePerGram,
     });
 
     if (!basePriceAmount) {
       throw new PosTransactionPricingError(
-        `${item.sku} belum bisa dihitung karena berat item atau Harga/Gram transaksi tidak valid.`,
+        `${item.sku} belum bisa dihitung karena Berat atau Harga/Gram transaksi tidak valid.`,
       );
     }
 
@@ -225,12 +258,15 @@ export async function resolvePosTransactionPricing({
       throw new PosTransactionPricingError(
         input.discountAmount > basePriceAmount
           ? `Diskon ${item.sku} tidak boleh lebih besar dari Harga Dasar.`
-          : `Perhitungan harga ${item.sku} tidak valid. Periksa Harga/Gram, Diskon, Ongkos, dan Round.`,
+          : `Perhitungan harga ${item.sku} tidak valid. Periksa Berat, Harga/Gram, Diskon, Ongkos, dan Round.`,
       );
     }
 
     return {
       itemId: item.id,
+      storedWeightGram,
+      transactionWeightGram,
+      weightSource,
       priceSource,
       activePricePerGram,
       pricePerGram,

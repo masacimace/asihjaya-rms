@@ -12,7 +12,10 @@ const holdCartDialogSource = readFileSync(resolve("src/components/pos/workspace/
 assert.match(mobileSidePanelSource, /fixed inset-0 z-50 overflow-y-auto bg-white lg:hidden/);
 assert.match(pricingDialogSource, /fixed inset-0 z-\[75\] flex items-stretch justify-center/);
 assert.match(pricingDialogSource, /aria-labelledby="pos-item-pricing-title"/);
-assert.match(pricingDialogSource, /Harga \/ Gram Aktif/);
+assert.match(pricingDialogSource, /Berat Transaksi/);
+assert.match(pricingDialogSource, /Berat tersimpan/);
+assert.match(pricingDialogSource, /Harga Standar Kadar/);
+assert.match(pricingDialogSource, /Harga \/ Gram Transaksi/);
 assert.match(pricingDialogSource, /Diskon/);
 assert.match(pricingDialogSource, /Ongkos/);
 assert.match(pricingDialogSource, /Round/);

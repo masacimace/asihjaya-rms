@@ -4,6 +4,7 @@ import type {
   PosHeldCartSummary,
 } from "@/features/pos/contracts";
 import { isStoredPosCartItem } from "@/features/pos/cart-storage";
+import { normalizePosTransactionWeight } from "@/features/pos/transaction-pricing";
 
 export const POS_PENDING_HELD_CART_RESUME_STORAGE_KEY =
   "asihjaya:pos-workspace-pending-held-cart-resume";
@@ -54,7 +55,15 @@ export function parsePendingHeldCartResumeState(
   }
 
   const heldCart = value.heldCart as PosHeldCartSummary;
-  const items = value.items.filter(isStoredPosCartItem) as PosHeldCartItem[];
+  const items = value.items
+    .filter(isStoredPosCartItem)
+    .map((item) => ({
+      ...item,
+      transactionWeightGram:
+        normalizePosTransactionWeight(item.transactionWeightGram) ??
+        normalizePosTransactionWeight(item.weightGram) ??
+        undefined,
+    })) as PosHeldCartItem[];
 
   if (items.length === 0 || typeof heldCart.holdNumber !== "string") {
     return null;

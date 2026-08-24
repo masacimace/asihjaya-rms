@@ -83,7 +83,7 @@
     "check:pos-dialog-state": "tsx scripts/check-pos-dialog-state.ts",
     "check:pos-result-shift-view": "tsx scripts/check-pos-result-shift-view.ts",
     "check:pos-workspace-composition": "tsx scripts/check-pos-workspace-composition.ts",
-    "check:pos-stage-1c": "npm run check:pos-checkout-services && npm run check:pos-checkout-client && npm run check:pos-payment-drafts && npm run check:pos-payment-panel-state && npm run check:pos-dialog-state && npm run check:pos-result-shift-view && npm run check:pos-workspace-composition && npm run check:pos-payment-state && npm run check:pos-workspace-commands && npm run check:pos-cart-state && npm run check:pos-catalog-view && npm run check:pos-customer-held-cart",
+    "check:pos-stage-1c": "npm run check:pos-checkout-services && npm run check:pos-checkout-client && npm run check:pos-payment-drafts && npm run check:pos-payment-panel-state && npm run check:pos-dialog-state && npm run check:pos-result-shift-view && npm run check:pos-workspace-composition && npm run check:pos-payment-state && npm run check:pos-workspace-commands && npm run check:pos-cart-state && npm run check:pos-reweigh && npm run check:pos-catalog-view && npm run check:pos-customer-held-cart",
     "check:pos-payment-state": "tsx scripts/check-pos-payment-state.ts",
     "check:pos-workspace-commands": "tsx scripts/check-pos-workspace-commands.ts",
     "check:pos-cart-state": "tsx scripts/check-pos-cart-state.ts",
@@ -186,7 +186,8 @@
     "test:product-batch-acceptance:checks": "tsx scripts/run-product-batch-import-acceptance-checks.ts",
     "test:product-batch-acceptance:existing": "npm run test:product-batch-acceptance:checks -- --profile=existing",
     "test:product-batch-acceptance:fresh": "tsx scripts/run-product-batch-import-acceptance-fresh.ts",
-    "test:product-batch-acceptance:premerge": "npm run check:stabilization && npm run build:clean"
+    "test:product-batch-acceptance:premerge": "npm run check:stabilization && npm run build:clean",
+    "check:pos-reweigh": "tsx scripts/check-pos-reweigh.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

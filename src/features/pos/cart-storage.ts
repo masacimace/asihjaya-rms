@@ -2,6 +2,7 @@ import type {
   PosCartItem,
   PosCustomerOption,
 } from "@/features/pos/contracts";
+import { normalizePosTransactionWeight } from "@/features/pos/transaction-pricing";
 
 export const POS_ACTIVE_CART_STORAGE_KEY =
   "asihjaya:pos-workspace-active-cart";
@@ -28,6 +29,8 @@ export function isStoredPosCartItem(value: unknown): value is PosCartItem {
     typeof value.productName === "string" &&
     typeof value.categoryId === "string" &&
     typeof value.categoryName === "string" &&
+    (value.transactionWeightGram === undefined ||
+      typeof value.transactionWeightGram === "string") &&
     (value.priceSource === undefined ||
       value.priceSource === "global" ||
       value.priceSource === "manual_override") &&
@@ -71,6 +74,10 @@ export function parseStoredPosCartStateValue(
 
   const items = parsedItems.map((item) => ({
     ...item,
+    transactionWeightGram:
+      normalizePosTransactionWeight(item.transactionWeightGram) ??
+      normalizePosTransactionWeight(item.weightGram) ??
+      undefined,
     priceSource:
       item.priceSource === "manual_override" ||
       (!item.activePricePerGram || item.activePricePerGram !== item.pricePerGram)

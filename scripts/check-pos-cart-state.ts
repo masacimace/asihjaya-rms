@@ -30,6 +30,7 @@ function createItem(overrides: Partial<PosCartItem> = {}): PosCartItem {
     categoryId: "category-1",
     categoryName: "Cincin",
     weightGram: "2.5",
+    transactionWeightGram: "2.500",
     purityPercent: "75",
     exchangePurityPercent: "375",
     size: "17",
@@ -139,6 +140,48 @@ if (missingGlobalRateExample.status === "success") {
   assert.equal(missingGlobalRateExample.item.basePriceAmount, "1800000");
 }
 
+const reweighedExample = buildPosCartItem(
+  createItem({
+    weightGram: "2.120",
+    purityPercent: "30",
+    activePricePerGram: "1000000",
+  }),
+  {
+    transactionWeightGram: "2,150",
+    pricePerGram: "1000000",
+    discountAmount: 0,
+    laborAmount: 0,
+    adjustmentAmount: 0,
+  },
+);
+assert.equal(reweighedExample.status, "success");
+if (reweighedExample.status === "success") {
+  assert.equal(reweighedExample.item.transactionWeightGram, "2.150");
+  assert.equal(reweighedExample.item.weightGram, "2.120");
+  assert.equal(reweighedExample.item.basePriceAmount, "2150000");
+}
+
+const missingStoredWeightExample = buildPosCartItem(
+  createItem({
+    weightGram: null,
+    transactionWeightGram: undefined,
+    purityPercent: "30",
+    activePricePerGram: "1000000",
+  }),
+  {
+    transactionWeightGram: "1.875",
+    pricePerGram: "1000000",
+    discountAmount: 0,
+    laborAmount: 0,
+    adjustmentAmount: 0,
+  },
+);
+assert.equal(missingStoredWeightExample.status, "success");
+if (missingStoredWeightExample.status === "success") {
+  assert.equal(missingStoredWeightExample.item.transactionWeightGram, "1.875");
+  assert.equal(missingStoredWeightExample.item.basePriceAmount, "1875000");
+}
+
 const firstItem = createItem();
 const secondItem = createItem({
   id: "item-2",
@@ -155,6 +198,7 @@ assert.equal(isStoredPosCartItem(firstItem), true);
 assert.equal(isStoredPosCartItem({ id: "incomplete" }), false);
 const legacyStoredItem: Partial<PosCartItem> = { ...firstItem };
 delete legacyStoredItem.priceSource;
+delete legacyStoredItem.transactionWeightGram;
 const legacyStoredState = parseStoredPosCartStateValue({
   version: 2,
   items: [legacyStoredItem],
@@ -162,6 +206,7 @@ const legacyStoredState = parseStoredPosCartStateValue({
   updatedAt: "2026-08-20T00:00:00.000Z",
 });
 assert.equal(legacyStoredState?.items[0]?.priceSource, "global");
+assert.equal(legacyStoredState?.items[0]?.transactionWeightGram, "2.500");
 
 const itemIds = getPosCartItemIds([firstItem, secondItem]);
 assert.equal(itemIds.has("item-1"), true);
@@ -177,7 +222,7 @@ assert.deepEqual(getPosCartSummary([firstItem, secondItem]), {
 assert.deepEqual(getPosCartAddIssue({ item: firstItem, itemIds }), {
   type: "duplicate",
   message:
-    "SKU-001 sudah ada di keranjang. Gunakan Edit Harga jika ingin mengubah Harga/Gram, Diskon, Ongkos, atau Round.",
+    "SKU-001 sudah ada di keranjang. Gunakan Edit Item jika ingin mengubah Berat, Harga/Gram, Diskon, Ongkos, atau Round.",
 });
 assert.equal(
   getPosCartAddIssue({
@@ -205,4 +250,4 @@ assert.equal(
   null,
 );
 
-console.log("POS per-item cart pricing state and storage checks passed.");
+console.log("POS per-item cart pricing + reweigh state and storage checks passed.");

@@ -54,6 +54,13 @@ assert.match(querySource, /eq\(productCategories\.id, normalizedCategoryId\)/);
 assert.match(catalogHookSource, /POS_CATALOG_SEARCH_DEBOUNCE_MS = 300/);
 assert.match(catalogHookSource, /requestVersionRef/);
 assert.match(catalogHookSource, /mergeUniqueCatalogItems/);
+assert.match(catalogHookSource, /const loadPageRef = useRef\(loadPage\)/);
+assert.match(catalogHookSource, /loadPageRef\.current = loadPage/);
+assert.match(catalogHookSource, /loadPageRef\.current\(\{/);
+assert.doesNotMatch(
+  catalogHookSource,
+  /\[activeCategoryId, debouncedSearchQuery, loadPage\]/,
+);
 assert.match(catalogPanelSource, /new IntersectionObserver/);
 assert.match(catalogPanelSource, /rootMargin: "600px 0px"/);
 assert.match(itemImageSource, /loading="lazy"/);

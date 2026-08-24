@@ -43,6 +43,7 @@ function canonicalizeCheckoutPayload(payload: PosCheckoutPayload) {
   const itemPricing = payload.itemPricing
     .map((item) => ({
       itemId: item.itemId,
+      transactionWeightGram: normalizeFingerprintText(item.transactionWeightGram),
       priceSource: item.priceSource ?? "global",
       pricePerGram: item.pricePerGram,
       discountAmount: item.discountAmount,

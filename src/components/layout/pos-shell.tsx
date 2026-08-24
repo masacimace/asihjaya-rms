@@ -104,7 +104,7 @@ const fallbackStatus: PosShellStatus = {
 const navigation = [
   { label: "Beranda", href: "/pos", icon: ShoppingBag },
   {
-    label: "Transaksi",
+    label: "Riwayat Transaksi",
     href: "/pos/transaksi",
     icon: ReceiptText,
     children: [
@@ -112,7 +112,7 @@ const navigation = [
       { label: "Transaksi Ditahan", href: "/pos/ditahan", icon: Pause },
     ],
   },
-  { label: "Pelanggan", href: "/pos/pelanggan", icon: UsersRound },
+  { label: "Daftar Pelanggan", href: "/pos/pelanggan", icon: UsersRound },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
 ] as const;
 

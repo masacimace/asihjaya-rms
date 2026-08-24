@@ -53,6 +53,7 @@ function createItem(
     categoryId: "category-1",
     categoryName: "Cincin",
     weightGram: "2.5",
+    transactionWeightGram: "2.500",
     purityPercent: "75",
     exchangePurityPercent: null,
     size: "17",

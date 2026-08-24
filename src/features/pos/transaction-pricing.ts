@@ -3,6 +3,7 @@ import type {
   PosCartItem,
   PosCartPricingInput,
   PosPriceSource,
+  PosWeightSource,
 } from "@/features/pos/contracts";
 
 function toSafeMoney(value: string | number | null | undefined) {
@@ -15,12 +16,12 @@ function toSafeMoney(value: string | number | null | undefined) {
   return Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : null;
 }
 
-function normalizeWeightMilli(value: string | null | undefined) {
-  if (!value) {
+function normalizeWeightMilli(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") {
     return null;
   }
 
-  const normalized = value.trim().replace(",", ".");
+  const normalized = String(value).trim().replace(",", ".");
 
   if (!/^\d+(?:\.\d{1,3})?$/.test(normalized)) {
     return null;
@@ -29,8 +30,68 @@ function normalizeWeightMilli(value: string | null | undefined) {
   const [whole = "0", decimal = ""] = normalized.split(".");
   const weightMilli =
     BigInt(whole) * BigInt(1000) + BigInt(decimal.padEnd(3, "0"));
+  const maxWeightMilli = BigInt("999999999999");
 
-  return weightMilli > BigInt(0) ? weightMilli : null;
+  return weightMilli > BigInt(0) && weightMilli <= maxWeightMilli
+    ? weightMilli
+    : null;
+}
+
+function formatWeightMilli(weightMilli: bigint) {
+  const whole = weightMilli / BigInt(1000);
+  const decimal = String(weightMilli % BigInt(1000)).padStart(3, "0");
+  return `${whole}.${decimal}`;
+}
+
+export function normalizePosTransactionWeight(
+  value: string | number | null | undefined,
+) {
+  const weightMilli = normalizeWeightMilli(value);
+  return weightMilli ? formatWeightMilli(weightMilli) : null;
+}
+
+export function formatPosWeightInput(value: string | number | null | undefined) {
+  const raw = String(value ?? "")
+    .trim()
+    .replace(".", ",")
+    .replace(/[^0-9,]/g, "");
+
+  if (!raw) {
+    return "";
+  }
+
+  const commaIndex = raw.indexOf(",");
+  const wholeRaw = (commaIndex >= 0 ? raw.slice(0, commaIndex) : raw).replace(
+    /\D/g,
+    "",
+  );
+  const whole = wholeRaw.replace(/^0+(?=\d)/, "") || "0";
+
+  if (commaIndex < 0) {
+    return whole;
+  }
+
+  const decimal = raw
+    .slice(commaIndex + 1)
+    .replace(/\D/g, "")
+    .slice(0, 3);
+
+  return `${whole},${decimal}`;
+}
+
+export function getPosWeightSource({
+  storedWeightGram,
+  transactionWeightGram,
+}: {
+  storedWeightGram: string | null | undefined;
+  transactionWeightGram: string | null | undefined;
+}): PosWeightSource {
+  const storedWeight = normalizePosTransactionWeight(storedWeightGram);
+  const transactionWeight = normalizePosTransactionWeight(transactionWeightGram);
+
+  return storedWeight && transactionWeight === storedWeight
+    ? "stored"
+    : "reweighed";
 }
 
 export function calculatePosBasePrice({
@@ -107,6 +168,7 @@ export function getPosPriceSource({
 }
 
 export type PosPricingDraftValues = {
+  transactionWeightGram?: string | number | null;
   priceSource?: PosPriceSource;
   pricePerGram?: string | number | null;
   discountAmount: number;
@@ -122,6 +184,9 @@ export function buildPosCartItem(
   item: PosAvailableItem,
   values: PosPricingDraftValues,
 ): BuildPosCartItemResult {
+  const transactionWeightGram = normalizePosTransactionWeight(
+    values.transactionWeightGram ?? item.weightGram,
+  );
   const submittedPricePerGram =
     values.pricePerGram === null || values.pricePerGram === undefined
       ? item.activePricePerGram
@@ -138,10 +203,10 @@ export function buildPosCartItem(
     };
   }
 
-  if (!item.weightGram) {
+  if (!transactionWeightGram) {
     return {
       status: "error",
-      message: `${item.sku} belum memiliki berat. Lengkapi data item sebelum dijual.`,
+      message: "Berat transaksi harus lebih dari 0 gr dan maksimal 3 angka desimal.",
     };
   }
 
@@ -153,14 +218,14 @@ export function buildPosCartItem(
   }
 
   const basePriceAmount = calculatePosBasePrice({
-    weightGram: item.weightGram,
+    weightGram: transactionWeightGram,
     pricePerGram,
   });
 
   if (!basePriceAmount) {
     return {
       status: "error",
-      message: `${item.sku} belum bisa dihitung karena berat atau Harga/Gram transaksi tidak valid.`,
+      message: `${item.sku} belum bisa dihitung karena Berat atau Harga/Gram transaksi tidak valid.`,
     };
   }
 
@@ -177,7 +242,7 @@ export function buildPosCartItem(
       message:
         values.discountAmount > basePriceAmount
           ? "Diskon item tidak boleh lebih besar dari Harga Dasar."
-          : "Perhitungan harga item tidak valid. Periksa Harga/Gram, Diskon, Ongkos, dan Round.",
+          : "Perhitungan harga item tidak valid. Periksa Berat, Harga/Gram, Diskon, Ongkos, dan Round.",
     };
   }
 
@@ -185,6 +250,7 @@ export function buildPosCartItem(
     status: "success",
     item: {
       ...item,
+      transactionWeightGram,
       priceSource: getPosPriceSource({
         activePricePerGram: item.activePricePerGram,
         transactionPricePerGram: pricePerGram,
@@ -202,6 +268,10 @@ export function buildPosCartItem(
 export function getPosCartPricingInput(item: PosCartItem): PosCartPricingInput {
   return {
     itemId: item.id,
+    transactionWeightGram:
+      normalizePosTransactionWeight(item.transactionWeightGram) ??
+      normalizePosTransactionWeight(item.weightGram) ??
+      undefined,
     priceSource:
       item.priceSource ??
       getPosPriceSource({

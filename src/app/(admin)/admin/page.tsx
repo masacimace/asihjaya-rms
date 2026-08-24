@@ -42,26 +42,26 @@ export const metadata = {
 
 const quickActions = [
   {
-    label: "Tambah Item",
-    description: "Registrasi barang baru",
+    label: "Tambah Produk",
+    description: "Form pembuatan produk baru",
     href: "/admin/produk/tambah",
     icon: Boxes,
   },
   {
-    label: "Penerimaan Barang",
-    description: "Catat stok masuk",
-    href: "/admin/inventaris",
+    label: "Batch Produk",
+    description: "Pembuatan produk dengan excel",
+    href: "/admin/produk/import",
     icon: PackageCheck,
   },
   {
-    label: "Cetak Label",
-    description: "Barcode dan QR produk",
-    href: "/admin/inventaris",
-    icon: ScanBarcode,
+    label: "Riwayat Penjualan",
+    description: "Riwayat transaksi penjualan",
+    href: "/admin/penjualan?q=&range=all&outletId=&status=&paymentMethod=",
+    icon: ReceiptText,
   },
   {
     label: "Lihat Laporan",
-    description: "Penjualan dan stok",
+    description: "Pusat analisa performa bisnis",
     href: "/admin/laporan",
     icon: TrendingUp,
   },

@@ -6,6 +6,7 @@ import {
   CircleDollarSign,
   Hammer,
   RotateCcw,
+  Scale,
   X,
 } from "lucide-react";
 
@@ -14,7 +15,10 @@ import type { PosAvailableItem, PosCartItem } from "@/features/pos/contracts";
 import {
   buildPosCartItem,
   calculatePosBasePrice,
+  formatPosWeightInput,
   getPosPriceSource,
+  getPosWeightSource,
+  normalizePosTransactionWeight,
 } from "@/features/pos/transaction-pricing";
 import {
   formatCurrency,
@@ -36,6 +40,7 @@ export function PosItemPricingDialog({
   onCancel,
   onConfirm,
 }: PosItemPricingDialogProps) {
+  const [transactionWeightInput, setTransactionWeightInput] = useState("");
   const [pricePerGramInput, setPricePerGramInput] = useState("");
   const [discountInput, setDiscountInput] = useState("");
   const [laborInput, setLaborInput] = useState("");
@@ -46,6 +51,9 @@ export function PosItemPricingDialog({
     const initialPricePerGram =
       existingItem?.pricePerGram ?? item.activePricePerGram ?? "";
 
+    setTransactionWeightInput(
+      formatPosWeightInput(existingItem?.transactionWeightGram ?? item.weightGram ?? ""),
+    );
     setPricePerGramInput(
       Number(initialPricePerGram) > 0
         ? formatRupiahInput(initialPricePerGram)
@@ -69,12 +77,17 @@ export function PosItemPricingDialog({
     setFeedback(null);
   }, [existingItem, item.activePricePerGram, item.id]);
 
+  const transactionWeightGram = normalizePosTransactionWeight(transactionWeightInput);
   const transactionPricePerGram = parsePaymentAmountInput(pricePerGramInput);
   const transactionPricePerGramText =
     transactionPricePerGram > 0 ? String(transactionPricePerGram) : null;
   const discountAmount = parsePaymentAmountInput(discountInput);
   const laborAmount = parsePaymentAmountInput(laborInput);
   const adjustmentAmount = parsePaymentAmountInput(adjustmentInput);
+  const weightSource = getPosWeightSource({
+    storedWeightGram: item.weightGram,
+    transactionWeightGram,
+  });
   const priceSource = getPosPriceSource({
     activePricePerGram: item.activePricePerGram,
     transactionPricePerGram: transactionPricePerGramText,
@@ -82,15 +95,15 @@ export function PosItemPricingDialog({
   const basePriceAmount = useMemo(
     () =>
       calculatePosBasePrice({
-        weightGram: item.weightGram,
+        weightGram: transactionWeightGram,
         pricePerGram: transactionPricePerGramText,
       }),
-    [item.weightGram, transactionPricePerGramText],
+    [transactionWeightGram, transactionPricePerGramText],
   );
   const projectedFinalAmount = basePriceAmount
     ? basePriceAmount - discountAmount + laborAmount + adjustmentAmount
     : 0;
-  const hasItemPricingData = Boolean(item.weightGram && item.purityPercent);
+  const hasItemPricingData = Boolean(transactionWeightGram && item.purityPercent);
   const hasValidTransactionPrice = Boolean(
     hasItemPricingData && transactionPricePerGramText && basePriceAmount,
   );
@@ -111,6 +124,7 @@ export function PosItemPricingDialog({
 
   function submit() {
     const result = buildPosCartItem(item, {
+      transactionWeightGram,
       priceSource,
       pricePerGram: transactionPricePerGramText,
       discountAmount,
@@ -144,10 +158,10 @@ export function PosItemPricingDialog({
                 id="pos-item-pricing-title"
                 className="mt-1 text-base font-semibold text-neutral-950 sm:text-lg"
               >
-                {existingItem ? "Edit harga transaksi" : "Tambahkan produk"}
+                {existingItem ? "Edit item transaksi" : "Tambahkan produk"}
               </h2>
               <p className="mt-2 text-xs leading-5 text-[var(--muted)] sm:text-sm sm:leading-6">
-                Harga standar berdasarkan kadar menjadi default. Harga/Gram transaksi bisa disesuaikan khusus untuk item ini tanpa mengubah rate global.
+                Timbang ulang bila diperlukan, lalu atur Harga/Gram transaksi. Perubahan berat baru disimpan ke item setelah checkout berhasil.
               </p>
             </div>
 
@@ -182,12 +196,73 @@ export function PosItemPricingDialog({
                   Kadar {item.purityPercent ?? "-"}%
                 </span>
                 <span className="rounded-full bg-white px-2.5 py-1 ring-1 ring-[var(--border)]">
-                  {item.weightGram ?? "-"} gr
+                  {transactionWeightGram ?? item.weightGram ?? "-"} gr
                 </span>
                 <span className="rounded-full bg-white px-2.5 py-1 ring-1 ring-[var(--border)]">
                   {item.color ?? "Warna -"}
                 </span>
               </div>
+            </div>
+          </div>
+
+
+          <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <label
+                  htmlFor="pos-transaction-weight"
+                  className="flex items-center gap-2 text-sm font-semibold text-neutral-900"
+                >
+                  <Scale className="size-4 text-[var(--accent)]" />
+                  Berat Transaksi
+                </label>
+                <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+                  Timbang ulang item sebelum dijual bila berat tersimpan perlu dikoreksi.
+                </p>
+              </div>
+              <div className="text-right text-[11px] text-[var(--muted)]">
+                <p>Berat tersimpan</p>
+                <p className="mt-0.5 font-semibold text-neutral-800">
+                  {item.weightGram ? `${item.weightGram} gr` : "Belum tersedia"}
+                </p>
+              </div>
+            </div>
+
+            <div className="relative mt-3">
+              <input
+                id="pos-transaction-weight"
+                value={transactionWeightInput}
+                onChange={(event) => {
+                  setTransactionWeightInput(formatPosWeightInput(event.target.value));
+                  setFeedback(null);
+                }}
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="Contoh: 2,150"
+                className="h-12 w-full rounded-xl border border-[var(--border)] bg-white px-3 pr-12 text-base font-semibold text-neutral-950 outline-none transition placeholder:font-normal placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+              />
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-[var(--muted)]">
+                gr
+              </span>
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] leading-4">
+              {transactionWeightGram ? (
+                weightSource === "stored" ? (
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">
+                    Mengikuti berat tersimpan
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">
+                    Ditimbang ulang
+                  </span>
+                )
+              ) : null}
+              {weightSource === "reweighed" && item.weightGram && transactionWeightGram ? (
+                <span className="text-[var(--muted)]">
+                  Sebelumnya {item.weightGram} gr
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -289,7 +364,7 @@ export function PosItemPricingDialog({
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
               {!item.purityPercent
                 ? "Kadar Persen item belum diisi. Lengkapi data produk sebelum transaksi."
-                : "Berat item belum diisi. Lengkapi data produk sebelum transaksi."}
+                : "Isi Berat Transaksi hasil timbang sebelum melanjutkan."}
             </div>
           ) : null}
 
@@ -369,7 +444,7 @@ export function PosItemPricingDialog({
             disabled={!hasValidTransactionPrice || projectedFinalAmount <= 0}
             className="flex h-11 items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent)]/90 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
           >
-            {existingItem ? "Simpan Harga" : "Tambahkan ke Keranjang"}
+            {existingItem ? "Simpan Item" : "Tambahkan ke Keranjang"}
           </button>
         </footer>
       </section>

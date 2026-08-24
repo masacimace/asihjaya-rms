@@ -69,6 +69,8 @@ export function usePosCatalog({
   const requestVersionRef = useRef(0);
   const isFirstFilterEffectRef = useRef(true);
   const isLoadingMoreRef = useRef(false);
+  const loadPageRef = useRef(loadPage);
+  loadPageRef.current = loadPage;
 
   useEffect(() => {
     if (activeCategoryId !== "all" || debouncedSearchQuery) {
@@ -116,7 +118,7 @@ export function usePosCatalog({
     isLoadingMoreRef.current = false;
     setIsLoadingMore(false);
 
-    void loadPage({
+    void loadPageRef.current({
       cursor: null,
       searchQuery: debouncedSearchQuery || null,
       categoryId,
@@ -149,7 +151,7 @@ export function usePosCatalog({
           setIsRefreshing(false);
         }
       });
-  }, [activeCategoryId, debouncedSearchQuery, loadPage]);
+  }, [activeCategoryId, debouncedSearchQuery]);
 
   const loadMore = useCallback(() => {
     if (
@@ -168,7 +170,7 @@ export function usePosCatalog({
     setIsLoadingMore(true);
     setCatalogError(null);
 
-    void loadPage({
+    void loadPageRef.current({
       cursor: nextCursor,
       searchQuery: debouncedSearchQuery || null,
       categoryId,
@@ -209,7 +211,6 @@ export function usePosCatalog({
     debouncedSearchQuery,
     hasMore,
     isRefreshing,
-    loadPage,
     nextCursor,
   ]);
 

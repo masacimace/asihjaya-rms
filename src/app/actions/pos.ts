@@ -1141,6 +1141,8 @@ export async function refreshPosCartPricingAction(
         changed: resolved.some((item) => item.rateChanged),
         items: resolved.map((item) => ({
           itemId: item.itemId,
+          transactionWeightGram: item.transactionWeightGram,
+          weightSource: item.weightSource,
           priceSource: item.priceSource,
           activePricePerGram: item.activePricePerGram,
           pricePerGram: item.pricePerGram,
@@ -1198,6 +1200,7 @@ type HeldCartActionItemRow = {
   lineNumber?: number;
   listPriceAmount?: string;
   activePricePerGram?: string | null;
+  transactionWeightGram?: string;
   priceSource?: PosPriceSource;
   pricePerGram?: string;
   basePriceAmount?: string;
@@ -1230,6 +1233,7 @@ function mapHeldCartActionItem(row: HeldCartActionItemRow): PosHeldCartItem {
     deductionPerGram: row.deductionPerGram,
     sellingAmount: row.sellingAmount,
     activePricePerGram: row.activePricePerGram ?? null,
+    transactionWeightGram: row.transactionWeightGram ?? row.weightGram ?? undefined,
     priceSource: row.priceSource ?? "global",
     pricePerGram: row.pricePerGram ?? row.activePricePerGram ?? "0",
     basePriceAmount: row.basePriceAmount ?? row.listPriceAmount ?? finalPriceAmount,
@@ -1605,7 +1609,9 @@ export async function holdPosCartAction(
               categoryId: item!.categoryId,
               categoryCode: item!.categoryCode,
               categoryName: item!.categoryName,
-              weightGram: item!.weightGram,
+              storedWeightGram: pricing.storedWeightGram,
+              weightGram: pricing.transactionWeightGram,
+              weightSource: pricing.weightSource,
               purityPercent: item!.purityPercent,
               exchangePurityPercent: item!.exchangePurityPercent,
               size: item!.size,
@@ -1646,6 +1652,9 @@ export async function holdPosCartAction(
             registerId: register.id,
             shiftId: activeShift.id,
             heldByUserId: auth.user.id,
+            storedWeightGram: pricingMap.get(item!.id)?.storedWeightGram ?? null,
+            transactionWeightGram: pricingMap.get(item!.id)?.transactionWeightGram ?? null,
+            weightSource: pricingMap.get(item!.id)?.weightSource ?? null,
             priceSource: pricingMap.get(item!.id)?.priceSource ?? null,
             globalPricePerGram: pricingMap.get(item!.id)?.activePricePerGram ?? null,
             pricePerGram: pricingMap.get(item!.id)?.pricePerGram ?? null,
@@ -1710,6 +1719,7 @@ export async function holdPosCartAction(
             lineNumber: index + 1,
             listPriceAmount: String(pricing.basePriceAmount),
             activePricePerGram: pricing.activePricePerGram,
+            transactionWeightGram: pricing.transactionWeightGram,
             priceSource: pricing.priceSource,
             pricePerGram: pricing.pricePerGram,
             basePriceAmount: String(pricing.basePriceAmount),
@@ -2079,6 +2089,8 @@ export async function resumePosHeldCartAction({
 
       const pricingInputs = itemRows.map((item) => ({
         itemId: item.id,
+        transactionWeightGram:
+          readSnapshotText(item.snapshot, "weightGram") ?? item.weightGram ?? undefined,
         priceSource: readSnapshotPriceSource(item.snapshot),
         pricePerGram: readSnapshotText(item.snapshot, "pricePerGram") ?? "0",
         discountAmount: parseDbAmount(item.discountAmount),
@@ -2179,6 +2191,7 @@ export async function resumePosHeldCartAction({
           return mapHeldCartActionItem({
             ...item,
             activePricePerGram: pricing.activePricePerGram,
+            transactionWeightGram: pricing.transactionWeightGram,
             priceSource: pricing.priceSource,
             pricePerGram: pricing.pricePerGram,
             basePriceAmount: String(pricing.basePriceAmount),
@@ -2898,6 +2911,23 @@ export async function completePosCheckoutAction(
           },
         ];
       });
+      const weightCorrections = orderedItems.flatMap((item) => {
+        const pricing = pricingMap.get(item!.id);
+
+        if (!pricing || pricing.weightSource !== "reweighed") {
+          return [];
+        }
+
+        return [
+          {
+            itemId: item!.id,
+            sku: item!.sku,
+            beforeWeightGram: pricing.storedWeightGram,
+            afterWeightGram: pricing.transactionWeightGram,
+          },
+        ];
+      });
+
       const subtotalAmount = resolvedPricing.reduce(
         (total, pricing) => total + pricing.basePriceAmount,
         0,
@@ -3018,7 +3048,9 @@ export async function completePosCheckoutAction(
               categoryId: item!.categoryId,
               categoryCode: item!.categoryCode,
               categoryName: item!.categoryName,
-              weightGram: item!.weightGram,
+              storedWeightGram: pricing.storedWeightGram,
+              weightGram: pricing.transactionWeightGram,
+              weightSource: pricing.weightSource,
               purityPercent: item!.purityPercent,
               exchangePurityPercent: item!.exchangePurityPercent,
               size: item!.size,
@@ -3056,6 +3088,49 @@ export async function completePosCheckoutAction(
         );
       }
 
+      for (const correction of weightCorrections) {
+        await transaction
+          .update(productItems)
+          .set({
+            weightGram: correction.afterWeightGram,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(productItems.organizationId, auth.organization.id),
+              eq(productItems.id, correction.itemId),
+            ),
+          );
+      }
+
+      if (weightCorrections.length > 0) {
+        await transaction.insert(auditLogs).values(
+          weightCorrections.map((correction) => ({
+            organizationId: auth.organization.id,
+            outletId: primaryOutlet.id,
+            actorUserId: auth.user.id,
+            action: "product_item.weight_reweighed_at_sale",
+            entityType: "product_item",
+            entityId: correction.itemId,
+            beforeData: {
+              weightGram: correction.beforeWeightGram,
+            },
+            afterData: {
+              weightGram: correction.afterWeightGram,
+            },
+            ipAddress: requestMetadata.ipAddress,
+            userAgent: requestMetadata.userAgent,
+            metadata: {
+              source: "pos.checkout",
+              saleId: sale.id,
+              invoiceNumber,
+              sku: correction.sku,
+            },
+            createdAt: now,
+          })),
+        );
+      }
+
       await transaction.insert(inventoryMovements).values(
         orderedItems.map((item) => ({
           organizationId: auth.organization.id,
@@ -3071,6 +3146,9 @@ export async function completePosCheckoutAction(
             registerId: register.id,
             shiftId: activeShift.id,
             cashierId: auth.user.id,
+            storedWeightGram: pricingMap.get(item!.id)?.storedWeightGram ?? null,
+            transactionWeightGram: pricingMap.get(item!.id)?.transactionWeightGram ?? null,
+            weightSource: pricingMap.get(item!.id)?.weightSource ?? null,
             priceSource: pricingMap.get(item!.id)?.priceSource ?? null,
             globalPricePerGram: pricingMap.get(item!.id)?.activePricePerGram ?? null,
             pricePerGram: pricingMap.get(item!.id)?.pricePerGram ?? null,
@@ -3249,6 +3327,8 @@ export async function completePosCheckoutAction(
           itemCount: itemIds.length,
           manualPriceOverrideCount: pricingOverrides.length,
           pricingOverrides,
+          reweighedItemCount: weightCorrections.length,
+          weightCorrections,
           subtotalAmount: String(subtotalAmount),
           discountAmount: String(approvedDiscountAmount),
           discountReason: null,
@@ -3272,6 +3352,7 @@ export async function completePosCheckoutAction(
           source: "pos.checkout",
           idempotencyKey,
           manualPriceOverrideCount: pricingOverrides.length,
+          reweighedItemCount: weightCorrections.length,
           customerId: selectedCustomer?.id ?? null,
           discountApprovalId: null,
           customerDepositUsedAmount: String(customerDepositUsedAmount),
@@ -3280,8 +3361,8 @@ export async function completePosCheckoutAction(
         createdAt: now,
       });
 
-      const totalWeightGram = orderedItems.reduce((total, item) => {
-        const weight = Number(item?.weightGram ?? 0);
+      const totalWeightGram = resolvedPricing.reduce((total, pricing) => {
+        const weight = Number(pricing.transactionWeightGram);
         return Number.isFinite(weight) ? total + weight : total;
       }, 0);
 

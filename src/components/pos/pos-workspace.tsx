@@ -427,7 +427,7 @@ export function PosWorkspace({
     resetPaymentFlow();
     setCartFeedback(
       isEditing
-        ? `Harga transaksi ${item.sku} diperbarui.`
+        ? `Item transaksi ${item.sku} diperbarui.`
         : `${item.sku} ditambahkan ke keranjang.`,
     );
   }
@@ -469,6 +469,7 @@ export function PosWorkspace({
           ? {
               ...item,
               activePricePerGram: refreshed.activePricePerGram,
+              transactionWeightGram: refreshed.transactionWeightGram,
               priceSource: refreshed.priceSource,
               pricePerGram: refreshed.pricePerGram,
               basePriceAmount: refreshed.basePriceAmount,

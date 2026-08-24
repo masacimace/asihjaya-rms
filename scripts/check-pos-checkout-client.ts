@@ -26,6 +26,7 @@ const item: PosCartItem = {
   categoryId: "category-1",
   categoryName: "Cincin",
   weightGram: "1",
+  transactionWeightGram: "1.000",
   purityPercent: "30",
   exchangePurityPercent: "35",
   size: null,
@@ -81,6 +82,7 @@ assert.match(initialPayload.idempotencyKey, /^pos_/);
 assert.deepEqual(initialPayload.itemIds, ["item-1"]);
 assert.deepEqual(initialPayload.itemPricing, [{
   itemId: "item-1",
+  transactionWeightGram: "1.000",
   priceSource: "global",
   pricePerGram: "1010000",
   discountAmount: 5000,

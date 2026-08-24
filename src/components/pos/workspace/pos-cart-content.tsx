@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { PosItemImage } from "@/components/pos/workspace/pos-item-image";
-import { getPosItemDetail } from "@/features/pos/catalog-state";
+import { formatPosItemDecimal } from "@/features/pos/catalog-state";
 import type {
   PosCartItem,
   PosCustomerOption,
@@ -22,6 +22,7 @@ import {
   getCustomerContactLabel,
 } from "@/features/pos/customer-state";
 import { formatCurrency } from "@/features/pos/payment-draft";
+import { getPosWeightSource } from "@/features/pos/transaction-pricing";
 import { cn } from "@/lib/utils";
 
 export type PosCartContentProps = {
@@ -132,9 +133,26 @@ export function PosCartContent({
                     </button>
                   </div>
 
-                  <p className="mt-2 text-[11px] text-[var(--muted)]">
-                    {getPosItemDetail(item)}
-                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--muted)]">
+                    <span>
+                      {formatPosItemDecimal(
+                        item.transactionWeightGram ?? item.weightGram,
+                        "gr",
+                      ) ?? "Berat -"}
+                      {item.purityPercent
+                        ? ` · Kadar ${formatPosItemDecimal(item.purityPercent, "%")}`
+                        : ""}
+                    </span>
+                    {getPosWeightSource({
+                      storedWeightGram: item.weightGram,
+                      transactionWeightGram:
+                        item.transactionWeightGram ?? item.weightGram,
+                    }) === "reweighed" ? (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">
+                        Ditimbang ulang
+                      </span>
+                    ) : null}
+                  </div>
 
                   <div className="mt-2 flex items-end justify-between gap-3">
                     <div>
@@ -160,7 +178,7 @@ export function PosCartContent({
                       className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-2.5 text-[11px] font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
                     >
                       <PencilLine className="size-3.5" />
-                      Edit Harga
+                      Edit Item
                     </button>
                   </div>
                 </div>

@@ -53,8 +53,10 @@ export type PosAvailableItem = {
 };
 
 export type PosPriceSource = "global" | "manual_override";
+export type PosWeightSource = "stored" | "reweighed";
 
 export type PosCartItem = PosAvailableItem & {
+  transactionWeightGram?: string;
   priceSource: PosPriceSource;
   pricePerGram: string;
   basePriceAmount: string;
@@ -66,6 +68,7 @@ export type PosCartItem = PosAvailableItem & {
 
 export type PosCartPricingInput = {
   itemId: string;
+  transactionWeightGram?: string;
   priceSource?: PosPriceSource;
   pricePerGram: string;
   discountAmount: number;
@@ -80,6 +83,8 @@ export type PosCartPricingRefreshResult =
       changed: boolean;
       items: Array<{
         itemId: string;
+        transactionWeightGram: string;
+        weightSource: PosWeightSource;
         priceSource: PosPriceSource;
         activePricePerGram: string | null;
         pricePerGram: string;
