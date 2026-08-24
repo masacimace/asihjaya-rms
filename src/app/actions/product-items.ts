@@ -28,7 +28,7 @@ import {
   normalizePurityKey,
 } from "@/features/pricing/metal-price-rates";
 import { getClientIp } from "@/lib/http/client-ip";
-import { requireAnyPermission } from "@/lib/auth/session";
+import { requireAnyPermission, requirePermission } from "@/lib/auth/session";
 import { deleteImageFile, storeImageFile } from "@/lib/storage/image-storage";
 import { validateImageFile } from "@/lib/storage/image-validation";
 
@@ -240,10 +240,16 @@ export async function createProductItemAction(
   _previousState: ProductItemActionState,
   formData: FormData,
 ): Promise<ProductItemActionState> {
-  const auth = await requireAnyPermission([
-    "inventory.receive",
-    "inventory.manage",
-  ]);
+  const creationSource =
+    readText(formData, "creationSource") === "pos" ? "pos" : "admin";
+  const auth =
+    creationSource === "pos"
+      ? await requirePermission("sales.create")
+      : await requireAnyPermission(["inventory.receive", "inventory.manage"]);
+
+  if (creationSource === "pos" && !auth.permissionCodes.includes("pos.access")) {
+    redirect("/akses-ditolak");
+  }
 
   const productId = readText(formData, "productMasterId");
   if (!isUuid(productId)) {
@@ -268,14 +274,19 @@ export async function createProductItemAction(
 
   const submitIntent = readText(formData, "submitIntent");
   const targetAvailability =
-    submitIntent === "draft" ? "draft" : "available";
+    creationSource === "pos" || submitIntent !== "draft" ? "available" : "draft";
   const displayName = readText(formData, "displayName");
   const weightRaw = readText(formData, "weightGram");
   const purityPercentRaw = readText(formData, "purityPercent");
   const exchangePurityRaw = readText(formData, "exchangePurityPercent");
   const itemColor = readText(formData, "color");
   const conditionRaw = readText(formData, "condition");
-  const outletId = readText(formData, "currentOutletId");
+  const primaryOutlet =
+    auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0] ?? null;
+  const outletId =
+    creationSource === "pos"
+      ? primaryOutlet?.id ?? ""
+      : readText(formData, "currentOutletId");
   const internalNotes = readText(formData, "internalNotes");
   const rawDeductionPerGram = readText(formData, "deductionPerGram");
   const image = readImage(formData);
@@ -520,7 +531,10 @@ export async function createProductItemAction(
           deductionPerGram: deductionPerGram.value ?? "0",
           availability: targetAvailability,
           imageKey,
-          source: "simple_product_create_v2",
+          source:
+            creationSource === "pos"
+              ? "pos_simple_product_create_v1"
+              : "simple_product_create_v2",
         },
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
@@ -545,6 +559,12 @@ export async function createProductItemAction(
   revalidatePath(`/admin/produk/${productId}`);
   revalidatePath("/admin/inventaris");
   revalidatePath(`/admin/inventaris/item/${itemId}`);
+  revalidatePath("/pos");
+  revalidatePath("/pos/produk/tambah");
+
+  if (creationSource === "pos") {
+    redirect(`/pos?createdProductItem=${itemId}`);
+  }
 
   redirect(`/admin/inventaris/item/${itemId}?created=1`);
 }

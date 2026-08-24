@@ -20,6 +20,7 @@ import {
   type PosAvailableItem,
   type PosCartItem,
   type PosCategoryOption,
+  type PosCheckoutSaleResult,
   type PosCustomerOption,
   type PosInitialData,
   type PosManualPaymentProfile,
@@ -48,6 +49,7 @@ import { usePosCart } from "@/features/pos/use-pos-cart";
 import { usePosCatalog } from "@/features/pos/use-pos-catalog";
 import { usePosCartSession } from "@/features/pos/use-pos-cart-session";
 import { usePosCheckout } from "@/features/pos/use-pos-checkout";
+import { usePosCheckoutSound } from "@/features/pos/use-pos-checkout-sound";
 import { usePosCustomer } from "@/features/pos/use-pos-customer";
 import { usePosHeldCart } from "@/features/pos/use-pos-held-cart";
 import { usePosPayment } from "@/features/pos/use-pos-payment";
@@ -80,6 +82,7 @@ export function PosWorkspace({
   canReopenShifts,
 }: PosWorkspaceProps) {
   const router = useRouter();
+  const playCheckoutSuccessSound = usePosCheckoutSound();
   const [activeCategoryId, setActiveCategoryId] = useState("all");
   const [isCategoryPickerOpen, setIsCategoryPickerOpen] = useState(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
@@ -203,7 +206,8 @@ export function PosWorkspace({
     [restoreCheckoutPaymentState, setIsMobileCartOpen, setPanelMode],
   );
 
-  const handleCheckoutSuccess = useCallback(() => {
+  const handleCheckoutSuccess = useCallback((sale: PosCheckoutSaleResult) => {
+    playCheckoutSuccessSound(sale.id);
     setPaymentFeedback(null);
     setCartFeedback(null);
     resetCustomerDepositDraft();
@@ -215,6 +219,7 @@ export function PosWorkspace({
     router.refresh();
   }, [
     clearCustomerState,
+    playCheckoutSuccessSound,
     resetCustomerDepositDraft,
     resetPaymentState,
     router,

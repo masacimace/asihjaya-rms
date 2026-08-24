@@ -315,7 +315,15 @@ export async function quickCreateProductMasterAction(
   _previousState: QuickProductMasterActionState,
   formData: FormData,
 ): Promise<QuickProductMasterActionState> {
-  const auth = await requirePermission("products.manage");
+  const creationSource =
+    readText(formData, "creationSource") === "pos" ? "pos" : "admin";
+  const auth = await requirePermission(
+    creationSource === "pos" ? "sales.create" : "products.manage",
+  );
+
+  if (creationSource === "pos" && !auth.permissionCodes.includes("pos.access")) {
+    redirect("/akses-ditolak");
+  }
 
   const code = readText(formData, "code").toUpperCase();
   const name = readText(formData, "name");
@@ -394,7 +402,10 @@ export async function quickCreateProductMasterAction(
           categoryCode: category.code,
           categoryName: category.name,
           status: "active",
-          source: "product_item_form",
+          source:
+            creationSource === "pos"
+              ? "pos_product_item_form"
+              : "product_item_form",
         },
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
@@ -410,6 +421,7 @@ export async function quickCreateProductMasterAction(
 
     revalidatePath("/admin/produk");
     revalidatePath("/admin/produk/tambah");
+    revalidatePath("/pos/produk/tambah");
 
     return {
       status: "success",

@@ -195,13 +195,14 @@ function formatItemSpec(value: string | null, suffix: string) {
 }
 
 function getPaymentMethodSummary(transaction: PosTransactionListItem) {
-  if (transaction.payments.length === 0) {
-    return "Belum ada payment";
-  }
+  const methods = [
+    ...(transaction.customerDepositUsedAmount > 0 ? ["Dana Titip"] : []),
+    ...transaction.payments.map(
+      (payment) => paymentMethodLabels[payment.method] ?? payment.method,
+    ),
+  ];
 
-  return transaction.payments
-    .map((payment) => paymentMethodLabels[payment.method] ?? payment.method)
-    .join(" + ");
+  return methods.length > 0 ? methods.join(" + ") : "Belum ada payment";
 }
 
 function getPaymentStatusLabel(
@@ -598,52 +599,78 @@ function TransactionDetailPanel({
 
           <DetailSection title="Payment">
             <div className="space-y-3">
-              {detail.payments.length === 0 ? (
+              {detail.payments.length === 0 &&
+              detail.customerDepositUsedAmount <= 0 ? (
                 <p className="text-sm text-[var(--muted)]">
                   Belum ada payment.
                 </p>
               ) : (
-                detail.payments.map((payment) => (
-                  <article
-                    key={payment.id}
-                    className="rounded-2xl border border-[var(--border)] p-3"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="font-semibold text-neutral-950">
-                          {paymentMethodLabels[payment.method] ??
-                            payment.method}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {payment.provider}
-                          {payment.providerReference
-                            ? ` · Ref ${payment.providerReference}`
-                            : ""}
-                        </p>
-                        {payment.note ? (
-                          <p className="mt-2 rounded-xl bg-neutral-50 px-3 py-2 text-xs text-neutral-700">
-                            {payment.note}
+                <>
+                  {detail.customerDepositUsedAmount > 0 ? (
+                    <article className="rounded-2xl border border-amber-200 bg-amber-50/40 p-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-neutral-950">
+                            Dana Titip
                           </p>
-                        ) : null}
-                      </div>
-                      <div className="text-left sm:text-right">
-                        <p className="text-sm font-semibold text-neutral-950">
-                          {formatMoney(payment.amount)}
-                        </p>
-                        {payment.receivedAmount ? (
                           <p className="mt-1 text-xs text-[var(--muted)]">
-                            Diterima {formatMoney(payment.receivedAmount)}
+                            Saldo Dana Titip customer digunakan untuk transaksi ini.
                           </p>
-                        ) : null}
-                        {payment.changeAmount ? (
-                          <p className="mt-1 text-xs text-emerald-700">
-                            Kembalian {formatMoney(payment.changeAmount)}
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <p className="text-sm font-semibold text-neutral-950">
+                            {formatMoney(detail.customerDepositUsedAmount)}
                           </p>
-                        ) : null}
+                          <p className="mt-1 text-xs font-medium text-amber-700">
+                            Dari saldo customer
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))
+                    </article>
+                  ) : null}
+
+                  {detail.payments.map((payment) => (
+                    <article
+                      key={payment.id}
+                      className="rounded-2xl border border-[var(--border)] p-3"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-neutral-950">
+                            {paymentMethodLabels[payment.method] ??
+                              payment.method}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">
+                            {payment.provider}
+                            {payment.providerReference
+                              ? ` · Ref ${payment.providerReference}`
+                              : ""}
+                          </p>
+                          {payment.note ? (
+                            <p className="mt-2 rounded-xl bg-neutral-50 px-3 py-2 text-xs text-neutral-700">
+                              {payment.note}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <p className="text-sm font-semibold text-neutral-950">
+                            {formatMoney(payment.amount)}
+                          </p>
+                          {payment.receivedAmount ? (
+                            <p className="mt-1 text-xs text-[var(--muted)]">
+                              Diterima {formatMoney(payment.receivedAmount)}
+                            </p>
+                          ) : null}
+                          {payment.changeAmount ? (
+                            <p className="mt-1 text-xs text-emerald-700">
+                              Kembalian {formatMoney(payment.changeAmount)}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </>
               )}
             </div>
           </DetailSection>

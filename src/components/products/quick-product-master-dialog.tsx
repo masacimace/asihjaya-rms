@@ -25,12 +25,14 @@ export function QuickProductMasterDialog({
   categoryLabel,
   onClose,
   onCreated,
+  creationSource = "admin",
 }: {
   open: boolean;
   categoryId: string;
   categoryLabel: string;
   onClose: () => void;
   onCreated: (master: ProductMasterOption) => void;
+  creationSource?: "admin" | "pos";
 }) {
   const [state, formAction] = useActionState(
     quickCreateProductMasterAction,
@@ -85,6 +87,7 @@ export function QuickProductMasterDialog({
 
         <form action={formAction} className="space-y-4 p-5">
           <input type="hidden" name="categoryId" value={categoryId} />
+          <input type="hidden" name="creationSource" value={creationSource} />
 
           {state.status === "error" && state.message ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

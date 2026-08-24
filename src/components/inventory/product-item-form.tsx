@@ -100,6 +100,7 @@ export function ProductItemForm({
   priceRates,
   initialProductMasterId,
   canCreateProductMaster,
+  creationSource = "admin",
 }: {
   categories: ProductMasterCategoryOption[];
   productMasters: ProductMasterOption[];
@@ -107,6 +108,7 @@ export function ProductItemForm({
   priceRates: ProductItemPriceRateOption[];
   initialProductMasterId?: string;
   canCreateProductMaster: boolean;
+  creationSource?: "admin" | "pos";
 }) {
   const initialMaster = initialProductMasterId
     ? initialProductMasters.find((master) => master.id === initialProductMasterId)
@@ -162,6 +164,7 @@ export function ProductItemForm({
   return (
     <>
       <form action={formAction} className="space-y-5">
+        <input type="hidden" name="creationSource" value={creationSource} />
         <ActionMessage state={state} />
 
         <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
@@ -452,6 +455,7 @@ export function ProductItemForm({
         categoryLabel={selectedCategory?.label ?? "Kategori belum dipilih"}
         onClose={() => setQuickCreateOpen(false)}
         onCreated={handleQuickCreated}
+        creationSource={creationSource}
       />
     </>
   );

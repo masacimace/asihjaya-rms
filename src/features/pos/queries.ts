@@ -2645,7 +2645,7 @@ export async function getPosTransactionListData({
 
   const saleIds = saleRows.map((sale) => sale.id);
 
-  const [paymentRows, itemRows] =
+  const [paymentRows, itemRows, customerDepositUsedRows] =
     saleIds.length > 0
       ? await Promise.all([
           db
@@ -2685,11 +2685,27 @@ export async function getPosTransactionListData({
             )
             .where(inArray(saleItems.saleId, saleIds))
             .orderBy(asc(saleItems.lineNumber)),
+
+          db
+            .select({
+              saleId: customerDepositLedger.saleId,
+              amount: customerDepositLedger.amount,
+            })
+            .from(customerDepositLedger)
+            .where(
+              and(
+                inArray(customerDepositLedger.saleId, saleIds),
+                eq(customerDepositLedger.entryType, "deposit_used"),
+                eq(customerDepositLedger.direction, "debit"),
+              ),
+            )
+            .orderBy(asc(customerDepositLedger.occurredAt)),
         ])
-      : [[], []];
+      : [[], [], []];
 
   const paymentsBySaleId = new Map<string, typeof paymentRows>();
   const itemsBySaleId = new Map<string, typeof itemRows>();
+  const customerDepositUsedBySaleId = new Map<string, number>();
 
   for (const payment of paymentRows) {
     const currentPayments = paymentsBySaleId.get(payment.saleId) ?? [];
@@ -2703,18 +2719,33 @@ export async function getPosTransactionListData({
     itemsBySaleId.set(item.saleId, currentItems);
   }
 
+  for (const entry of customerDepositUsedRows) {
+    if (!entry.saleId) {
+      continue;
+    }
+
+    customerDepositUsedBySaleId.set(
+      entry.saleId,
+      (customerDepositUsedBySaleId.get(entry.saleId) ?? 0) +
+        parseTransactionAmount(entry.amount),
+    );
+  }
+
   const transactions = saleRows.map(
     (sale): PosTransactionListData["transactions"][number] => {
       const transactionPayments = paymentsBySaleId.get(sale.id) ?? [];
       const transactionItems = itemsBySaleId.get(sale.id) ?? [];
       const totalAmount = parseTransactionAmount(sale.totalAmount);
-      const paidAmount = transactionPayments.reduce(
+      const externalPaidAmount = transactionPayments.reduce(
         (total, payment) =>
           payment.status === "paid"
             ? total + parseTransactionAmount(payment.amount)
             : total,
         0,
       );
+      const customerDepositUsedAmount =
+        customerDepositUsedBySaleId.get(sale.id) ?? 0;
+      const paidAmount = externalPaidAmount + customerDepositUsedAmount;
 
       return {
         id: sale.id,
@@ -2725,12 +2756,8 @@ export async function getPosTransactionListData({
         additionalFeeAmount: sale.additionalFeeAmount,
         totalAmount: sale.totalAmount,
         paidAmount,
-        paymentStatus:
-          paidAmount >= totalAmount
-            ? "paid"
-            : paidAmount > 0
-              ? "partial"
-              : "pending",
+        customerDepositUsedAmount,
+        paymentStatus: getPaymentStatusFromAmounts(totalAmount, paidAmount),
         completedAt: sale.completedAt,
         createdAt: sale.createdAt,
         customerCode: sale.customerCode,
@@ -2877,7 +2904,7 @@ export async function getPosTransactionDetailData({
     return null;
   }
 
-  const [paymentRows, itemRows, hardwareJobRows] = await Promise.all([
+  const [paymentRows, itemRows, hardwareJobRows, customerDepositUsedRows] = await Promise.all([
     db
       .select({
         id: payments.id,
@@ -2954,16 +2981,35 @@ export async function getPosTransactionDetailData({
       )
       .orderBy(desc(hardwareJobs.createdAt))
       .limit(8),
+
+    db
+      .select({
+        amount: customerDepositLedger.amount,
+      })
+      .from(customerDepositLedger)
+      .where(
+        and(
+          eq(customerDepositLedger.saleId, sale.id),
+          eq(customerDepositLedger.entryType, "deposit_used"),
+          eq(customerDepositLedger.direction, "debit"),
+        ),
+      )
+      .orderBy(asc(customerDepositLedger.occurredAt)),
   ]);
 
   const totalAmount = parseTransactionAmount(sale.totalAmount);
-  const paidAmount = paymentRows.reduce(
+  const externalPaidAmount = paymentRows.reduce(
     (total, payment) =>
       payment.status === "paid"
         ? total + parseTransactionAmount(payment.amount)
         : total,
     0,
   );
+  const customerDepositUsedAmount = customerDepositUsedRows.reduce(
+    (total, entry) => total + parseTransactionAmount(entry.amount),
+    0,
+  );
+  const paidAmount = externalPaidAmount + customerDepositUsedAmount;
 
   return {
     id: sale.id,
@@ -2975,12 +3021,8 @@ export async function getPosTransactionDetailData({
     additionalFeeAmount: sale.additionalFeeAmount,
     totalAmount: sale.totalAmount,
     paidAmount,
-    paymentStatus:
-      paidAmount >= totalAmount
-        ? "paid"
-        : paidAmount > 0
-          ? "partial"
-          : "pending",
+    customerDepositUsedAmount,
+    paymentStatus: getPaymentStatusFromAmounts(totalAmount, paidAmount),
     completedAt: sale.completedAt,
     createdAt: sale.createdAt,
     notes: sale.notes,

@@ -6,6 +6,7 @@ import {
   ListChevronsDownUp,
   Clock3,
   LayoutDashboard,
+  PackagePlus,
   Pause,
   Printer,
   ReceiptText,
@@ -47,6 +48,7 @@ type PosShellUser = {
   canAccessAdmin: boolean;
   outletName: string;
   canAccessMigration: boolean;
+  canCreateProducts: boolean;
 };
 
 type PosShellStatus = {
@@ -104,7 +106,13 @@ const fallbackStatus: PosShellStatus = {
 const navigation = [
   { label: "Beranda", href: "/pos", icon: ShoppingBag },
   {
-    label: "Riwayat Transaksi",
+    label: "Tambah Produk",
+    href: "/pos/produk/tambah",
+    icon: PackagePlus,
+    requiresProductCreate: true,
+  },
+  {
+    label: "Daftar Transaksi",
     href: "/pos/transaksi",
     icon: ReceiptText,
     children: [
@@ -112,7 +120,7 @@ const navigation = [
       { label: "Transaksi Ditahan", href: "/pos/ditahan", icon: Pause },
     ],
   },
-  { label: "Daftar Pelanggan", href: "/pos/pelanggan", icon: UsersRound },
+  { label: "Pelanggan", href: "/pos/pelanggan", icon: UsersRound },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
 ] as const;
 
@@ -123,6 +131,12 @@ const mobilePrimaryNavigation = [
 ] as const;
 
 const mobileMoreNavigation = [
+  {
+    label: "Tambah Produk",
+    href: "/pos/produk/tambah",
+    icon: PackagePlus,
+    requiresProductCreate: true,
+  },
   { label: "Transaksi Tertahan", href: "/pos/ditahan", icon: Pause },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
 ] as const;
@@ -142,6 +156,7 @@ type SidebarContentProps = {
   pathname: string;
   canAccessAdmin: boolean;
   canAccessMigration: boolean;
+  canCreateProducts: boolean;
   onNavigate?: () => void;
 };
 
@@ -260,6 +275,7 @@ function SidebarContent({
   pathname,
   canAccessAdmin,
   canAccessMigration,
+  canCreateProducts,
   onNavigate,
 }: SidebarContentProps) {
   const [openNavigationGroups, setOpenNavigationGroups] = useState<
@@ -305,12 +321,17 @@ function SidebarContent({
       </Link>
       <nav className="space-y-1">
         {navigation
-          .filter(
-            (item) =>
-              !("access" in item) ||
-              item.access !== "migration" ||
-              canAccessMigration,
-          )
+          .filter((item) => {
+            if ("requiresProductCreate" in item && item.requiresProductCreate) {
+              return canCreateProducts;
+            }
+
+            if ("access" in item && item.access === "migration") {
+              return canAccessMigration;
+            }
+
+            return true;
+          })
           .map((item) => {
             const Icon = item.icon;
             const hasChildren = "children" in item;
@@ -589,6 +610,7 @@ export function PosShell({
           pathname={pathname}
           canAccessAdmin={user.canAccessAdmin}
           canAccessMigration={user.canAccessMigration}
+          canCreateProducts={user.canCreateProducts}
         />
       </aside>
 
@@ -618,6 +640,7 @@ export function PosShell({
               pathname={pathname}
               canAccessAdmin={user.canAccessAdmin}
               canAccessMigration={user.canAccessMigration}
+              canCreateProducts={user.canCreateProducts}
               onNavigate={() => setIsNavigationOpen(false)}
             />
           </aside>
@@ -657,12 +680,20 @@ export function PosShell({
 
             <div className="mt-5 grid gap-3">
               {mobileMoreNavigation
-                .filter(
-                  (item) =>
-                    !("access" in item) ||
-                    item.access !== "migration" ||
-                    user.canAccessMigration,
-                )
+                .filter((item) => {
+                  if (
+                    "requiresProductCreate" in item &&
+                    item.requiresProductCreate
+                  ) {
+                    return user.canCreateProducts;
+                  }
+
+                  if ("access" in item && item.access === "migration") {
+                    return user.canAccessMigration;
+                  }
+
+                  return true;
+                })
                 .map(({ label, href, icon: Icon }) => {
                   const active = isNavigationActive(pathname, href);
 

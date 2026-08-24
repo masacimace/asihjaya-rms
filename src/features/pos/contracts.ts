@@ -426,6 +426,7 @@ export type PosTransactionListItem = {
   additionalFeeAmount: string;
   totalAmount: string;
   paidAmount: number;
+  customerDepositUsedAmount: number;
   paymentStatus: "paid" | "partial" | "pending";
   completedAt: Date | null;
   createdAt: Date;
@@ -509,6 +510,7 @@ export type PosTransactionDetailData = {
   additionalFeeAmount: string;
   totalAmount: string;
   paidAmount: number;
+  customerDepositUsedAmount: number;
   paymentStatus: "paid" | "partial" | "pending";
   completedAt: Date | null;
   createdAt: Date;

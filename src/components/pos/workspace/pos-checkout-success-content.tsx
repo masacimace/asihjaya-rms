@@ -57,7 +57,7 @@ export function PosCheckoutSuccessContent({
                 Nota/certificate masuk antrean print
               </p>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Dokumen A4 landscape sudah dibuat dari data transaksi real
+                Dokumen sudah dibuat dari data transaksi real
                 {receiptView.hasPrintJob
                   ? " dan dikirim ke Hardware Hub untuk silent print."
                   : ". PDF tetap bisa dibuka manual dari tombol di bawah."}
@@ -95,22 +95,14 @@ export function PosCheckoutSuccessContent({
           <ChevronRight className="size-4" />
         </button>
 
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className="mt-3 grid gap-2 sm:grid-cols-1">
           <a
             href={receiptView.href}
             target="_blank"
             rel="noreferrer"
-            className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+            className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 bg-black/90 !text-white text-sm font-medium text-neutral-700 transition hover:bg-black/80"
           >
-            Buka PDF A4
-          </a>
-          <a
-            href={receiptView.href}
-            target="_blank"
-            rel="noreferrer"
-            className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
-          >
-            Preview Cetak
+            Download Receipt Nota
           </a>
         </div>
 

@@ -23,6 +23,7 @@ export default async function PosLayout({ children }: { children: ReactNode }) {
         canAccessAdmin: hasPermission(auth, "admin.access"),
         outletName: primaryOutlet?.name ?? "Outlet belum dipilih",
         canAccessMigration: hasPermission(auth, "migration.scan"),
+        canCreateProducts: hasPermission(auth, "sales.create"),
       }}
       status={posShellStatus}
     >
