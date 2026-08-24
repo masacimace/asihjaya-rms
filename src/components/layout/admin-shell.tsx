@@ -403,7 +403,7 @@ export function AdminShell({
   }, []);
 
   return (
-    <div className="grid h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[280px_minmax(0,1fr)]">
+    <div className="fixed inset-0 grid h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[280px_minmax(0,1fr)]">
       {/* Sidebar desktop */}
       <aside className="hidden h-dvh min-h-0 flex-col overflow-y-auto border-r border-[var(--border)] bg-white p-5 lg:flex">
         <SidebarContent
@@ -470,7 +470,7 @@ export function AdminShell({
 
       <div className="flex h-dvh min-h-0 min-w-0 max-w-full flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="sticky top-0 z-50 flex h-20 w-full max-w-full min-w-0 shrink-0 items-center overflow-visible border-b border-[var(--border)] bg-white/95 px-2 backdrop-blur sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-50 flex h-20 w-full max-w-full min-w-0 shrink-0 items-center overflow-visible border-b border-[var(--border)] bg-white/95 px-1.5 backdrop-blur sm:px-6 lg:px-8">
           <button
             type="button"
             aria-label="Buka navigasi"
