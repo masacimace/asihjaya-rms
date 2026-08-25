@@ -661,6 +661,11 @@ function CashSnapshot({ data }: { data: ReportSummaryData }) {
       tone: "text-red-700",
     },
     {
+      label: "Payout cash Buyback",
+      value: -data.cashSnapshot.buybackCashPayouts,
+      tone: "text-red-700",
+    },
+    {
       label: "Tarik tunai Dana Titip",
       value: -data.cashSnapshot.customerDepositCashWithdrawals,
       tone: "text-red-700",
@@ -1026,7 +1031,7 @@ export default async function LaporanDashboardPage({
         <MetricCard
           title="Net cash movement"
           value={formatMoney(data.cashSnapshot.netCashMovement)}
-          helper="Cash sale + kas masuk - refund/kas keluar/Dana Titip"
+          helper="Cash sale + kas masuk - refund/kas keluar/Buyback/Dana Titip"
           icon={<Banknote className="size-5" />}
           tone={data.cashSnapshot.netCashMovement < 0 ? "danger" : "success"}
         />

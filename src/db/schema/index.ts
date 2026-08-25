@@ -183,6 +183,7 @@ export const movementTypeEnum = pgEnum("inventory_movement_type", [
   "repair_in",
   "reversal",
   "migration_opening",
+  "buyback",
 ]);
 
 export const shiftStatusEnum = pgEnum("shift_status", [
@@ -208,6 +209,22 @@ export const saleStatusEnum = pgEnum("sale_status", [
   "voided",
   "partially_refunded",
   "refunded",
+]);
+
+export const buybackStatusEnum = pgEnum("buyback_status", [
+  "completed",
+  "cancelled",
+]);
+
+export const buybackItemSourceEnum = pgEnum("buyback_item_source", [
+  "asihjaya",
+  "external",
+]);
+
+export const buybackPayoutMethodEnum = pgEnum("buyback_payout_method", [
+  "cash",
+  "bank_transfer",
+  "customer_deposit",
 ]);
 
 export const paymentStatusEnum = pgEnum("payment_status", [
@@ -3347,6 +3364,175 @@ export const manualPaymentPolicies = pgTable(
       "manual_payment_policies_lookback_ck",
       sql`${table.duplicateLookbackDays} between 1 and 3650`,
     ),
+  ],
+);
+
+export const buybacks = pgTable(
+  "buybacks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    registerId: uuid("register_id")
+      .notNull()
+      .references(() => registers.id),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => shifts.id),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    processedBy: uuid("processed_by")
+      .notNull()
+      .references(() => users.id),
+    buybackNumber: varchar("buyback_number", { length: 80 }).notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 120 }).notNull(),
+    status: buybackStatusEnum("status").default("completed").notNull(),
+    totalAmount: numeric("total_amount", { precision: 18, scale: 0 }).notNull(),
+    notes: text("notes"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("buybacks_org_number_uq").on(
+      table.organizationId,
+      table.buybackNumber,
+    ),
+    uniqueIndex("buybacks_org_idempotency_uq").on(
+      table.organizationId,
+      table.idempotencyKey,
+    ),
+    index("buybacks_outlet_created_idx").on(table.outletId, table.createdAt),
+    index("buybacks_customer_created_idx").on(
+      table.customerId,
+      table.createdAt,
+    ),
+    index("buybacks_shift_idx").on(table.shiftId),
+    check("buybacks_total_positive_ck", sql`${table.totalAmount} > 0`),
+    check(
+      "buybacks_completed_timestamp_ck",
+      sql`${table.status} <> 'completed' or ${table.completedAt} is not null`,
+    ),
+    check(
+      "buybacks_cancelled_timestamp_ck",
+      sql`${table.status} <> 'cancelled' or ${table.cancelledAt} is not null`,
+    ),
+  ],
+);
+
+export const buybackItems = pgTable(
+  "buyback_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    buybackId: uuid("buyback_id")
+      .notNull()
+      .references(() => buybacks.id),
+    productItemId: uuid("product_item_id")
+      .notNull()
+      .references(() => productItems.id),
+    source: buybackItemSourceEnum("source").notNull(),
+    lineNumber: integer("line_number").notNull(),
+    weightGram: numeric("weight_gram", { precision: 12, scale: 3 }).notNull(),
+    purityPercent: numeric("purity_percent", { precision: 7, scale: 3 }).notNull(),
+    exchangePurityPercent: numeric("exchange_purity_percent", {
+      precision: 7,
+      scale: 3,
+    }).notNull(),
+    buybackPricePerGram: numeric("buyback_price_per_gram", {
+      precision: 18,
+      scale: 0,
+    }).notNull(),
+    deductionPerGram: numeric("deduction_per_gram", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    baseAmount: numeric("base_amount", { precision: 18, scale: 0 }).notNull(),
+    deductionAmount: numeric("deduction_amount", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    finalAmount: numeric("final_amount", { precision: 18, scale: 0 }).notNull(),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("buyback_items_buyback_line_uq").on(
+      table.buybackId,
+      table.lineNumber,
+    ),
+    uniqueIndex("buyback_items_buyback_product_uq").on(
+      table.buybackId,
+      table.productItemId,
+    ),
+    index("buyback_items_product_idx").on(table.productItemId),
+    check("buyback_items_line_positive_ck", sql`${table.lineNumber} > 0`),
+    check("buyback_items_weight_positive_ck", sql`${table.weightGram} > 0`),
+    check(
+      "buyback_items_purity_range_ck",
+      sql`${table.purityPercent} > 0 and ${table.purityPercent} <= 100`,
+    ),
+    check(
+      "buyback_items_exchange_purity_range_ck",
+      sql`${table.exchangePurityPercent} > 0 and ${table.exchangePurityPercent} <= 999.999`,
+    ),
+    check(
+      "buyback_items_price_positive_ck",
+      sql`${table.buybackPricePerGram} > 0`,
+    ),
+    check(
+      "buyback_items_deduction_nonnegative_ck",
+      sql`${table.deductionPerGram} >= 0 and ${table.deductionAmount} >= 0`,
+    ),
+    check(
+      "buyback_items_amount_formula_ck",
+      sql`${table.finalAmount} = ${table.baseAmount} - ${table.deductionAmount}`,
+    ),
+    check(
+      "buyback_items_final_positive_ck",
+      sql`${table.finalAmount} > 0 and ${table.deductionAmount} < ${table.baseAmount}`,
+    ),
+  ],
+);
+
+export const buybackPayouts = pgTable(
+  "buyback_payouts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    buybackId: uuid("buyback_id")
+      .notNull()
+      .references(() => buybacks.id),
+    method: buybackPayoutMethodEnum("method").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 0 }).notNull(),
+    reference: varchar("reference", { length: 160 }),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("buyback_payouts_buyback_method_uq").on(
+      table.buybackId,
+      table.method,
+    ),
+    index("buyback_payouts_buyback_idx").on(table.buybackId),
+    check("buyback_payouts_amount_positive_ck", sql`${table.amount} > 0`),
   ],
 );
 

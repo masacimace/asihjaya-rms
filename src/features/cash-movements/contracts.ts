@@ -89,6 +89,7 @@ export type AdminCashMovementListData = {
     cashSales: number;
     manualCashIn: number;
     manualCashOut: number;
+    buybackCashPayouts: number;
     cashRefunds: number;
     customerDepositCashWithdrawals: number;
     closingAdjustments: number;

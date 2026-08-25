@@ -189,7 +189,10 @@
     "test:product-batch-acceptance:premerge": "npm run check:stabilization && npm run build:clean",
     "check:pos-reweigh": "tsx scripts/check-pos-reweigh.ts",
     "check:pos-client-revision-02": "tsx scripts/check-pos-client-revision-02.ts",
-    "check:pos-transaction-deposit-ux": "tsx scripts/check-pos-transaction-deposit-ux.ts"
+    "check:pos-transaction-deposit-ux": "tsx scripts/check-pos-transaction-deposit-ux.ts",
+    "check:buyback-bb1": "tsx scripts/check-buyback-bb1.ts",
+    "check:buyback-bb2": "tsx scripts/check-buyback-bb2.ts",
+    "check:buyback-bb3a": "tsx scripts/check-buyback-bb3a.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

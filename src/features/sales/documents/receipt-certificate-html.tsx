@@ -1392,16 +1392,35 @@ export function ReceiptCertificateHtmlDocument({
   overlayCalibration?: ReceiptOverlayCalibration;
   renderMode?: ReceiptCertificateRenderMode;
 }) {
-  const customerName = data.customer?.fullName ?? "Pelanggan Umum";
+  const isBuyback = data.documentKind === "buyback";
+  const customerName =
+    data.customer?.fullName ?? (isBuyback ? "Penjual tidak tercatat" : "Pelanggan Umum");
   const customerPhone = data.customer?.phone ?? "-";
   const completedDate = formatDate(
     data.sale.completedAt,
     data.organization.timezone,
   );
+  const externalPayoutAmount = toNumber(
+    data.customerDeposit.externalPaymentDueAmount,
+  );
+  const payoutSummary = data.payments
+    .map((payment) => {
+      const label =
+        payment.method === "cash"
+          ? "Cash"
+          : payment.method === "bank_transfer"
+            ? "Transfer"
+            : payment.method === "customer_deposit"
+              ? "Dana Titip"
+              : payment.method;
+      return `${label} ${formatAmount(payment.amount)}`;
+    })
+    .join(" · ");
   const isVendorStaticArtwork =
     renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK;
   const isPreprintedOverlay =
     renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY;
+  const useBuybackAdjustedLabels = isBuyback && !isPreprintedOverlay;
   const receiptOutletCopy = isVendorStaticArtwork
     ? resolveReceiptVendorStaticOutletCopy(data)
     : resolveReceiptRuntimeOutletCopy(data);
@@ -1439,7 +1458,9 @@ export function ReceiptCertificateHtmlDocument({
             <article
               className="aj-receipt-page"
               key={item.lineNumber}
-              aria-label={`Nota dan certificate pembelian item ${pageNumber} dari ${pageCount}`}
+              aria-label={`${
+                isBuyback ? "Nota Buyback" : "Nota dan certificate pembelian"
+              } item ${pageNumber} dari ${pageCount}`}
               data-aj-receipt-page="front"
               data-aj-page-number={pageNumber}
               data-aj-total-pages={totalPdfPages}
@@ -1488,7 +1509,9 @@ export function ReceiptCertificateHtmlDocument({
                     <aside className="aj-certificate-card">
                       <div className="aj-summary-lines">
                         <div className="aj-summary-row">
-                          <span className="aj-static-artwork">No. Order :</span>
+                          <span className="aj-static-artwork">
+                            {useBuybackAdjustedLabels ? "No. Buyback :" : "No. Order :"}
+                          </span>
                           <span className="aj-summary-value aj-dynamic-print">
                             {data.sale.invoiceNumber}
                           </span>
@@ -1506,7 +1529,9 @@ export function ReceiptCertificateHtmlDocument({
                           </span>
                         </div>
                         <div className="aj-summary-row">
-                          <span className="aj-static-artwork">Sales :</span>
+                          <span className="aj-static-artwork">
+                            {useBuybackAdjustedLabels ? "Petugas :" : "Sales :"}
+                          </span>
                           <span className="aj-summary-value aj-dynamic-print">
                             {data.cashier.fullName}
                           </span>
@@ -1525,7 +1550,7 @@ export function ReceiptCertificateHtmlDocument({
                     <div className="aj-info-box">
                       <div>
                         <div className="aj-info-label aj-static-artwork">
-                          Konsumen
+                          {useBuybackAdjustedLabels ? "Penjual" : "Konsumen"}
                         </div>
                         <div className="aj-info-value aj-dynamic-print">
                           {customerName}
@@ -1553,8 +1578,12 @@ export function ReceiptCertificateHtmlDocument({
                         <div className="aj-head-center">KADAR ±%</div>
                         <div className="aj-head-center">GRAM</div>
                         <div className="aj-head-right">POTONGAN/GR</div>
-                        <div className="aj-head-right">DISKON</div>
-                        <div className="aj-head-right">HARGA</div>
+                        <div className="aj-head-right">
+                          {useBuybackAdjustedLabels ? "HARGA/GR" : "DISKON"}
+                        </div>
+                        <div className="aj-head-right">
+                          {useBuybackAdjustedLabels ? "NILAI" : "HARGA"}
+                        </div>
                       </div>
                       <div className="aj-product-row aj-product-body">
                         <div className="aj-code">
@@ -1569,6 +1598,12 @@ export function ReceiptCertificateHtmlDocument({
                           </div>
                           <div className="aj-product-meta aj-dynamic-print">
                             {buildProductMeta(item)}
+                            {isBuyback && isPreprintedOverlay ? (
+                              <>
+                                {buildProductMeta(item) ? " · " : ""}
+                                BB/Gr {formatAmount(item.snapshot.buybackPricePerGram)}
+                              </>
+                            ) : null}
                           </div>
                         </div>
                         <div className="aj-kadar aj-dynamic-print">
@@ -1590,12 +1625,16 @@ export function ReceiptCertificateHtmlDocument({
                         </div>
                         <div
                           className={`aj-discount aj-dynamic-print ${
-                            itemDiscountAmount > 0
-                              ? "aj-money-negative"
-                              : "aj-money-muted"
+                            useBuybackAdjustedLabels
+                              ? ""
+                              : itemDiscountAmount > 0
+                                ? "aj-money-negative"
+                                : "aj-money-muted"
                           }`}
                         >
-                          {formatDiscountAmount(itemDiscountAmount)}
+                          {useBuybackAdjustedLabels
+                            ? formatAmount(item.snapshot.buybackPricePerGram)
+                            : formatDiscountAmount(itemDiscountAmount)}
                         </div>
                         <div className="aj-price aj-dynamic-print">
                           {formatAmount(item.finalPriceAmount)}
@@ -1607,32 +1646,40 @@ export function ReceiptCertificateHtmlDocument({
                   <footer className="aj-footer">
                     <section className="aj-payment-support">
                       <div className="aj-payment-support-title aj-static-artwork">
-                        Support Payment
+                        {useBuybackAdjustedLabels ? "Payout Buyback" : "Support Payment"}
                       </div>
-                      <div
-                        className="aj-edc-grid aj-static-artwork"
-                        aria-label="Provider EDC yang didukung"
-                      >
-                        <div className="aj-edc-logo">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src="/logo/edc/bca.svg" alt="BCA" />
+                      {useBuybackAdjustedLabels ? (
+                        <div className="aj-payment-support-note aj-dynamic-print">
+                          {payoutSummary || "Payout tercatat pada transaksi Buyback."}
                         </div>
-                        <div className="aj-edc-logo">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src="/logo/edc/bri.svg" alt="BRI" />
-                        </div>
-                        <div className="aj-edc-logo">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src="/logo/edc/bni.svg" alt="BNI" />
-                        </div>
-                        <div className="aj-edc-logo">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src="/logo/edc/mandiri.svg" alt="Mandiri" />
-                        </div>
-                      </div>
-                      <div className="aj-payment-support-note aj-static-artwork">
-                        Pembayaran EDC yang tersedia di outlet.
-                      </div>
+                      ) : (
+                        <>
+                          <div
+                            className="aj-edc-grid aj-static-artwork"
+                            aria-label="Provider EDC yang didukung"
+                          >
+                            <div className="aj-edc-logo">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src="/logo/edc/bca.svg" alt="BCA" />
+                            </div>
+                            <div className="aj-edc-logo">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src="/logo/edc/bri.svg" alt="BRI" />
+                            </div>
+                            <div className="aj-edc-logo">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src="/logo/edc/bni.svg" alt="BNI" />
+                            </div>
+                            <div className="aj-edc-logo">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src="/logo/edc/mandiri.svg" alt="Mandiri" />
+                            </div>
+                          </div>
+                          <div className="aj-payment-support-note aj-static-artwork">
+                            Pembayaran EDC yang tersedia di outlet.
+                          </div>
+                        </>
+                      )}
                     </section>
 
                     <section className="aj-signature-card">
@@ -1654,9 +1701,13 @@ export function ReceiptCertificateHtmlDocument({
                         </strong>
                       </div>
                       <div className="aj-total-detail-row aj-total-row-deposit-used">
-                        <span className="aj-static-artwork">Gunakan Saldo</span>
+                        <span className="aj-static-artwork">
+                          {useBuybackAdjustedLabels ? "Cash / Transfer" : "Gunakan Saldo"}
+                        </span>
                         <strong className="aj-dynamic-print">
-                          {formatNegativeAmount(customerDepositUsedAmount)}
+                          {useBuybackAdjustedLabels
+                            ? formatPositiveAmount(externalPayoutAmount)
+                            : formatNegativeAmount(customerDepositUsedAmount)}
                         </strong>
                       </div>
                       <div
@@ -1664,7 +1715,9 @@ export function ReceiptCertificateHtmlDocument({
                         aria-label="Rincian harga item"
                       >
                         <div className="aj-total-detail-row">
-                          <span className="aj-static-artwork">Harga Item</span>
+                          <span className="aj-static-artwork">
+                            {useBuybackAdjustedLabels ? "Nilai Dasar" : "Harga Item"}
+                          </span>
                           <strong className="aj-dynamic-print">
                             {formatAmount(itemSubtotalAmount)}
                           </strong>
@@ -1672,7 +1725,7 @@ export function ReceiptCertificateHtmlDocument({
                         {itemDiscountAmount > 0 ? (
                           <div className="aj-total-detail-row aj-total-row-discount">
                             <span className="aj-static-artwork">
-                              Diskon Item
+                              {useBuybackAdjustedLabels ? "Potongan Item" : "Diskon Item"}
                             </span>
                             <strong className="aj-dynamic-print">
                               {formatNegativeAmount(itemDiscountAmount)}
@@ -1682,7 +1735,7 @@ export function ReceiptCertificateHtmlDocument({
                         {pageCount > 1 ? (
                           <div className="aj-total-detail-row">
                             <span className="aj-static-artwork">
-                              Total Order
+                              {useBuybackAdjustedLabels ? "Total Buyback" : "Total Order"}
                             </span>
                             <strong className="aj-dynamic-print">
                               {formatAmount(data.sale.totalAmount)}
@@ -1691,18 +1744,20 @@ export function ReceiptCertificateHtmlDocument({
                         ) : null}
                         <div className="aj-total-detail-row aj-total-row-external">
                           <span className="aj-static-artwork">
-                            Total Pembayaran
+                            {useBuybackAdjustedLabels ? "Total Payout" : "Total Pembayaran"}
                           </span>
                           <strong className="aj-dynamic-print">
                             {formatAmount(
-                              data.customerDeposit.externalPaymentDueAmount,
+                              useBuybackAdjustedLabels
+                                ? data.sale.totalAmount
+                                : data.customerDeposit.externalPaymentDueAmount,
                             )}
                           </strong>
                         </div>
                       </div>
                       <div className="aj-total-box">
                         <span className="aj-total-label aj-static-artwork">
-                          Total Item
+                          {useBuybackAdjustedLabels ? "Nilai Item" : "Total Item"}
                         </span>
                         <strong className="aj-total-amount aj-dynamic-print">
                           {formatAmount(itemTotalAmount)}
@@ -1726,10 +1781,12 @@ export function ReceiptCertificateHtmlDocument({
                         </div>
                       )}
                       <div className="aj-qr-label aj-static-artwork">
-                        Riwayat Transaksi
+                        {useBuybackAdjustedLabels ? "Detail Buyback" : "Riwayat Transaksi"}
                       </div>
                       <div className="aj-qr-note aj-static-artwork">
-                        Scan untuk melihat riwayat pembelian
+                        {useBuybackAdjustedLabels
+                          ? "Scan untuk membuka detail Buyback"
+                          : "Scan untuk melihat riwayat pembelian"}
                       </div>
                     </section>
                   </footer>
@@ -1764,9 +1821,9 @@ export function ReceiptCertificateHtmlDocument({
                   <div>
                     <div className="aj-back-title">Informasi & Ketentuan</div>
                     <div className="aj-back-subtitle">
-                      Simpan nota ini sebagai bukti transaksi resmi dan
-                      referensi saat melakukan layanan lanjutan di outlet
-                      Asihjaya.
+                      {isBuyback
+                        ? "Simpan nota ini sebagai bukti resmi transaksi Buyback dan rincian penilaian barang yang diterima Asihjaya."
+                        : "Simpan nota ini sebagai bukti transaksi resmi dan referensi saat melakukan layanan lanjutan di outlet Asihjaya."}
                     </div>
                   </div>
 
@@ -1788,9 +1845,34 @@ export function ReceiptCertificateHtmlDocument({
                     </BackSectionTitle>
 
                     <div className="aj-back-policy-heading">
-                      Terima kasih telah memilih Asih Jaya
+                      {isBuyback
+                        ? "Terima kasih telah melakukan Buyback di Asih Jaya"
+                        : "Terima kasih telah memilih Asih Jaya"}
                     </div>
 
+                    {isBuyback ? (
+                      <ol className="aj-back-policy-list">
+                        <li>
+                          1. Nota Buyback ini adalah bukti resmi barang yang diterima Asih Jaya beserta nilai payout yang telah disepakati.
+                        </li>
+                        <br />
+                        <li>
+                          2. Berat, kadar, kondisi, Harga Buyback/Gram, dan potongan pada nota merupakan snapshot penilaian saat transaksi diselesaikan.
+                        </li>
+                        <br />
+                        <li>
+                          3. Payout melalui Dana Titip menambah saldo customer dan dapat digunakan pada transaksi berikutnya sesuai ketentuan toko.
+                        </li>
+                        <br />
+                        <li>
+                          4. Produk ASIHJAYA maupun produk eksternal yang diterima melalui Buyback menjadi inventory toko setelah transaksi selesai.
+                        </li>
+                        <br />
+                        <li>
+                          5. Simpan nota ini untuk referensi apabila diperlukan pemeriksaan histori Buyback di kemudian hari.
+                        </li>
+                      </ol>
+                    ) : (
                     <ol className="aj-back-policy-list">
                       <li>
                         1. Setiap permintaan untuk layanan lebih lanjut
@@ -1886,6 +1968,7 @@ export function ReceiptCertificateHtmlDocument({
                         </ol>
                       </li>
                     </ol>
+                    )}
                   </article>
 
                   <article className="aj-back-card aj-back-card-compact">

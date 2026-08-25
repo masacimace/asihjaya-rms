@@ -47,6 +47,7 @@ type PageProps = {
 const movementTypeLabels: Record<ReportInventoryMovementType, string> = {
   goods_receipt: "Barang masuk",
   migration_opening: "Saldo awal migrasi",
+  buyback: "Buyback masuk",
   sale: "Terjual",
   sale_return: "Retur penjualan",
   transfer_out: "Transfer keluar",
@@ -64,6 +65,7 @@ const movementTypeLabels: Record<ReportInventoryMovementType, string> = {
 const movementTypeStyles: Record<ReportInventoryMovementType, string> = {
   goods_receipt: "border-emerald-200 bg-emerald-50 text-emerald-700",
   migration_opening: "border-teal-200 bg-teal-50 text-teal-700",
+  buyback: "border-emerald-200 bg-emerald-50 text-emerald-700",
   sale: "border-red-200 bg-red-50 text-red-700",
   sale_return: "border-blue-200 bg-blue-50 text-blue-700",
   transfer_out: "border-orange-200 bg-orange-50 text-orange-700",

@@ -10,6 +10,7 @@ import {
   Pause,
   Printer,
   ReceiptText,
+  RefreshCcw,
   ScanBarcode,
   Search,
   ShoppingBag,
@@ -49,6 +50,7 @@ type PosShellUser = {
   outletName: string;
   canAccessMigration: boolean;
   canCreateProducts: boolean;
+  canAccessBuybacks: boolean;
 };
 
 type PosShellStatus = {
@@ -106,13 +108,19 @@ const fallbackStatus: PosShellStatus = {
 const navigation = [
   { label: "Beranda", href: "/pos", icon: ShoppingBag },
   {
-    label: "Tambah Produk",
+    label: "Produk Baru",
     href: "/pos/produk/tambah",
     icon: PackagePlus,
     requiresProductCreate: true,
   },
   {
-    label: "Daftar Transaksi",
+    label: "Buyback Produk",
+    href: "/pos/buyback",
+    icon: RefreshCcw,
+    requiresBuybackAccess: true,
+  },
+  {
+    label: "Riwayat Transaksi",
     href: "/pos/transaksi",
     icon: ReceiptText,
     children: [
@@ -137,7 +145,13 @@ const mobileMoreNavigation = [
     icon: PackagePlus,
     requiresProductCreate: true,
   },
-  { label: "Transaksi Tertahan", href: "/pos/ditahan", icon: Pause },
+  {
+    label: "Buyback",
+    href: "/pos/buyback",
+    icon: RefreshCcw,
+    requiresBuybackAccess: true,
+  },
+  { label: "Hold Cart", href: "/pos/ditahan", icon: Pause },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
 ] as const;
 
@@ -157,6 +171,7 @@ type SidebarContentProps = {
   canAccessAdmin: boolean;
   canAccessMigration: boolean;
   canCreateProducts: boolean;
+  canAccessBuybacks: boolean;
   onNavigate?: () => void;
 };
 
@@ -276,6 +291,7 @@ function SidebarContent({
   canAccessAdmin,
   canAccessMigration,
   canCreateProducts,
+  canAccessBuybacks,
   onNavigate,
 }: SidebarContentProps) {
   const [openNavigationGroups, setOpenNavigationGroups] = useState<
@@ -324,6 +340,10 @@ function SidebarContent({
           .filter((item) => {
             if ("requiresProductCreate" in item && item.requiresProductCreate) {
               return canCreateProducts;
+            }
+
+            if ("requiresBuybackAccess" in item && item.requiresBuybackAccess) {
+              return canAccessBuybacks;
             }
 
             if ("access" in item && item.access === "migration") {
@@ -611,6 +631,7 @@ export function PosShell({
           canAccessAdmin={user.canAccessAdmin}
           canAccessMigration={user.canAccessMigration}
           canCreateProducts={user.canCreateProducts}
+          canAccessBuybacks={user.canAccessBuybacks}
         />
       </aside>
 
@@ -641,6 +662,7 @@ export function PosShell({
               canAccessAdmin={user.canAccessAdmin}
               canAccessMigration={user.canAccessMigration}
               canCreateProducts={user.canCreateProducts}
+              canAccessBuybacks={user.canAccessBuybacks}
               onNavigate={() => setIsNavigationOpen(false)}
             />
           </aside>
@@ -686,6 +708,13 @@ export function PosShell({
                     item.requiresProductCreate
                   ) {
                     return user.canCreateProducts;
+                  }
+
+                  if (
+                    "requiresBuybackAccess" in item &&
+                    item.requiresBuybackAccess
+                  ) {
+                    return user.canAccessBuybacks;
                   }
 
                   if ("access" in item && item.access === "migration") {

@@ -5,6 +5,7 @@ import { RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1 } from "@/features/sales/docum
 import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
 import {
   assertHardwareJobPayloadV2,
+  buildBuybackReceiptDocumentPayloadV2,
   buildHardwareTestPayloadV2,
   buildInventoryLabelPayloadV2,
   buildReceiptDocumentPayloadV2,
@@ -70,6 +71,22 @@ assert.equal(
   RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
 );
 assertHardwareJobPayloadV2("print_receipt_certificate", overlayReceiptPayload);
+
+const buybackId = "44444444-4444-4444-8444-444444444444";
+const buybackReceiptPayload = buildBuybackReceiptDocumentPayloadV2({
+  buybackId,
+  buybackNumber: "AJ-BB-BG-20260825-TEST",
+  requestSource: "check.hardware.job-payloads.buyback",
+  reprint: false,
+  requestedAt: new Date("2026-08-25T00:00:00.000Z"),
+  renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+});
+assert.equal(buybackReceiptPayload.documentType, "buyback_receipt");
+assert.equal(
+  buybackReceiptPayload.download.path,
+  `/api/buybacks/${buybackId}/receipt-certificate?profile=receipt_a4_landscape_v1&mode=preprinted_overlay`,
+);
+assertHardwareJobPayloadV2("print_receipt_certificate", buybackReceiptPayload);
 
 const posActionsSource = readFileSync(
   new URL("../src/app/actions/pos.ts", import.meta.url),

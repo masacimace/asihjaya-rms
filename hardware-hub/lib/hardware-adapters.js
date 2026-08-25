@@ -16,6 +16,7 @@ const { prepareSatoJewelryLabel } = require("./sato-jewelry-label");
 
 const DOCUMENT_DOWNLOAD_PATH_PATTERNS = [
   /^\/api\/sales\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/receipt-certificate$/i,
+  /^\/api\/buybacks\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/receipt-certificate$/i,
   /^\/api\/sales\/receipt-certificate-preview$/,
 ];
 

@@ -18,7 +18,7 @@ const MAX_TOKEN_LENGTH = 4_096;
 const MAX_MEDIA_KEYS = 1_000;
 const GLOBAL_REGISTRY_KEY = "__asihjayaPdfRenderAccessRegistry";
 
-type PdfRenderScope = "receipt-sale" | "receipt-preview";
+type PdfRenderScope = "receipt-sale" | "receipt-buyback" | "receipt-preview";
 
 type PdfRenderTokenPayload = {
   version: 1;
@@ -26,6 +26,7 @@ type PdfRenderTokenPayload = {
   scope: PdfRenderScope;
   organizationId: string;
   saleId: string | null;
+  buybackId: string | null;
   documentProfileId: ReceiptDocumentProfileId;
   renderMode: ReceiptCertificateRenderMode;
   issuedAt: number;
@@ -45,6 +46,7 @@ export type PdfRenderCapabilityInput = {
   scope: PdfRenderScope;
   organizationId: string;
   saleId?: string | null;
+  buybackId?: string | null;
   documentProfileId: ReceiptDocumentProfileId;
   renderMode: ReceiptCertificateRenderMode;
   allowedMediaKeys?: readonly string[];
@@ -54,6 +56,7 @@ export type ActivePdfRenderAccess = {
   scope: PdfRenderScope;
   organizationId: string;
   saleId: string | null;
+  buybackId: string | null;
   documentProfileId: ReceiptDocumentProfileId;
   renderMode: ReceiptCertificateRenderMode;
   expiresAt: number;
@@ -126,12 +129,16 @@ function parseTokenPayload(encodedPayload: string): PdfRenderTokenPayload | null
       value.version !== 1 ||
       typeof value.nonce !== "string" ||
       value.nonce.length < 16 ||
-      !["receipt-sale", "receipt-preview"].includes(value.scope ?? "") ||
+      !["receipt-sale", "receipt-buyback", "receipt-preview"].includes(value.scope ?? "") ||
       typeof value.organizationId !== "string" ||
       value.organizationId.length === 0 ||
       !(
         value.saleId === null ||
         typeof value.saleId === "string"
+      ) ||
+      !(
+        value.buybackId === null ||
+        typeof value.buybackId === "string"
       ) ||
       typeof value.documentProfileId !== "string" ||
       typeof value.renderMode !== "string" ||
@@ -188,6 +195,7 @@ function resolveActiveEntry(token: string | null | undefined) {
     entry.scope !== payload.scope ||
     entry.organizationId !== payload.organizationId ||
     entry.saleId !== payload.saleId ||
+    entry.buybackId !== payload.buybackId ||
     entry.documentProfileId !== payload.documentProfileId ||
     entry.renderMode !== payload.renderMode ||
     entry.expiresAt !== payload.expiresAt
@@ -223,6 +231,7 @@ export function issuePdfRenderCapability(input: PdfRenderCapabilityInput) {
     scope: input.scope,
     organizationId: input.organizationId,
     saleId: input.saleId ?? null,
+    buybackId: input.buybackId ?? null,
     documentProfileId: input.documentProfileId,
     renderMode: input.renderMode,
     issuedAt: now,
@@ -263,12 +272,14 @@ export function authorizePdfRenderDocument({
   token,
   scope,
   saleId,
+  buybackId,
   documentProfileId,
   renderMode,
 }: {
   token: string | null | undefined;
   scope: PdfRenderScope;
   saleId?: string | null;
+  buybackId?: string | null;
   documentProfileId: ReceiptDocumentProfileId;
   renderMode: ReceiptCertificateRenderMode;
 }): ActivePdfRenderAccess | null {
@@ -278,6 +289,7 @@ export function authorizePdfRenderDocument({
     !entry ||
     entry.scope !== scope ||
     entry.saleId !== (saleId ?? null) ||
+    entry.buybackId !== (buybackId ?? null) ||
     entry.documentProfileId !== documentProfileId ||
     entry.renderMode !== renderMode
   ) {
@@ -288,6 +300,7 @@ export function authorizePdfRenderDocument({
     scope: entry.scope,
     organizationId: entry.organizationId,
     saleId: entry.saleId,
+    buybackId: entry.buybackId,
     documentProfileId: entry.documentProfileId,
     renderMode: entry.renderMode,
     expiresAt: entry.expiresAt,
@@ -311,6 +324,7 @@ export function authorizePdfRenderMedia({
     scope: entry.scope,
     organizationId: entry.organizationId,
     saleId: entry.saleId,
+    buybackId: entry.buybackId,
     documentProfileId: entry.documentProfileId,
     renderMode: entry.renderMode,
     expiresAt: entry.expiresAt,

@@ -20,6 +20,10 @@ function getCashMovementTypeLabel(row: Pick<AdminCashMovementRow, "type" | "refe
     return "Penarikan Dana Titip";
   }
 
+  if (row.type === "cash_out" && row.referenceType === "buyback") {
+    return "Payout Cash Buyback";
+  }
+
   return cashMovementTypeLabels[row.type];
 }
 
@@ -72,6 +76,7 @@ export function buildCashMovementSheets({
         ["Penjualan cash", roundAmount(data.summary.cashSales), ""],
         ["Kas masuk manual", roundAmount(data.summary.manualCashIn), ""],
         ["Kas keluar manual", roundAmount(data.summary.manualCashOut), ""],
+        ["Payout Cash Buyback", roundAmount(data.summary.buybackCashPayouts), "Kas keluar untuk transaksi Buyback"],
         [
           "Tarik tunai Dana Titip",
           roundAmount(data.summary.customerDepositCashWithdrawals),

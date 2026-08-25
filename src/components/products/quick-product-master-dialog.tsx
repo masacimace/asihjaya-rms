@@ -32,7 +32,7 @@ export function QuickProductMasterDialog({
   categoryLabel: string;
   onClose: () => void;
   onCreated: (master: ProductMasterOption) => void;
-  creationSource?: "admin" | "pos";
+  creationSource?: "admin" | "pos" | "buyback";
 }) {
   const [state, formAction] = useActionState(
     quickCreateProductMasterAction,

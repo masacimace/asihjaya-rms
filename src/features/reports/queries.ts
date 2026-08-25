@@ -242,6 +242,7 @@ function createEmptyData(
       cashRefunds: 0,
       manualCashIn: 0,
       manualCashOut: 0,
+      buybackCashPayouts: 0,
       customerDepositCashWithdrawals: 0,
       closingAdjustments: 0,
       customerDepositOpeningBalance: 0,
@@ -450,7 +451,8 @@ export async function getReportSummaryData(
         cashSales: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_sale' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         cashRefunds: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_refund' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         manualCashIn: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_in' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
-        manualCashOut: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and coalesce(${cashMovements.referenceType}, '') <> 'customer_deposit_withdrawal' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
+        manualCashOut: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and coalesce(${cashMovements.referenceType}, '') not in ('customer_deposit_withdrawal', 'buyback') then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
+        buybackCashPayouts: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and ${cashMovements.referenceType} = 'buyback' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         customerDepositCashWithdrawals: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and ${cashMovements.referenceType} = 'customer_deposit_withdrawal' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         closingAdjustments: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'closing_adjustment' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
       })
@@ -619,6 +621,7 @@ export async function getReportSummaryData(
   const cashRefunds = cash?.cashRefunds ?? 0;
   const manualCashIn = cash?.manualCashIn ?? 0;
   const manualCashOut = cash?.manualCashOut ?? 0;
+  const buybackCashPayouts = cash?.buybackCashPayouts ?? 0;
   const customerDepositCashWithdrawals =
     cash?.customerDepositCashWithdrawals ?? 0;
   const closingAdjustments = cash?.closingAdjustments ?? 0;
@@ -643,6 +646,7 @@ export async function getReportSummaryData(
     cashRefunds,
     manualCashIn,
     manualCashOut,
+    buybackCashPayouts,
     customerDepositCashWithdrawals,
     closingAdjustments,
     customerDepositOpeningBalance,
@@ -660,6 +664,7 @@ export async function getReportSummaryData(
       closingAdjustments -
       cashRefunds -
       manualCashOut -
+      buybackCashPayouts -
       customerDepositCashWithdrawals,
   };
 
@@ -1365,7 +1370,7 @@ export async function getReportStockData(
     db
       .select({
         movementCount: count(),
-        stockInCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('goods_receipt', 'migration_opening', 'transfer_in', 'reservation_release', 'sale_return', 'repair_in', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
+        stockInCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('goods_receipt', 'migration_opening', 'buyback', 'transfer_in', 'reservation_release', 'sale_return', 'repair_in', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
         stockOutCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale', 'transfer_out', 'reservation', 'repair_out', 'damaged', 'lost') then 1 else 0 end), 0)`.mapWith(Number),
         saleCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} = 'sale' then 1 else 0 end), 0)`.mapWith(Number),
         returnCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale_return', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
@@ -1395,7 +1400,7 @@ export async function getReportStockData(
     db
       .select({
         bucket: movementBucketSql,
-        stockInCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('goods_receipt', 'migration_opening', 'transfer_in', 'reservation_release', 'sale_return', 'repair_in', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
+        stockInCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('goods_receipt', 'migration_opening', 'buyback', 'transfer_in', 'reservation_release', 'sale_return', 'repair_in', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
         stockOutCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale', 'transfer_out', 'reservation', 'repair_out', 'damaged', 'lost') then 1 else 0 end), 0)`.mapWith(Number),
         returnCount: sql<number>`coalesce(sum(case when ${inventoryMovements.movementType} in ('sale_return', 'reversal') then 1 else 0 end), 0)`.mapWith(Number),
       })

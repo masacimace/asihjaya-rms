@@ -50,11 +50,13 @@ type SaleItemSnapshot = {
   gemstone?: string | null;
   sellingAmount?: string | null;
   deductionPerGram?: string | null;
+  buybackPricePerGram?: string | null;
   imageKey?: string | null;
   productImageKey?: string | null;
 };
 
 export type ReceiptCertificateData = {
+  documentKind?: "sale" | "buyback";
   organization: {
     name: string;
     timezone: string;
@@ -145,6 +147,7 @@ function toSafeSnapshot(value: Record<string, unknown>): SaleItemSnapshot {
     gemstone: readString("gemstone"),
     sellingAmount: readString("sellingAmount"),
     deductionPerGram: readString("deductionPerGram"),
+    buybackPricePerGram: readString("buybackPricePerGram"),
     imageKey: readString("imageKey"),
     productImageKey: readString("productImageKey"),
   };

@@ -315,13 +315,22 @@ export async function quickCreateProductMasterAction(
   _previousState: QuickProductMasterActionState,
   formData: FormData,
 ): Promise<QuickProductMasterActionState> {
+  const rawCreationSource = readText(formData, "creationSource");
   const creationSource =
-    readText(formData, "creationSource") === "pos" ? "pos" : "admin";
+    rawCreationSource === "buyback"
+      ? "buyback"
+      : rawCreationSource === "pos"
+        ? "pos"
+        : "admin";
   const auth = await requirePermission(
-    creationSource === "pos" ? "sales.create" : "products.manage",
+    creationSource === "buyback"
+      ? "buybacks.create"
+      : creationSource === "pos"
+        ? "sales.create"
+        : "products.manage",
   );
 
-  if (creationSource === "pos" && !auth.permissionCodes.includes("pos.access")) {
+  if (creationSource !== "admin" && !auth.permissionCodes.includes("pos.access")) {
     redirect("/akses-ditolak");
   }
 
@@ -403,9 +412,11 @@ export async function quickCreateProductMasterAction(
           categoryName: category.name,
           status: "active",
           source:
-            creationSource === "pos"
-              ? "pos_product_item_form"
-              : "product_item_form",
+            creationSource === "buyback"
+              ? "pos_buyback_external_item"
+              : creationSource === "pos"
+                ? "pos_product_item_form"
+                : "product_item_form",
         },
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
@@ -422,6 +433,7 @@ export async function quickCreateProductMasterAction(
     revalidatePath("/admin/produk");
     revalidatePath("/admin/produk/tambah");
     revalidatePath("/pos/produk/tambah");
+    revalidatePath("/pos/buyback");
 
     return {
       status: "success",

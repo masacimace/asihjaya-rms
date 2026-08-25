@@ -66,7 +66,10 @@ assert.match(productItemActionSource, /revalidatePath\("\/pos"\)/);
 assert.match(productItemActionSource, /redirect\(`\/pos\?createdProductItem=\$\{itemId\}`\)/);
 assert.match(productItemActionSource, /pos_simple_product_create_v1/);
 
-assert.match(productMasterActionSource, /creationSource === "pos" \? "sales\.create" : "products\.manage"/);
+assert.match(
+  productMasterActionSource,
+  /creationSource === "buyback"[\s\S]*"buybacks\.create"[\s\S]*creationSource === "pos"[\s\S]*"sales\.create"[\s\S]*"products\.manage"/,
+);
 assert.match(productMasterActionSource, /pos_product_item_form/);
 assert.match(productMasterActionSource, /revalidatePath\("\/pos\/produk\/tambah"\)/);
 

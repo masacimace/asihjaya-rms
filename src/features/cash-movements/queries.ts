@@ -15,6 +15,7 @@ import {
 
 import { db } from "@/db";
 import {
+  buybacks,
   cashMovements,
   customerDepositLedger,
   outlets,
@@ -107,6 +108,7 @@ function createSearchCondition(search: string) {
     ilike(registers.name, pattern),
     ilike(users.fullName, pattern),
     ilike(sales.invoiceNumber, pattern),
+    ilike(buybacks.buybackNumber, pattern),
   );
 }
 
@@ -191,6 +193,7 @@ function createEmptyData(
       cashSales: 0,
       manualCashIn: 0,
       manualCashOut: 0,
+      buybackCashPayouts: 0,
       cashRefunds: 0,
       customerDepositCashWithdrawals: 0,
       closingAdjustments: 0,
@@ -352,6 +355,13 @@ export async function getAdminCashMovementListData(
           eq(cashMovements.referenceType, "sale"),
         ),
       )
+      .leftJoin(
+        buybacks,
+        and(
+          eq(cashMovements.referenceId, buybacks.id),
+          eq(cashMovements.referenceType, "buyback"),
+        ),
+      )
       .where(whereClause),
 
     db
@@ -360,7 +370,8 @@ export async function getAdminCashMovementListData(
         openingBalance: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'opening_balance' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         cashSales: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_sale' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         manualCashIn: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_in' then ${cashMovements.amount}::numeric else 0 end), 0)`,
-        manualCashOut: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and coalesce(${cashMovements.referenceType}, '') <> 'customer_deposit_withdrawal' then ${cashMovements.amount}::numeric else 0 end), 0)`,
+        manualCashOut: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and coalesce(${cashMovements.referenceType}, '') not in ('customer_deposit_withdrawal', 'buyback') then ${cashMovements.amount}::numeric else 0 end), 0)`,
+        buybackCashPayouts: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and ${cashMovements.referenceType} = 'buyback' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         cashRefunds: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_refund' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         customerDepositCashWithdrawals: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and ${cashMovements.referenceType} = 'customer_deposit_withdrawal' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         closingAdjustments: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'closing_adjustment' then ${cashMovements.amount}::numeric else 0 end), 0)`,
@@ -375,6 +386,13 @@ export async function getAdminCashMovementListData(
         and(
           eq(cashMovements.referenceId, sales.id),
           eq(cashMovements.referenceType, "sale"),
+        ),
+      )
+      .leftJoin(
+        buybacks,
+        and(
+          eq(cashMovements.referenceId, buybacks.id),
+          eq(cashMovements.referenceType, "buyback"),
         ),
       )
       .where(whereClause),
@@ -408,6 +426,7 @@ export async function getAdminCashMovementListData(
       shiftStatus: shifts.status,
       shiftOpenedAt: shifts.openedAt,
       saleInvoiceNumber: sales.invoiceNumber,
+      buybackNumber: buybacks.buybackNumber,
     })
     .from(cashMovements)
     .innerJoin(shifts, eq(cashMovements.shiftId, shifts.id))
@@ -421,6 +440,13 @@ export async function getAdminCashMovementListData(
         eq(cashMovements.referenceType, "sale"),
       ),
     )
+    .leftJoin(
+      buybacks,
+      and(
+        eq(cashMovements.referenceId, buybacks.id),
+        eq(cashMovements.referenceType, "buyback"),
+      ),
+    )
     .where(whereClause)
     .orderBy(desc(cashMovements.createdAt))
     .limit(ADMIN_CASH_MOVEMENTS_PAGE_SIZE)
@@ -431,6 +457,7 @@ export async function getAdminCashMovementListData(
   const cashSales = parseAmount(summaryRow?.cashSales);
   const manualCashIn = parseAmount(summaryRow?.manualCashIn);
   const manualCashOut = parseAmount(summaryRow?.manualCashOut);
+  const buybackCashPayouts = parseAmount(summaryRow?.buybackCashPayouts);
   const cashRefunds = parseAmount(summaryRow?.cashRefunds);
   const customerDepositCashWithdrawals = parseAmount(
     summaryRow?.customerDepositCashWithdrawals,
@@ -442,6 +469,7 @@ export async function getAdminCashMovementListData(
     manualCashIn +
     closingAdjustments -
     manualCashOut -
+    buybackCashPayouts -
     cashRefunds -
     customerDepositCashWithdrawals;
 
@@ -454,6 +482,7 @@ export async function getAdminCashMovementListData(
     referenceId: row.referenceId,
     referenceLabel:
       row.saleInvoiceNumber ??
+      row.buybackNumber ??
       (row.referenceType === "customer_deposit_withdrawal"
         ? "Penarikan Dana Titip"
         : row.referenceType === "shift"
@@ -490,6 +519,7 @@ export async function getAdminCashMovementListData(
       cashSales,
       manualCashIn,
       manualCashOut,
+      buybackCashPayouts,
       cashRefunds,
       customerDepositCashWithdrawals,
       closingAdjustments,
@@ -542,6 +572,7 @@ export async function getAdminCashMovementExportRows(
       shiftStatus: shifts.status,
       shiftOpenedAt: shifts.openedAt,
       saleInvoiceNumber: sales.invoiceNumber,
+      buybackNumber: buybacks.buybackNumber,
     })
     .from(cashMovements)
     .innerJoin(shifts, eq(cashMovements.shiftId, shifts.id))
@@ -553,6 +584,13 @@ export async function getAdminCashMovementExportRows(
       and(
         eq(cashMovements.referenceId, sales.id),
         eq(cashMovements.referenceType, "sale"),
+      ),
+    )
+    .leftJoin(
+      buybacks,
+      and(
+        eq(cashMovements.referenceId, buybacks.id),
+        eq(cashMovements.referenceType, "buyback"),
       ),
     )
     .where(whereClause)
@@ -568,6 +606,7 @@ export async function getAdminCashMovementExportRows(
     referenceId: row.referenceId,
     referenceLabel:
       row.saleInvoiceNumber ??
+      row.buybackNumber ??
       (row.referenceType === "customer_deposit_withdrawal"
         ? "Penarikan Dana Titip"
         : row.referenceType === "shift"

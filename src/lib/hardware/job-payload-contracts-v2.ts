@@ -52,7 +52,10 @@ export type HardwareLabelPayloadV2 = {
 
 export type HardwareDocumentPayloadV2 = {
   schemaVersion: 1;
-  documentType: "receipt_certificate" | "hardware_test_document";
+  documentType:
+    | "receipt_certificate"
+    | "buyback_receipt"
+    | "hardware_test_document";
   documentId: string;
   download: {
     path: string;
@@ -68,6 +71,7 @@ export type HardwareDocumentPayloadV2 = {
   copies: number;
   metadata: {
     invoiceNumber?: string;
+    buybackNumber?: string;
     requestSource: string;
     reprint: boolean;
     requestedAt: string;
@@ -251,6 +255,7 @@ function validateDocumentPayload(payload: Record<string, unknown>) {
   }
   if (
     payload.documentType !== "receipt_certificate" &&
+    payload.documentType !== "buyback_receipt" &&
     payload.documentType !== "hardware_test_document"
   ) {
     throw new TypeError("Document payload documentType tidak didukung.");
@@ -323,7 +328,9 @@ function validateDocumentPayload(payload: Record<string, unknown>) {
   const basePath =
     payload.documentType === "receipt_certificate"
       ? `/api/sales/${documentId}/receipt-certificate`
-      : "/api/sales/receipt-certificate-preview";
+      : payload.documentType === "buyback_receipt"
+        ? `/api/buybacks/${documentId}/receipt-certificate`
+        : "/api/sales/receipt-certificate-preview";
   const expectedParams = new URLSearchParams();
 
   if (documentProfileId) {
@@ -353,10 +360,23 @@ function validateDocumentPayload(payload: Record<string, unknown>) {
   }
   assertOnlyKeys(
     payload.metadata,
-    ["invoiceNumber", "requestSource", "reprint", "requestedAt", "renderMode"],
+    [
+      "invoiceNumber",
+      "buybackNumber",
+      "requestSource",
+      "reprint",
+      "requestedAt",
+      "renderMode",
+    ],
     "Document metadata",
   );
   requireString(payload.metadata, "requestSource", 120);
+  if (payload.metadata.invoiceNumber !== undefined) {
+    requireString(payload.metadata, "invoiceNumber", 120);
+  }
+  if (payload.metadata.buybackNumber !== undefined) {
+    requireString(payload.metadata, "buybackNumber", 120);
+  }
   requireIsoDate(payload.metadata, "requestedAt");
   if (typeof payload.metadata.reprint !== "boolean") {
     throw new TypeError("Document metadata reprint wajib boolean.");
@@ -511,6 +531,58 @@ export function buildReceiptDocumentPayloadV2(input: {
     copies: 1,
     metadata: {
       invoiceNumber: input.invoiceNumber,
+      requestSource: input.requestSource,
+      reprint: input.reprint,
+      requestedAt: input.requestedAt.toISOString(),
+    },
+  };
+
+  if (renderMode !== RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN) {
+    payload.metadata.renderMode = renderMode;
+  }
+
+  assertHardwareJobPayloadV2("print_receipt_certificate", payload);
+  return payload;
+}
+
+export function buildBuybackReceiptDocumentPayloadV2(input: {
+  buybackId: string;
+  buybackNumber: string;
+  requestSource: string;
+  reprint: boolean;
+  requestedAt: Date;
+  documentProfileId?: ReceiptDocumentProfileId;
+  printProfileId?: HardwareDocumentPayloadV2["printProfileId"];
+  renderMode?: HardwareReceiptRenderMode;
+}): HardwareDocumentPayloadV2 {
+  const documentProfileId =
+    input.documentProfileId ?? getConfiguredReceiptDocumentProfileId();
+  const renderMode =
+    input.renderMode ?? RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN;
+  const pathParams = new URLSearchParams({ profile: documentProfileId });
+
+  if (renderMode !== RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN) {
+    pathParams.set("mode", renderMode);
+  }
+
+  const payload: HardwareDocumentPayloadV2 = {
+    schemaVersion: 1,
+    documentType: "buyback_receipt",
+    documentId: input.buybackId,
+    download: {
+      path: `/api/buybacks/${input.buybackId}/receipt-certificate?${pathParams.toString()}`,
+      contentType: "application/pdf",
+      maxBytes: DEFAULT_DOCUMENT_MAX_BYTES,
+    },
+    documentProfileId,
+    printProfileId:
+      input.printProfileId ??
+      (documentProfileId === RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1
+        ? EPSON_L3251_PRINT_PROFILE_A4_V1
+        : RECEIPT_PRINT_PROFILE_A5_V1),
+    copies: 1,
+    metadata: {
+      buybackNumber: input.buybackNumber,
       requestSource: input.requestSource,
       reprint: input.reprint,
       requestedAt: input.requestedAt.toISOString(),

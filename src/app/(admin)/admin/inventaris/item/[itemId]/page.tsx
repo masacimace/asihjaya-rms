@@ -84,6 +84,7 @@ const movementLabels = {
   repair_out: "Keluar untuk perbaikan",
   repair_in: "Kembali dari perbaikan",
   reversal: "Pembalikan movement",
+  buyback: "Buyback",
 } as const;
 
 function getAvailabilityClass(

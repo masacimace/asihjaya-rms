@@ -30,6 +30,7 @@ const saleStatusLabels: Record<ReportSaleStatus, string> = {
 const movementTypeLabels: Record<ReportInventoryMovementType, string> = {
   goods_receipt: "Barang masuk",
   migration_opening: "Saldo awal migrasi",
+  buyback: "Buyback masuk",
   sale: "Terjual",
   sale_return: "Retur penjualan",
   transfer_out: "Transfer keluar",

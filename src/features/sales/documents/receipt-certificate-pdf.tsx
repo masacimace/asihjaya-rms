@@ -376,7 +376,9 @@ function buildInternalRenderUrl({
   const path =
     access.scope === "receipt-sale"
       ? `/documents/sales/${access.saleId}/receipt-certificate-html`
-      : "/documents/sales/receipt-certificate-preview-html";
+      : access.scope === "receipt-buyback"
+        ? `/documents/buybacks/${access.buybackId}/receipt-certificate-html`
+        : "/documents/sales/receipt-certificate-preview-html";
   const url = new URL(path, `${serverEnv.INTERNAL_RENDER_ORIGIN}/`);
   url.searchParams.set("profile", documentProfileId);
   url.searchParams.set("mode", renderMode);

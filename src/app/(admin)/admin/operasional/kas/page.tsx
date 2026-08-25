@@ -65,6 +65,10 @@ function getMovementDisplayLabel(movement: Pick<AdminCashMovementRow, "type" | "
     return "Tarik Dana Titip";
   }
 
+  if (movement.type === "cash_out" && movement.referenceType === "buyback") {
+    return "Payout Buyback";
+  }
+
   return movementTypeLabels[movement.type];
 }
 
@@ -424,11 +428,11 @@ export default async function KasPage({ searchParams }: PageProps) {
 
       <FlashMessage type={query.type} message={query.message} />
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <SummaryCard
           title="Net Movement"
           value={formatSignedMoney(data.summary.netMovement)}
-          helper="Modal awal + cash sale + kas masuk - kas keluar/refund/Dana Titip."
+          helper="Modal awal + cash sale + kas masuk - kas keluar/refund/Buyback/Dana Titip."
           icon={<WalletCards className="size-5" />}
           tone="dark"
         />
@@ -454,9 +458,16 @@ export default async function KasPage({ searchParams }: PageProps) {
           tone="danger"
         />
         <SummaryCard
+          title="Payout Cash Buyback"
+          value={formatMoney(data.summary.buybackCashPayouts)}
+          helper="Kas keluar untuk pembayaran transaksi Buyback."
+          icon={<MinusCircle className="size-5" />}
+          tone="danger"
+        />
+        <SummaryCard
           title="Kas Keluar Manual"
           value={formatMoney(data.summary.manualCashOut)}
-          helper="Kas keluar operasional non-Dana Titip."
+          helper="Kas keluar operasional non-Dana Titip dan non-Buyback."
           icon={<MinusCircle className="size-5" />}
           tone="danger"
         />

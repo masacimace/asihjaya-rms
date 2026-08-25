@@ -154,6 +154,9 @@ async function checkLiveDatabase(): Promise<void> {
       "telegram_report_settings",
       "telegram_delivery_outbox",
       "telegram_delivery_attempts",
+      "buybacks",
+      "buyback_items",
+      "buyback_payouts",
     ];
 
     const tableResult = await pool.query<{ table_name: string }>(
@@ -168,6 +171,41 @@ async function checkLiveDatabase(): Promise<void> {
 
     const requiredColumns = new Map<string, string[]>([
       ["organizations", ["timezone"]],
+      [
+        "buybacks",
+        [
+          "organization_id",
+          "outlet_id",
+          "register_id",
+          "shift_id",
+          "customer_id",
+          "processed_by",
+          "buyback_number",
+          "idempotency_key",
+          "status",
+          "total_amount",
+          "completed_at",
+        ],
+      ],
+      [
+        "buyback_items",
+        [
+          "buyback_id",
+          "product_item_id",
+          "source",
+          "line_number",
+          "weight_gram",
+          "purity_percent",
+          "exchange_purity_percent",
+          "buyback_price_per_gram",
+          "deduction_per_gram",
+          "base_amount",
+          "deduction_amount",
+          "final_amount",
+          "snapshot",
+        ],
+      ],
+      ["buyback_payouts", ["buyback_id", "method", "amount", "reference", "metadata"]],
       ["hardware_agents", ["secret_hash"]],
       ["customer_history_credentials", ["pin_hash", "credential_version", "must_change_pin"]],
       ["customer_history_sessions", ["token_hash", "absolute_expires_at", "idle_expires_at"]],

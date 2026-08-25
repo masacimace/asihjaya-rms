@@ -13,6 +13,7 @@ const {
 
 const organizationId = "11111111-1111-4111-8111-111111111111";
 const saleId = "22222222-2222-4222-8222-222222222222";
+const buybackId = "66666666-6666-4666-8666-666666666666";
 const allowedImageKey =
   `organizations/${organizationId}/items/33333333-3333-4333-8333-333333333333/44444444-4444-4444-8444-444444444444.webp`;
 
@@ -62,6 +63,36 @@ assert.equal(
   }),
   null,
 );
+
+const buybackCapability = issuePdfRenderCapability({
+  scope: "receipt-buyback",
+  organizationId,
+  buybackId,
+  documentProfileId: "receipt_a4_landscape_v1",
+  renderMode: "preprinted_overlay",
+  allowedMediaKeys: [allowedImageKey],
+});
+const buybackAccess = authorizePdfRenderDocument({
+  token: buybackCapability.token,
+  scope: "receipt-buyback",
+  buybackId,
+  documentProfileId: "receipt_a4_landscape_v1",
+  renderMode: "preprinted_overlay",
+});
+assert.equal(buybackAccess?.organizationId, organizationId);
+assert.equal(buybackAccess?.buybackId, buybackId);
+assert.equal(buybackAccess?.saleId, null);
+assert.equal(
+  authorizePdfRenderDocument({
+    token: buybackCapability.token,
+    scope: "receipt-sale",
+    saleId,
+    documentProfileId: "receipt_a4_landscape_v1",
+    renderMode: "preprinted_overlay",
+  }),
+  null,
+);
+buybackCapability.release();
 
 const tamperedToken = `${capability.token.slice(0, -1)}${
   capability.token.endsWith("A") ? "B" : "A"

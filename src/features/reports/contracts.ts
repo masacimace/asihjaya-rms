@@ -115,6 +115,7 @@ export type ReportCashSnapshot = {
   cashRefunds: number;
   manualCashIn: number;
   manualCashOut: number;
+  buybackCashPayouts: number;
   customerDepositCashWithdrawals: number;
   closingAdjustments: number;
   customerDepositOpeningBalance: number;
@@ -216,7 +217,8 @@ export type ReportInventoryMovementType =
   | "repair_out"
   | "repair_in"
   | "reversal"
-  | "migration_opening";
+  | "migration_opening"
+  | "buyback";
 
 export type ReportStockMovementFilter = "all" | ReportInventoryMovementType;
 
@@ -328,6 +330,7 @@ export const reportStockMovementOptions: Array<{
   { value: "all", label: "Semua movement" },
   { value: "goods_receipt", label: "Barang masuk" },
   { value: "migration_opening", label: "Saldo awal migrasi" },
+  { value: "buyback", label: "Buyback masuk" },
   { value: "sale", label: "Terjual" },
   { value: "sale_return", label: "Retur penjualan" },
   { value: "reversal", label: "Reversal/Void" },
