@@ -19,9 +19,9 @@ export const RECEIPT_PRINT_PROFILE_A4_V1 = "receipt_a4_v1" as const;
 export const EPSON_L3251_PRINT_PROFILE_A4_V1 =
   "epson_l3251_a4_v1" as const;
 export const INVENTORY_LABEL_TEMPLATE_V2 =
-  "jewelry_barbell_host_bold_v2" as const;
+  "jewelry_barbell_inter_v3" as const;
 export const SATO_CG408_LABEL_PROFILE_V2 =
-  "sato_cg408_jewelry_barbell_host_bold_v2" as const;
+  "sato_cg408_jewelry_barbell_inter_v3" as const;
 export const DEFAULT_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 export type HardwareReceiptRenderMode =
@@ -32,14 +32,15 @@ export type HardwareReceiptRenderMode =
 export type HardwareLabelPayloadV2 = {
   schemaVersion: 1;
   templateId: typeof INVENTORY_LABEL_TEMPLATE_V2;
-  templateVersion: 2;
+  templateVersion: 3;
   printerProfileId: typeof SATO_CG408_LABEL_PROFILE_V2;
   itemId: string;
   copies: number;
   fields: {
     sku: string;
     barcode: string;
-    productName: string;
+    masterProductName: string;
+    itemDisplayName: string;
     weightGram: string | null;
     purityPercent: string | null;
     exchangePurityPercent: string | null;
@@ -186,8 +187,8 @@ function validateLabelPayload(payload: Record<string, unknown>) {
   if (payload.templateId !== INVENTORY_LABEL_TEMPLATE_V2) {
     throw new TypeError("Label payload templateId tidak didukung.");
   }
-  if (payload.templateVersion !== 2) {
-    throw new TypeError("Label payload templateVersion harus 2.");
+  if (payload.templateVersion !== 3) {
+    throw new TypeError("Label payload templateVersion harus 3.");
   }
   if (payload.printerProfileId !== SATO_CG408_LABEL_PROFILE_V2) {
     throw new TypeError("Label payload printerProfileId tidak didukung.");
@@ -207,7 +208,8 @@ function validateLabelPayload(payload: Record<string, unknown>) {
     [
       "sku",
       "barcode",
-      "productName",
+      "masterProductName",
+      "itemDisplayName",
       "weightGram",
       "purityPercent",
       "exchangePurityPercent",
@@ -225,7 +227,8 @@ function validateLabelPayload(payload: Record<string, unknown>) {
       "Label barcode wajib format CODE128 uppercase maksimal 40 karakter.",
     );
   }
-  requireString(payload.fields, "productName", 220);
+  requireString(payload.fields, "masterProductName", 220);
+  requireString(payload.fields, "itemDisplayName", 220);
   requireNullableString(payload.fields, "weightGram", 32);
   requireNullableString(payload.fields, "purityPercent", 32);
   requireNullableString(payload.fields, "exchangePurityPercent", 32);
@@ -460,7 +463,8 @@ export function buildInventoryLabelPayloadV2(input: {
   copies: number;
   sku: string;
   barcode: string;
-  productName: string;
+  masterProductName: string;
+  itemDisplayName: string;
   weightGram: string | null;
   purityPercent: string | null;
   exchangePurityPercent: string | null;
@@ -472,14 +476,15 @@ export function buildInventoryLabelPayloadV2(input: {
   const payload: HardwareLabelPayloadV2 = {
     schemaVersion: 1,
     templateId: INVENTORY_LABEL_TEMPLATE_V2,
-    templateVersion: 2,
+    templateVersion: 3,
     printerProfileId: SATO_CG408_LABEL_PROFILE_V2,
     itemId: input.itemId,
     copies: input.copies,
     fields: {
       sku: input.sku,
       barcode: input.barcode,
-      productName: input.productName,
+      masterProductName: input.masterProductName,
+      itemDisplayName: input.itemDisplayName,
       weightGram: input.weightGram,
       purityPercent: input.purityPercent,
       exchangePurityPercent: input.exchangePurityPercent,
@@ -608,7 +613,8 @@ export function buildHardwareTestPayloadV2(input: {
       copies: 1,
       sku: "AJ-TEST-LABEL",
       barcode: "AJTEST123456",
-      productName: "CINCIN EMAS TEST ASIHJAYA",
+      masterProductName: "CINCIN EMAS TEST ASIHJAYA",
+      itemDisplayName: "CINCIN EMAS TEST ITEM 001",
       weightGram: "2.350",
       purityPercent: "75",
       exchangePurityPercent: "70",

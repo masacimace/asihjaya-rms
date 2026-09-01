@@ -46,7 +46,6 @@ export type CustomerDepositLedgerRow = CustomerDepositScope & {
   saleId: string | null;
   paymentId: string | null;
   cashMovementId: string | null;
-  approvalId: string | null;
   entryType: CustomerDepositLedgerEntryType;
   direction: CustomerDepositLedgerDirection;
   amount: string;
@@ -77,7 +76,6 @@ export type CreateCustomerDepositLedgerEntryInput = CustomerDepositScope & {
   saleId?: string | null;
   paymentId?: string | null;
   cashMovementId?: string | null;
-  approvalId?: string | null;
   idempotencyKey?: string | null;
   referenceType?: string | null;
   referenceId?: string | null;

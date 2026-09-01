@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import {
   Banknote,
   CircleDollarSign,
@@ -237,6 +239,7 @@ function BuybackDetailPanel({
             </a>
             <form action={reprintBuybackReceiptAction}>
               <input type="hidden" name="buybackId" value={detail.id} />
+              <input type="hidden" name="requestId" value={randomUUID()} />
               <button
                 type="submit"
                 className="inline-flex items-center gap-1.5 rounded-xl bg-neutral-950 px-3 py-2 text-xs font-semibold text-white"

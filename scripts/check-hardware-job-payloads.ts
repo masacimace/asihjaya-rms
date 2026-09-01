@@ -22,7 +22,8 @@ const labelPayload = buildInventoryLabelPayloadV2({
   copies: 2,
   sku: "AJ-0001",
   barcode: "899000000001",
-  productName: "Cincin Emas",
+  masterProductName: "Cincin Emas Master",
+  itemDisplayName: "Cincin Emas Item 001",
   weightGram: "2.350",
   purityPercent: "75",
   exchangePurityPercent: "70",
@@ -32,8 +33,11 @@ const labelPayload = buildInventoryLabelPayloadV2({
   sellingAmount: "3500000",
 });
 assert.equal(labelPayload.schemaVersion, 1);
-assert.equal(labelPayload.templateId, "jewelry_barbell_host_bold_v2");
-assert.equal(labelPayload.printerProfileId, "sato_cg408_jewelry_barbell_host_bold_v2");
+assert.equal(labelPayload.templateId, "jewelry_barbell_inter_v3");
+assert.equal(labelPayload.templateVersion, 3);
+assert.equal(labelPayload.printerProfileId, "sato_cg408_jewelry_barbell_inter_v3");
+assert.equal(labelPayload.fields.masterProductName, "Cincin Emas Master");
+assert.equal(labelPayload.fields.itemDisplayName, "Cincin Emas Item 001");
 assertHardwareJobPayloadV2("print_label_sato", labelPayload);
 
 const receiptPayload = buildReceiptDocumentPayloadV2({

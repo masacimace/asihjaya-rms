@@ -8,7 +8,6 @@ import {
   customerDepositLedger,
   payments,
   sales,
-  settlementImportBatches,
 } from "@/db/schema";
 import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
 import {
@@ -23,7 +22,6 @@ import {
   claimProductItemsForSale,
   type InventorySaleClaimTransaction,
 } from "@/features/pos/inventory-sale-claim";
-import { lockManualPaymentReference } from "@/features/pos/manual-payment-reference-lock";
 import {
   executeSaleReversal,
   SaleReversalTransactionError,
@@ -641,74 +639,6 @@ test("Dana Titip advisory lock prevents concurrent double spend", async ({ organ
   );
 });
 
-test("manual payment reference lock serializes duplicate detection", async ({ organizationA }) => {
-  const saleA = await createSale(organizationA);
-  const saleB = await createSale(organizationA);
-  const normalizedProvider = "BCA";
-  const normalizedReference = "FINANCIAL-REF-001";
-
-  async function insertPayment(saleId: string) {
-    return db.transaction(async (transaction: InventorySaleClaimTransaction) => {
-      await lockManualPaymentReference(transaction, {
-        organizationId: organizationA.organizationId,
-        outletId: organizationA.outletId,
-        method: "debit_card",
-        normalizedProvider,
-        normalizedReference,
-      });
-
-      const duplicate = await transaction
-        .select({ id: payments.id })
-        .from(payments)
-        .innerJoin(sales, eq(payments.saleId, sales.id))
-        .where(
-          and(
-            eq(sales.organizationId, organizationA.organizationId),
-            eq(sales.outletId, organizationA.outletId),
-            eq(payments.method, "debit_card"),
-            eq(payments.provider, normalizedProvider),
-            eq(payments.normalizedReference, normalizedReference),
-          ),
-        )
-        .limit(1);
-
-      if (duplicate.length > 0) return false;
-
-      await transaction.insert(payments).values({
-        saleId,
-        method: "debit_card",
-        provider: normalizedProvider,
-        amount: "1000000",
-        status: "paid",
-        providerReference: normalizedReference,
-        normalizedReference,
-        verificationStatus: "self_verified",
-        verificationSource: "edc_terminal",
-        providerPaidAt: TEST_NOW,
-        manualPaymentProfileId: organizationA.paymentProfileId,
-        settlementStatus: "unreconciled",
-        verifiedBy: organizationA.makerId,
-        verifiedAt: TEST_NOW,
-        paidAt: TEST_NOW,
-        metadata: { source: "financial-concurrency-test" },
-      });
-      await transaction.execute(sql`select pg_sleep(0.08)`);
-      return true;
-    });
-  }
-
-  const outcomes = await Promise.all([insertPayment(saleA.saleId), insertPayment(saleB.saleId)]);
-  assert.deepEqual(outcomes.sort(), [false, true]);
-  assert.equal(
-    await queryCount(
-      "payments p join sales s on s.id = p.sale_id",
-      "where s.organization_id = $1 and p.normalized_reference = $2",
-      [organizationA.organizationId, normalizedReference],
-    ),
-    1,
-  );
-});
-
 test("direct refund is concurrency-safe and tenant scoped without approval", async ({
   organizationA,
   organizationB,
@@ -730,11 +660,10 @@ test("direct refund is concurrency-safe and tenant scoped without approval", asy
   );
   await pool.query(
     `insert into payments (
-       id, sale_id, method, provider, amount, status, verification_status,
-       manual_payment_profile_id, settlement_status, verified_by, verified_at,
-       paid_at, metadata
-     ) values ($1, $2, 'debit_card', 'BCA', 1000000, 'paid', 'self_verified',
-       $3, 'not_applicable', $4, $5, $5, '{}'::jsonb)`,
+       id, sale_id, method, provider, amount, status,
+       manual_payment_profile_id, verified_by, verified_at, paid_at, metadata
+     ) values ($1, $2, 'debit_card', 'BCA', 1000000, 'paid',
+       $3, $4, $5, $5, '{}'::jsonb)`,
     [
       id(),
       sale.saleId,
@@ -773,7 +702,6 @@ test("direct refund is concurrency-safe and tenant scoped without approval", asy
     }
   }
 
-  assert.equal(await queryCount("approvals"), 0, "Refund langsung tidak boleh membuat approval.");
   assert.equal(await queryCount("payment_refunds", "where sale_id = $1", [sale.saleId]), 1);
   assert.equal(await queryCount("sale_return_cases", "where sale_id = $1", [sale.saleId]), 1);
   assert.equal(await queryCount("sale_return_items", "where product_item_id = $1", [itemId]), 1);
@@ -926,49 +854,6 @@ test("shift closing reconciles cash exactly once and requires variance notes", a
   assert.equal(varianceClose.expectedCash, 100_000);
   assert.equal(varianceClose.variance, -10_000);
   assert.equal(varianceClose.varianceReason, "Selisih kas hasil perhitungan ulang");
-});
-
-test("settlement file fingerprint is unique per organization", async ({
-  organizationA,
-  organizationB,
-}) => {
-  const fileHash = "a".repeat(64);
-
-  async function insertBatch(fixture: OrganizationFixture) {
-    const rows = await db
-      .insert(settlementImportBatches)
-      .values({
-        organizationId: fixture.organizationId,
-        outletId: fixture.outletId,
-        profileId: fixture.paymentProfileId,
-        uploadedBy: fixture.makerId,
-        fileName: "financial-test.csv",
-        fileKey: `financial-test/${fixture.prefix}.csv`,
-        fileHash,
-        fileSizeBytes: 128,
-        status: "uploaded",
-      })
-      .onConflictDoNothing()
-      .returning({ id: settlementImportBatches.id });
-    return rows[0]?.id ?? null;
-  }
-
-  const concurrent = await Promise.all([insertBatch(organizationA), insertBatch(organizationA)]);
-  assert.equal(concurrent.filter(Boolean).length, 1);
-  assert.equal(
-    await queryCount(
-      "settlement_import_batches",
-      "where organization_id = $1 and file_hash = $2",
-      [organizationA.organizationId, fileHash],
-    ),
-    1,
-  );
-
-  assert.notEqual(await insertBatch(organizationB), null);
-  assert.equal(
-    await queryCount("settlement_import_batches", "where file_hash = $1", [fileHash]),
-    2,
-  );
 });
 
 test("hardware job creation is exactly-once per organization and business intent", async ({

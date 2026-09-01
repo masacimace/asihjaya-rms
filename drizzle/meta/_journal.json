@@ -148,6 +148,13 @@
       "when": 1787595180000,
       "tag": "0020_buyback_core_transaction",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787985010688,
+      "tag": "0021_r4_final_schema_cleanup",
+      "breakpoints": true
     }
   ]
 }

@@ -41,6 +41,7 @@ const { acquireProcessLock } = require("./lib/process-lock");
 const {
   loadSatoJewelryLabelConfig,
   SATO_JEWELRY_LABEL_TEMPLATE_ID,
+  SATO_JEWELRY_RENDERER,
 } = require("./lib/sato-jewelry-label");
 
 const PROTOCOL_MODES = new Set(["v2-preferred", "v2-only", "v1-only"]);
@@ -636,10 +637,10 @@ function getCapabilitiesPayload() {
     label_config: {
       template_id: SATO_JEWELRY_LABEL_TEMPLATE_ID,
       printer_profile_id: SATO_LABEL_CONFIG.config.id,
-      renderer: "host_bold_bmp_v2",
+      renderer: SATO_JEWELRY_RENDERER,
       copies: SATO_COPIES,
       barcode_strategy: SATO_LABEL_CONFIG.config.front.barcode.strategy,
-      physical_validation: "accepted",
+      physical_validation: SATO_LABEL_CONFIG.config.physicalValidation,
     },
     operations: {
       structured_logs: true,

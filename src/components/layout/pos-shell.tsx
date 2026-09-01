@@ -48,7 +48,6 @@ type PosShellUser = {
   roleLabel: string;
   canAccessAdmin: boolean;
   outletName: string;
-  canAccessMigration: boolean;
   canCreateProducts: boolean;
   canAccessBuybacks: boolean;
 };
@@ -169,7 +168,6 @@ function getMobileBottomNavigationItemClassName(active: boolean) {
 type SidebarContentProps = {
   pathname: string;
   canAccessAdmin: boolean;
-  canAccessMigration: boolean;
   canCreateProducts: boolean;
   canAccessBuybacks: boolean;
   onNavigate?: () => void;
@@ -289,7 +287,6 @@ function NotificationIcon({
 function SidebarContent({
   pathname,
   canAccessAdmin,
-  canAccessMigration,
   canCreateProducts,
   canAccessBuybacks,
   onNavigate,
@@ -346,9 +343,6 @@ function SidebarContent({
               return canAccessBuybacks;
             }
 
-            if ("access" in item && item.access === "migration") {
-              return canAccessMigration;
-            }
 
             return true;
           })
@@ -629,7 +623,6 @@ export function PosShell({
         <SidebarContent
           pathname={pathname}
           canAccessAdmin={user.canAccessAdmin}
-          canAccessMigration={user.canAccessMigration}
           canCreateProducts={user.canCreateProducts}
           canAccessBuybacks={user.canAccessBuybacks}
         />
@@ -660,8 +653,7 @@ export function PosShell({
             <SidebarContent
               pathname={pathname}
               canAccessAdmin={user.canAccessAdmin}
-              canAccessMigration={user.canAccessMigration}
-              canCreateProducts={user.canCreateProducts}
+                  canCreateProducts={user.canCreateProducts}
               canAccessBuybacks={user.canAccessBuybacks}
               onNavigate={() => setIsNavigationOpen(false)}
             />
@@ -717,9 +709,6 @@ export function PosShell({
                     return user.canAccessBuybacks;
                   }
 
-                  if ("access" in item && item.access === "migration") {
-                    return user.canAccessMigration;
-                  }
 
                   return true;
                 })

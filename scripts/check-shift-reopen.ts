@@ -53,8 +53,8 @@ contains(
 );
 contains(
   reopenSource,
-  'auth.permissionCodes.includes("shifts.reopen")',
-  "permission guard",
+  'auth.permissionCodes.includes("shifts.manage")',
+  "same-day continuation permission guard",
 );
 contains(
   reopenSource,
@@ -75,11 +75,11 @@ contains(
   'reportType: "shift_reopened"',
   "reopen correction outbox",
 );
-contains(controlsSource, "Buka Kembali Shift", "POS controlled reopen UI");
+contains(controlsSource, "Lanjutkan Shift Hari Ini", "POS same-day continuation UI");
 contains(
   pageSource,
-  'canReopenShifts={auth.permissionCodes.includes("shifts.reopen")}',
-  "POS reopen permission exposure",
+  'canContinueShift={auth.permissionCodes.includes("shifts.manage")}',
+  "POS continuation permission exposure",
 );
 contains(
   dailySource,
@@ -246,7 +246,6 @@ async function checkDatabase() {
       transactionCount: 0,
       itemsSoldCount: 0,
       heldTransactionCount: 0,
-      pendingApprovalCount: 0,
       openedAt,
       closedAt,
       cashierId,
@@ -314,18 +313,18 @@ async function checkDatabase() {
   await assert.rejects(
     () =>
       reopenClosedShift({
-        auth: makeAuth(["shifts.manage"]),
+        auth: makeAuth(["pos.access"]),
         shiftId,
-        reason: "Kasir tidak boleh reopen",
+        reason: "Tidak memiliki akses pengelolaan shift",
         source: "pos.reopen_shift",
         requestMetadata: { ipAddress: null, userAgent: null },
       }),
     (error: unknown) =>
       error instanceof ShiftReopenError &&
-      error.message.includes("shifts.reopen"),
+      error.message.includes("shifts.manage"),
   );
 
-  const auth = makeAuth(["shifts.manage", "shifts.reopen"]);
+  const auth = makeAuth(["shifts.manage"]);
   const firstReopen = await reopenClosedShift({
     auth,
     shiftId,

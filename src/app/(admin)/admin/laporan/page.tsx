@@ -868,14 +868,14 @@ function RecentSales({ data }: { data: ReportSummaryData }) {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-[var(--accent)]">
+                    <p className="text-xs font-semibold text-[var(--accent)]">
                       {sale.invoiceNumber}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
                       {sale.outletName} · {sale.customerName ?? "Walk-in"}
                     </p>
                   </div>
-                  <p className="text-right text-sm font-semibold text-neutral-950">
+                  <p className="text-right text-xs font-semibold text-neutral-950">
                     {formatMoney(sale.totalAmount)}
                   </p>
                 </div>

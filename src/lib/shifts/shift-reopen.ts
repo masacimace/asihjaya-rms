@@ -64,10 +64,10 @@ export type ReopenShiftResult = {
 function normalizeReason(value: string): string {
   const reason = value.trim();
   if (reason.length < 5) {
-    throw new ShiftReopenError("Alasan membuka kembali shift wajib diisi minimal 5 karakter.");
+    throw new ShiftReopenError("Alasan melanjutkan shift wajib diisi minimal 5 karakter.");
   }
   if (reason.length > 500) {
-    throw new ShiftReopenError("Alasan membuka kembali shift maksimal 500 karakter.");
+    throw new ShiftReopenError("Alasan melanjutkan shift maksimal 500 karakter.");
   }
   return reason;
 }
@@ -80,9 +80,9 @@ export async function reopenClosedShift({
   source,
   now = new Date(),
 }: ReopenShiftInput): Promise<ReopenShiftResult> {
-  if (!auth.permissionCodes.includes("shifts.reopen")) {
+  if (!auth.permissionCodes.includes("shifts.manage")) {
     throw new ShiftReopenError(
-      "Buka kembali shift hanya dapat dilakukan oleh manager/owner yang memiliki permission shifts.reopen.",
+      "Melanjutkan shift hari ini membutuhkan permission shifts.manage.",
     );
   }
 
@@ -128,14 +128,14 @@ export async function reopenClosedShift({
       throw new ShiftReopenError("Shift tidak ditemukan atau bukan akses outlet kamu.");
     }
     if (shift.status !== "closed") {
-      throw new ShiftReopenError("Hanya shift berstatus closed yang dapat dibuka kembali.");
+      throw new ShiftReopenError("Hanya shift yang sudah ditutup yang dapat dilanjutkan kembali.");
     }
     if (!shift.businessDate || !shift.closedAt || !shift.closedBy) {
       throw new ShiftReopenError("Data penutupan shift belum lengkap dan tidak aman untuk dibuka kembali.");
     }
     if (shift.businessDate !== currentBusinessDate) {
       throw new ShiftReopenError(
-        `Shift hanya dapat dibuka kembali pada tanggal operasional yang sama (${shift.businessDate}).`,
+        `Shift hanya dapat dilanjutkan pada tanggal operasional yang sama (${shift.businessDate}).`,
       );
     }
 

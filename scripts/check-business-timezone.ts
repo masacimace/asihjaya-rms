@@ -102,7 +102,6 @@ const criticalFiles = [
   "src/features/reports/queries.ts",
   "src/features/admin/dashboard/queries.ts",
   "src/features/cash-movements/queries.ts",
-  "src/features/approvals/queries.ts",
   "src/features/customers/queries.ts",
   "src/features/notifications/queries.ts",
   "src/features/sales/correction-eligibility.ts",

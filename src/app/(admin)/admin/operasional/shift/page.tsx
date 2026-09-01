@@ -238,6 +238,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSummary }) {
       <div className="border-t border-[var(--border)] bg-neutral-50/50 p-4 sm:p-5 lg:p-6">
         <CloseShiftForm
           shiftId={shift.id}
+          expectedCashAmount={shift.cashSummary.expectedCash}
           expectedCashLabel={formatMoney(shift.cashSummary.expectedCash)}
         />
       </div>
@@ -322,13 +323,13 @@ function RecentShiftMobileCard({ shift }: { shift: ShiftSummary }) {
       <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
         <div className="rounded-2xl bg-neutral-50 p-3">
           <p className="text-xs text-[var(--muted)]">Expected</p>
-          <p className="mt-1 font-semibold text-neutral-950">
+          <p className="mt-1 text-xs font-semibold text-neutral-950">
             {formatMoney(getExpectedCash(shift))}
           </p>
         </div>
         <div className="rounded-2xl bg-neutral-50 p-3">
           <p className="text-xs text-[var(--muted)]">Aktual</p>
-          <p className="mt-1 font-semibold text-neutral-950">
+          <p className="mt-1 text-xs font-semibold text-neutral-950">
             {shift.actualCash ? formatMoney(shift.actualCash) : "-"}
           </p>
         </div>

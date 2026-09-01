@@ -37,7 +37,7 @@ type PosWorkspaceDialogs = {
 type PosWorkspaceShiftProps = {
   context: PosOperationalContext;
   canManageShifts: boolean;
-  canReopenShifts: boolean;
+  canContinueShift: boolean;
   isCloseShiftPanelOpen: boolean;
   onToggleCloseShiftPanel: () => void;
   onCloseShiftPanel: () => void;
@@ -100,12 +100,12 @@ export function PosWorkspaceView({
           <PosContextNotice
             context={shifts.context}
             canManageShifts={shifts.canManageShifts}
-            canReopenShifts={shifts.canReopenShifts}
+            canContinueShift={shifts.canContinueShift}
             isCloseShiftPanelOpen={shifts.isCloseShiftPanelOpen}
             onCloseShiftClick={shifts.onToggleCloseShiftPanel}
           />
 
-          {shifts.canReopenShifts && shifts.context.reopenCandidate ? (
+          {shifts.canContinueShift && shifts.context.reopenCandidate ? (
             <PosReopenShiftCard context={shifts.context} />
           ) : null}
 

@@ -35,6 +35,11 @@
     "check:telegram-operations": "tsx scripts/check-telegram-operations.ts",
     "check:settings-hub": "tsx scripts/check-settings-hub.ts",
     "check:shift-reopen": "tsx scripts/check-shift-reopen.ts",
+    "check:pre-r4-shift-ux": "tsx scripts/check-pre-r4-shift-ux.ts",
+    "check:r4-2a": "tsx scripts/check-r4-2a-retired-payment-schema.ts",
+    "check:r4-2b": "tsx scripts/check-r4-2b-retired-legacy-workflow.ts",
+    "check:r4-2c": "tsx scripts/check-r4-2c-final-permission-contracts.ts",
+    "check:r4-3": "tsx scripts/check-r4-3-final-schema-migration.ts",
     "test:telegram-outbox:local": "tsx scripts/run-telegram-outbox-local.ts",
     "test:telegram-opening:local": "tsx scripts/run-telegram-opening-local.ts",
     "test:telegram-daily:local": "tsx scripts/run-telegram-daily-local.ts",
@@ -192,7 +197,11 @@
     "check:pos-transaction-deposit-ux": "tsx scripts/check-pos-transaction-deposit-ux.ts",
     "check:buyback-bb1": "tsx scripts/check-buyback-bb1.ts",
     "check:buyback-bb2": "tsx scripts/check-buyback-bb2.ts",
-    "check:buyback-bb3a": "tsx scripts/check-buyback-bb3a.ts"
+    "check:buyback-bb3a": "tsx scripts/check-buyback-bb3a.ts",
+    "check:buyback-bb3b": "tsx scripts/check-buyback-bb3b.ts",
+    "check:buyback-bb3c": "tsx scripts/check-buyback-bb3c.ts",
+    "check:buyback-bb3d": "tsx scripts/check-buyback-bb3d.ts",
+    "check:buyback-final": "npm run check:buyback-bb1 && npm run check:buyback-bb2 && npm run check:buyback-bb3a && npm run check:buyback-bb3b && npm run check:buyback-bb3c && npm run check:buyback-bb3d && npm run check:pos-reweigh && npm run check:pos-transaction-deposit-ux && npm run check:shift-reopen && npm run check:telegram-daily && npm run check:telegram-weekly && npm run check:telegram-monthly && npm --prefix hardware-hub run check:v2 && npm --prefix hardware-hub run check:simulation"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

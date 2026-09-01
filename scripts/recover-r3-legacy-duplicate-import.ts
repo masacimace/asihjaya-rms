@@ -144,8 +144,6 @@ try {
     sale_items: number;
     sale_return_items: number;
     held_cart_items: number;
-    legacy_verifications: number;
-    legacy_sold_records: number;
     product_batch_rows: number;
   }>(
     `with duplicate_items as (
@@ -162,8 +160,6 @@ try {
        (select count(*)::int from sale_items si join duplicate_items d on d.id = si.product_item_id) as sale_items,
        (select count(*)::int from sale_return_items sri join duplicate_items d on d.id = sri.product_item_id) as sale_return_items,
        (select count(*)::int from pos_held_cart_items hc join duplicate_items d on d.id = hc.product_item_id) as held_cart_items,
-       (select count(*)::int from legacy_migration_verifications lv join duplicate_items d on d.id = lv.product_item_id) as legacy_verifications,
-       (select count(*)::int from legacy_migration_sold_records ls join duplicate_items d on d.id = ls.product_item_id) as legacy_sold_records,
        (select count(*)::int from product_batch_import_item_rows pbi join duplicate_items d on d.id = pbi.committed_product_item_id) as product_batch_rows`,
     [batchId, batch.organization_id, duplicate.imported_at],
   );
@@ -176,8 +172,6 @@ try {
     dependencies.sale_items +
     dependencies.sale_return_items +
     dependencies.held_cart_items +
-    dependencies.legacy_verifications +
-    dependencies.legacy_sold_records +
     dependencies.product_batch_rows;
   if (blockingReferences > 0) {
     throw new Error(

@@ -169,7 +169,6 @@ export async function withdrawCustomerDepositAction(formData: FormData) {
           outletId,
           customerId,
           cashMovementId: cashMovement.id,
-          approvalId: null,
           entryType: "deposit_withdrawal",
           direction: "debit",
           amount: String(amount),

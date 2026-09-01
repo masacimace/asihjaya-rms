@@ -6,6 +6,7 @@ const { DOCUMENT_PRINT_PROFILES } = require("../lib/document-print-profiles");
 const {
   loadSatoJewelryLabelConfig,
   SATO_JEWELRY_LABEL_TEMPLATE_ID,
+  SATO_JEWELRY_RENDERER,
 } = require("../lib/sato-jewelry-label");
 
 const root = path.resolve(__dirname, "..");
@@ -81,11 +82,11 @@ function collectDiagnostics() {
               model: "CG408",
               language: "SBPL",
               dpi: 203,
-              renderer: "host_bold_bmp_v2",
+              renderer: SATO_JEWELRY_RENDERER,
               configVersion: resolved.config.version,
               configPath: resolved.path,
               barcodeStrategy: resolved.config.front.barcode.strategy,
-              physicalValidation: "accepted",
+              physicalValidation: resolved.config.physicalValidation,
             }
           : null,
         availableProfiles: resolved ? [resolved.config.id] : [],

@@ -280,15 +280,17 @@ Recovery rules:
 
 ## Label SATO
 
-Production memakai satu jalur SATO CG408 yang sudah lolos physical acceptance:
+Production memakai satu jalur SATO CG408 yang sudah **client-approved dan frozen**:
 
 ```text
-jewelry_barbell_host_bold_v2
-→ sato_cg408_jewelry_barbell_host_bold_v2
-→ host-rendered Arial Narrow Bold + native CODE128_B
+jewelry_barbell_inter_v3
+→ sato_cg408_jewelry_barbell_inter_v3
+→ host-rendered Inter Medium + native CODE128_B
 → RAW Winspool
 → SATO CG408
 ```
+
+Media fisik: **80 mm × 24 mm**. Front mencetak Product Master Name, native CODE128, dan barcode number. Back hanya mencetak Weight dan Physical Item Name. Purity tidak dicetak.
 
 Konfigurasi runtime:
 
@@ -296,10 +298,27 @@ Konfigurasi runtime:
 LABEL_PRINTER_NAME=SATO CG408
 LABEL_PRINTER_ADAPTER=fake
 SATO_LABEL_CONFIG_PATH=./config/sato-jewelry-barbell-host-bold.json
+SATO_LABEL_FONT_PATH=C:\\path\\ke\\Inter-Medium.ttf
 SATO_COPIES=1
 ```
 
-`LABEL_PRINTER_NAME` adalah Windows printer queue name persis seperti kolom `Name` dari `Get-Printer`. Printer tidak perlu di-share. Text label dirender host sebagai monochrome bitmap menggunakan font Bold Windows, barcode tetap native CODE128 Set B, lalu seluruh SBPL dikirim lewat Winspool dengan datatype `RAW`.
+Nama file config lama `sato-jewelry-barbell-host-bold.json` **sengaja dipertahankan untuk backward compatibility env/deployment**. Identitas template/profile production tetap V3; nama file bukan contract visual.
+
+### Freeze contract
+
+Fine-tuning fisik pada config adalah source of truth. Untuk melakukan acceptance/freeze pertama kali setelah client menyetujui hasil cetak:
+
+```powershell
+npm run label:freeze-v3
+```
+
+Command tersebut **tidak mengubah coordinate, scale, font size, atau layout**. Ia hanya:
+
+1. mengubah `physicalValidation` menjadi `accepted`;
+2. menghasilkan `config/sato-jewelry-barbell-inter-v3.lock.json`;
+3. menyimpan SHA-256 dari config fine-tuned yang aktif.
+
+Hardware Hub kemudian menolak startup/render bila config berubah dan hash tidak lagi sama dengan lock. Setiap revisi visual setelah freeze harus diperlakukan sebagai design revision baru dan di-accept/freeze kembali secara eksplisit.
 
 Contract check:
 
@@ -310,10 +329,10 @@ npm run check:sato
 Untuk membuat SBPL production manual:
 
 ```powershell
-npm run render:sato-label -- -ProductName "NAMA PRODUK" -Barcode "AJ00000006" -Weight "6.05Gr" -Purity "16K-60%" -Copies 1 -OutputFile ".\data\temp\label.sbpl"
+npm run render:sato-label -- -MasterProductName "GIWANG KB KERONCONG 16K" -ItemDisplayName "GIWANG KB MP 1 GIGI 4 + ULIR GR.099 - 16K/700" -Barcode "AJ0002416" -Weight "2.75 Gr" -Copies 1 -OutputFile ".\data\temp\label-v3.sbpl"
 ```
 
-Layout fisik hanya bersumber dari `config/sato-jewelry-barbell-host-bold.json`. Renderer/profile SATO legacy sudah dihapus dan Hardware Hub menolak template/profile selain contract production tersebut.
+Font file tidak disimpan di repository. Gunakan `SATO_LABEL_FONT_PATH` untuk mengarah ke `Inter-Medium.ttf` lokal agar hasil Windows dev/Mini PC deterministik. Barcode tetap native CODE128 Set B.
 
 ## Document printer
 

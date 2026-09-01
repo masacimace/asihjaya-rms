@@ -76,18 +76,18 @@ async function main() {
     );
     assert.equal(
       diagnostics.labelPrinting.configuredProfileId,
-      "sato_cg408_jewelry_barbell_host_bold_v2",
+      "sato_cg408_jewelry_barbell_inter_v3",
       "support diagnostics harus mencantumkan single production SATO profile",
     );
     assert.equal(
       diagnostics.labelPrinting.active?.physicalValidation,
       "accepted",
-      "SATO physical validation final harus accepted",
+      "SATO label v3 production wajib sudah client-approved dan frozen",
     );
     assert.equal(
       diagnostics.labelPrinting.active?.renderer,
-      "host_bold_bmp_v2",
-      "support diagnostics harus mencantumkan production host-bold renderer",
+      "host_inter_bmp_v3",
+      "support diagnostics harus mencantumkan production Inter v3 renderer",
     );
 
     for (const file of [

@@ -16,6 +16,10 @@ import { initialPosShiftActionState } from "@/features/pos/contracts";
 import { requestPosShellStatusRefresh } from "@/features/pos/live-status";
 import { cn } from "@/lib/utils";
 
+const CASH_VARIANCE_QUICK_REASONS = ["Menggunakan kas cadangan toko."] as const;
+
+const OTHER_REASON = "__other__";
+
 type ShiftClosePanelProps = {
   shiftId: string;
   registerId: string;
@@ -77,14 +81,14 @@ function getVarianceHelper(value: number | null) {
   }
 
   if (value === 0) {
-    return "Jumlah uang fisik sesuai dengan expected cash sistem.";
+    return "Jumlah uang fisik sesuai dengan posisi kas sistem.";
   }
 
   if (value > 0) {
-    return "Ada uang fisik lebih dari expected cash. Catatan selisih wajib diisi.";
+    return "Ada uang fisik lebih dari posisi kas sistem. Penjelasan wajib dipilih.";
   }
 
-  return "Ada uang fisik kurang dari expected cash. Catatan selisih wajib diisi.";
+  return "Ada uang fisik kurang dari posisi kas sistem. Penjelasan wajib dipilih.";
 }
 
 function CloseShiftSubmitButton() {
@@ -118,7 +122,8 @@ export function ShiftClosePanel({
     initialPosShiftActionState,
   );
   const [actualCashInput, setActualCashInput] = useState("");
-  const [varianceReason, setVarianceReason] = useState("");
+  const [reasonPreset, setReasonPreset] = useState<string>("");
+  const [otherReason, setOtherReason] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
   const actualCashAmount = actualCashInput
     ? Number(actualCashInput.replace(/[^0-9]/g, ""))
@@ -128,9 +133,12 @@ export function ShiftClosePanel({
     actualCashAmount === null ? null : actualCashAmount - expectedCashAmount;
   const hasCashVariance =
     cashVarianceAmount !== null && cashVarianceAmount !== 0;
+  const isNegativeExpected = expectedCashAmount < 0;
+  const varianceReason =
+    reasonPreset === OTHER_REASON ? otherReason.trim() : reasonPreset;
   const isReadyToReview =
     actualCashAmount !== null &&
-    (!hasCashVariance || varianceReason.trim().length > 0);
+    (!hasCashVariance || varianceReason.trim().length >= 5);
 
   useEffect(() => {
     if (state.status === "success") {
@@ -141,11 +149,18 @@ export function ShiftClosePanel({
 
   function handleActualCashChange(value: string) {
     setActualCashInput(formatRupiahInput(value));
+    setReasonPreset("");
+    setOtherReason("");
     setIsReviewing(false);
   }
 
-  function handleVarianceReasonChange(value: string) {
-    setVarianceReason(value);
+  function handleReasonPresetChange(value: string) {
+    setReasonPreset(value);
+    setIsReviewing(false);
+  }
+
+  function handleOtherReasonChange(value: string) {
+    setOtherReason(value);
     setIsReviewing(false);
   }
 
@@ -166,7 +181,7 @@ export function ShiftClosePanel({
         <div className="min-w-0">
           <h2 className="font-semibold text-neutral-950">Tutup Shift</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Rekonsiliasi kas untuk {registerName}. Expected cash sistem saat ini{" "}
+            Rekonsiliasi kas untuk {registerName}. Posisi kas sistem saat ini{" "}
             <span className="font-semibold text-neutral-800">
               {formatMoney(expectedCash)}
             </span>
@@ -183,6 +198,7 @@ export function ShiftClosePanel({
           name="actualCash"
           value={actualCashInput.replace(/[^0-9]/g, "")}
         />
+        <input type="hidden" name="varianceReason" value={varianceReason} />
 
         {state.message ? (
           <p
@@ -199,10 +215,27 @@ export function ShiftClosePanel({
           </p>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        {isNegativeExpected ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-700" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900">
+                  Posisi kas sistem berada di bawah Rp.0
+                </p>
+                <p className="mt-1 text-xs leading-5 text-amber-800">
+                  Pengeluaran Cash lebih besar daripada kas yang tercatat masuk.
+                  Kas fisik tetap diinput sesuai uang yang ada di drawer.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <label className="block text-sm">
             <span className="mb-2 block font-medium text-neutral-800">
-              Expected Cash
+              Saldo Cash
             </span>
             <input
               inputMode="numeric"
@@ -221,32 +254,74 @@ export function ShiftClosePanel({
             </p>
           </label>
 
-          <label className="block text-sm">
+          <div className="text-sm">
             <span className="mb-2 block font-medium text-neutral-800">
-              Alasan / Catatan Selisih
+              {isNegativeExpected ? "Penjelasan posisi kas" : "Catatan selisih"}
+              {hasCashVariance ? (
+                <span className="text-red-600"> *</span>
+              ) : null}
             </span>
-            <textarea
-              name="varianceReason"
-              value={varianceReason}
-              onChange={(event) =>
-                handleVarianceReasonChange(event.target.value)
-              }
-              maxLength={500}
-              rows={4}
-              placeholder="Wajib diisi jika kas kurang / lebih"
-              className="min-h-24 w-full resize-none rounded-xl border border-[var(--border)] bg-white px-3 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-            />
+            {hasCashVariance ? (
+              <>
+                <div className="grid gap-2 sm:grid-cols-1">
+                  {CASH_VARIANCE_QUICK_REASONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => handleReasonPresetChange(option)}
+                      className={cn(
+                        "rounded-xl border px-3 py-2 text-left text-xs transition",
+                        reasonPreset === option
+                          ? "border-amber-500 bg-amber-50 font-semibold text-amber-950"
+                          : "border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
+                      )}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => handleReasonPresetChange(OTHER_REASON)}
+                    className={cn(
+                      "rounded-xl border px-3 py-2 text-left text-xs transition",
+                      reasonPreset === OTHER_REASON
+                        ? "border-amber-500 bg-amber-50 font-semibold text-amber-950"
+                        : "border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
+                    )}
+                  >
+                    Lainnya
+                  </button>
+                </div>
+                {reasonPreset === OTHER_REASON ? (
+                  <textarea
+                    value={otherReason}
+                    onChange={(event) =>
+                      handleOtherReasonChange(event.target.value)
+                    }
+                    maxLength={500}
+                    rows={3}
+                    placeholder="Jelaskan selisih kas..."
+                    className="mt-2 min-h-20 w-full resize-none rounded-xl border border-[var(--border)] bg-white px-3 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                  />
+                ) : null}
+                {!varianceReason.trim() ? (
+                  <p className="mt-1.5 text-xs text-amber-700">
+                    Pilih satu penjelasan sebelum closing.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="rounded-xl border border-[var(--border)] bg-neutral-50 px-3 py-3 text-xs text-[var(--muted)]">
+                Tidak perlu catatan jika kas fisik sama dengan posisi kas
+                sistem.
+              </p>
+            )}
             {state.fieldErrors?.varianceReason ? (
               <p className="mt-1.5 text-xs text-red-600">
                 {state.fieldErrors.varianceReason}
               </p>
             ) : null}
-            {hasCashVariance && !varianceReason.trim() ? (
-              <p className="mt-1.5 text-xs text-amber-700">
-                Catatan wajib diisi karena ada selisih kas.
-              </p>
-            ) : null}
-          </label>
+          </div>
         </div>
 
         <div
@@ -263,7 +338,7 @@ export function ShiftClosePanel({
         >
           <div>
             <p className="text-[10px] font-semibold uppercase text-current/60">
-              Expected Cash
+              Nominal Expected
             </p>
             <p className="mt-1 font-semibold text-neutral-950">
               {formatMoney(expectedCashAmount)}
@@ -271,7 +346,7 @@ export function ShiftClosePanel({
           </div>
           <div>
             <p className="text-[10px] font-semibold uppercase text-current/60">
-              Total (Closing)
+              Saldo Cash (Opening / Closing)
             </p>
             <p className="mt-1 font-semibold text-neutral-950">
               {actualCashAmount === null
@@ -281,7 +356,7 @@ export function ShiftClosePanel({
           </div>
           <div>
             <p className="text-[10px] font-semibold uppercase text-current/60">
-              Selisih Uang
+              Selisih Saldo (Closing)
             </p>
             <p className="mt-1 font-semibold text-neutral-950">
               {cashVarianceAmount === null
@@ -332,8 +407,8 @@ export function ShiftClosePanel({
                 </p>
                 <p className="mt-1 text-xs leading-5 text-amber-800">
                   Pastikan uang fisik sudah dihitung ulang. Setelah
-                  dikonfirmasi, checkout POS akan diblokir sampai shift baru
-                  dibuka.
+                  dikonfirmasi, checkout POS akan diblokir sampai shift hari ini
+                  dilanjutkan atau shift hari berikutnya dibuka.
                 </p>
               </div>
             </div>
@@ -342,8 +417,9 @@ export function ShiftClosePanel({
 
         <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4">
           <p className="text-xs leading-5 text-[var(--muted)]">
-            Setelah shift ditutup, checkout POS akan diblokir sampai shift baru
-            dibuka.
+            Setelah shift ditutup, checkout POS akan diblokir. Jika toko masih
+            beroperasi di tanggal yang sama, gunakan Lanjutkan Shift Hari Ini
+            dari POS utama.
           </p>
 
           {isReviewing ? (

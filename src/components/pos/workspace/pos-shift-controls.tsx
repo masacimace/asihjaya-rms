@@ -1,6 +1,13 @@
 "use client";
 
-import { Clock3, LoaderCircle, RotateCcw, StopCircle, WalletCards } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock3,
+  LoaderCircle,
+  RotateCcw,
+  StopCircle,
+  WalletCards,
+} from "lucide-react";
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -25,6 +32,16 @@ import {
   type PosShiftVarianceTone,
 } from "@/features/pos/shift-view-state";
 import { cn } from "@/lib/utils";
+
+const CASH_VARIANCE_QUICK_REASONS = ["Menggunakan kas cadangan toko."] as const;
+
+const CONTINUE_SHIFT_QUICK_REASONS = [
+  "Toko masih beroperasi.",
+  "Shift tertutup terlalu cepat.",
+  "Perlu melanjutkan transaksi.",
+] as const;
+
+const OTHER_REASON = "__other__";
 
 function ActionMessage({ state }: { state: PosShiftActionState }) {
   if (state.status === "idle" || !state.message) {
@@ -118,37 +135,37 @@ function OpenShiftSubmitButton() {
   );
 }
 
-function ReopenShiftSubmitButton() {
+function ReopenShiftSubmitButton({ disabled = false }: { disabled?: boolean }) {
   const { pending } = useFormStatus();
 
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-wait disabled:opacity-70 sm:w-auto"
     >
       {pending ? (
         <>
           <LoaderCircle className="size-4 animate-spin" />
-          Membuka kembali shift...
+          Melanjutkan shift...
         </>
       ) : (
         <>
           <RotateCcw className="size-4" />
-          Buka Kembali Shift
+          Lanjutkan Shift Hari Ini
         </>
       )}
     </button>
   );
 }
 
-function CloseShiftSubmitButton() {
+function CloseShiftSubmitButton({ disabled = false }: { disabled?: boolean }) {
   const { pending } = useFormStatus();
 
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-70 sm:w-auto"
     >
       {pending ? (
@@ -169,13 +186,13 @@ function CloseShiftSubmitButton() {
 export function PosContextNotice({
   context,
   canManageShifts,
-  canReopenShifts,
+  canContinueShift,
   onCloseShiftClick,
   isCloseShiftPanelOpen = false,
 }: {
   context: PosOperationalContext;
   canManageShifts: boolean;
-  canReopenShifts: boolean;
+  canContinueShift: boolean;
   onCloseShiftClick?: () => void;
   isCloseShiftPanelOpen?: boolean;
 }) {
@@ -202,11 +219,12 @@ export function PosContextNotice({
       return (
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           Shift tanggal operasional {context.reopenCandidate.businessDate} sudah
-          ditutup pada {formatPosShiftOpenedAt(context.reopenCandidate.closedAt)}.
-          Checkout diblokir sampai shift yang sama dibuka kembali.
-          {canReopenShifts
-            ? " Gunakan menu Buka Kembali Shift di bawah dan isi alasan reopen."
-            : " Hubungi manager/owner untuk membuka kembali shift."}
+          ditutup pada{" "}
+          {formatPosShiftOpenedAt(context.reopenCandidate.closedAt)}. Checkout
+          diblokir sampai shift hari ini dilanjutkan kembali.
+          {canContinueShift
+            ? " Gunakan menu Lanjutkan Shift Hari Ini di bawah."
+            : " Hubungi staff yang memiliki akses pengelolaan shift."}
         </div>
       );
     }
@@ -244,7 +262,7 @@ export function PosContextNotice({
               <span>
                 Saldo Cash: {formatCurrency(context.activeShift.openingCash)}
               </span>
-              <span>Expected: {formatCurrency(expectedCash)}</span>
+              <span>Total Expected: {formatCurrency(expectedCash)}</span>
             </div>
           </div>
         </div>
@@ -375,15 +393,27 @@ export function PosReopenShiftCard({
     reopenPosShiftAction,
     initialPosShiftActionState,
   );
+  const [reasonPreset, setReasonPreset] = useState<string>(
+    CONTINUE_SHIFT_QUICK_REASONS[0],
+  );
+  const [otherReason, setOtherReason] = useState("");
 
   useEffect(() => {
     if (state.status === "success") router.refresh();
   }, [router, state.status]);
 
   const candidate = context.reopenCandidate;
-  if (!context.outlet || !context.register || context.activeShift || !candidate) {
+  if (
+    !context.outlet ||
+    !context.register ||
+    context.activeShift ||
+    !candidate
+  ) {
     return null;
   }
+
+  const reason =
+    reasonPreset === OTHER_REASON ? otherReason.trim() : reasonPreset;
 
   return (
     <section className="mb-4 rounded-2xl border border-amber-200 bg-white p-4 sm:p-5">
@@ -392,43 +422,99 @@ export function PosReopenShiftCard({
           <RotateCcw className="size-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="font-semibold text-neutral-950">Buka Kembali Shift</h2>
+          <h2 className="font-semibold text-neutral-950">
+            Lanjutkan Shift Hari Ini
+          </h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Shift {candidate.businessDate} sudah ditutup pada {formatPosShiftOpenedAt(candidate.closedAt)}.
-            Reopen menggunakan shift ID, business date, modal awal, dan alur kas yang sama; tidak membuat shift baru.
+            Shift tanggal operasional {candidate.businessDate} sudah ditutup
+            pada {formatPosShiftOpenedAt(candidate.closedAt)}. Jika toko masih
+            beroperasi, lanjutkan shift yang sama tanpa membuat shift baru.
           </p>
         </div>
       </div>
 
       <form action={formAction} className="mt-4 space-y-4">
         <input type="hidden" name="shiftId" value={candidate.id} />
+        <input type="hidden" name="reason" value={reason} />
         <ActionMessage state={state} />
 
         <div className="grid gap-3 rounded-xl border border-amber-100 bg-amber-50/70 p-3 text-xs text-amber-950 sm:grid-cols-3">
-          <div><span className="block text-[var(--muted)]">Expected saat closing</span><strong>{formatCurrency(candidate.expectedCash)}</strong></div>
-          <div><span className="block text-[var(--muted)]">Actual closing</span><strong>{formatCurrency(candidate.actualCash)}</strong></div>
-          <div><span className="block text-[var(--muted)]">Variance closing</span><strong>{formatCurrency(candidate.cashVariance)}</strong></div>
+          <div>
+            <span className="block text-[var(--muted)]">
+              Posisi kas saat closing
+            </span>
+            <strong>{formatCurrency(candidate.expectedCash)}</strong>
+          </div>
+          <div>
+            <span className="block text-[var(--muted)]">
+              Kas fisik saat closing
+            </span>
+            <strong>{formatCurrency(candidate.actualCash)}</strong>
+          </div>
+          <div>
+            <span className="block text-[var(--muted)]">Selisih Saldo</span>
+            <strong>{formatCurrency(candidate.cashVariance)}</strong>
+          </div>
         </div>
 
-        <label className="block text-sm">
-          <span className="mb-2 block font-medium text-neutral-800">Alasan buka kembali <span className="text-red-600">*</span></span>
-          <textarea
-            name="reason"
-            required
-            minLength={5}
-            maxLength={500}
-            rows={3}
-            placeholder="Contoh: Shift tidak sengaja ditutup sebelum toko selesai beroperasi."
-            className="w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
-          />
+        <div>
+          <p className="text-sm font-medium text-neutral-800">
+            Alasan melanjutkan shift
+          </p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Pilih alasan yang paling sesuai. Audit closing sebelumnya tetap
+            tersimpan.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {CONTINUE_SHIFT_QUICK_REASONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setReasonPreset(option)}
+                className={cn(
+                  "rounded-xl border px-3 py-2.5 text-left text-sm transition",
+                  reasonPreset === option
+                    ? "border-amber-500 bg-amber-50 font-semibold text-amber-950"
+                    : "border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
+                )}
+              >
+                {option}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setReasonPreset(OTHER_REASON)}
+              className={cn(
+                "rounded-xl border px-3 py-2.5 text-left text-sm transition",
+                reasonPreset === OTHER_REASON
+                  ? "border-amber-500 bg-amber-50 font-semibold text-amber-950"
+                  : "border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
+              )}
+            >
+              Lainnya
+            </button>
+          </div>
+
+          {reasonPreset === OTHER_REASON ? (
+            <textarea
+              value={otherReason}
+              onChange={(event) => setOtherReason(event.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder="Jelaskan alasan melanjutkan shift..."
+              className="mt-3 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
+            />
+          ) : null}
           <FieldError message={state.fieldErrors?.reason} />
-        </label>
+        </div>
 
         <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-2xl text-xs leading-5 text-[var(--muted)]">
-            Hanya manager/owner berizin yang dapat melakukan reopen. Closing snapshot lama tetap diaudit sebagai superseded; laporan final baru dibuat saat closing berikutnya.
+            Shift ID dan tanggal operasional tetap sama. Snapshot closing
+            sebelumnya tetap diaudit sebagai superseded dan laporan final baru
+            dibuat saat closing berikutnya.
           </p>
-          <ReopenShiftSubmitButton />
+          <ReopenShiftSubmitButton disabled={reason.length < 5} />
         </div>
       </form>
     </section>
@@ -461,6 +547,8 @@ export function PosCloseShiftCard({
     initialPosShiftActionState,
   );
   const [actualCashAmount, setActualCashAmount] = useState<number | null>(null);
+  const [reasonPreset, setReasonPreset] = useState<string>("");
+  const [otherReason, setOtherReason] = useState("");
 
   useEffect(() => {
     if (state.status === "success") {
@@ -479,6 +567,20 @@ export function PosCloseShiftCard({
     expectedCash,
     actualCashAmount,
   });
+  const isNegativeExpected = reconciliation.expectedCashAmount < 0;
+  const hasVariance =
+    reconciliation.cashVarianceAmount !== null &&
+    reconciliation.cashVarianceAmount !== 0;
+  const varianceReason =
+    reasonPreset === OTHER_REASON ? otherReason.trim() : reasonPreset;
+  const canClose =
+    actualCashAmount !== null && (!hasVariance || varianceReason.length >= 5);
+
+  function handleActualCashChange(value: number | null) {
+    setActualCashAmount(value);
+    setReasonPreset("");
+    setOtherReason("");
+  }
 
   return (
     <section className="mb-4 rounded-2xl border border-red-100 bg-white p-4 sm:p-5">
@@ -488,56 +590,96 @@ export function PosCloseShiftCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="font-semibold text-neutral-950">
-                Closing Shift POS
-              </h2>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Rekonsiliasi kas untuk {context.register.name}. Expected cash
-                sistem saat ini {formatCurrency(expectedCash)}. Setelah ditutup,
-                checkout akan diblokir sampai shift baru dibuka.
-              </p>
-            </div>
-          </div>
+          <h2 className="font-semibold text-neutral-950">Closing Shift POS</h2>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+            Rekonsiliasi kas untuk {context.register.name}. Input kas fisik
+            sesuai uang yang benar-benar ada di drawer.
+          </p>
         </div>
       </div>
 
       <form action={formAction} className="mt-4 space-y-4">
         <input type="hidden" name="shiftId" value={context.activeShift.id} />
         <input type="hidden" name="registerId" value={context.register.id} />
+        <input type="hidden" name="varianceReason" value={varianceReason} />
 
         <ActionMessage state={state} />
-
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
           <label className="block text-sm">
             <span className="mb-2 block font-medium text-neutral-800">
-              Nominal Uang (Closing)
+              Nominal Expected
             </span>
             <CurrencyFormInput
               name="actualCash"
               placeholder="Contoh: 2.500.000"
-              onValueChange={setActualCashAmount}
+              onValueChange={handleActualCashChange}
               className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
             />
             <FieldError message={state.fieldErrors?.actualCash} />
             <p className="mt-1.5 text-xs text-[var(--muted)]">
-              Hitung uang di laci (Cash Drawer), lalu input nominal aktual.
+              Jangan memasukkan nominal kas sistem sebagai uang fisik.
             </p>
           </label>
 
-          <label className="block text-sm">
+          <div className="text-sm">
             <span className="mb-2 block font-medium text-neutral-800">
-              Alasan / Catatan Selisih
+              {isNegativeExpected ? "Penjelasan posisi kas" : "Catatan selisih"}
+              {hasVariance ? <span className="text-red-600"> *</span> : null}
             </span>
-            <input
-              name="varianceReason"
-              maxLength={500}
-              placeholder="Berikan alasan jika total cash kurang / lebih dari expected cash"
-              className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-            />
+            {hasVariance ? (
+              <>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {CASH_VARIANCE_QUICK_REASONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setReasonPreset(option)}
+                      className={cn(
+                        "rounded-xl border px-3 py-2 text-left text-xs transition",
+                        reasonPreset === option
+                          ? "border-amber-500 bg-amber-50 font-semibold text-amber-950"
+                          : "border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
+                      )}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setReasonPreset(OTHER_REASON)}
+                    className={cn(
+                      "rounded-xl border px-3 py-2 text-left text-xs transition",
+                      reasonPreset === OTHER_REASON
+                        ? "border-amber-500 bg-amber-50 font-semibold text-amber-950"
+                        : "border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
+                    )}
+                  >
+                    Lainnya
+                  </button>
+                </div>
+                {reasonPreset === OTHER_REASON ? (
+                  <input
+                    value={otherReason}
+                    onChange={(event) => setOtherReason(event.target.value)}
+                    maxLength={500}
+                    placeholder="Jelaskan selisih kas..."
+                    className="mt-2 h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                  />
+                ) : null}
+                {!varianceReason ? (
+                  <p className="mt-1.5 text-xs text-amber-700">
+                    Pilih satu penjelasan sebelum closing.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="rounded-xl border border-[var(--border)] bg-neutral-50 px-3 py-3 text-xs text-[var(--muted)]">
+                Tidak perlu catatan jika kas fisik sama dengan posisi kas
+                sistem.
+              </p>
+            )}
             <FieldError message={state.fieldErrors?.varianceReason} />
-          </label>
+          </div>
         </div>
 
         <div
@@ -548,16 +690,15 @@ export function PosCloseShiftCard({
         >
           <div>
             <p className="text-[10px] !font-medium uppercase text-current/60">
-              Nominal Seharusnya
+              Nominal Expected
             </p>
             <p className="mt-1 !font-medium text-neutral-950">
               {formatCurrency(reconciliation.expectedCashAmount)}
             </p>
           </div>
-
           <div>
             <p className="text-[10px] font-semibold uppercase text-current/60">
-              Total Uang (Closing)
+              Saldo Cash (Opening / Closing)
             </p>
             <p className="mt-1 !font-medium text-neutral-950">
               {actualCashAmount === null
@@ -565,10 +706,9 @@ export function PosCloseShiftCard({
                 : formatCurrency(actualCashAmount)}
             </p>
           </div>
-
           <div>
             <p className="text-[10px] !font-medium uppercase text-current/60">
-              Selisih Uang
+              Selisih Saldo (Closing)
             </p>
             <p className="mt-1 !font-medium text-neutral-950">
               {reconciliation.cashVarianceLabel}
@@ -578,8 +718,8 @@ export function PosCloseShiftCard({
 
         <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-5 text-[var(--muted)]">
-            Expected cash dihitung dari modal awal, cash sale, kas masuk/keluar,
-            dan refund cash.
+            Posisi kas sistem dihitung dari modal awal, cash sale, kas
+            masuk/keluar, refund, dan payout cash seperti Buyback.
           </p>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -592,7 +732,7 @@ export function PosCloseShiftCard({
                 Batal
               </button>
             ) : null}
-            <CloseShiftSubmitButton />
+            <CloseShiftSubmitButton disabled={!canClose} />
           </div>
         </div>
       </form>

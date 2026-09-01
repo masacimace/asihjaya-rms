@@ -14,6 +14,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db";
 import {
+  buybackItems,
   cashMovements,
   customerDepositLedger,
   customers,
@@ -334,8 +335,8 @@ export async function getReportSummaryData(
     db
       .select({
         itemSold: count(),
-        weightSoldGram: sql<number>`coalesce(sum(coalesce(${productItems.weightGram}, 0)::numeric), 0)`.mapWith(Number),
-        grossProfit: sql<number>`coalesce(sum(${saleItems.finalPriceAmount}::numeric - coalesce(${productItems.costAmount}, 0)::numeric), 0)`.mapWith(Number),
+        weightSoldGram: sql<number>`coalesce(sum(coalesce(nullif(${saleItems.snapshot}->>'weightGram', '')::numeric, nullif(${saleItems.snapshot}->>'storedWeightGram', '')::numeric, 0)), 0)`.mapWith(Number),
+        grossProfit: sql<number>`coalesce(sum(case when coalesce(${saleItems.costAmountSnapshot}::numeric, nullif(${saleItems.snapshot}->>'costAmountSnapshot', '')::numeric) is null then 0 else ${saleItems.finalPriceAmount}::numeric - coalesce(${saleItems.costAmountSnapshot}::numeric, nullif(${saleItems.snapshot}->>'costAmountSnapshot', '')::numeric) end), 0)`.mapWith(Number),
       })
       .from(saleItems)
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
@@ -345,8 +346,8 @@ export async function getReportSummaryData(
     db
       .select({
         itemSold: count(),
-        weightSoldGram: sql<number>`coalesce(sum(coalesce(${productItems.weightGram}, 0)::numeric), 0)`.mapWith(Number),
-        grossProfit: sql<number>`coalesce(sum(${saleItems.finalPriceAmount}::numeric - coalesce(${productItems.costAmount}, 0)::numeric), 0)`.mapWith(Number),
+        weightSoldGram: sql<number>`coalesce(sum(coalesce(nullif(${saleItems.snapshot}->>'weightGram', '')::numeric, nullif(${saleItems.snapshot}->>'storedWeightGram', '')::numeric, 0)), 0)`.mapWith(Number),
+        grossProfit: sql<number>`coalesce(sum(case when coalesce(${saleItems.costAmountSnapshot}::numeric, nullif(${saleItems.snapshot}->>'costAmountSnapshot', '')::numeric) is null then 0 else ${saleItems.finalPriceAmount}::numeric - coalesce(${saleItems.costAmountSnapshot}::numeric, nullif(${saleItems.snapshot}->>'costAmountSnapshot', '')::numeric) end), 0)`.mapWith(Number),
       })
       .from(saleItems)
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
@@ -878,8 +879,8 @@ export async function getReportSalesData(
     db
       .select({
         itemSold: count(),
-        weightSoldGram: sql<number>`coalesce(sum(coalesce(${productItems.weightGram}, 0)::numeric), 0)`.mapWith(Number),
-        grossProfit: sql<number>`coalesce(sum(${saleItems.finalPriceAmount}::numeric - coalesce(${productItems.costAmount}, 0)::numeric), 0)`.mapWith(Number),
+        weightSoldGram: sql<number>`coalesce(sum(coalesce(nullif(${saleItems.snapshot}->>'weightGram', '')::numeric, nullif(${saleItems.snapshot}->>'storedWeightGram', '')::numeric, 0)), 0)`.mapWith(Number),
+        grossProfit: sql<number>`coalesce(sum(case when coalesce(${saleItems.costAmountSnapshot}::numeric, nullif(${saleItems.snapshot}->>'costAmountSnapshot', '')::numeric) is null then 0 else ${saleItems.finalPriceAmount}::numeric - coalesce(${saleItems.costAmountSnapshot}::numeric, nullif(${saleItems.snapshot}->>'costAmountSnapshot', '')::numeric) end), 0)`.mapWith(Number),
       })
       .from(saleItems)
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
@@ -953,7 +954,7 @@ export async function getReportSalesData(
       .select({
         bucket: dailyBucketSql,
         itemSold: count(),
-        grossProfit: sql<number>`coalesce(sum(${saleItems.finalPriceAmount}::numeric - coalesce(${productItems.costAmount}, 0)::numeric), 0)`.mapWith(Number),
+        grossProfit: sql<number>`coalesce(sum(case when coalesce(${saleItems.costAmountSnapshot}::numeric, nullif(${saleItems.snapshot}->>'costAmountSnapshot', '')::numeric) is null then 0 else ${saleItems.finalPriceAmount}::numeric - coalesce(${saleItems.costAmountSnapshot}::numeric, nullif(${saleItems.snapshot}->>'costAmountSnapshot', '')::numeric) end), 0)`.mapWith(Number),
       })
       .from(saleItems)
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
@@ -1062,17 +1063,13 @@ export async function getReportSalesData(
           where report_row_sale_items.sale_id = ${sales.id}
         )`.mapWith(Number),
         weightSoldGram: sql<number>`coalesce((
-          select sum(coalesce(report_row_product_items.weight_gram, 0)::numeric)
+          select sum(coalesce(nullif(report_row_sale_items.snapshot->>'weightGram', '')::numeric, nullif(report_row_sale_items.snapshot->>'storedWeightGram', '')::numeric, 0))
           from ${saleItems} as report_row_sale_items
-          inner join ${productItems} as report_row_product_items
-            on report_row_sale_items.product_item_id = report_row_product_items.id
           where report_row_sale_items.sale_id = ${sales.id}
         ), 0)`.mapWith(Number),
         grossProfit: sql<number>`coalesce((
-          select sum(report_row_sale_items.final_price_amount::numeric - coalesce(report_row_product_items.cost_amount, 0)::numeric)
+          select sum(case when coalesce(report_row_sale_items.cost_amount_snapshot::numeric, nullif(report_row_sale_items.snapshot->>'costAmountSnapshot', '')::numeric) is null then 0 else report_row_sale_items.final_price_amount::numeric - coalesce(report_row_sale_items.cost_amount_snapshot::numeric, nullif(report_row_sale_items.snapshot->>'costAmountSnapshot', '')::numeric) end)
           from ${saleItems} as report_row_sale_items
-          inner join ${productItems} as report_row_product_items
-            on report_row_sale_items.product_item_id = report_row_product_items.id
           where report_row_sale_items.sale_id = ${sales.id}
         ), 0)`.mapWith(Number),
         paymentMethods: sql<ReportPaymentMethod[]>`coalesce(array_agg(distinct ${payments.method}) filter (where ${payments.id} is not null), '{}')`,
@@ -1456,7 +1453,7 @@ export async function getReportStockData(
         productName: productMasters.name,
         categoryName: productCategories.name,
         soldCount: count(),
-        soldWeightGram: sql<number>`coalesce(sum(coalesce(${productItems.weightGram}, 0)::numeric), 0)`.mapWith(Number),
+        soldWeightGram: sql<number>`coalesce(sum(coalesce(nullif(${saleItems.snapshot}->>'weightGram', '')::numeric, nullif(${saleItems.snapshot}->>'storedWeightGram', '')::numeric, 0)), 0)`.mapWith(Number),
         revenue: sql<number>`coalesce(sum(${saleItems.finalPriceAmount}::numeric), 0)`.mapWith(Number),
         availableCount: sql<number>`(
           select count(*)::integer
@@ -1526,8 +1523,16 @@ export async function getReportStockData(
         referenceId: inventoryMovements.referenceId,
         invoiceNumber: sales.invoiceNumber,
         reason: inventoryMovements.reason,
-        weightGram: productItems.weightGram,
-        costAmount: productItems.costAmount,
+        weightGram: sql<string | null>`case
+          when ${inventoryMovements.referenceType} in ('sale', 'sale_void', 'sale_refund') then coalesce(nullif(${saleItems.snapshot}->>'weightGram', ''), nullif(${saleItems.snapshot}->>'storedWeightGram', ''))
+          when ${inventoryMovements.referenceType} = 'buyback' then cast(${buybackItems.weightGram} as text)
+          else cast(${productItems.weightGram} as text)
+        end`,
+        costAmount: sql<string | null>`case
+          when ${inventoryMovements.referenceType} in ('sale', 'sale_void', 'sale_refund') then coalesce(cast(${saleItems.costAmountSnapshot} as text), nullif(${saleItems.snapshot}->>'costAmountSnapshot', ''))
+          when ${inventoryMovements.referenceType} = 'buyback' then cast(${buybackItems.finalAmount} as text)
+          else cast(${productItems.costAmount} as text)
+        end`,
         sellingAmount: productItems.sellingAmount,
         occurredAt: inventoryMovements.occurredAt,
       })
@@ -1548,6 +1553,26 @@ export async function getReportStockData(
             eq(inventoryMovements.referenceType, "sale_void"),
             eq(inventoryMovements.referenceType, "sale_refund"),
           ),
+        ),
+      )
+      .leftJoin(
+        saleItems,
+        and(
+          or(
+            eq(inventoryMovements.referenceType, "sale"),
+            eq(inventoryMovements.referenceType, "sale_void"),
+            eq(inventoryMovements.referenceType, "sale_refund"),
+          ),
+          eq(saleItems.saleId, inventoryMovements.referenceId),
+          eq(saleItems.productItemId, inventoryMovements.itemId),
+        ),
+      )
+      .leftJoin(
+        buybackItems,
+        and(
+          eq(inventoryMovements.referenceType, "buyback"),
+          eq(buybackItems.buybackId, inventoryMovements.referenceId),
+          eq(buybackItems.productItemId, inventoryMovements.itemId),
         ),
       )
       .where(movementWhere)

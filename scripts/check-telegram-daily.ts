@@ -391,10 +391,6 @@ async function checkDatabase() {
         amount: "1500000",
         status: "paid",
         providerReference: "TRX-TGD-001",
-        normalizedReference: "TRX-TGD-001",
-        verificationSource: "bank_app",
-        providerPaidAt: new Date("2026-08-07T04:00:00.000Z"),
-        settlementStatus: "unreconciled",
         verifiedBy: userId,
         verifiedAt: new Date("2026-08-07T04:00:00.000Z"),
         paidAt: new Date("2026-08-07T04:00:00.000Z"),
@@ -543,7 +539,6 @@ async function checkDatabase() {
   assert.equal(finance.transactionCount, 1);
   assert.equal(finance.itemsSoldCount, 2);
   assert.equal(finance.heldTransactionCount, 1);
-  assert.equal(finance.pendingApprovalCount, 0);
   assert.equal(finance.expectedCash, "3300000");
   assert.equal(finance.actualCash, "3250000");
   assert.equal(finance.cashVariance, "-50000");

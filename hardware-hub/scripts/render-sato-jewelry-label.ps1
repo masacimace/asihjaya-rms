@@ -1,9 +1,9 @@
 param(
   [string]$ConfigPath = "",
-  [string]$ProductName = "NAMA PRODUK MASTER",
-  [string]$Barcode = "AJ00000006",
-  [string]$Weight = "6.05Gr",
-  [string]$Purity = "16K-60%",
+  [string]$MasterProductName = "NAMA PRODUK MASTER",
+  [string]$ItemDisplayName = "NAMA ITEM PRODUK FISIK",
+  [string]$Barcode = "AJ0002416",
+  [string]$Weight = "2.75 Gr",
   [string]$OutputFile = "",
   [ValidateRange(1,20)]
   [int]$Copies = 1
@@ -17,6 +17,7 @@ Add-Type -AssemblyName System.Drawing
 $ESC = [char]27
 $Encoding = [System.Text.Encoding]::ASCII
 $HardwareHubRoot = Split-Path -Parent $PSScriptRoot
+$PrivateFontCollection = $null
 
 if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
   $ConfigPath = Join-Path $HardwareHubRoot "config\sato-jewelry-barbell-host-bold.json"
@@ -25,12 +26,12 @@ if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
 }
 
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
-  throw "Host-bold layout config tidak ditemukan: $ConfigPath"
+  throw "Layout config SATO tidak ditemukan: $ConfigPath"
 }
 
 $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
-if ($config.version -ne 2) {
-  throw "Host-bold layout config version tidak didukung: $($config.version). Expected version 2 (split-back typography)."
+if ($config.version -ne 3) {
+  throw "Layout config SATO version tidak didukung: $($config.version). Expected version 3 (Inter dual-name layout)."
 }
 
 function Get-RequiredInt {
@@ -49,24 +50,6 @@ function Get-RequiredInt {
     throw "$Name harus antara $Minimum dan $Maximum; aktual=$parsed."
   }
   return $parsed
-}
-
-function Resolve-InstalledFontFamily {
-  param([string]$Requested)
-
-  $installed = [System.Drawing.Text.InstalledFontCollection]::new()
-  $match = $installed.Families | Where-Object { $_.Name -eq $Requested } | Select-Object -First 1
-  if ($null -ne $match) {
-    return $match.Name
-  }
-
-  $fallback = $installed.Families | Where-Object { $_.Name -eq "Arial" } | Select-Object -First 1
-  if ($null -eq $fallback) {
-    throw "Font '$Requested' tidak tersedia dan fallback Arial juga tidak ditemukan."
-  }
-
-  Write-Warning "Font '$Requested' tidak tersedia. Menggunakan fallback '$($fallback.Name)'."
-  return $fallback.Name
 }
 
 function Convert-To1BppBmpBytes {
@@ -161,22 +144,315 @@ function Convert-To1BppBmpBytes {
   }
 }
 
-function New-BoldTextGraphic {
+function Resolve-FontStyle {
+  param([string]$Style)
+  switch ($Style) {
+    "Regular" { return [System.Drawing.FontStyle]::Regular }
+    "Bold" { return [System.Drawing.FontStyle]::Bold }
+    default { throw "font.style '$Style' tidak didukung. Gunakan Regular atau Bold." }
+  }
+}
+
+function Resolve-FontContext {
   param(
-    [string]$Family,
+    [string]$RequestedFamily,
+    [string]$FilePathEnvName
+  )
+
+  $fontPath = ""
+  if (-not [string]::IsNullOrWhiteSpace($FilePathEnvName)) {
+    $fontPath = [Environment]::GetEnvironmentVariable($FilePathEnvName)
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($fontPath)) {
+    if (-not [System.IO.Path]::IsPathRooted($fontPath)) {
+      $fontPath = Join-Path $HardwareHubRoot $fontPath
+    }
+    if (-not (Test-Path -LiteralPath $fontPath)) {
+      throw "Font SATO dari env $FilePathEnvName tidak ditemukan: $fontPath"
+    }
+    $script:PrivateFontCollection = [System.Drawing.Text.PrivateFontCollection]::new()
+    $script:PrivateFontCollection.AddFontFile((Resolve-Path -LiteralPath $fontPath).Path)
+    $family = $script:PrivateFontCollection.Families | Select-Object -First 1
+    if ($null -eq $family) {
+      throw "Font file SATO tidak menghasilkan FontFamily: $fontPath"
+    }
+    return [pscustomobject]@{
+      Family = $family
+      Name = $family.Name
+      Source = "private-file"
+      Path = (Resolve-Path -LiteralPath $fontPath).Path
+    }
+  }
+
+  $installed = [System.Drawing.Text.InstalledFontCollection]::new()
+  $family = $installed.Families | Where-Object { $_.Name -eq $RequestedFamily } | Select-Object -First 1
+  if ($null -eq $family) {
+    throw "Font '$RequestedFamily' tidak tersedia. Install Inter Medium atau set $FilePathEnvName ke Inter-Medium.ttf."
+  }
+  return [pscustomobject]@{
+    Family = $family
+    Name = $family.Name
+    Source = "windows-installed"
+    Path = $null
+  }
+}
+
+function Get-StringAlignment {
+  param([string]$Value)
+  switch ($Value) {
+    "left" { return [System.Drawing.StringAlignment]::Near }
+    "center" { return [System.Drawing.StringAlignment]::Center }
+    "right" { return [System.Drawing.StringAlignment]::Far }
+    default { throw "textAlign '$Value' tidak didukung." }
+  }
+}
+
+function Add-FittedTextLayer {
+  param(
+    [System.Drawing.Graphics]$Graphics,
+    [System.Drawing.FontFamily]$FontFamily,
+    [System.Drawing.FontStyle]$FontStyle,
+    [string]$Text,
+    [int]$X,
+    [int]$Y,
+    [int]$Width,
+    [int]$Height,
+    [int]$FontPx,
+    [int]$MinFontPx,
+    [string]$TextAlign,
+    [bool]$TruncateWithEllipsis = $false
+  )
+
+  $candidate = $Text.Trim()
+  if ([string]::IsNullOrWhiteSpace($candidate)) { $candidate = "-" }
+  $measureFormat = [System.Drawing.StringFormat]::GenericTypographic
+  $measureFormat.FormatFlags = $measureFormat.FormatFlags -bor [System.Drawing.StringFormatFlags]::NoWrap
+
+  $resolvedFont = $null
+  $measuredWidth = 0
+  $measuredHeight = 0
+  $resolvedFontPx = $FontPx
+
+  for ($size = $FontPx; $size -ge $MinFontPx; $size--) {
+    $font = [System.Drawing.Font]::new($FontFamily, [float]$size, $FontStyle, [System.Drawing.GraphicsUnit]::Pixel)
+    $measured = $Graphics.MeasureString($candidate, $font, [int]::MaxValue, $measureFormat)
+    $w = [int][math]::Ceiling($measured.Width)
+    $h = [int][math]::Ceiling($measured.Height)
+    if ($w -le ($Width - 2) -and $h -le $Height) {
+      $resolvedFont = $font
+      $resolvedFontPx = $size
+      $measuredWidth = $w
+      $measuredHeight = $h
+      break
+    }
+    $font.Dispose()
+  }
+
+  if ($null -eq $resolvedFont -and $TruncateWithEllipsis) {
+    $resolvedFontPx = $MinFontPx
+    $resolvedFont = [System.Drawing.Font]::new($FontFamily, [float]$MinFontPx, $FontStyle, [System.Drawing.GraphicsUnit]::Pixel)
+    $base = $candidate
+    while ($base.Length -gt 4) {
+      $base = $base.Substring(0, $base.Length - 1).TrimEnd()
+      $candidate = "$base..."
+      $measured = $Graphics.MeasureString($candidate, $resolvedFont, [int]::MaxValue, $measureFormat)
+      $measuredWidth = [int][math]::Ceiling($measured.Width)
+      $measuredHeight = [int][math]::Ceiling($measured.Height)
+      if ($measuredWidth -le ($Width - 2) -and $measuredHeight -le $Height) { break }
+    }
+  }
+
+  if ($null -eq $resolvedFont) {
+    throw "Text '$Text' tidak muat pada layer ${Width}x${Height} sampai minimum ${MinFontPx}px."
+  }
+
+  if ($measuredWidth -gt ($Width - 2) -or $measuredHeight -gt $Height) {
+    $resolvedFont.Dispose()
+    throw "Text '$candidate' tetap tidak muat pada layer ${Width}x${Height}."
+  }
+
+  try {
+    $format = [System.Drawing.StringFormat]::new()
+    try {
+      $format.Alignment = Get-StringAlignment -Value $TextAlign
+      $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+      $format.FormatFlags = [System.Drawing.StringFormatFlags]::NoWrap
+      $rect = [System.Drawing.RectangleF]::new($X, $Y, $Width, $Height)
+      $Graphics.DrawString($candidate, $resolvedFont, [System.Drawing.Brushes]::Black, $rect, $format)
+    }
+    finally {
+      $format.Dispose()
+    }
+  }
+  finally {
+    $resolvedFont.Dispose()
+  }
+
+  return [pscustomobject]@{
+    text = $candidate
+    fontPx = $resolvedFontPx
+    x = $X
+    y = $Y
+    widthDots = $Width
+    heightDots = $Height
+    measuredWidth = $measuredWidth
+    measuredHeight = $measuredHeight
+    truncated = ($candidate -ne $Text.Trim())
+  }
+}
+
+function Get-WrappedLinesForFont {
+  param(
+    [System.Drawing.Graphics]$Graphics,
+    [System.Drawing.Font]$Font,
+    [string]$Text,
+    [int]$MaxWidth,
+    [int]$MaxLines
+  )
+
+  $measureFormat = [System.Drawing.StringFormat]::GenericTypographic
+  $measureFormat.FormatFlags = $measureFormat.FormatFlags -bor [System.Drawing.StringFormatFlags]::NoWrap
+  $words = $Text.Trim() -split '\s+'
+  $lines = [System.Collections.Generic.List[string]]::new()
+  $current = ""
+
+  foreach ($word in $words) {
+    $candidate = if ([string]::IsNullOrWhiteSpace($current)) { $word } else { "$current $word" }
+    $measured = $Graphics.MeasureString($candidate, $Font, [int]::MaxValue, $measureFormat)
+    if ([math]::Ceiling($measured.Width) -le ($MaxWidth - 2)) {
+      $current = $candidate
+      continue
+    }
+
+    if ([string]::IsNullOrWhiteSpace($current)) {
+      return $null
+    }
+    $lines.Add($current)
+    $current = $word
+    if ($lines.Count -ge $MaxLines) { return $null }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($current)) { $lines.Add($current) }
+  if ($lines.Count -gt $MaxLines) { return $null }
+  return $lines.ToArray()
+}
+
+function Add-FittedWrappedTextLayer {
+  param(
+    [System.Drawing.Graphics]$Graphics,
+    [System.Drawing.FontFamily]$FontFamily,
+    [System.Drawing.FontStyle]$FontStyle,
+    [string]$Text,
+    [int]$X,
+    [int]$Y,
+    [int]$Width,
+    [int]$Height,
+    [int]$FontPx,
+    [int]$MinFontPx,
+    [int]$MaxLines,
+    [string]$TextAlign,
+    [bool]$TruncateWithEllipsis = $false
+  )
+
+  $candidate = $Text.Trim()
+  if ([string]::IsNullOrWhiteSpace($candidate)) { $candidate = "-" }
+  $resolvedFont = $null
+  $resolvedLines = $null
+  $resolvedFontPx = $FontPx
+  $lineHeight = 0
+
+  for ($size = $FontPx; $size -ge $MinFontPx; $size--) {
+    $font = [System.Drawing.Font]::new($FontFamily, [float]$size, $FontStyle, [System.Drawing.GraphicsUnit]::Pixel)
+    $lines = Get-WrappedLinesForFont -Graphics $Graphics -Font $font -Text $candidate -MaxWidth $Width -MaxLines $MaxLines
+    if ($null -ne $lines) {
+      $probe = $Graphics.MeasureString("Ag", $font)
+      $candidateLineHeight = [int][math]::Ceiling($probe.Height)
+      if (($candidateLineHeight * $lines.Count) -le $Height) {
+        $resolvedFont = $font
+        $resolvedLines = $lines
+        $resolvedFontPx = $size
+        $lineHeight = $candidateLineHeight
+        break
+      }
+    }
+    $font.Dispose()
+  }
+
+  $truncated = $false
+  if ($null -eq $resolvedFont -and $TruncateWithEllipsis) {
+    $resolvedFontPx = $MinFontPx
+    $resolvedFont = [System.Drawing.Font]::new($FontFamily, [float]$MinFontPx, $FontStyle, [System.Drawing.GraphicsUnit]::Pixel)
+    $base = $candidate
+    while ($base.Length -gt 4) {
+      $base = $base.Substring(0, $base.Length - 1).TrimEnd()
+      $trial = "$base..."
+      $lines = Get-WrappedLinesForFont -Graphics $Graphics -Font $resolvedFont -Text $trial -MaxWidth $Width -MaxLines $MaxLines
+      if ($null -eq $lines) { continue }
+      $probe = $Graphics.MeasureString("Ag", $resolvedFont)
+      $candidateLineHeight = [int][math]::Ceiling($probe.Height)
+      if (($candidateLineHeight * $lines.Count) -le $Height) {
+        $candidate = $trial
+        $resolvedLines = $lines
+        $lineHeight = $candidateLineHeight
+        $truncated = $true
+        break
+      }
+    }
+  }
+
+  if ($null -eq $resolvedFont -or $null -eq $resolvedLines) {
+    if ($null -ne $resolvedFont) { $resolvedFont.Dispose() }
+    throw "Text multi-line '$Text' tidak muat pada layer ${Width}x${Height} sampai minimum ${MinFontPx}px."
+  }
+
+  try {
+    $alignment = Get-StringAlignment -Value $TextAlign
+    $blockHeight = $lineHeight * $resolvedLines.Count
+    $startY = $Y + [int][math]::Floor(($Height - $blockHeight) / 2.0)
+    for ($index = 0; $index -lt $resolvedLines.Count; $index++) {
+      $format = [System.Drawing.StringFormat]::new()
+      try {
+        $format.Alignment = $alignment
+        $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+        $format.FormatFlags = [System.Drawing.StringFormatFlags]::NoWrap
+        $rect = [System.Drawing.RectangleF]::new($X, $startY + ($index * $lineHeight), $Width, $lineHeight)
+        $Graphics.DrawString($resolvedLines[$index], $resolvedFont, [System.Drawing.Brushes]::Black, $rect, $format)
+      }
+      finally { $format.Dispose() }
+    }
+  }
+  finally { $resolvedFont.Dispose() }
+
+  return [pscustomobject]@{
+    text = $candidate
+    lines = @($resolvedLines)
+    lineCount = $resolvedLines.Count
+    fontPx = $resolvedFontPx
+    x = $X
+    y = $Y
+    widthDots = $Width
+    heightDots = $Height
+    truncated = $truncated
+  }
+}
+
+function New-FittedTextGraphic {
+  param(
+    [System.Drawing.FontFamily]$FontFamily,
+    [System.Drawing.FontStyle]$FontStyle,
     [string]$Text,
     [int]$CanvasWidth,
     [int]$CanvasHeight,
     [int]$FontPx,
+    [int]$MinFontPx,
+    [string]$TextAlign,
     [bool]$Rotate180,
-    [int]$SpreadPx
+    [int]$SpreadPx,
+    [bool]$TruncateWithEllipsis = $false
   )
 
-  $bitmap = [System.Drawing.Bitmap]::new(
-    $CanvasWidth,
-    $CanvasHeight,
-    [System.Drawing.Imaging.PixelFormat]::Format32bppArgb
-  )
+  $bitmap = [System.Drawing.Bitmap]::new($CanvasWidth, $CanvasHeight, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
   try {
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     try {
@@ -186,77 +462,37 @@ function New-BoldTextGraphic {
       $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
       $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
 
-      $font = [System.Drawing.Font]::new(
-        $Family,
-        [float]$FontPx,
-        [System.Drawing.FontStyle]::Bold,
-        [System.Drawing.GraphicsUnit]::Pixel
-      )
-      try {
-        $measureFormat = [System.Drawing.StringFormat]::GenericTypographic
-        $measureFormat.FormatFlags = $measureFormat.FormatFlags -bor [System.Drawing.StringFormatFlags]::NoWrap
-        $measured = $graphics.MeasureString($Text, $font, [int]::MaxValue, $measureFormat)
-        if ([math]::Ceiling($measured.Width) -gt ($CanvasWidth - 2) -or [math]::Ceiling($measured.Height) -gt $CanvasHeight) {
-          throw "Text '$Text' tidak muat: font=${FontPx}px, measured=$([math]::Ceiling($measured.Width))x$([math]::Ceiling($measured.Height)), canvas=${CanvasWidth}x${CanvasHeight}. Perbesar canvas atau kecilkan fontPx."
-        }
-
-        $format = [System.Drawing.StringFormat]::new()
-        try {
-          $format.Alignment = [System.Drawing.StringAlignment]::Center
-          $format.LineAlignment = [System.Drawing.StringAlignment]::Center
-          $format.FormatFlags = [System.Drawing.StringFormatFlags]::NoWrap
-          $rect = [System.Drawing.RectangleF]::new(0, 0, $CanvasWidth, $CanvasHeight)
-          $graphics.DrawString($Text, $font, [System.Drawing.Brushes]::Black, $rect, $format)
-        }
-        finally {
-          $format.Dispose()
-        }
-
-        if ($Rotate180) {
-          $bitmap.RotateFlip([System.Drawing.RotateFlipType]::Rotate180FlipNone)
-        }
-
-        return [pscustomobject]@{
-          Bytes = Convert-To1BppBmpBytes -Source $bitmap -SpreadPx $SpreadPx
-          FontPx = $FontPx
-          Width = $CanvasWidth
-          Height = $CanvasHeight
-          MeasuredWidth = [int][math]::Ceiling($measured.Width)
-          MeasuredHeight = [int][math]::Ceiling($measured.Height)
-        }
+      $measurement = Add-FittedTextLayer -Graphics $graphics -FontFamily $FontFamily -FontStyle $FontStyle -Text $Text -X 0 -Y 0 -Width $CanvasWidth -Height $CanvasHeight -FontPx $FontPx -MinFontPx $MinFontPx -TextAlign $TextAlign -TruncateWithEllipsis $TruncateWithEllipsis
+      if ($Rotate180) {
+        $bitmap.RotateFlip([System.Drawing.RotateFlipType]::Rotate180FlipNone)
       }
-      finally {
-        $font.Dispose()
+      return [pscustomobject]@{
+        Bytes = Convert-To1BppBmpBytes -Source $bitmap -SpreadPx $SpreadPx
+        Width = $CanvasWidth
+        Height = $CanvasHeight
+        Measurement = $measurement
       }
     }
-    finally {
-      $graphics.Dispose()
-    }
+    finally { $graphics.Dispose() }
   }
-  finally {
-    $bitmap.Dispose()
-  }
+  finally { $bitmap.Dispose() }
 }
 
-function New-SplitBackGraphic {
+function New-BackGraphicV3 {
   param(
-    [string]$Family,
+    [System.Drawing.FontFamily]$FontFamily,
+    [System.Drawing.FontStyle]$FontStyle,
     [string]$WeightText,
-    [string]$PurityText,
+    [string]$ItemDisplayName,
     [int]$CanvasWidth,
     [int]$CanvasHeight,
     [object]$WeightConfig,
-    [object]$PurityConfig,
+    [object]$ItemConfig,
     [bool]$Rotate180,
     [int]$SpreadPx
   )
 
-  $bitmap = [System.Drawing.Bitmap]::new(
-    $CanvasWidth,
-    $CanvasHeight,
-    [System.Drawing.Imaging.PixelFormat]::Format32bppArgb
-  )
-
+  $bitmap = [System.Drawing.Bitmap]::new($CanvasWidth, $CanvasHeight, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
   try {
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     try {
@@ -267,75 +503,33 @@ function New-SplitBackGraphic {
       $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
 
       $layers = @(
-        [pscustomobject]@{ Name = "weight"; Text = $WeightText; Config = $WeightConfig },
-        [pscustomobject]@{ Name = "purity"; Text = $PurityText; Config = $PurityConfig }
+        [pscustomobject]@{ Name = "weight"; Text = $WeightText; Config = $WeightConfig; Truncate = $false },
+        [pscustomobject]@{ Name = "itemDisplayName"; Text = $ItemDisplayName; Config = $ItemConfig; Truncate = [bool]$ItemConfig.truncateWithEllipsis }
       )
       $measurements = [ordered]@{}
 
       foreach ($layer in $layers) {
         $cfg = $layer.Config
-        $layerX = Get-RequiredInt $cfg.x "back.$($layer.Name).x" 0 $CanvasWidth
-        $layerY = Get-RequiredInt $cfg.y "back.$($layer.Name).y" 0 $CanvasHeight
-        $layerWidth = Get-RequiredInt $cfg.widthDots "back.$($layer.Name).widthDots" 4 $CanvasWidth
-        $layerHeight = Get-RequiredInt $cfg.heightDots "back.$($layer.Name).heightDots" 4 $CanvasHeight
-        $layerFontPx = Get-RequiredInt $cfg.fontPx "back.$($layer.Name).fontPx" 4 200
-        if (($layerX + $layerWidth) -gt $CanvasWidth -or ($layerY + $layerHeight) -gt $CanvasHeight) {
-          throw "back.$($layer.Name) keluar dari canvas back ${CanvasWidth}x${CanvasHeight}: x=$layerX y=$layerY width=$layerWidth height=$layerHeight."
+        $x = Get-RequiredInt $cfg.x "back.$($layer.Name).x" 0 $CanvasWidth
+        $y = Get-RequiredInt $cfg.y "back.$($layer.Name).y" 0 $CanvasHeight
+        $w = Get-RequiredInt $cfg.widthDots "back.$($layer.Name).widthDots" 8 $CanvasWidth
+        $h = Get-RequiredInt $cfg.heightDots "back.$($layer.Name).heightDots" 8 $CanvasHeight
+        $fontPx = Get-RequiredInt $cfg.fontPx "back.$($layer.Name).fontPx" 4 200
+        $minFontPx = Get-RequiredInt $cfg.minFontPx "back.$($layer.Name).minFontPx" 4 $fontPx
+        if (($x + $w) -gt $CanvasWidth -or ($y + $h) -gt $CanvasHeight) {
+          throw "back.$($layer.Name) keluar dari canvas back ${CanvasWidth}x${CanvasHeight}."
         }
-        if ([string]$cfg.textAlign -ne "center") {
-          throw "back.$($layer.Name).textAlign saat ini wajib 'center'."
-        }
-
-        $font = [System.Drawing.Font]::new(
-          $Family,
-          [float]$layerFontPx,
-          [System.Drawing.FontStyle]::Bold,
-          [System.Drawing.GraphicsUnit]::Pixel
-        )
-        try {
-          $measureFormat = [System.Drawing.StringFormat]::GenericTypographic
-          $measureFormat.FormatFlags = $measureFormat.FormatFlags -bor [System.Drawing.StringFormatFlags]::NoWrap
-          $measured = $graphics.MeasureString($layer.Text, $font, [int]::MaxValue, $measureFormat)
-          $measuredWidth = [int][math]::Ceiling($measured.Width)
-          $measuredHeight = [int][math]::Ceiling($measured.Height)
-          if ($measuredWidth -gt ($layerWidth - 2) -or $measuredHeight -gt $layerHeight) {
-            throw "Back $($layer.Name) '$($layer.Text)' tidak muat: font=${layerFontPx}px, measured=${measuredWidth}x${measuredHeight}, layer=${layerWidth}x${layerHeight}. Perbesar widthDots/heightDots atau kecilkan fontPx."
-          }
-
-          $format = [System.Drawing.StringFormat]::new()
-          try {
-            $format.Alignment = [System.Drawing.StringAlignment]::Center
-            $format.LineAlignment = [System.Drawing.StringAlignment]::Center
-            $format.FormatFlags = [System.Drawing.StringFormatFlags]::NoWrap
-            $rect = [System.Drawing.RectangleF]::new($layerX, $layerY, $layerWidth, $layerHeight)
-            $graphics.DrawString($layer.Text, $font, [System.Drawing.Brushes]::Black, $rect, $format)
-          }
-          finally {
-            $format.Dispose()
-          }
-
-          $measurements[$layer.Name] = [ordered]@{
-            text = $layer.Text
-            fontPx = $layerFontPx
-            x = $layerX
-            y = $layerY
-            widthDots = $layerWidth
-            heightDots = $layerHeight
-            measuredWidth = $measuredWidth
-            measuredHeight = $measuredHeight
-          }
-        }
-        finally {
-          $font.Dispose()
+        if ($layer.Name -eq "itemDisplayName") {
+          $maxLines = Get-RequiredInt $cfg.maxLines "back.itemDisplayName.maxLines" 1 3
+          $measurements[$layer.Name] = Add-FittedWrappedTextLayer -Graphics $graphics -FontFamily $FontFamily -FontStyle $FontStyle -Text $layer.Text -X $x -Y $y -Width $w -Height $h -FontPx $fontPx -MinFontPx $minFontPx -MaxLines $maxLines -TextAlign ([string]$cfg.textAlign) -TruncateWithEllipsis $layer.Truncate
+        } else {
+          $measurements[$layer.Name] = Add-FittedTextLayer -Graphics $graphics -FontFamily $FontFamily -FontStyle $FontStyle -Text $layer.Text -X $x -Y $y -Width $w -Height $h -FontPx $fontPx -MinFontPx $minFontPx -TextAlign ([string]$cfg.textAlign) -TruncateWithEllipsis $layer.Truncate
         }
       }
 
-      # Rotate the complete back panel once, not each text item independently.
-      # This preserves the intended final left-to-right visual order after the tag is folded.
       if ($Rotate180) {
         $bitmap.RotateFlip([System.Drawing.RotateFlipType]::Rotate180FlipNone)
       }
-
       return [pscustomobject]@{
         Bytes = Convert-To1BppBmpBytes -Source $bitmap -SpreadPx $SpreadPx
         Width = $CanvasWidth
@@ -343,13 +537,9 @@ function New-SplitBackGraphic {
         Measurements = $measurements
       }
     }
-    finally {
-      $graphics.Dispose()
-    }
+    finally { $graphics.Dispose() }
   }
-  finally {
-    $bitmap.Dispose()
-  }
+  finally { $bitmap.Dispose() }
 }
 
 function Add-Ascii {
@@ -359,13 +549,7 @@ function Add-Ascii {
 }
 
 function Add-BmpGraphicCommand {
-  param(
-    [System.IO.Stream]$Stream,
-    [int]$X,
-    [int]$Y,
-    [byte[]]$BmpBytes
-  )
-
+  param([System.IO.Stream]$Stream, [int]$X, [int]$Y, [byte[]]$BmpBytes)
   if ($BmpBytes.Length -gt 32768) {
     throw "BMP graphic terlalu besar: $($BmpBytes.Length) bytes (maksimum 32768 bytes untuk ESC GM)."
   }
@@ -380,163 +564,149 @@ function Get-Code128BWidthDots {
   return (11 * ($symbolCount + 1) + 13) * $NarrowDots
 }
 
-if ($Barcode -notmatch '^[0-9A-Z .$/+%-]{1,40}$') {
-  throw "Barcode '$Barcode' tidak valid untuk prototype CODE128 Set B."
-}
-
-$fontFamilyRequested = [string]$config.font.family
-$fontStyle = [string]$config.font.style
-if ($fontStyle -ne "Bold") {
-  throw "Production host-bold renderer hanya mendukung font.style='Bold'; aktual='$fontStyle'."
-}
-$inkSpreadPx = Get-RequiredInt -Value $config.font.inkSpreadPx -Name "font.inkSpreadPx" -Minimum 0 -Maximum 2
-$resolvedFontFamily = Resolve-InstalledFontFamily -Requested $fontFamilyRequested
-
-$product = $config.front.productName
-$productX = Get-RequiredInt $product.x "front.productName.x"
-$productY = Get-RequiredInt $product.y "front.productName.y"
-$productCanvasWidth = Get-RequiredInt $product.canvasWidthDots "front.productName.canvasWidthDots" 8 999
-$productCanvasHeight = Get-RequiredInt $product.canvasHeightDots "front.productName.canvasHeightDots" 8 999
-$productFontPx = Get-RequiredInt $product.fontPx "front.productName.fontPx" 4 200
-$productMaxChars = Get-RequiredInt $product.maxChars "front.productName.maxChars" 1 200
-$productText = $ProductName.Trim().ToUpperInvariant()
-if ($productText.Length -gt $productMaxChars) {
-  $productText = $productText.Substring(0, $productMaxChars).TrimEnd()
-}
-
-$barcodeConfig = $config.front.barcode
-$barcodeX = Get-RequiredInt $barcodeConfig.x "front.barcode.x"
-$barcodeY = Get-RequiredInt $barcodeConfig.y "front.barcode.y"
-$barcodeHeightDots = Get-RequiredInt $barcodeConfig.heightDots "front.barcode.heightDots" 1 999
-$narrowBarDots = Get-RequiredInt $barcodeConfig.narrowBarDots "front.barcode.narrowBarDots" 1 12
-$quietZoneModules = Get-RequiredInt $barcodeConfig.quietZoneModules "front.barcode.quietZoneModules" 0 100
-if ([string]$barcodeConfig.strategy -ne "CODE128_B") {
-  throw "front.barcode.strategy wajib CODE128_B pada Option A."
-}
-
-$barcodeTextConfig = $config.front.barcodeText
-$barcodeTextX = Get-RequiredInt $barcodeTextConfig.x "front.barcodeText.x"
-$barcodeTextY = Get-RequiredInt $barcodeTextConfig.y "front.barcodeText.y"
-$barcodeTextCanvasWidth = Get-RequiredInt $barcodeTextConfig.canvasWidthDots "front.barcodeText.canvasWidthDots" 8 999
-$barcodeTextCanvasHeight = Get-RequiredInt $barcodeTextConfig.canvasHeightDots "front.barcodeText.canvasHeightDots" 8 999
-$barcodeTextFontPx = Get-RequiredInt $barcodeTextConfig.fontPx "front.barcodeText.fontPx" 4 200
-
-$backConfig = $config.back
-$backX = Get-RequiredInt $backConfig.x "back.x"
-$backY = Get-RequiredInt $backConfig.y "back.y"
-$backCanvasWidth = Get-RequiredInt $backConfig.canvasWidthDots "back.canvasWidthDots" 8 999
-$backCanvasHeight = Get-RequiredInt $backConfig.canvasHeightDots "back.canvasHeightDots" 8 999
-$backRotation = Get-RequiredInt $backConfig.rotation "back.rotation" 0 359
-if ($backRotation -ne 180) {
-  throw "back.rotation wajib 180 untuk jewelry barbell yang sudah dikalibrasi."
-}
-
-$weightText = $Weight.Trim()
-if ([string]::IsNullOrWhiteSpace($weightText)) {
-  throw "Weight tidak boleh kosong."
-}
-$purityValue = $Purity.Trim()
-if ([string]::IsNullOrWhiteSpace($purityValue)) {
-  throw "Purity tidak boleh kosong."
-}
-$purityPrefix = [string]$backConfig.purity.prefix
-$purityText = "$purityPrefix$purityValue"
-
-$productGraphic = New-BoldTextGraphic -Family $resolvedFontFamily -Text $productText -CanvasWidth $productCanvasWidth -CanvasHeight $productCanvasHeight -FontPx $productFontPx -Rotate180 $false -SpreadPx $inkSpreadPx
-$barcodeTextGraphic = New-BoldTextGraphic -Family $resolvedFontFamily -Text $Barcode -CanvasWidth $barcodeTextCanvasWidth -CanvasHeight $barcodeTextCanvasHeight -FontPx $barcodeTextFontPx -Rotate180 $false -SpreadPx $inkSpreadPx
-$backGraphic = New-SplitBackGraphic -Family $resolvedFontFamily -WeightText $weightText -PurityText $purityText -CanvasWidth $backCanvasWidth -CanvasHeight $backCanvasHeight -WeightConfig $backConfig.weight -PurityConfig $backConfig.purity -Rotate180 $true -SpreadPx $inkSpreadPx
-
-$barcodeWidth = Get-Code128BWidthDots -Value $Barcode -NarrowDots $narrowBarDots
-$quietDots = $quietZoneModules * $narrowBarDots
-
-$outputDir = Join-Path $HardwareHubRoot "data\temp"
-New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
-if ([string]::IsNullOrWhiteSpace($OutputFile)) {
-  $OutputFile = Join-Path $outputDir "sato-jewelry-production.sbpl"
-} elseif (-not [System.IO.Path]::IsPathRooted($OutputFile)) {
-  $OutputFile = Join-Path (Get-Location) $OutputFile
-}
-
-$stream = [System.IO.MemoryStream]::new()
 try {
-  Add-Ascii -Stream $stream -Text ("$ESC" + "A")
-  Add-BmpGraphicCommand -Stream $stream -X $productX -Y $productY -BmpBytes $productGraphic.Bytes
+  if ($Barcode -notmatch '^[0-9A-Z .$/+%-]{1,40}$') {
+    throw "Barcode '$Barcode' tidak valid untuk CODE128 Set B."
+  }
 
-  Add-Ascii -Stream $stream -Text ("$ESC" + "H" + $barcodeX.ToString("0000") + "$ESC" + "V" + $barcodeY.ToString("0000"))
-  Add-Ascii -Stream $stream -Text ("$ESC" + "BG" + $narrowBarDots.ToString("00") + $barcodeHeightDots.ToString("000") + ">H" + $Barcode)
+  $fontFamilyRequested = [string]$config.font.family
+  $fontStyleName = [string]$config.font.style
+  $fontStyle = Resolve-FontStyle -Style $fontStyleName
+  $fontPathEnvName = [string]$config.font.filePathEnv
+  $inkSpreadPx = Get-RequiredInt -Value $config.font.inkSpreadPx -Name "font.inkSpreadPx" -Minimum 0 -Maximum 2
+  $fontContext = Resolve-FontContext -RequestedFamily $fontFamilyRequested -FilePathEnvName $fontPathEnvName
 
-  Add-BmpGraphicCommand -Stream $stream -X $barcodeTextX -Y $barcodeTextY -BmpBytes $barcodeTextGraphic.Bytes
-  Add-BmpGraphicCommand -Stream $stream -X $backX -Y $backY -BmpBytes $backGraphic.Bytes
-  Add-Ascii -Stream $stream -Text ("$ESC" + "Q" + $Copies + "$ESC" + "Z")
+  $product = $config.front.productMasterName
+  $productX = Get-RequiredInt $product.x "front.productMasterName.x"
+  $productY = Get-RequiredInt $product.y "front.productMasterName.y"
+  $productCanvasWidth = Get-RequiredInt $product.canvasWidthDots "front.productMasterName.canvasWidthDots" 8 999
+  $productCanvasHeight = Get-RequiredInt $product.canvasHeightDots "front.productMasterName.canvasHeightDots" 8 999
+  $productFontPx = Get-RequiredInt $product.fontPx "front.productMasterName.fontPx" 4 200
+  $productMinFontPx = Get-RequiredInt $product.minFontPx "front.productMasterName.minFontPx" 4 $productFontPx
+  $productMaxChars = Get-RequiredInt $product.maxChars "front.productMasterName.maxChars" 1 220
+  $productText = $MasterProductName.Trim().ToUpperInvariant()
+  if ($productText.Length -gt $productMaxChars) {
+    $productText = $productText.Substring(0, $productMaxChars).TrimEnd()
+  }
 
-  [System.IO.File]::WriteAllBytes($OutputFile, $stream.ToArray())
+  $barcodeConfig = $config.front.barcode
+  $barcodeHeightDots = Get-RequiredInt $barcodeConfig.heightDots "front.barcode.heightDots" 1 999
+  $narrowBarDots = Get-RequiredInt $barcodeConfig.narrowBarDots "front.barcode.narrowBarDots" 1 12
+  $quietZoneModules = Get-RequiredInt $barcodeConfig.quietZoneModules "front.barcode.quietZoneModules" 0 100
+  if ([string]$barcodeConfig.strategy -ne "CODE128_B") { throw "front.barcode.strategy wajib CODE128_B." }
+  $barcodeWidth = Get-Code128BWidthDots -Value $Barcode -NarrowDots $narrowBarDots
+  $quietDots = $quietZoneModules * $narrowBarDots
+  if (($barcodeWidth + (2 * $quietDots)) -gt $productCanvasWidth) {
+    throw "Barcode '$Barcode' terlalu lebar untuk panel front: bars=$barcodeWidth quiet=$quietDots panel=$productCanvasWidth."
+  }
+  $barcodeX = $productX + [int][math]::Round(($productCanvasWidth - $barcodeWidth) / 2.0)
+  $barcodeY = Get-RequiredInt $barcodeConfig.y "front.barcode.y"
+
+  $barcodeTextConfig = $config.front.barcodeText
+  $barcodeTextX = Get-RequiredInt $barcodeTextConfig.x "front.barcodeText.x"
+  $barcodeTextY = Get-RequiredInt $barcodeTextConfig.y "front.barcodeText.y"
+  $barcodeTextCanvasWidth = Get-RequiredInt $barcodeTextConfig.canvasWidthDots "front.barcodeText.canvasWidthDots" 8 999
+  $barcodeTextCanvasHeight = Get-RequiredInt $barcodeTextConfig.canvasHeightDots "front.barcodeText.canvasHeightDots" 8 999
+  $barcodeTextFontPx = Get-RequiredInt $barcodeTextConfig.fontPx "front.barcodeText.fontPx" 4 200
+  $barcodeTextMinFontPx = Get-RequiredInt $barcodeTextConfig.minFontPx "front.barcodeText.minFontPx" 4 $barcodeTextFontPx
+
+  $backConfig = $config.back
+  $backX = Get-RequiredInt $backConfig.x "back.x"
+  $backY = Get-RequiredInt $backConfig.y "back.y"
+  $backCanvasWidth = Get-RequiredInt $backConfig.canvasWidthDots "back.canvasWidthDots" 8 999
+  $backCanvasHeight = Get-RequiredInt $backConfig.canvasHeightDots "back.canvasHeightDots" 8 999
+  $backRotation = Get-RequiredInt $backConfig.rotation "back.rotation" 0 359
+  if ($backRotation -ne 180) { throw "back.rotation wajib 180 untuk jewelry barbell yang sudah dikalibrasi." }
+
+  $weightText = $Weight.Trim()
+  $itemText = $ItemDisplayName.Trim().ToUpperInvariant()
+  if ([string]::IsNullOrWhiteSpace($weightText)) { throw "Weight tidak boleh kosong." }
+  if ([string]::IsNullOrWhiteSpace($itemText)) { throw "ItemDisplayName tidak boleh kosong." }
+
+  $itemMaxChars = Get-RequiredInt $backConfig.itemDisplayName.maxChars "back.itemDisplayName.maxChars" 1 220
+  if ($itemText.Length -gt $itemMaxChars) {
+    $itemText = $itemText.Substring(0, $itemMaxChars).TrimEnd()
+  }
+
+  $productGraphic = New-FittedTextGraphic -FontFamily $fontContext.Family -FontStyle $fontStyle -Text $productText -CanvasWidth $productCanvasWidth -CanvasHeight $productCanvasHeight -FontPx $productFontPx -MinFontPx $productMinFontPx -TextAlign ([string]$product.textAlign) -Rotate180 $false -SpreadPx $inkSpreadPx
+  $barcodeTextGraphic = New-FittedTextGraphic -FontFamily $fontContext.Family -FontStyle $fontStyle -Text $Barcode -CanvasWidth $barcodeTextCanvasWidth -CanvasHeight $barcodeTextCanvasHeight -FontPx $barcodeTextFontPx -MinFontPx $barcodeTextMinFontPx -TextAlign ([string]$barcodeTextConfig.textAlign) -Rotate180 $false -SpreadPx $inkSpreadPx
+  $backGraphic = New-BackGraphicV3 -FontFamily $fontContext.Family -FontStyle $fontStyle -WeightText $weightText -ItemDisplayName $itemText -CanvasWidth $backCanvasWidth -CanvasHeight $backCanvasHeight -WeightConfig $backConfig.weight -ItemConfig $backConfig.itemDisplayName -Rotate180 $true -SpreadPx $inkSpreadPx
+
+  $outputDir = Join-Path $HardwareHubRoot "data\temp"
+  New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+  if ([string]::IsNullOrWhiteSpace($OutputFile)) {
+    $OutputFile = Join-Path $outputDir "sato-jewelry-v3.sbpl"
+  } elseif (-not [System.IO.Path]::IsPathRooted($OutputFile)) {
+    $OutputFile = Join-Path (Get-Location) $OutputFile
+  }
+
+  $stream = [System.IO.MemoryStream]::new()
+  try {
+    Add-Ascii -Stream $stream -Text ("$ESC" + "A")
+    Add-BmpGraphicCommand -Stream $stream -X $productX -Y $productY -BmpBytes $productGraphic.Bytes
+    Add-Ascii -Stream $stream -Text ("$ESC" + "H" + $barcodeX.ToString("0000") + "$ESC" + "V" + $barcodeY.ToString("0000"))
+    Add-Ascii -Stream $stream -Text ("$ESC" + "BG" + $narrowBarDots.ToString("00") + $barcodeHeightDots.ToString("000") + ">H" + $Barcode)
+    Add-BmpGraphicCommand -Stream $stream -X $barcodeTextX -Y $barcodeTextY -BmpBytes $barcodeTextGraphic.Bytes
+    Add-BmpGraphicCommand -Stream $stream -X $backX -Y $backY -BmpBytes $backGraphic.Bytes
+    Add-Ascii -Stream $stream -Text ("$ESC" + "Q" + $Copies + "$ESC" + "Z")
+    [System.IO.File]::WriteAllBytes($OutputFile, $stream.ToArray())
+  }
+  finally { $stream.Dispose() }
+
+  $meta = [ordered]@{
+    configPath = $ConfigPath
+    configId = [string]$config.id
+    outputFile = $OutputFile
+    bytes = (Get-Item $OutputFile).Length
+    fontFamilyRequested = $fontFamilyRequested
+    fontFamilyUsed = $fontContext.Name
+    fontStyle = $fontStyleName
+    fontSource = $fontContext.Source
+    fontPath = $fontContext.Path
+    inkSpreadPx = $inkSpreadPx
+    copies = $Copies
+    renderer = "host_inter_bmp_v3"
+    front = [ordered]@{
+      productMasterName = $productGraphic.Measurement
+      barcode = [ordered]@{
+        data = $Barcode
+        symbology = "CODE128"
+        strategy = "Set B"
+        x = $barcodeX
+        y = $barcodeY
+        barsWidthDots = $barcodeWidth
+        quietZoneDotsPerSide = $quietDots
+        heightDots = $barcodeHeightDots
+        narrowBarDots = $narrowBarDots
+      }
+      barcodeText = $barcodeTextGraphic.Measurement
+    }
+    back = [ordered]@{
+      canvas = "$($backGraphic.Width)x$($backGraphic.Height)"
+      x = $backX
+      y = $backY
+      rotation = $backRotation
+      weight = $backGraphic.Measurements.weight
+      itemDisplayName = $backGraphic.Measurements.itemDisplayName
+      bmpBytes = $backGraphic.Bytes.Length
+    }
+  }
+
+  $metaPath = "$OutputFile.json"
+  $meta | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $metaPath -Encoding UTF8
+
+  Write-Host "[PASS] Production SATO jewelry v3 SBPL: $OutputFile"
+  Write-Host "[INFO] Config: $ConfigPath"
+  Write-Host "[INFO] Font: $($fontContext.Name) $fontStyleName ($($fontContext.Source)); inkSpread=$inkSpreadPx"
+  Write-Host "[INFO] Front master: '$($productGraphic.Measurement.text)' font=$($productGraphic.Measurement.fontPx)px"
+  Write-Host "[INFO] Barcode: CODE128 Set B '$Barcode'; H=$barcodeX V=$barcodeY bars=${barcodeWidth} dots height=${barcodeHeightDots}"
+  Write-Host "[INFO] Barcode number: '$($barcodeTextGraphic.Measurement.text)' font=$($barcodeTextGraphic.Measurement.fontPx)px"
+  Write-Host "[INFO] Back weight: '$($backGraphic.Measurements.weight.text)' font=$($backGraphic.Measurements.weight.fontPx)px"
+  Write-Host "[INFO] Back item: '$($backGraphic.Measurements.itemDisplayName.text)' font=$($backGraphic.Measurements.itemDisplayName.fontPx)px truncated=$($backGraphic.Measurements.itemDisplayName.truncated)"
+  Write-Host "[INFO] Metadata: $metaPath"
 }
 finally {
-  $stream.Dispose()
-}
-
-$meta = [ordered]@{
-  configPath = $ConfigPath
-  configId = [string]$config.id
-  outputFile = $OutputFile
-  bytes = (Get-Item $OutputFile).Length
-  fontFamilyRequested = $fontFamilyRequested
-  fontFamilyUsed = $resolvedFontFamily
-  fontStyle = $fontStyle
-  inkSpreadPx = $inkSpreadPx
-  copies = $Copies
-  renderer = "host_bold_bmp_v2"
-  product = [ordered]@{
-    text = $productText
-    fontPx = $productGraphic.FontPx
-    canvas = "$($productGraphic.Width)x$($productGraphic.Height)"
-    measured = "$($productGraphic.MeasuredWidth)x$($productGraphic.MeasuredHeight)"
-    x = $productX
-    y = $productY
-    bmpBytes = $productGraphic.Bytes.Length
-  }
-  barcode = [ordered]@{
-    data = $Barcode
-    symbology = "CODE128"
-    strategy = "Set B"
-    x = $barcodeX
-    y = $barcodeY
-    barsWidthDots = $barcodeWidth
-    quietZoneDotsPerSide = $quietDots
-    heightDots = $barcodeHeightDots
-    narrowBarDots = $narrowBarDots
-  }
-  barcodeText = [ordered]@{
-    text = $Barcode
-    fontPx = $barcodeTextGraphic.FontPx
-    canvas = "$($barcodeTextGraphic.Width)x$($barcodeTextGraphic.Height)"
-    measured = "$($barcodeTextGraphic.MeasuredWidth)x$($barcodeTextGraphic.MeasuredHeight)"
-    x = $barcodeTextX
-    y = $barcodeTextY
-    bmpBytes = $barcodeTextGraphic.Bytes.Length
-  }
-  back = [ordered]@{
-    canvas = "$($backGraphic.Width)x$($backGraphic.Height)"
-    x = $backX
-    y = $backY
-    rotation = $backRotation
-    weight = $backGraphic.Measurements.weight
-    purity = $backGraphic.Measurements.purity
-    bmpBytes = $backGraphic.Bytes.Length
+  if ($null -ne $PrivateFontCollection) {
+    $PrivateFontCollection.Dispose()
   }
 }
-
-$metaPath = "$OutputFile.json"
-$meta | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $metaPath -Encoding UTF8
-
-Write-Host "[PASS] Production SATO jewelry SBPL: $OutputFile"
-Write-Host "[INFO] Config: $ConfigPath"
-Write-Host "[INFO] Font: $resolvedFontFamily Bold; inkSpread=$inkSpreadPx"
-Write-Host "[INFO] Product: H=$productX V=$productY font=${productFontPx}px canvas=${productCanvasWidth}x${productCanvasHeight}"
-Write-Host "[INFO] Barcode: CODE128 Set B '$Barcode'; H=$barcodeX V=$barcodeY bars=${barcodeWidth} dots height=${barcodeHeightDots}"
-Write-Host "[INFO] Barcode text: H=$barcodeTextX V=$barcodeTextY font=${barcodeTextFontPx}px canvas=${barcodeTextCanvasWidth}x${barcodeTextCanvasHeight}"
-Write-Host "[INFO] Back panel: H=$backX V=$backY canvas=${backCanvasWidth}x${backCanvasHeight} rotation=180"
-Write-Host "[INFO] Back weight: '$weightText' font=$($backGraphic.Measurements.weight.fontPx)px layer=$($backGraphic.Measurements.weight.widthDots)x$($backGraphic.Measurements.weight.heightDots)"
-Write-Host "[INFO] Back purity: '$purityText' font=$($backGraphic.Measurements.purity.fontPx)px layer=$($backGraphic.Measurements.purity.widthDots)x$($backGraphic.Measurements.purity.heightDots)"
-Write-Host "[INFO] Metadata: $metaPath"
-Write-Host "[INFO] Copies: $Copies"

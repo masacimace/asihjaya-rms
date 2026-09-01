@@ -57,7 +57,9 @@ const movementTypeLabels: Record<AdminCashMovementType, string> = {
   closing_adjustment: "Koreksi Closing",
 };
 
-function getMovementDisplayLabel(movement: Pick<AdminCashMovementRow, "type" | "referenceType">) {
+function getMovementDisplayLabel(
+  movement: Pick<AdminCashMovementRow, "type" | "referenceType">,
+) {
   if (
     movement.type === "cash_out" &&
     movement.referenceType === "customer_deposit_withdrawal"
@@ -242,13 +244,13 @@ function SummaryCard({
         <div className="min-w-0">
           <p
             className={cn(
-              "text-xs font-semibold uppercase tracking-wide",
+              "text-xs font-semibold uppercase",
               tone === "dark" ? "text-white/55" : "text-[var(--muted)]",
             )}
           >
             {title}
           </p>
-          <p className="mt-3 truncate text-2xl font-semibold tracking-tight">
+          <p className="mt-3 truncate text-sm font-semibold tracking-tight">
             {value}
           </p>
           <p
@@ -296,7 +298,9 @@ function MovementBadge({ movement }: { movement: AdminCashMovementRow }) {
 
 function ReferenceLink({ movement }: { movement: AdminCashMovementRow }) {
   if (movement.referenceType === "customer_deposit_withdrawal") {
-    return <span className="font-medium text-neutral-700">Penarikan Dana Titip</span>;
+    return (
+      <span className="font-medium text-neutral-700">Penarikan Dana Titip</span>
+    );
   }
 
   if (movement.referenceType === "sale" && movement.referenceId) {
@@ -458,7 +462,7 @@ export default async function KasPage({ searchParams }: PageProps) {
           tone="danger"
         />
         <SummaryCard
-          title="Payout Cash Buyback"
+          title="Payout Buyback"
           value={formatMoney(data.summary.buybackCashPayouts)}
           helper="Kas keluar untuk pembayaran transaksi Buyback."
           icon={<MinusCircle className="size-5" />}
@@ -484,9 +488,9 @@ export default async function KasPage({ searchParams }: PageProps) {
               Rekap Dana Titip periode ini
             </h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Saldo ini adalah kewajiban outlet ke customer, bukan omzet. Deposit
-              Saldo menambah liability, sedangkan Gunakan saldo dan penarikan
-              tunai mengurangi liability.
+              Saldo ini adalah kewajiban outlet ke customer, bukan omzet.
+              Deposit Saldo menambah liability, sedangkan Gunakan saldo dan
+              penarikan tunai mengurangi liability.
             </p>
           </div>
           <div className="rounded-2xl bg-neutral-950 px-5 py-4 text-white lg:min-w-64 lg:text-right">

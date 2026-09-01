@@ -337,7 +337,6 @@ async function checkDatabase() {
         transactionCount: input.transactionCount ?? 0,
         itemsSoldCount: input.itemsSoldCount ?? 0,
         heldTransactionCount: 0,
-        pendingApprovalCount: 0,
         openedAt,
         closedAt,
         cashierId: userId,

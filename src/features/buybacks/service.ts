@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -61,6 +61,169 @@ function getPrimaryOutlet(auth: BuybackServiceAuth) {
   return auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0] ?? null;
 }
 
+type BuybackTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+function readSnapshotText(snapshot: Record<string, unknown>, key: string) {
+  const value = snapshot[key];
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
+function sameNullableText(left: unknown, right: unknown) {
+  const normalize = (value: unknown) => {
+    const normalized = String(value ?? "").trim();
+    return normalized || null;
+  };
+  return normalize(left) === normalize(right);
+}
+
+function sameNumeric(left: unknown, right: unknown) {
+  return Number(left) === Number(right);
+}
+
+async function getExistingBuybackReplayResultInTransaction(
+  transaction: BuybackTransaction,
+  organizationId: string,
+  payload: NormalizedBuybackPayload,
+): Promise<CompleteBuybackResult | null> {
+  const [existing] = await transaction
+    .select({
+      id: buybacks.id,
+      buybackNumber: buybacks.buybackNumber,
+      customerId: buybacks.customerId,
+      totalAmount: buybacks.totalAmount,
+      notes: buybacks.notes,
+    })
+    .from(buybacks)
+    .where(
+      and(
+        eq(buybacks.organizationId, organizationId),
+        eq(buybacks.idempotencyKey, payload.idempotencyKey),
+      ),
+    )
+    .limit(1);
+
+  if (!existing) return null;
+
+  const [storedItems, storedPayouts] = await Promise.all([
+    transaction
+      .select({
+        productItemId: buybackItems.productItemId,
+        source: buybackItems.source,
+        lineNumber: buybackItems.lineNumber,
+        weightGram: buybackItems.weightGram,
+        purityPercent: buybackItems.purityPercent,
+        exchangePurityPercent: buybackItems.exchangePurityPercent,
+        buybackPricePerGram: buybackItems.buybackPricePerGram,
+        deductionPerGram: buybackItems.deductionPerGram,
+        baseAmount: buybackItems.baseAmount,
+        deductionAmount: buybackItems.deductionAmount,
+        finalAmount: buybackItems.finalAmount,
+        snapshot: buybackItems.snapshot,
+      })
+      .from(buybackItems)
+      .where(eq(buybackItems.buybackId, existing.id))
+      .orderBy(asc(buybackItems.lineNumber)),
+    transaction
+      .select({
+        method: buybackPayouts.method,
+        amount: buybackPayouts.amount,
+        reference: buybackPayouts.reference,
+      })
+      .from(buybackPayouts)
+      .where(eq(buybackPayouts.buybackId, existing.id)),
+  ]);
+
+  let matches =
+    existing.customerId === payload.customerId &&
+    sameNumeric(existing.totalAmount, payload.totalAmount) &&
+    sameNullableText(existing.notes, payload.notes) &&
+    storedItems.length === payload.items.length &&
+    storedPayouts.length === payload.payouts.length;
+
+  if (matches) {
+    for (const [index, incoming] of payload.items.entries()) {
+      const stored = storedItems[index];
+      if (!stored || stored.lineNumber !== index + 1 || stored.source !== incoming.source) {
+        matches = false;
+        break;
+      }
+
+      const snapshot = stored.snapshot ?? {};
+      const identityMatches =
+        incoming.source === "asihjaya"
+          ? stored.productItemId === incoming.productItemId
+          : readSnapshotText(snapshot, "productMasterId") === incoming.productMasterId &&
+            sameNullableText(readSnapshotText(snapshot, "displayName"), incoming.displayName);
+
+      if (
+        !identityMatches ||
+        !sameNumeric(stored.weightGram, incoming.weightGram) ||
+        !sameNumeric(stored.purityPercent, incoming.purityPercent) ||
+        !sameNumeric(stored.exchangePurityPercent, incoming.exchangePurityPercent) ||
+        !sameNumeric(stored.buybackPricePerGram, incoming.buybackPricePerGram) ||
+        !sameNumeric(stored.deductionPerGram, incoming.deductionPerGram) ||
+        !sameNumeric(stored.baseAmount, incoming.baseAmount) ||
+        !sameNumeric(stored.deductionAmount, incoming.deductionAmount) ||
+        !sameNumeric(stored.finalAmount, incoming.finalAmount) ||
+        !sameNullableText(readSnapshotText(snapshot, "color"), incoming.color)
+      ) {
+        matches = false;
+        break;
+      }
+    }
+  }
+
+  if (matches) {
+    const storedPayoutByMethod = new Map(
+      storedPayouts.map((payout) => [payout.method, payout]),
+    );
+    for (const incoming of payload.payouts) {
+      const stored = storedPayoutByMethod.get(incoming.method);
+      if (
+        !stored ||
+        !sameNumeric(stored.amount, incoming.amount) ||
+        !sameNullableText(stored.reference, incoming.reference)
+      ) {
+        matches = false;
+        break;
+      }
+    }
+  }
+
+  if (!matches) {
+    throw new BuybackValidationError(
+      "Sesi Buyback ini sudah dipakai oleh transaksi berhasil dengan data yang berbeda. Refresh halaman untuk memulai Buyback baru.",
+    );
+  }
+
+  return {
+    buybackId: existing.id,
+    buybackNumber: existing.buybackNumber,
+    totalAmount: Number(existing.totalAmount),
+    itemCount: storedItems.length,
+    replayed: true,
+    receiptJobId: null,
+  };
+}
+
+export function getExistingBuybackReplayResult({
+  organizationId,
+  payload,
+}: {
+  organizationId: string;
+  payload: NormalizedBuybackPayload;
+}) {
+  return db.transaction((transaction) =>
+    getExistingBuybackReplayResultInTransaction(
+      transaction,
+      organizationId,
+      payload,
+    ),
+  );
+}
+
 export async function completeBuybackTransaction({
   auth,
   payload,
@@ -88,31 +251,12 @@ export async function completeBuybackTransaction({
       sql`select pg_advisory_xact_lock(hashtext(${`${auth.organization.id}:buyback:${payload.idempotencyKey}`}))`,
     );
 
-    const [existingBuyback] = await transaction
-      .select({
-        id: buybacks.id,
-        buybackNumber: buybacks.buybackNumber,
-        totalAmount: buybacks.totalAmount,
-      })
-      .from(buybacks)
-      .where(
-        and(
-          eq(buybacks.organizationId, auth.organization.id),
-          eq(buybacks.idempotencyKey, payload.idempotencyKey),
-        ),
-      )
-      .limit(1);
-
-    if (existingBuyback) {
-      return {
-        buybackId: existingBuyback.id,
-        buybackNumber: existingBuyback.buybackNumber,
-        totalAmount: Number(existingBuyback.totalAmount),
-        itemCount: payload.items.length,
-        replayed: true,
-        receiptJobId: null,
-      };
-    }
+    const replayResult = await getExistingBuybackReplayResultInTransaction(
+      transaction,
+      auth.organization.id,
+      payload,
+    );
+    if (replayResult) return replayResult;
 
     const [register] = await transaction
       .select({ id: registers.id, code: registers.code, name: registers.name })
@@ -667,7 +811,6 @@ export async function completeBuybackTransaction({
         saleId: null,
         paymentId: null,
         cashMovementId: null,
-        approvalId: null,
         entryType: "deposit_in",
         direction: "credit",
         amount: String(depositPayout),

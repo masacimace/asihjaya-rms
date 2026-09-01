@@ -129,6 +129,8 @@ async function checkLiveDatabase(): Promise<void> {
       "outlets",
       "users",
       "sales",
+      "payments",
+      "manual_payment_profiles",
       "hardware_agents",
       "hardware_jobs",
       "customer_deposit_ledger",
@@ -143,11 +145,6 @@ async function checkLiveDatabase(): Promise<void> {
       "product_batch_import_item_rows",
       "product_batch_import_media",
       "legacy_product_master_mappings",
-      "legacy_migration_sessions",
-      "legacy_migration_session_assignments",
-      "legacy_migration_verifications",
-      "legacy_migration_sold_records",
-      "legacy_migration_cutover_runs",
       "item_barcodes",
       "finance_closing_snapshots",
       "telegram_destinations",
@@ -169,8 +166,129 @@ async function checkLiveDatabase(): Promise<void> {
     const missingTables = requiredTables.filter((tableName) => !existingTables.has(tableName));
     assert(missingTables.length === 0, `Tabel hasil migration belum lengkap: ${missingTables.join(", ")}.`);
 
+    const retiredTables = [
+      "approvals",
+      "payment_reconciliations",
+      "settlement_import_mappings",
+      "settlement_import_batches",
+      "settlement_import_rows",
+      "manual_payment_policies",
+      "payment_evidence_uploads",
+      "legacy_migration_sessions",
+      "legacy_migration_session_assignments",
+      "legacy_migration_verifications",
+      "legacy_migration_sold_records",
+      "legacy_migration_cutover_runs",
+    ];
+    const retiredTableResult = await pool.query<{ table_name: string }>(
+      `select table_name
+       from information_schema.tables
+       where table_schema = 'public' and table_name = any($1::text[])`,
+      [retiredTables],
+    );
+    assert(
+      retiredTableResult.rows.length === 0,
+      `Retired table masih tersedia setelah R4 cleanup: ${retiredTableResult.rows.map((row) => row.table_name).join(", ")}.`,
+    );
+
+    const retiredColumns = new Map<string, string[]>([
+      ["payments", [
+        "normalized_reference",
+        "external_order_id",
+        "verification_status",
+        "verification_source",
+        "provider_paid_at",
+        "verification_approval_id",
+        "co_verified_by",
+        "co_verified_at",
+        "evidence_key",
+        "settlement_status",
+      ]],
+      ["customer_deposit_ledger", ["approval_id"]],
+      ["payment_refunds", ["approval_id"]],
+      ["sale_return_cases", ["approval_id"]],
+      ["finance_closing_snapshots", ["pending_approval_count"]],
+    ]);
+    for (const [tableName, columns] of retiredColumns) {
+      const retiredColumnResult = await pool.query<{ column_name: string }>(
+        `select column_name
+         from information_schema.columns
+         where table_schema = 'public' and table_name = $1 and column_name = any($2::text[])`,
+        [tableName, columns],
+      );
+      assert(
+        retiredColumnResult.rows.length === 0,
+        `Retired column masih tersedia pada ${tableName}: ${retiredColumnResult.rows.map((row) => row.column_name).join(", ")}.`,
+      );
+    }
+
+    const retiredEnums = [
+      "approval_execution_status",
+      "approval_status",
+      "approval_type",
+      "manual_payment_verification_status",
+      "payment_settlement_status",
+      "settlement_import_status",
+      "settlement_import_row_status",
+      "legacy_migration_session_status",
+      "legacy_migration_assignment_role",
+      "legacy_migration_verification_source",
+      "legacy_migration_verification_status",
+    ];
+    const retiredEnumResult = await pool.query<{ typname: string }>(
+      `select enum_type.typname
+       from pg_type as enum_type
+       inner join pg_namespace as namespace_record on namespace_record.oid = enum_type.typnamespace
+       where namespace_record.nspname = 'public' and enum_type.typname = any($1::text[])`,
+      [retiredEnums],
+    );
+    assert(
+      retiredEnumResult.rows.length === 0,
+      `Retired enum masih tersedia setelah R4 cleanup: ${retiredEnumResult.rows.map((row) => row.typname).join(", ")}.`,
+    );
+
+    const retiredPermissionCodes = [
+      "shifts.reopen",
+      "migration.mapping.manage",
+      "migration.session.manage",
+      "migration.scan",
+      "migration.verification.submit",
+      "migration.verification.review",
+      "migration.verification.approve",
+      "migration.sold.manage",
+      "migration.cutover.execute",
+    ];
+    const retiredPermissionResult = await pool.query<{ code: string }>(
+      `select code from permissions where code = any($1::text[])`,
+      [retiredPermissionCodes],
+    );
+    assert(
+      retiredPermissionResult.rows.length === 0,
+      `Permission retired masih tersedia: ${retiredPermissionResult.rows.map((row) => row.code).join(", ")}.`,
+    );
+
     const requiredColumns = new Map<string, string[]>([
       ["organizations", ["timezone"]],
+      [
+        "payments",
+        [
+          "sale_id",
+          "method",
+          "provider",
+          "amount",
+          "status",
+          "provider_reference",
+          "manual_payment_profile_id",
+          "verified_by",
+          "verified_at",
+          "paid_at",
+          "metadata",
+        ],
+      ],
+      [
+        "manual_payment_profiles",
+        ["organization_id", "outlet_id", "profile_type", "code", "name", "provider", "verification_source", "is_active"],
+      ],
       [
         "buybacks",
         [
@@ -295,56 +413,6 @@ async function checkLiveDatabase(): Promise<void> {
         "legacy_product_master_mappings",
         ["legacy_master_code", "item_count", "status", "target_product_master_id"],
       ],
-      [
-        "legacy_migration_sessions",
-        ["batch_id", "name", "location_code", "status"],
-      ],
-      [
-        "legacy_migration_session_assignments",
-        ["session_id", "user_id", "assignment_role"],
-      ],
-      [
-        "legacy_migration_verifications",
-        [
-          "session_id",
-          "barcode_value",
-          "source",
-          "status",
-          "target_product_master_id",
-          "submission_fingerprint",
-          "submitted_by",
-          "product_item_id",
-          "revision",
-        ],
-      ],
-      [
-        "legacy_migration_sold_records",
-        [
-          "batch_id",
-          "barcode_value",
-          "verification_id",
-          "product_item_id",
-          "previous_verification_status",
-          "previous_item_availability",
-          "sold_at",
-          "reported_by",
-          "reverted_at",
-          "revert_reason",
-        ],
-      ],
-      [
-        "legacy_migration_cutover_runs",
-        [
-          "batch_id",
-          "session_id",
-          "organization_id",
-          "outlet_id",
-          "item_count",
-          "executed_by",
-          "executed_at",
-          "metadata",
-        ],
-      ],
       ["item_barcodes", ["barcode_value", "source", "is_primary", "is_active"]],
       ["shifts", ["business_date"]],
       ["sale_items", ["cost_amount_snapshot"]],
@@ -383,7 +451,6 @@ async function checkLiveDatabase(): Promise<void> {
           "transaction_count",
           "items_sold_count",
           "held_transaction_count",
-          "pending_approval_count",
           "opened_at",
           "closed_at",
           "cashier_id",
@@ -483,15 +550,6 @@ async function checkLiveDatabase(): Promise<void> {
       "product_batch_import_item_rows_session_validation_idx",
       "product_batch_import_media_session_archive_path_uq",
       "product_batch_import_media_session_target_idx",
-      "legacy_migration_verifications_org_barcode_uq",
-      "legacy_migration_verifications_legacy_row_uq",
-      "legacy_migration_verifications_session_status_idx",
-      "legacy_migration_verifications_product_item_uq",
-      "legacy_migration_sold_records_org_barcode_active_uq",
-      "legacy_migration_sold_records_batch_sold_at_idx",
-      "legacy_migration_sold_records_verification_idx",
-      "legacy_migration_cutover_runs_session_uq",
-      "legacy_migration_cutover_runs_batch_time_idx",
       "item_barcodes_item_value_uq",
       "item_barcodes_org_active_value_uq",
       "item_barcodes_item_active_primary_uq",
@@ -537,11 +595,6 @@ async function checkLiveDatabase(): Promise<void> {
       "product_batch_import_media_byte_size_ck",
       "product_batch_import_media_dimensions_ck",
       "product_batch_import_media_target_ck",
-      "legacy_migration_verifications_source_ck",
-      "legacy_migration_verifications_weight_ck",
-      "legacy_migration_verifications_purity_ck",
-      "legacy_migration_verifications_photo_ck",
-      "legacy_migration_verifications_revision_ck",
       "sale_items_cost_snapshot_nonnegative_ck",
       "finance_closing_snapshots_cost_state_ck",
       "finance_closing_snapshots_revision_positive_ck",
@@ -571,49 +624,6 @@ async function checkLiveDatabase(): Promise<void> {
     assert(
       missingConstraints.length === 0,
       `Constraint migration verification belum lengkap: ${missingConstraints.join(", ")}.`,
-    );
-
-    const soldConstraints = [
-      "legacy_migration_sold_records_link_ck",
-      "legacy_migration_sold_records_revert_ck",
-    ];
-    const soldConstraintResult = await pool.query<{ conname: string }>(
-      `select constraint_record.conname
-       from pg_constraint as constraint_record
-       inner join pg_class as table_record
-         on table_record.oid = constraint_record.conrelid
-       inner join pg_namespace as namespace_record
-         on namespace_record.oid = table_record.relnamespace
-       where namespace_record.nspname = 'public'
-         and table_record.relname = 'legacy_migration_sold_records'
-         and constraint_record.conname = any($1::text[])`,
-      [soldConstraints],
-    );
-    const existingSoldConstraints = new Set(
-      soldConstraintResult.rows.map((row) => row.conname),
-    );
-    const missingSoldConstraints = soldConstraints.filter(
-      (constraintName) => !existingSoldConstraints.has(constraintName),
-    );
-    assert(
-      missingSoldConstraints.length === 0,
-      `Constraint sold during migration belum lengkap: ${missingSoldConstraints.join(", ")}.`,
-    );
-
-    const cutoverConstraintResult = await pool.query<{ conname: string }>(
-      `select constraint_record.conname
-       from pg_constraint as constraint_record
-       inner join pg_class as table_record
-         on table_record.oid = constraint_record.conrelid
-       inner join pg_namespace as namespace_record
-         on namespace_record.oid = table_record.relnamespace
-       where namespace_record.nspname = 'public'
-         and table_record.relname = 'legacy_migration_cutover_runs'
-         and constraint_record.conname = 'legacy_migration_cutover_runs_item_count_ck'`,
-    );
-    assert(
-      cutoverConstraintResult.rows.length === 1,
-      "Constraint cutover item count belum tersedia.",
     );
 
     const barcodeNamespaceConstraints = [

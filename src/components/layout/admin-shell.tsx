@@ -99,7 +99,7 @@ const navigation: NavigationItem[] = [
     label: "Operasional",
     icon: Store,
     children: [
-      { label: "Shift Kasir", href: "/admin/operasional/shift" },
+      /* Sidebar mobile label: "Shift Kasir", href: "/admin/operasional/shift" */
       { label: "Laporan Outlet", href: "/admin/laporan" },
       { label: "Pergerakan Kas", href: "/admin/operasional/kas" },
       { label: "Hardware Hub", href: "/admin/operasional/hardware" },

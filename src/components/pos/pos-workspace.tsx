@@ -68,7 +68,7 @@ type PosWorkspaceProps = {
   catalogPage: PosInitialData["catalogPage"];
   context: PosOperationalContext;
   canManageShifts: boolean;
-  canReopenShifts: boolean;
+  canContinueShift: boolean;
 };
 
 export function PosWorkspace({
@@ -79,7 +79,7 @@ export function PosWorkspace({
   catalogPage,
   context,
   canManageShifts,
-  canReopenShifts,
+  canContinueShift,
 }: PosWorkspaceProps) {
   const router = useRouter();
   const playCheckoutSuccessSound = usePosCheckoutSound();
@@ -746,7 +746,7 @@ export function PosWorkspace({
     shifts: {
       context,
       canManageShifts,
-      canReopenShifts,
+      canContinueShift,
       isCloseShiftPanelOpen,
       onToggleCloseShiftPanel: () =>
         setIsCloseShiftPanelOpen((isOpen) => !isOpen),

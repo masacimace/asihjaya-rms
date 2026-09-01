@@ -119,14 +119,15 @@ function createSatoProductionContractFixture(configPath = DEFAULT_SATO_LABEL_CON
   const payload = {
     schemaVersion: 1,
     templateId: SATO_JEWELRY_LABEL_TEMPLATE_ID,
-    templateVersion: 2,
+    templateVersion: 3,
     printerProfileId: SATO_JEWELRY_LABEL_PROFILE_ID,
     itemId: "00000000-0000-4000-8000-000000000001",
     copies: 1,
     fields: {
       sku: "AJ-TEST-LABEL",
       barcode: "AJTEST123456",
-      productName: "CINCIN EMAS TEST ASIHJAYA",
+      masterProductName: "CINCIN EMAS TEST ASIHJAYA",
+      itemDisplayName: "CINCIN EMAS TEST ITEM 001",
       weightGram: "2.350",
       purityPercent: "75",
       exchangePurityPercent: "70",

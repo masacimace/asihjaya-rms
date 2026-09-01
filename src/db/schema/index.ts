@@ -115,34 +115,6 @@ export const legacyMasterMappingSourceEnum = pgEnum(
   ["existing", "created"],
 );
 
-export const legacyMigrationSessionStatusEnum = pgEnum(
-  "legacy_migration_session_status",
-  ["draft", "active", "locked", "completed", "cancelled"],
-);
-
-export const legacyMigrationAssignmentRoleEnum = pgEnum(
-  "legacy_migration_assignment_role",
-  ["operator", "lead"],
-);
-
-export const legacyMigrationVerificationSourceEnum = pgEnum(
-  "legacy_migration_verification_source",
-  ["legacy_match", "physical_unmatched"],
-);
-
-export const legacyMigrationVerificationStatusEnum = pgEnum(
-  "legacy_migration_verification_status",
-  [
-    "submitted",
-    "needs_review",
-    "returned",
-    "approved",
-    "rejected",
-    "sold_during_migration",
-    "activated",
-  ],
-);
-
 export const itemAvailabilityEnum = pgEnum("item_availability", [
   "draft",
   "migration_hold",
@@ -237,46 +209,6 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "refunded",
 ]);
 
-export const manualPaymentVerificationStatusEnum = pgEnum(
-  "manual_payment_verification_status",
-  ["self_verified", "co_verification_required", "co_verified", "rejected"],
-);
-
-export const paymentSettlementStatusEnum = pgEnum("payment_settlement_status", [
-  "not_applicable",
-  "unreconciled",
-  "pending_settlement",
-  "reconciled",
-  "mismatch",
-  "not_found",
-  "waived",
-]);
-
-export const settlementImportStatusEnum = pgEnum("settlement_import_status", [
-  "uploaded",
-  "ready",
-  "processing",
-  "completed",
-  "completed_with_issues",
-  "failed",
-  "cancelled",
-]);
-
-export const settlementImportRowStatusEnum = pgEnum(
-  "settlement_import_row_status",
-  [
-    "pending",
-    "matched",
-    "ambiguous",
-    "mismatch",
-    "not_found",
-    "duplicate",
-    "ignored",
-    "applied",
-    "failed",
-  ],
-);
-
 export const posCheckoutAttemptStatusEnum = pgEnum(
   "pos_checkout_attempt_status",
   ["processing", "completed", "failed"],
@@ -313,14 +245,6 @@ export const returnInspectionDecisionEnum = pgEnum(
   "return_inspection_decision",
   ["restock", "repair", "damaged", "reject"],
 );
-
-export const approvalExecutionStatusEnum = pgEnum("approval_execution_status", [
-  "not_started",
-  "executing",
-  "completed",
-  "failed",
-  "cancelled",
-]);
 
 export const customerDepositLedgerEntryTypeEnum = pgEnum(
   "customer_deposit_ledger_entry_type",
@@ -1367,353 +1291,6 @@ export const legacyProductMasterMappings = pgTable(
   ],
 );
 
-export const legacyMigrationSessions = pgTable(
-  "legacy_migration_sessions",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    batchId: uuid("batch_id")
-      .notNull()
-      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    outletId: uuid("outlet_id")
-      .notNull()
-      .references(() => outlets.id),
-    name: varchar("name", { length: 160 }).notNull(),
-    locationCode: varchar("location_code", { length: 80 }),
-    expectedItemCount: integer("expected_item_count"),
-    notes: text("notes"),
-    status: legacyMigrationSessionStatusEnum("status")
-      .default("draft")
-      .notNull(),
-    createdBy: uuid("created_by")
-      .notNull()
-      .references(() => users.id),
-    startedAt: timestamp("started_at", { withTimezone: true }),
-    lockedAt: timestamp("locked_at", { withTimezone: true }),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("legacy_migration_sessions_batch_name_uq").on(
-      table.batchId,
-      table.name,
-    ),
-    index("legacy_migration_sessions_batch_status_idx").on(
-      table.batchId,
-      table.status,
-      table.createdAt,
-    ),
-    index("legacy_migration_sessions_outlet_status_idx").on(
-      table.outletId,
-      table.status,
-    ),
-    check(
-      "legacy_migration_sessions_expected_count_ck",
-      sql`${table.expectedItemCount} is null or ${table.expectedItemCount} > 0`,
-    ),
-  ],
-);
-
-export const legacyMigrationSessionAssignments = pgTable(
-  "legacy_migration_session_assignments",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    sessionId: uuid("session_id")
-      .notNull()
-      .references(() => legacyMigrationSessions.id, { onDelete: "cascade" }),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id),
-    assignmentRole: legacyMigrationAssignmentRoleEnum("assignment_role")
-      .default("operator")
-      .notNull(),
-    assignedBy: uuid("assigned_by")
-      .notNull()
-      .references(() => users.id),
-    assignedAt: timestamp("assigned_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [
-    uniqueIndex("legacy_migration_session_assignments_session_user_uq").on(
-      table.sessionId,
-      table.userId,
-    ),
-    index("legacy_migration_session_assignments_user_idx").on(
-      table.userId,
-      table.assignedAt,
-    ),
-  ],
-);
-
-export const legacyMigrationVerifications = pgTable(
-  "legacy_migration_verifications",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    sessionId: uuid("session_id")
-      .notNull()
-      .references(() => legacyMigrationSessions.id, { onDelete: "cascade" }),
-    batchId: uuid("batch_id")
-      .notNull()
-      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    outletId: uuid("outlet_id")
-      .notNull()
-      .references(() => outlets.id),
-    barcodeValue: varchar("barcode_value", { length: 120 }).notNull(),
-    legacyRowId: uuid("legacy_row_id").references(() => legacyProductRows.id, {
-      onDelete: "cascade",
-    }),
-    source: legacyMigrationVerificationSourceEnum("source").notNull(),
-    status: legacyMigrationVerificationStatusEnum("status")
-      .default("submitted")
-      .notNull(),
-    targetProductMasterId: uuid("target_product_master_id")
-      .notNull()
-      .references(() => productMasters.id),
-    verifiedItemName: varchar("verified_item_name", { length: 240 }).notNull(),
-    verifiedWeightGram: numeric("verified_weight_gram", {
-      precision: 12,
-      scale: 3,
-    }).notNull(),
-    verifiedPurity: numeric("verified_purity", {
-      precision: 10,
-      scale: 3,
-    }).notNull(),
-    verifiedExchangePurity: numeric("verified_exchange_purity", {
-      precision: 10,
-      scale: 3,
-    }),
-    verifiedColor: varchar("verified_color", { length: 120 }),
-    condition: itemConditionEnum("condition").default("good").notNull(),
-    useLegacyImage: boolean("use_legacy_image").default(false).notNull(),
-    legacyImageUrl: text("legacy_image_url"),
-    imageKey: text("image_key"),
-    staffNotes: text("staff_notes"),
-    reviewFlags: jsonb("review_flags").$type<string[]>().default([]).notNull(),
-    submissionFingerprint: varchar("submission_fingerprint", {
-      length: 64,
-    }).notNull(),
-    submittedBy: uuid("submitted_by")
-      .notNull()
-      .references(() => users.id),
-    submittedAt: timestamp("submitted_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    reviewedBy: uuid("reviewed_by").references(() => users.id),
-    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-    reviewNotes: text("review_notes"),
-    productItemId: uuid("product_item_id").references(() => productItems.id),
-    revision: integer("revision").default(1).notNull(),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("legacy_migration_verifications_org_barcode_uq").on(
-      table.organizationId,
-      table.barcodeValue,
-    ),
-    uniqueIndex("legacy_migration_verifications_legacy_row_uq")
-      .on(table.legacyRowId)
-      .where(sql`${table.legacyRowId} is not null`),
-    index("legacy_migration_verifications_session_status_idx").on(
-      table.sessionId,
-      table.status,
-      table.submittedAt,
-    ),
-    index("legacy_migration_verifications_batch_status_idx").on(
-      table.batchId,
-      table.status,
-      table.submittedAt,
-    ),
-    uniqueIndex("legacy_migration_verifications_product_item_uq")
-      .on(table.productItemId)
-      .where(sql`${table.productItemId} is not null`),
-    check(
-      "legacy_migration_verifications_source_ck",
-      sql`(
-        ${table.source} = 'legacy_match'
-        and ${table.legacyRowId} is not null
-      ) or (
-        ${table.source} = 'physical_unmatched'
-        and ${table.legacyRowId} is null
-      )`,
-    ),
-    check(
-      "legacy_migration_verifications_weight_ck",
-      sql`${table.verifiedWeightGram} > 0`,
-    ),
-    check(
-      "legacy_migration_verifications_purity_ck",
-      sql`${table.verifiedPurity} > 0`,
-    ),
-    check(
-      "legacy_migration_verifications_revision_ck",
-      sql`${table.revision} > 0`,
-    ),
-    check(
-      "legacy_migration_verifications_photo_ck",
-      sql`(
-        ${table.useLegacyImage} = true
-        and ${table.legacyImageUrl} is not null
-        and ${table.imageKey} is null
-      ) or (
-        ${table.useLegacyImage} = false
-        and ${table.imageKey} is not null
-      )`,
-    ),
-  ],
-);
-
-export const legacyMigrationSoldRecords = pgTable(
-  "legacy_migration_sold_records",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    batchId: uuid("batch_id")
-      .notNull()
-      .references(() => legacyProductImportBatches.id, { onDelete: "cascade" }),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    outletId: uuid("outlet_id")
-      .notNull()
-      .references(() => outlets.id),
-    sessionId: uuid("session_id").references(() => legacyMigrationSessions.id, {
-      onDelete: "restrict",
-    }),
-    barcodeValue: varchar("barcode_value", { length: 120 }).notNull(),
-    verificationId: uuid("verification_id").references(
-      () => legacyMigrationVerifications.id,
-      { onDelete: "restrict" },
-    ),
-    productItemId: uuid("product_item_id").references(() => productItems.id, {
-      onDelete: "restrict",
-    }),
-    previousVerificationStatus: legacyMigrationVerificationStatusEnum(
-      "previous_verification_status",
-    ),
-    previousItemAvailability: itemAvailabilityEnum(
-      "previous_item_availability",
-    ),
-    soldAt: timestamp("sold_at", { withTimezone: true }).notNull(),
-    legacyReference: varchar("legacy_reference", { length: 160 }),
-    notes: text("notes"),
-    reportedBy: uuid("reported_by")
-      .notNull()
-      .references(() => users.id),
-    reportedAt: timestamp("reported_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    revertedBy: uuid("reverted_by").references(() => users.id),
-    revertedAt: timestamp("reverted_at", { withTimezone: true }),
-    revertReason: text("revert_reason"),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("legacy_migration_sold_records_org_barcode_active_uq")
-      .on(table.organizationId, table.barcodeValue)
-      .where(sql`${table.revertedAt} is null`),
-    index("legacy_migration_sold_records_batch_sold_at_idx").on(
-      table.batchId,
-      table.soldAt,
-    ),
-    index("legacy_migration_sold_records_batch_session_sold_at_idx").on(
-      table.batchId,
-      table.sessionId,
-      table.soldAt,
-    ),
-    index("legacy_migration_sold_records_verification_idx").on(
-      table.verificationId,
-    ),
-    check(
-      "legacy_migration_sold_records_link_ck",
-      sql`(
-        ${table.verificationId} is null
-        and ${table.productItemId} is null
-        and ${table.previousVerificationStatus} is null
-        and ${table.previousItemAvailability} is null
-      ) or (
-        ${table.verificationId} is not null
-        and ${table.previousVerificationStatus} in (
-          'submitted',
-          'needs_review',
-          'returned',
-          'approved',
-          'rejected'
-        )
-        and (
-          (${table.productItemId} is null and ${table.previousItemAvailability} is null)
-          or (
-            ${table.productItemId} is not null
-            and ${table.previousItemAvailability} = 'migration_hold'
-            and ${table.previousVerificationStatus} = 'approved'
-          )
-        )
-      )`,
-    ),
-    check(
-      "legacy_migration_sold_records_revert_ck",
-      sql`(
-        ${table.revertedBy} is null
-        and ${table.revertedAt} is null
-        and ${table.revertReason} is null
-      ) or (
-        ${table.revertedBy} is not null
-        and ${table.revertedAt} is not null
-        and length(btrim(${table.revertReason})) >= 5
-      )`,
-    ),
-  ],
-);
-
-export const legacyMigrationCutoverRuns = pgTable(
-  "legacy_migration_cutover_runs",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    batchId: uuid("batch_id")
-      .notNull()
-      .references(() => legacyProductImportBatches.id, {
-        onDelete: "restrict",
-      }),
-    sessionId: uuid("session_id")
-      .notNull()
-      .references(() => legacyMigrationSessions.id, { onDelete: "restrict" }),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    outletId: uuid("outlet_id")
-      .notNull()
-      .references(() => outlets.id),
-    itemCount: integer("item_count").notNull(),
-    executedBy: uuid("executed_by")
-      .notNull()
-      .references(() => users.id),
-    executedAt: timestamp("executed_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    metadata: jsonb("metadata")
-      .$type<Record<string, unknown>>()
-      .default({})
-      .notNull(),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("legacy_migration_cutover_runs_session_uq").on(table.sessionId),
-    index("legacy_migration_cutover_runs_batch_time_idx").on(
-      table.batchId,
-      table.executedAt,
-    ),
-    check(
-      "legacy_migration_cutover_runs_item_count_ck",
-      sql`${table.itemCount} >= 0`,
-    ),
-  ],
-);
-
 export const itemBarcodes = pgTable(
   "item_barcodes",
   {
@@ -1973,9 +1550,6 @@ export const financeClosingSnapshots = pgTable(
     heldTransactionCount: integer("held_transaction_count")
       .default(0)
       .notNull(),
-    pendingApprovalCount: integer("pending_approval_count")
-      .default(0)
-      .notNull(),
     openedAt: timestamp("opened_at", { withTimezone: true }).notNull(),
     closedAt: timestamp("closed_at", { withTimezone: true }).notNull(),
     cashierId: uuid("cashier_id")
@@ -2061,8 +1635,7 @@ export const financeClosingSnapshots = pgTable(
       "finance_closing_snapshots_counts_nonnegative_ck",
       sql`${table.transactionCount} >= 0
         and ${table.itemsSoldCount} >= 0
-        and ${table.heldTransactionCount} >= 0
-        and ${table.pendingApprovalCount} >= 0`,
+        and ${table.heldTransactionCount} >= 0`,
     ),
     check(
       "finance_closing_snapshots_actual_cash_nonnegative_ck",
@@ -2931,28 +2504,10 @@ export const payments = pgTable(
     amount: numeric("amount", { precision: 18, scale: 0 }).notNull(),
     status: paymentStatusEnum("status").default("pending").notNull(),
     providerReference: varchar("provider_reference", { length: 160 }),
-    normalizedReference: varchar("normalized_reference", { length: 160 }),
-    externalOrderId: varchar("external_order_id", { length: 160 }),
-    verificationStatus: manualPaymentVerificationStatusEnum(
-      "verification_status",
-    )
-      .default("self_verified")
-      .notNull(),
-    verificationSource: varchar("verification_source", { length: 40 }),
-    providerPaidAt: timestamp("provider_paid_at", { withTimezone: true }),
-    verificationApprovalId: uuid("verification_approval_id").references(
-      () => approvals.id,
-    ),
-    coVerifiedBy: uuid("co_verified_by").references(() => users.id),
-    coVerifiedAt: timestamp("co_verified_at", { withTimezone: true }),
-    evidenceKey: text("evidence_key"),
     manualPaymentProfileId: uuid("manual_payment_profile_id").references(
       () => manualPaymentProfiles.id,
       { onDelete: "set null" },
     ),
-    settlementStatus: paymentSettlementStatusEnum("settlement_status")
-      .default("not_applicable")
-      .notNull(),
     verifiedBy: uuid("verified_by").references(() => users.id),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
     paidAt: timestamp("paid_at", { withTimezone: true }),
@@ -2964,19 +2519,6 @@ export const payments = pgTable(
     index("payments_provider_reference_idx").on(
       table.provider,
       table.providerReference,
-    ),
-    index("payments_normalized_reference_idx").on(
-      table.method,
-      table.provider,
-      table.normalizedReference,
-    ),
-    index("payments_verification_status_idx").on(
-      table.verificationStatus,
-      table.createdAt,
-    ),
-    index("payments_settlement_status_idx").on(
-      table.settlementStatus,
-      table.createdAt,
     ),
     index("payments_manual_profile_idx").on(
       table.manualPaymentProfileId,
@@ -2990,379 +2532,6 @@ export const payments = pgTable(
         and ${table.verifiedAt} is not null
         and ${table.paidAt} is not null
       )`,
-    ),
-    check(
-      "payments_co_verified_state_ck",
-      sql`${table.verificationStatus} <> 'co_verified' or (
-        ${table.verificationApprovalId} is not null
-        and ${table.coVerifiedBy} is not null
-        and ${table.coVerifiedAt} is not null
-      )`,
-    ),
-    check(
-      "payments_cash_settlement_ck",
-      sql`${table.method} <> 'cash' or (
-        ${table.settlementStatus} = 'not_applicable'
-        and ${table.verificationSource} is null
-        and ${table.providerPaidAt} is null
-        and ${table.verificationApprovalId} is null
-        and ${table.coVerifiedBy} is null
-        and ${table.coVerifiedAt} is null
-        and ${table.evidenceKey} is null
-      )`,
-    ),
-  ],
-);
-
-export const paymentReconciliations = pgTable(
-  "payment_reconciliations",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    outletId: uuid("outlet_id")
-      .notNull()
-      .references(() => outlets.id),
-    paymentId: uuid("payment_id")
-      .notNull()
-      .references(() => payments.id, { onDelete: "cascade" }),
-    status: paymentSettlementStatusEnum("status").notNull(),
-    expectedAmount: numeric("expected_amount", {
-      precision: 18,
-      scale: 0,
-    }).notNull(),
-    settlementGrossAmount: numeric("settlement_gross_amount", {
-      precision: 18,
-      scale: 0,
-    }),
-    feeAmount: numeric("fee_amount", { precision: 18, scale: 0 })
-      .default("0")
-      .notNull(),
-    taxAmount: numeric("tax_amount", { precision: 18, scale: 0 })
-      .default("0")
-      .notNull(),
-    netSettlementAmount: numeric("net_settlement_amount", {
-      precision: 18,
-      scale: 0,
-    }),
-    differenceAmount: numeric("difference_amount", {
-      precision: 18,
-      scale: 0,
-    })
-      .default("0")
-      .notNull(),
-    settlementDate: timestamp("settlement_date", { withTimezone: true }),
-    settlementReference: varchar("settlement_reference", { length: 160 }),
-    evidenceKey: text("evidence_key"),
-    notes: text("notes"),
-    reconciledBy: uuid("reconciled_by")
-      .notNull()
-      .references(() => users.id),
-    reconciledAt: timestamp("reconciled_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    resolvedBy: uuid("resolved_by").references(() => users.id),
-    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-    metadata: jsonb("metadata")
-      .$type<Record<string, unknown>>()
-      .default({})
-      .notNull(),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("payment_reconciliations_payment_uq").on(table.paymentId),
-    index("payment_reconciliations_org_status_idx").on(
-      table.organizationId,
-      table.status,
-      table.updatedAt,
-    ),
-    index("payment_reconciliations_outlet_status_idx").on(
-      table.outletId,
-      table.status,
-      table.updatedAt,
-    ),
-    index("payment_reconciliations_settlement_date_idx").on(
-      table.settlementDate,
-    ),
-    check(
-      "payment_reconciliations_actionable_status_ck",
-      sql`${table.status} not in ('not_applicable', 'unreconciled')`,
-    ),
-    check(
-      "payment_reconciliations_expected_positive_ck",
-      sql`${table.expectedAmount} > 0`,
-    ),
-    check(
-      "payment_reconciliations_amounts_nonnegative_ck",
-      sql`${table.feeAmount} >= 0 and ${table.taxAmount} >= 0 and (${table.settlementGrossAmount} is null or ${table.settlementGrossAmount} >= 0) and (${table.netSettlementAmount} is null or ${table.netSettlementAmount} >= 0)`,
-    ),
-    check(
-      "payment_reconciliations_net_formula_ck",
-      sql`${table.settlementGrossAmount} is null or ${table.netSettlementAmount} is null or ${table.netSettlementAmount} = ${table.settlementGrossAmount} - ${table.feeAmount} - ${table.taxAmount}`,
-    ),
-    check(
-      "payment_reconciliations_difference_formula_ck",
-      sql`${table.settlementGrossAmount} is null or ${table.differenceAmount} = ${table.settlementGrossAmount} - ${table.expectedAmount}`,
-    ),
-    check(
-      "payment_reconciliations_reconciled_complete_ck",
-      sql`${table.status} <> 'reconciled' or (
-        ${table.settlementGrossAmount} = ${table.expectedAmount}
-        and ${table.differenceAmount} = 0
-        and ${table.netSettlementAmount} is not null
-        and ${table.settlementDate} is not null
-        and ${table.settlementReference} is not null
-        and btrim(${table.settlementReference}) <> ''
-      )`,
-    ),
-    check(
-      "payment_reconciliations_mismatch_complete_ck",
-      sql`${table.status} <> 'mismatch' or (
-        ${table.settlementGrossAmount} is not null
-        and ${table.differenceAmount} <> 0
-      )`,
-    ),
-    check(
-      "payment_reconciliations_not_found_notes_ck",
-      sql`${table.status} <> 'not_found' or (${table.notes} is not null and length(btrim(${table.notes})) >= 8)`,
-    ),
-    check(
-      "payment_reconciliations_waived_resolution_ck",
-      sql`${table.status} <> 'waived' or (
-        ${table.notes} is not null
-        and length(btrim(${table.notes})) >= 8
-        and ${table.resolvedBy} is not null
-        and ${table.resolvedAt} is not null
-      )`,
-    ),
-  ],
-);
-
-export const settlementImportMappings = pgTable(
-  "settlement_import_mappings",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    outletId: uuid("outlet_id")
-      .notNull()
-      .references(() => outlets.id),
-    profileId: uuid("profile_id")
-      .notNull()
-      .references(() => manualPaymentProfiles.id, { onDelete: "cascade" }),
-    delimiter: varchar("delimiter", { length: 8 }).default(",").notNull(),
-    columnMapping: jsonb("column_mapping")
-      .$type<Record<string, string | null>>()
-      .default({})
-      .notNull(),
-    updatedBy: uuid("updated_by")
-      .notNull()
-      .references(() => users.id),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("settlement_import_mappings_profile_uq").on(table.profileId),
-    index("settlement_import_mappings_org_outlet_idx").on(
-      table.organizationId,
-      table.outletId,
-    ),
-    check(
-      "settlement_import_mappings_delimiter_ck",
-      sql`length(${table.delimiter}) between 1 and 8`,
-    ),
-  ],
-);
-
-export const settlementImportBatches = pgTable(
-  "settlement_import_batches",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    outletId: uuid("outlet_id")
-      .notNull()
-      .references(() => outlets.id),
-    profileId: uuid("profile_id")
-      .notNull()
-      .references(() => manualPaymentProfiles.id),
-    uploadedBy: uuid("uploaded_by")
-      .notNull()
-      .references(() => users.id),
-    fileName: varchar("file_name", { length: 255 }).notNull(),
-    fileKey: text("file_key").notNull(),
-    fileHash: varchar("file_hash", { length: 64 }).notNull(),
-    fileSizeBytes: integer("file_size_bytes").notNull(),
-    status: settlementImportStatusEnum("status").default("uploaded").notNull(),
-    delimiter: varchar("delimiter", { length: 8 }).default(",").notNull(),
-    headers: jsonb("headers").$type<string[]>().default([]).notNull(),
-    columnMapping: jsonb("column_mapping")
-      .$type<Record<string, string | null>>()
-      .default({})
-      .notNull(),
-    rowCount: integer("row_count").default(0).notNull(),
-    validRowCount: integer("valid_row_count").default(0).notNull(),
-    matchedCount: integer("matched_count").default(0).notNull(),
-    appliedCount: integer("applied_count").default(0).notNull(),
-    ambiguousCount: integer("ambiguous_count").default(0).notNull(),
-    mismatchCount: integer("mismatch_count").default(0).notNull(),
-    notFoundCount: integer("not_found_count").default(0).notNull(),
-    duplicateCount: integer("duplicate_count").default(0).notNull(),
-    ignoredCount: integer("ignored_count").default(0).notNull(),
-    failedCount: integer("failed_count").default(0).notNull(),
-    errorMessage: text("error_message"),
-    startedAt: timestamp("started_at", { withTimezone: true }),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("settlement_import_batches_org_hash_uq").on(
-      table.organizationId,
-      table.fileHash,
-    ),
-    index("settlement_import_batches_org_status_idx").on(
-      table.organizationId,
-      table.status,
-      table.createdAt,
-    ),
-    index("settlement_import_batches_outlet_profile_idx").on(
-      table.outletId,
-      table.profileId,
-      table.createdAt,
-    ),
-    check(
-      "settlement_import_batches_file_size_ck",
-      sql`${table.fileSizeBytes} between 1 and 5242880`,
-    ),
-    check(
-      "settlement_import_batches_counts_ck",
-      sql`${table.rowCount} >= 0
-        and ${table.validRowCount} >= 0
-        and ${table.matchedCount} >= 0
-        and ${table.appliedCount} >= 0
-        and ${table.ambiguousCount} >= 0
-        and ${table.mismatchCount} >= 0
-        and ${table.notFoundCount} >= 0
-        and ${table.duplicateCount} >= 0
-        and ${table.ignoredCount} >= 0
-        and ${table.failedCount} >= 0`,
-    ),
-  ],
-);
-
-export const settlementImportRows = pgTable(
-  "settlement_import_rows",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    batchId: uuid("batch_id")
-      .notNull()
-      .references(() => settlementImportBatches.id, { onDelete: "cascade" }),
-    rowNumber: integer("row_number").notNull(),
-    rawData: jsonb("raw_data")
-      .$type<Record<string, string>>()
-      .default({})
-      .notNull(),
-    transactionDate: timestamp("transaction_date", { withTimezone: true }),
-    paymentReference: varchar("payment_reference", { length: 160 }),
-    normalizedReference: varchar("normalized_reference", { length: 160 }),
-    grossAmount: numeric("gross_amount", { precision: 18, scale: 0 }),
-    feeAmount: numeric("fee_amount", { precision: 18, scale: 0 })
-      .default("0")
-      .notNull(),
-    taxAmount: numeric("tax_amount", { precision: 18, scale: 0 })
-      .default("0")
-      .notNull(),
-    netAmount: numeric("net_amount", { precision: 18, scale: 0 }),
-    settlementReference: varchar("settlement_reference", { length: 160 }),
-    providerStatus: varchar("provider_status", { length: 80 }),
-    status: settlementImportRowStatusEnum("status")
-      .default("pending")
-      .notNull(),
-    matchedPaymentId: uuid("matched_payment_id").references(() => payments.id),
-    candidatePaymentIds: jsonb("candidate_payment_ids")
-      .$type<string[]>()
-      .default([])
-      .notNull(),
-    matchReason: text("match_reason"),
-    errorMessage: text("error_message"),
-    reviewNotes: text("review_notes"),
-    appliedAt: timestamp("applied_at", { withTimezone: true }),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("settlement_import_rows_batch_row_uq").on(
-      table.batchId,
-      table.rowNumber,
-    ),
-    index("settlement_import_rows_batch_status_idx").on(
-      table.batchId,
-      table.status,
-      table.rowNumber,
-    ),
-    index("settlement_import_rows_reference_idx").on(table.normalizedReference),
-    index("settlement_import_rows_payment_idx").on(table.matchedPaymentId),
-    check("settlement_import_rows_row_number_ck", sql`${table.rowNumber} > 1`),
-    check(
-      "settlement_import_rows_amounts_ck",
-      sql`(${table.grossAmount} is null or ${table.grossAmount} >= 0)
-        and ${table.feeAmount} >= 0
-        and ${table.taxAmount} >= 0
-        and (${table.netAmount} is null or ${table.netAmount} >= 0)`,
-    ),
-    check(
-      "settlement_import_rows_applied_ck",
-      sql`${table.status} <> 'applied' or (
-        ${table.matchedPaymentId} is not null
-        and ${table.appliedAt} is not null
-      )`,
-    ),
-  ],
-);
-
-export const manualPaymentPolicies = pgTable(
-  "manual_payment_policies",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    method: paymentMethodEnum("method").notNull(),
-    coVerificationThreshold: numeric("co_verification_threshold", {
-      precision: 18,
-      scale: 0,
-    })
-      .default("0")
-      .notNull(),
-    evidenceThreshold: numeric("evidence_threshold", {
-      precision: 18,
-      scale: 0,
-    })
-      .default("0")
-      .notNull(),
-    duplicateLookbackDays: integer("duplicate_lookback_days")
-      .default(30)
-      .notNull(),
-    isEnabled: boolean("is_enabled").default(true).notNull(),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("manual_payment_policies_org_method_uq").on(
-      table.organizationId,
-      table.method,
-    ),
-    check(
-      "manual_payment_policies_method_ck",
-      sql`${table.method} in ('qris_manual', 'debit_card', 'credit_card', 'bank_transfer')`,
-    ),
-    check(
-      "manual_payment_policies_thresholds_ck",
-      sql`${table.coVerificationThreshold} >= 0 and ${table.evidenceThreshold} >= 0`,
-    ),
-    check(
-      "manual_payment_policies_lookback_ck",
-      sql`${table.duplicateLookbackDays} between 1 and 3650`,
     ),
   ],
 );
@@ -3533,54 +2702,6 @@ export const buybackPayouts = pgTable(
     ),
     index("buyback_payouts_buyback_idx").on(table.buybackId),
     check("buyback_payouts_amount_positive_ck", sql`${table.amount} > 0`),
-  ],
-);
-
-export const paymentEvidenceUploads = pgTable(
-  "payment_evidence_uploads",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    outletId: uuid("outlet_id")
-      .notNull()
-      .references(() => outlets.id),
-    uploadedBy: uuid("uploaded_by")
-      .notNull()
-      .references(() => users.id),
-    storageKey: text("storage_key").notNull(),
-    originalFilename: varchar("original_filename", { length: 255 }),
-    sizeBytes: integer("size_bytes").notNull(),
-    saleId: uuid("sale_id").references(() => sales.id),
-    attachedAt: timestamp("attached_at", { withTimezone: true }),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).default(
-      sql`now() + interval '7 days'`,
-    ),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [
-    uniqueIndex("payment_evidence_uploads_storage_key_uq").on(table.storageKey),
-    index("payment_evidence_uploads_org_outlet_idx").on(
-      table.organizationId,
-      table.outletId,
-      table.createdAt,
-    ),
-    index("payment_evidence_uploads_expiry_idx").on(
-      table.saleId,
-      table.expiresAt,
-    ),
-    index("payment_evidence_uploads_uploader_idx").on(
-      table.uploadedBy,
-      table.createdAt,
-    ),
-    check("payment_evidence_uploads_size_ck", sql`${table.sizeBytes} > 0`),
-    check(
-      "payment_evidence_uploads_attachment_ck",
-      sql`(${table.saleId} is null and ${table.attachedAt} is null) or (${table.saleId} is not null and ${table.attachedAt} is not null and ${table.expiresAt} is null)`,
-    ),
   ],
 );
 
@@ -4141,91 +3262,6 @@ export const notifications = pgTable(
   ],
 );
 
-export const approvalStatusEnum = pgEnum("approval_status", [
-  "pending",
-  "approved",
-  "rejected",
-]);
-
-export const approvalTypeEnum = pgEnum("approval_type", [
-  "discount",
-  "void_receipt",
-  "refund_transaction",
-  "manual_payment_verification",
-  "customer_deposit_withdrawal",
-  "stock_adjustment",
-  "other",
-]);
-
-export const approvals = pgTable(
-  "approvals",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    outletId: uuid("outlet_id").references(() => outlets.id),
-    type: approvalTypeEnum("type").notNull(),
-    status: approvalStatusEnum("status").default("pending").notNull(),
-    requestedBy: uuid("requested_by")
-      .notNull()
-      .references(() => users.id),
-    approvedBy: uuid("approved_by").references(() => users.id),
-    referenceType: varchar("reference_type", { length: 80 }),
-    referenceId: uuid("reference_id"),
-    requestData: jsonb("request_data")
-      .$type<Record<string, unknown>>()
-      .notNull(),
-    notes: text("notes"),
-    responseNotes: text("response_notes"),
-    executionStatus: approvalExecutionStatusEnum("execution_status")
-      .default("not_started")
-      .notNull(),
-    executionIdempotencyKey: varchar("execution_idempotency_key", {
-      length: 160,
-    }),
-    executionStartedAt: timestamp("execution_started_at", {
-      withTimezone: true,
-    }),
-    executedAt: timestamp("executed_at", { withTimezone: true }),
-    executedBy: uuid("executed_by").references(() => users.id),
-    executionError: text("execution_error"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-  },
-  (table) => [
-    uniqueIndex("approvals_execution_idempotency_uq")
-      .on(table.organizationId, table.executionIdempotencyKey)
-      .where(sql`${table.executionIdempotencyKey} is not null`),
-    uniqueIndex("approvals_manual_payment_fingerprint_uq")
-      .on(
-        table.organizationId,
-        table.outletId,
-        table.requestedBy,
-        sql`(${table.requestData}->>'verificationFingerprint')`,
-      )
-      .where(sql`${table.type} = 'manual_payment_verification'`),
-    index("approvals_org_status_idx").on(table.organizationId, table.status),
-    index("approvals_ref_idx").on(table.referenceType, table.referenceId),
-    index("approvals_execution_status_idx").on(
-      table.organizationId,
-      table.executionStatus,
-    ),
-    check(
-      "approvals_executing_state_ck",
-      sql`${table.executionStatus} <> 'executing' or ${table.executionStartedAt} is not null`,
-    ),
-    check(
-      "approvals_completed_state_ck",
-      sql`${table.executionStatus} <> 'completed' or (
-        ${table.executedAt} is not null and ${table.executedBy} is not null
-      )`,
-    ),
-  ],
-);
-
 export const customerDepositLedger = pgTable(
   "customer_deposit_ledger",
   {
@@ -4251,9 +3287,6 @@ export const customerDepositLedger = pgTable(
         onDelete: "set null",
       },
     ),
-    approvalId: uuid("approval_id").references(() => approvals.id, {
-      onDelete: "set null",
-    }),
     entryType: customerDepositLedgerEntryTypeEnum("entry_type").notNull(),
     direction: customerDepositLedgerDirectionEnum("direction").notNull(),
     amount: numeric("amount", { precision: 18, scale: 0 }).notNull(),
@@ -4333,7 +3366,6 @@ export const paymentRefunds = pgTable(
     paymentId: uuid("payment_id")
       .notNull()
       .references(() => payments.id),
-    approvalId: uuid("approval_id").references(() => approvals.id),
     originalShiftId: uuid("original_shift_id")
       .notNull()
       .references(() => shifts.id),
@@ -4369,9 +3401,6 @@ export const paymentRefunds = pgTable(
       table.organizationId,
       table.idempotencyKey,
     ),
-    uniqueIndex("payment_refunds_approval_payment_uq")
-      .on(table.approvalId, table.paymentId)
-      .where(sql`${table.approvalId} is not null`),
     index("payment_refunds_sale_status_idx").on(table.saleId, table.status),
     index("payment_refunds_payment_status_idx").on(
       table.paymentId,
@@ -4408,7 +3437,6 @@ export const saleReturnCases = pgTable(
     saleId: uuid("sale_id")
       .notNull()
       .references(() => sales.id),
-    approvalId: uuid("approval_id").references(() => approvals.id),
     status: saleReturnCaseStatusEnum("status")
       .default("awaiting_receipt")
       .notNull(),
@@ -4426,9 +3454,6 @@ export const saleReturnCases = pgTable(
   },
   (table) => [
     uniqueIndex("sale_return_cases_sale_uq").on(table.saleId),
-    uniqueIndex("sale_return_cases_approval_uq")
-      .on(table.approvalId)
-      .where(sql`${table.approvalId} is not null`),
     index("sale_return_cases_outlet_status_idx").on(
       table.outletId,
       table.status,

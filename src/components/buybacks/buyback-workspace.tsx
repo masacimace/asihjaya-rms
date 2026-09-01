@@ -298,7 +298,7 @@ export function BuybackWorkspace({
   initialIdempotencyKey: string;
   canCreate: boolean;
 }) {
-  const [state, formAction] = useActionState(
+  const [state, formAction, isSubmitting] = useActionState(
     completeBuybackAction,
     initialBuybackActionState,
   );
@@ -955,11 +955,15 @@ export function BuybackWorkspace({
 
           <button
             type="submit"
-            disabled={!canSubmit}
+            disabled={!canSubmit || isSubmitting}
             className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 text-sm font-bold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
           >
-            <CircleDollarSign className="size-5" />
-            Selesaikan Buyback
+            {isSubmitting ? (
+              <LoaderCircle className="size-5 animate-spin" />
+            ) : (
+              <CircleDollarSign className="size-5" />
+            )}
+            {isSubmitting ? "Memproses Buyback..." : "Selesaikan Buyback"}
           </button>
         </section>
       </form>

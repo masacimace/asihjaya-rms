@@ -464,7 +464,7 @@ function createHardwareAdapterFactory(config) {
     }
 
     if (process.platform !== "win32") {
-      throw new HardwareAdapterError("SATO host-bold renderer production hanya dapat berjalan di Windows.", {
+      throw new HardwareAdapterError("SATO Inter v3 renderer production hanya dapat berjalan di Windows.", {
         code: "WINDOWS_SATO_RENDERER_REQUIRED",
         retrySafe: false,
         category: "configuration",
@@ -494,14 +494,14 @@ function createHardwareAdapterFactory(config) {
           renderScript,
           "-ConfigPath",
           prepared.configPath,
-          "-ProductName",
-          prepared.renderInput.productName,
+          "-MasterProductName",
+          prepared.renderInput.masterProductName,
+          "-ItemDisplayName",
+          prepared.renderInput.itemDisplayName,
           "-Barcode",
           prepared.renderInput.barcode,
           "-Weight",
           prepared.renderInput.weight,
-          "-Purity",
-          prepared.renderInput.purity,
           "-Copies",
           String(prepared.copies),
           "-OutputFile",

@@ -200,7 +200,6 @@ async function calculateFinanceMetrics(
     transactionCount: salesSummary.transactionCount,
     itemsSoldCount: itemSummary.itemCount,
     heldTransactionCount: heldRows[0]?.total ?? 0,
-    pendingApprovalCount: 0,
   };
 }
 
@@ -270,7 +269,6 @@ async function persistFinanceSnapshot(
       transactionCount: metrics.transactionCount,
       itemsSoldCount: metrics.itemsSoldCount,
       heldTransactionCount: metrics.heldTransactionCount,
-      pendingApprovalCount: metrics.pendingApprovalCount,
       openedAt: input.openedAt,
       closedAt: input.closedAt,
       cashierId: input.cashierId,

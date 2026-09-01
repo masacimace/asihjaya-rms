@@ -1,58 +1,68 @@
 {
-  "version": 2,
-  "id": "sato_cg408_jewelry_barbell_host_bold_v2",
+  "version": 3,
+  "id": "sato_cg408_jewelry_barbell_inter_v3",
   "font": {
-    "family": "Arial Narrow",
+    "family": "Inter",
     "style": "Bold",
+    "filePathEnv": "SATO_LABEL_FONT_PATH",
     "inkSpreadPx": 0
   },
   "front": {
-    "productName": {
-      "x": 105,
-      "y": 9,
-      "canvasWidthDots": 170,
-      "canvasHeightDots": 26,
-      "fontPx": 14,
-      "maxChars": 22
+    "productMasterName": {
+      "x": 93,
+      "y": 8,
+      "canvasWidthDots": 182,
+      "canvasHeightDots": 24,
+      "fontPx": 15,
+      "minFontPx": 9,
+      "maxChars": 50,
+      "textAlign": "center"
     },
     "barcode": {
-      "x": 115,
-      "y": 34,
-      "heightDots": 38,
+      "y": 30,
+      "heightDots": 41,
       "narrowBarDots": 1,
       "quietZoneModules": 10,
-      "strategy": "CODE128_B"
+      "strategy": "CODE128_B",
+      "centerWithinFront": true
     },
     "barcodeText": {
-      "x": 105,
-      "y": 69,
-      "canvasWidthDots": 170,
-      "canvasHeightDots": 30,
-      "fontPx": 20
+      "x": 98,
+      "y": 70,
+      "canvasWidthDots": 178,
+      "canvasHeightDots": 28,
+      "fontPx": 15,
+      "minFontPx": 14,
+      "textAlign": "center"
     }
   },
   "back": {
-    "x": 98,
-    "y": 122,
-    "canvasWidthDots": 178,
-    "canvasHeightDots": 44,
+    "x": 105,
+    "y": 96,
+    "canvasWidthDots": 172,
+    "canvasHeightDots": 88,
     "rotation": 180,
     "weight": {
       "x": 0,
       "y": 0,
-      "widthDots": 82,
-      "heightDots": 44,
-      "fontPx": 26,
+      "widthDots": 172,
+      "heightDots": 52,
+      "fontPx": 45,
+      "minFontPx": 28,
       "textAlign": "center"
     },
-    "purity": {
-      "x": 72,
-      "y": 0,
-      "widthDots": 106,
-      "heightDots": 44,
-      "fontPx": 22,
-      "prefix": "/ ",
-      "textAlign": "center"
+    "itemDisplayName": {
+      "x": 6,
+      "y": 47,
+      "widthDots": 160,
+      "heightDots": 37,
+      "fontPx": 29,
+      "minFontPx": 10,
+      "maxChars": 35,
+      "textAlign": "center",
+      "truncateWithEllipsis": true,
+      "maxLines": 2
     }
-  }
+  },
+  "physicalValidation": "accepted"
 }

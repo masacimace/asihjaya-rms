@@ -95,7 +95,6 @@ import {
   PosTransactionPricingError,
   resolvePosTransactionPricing,
 } from "@/features/pos/transaction-pricing-server";
-import { lockManualPaymentReference } from "@/features/pos/manual-payment-reference-lock";
 import {
   DEFAULT_POS_REGISTER_MISSING_MESSAGE,
   DEFAULT_POS_REGISTER_SHIFT_MESSAGE,
@@ -3173,17 +3172,7 @@ export async function completePosCheckoutAction(
             amount: String(payment.amount),
             status: "paid" as const,
             providerReference: null,
-            normalizedReference: null,
-            externalOrderId: null,
-            verificationStatus: "self_verified" as const,
-            verificationSource: null,
-            providerPaidAt: null,
-            verificationApprovalId: null,
-            coVerifiedBy: null,
-            coVerifiedAt: null,
-            evidenceKey: null,
             manualPaymentProfileId: payment.manualPaymentProfileId,
-            settlementStatus: "not_applicable" as const,
             verifiedBy: auth.user.id,
             verifiedAt: now,
             paidAt: now,
@@ -3244,7 +3233,6 @@ export async function completePosCheckoutAction(
           saleId: sale.id,
           paymentId: null,
           cashMovementId: null,
-          approvalId: null,
           entryType: "deposit_used",
           direction: "debit",
           amount: String(customerDepositUsedAmount),
@@ -3280,7 +3268,6 @@ export async function completePosCheckoutAction(
           saleId: sale.id,
           paymentId: null,
           cashMovementId: null,
-          approvalId: null,
           entryType: "deposit_in",
           direction: "credit",
           amount: String(customerDepositInAmount),
@@ -3768,7 +3755,7 @@ export async function reopenPosShiftAction(
   formData: FormData,
 ): Promise<PosShiftActionState> {
   try {
-    const auth = await requirePermission("shifts.reopen");
+    const auth = await requirePermission("shifts.manage");
     const shiftId = String(formData.get("shiftId") ?? "").trim();
     const reason = String(formData.get("reason") ?? "").trim();
 
@@ -3776,12 +3763,12 @@ export async function reopenPosShiftAction(
       return failure("Shift yang akan dibuka kembali tidak valid.");
     }
     if (reason.length < 5) {
-      return failure("Alasan membuka kembali shift wajib diisi minimal 5 karakter.", {
-        reason: "Isi alasan minimal 5 karakter.",
+      return failure("Alasan melanjutkan shift wajib diisi minimal 5 karakter.", {
+        reason: "Pilih alasan atau isi alasan lain minimal 5 karakter.",
       });
     }
     if (reason.length > 500) {
-      return failure("Alasan membuka kembali shift maksimal 500 karakter.", {
+      return failure("Alasan melanjutkan shift maksimal 500 karakter.", {
         reason: "Maksimal 500 karakter.",
       });
     }
@@ -3805,7 +3792,7 @@ export async function reopenPosShiftAction(
     revalidatePath("/admin/pengaturan/integrasi/telegram");
 
     return success(
-      `Shift ${result.businessDate} berhasil dibuka kembali pada shift yang sama.`,
+      `Shift ${result.businessDate} berhasil dilanjutkan pada shift yang sama.`,
     );
   } catch (error) {
     if (error instanceof ShiftReopenError) {
@@ -3990,7 +3977,7 @@ export async function openPosShiftAction(
   } catch (error) {
     if (isPostgresUniqueViolation(error, "shifts_outlet_business_date_uq")) {
       return failure(
-        "Shift untuk tanggal operasional hari ini sudah pernah dibuka. Jika shift sudah ditutup terlalu cepat, minta manager/owner menggunakan Buka Kembali Shift.",
+        "Shift untuk tanggal operasional hari ini sudah pernah dibuka. Jika toko masih beroperasi, gunakan Lanjutkan Shift Hari Ini.",
       );
     }
     console.error("Failed to open POS shift", error);

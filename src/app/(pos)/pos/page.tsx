@@ -22,7 +22,7 @@ export default async function PosPage() {
     <PosWorkspace
       {...initialData}
       canManageShifts={auth.permissionCodes.includes("shifts.manage")}
-      canReopenShifts={auth.permissionCodes.includes("shifts.reopen")}
+      canContinueShift={auth.permissionCodes.includes("shifts.manage")}
     />
   );
 }

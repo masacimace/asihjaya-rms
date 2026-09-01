@@ -13,8 +13,6 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
-
 import { db } from "@/db";
 import {
   auditLogs,
@@ -49,7 +47,6 @@ import {
   getStartOfBusinessMonth,
 } from "@/lib/time/business-time";
 
-const paymentCoVerifiedByUsers = alias(users, "sales_detail_payment_co_verified_by_users");
 
 function createSalesPeriod(
   range: AdminSalesFilters["dateRange"],
@@ -1021,20 +1018,9 @@ export async function getAdminSaleDetailData({
         providerReference: payments.providerReference,
         paidAt: payments.paidAt,
         verifiedAt: payments.verifiedAt,
-        verificationStatus: payments.verificationStatus,
-        verificationSource: payments.verificationSource,
-        providerPaidAt: payments.providerPaidAt,
-        coVerifiedAt: payments.coVerifiedAt,
-        coVerifiedByName: paymentCoVerifiedByUsers.fullName,
-        evidenceKey: payments.evidenceKey,
-        settlementStatus: payments.settlementStatus,
         metadata: payments.metadata,
       })
       .from(payments)
-      .leftJoin(
-        paymentCoVerifiedByUsers,
-        eq(payments.coVerifiedBy, paymentCoVerifiedByUsers.id),
-      )
       .where(eq(payments.saleId, sale.id))
       .orderBy(asc(payments.createdAt)),
 
@@ -1068,12 +1054,12 @@ export async function getAdminSaleDetailData({
         serialNumber: productItems.serialNumber,
         productName: sql<string>`coalesce(${saleItems.snapshot}->>'productName', ${productItems.displayName}, ${productMasters.name})`,
         categoryName: productCategories.name,
-        weightGram: productItems.weightGram,
-        purityPercent: productItems.purityPercent,
-        exchangePurityPercent: productItems.exchangePurityPercent,
-        size: productItems.size,
-        color: productItems.color,
-        gemstone: productItems.gemstone,
+        weightGram: sql<string | null>`coalesce(nullif(${saleItems.snapshot}->>'weightGram', ''), nullif(${saleItems.snapshot}->>'storedWeightGram', ''))`,
+        purityPercent: sql<string | null>`nullif(${saleItems.snapshot}->>'purityPercent', '')`,
+        exchangePurityPercent: sql<string | null>`nullif(${saleItems.snapshot}->>'exchangePurityPercent', '')`,
+        size: sql<string | null>`nullif(${saleItems.snapshot}->>'size', '')`,
+        color: sql<string | null>`nullif(${saleItems.snapshot}->>'color', '')`,
+        gemstone: sql<string | null>`nullif(${saleItems.snapshot}->>'gemstone', '')`,
         listPriceAmount: saleItems.listPriceAmount,
         discountAmount: saleItems.discountAmount,
         finalPriceAmount: saleItems.finalPriceAmount,
@@ -1307,13 +1293,6 @@ export async function getAdminSaleDetailData({
       receivedAmount: getPaymentMetadataNumber(payment.metadata, "receivedAmount"),
       changeAmount: getPaymentMetadataNumber(payment.metadata, "changeAmount"),
       note: getPaymentMetadataString(payment.metadata, "note"),
-      verificationStatus: payment.verificationStatus,
-      verificationSource: payment.verificationSource,
-      providerPaidAt: payment.providerPaidAt,
-      coVerifiedAt: payment.coVerifiedAt,
-      coVerifiedByName: payment.coVerifiedByName,
-      evidenceKey: payment.evidenceKey,
-      settlementStatus: payment.settlementStatus,
       verificationDetails: getPaymentMetadataStringRecord(
         payment.metadata,
         "verificationDetails",

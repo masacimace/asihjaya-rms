@@ -11,7 +11,8 @@ const payload = buildInventoryLabelPayloadV2({
   copies: 2,
   sku: "AJ-0001",
   barcode: "AJ00000001",
-  productName: "CINCIN EMAS ASIHJAYA",
+  masterProductName: "CINCIN EMAS ASIHJAYA",
+  itemDisplayName: "CINCIN EMAS ASIHJAYA ITEM 001",
   weightGram: "2.350",
   purityPercent: "75",
   exchangePurityPercent: "70",
@@ -22,10 +23,12 @@ const payload = buildInventoryLabelPayloadV2({
 });
 
 assert.equal(payload.templateId, INVENTORY_LABEL_TEMPLATE_V2);
-assert.equal(payload.templateVersion, 2);
+assert.equal(payload.templateVersion, 3);
 assert.equal(payload.printerProfileId, SATO_CG408_LABEL_PROFILE_V2);
 assert.equal(payload.copies, 2);
 assert.equal(payload.fields.barcode, "AJ00000001");
+assert.equal(payload.fields.masterProductName, "CINCIN EMAS ASIHJAYA");
+assert.equal(payload.fields.itemDisplayName, "CINCIN EMAS ASIHJAYA ITEM 001");
 
 assert.throws(
   () =>

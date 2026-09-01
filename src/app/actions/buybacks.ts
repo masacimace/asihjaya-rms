@@ -30,6 +30,7 @@ import { searchBuybackExistingItems } from "@/features/buybacks/queries";
 import {
   BuybackValidationError,
   completeBuybackTransaction,
+  getExistingBuybackReplayResult,
   type BuybackExternalArtifact,
 } from "@/features/buybacks/service";
 import { getActiveGoldPriceRateMap } from "@/features/pricing/metal-price-rates";
@@ -312,33 +313,26 @@ export async function completeBuybackAction(
   }
   const payload = normalized.value;
 
-  const [existing] = await db
-    .select({
-      id: buybacks.id,
-      buybackNumber: buybacks.buybackNumber,
-      totalAmount: buybacks.totalAmount,
-    })
-    .from(buybacks)
-    .where(
-      and(
-        eq(buybacks.organizationId, auth.organization.id),
-        eq(buybacks.idempotencyKey, payload.idempotencyKey),
-      ),
-    )
-    .limit(1);
-
-  if (existing) {
-    return {
-      status: "success",
-      message: `Buyback ${existing.buybackNumber} sudah pernah berhasil diproses.`,
-      result: {
-        buybackId: existing.id,
-        buybackNumber: existing.buybackNumber,
-        totalAmount: Number(existing.totalAmount),
-        itemCount: payload.items.length,
-        replayed: true,
-      },
-    };
+  try {
+    const existingReplay = await getExistingBuybackReplayResult({
+      organizationId: auth.organization.id,
+      payload,
+    });
+    if (existingReplay) {
+      return {
+        status: "success",
+        message: `Buyback ${existingReplay.buybackNumber} sudah pernah berhasil diproses.`,
+        result: existingReplay,
+      };
+    }
+  } catch (error) {
+    if (error instanceof BuybackValidationError) {
+      return failure(error.message, {
+        idempotencyKey: error.message,
+      });
+    }
+    console.error("Gagal memeriksa replay Buyback:", error);
+    return failure("Buyback belum bisa diproses karena terjadi kendala sistem. Coba ulang.");
   }
 
   const externalArtifacts = new Map<string, BuybackExternalArtifact>();
@@ -445,8 +439,16 @@ function redirectBuybackDetailWithFeedback({
 
 export async function reprintBuybackReceiptAction(formData: FormData) {
   const buybackId = String(formData.get("buybackId") ?? "").trim();
+  const requestId = String(formData.get("requestId") ?? "").trim();
   if (!UUID_PATTERN.test(buybackId)) {
     redirect("/pos/buyback?bb_type=error&bb_msg=Buyback%20tidak%20valid.");
+  }
+  if (!UUID_PATTERN.test(requestId)) {
+    redirectBuybackDetailWithFeedback({
+      buybackId,
+      type: "error",
+      message: "Request cetak ulang nota Buyback tidak valid.",
+    });
   }
 
   const auth = await requirePermission("buybacks.create");
@@ -487,7 +489,6 @@ export async function reprintBuybackReceiptAction(formData: FormData) {
   }
 
   const now = new Date();
-  const requestId = randomUUID();
   const requestMetadata = await getRequestMetadata();
 
   let feedbackType: "success" | "info";

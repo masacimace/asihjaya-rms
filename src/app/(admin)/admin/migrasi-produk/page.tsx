@@ -5,7 +5,7 @@ import {
   History,
   ImageIcon,
   PackageCheck,
-  PackageSearch,
+  ArrowLeft,
   ShieldCheck,
   UploadCloud,
   type LucideIcon,
@@ -90,7 +90,10 @@ export default async function LegacyProductMigrationPage({
 }: {
   searchParams: Promise<{ type?: string; message?: string }>;
 }) {
-  const auth = await requireAnyPermission(["migration.view", "migration.import"]);
+  const auth = await requireAnyPermission([
+    "migration.view",
+    "migration.import",
+  ]);
   const [data, query] = await Promise.all([
     getLegacyMigrationOverview(auth),
     searchParams,
@@ -133,19 +136,22 @@ export default async function LegacyProductMigrationPage({
       <FlashMessage type={query.type} message={query.message} />
 
       <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
-        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_22rem] lg:items-end lg:p-7">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_23rem] lg:items-end lg:p-7">
           <div>
-            <p className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-              <PackageSearch className="size-3.5" />
-              Direct import produk legacy
-            </p>
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-2 bg-white px-3 py-2 text-sm font-semibold text-neutral-900"
+            >
+              <ArrowLeft className="size-4" />
+              Kembali ke Dashboard
+            </Link>
             <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Import Produk Legacy
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Upload XLSX dari sistem lama dan seluruh baris langsung dibuat sebagai
-              Product Item aktif. Tidak ada stock opname, review, migration hold,
-              reconciliation, atau cutover.
+              Upload XLSX dari sistem lama dan seluruh baris langsung dibuat
+              sebagai Product Item aktif. Tidak ada stock opname, review,
+              migration hold, reconciliation, atau cutover.
             </p>
           </div>
 
@@ -156,7 +162,8 @@ export default async function LegacyProductMigrationPage({
             </p>
             <p className="mt-2 text-sm leading-6 text-emerald-800">
               Data yang kurang rapi tetap masuk. Warning dicatat untuk cleanup
-              sambil berjalan, sedangkan foto disalin otomatis setelah item aktif.
+              sambil berjalan, sedangkan foto disalin otomatis setelah item
+              aktif.
             </p>
           </div>
         </div>
@@ -174,7 +181,9 @@ export default async function LegacyProductMigrationPage({
             <p className="mt-4 text-2xl font-semibold text-neutral-950">
               {formatNumber(value)}
             </p>
-            <p className="mt-1 text-sm font-semibold text-neutral-800">{label}</p>
+            <p className="mt-1 text-sm font-semibold text-neutral-800">
+              {label}
+            </p>
             <p className="mt-1 text-xs text-[var(--muted)]">{helper}</p>
           </div>
         ))}
@@ -233,9 +242,10 @@ export default async function LegacyProductMigrationPage({
               <p className="font-semibold">Sekali upload langsung aktif</p>
               <p className="mt-1">
                 Kategori dan Product Master dipetakan/dibuat otomatis, identitas
-                internal dibuat aman, barcode legacy tetap dapat dipindai jika unik,
-                dan semua item masuk ke status Tersedia. Harga legacy hanya disimpan
-                sebagai referensi; POS tetap memakai Harga/Gram aktif berdasarkan Kadar %.
+                internal dibuat aman, barcode legacy tetap dapat dipindai jika
+                unik, dan semua item masuk ke status Tersedia. Harga legacy
+                hanya disimpan sebagai referensi; POS tetap memakai Harga/Gram
+                aktif berdasarkan Kadar %.
               </p>
             </div>
 
@@ -250,9 +260,12 @@ export default async function LegacyProductMigrationPage({
         ) : (
           <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
             <ShieldCheck className="size-10 text-neutral-500" />
-            <h2 className="mt-4 font-semibold text-neutral-950">Akses lihat saja</h2>
+            <h2 className="mt-4 font-semibold text-neutral-950">
+              Akses lihat saja
+            </h2>
             <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              Permission <strong>migration.import</strong> diperlukan untuk direct import.
+              Permission <strong>migration.import</strong> diperlukan untuk
+              direct import.
             </p>
           </section>
         )}
@@ -261,10 +274,22 @@ export default async function LegacyProductMigrationPage({
           <h2 className="font-semibold text-neutral-950">Aturan import baru</h2>
           <div className="mt-5 grid gap-3">
             {[
-              ["Semua row tetap masuk", "Warning/invalid hanya menjadi penanda cleanup."],
-              ["Langsung Tersedia", "Tidak ada verification session atau stock opname."],
-              ["Barcode duplicate-safe", "Barcode legacy yang bentrok tidak memblokir item; item tetap punya barcode internal unik."],
-              ["Foto non-blocking", "URL foto disalin ke storage internal setelah commit. Gagal download tidak mematikan item."],
+              [
+                "Semua row tetap masuk",
+                "Warning/invalid hanya menjadi penanda cleanup.",
+              ],
+              [
+                "Langsung Tersedia",
+                "Tidak ada verification session atau stock opname.",
+              ],
+              [
+                "Barcode duplicate-safe",
+                "Barcode legacy yang bentrok tidak memblokir item; item tetap punya barcode internal unik.",
+              ],
+              [
+                "Foto non-blocking",
+                "URL foto disalin ke storage internal setelah commit. Gagal download tidak mematikan item.",
+              ],
             ].map(([title, description]) => (
               <div key={title} className="rounded-2xl bg-neutral-50 p-4">
                 <p className="flex items-start gap-2 text-sm font-semibold text-neutral-900">
@@ -307,18 +332,26 @@ export default async function LegacyProductMigrationPage({
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-semibold text-neutral-950">{batch.fileName}</p>
+                    <p className="truncate font-semibold text-neutral-950">
+                      {batch.fileName}
+                    </p>
                     <BatchStatusBadge status={batch.status} />
                   </div>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    {batch.outletName} · {batch.outletCode} · {formatNumber(batch.totalRows)} item · {formatNumber(batch.uniqueMasterCount)} master
+                    {batch.outletName} · {batch.outletCode} ·{" "}
+                    {formatNumber(batch.totalRows)} item ·{" "}
+                    {formatNumber(batch.uniqueMasterCount)} master
                   </p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    {formatNumber(batch.warningRows + batch.invalidRows)} perlu dirapikan · oleh {batch.uploadedByName}
+                    {formatNumber(batch.warningRows + batch.invalidRows)} perlu
+                    dirapikan · oleh {batch.uploadedByName}
                   </p>
                 </div>
                 <div className="text-xs text-[var(--muted)] md:text-right">
-                  {formatDateTime(batch.completedAt ?? batch.createdAt, auth.organization.timezone)}
+                  {formatDateTime(
+                    batch.completedAt ?? batch.createdAt,
+                    auth.organization.timezone,
+                  )}
                 </div>
               </Link>
             ))}

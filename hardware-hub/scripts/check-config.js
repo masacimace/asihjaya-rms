@@ -243,6 +243,23 @@ try {
 } catch (error) {
   errors.push(`Konfigurasi label SATO production tidak valid: ${error.message}`);
 }
+if (resolvedSatoLabelConfig) {
+  const fontEnvName = resolvedSatoLabelConfig.config.font?.filePathEnv;
+  const configuredFontPath = fontEnvName ? getEnv(fontEnvName) : "";
+  if (configuredFontPath) {
+    const resolvedFontPath = path.isAbsolute(configuredFontPath)
+      ? configuredFontPath
+      : path.resolve(root, configuredFontPath);
+    if (!fs.existsSync(resolvedFontPath)) {
+      errors.push(`Font SATO dari ${fontEnvName} tidak ditemukan: ${resolvedFontPath}`);
+    }
+  } else if (adapterModes.label_printer === "real") {
+    warnings.push(
+      `SATO_LABEL_FONT_PATH kosong; renderer akan memakai font '${resolvedSatoLabelConfig.config.font.family}' yang ter-install di Windows. ` +
+        "Untuk hasil Inter Medium yang deterministik, arahkan env tersebut ke Inter-Medium.ttf.",
+    );
+  }
+}
 if (adapterModes.label_printer === "real" && !getEnv("LABEL_PRINTER_NAME")) {
   warnings.push("LABEL_PRINTER_NAME kosong; job label real akan gagal sampai dikonfigurasi.");
 }
@@ -304,11 +321,13 @@ console.log(`Fake scenarios        : ${Array.from(SUPPORTED_FAKE_SCENARIOS).join
 console.log(`Label printer         : ${getEnv("LABEL_PRINTER_NAME") || "-"}`);
 console.log(`Label template        : ${SATO_JEWELRY_LABEL_TEMPLATE_ID}`);
 console.log(`SATO printer profile  : ${resolvedSatoLabelConfig?.config.id || "invalid"}`);
-console.log(`SATO renderer         : host_bold_bmp_v2`);
+console.log(`SATO renderer         : host_inter_bmp_v3`);
 console.log(`SATO layout config    : ${satoLabelConfigPath}`);
 console.log(`SATO copies           : ${satoCopies}`);
 console.log(`Barcode strategy      : ${resolvedSatoLabelConfig?.config.front?.barcode?.strategy || "-"}`);
-console.log(`Physical validation   : accepted`);
+console.log(`SATO font file        : ${getEnv("SATO_LABEL_FONT_PATH") || "Windows installed Inter"}`);
+console.log(`Physical validation   : ${resolvedSatoLabelConfig?.config.physicalValidation || "-"}`);
+console.log(`SATO config lock       : ${resolvedSatoLabelConfig?.lock?.configSha256 || "-"}`);
 console.log(`Document printer      : ${getEnv("DOCUMENT_PRINTER_NAME") || "-"}`);
 console.log(`PDF executable        : ${getEnv("PDF_PRINT_EXECUTABLE") || "-"}`);
 console.log(`Document profiles     : ${Object.keys(DOCUMENT_PRINT_PROFILES).join(", ")}`);

@@ -113,13 +113,7 @@ function getStatusClass(status: SaleReturnCaseStatus | SaleReturnItemStatus) {
   return "bg-amber-50 text-amber-700";
 }
 
-function FeedbackNotice({
-  type,
-  message,
-}: {
-  type: string;
-  message: string;
-}) {
+function FeedbackNotice({ type, message }: { type: string; message: string }) {
   const isSuccess = type === "success";
   const isError = type === "error";
 
@@ -212,7 +206,10 @@ export default async function SaleReturnWorkflowPage({
       </header>
 
       {feedbackMessage ? (
-        <FeedbackNotice type={feedbackType ?? "info"} message={feedbackMessage} />
+        <FeedbackNotice
+          type={feedbackType ?? "info"}
+          message={feedbackMessage}
+        />
       ) : null}
 
       <section className="grid gap-3 sm:grid-cols-3">
@@ -246,11 +243,11 @@ export default async function SaleReturnWorkflowPage({
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 size-5 shrink-0" />
           <div>
-            <p className="font-semibold">Inventory retur dikarantina</p>
+            <p className="font-semibold">Status barang retur</p>
             <p className="mt-1 text-blue-800">
-              Barang yang baru diterima tidak langsung tersedia di POS. Statusnya
-              menjadi inspection sampai pemeriksa memilih restock, repair, rusak,
-              atau ditolak.
+              Barang yang baru diterima tidak langsung tersedia di POS.
+              Statusnya menjadi inspection sampai pemeriksa memilih restock,
+              repair, rusak, atau ditolak.
             </p>
           </div>
         </div>
@@ -294,13 +291,17 @@ export default async function SaleReturnWorkflowPage({
                 <div className="space-y-4">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl bg-neutral-50 p-3 text-sm">
-                      <p className="text-xs text-neutral-500">Berat transaksi</p>
+                      <p className="text-xs text-neutral-500">
+                        Berat transaksi
+                      </p>
                       <p className="mt-1 font-semibold text-neutral-900">
                         {formatWeight(item.expectedWeightGram)}
                       </p>
                     </div>
                     <div className="rounded-xl bg-neutral-50 p-3 text-sm">
-                      <p className="text-xs text-neutral-500">Berat pemeriksaan</p>
+                      <p className="text-xs text-neutral-500">
+                        Berat pemeriksaan
+                      </p>
                       <p className="mt-1 font-semibold text-neutral-900">
                         {formatWeight(item.actualWeightGram)}
                       </p>
@@ -327,7 +328,8 @@ export default async function SaleReturnWorkflowPage({
                         {decisionLabels[item.decision]}
                       </div>
                       <p className="mt-2 text-xs leading-5 text-emerald-800">
-                        Diputuskan oleh {item.decidedByName ?? "-"} pada {formatDateTime(item.decidedAt)}.
+                        Diputuskan oleh {item.decidedByName ?? "-"} pada{" "}
+                        {formatDateTime(item.decidedAt)}.
                       </p>
                       {item.inspectionNotes ? (
                         <p className="mt-2 whitespace-pre-wrap text-xs leading-5">
@@ -350,19 +352,25 @@ export default async function SaleReturnWorkflowPage({
                 </div>
 
                 <div>
-                  {item.status === "awaiting_receipt" && capabilities.canReceive ? (
+                  {item.status === "awaiting_receipt" &&
+                  capabilities.canReceive ? (
                     <form
                       action={receiveSaleReturnItemAction}
                       className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
                     >
                       <input type="hidden" name="saleId" value={data.saleId} />
-                      <input type="hidden" name="returnItemId" value={item.id} />
+                      <input
+                        type="hidden"
+                        name="returnItemId"
+                        value={item.id}
+                      />
                       <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
                         <ScanLine className="size-4" />
                         Terima barang fisik
                       </div>
                       <p className="mt-2 text-xs leading-5 text-amber-800">
-                        Scan barcode/serial atau ketik kode yang tercetak pada barang.
+                        Scan barcode/serial atau ketik kode yang tercetak pada
+                        barang.
                       </p>
                       <input
                         name="scannedCode"
@@ -384,19 +392,26 @@ export default async function SaleReturnWorkflowPage({
                     </form>
                   ) : null}
 
-                  {item.status === "awaiting_receipt" && !capabilities.canReceive ? (
+                  {item.status === "awaiting_receipt" &&
+                  !capabilities.canReceive ? (
                     <p className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50 p-4 text-xs leading-5 text-neutral-600">
-                      Barang belum diterima. Minta user dengan permission penerimaan retur untuk melakukan scan.
+                      Barang belum diterima. Minta user dengan permission
+                      penerimaan retur untuk melakukan scan.
                     </p>
                   ) : null}
 
-                  {item.status === "pending_inspection" && capabilities.canInspect ? (
+                  {item.status === "pending_inspection" &&
+                  capabilities.canInspect ? (
                     <form
                       action={inspectSaleReturnItemAction}
                       className="space-y-4 rounded-2xl border border-blue-200 bg-blue-50 p-4"
                     >
                       <input type="hidden" name="saleId" value={data.saleId} />
-                      <input type="hidden" name="returnItemId" value={item.id} />
+                      <input
+                        type="hidden"
+                        name="returnItemId"
+                        value={item.id}
+                      />
 
                       <div>
                         <div className="flex items-center gap-2 text-sm font-semibold text-blue-950">
@@ -404,7 +419,8 @@ export default async function SaleReturnWorkflowPage({
                           Pemeriksaan fisik
                         </div>
                         <p className="mt-1 text-xs leading-5 text-blue-800">
-                          Timbang barang dan tentukan status inventory berikutnya.
+                          Timbang barang dan tentukan status inventory
+                          berikutnya.
                         </p>
                       </div>
 
@@ -424,19 +440,39 @@ export default async function SaleReturnWorkflowPage({
 
                       <div className="space-y-2 rounded-xl bg-white p-3 text-xs text-neutral-700">
                         <label className="flex items-start gap-2">
-                          <input type="checkbox" name="identityConfirmed" className="mt-0.5 size-4" />
-                          <span>Barcode/serial dan identitas barang sesuai.</span>
+                          <input
+                            type="checkbox"
+                            name="identityConfirmed"
+                            className="mt-0.5 size-4"
+                          />
+                          <span>
+                            Barcode/serial dan identitas barang sesuai.
+                          </span>
                         </label>
                         <label className="flex items-start gap-2">
-                          <input type="checkbox" name="conditionGood" className="mt-0.5 size-4" />
-                          <span>Kondisi fisik baik dan tidak ada kerusakan.</span>
+                          <input
+                            type="checkbox"
+                            name="conditionGood"
+                            className="mt-0.5 size-4"
+                          />
+                          <span>
+                            Kondisi fisik baik dan tidak ada kerusakan.
+                          </span>
                         </label>
                         <label className="flex items-start gap-2">
-                          <input type="checkbox" name="certificateComplete" className="mt-0.5 size-4" />
+                          <input
+                            type="checkbox"
+                            name="certificateComplete"
+                            className="mt-0.5 size-4"
+                          />
                           <span>Sertifikat/kelengkapan utama tersedia.</span>
                         </label>
                         <label className="flex items-start gap-2">
-                          <input type="checkbox" name="packagingComplete" className="mt-0.5 size-4" />
+                          <input
+                            type="checkbox"
+                            name="packagingComplete"
+                            className="mt-0.5 size-4"
+                          />
                           <span>Kemasan lengkap.</span>
                         </label>
                       </div>
@@ -451,7 +487,9 @@ export default async function SaleReturnWorkflowPage({
                         >
                           <option value="restock">Layak jual kembali</option>
                           <option value="repair">Perlu perbaikan</option>
-                          <option value="damaged">Rusak / tidak layak jual</option>
+                          <option value="damaged">
+                            Rusak / tidak layak jual
+                          </option>
                           <option value="reject">Tolak barang retur</option>
                         </select>
                       </label>
@@ -489,9 +527,11 @@ export default async function SaleReturnWorkflowPage({
                     </form>
                   ) : null}
 
-                  {item.status === "pending_inspection" && !capabilities.canInspect ? (
+                  {item.status === "pending_inspection" &&
+                  !capabilities.canInspect ? (
                     <p className="rounded-xl border border-dashed border-blue-200 bg-blue-50 p-4 text-xs leading-5 text-blue-800">
-                      Item sudah diterima dan menunggu pemeriksaan manager/admin stok.
+                      Item sudah diterima dan menunggu pemeriksaan manager/admin
+                      stok.
                     </p>
                   ) : null}
                 </div>
@@ -502,7 +542,8 @@ export default async function SaleReturnWorkflowPage({
       </section>
 
       <footer className="rounded-2xl border border-[var(--border)] bg-white p-4 text-xs leading-5 text-neutral-500">
-        Kasus dibuat oleh {data.createdByName} pada {formatDateTime(data.createdAt)}.
+        Kasus dibuat oleh {data.createdByName} pada{" "}
+        {formatDateTime(data.createdAt)}.
         {data.customerName ? ` Customer: ${data.customerName}.` : ""}
       </footer>
     </div>
