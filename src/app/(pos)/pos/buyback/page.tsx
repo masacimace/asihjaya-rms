@@ -96,7 +96,7 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
           <>
             <Link
               href="/pos/buyback/pemrosesan"
-              className="inline-flex h-11 items-center gap-2 rounded-2xl bg-neutral-950 px-4 text-xs font-semibold text-white transition hover:bg-neutral-800"
+              className="inline-flex h-11 justify-center items-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm !text-white transition hover:bg-neutral-800"
             >
               <Wrench className="size-4" />
               Pemrosesan Cuci/Rongsok
@@ -123,13 +123,6 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
                   maximumFractionDigits: 0,
                 }).format(Number(context.activeShift?.expectedCash ?? 0))}
               </p>
-            </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--accent-soft)] px-3.5 py-2.5 text-xs text-[var(--accent)]">
-              <p className="flex items-center gap-1.5 font-semibold">
-                <CircleDollarSign className="size-3.5" />
-                Total Harga manual
-              </p>
-              <p className="mt-1">Cuci / Rongsok sebelum dijual</p>
             </div>
           </>
         }
