@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 
-import { CircleDollarSign, RefreshCcw, Store, WalletCards } from "lucide-react";
+import {
+  CircleDollarSign,
+  RefreshCcw,
+  Store,
+  WalletCards,
+  Wrench,
+} from "lucide-react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { BuybackHistoryPanel } from "@/components/buybacks/buyback-history-panel";
@@ -87,6 +94,13 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
         icon={<RefreshCcw className="size-5" />}
         actions={
           <>
+            <Link
+              href="/pos/buyback/pemrosesan"
+              className="inline-flex h-11 items-center gap-2 rounded-2xl bg-neutral-950 px-4 text-xs font-semibold text-white transition hover:bg-neutral-800"
+            >
+              <Wrench className="size-4" />
+              Pemrosesan Cuci/Rongsok
+            </Link>
             <div className="rounded-2xl border border-[var(--border)] bg-white px-3.5 py-2.5 text-xs">
               <p className="flex items-center gap-1.5 font-semibold text-neutral-900">
                 <Store className="size-3.5 text-[var(--accent)]" />
