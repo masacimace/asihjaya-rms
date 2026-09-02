@@ -71,7 +71,14 @@ import {
 type ScannedPosItemRow = Omit<PosAvailableItem, "activePricePerGram"> & {
   activePricePerGram?: string | null;
   isActive: boolean;
-  availability: "draft" | "migration_hold" | "available" | "reserved" | "inspection" | "sold";
+  availability:
+    | "draft"
+    | "migration_hold"
+    | "processing"
+    | "available"
+    | "reserved"
+    | "inspection"
+    | "sold";
   condition: "good" | "used" | "damaged" | "lost" | "returned";
   locationState: "outlet" | "warehouse" | "in_transit" | "customer" | "repair";
   productStatus: "draft" | "active" | "inactive";
@@ -84,6 +91,7 @@ const itemAvailabilityLabels: Record<
 > = {
   draft: "masih draft",
   migration_hold: "ditahan untuk proses migrasi",
+  processing: "sedang dalam pemrosesan Buyback",
   available: "tersedia",
   reserved: "sedang di-reserve",
   inspection: "sedang diperiksa sebagai retur",

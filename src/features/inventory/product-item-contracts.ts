@@ -1,6 +1,13 @@
 export const PRODUCT_ITEM_PAGE_SIZE = 20;
 
-export type ItemAvailability = "draft" | "migration_hold" | "available" | "reserved" | "inspection" | "sold";
+export type ItemAvailability =
+  | "draft"
+  | "migration_hold"
+  | "processing"
+  | "available"
+  | "reserved"
+  | "inspection"
+  | "sold";
 export type ItemCondition = "good" | "used" | "damaged" | "lost" | "returned";
 export type ItemLocationState =
   | "outlet"
@@ -31,6 +38,7 @@ export const initialProductItemActionState: ProductItemActionState = {
 const AVAILABILITIES: readonly ItemAvailability[] = [
   "draft",
   "migration_hold",
+  "processing",
   "available",
   "reserved",
   "inspection",

@@ -118,6 +118,7 @@ type EditableItem = {
   availability:
     | "draft"
     | "migration_hold"
+    | "processing"
     | "available"
     | "reserved"
     | "inspection"

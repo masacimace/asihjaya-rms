@@ -41,6 +41,7 @@ export const metadata = {
 const availabilityLabels: Record<ItemAvailability, string> = {
   draft: "Draft",
   migration_hold: "Hold Migrasi",
+  processing: "Pemrosesan Buyback",
   available: "Tersedia",
   reserved: "Reserved",
   inspection: "Inspeksi",

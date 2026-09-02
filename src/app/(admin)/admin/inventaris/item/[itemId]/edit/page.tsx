@@ -17,6 +17,7 @@ export const runtime = "nodejs";
 const availabilityLabels = {
   draft: "Draft",
   migration_hold: "Hold Migrasi",
+  processing: "Pemrosesan Buyback",
   available: "Tersedia",
   reserved: "Reserved",
   inspection: "Pemeriksaan Retur",

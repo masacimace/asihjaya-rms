@@ -118,6 +118,7 @@ export const legacyMasterMappingSourceEnum = pgEnum(
 export const itemAvailabilityEnum = pgEnum("item_availability", [
   "draft",
   "migration_hold",
+  "processing",
   "available",
   "reserved",
   "inspection",
@@ -191,6 +192,16 @@ export const buybackStatusEnum = pgEnum("buyback_status", [
 export const buybackItemSourceEnum = pgEnum("buyback_item_source", [
   "asihjaya",
   "external",
+]);
+
+export const buybackProcessingTypeEnum = pgEnum("buyback_processing_type", [
+  "cleaning",
+  "recondition",
+]);
+
+export const buybackProcessingStatusEnum = pgEnum("buyback_processing_status", [
+  "pending",
+  "completed",
 ]);
 
 export const buybackPayoutMethodEnum = pgEnum("buyback_payout_method", [
@@ -2670,6 +2681,60 @@ export const buybackItems = pgTable(
     check(
       "buyback_items_final_positive_ck",
       sql`${table.finalAmount} > 0 and ${table.deductionAmount} < ${table.baseAmount}`,
+    ),
+  ],
+);
+
+export const buybackItemProcessings = pgTable(
+  "buyback_item_processings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    buybackItemId: uuid("buyback_item_id")
+      .notNull()
+      .references(() => buybackItems.id),
+    processingType: buybackProcessingTypeEnum("processing_type").notNull(),
+    status: buybackProcessingStatusEnum("status").default("pending").notNull(),
+    resultProductItemId: uuid("result_product_item_id").references(
+      () => productItems.id,
+    ),
+    resultSnapshot: jsonb("result_snapshot").$type<
+      Record<string, unknown> | null
+    >(),
+    processedBy: uuid("processed_by").references(() => users.id),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("buyback_item_processings_buyback_item_uq").on(
+      table.buybackItemId,
+    ),
+    index("buyback_item_processings_status_type_created_idx").on(
+      table.status,
+      table.processingType,
+      table.createdAt,
+    ),
+    index("buyback_item_processings_result_item_idx").on(
+      table.resultProductItemId,
+    ),
+    check(
+      "buyback_item_processings_completion_ck",
+      sql`(
+        ${table.status} = 'pending'
+        and ${table.resultProductItemId} is null
+        and ${table.resultSnapshot} is null
+        and ${table.processedBy} is null
+        and ${table.processedAt} is null
+      ) or (
+        ${table.status} = 'completed'
+        and ${table.resultProductItemId} is not null
+        and ${table.resultSnapshot} is not null
+        and ${table.processedBy} is not null
+        and ${table.processedAt} is not null
+      )`,
+    ),
+    check(
+      "buyback_item_processings_processed_time_ck",
+      sql`${table.processedAt} is null or ${table.processedAt} >= ${table.createdAt}`,
     ),
   ],
 );
