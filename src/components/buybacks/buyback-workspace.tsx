@@ -35,7 +35,10 @@ import {
 } from "@/app/actions/buybacks";
 import { createPosQuickCustomerAction } from "@/app/actions/pos";
 import { PosQuickCustomerDialog } from "@/components/pos/workspace/pos-quick-customer-dialog";
-import { normalizeBuybackDecimal, normalizeBuybackMoney } from "@/features/buybacks/calculations";
+import {
+  normalizeBuybackDecimal,
+  normalizeBuybackMoney,
+} from "@/features/buybacks/calculations";
 import {
   BUYBACK_MAX_ITEMS,
   initialBuybackActionState,
@@ -345,7 +348,8 @@ export function BuybackWorkspace({
         normalizeBuybackMoney(payouts.bank_transfer, { allowZero: true }) ?? 0,
       ),
       customer_deposit: Number(
-        normalizeBuybackMoney(payouts.customer_deposit, { allowZero: true }) ?? 0,
+        normalizeBuybackMoney(payouts.customer_deposit, { allowZero: true }) ??
+          0,
       ),
     }),
     [payouts],
@@ -528,8 +532,8 @@ export function BuybackWorkspace({
                 <p className="font-semibold">{state.message}</p>
                 <p className="mt-1 text-sm">
                   {state.result.itemCount} item ·{" "}
-                  {formatCurrency(state.result.totalAmount)}. Barang masuk antrean
-                  Cuci/Rongsok dan belum tersedia untuk dijual di POS.
+                  {formatCurrency(state.result.totalAmount)}. Barang masuk
+                  antrean Cuci/Rongsok dan belum tersedia untuk dijual di POS.
                 </p>
                 <p className="mt-1 text-xs">
                   {state.result.receiptJobId
@@ -592,28 +596,31 @@ export function BuybackWorkspace({
                 {customer.isCustomerSelectorOpen &&
                 customer.customerSearchResults.length > 0 ? (
                   <div className="absolute z-30 mt-2 max-h-64 w-full overflow-y-auto rounded-2xl border border-[var(--border)] bg-white p-1 shadow-xl">
-                    {customer.customerSearchResults.slice(0, 10).map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => customer.selectCustomerState(option)}
-                        className="flex w-full items-start justify-between gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-neutral-50"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold text-neutral-900">
-                            {option.fullName}
+                    {customer.customerSearchResults
+                      .slice(0, 10)
+                      .map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => customer.selectCustomerState(option)}
+                          className="flex w-full items-start justify-between gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-neutral-50"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-neutral-900">
+                              {option.fullName}
+                            </span>
+                            <span className="mt-0.5 block text-xs text-[var(--muted)]">
+                              {option.customerCode ?? "Tanpa kode"} ·{" "}
+                              {option.phone ?? "Tanpa HP"}
+                            </span>
                           </span>
-                          <span className="mt-0.5 block text-xs text-[var(--muted)]">
-                            {option.customerCode ?? "Tanpa kode"} ·{" "}
-                            {option.phone ?? "Tanpa HP"}
+                          <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
+                            Saldo{" "}
+                            {formatCurrency(option.customerDepositBalance)}
                           </span>
-                        </span>
-                        <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
-                          Saldo {formatCurrency(option.customerDepositBalance)}
-                        </span>
-                      </button>
-                    ))}
+                        </button>
+                      ))}
                   </div>
                 ) : null}
               </div>
@@ -646,7 +653,7 @@ export function BuybackWorkspace({
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-black px-4 text-sm font-semibold text-white hover:bg-black/80"
             >
               <PackagePlus className="size-4" />
-              Tambah Barang Luar
+              Tambah Produk External
             </button>
           </div>
 
@@ -700,8 +707,8 @@ export function BuybackWorkspace({
                           {result.sku} · {result.productName}
                         </p>
                         <p className="mt-1 text-xs text-[var(--muted)]">
-                          {result.categoryName} · {result.weightGram ?? "-"} gr ·
-                          Kadar {result.purityPercent ?? "-"}%
+                          {result.categoryName} · {result.weightGram ?? "-"} gr
+                          · Kadar {result.purityPercent ?? "-"}%
                         </p>
                         {result.lastInvoiceNumber ? (
                           <p className="mt-1 text-[11px] text-neutral-500">
@@ -841,7 +848,9 @@ export function BuybackWorkspace({
                     <input
                       value={item.color}
                       onChange={(event) =>
-                        updateItem(item.clientKey, { color: event.target.value })
+                        updateItem(item.clientKey, {
+                          color: event.target.value,
+                        })
                       }
                       maxLength={64}
                       className={inputClassName}
@@ -857,7 +866,9 @@ export function BuybackWorkspace({
                       value={item.purityPercent}
                       onChange={(event) =>
                         updateItem(item.clientKey, {
-                          purityPercent: formatPosWeightInput(event.target.value),
+                          purityPercent: formatPosWeightInput(
+                            event.target.value,
+                          ),
                         })
                       }
                       inputMode="decimal"
@@ -911,7 +922,9 @@ export function BuybackWorkspace({
                   <div className="lg:col-span-2">
                     <BuybackImageInput
                       clientKey={item.clientKey}
-                      error={state.fieldErrors?.[`items.${item.clientKey}.image`]}
+                      error={
+                        state.fieldErrors?.[`items.${item.clientKey}.image`]
+                      }
                       onSelectionChange={(imageSelected) =>
                         updateItem(item.clientKey, { imageSelected })
                       }
@@ -1016,7 +1029,10 @@ export function BuybackWorkspace({
             >
               {customer.selectedCustomer ? (
                 <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-[11px] leading-4 text-emerald-800">
-                  Saldo {formatCurrency(customer.selectedCustomer.customerDepositBalance)}
+                  Saldo{" "}
+                  {formatCurrency(
+                    customer.selectedCustomer.customerDepositBalance,
+                  )}
                   {" → "}
                   {formatCurrency(
                     customer.selectedCustomer.customerDepositBalance +
