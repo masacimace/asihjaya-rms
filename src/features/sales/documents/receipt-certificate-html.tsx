@@ -1607,7 +1607,11 @@ export function ReceiptCertificateHtmlDocument({
                           </div>
                         </div>
                         <div className="aj-kadar aj-dynamic-print">
-                          {formatPercent(item.snapshot.exchangePurityPercent)}
+                          {formatPercent(
+                            isBuyback
+                              ? item.snapshot.purityPercent
+                              : item.snapshot.exchangePurityPercent,
+                          )}
                         </div>
                         <div className="aj-gram aj-dynamic-print">
                           {formatGram(item.snapshot.weightGram)}
