@@ -162,6 +162,13 @@
       "when": 1788264086437,
       "tag": "0022_buyback_processing_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788343245624,
+      "tag": "0023_buyback_simplified_acquisition",
+      "breakpoints": true
     }
   ]
 }

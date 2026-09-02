@@ -1,6 +1,8 @@
 export const BUYBACK_MAX_ITEMS = 20;
 
 export type BuybackItemSource = "asihjaya" | "external";
+export type BuybackProcessingType = "cleaning" | "recondition";
+export type BuybackProcessingStatus = "pending" | "completed";
 export type BuybackPayoutMethod = "cash" | "bank_transfer" | "customer_deposit";
 
 export type BuybackExistingItemOption = {
@@ -16,9 +18,7 @@ export type BuybackExistingItemOption = {
   categoryName: string;
   weightGram: string | null;
   purityPercent: string | null;
-  exchangePurityPercent: string | null;
   color: string | null;
-  deductionPerGram: string | null;
   imageKey: string | null;
   soldAt: Date | null;
   lastInvoiceNumber: string | null;
@@ -54,14 +54,13 @@ export type BuybackItemPayload = {
   clientKey: string;
   source: BuybackItemSource;
   productItemId?: string | null;
-  productMasterId?: string | null;
-  displayName?: string | null;
+  displayName: string;
+  categoryId: string;
+  processingType: BuybackProcessingType;
   weightGram: string;
   purityPercent: string;
-  exchangePurityPercent: string;
   color: string;
-  deductionPerGram: string;
-  buybackPricePerGram: string;
+  totalAmount: string;
 };
 
 export type BuybackPayoutPayload = {
@@ -78,17 +77,16 @@ export type BuybackSubmitPayload = {
   payouts: BuybackPayoutPayload[];
 };
 
-export type NormalizedBuybackItem = BuybackItemPayload & {
+export type NormalizedBuybackItem = {
+  clientKey: string;
+  source: BuybackItemSource;
   productItemId: string | null;
-  productMasterId: string | null;
-  displayName: string | null;
+  displayName: string;
+  categoryId: string;
+  processingType: BuybackProcessingType;
   weightGram: string;
   purityPercent: string;
-  exchangePurityPercent: string;
-  deductionPerGram: string;
-  buybackPricePerGram: string;
-  baseAmount: number;
-  deductionAmount: number;
+  color: string;
   finalAmount: number;
 };
 
@@ -127,7 +125,6 @@ export type BuybackExistingSearchResult =
   | { status: "success"; items: BuybackExistingItemOption[] }
   | { status: "error"; message: string; items: [] };
 
-
 export type BuybackHistoryPayoutSummary = {
   method: BuybackPayoutMethod;
   amount: string;
@@ -150,26 +147,29 @@ export type BuybackHistoryRow = {
   outletCode: string;
   outletName: string;
   itemCount: number;
+  pendingProcessingCount: number;
   payouts: BuybackHistoryPayoutSummary[];
 };
 
 export type BuybackDetailItem = {
   id: string;
-  productItemId: string;
+  productItemId: string | null;
   source: BuybackItemSource;
   lineNumber: number;
   weightGram: string;
   purityPercent: string;
-  exchangePurityPercent: string;
-  buybackPricePerGram: string;
-  deductionPerGram: string;
+  exchangePurityPercent: string | null;
+  buybackPricePerGram: string | null;
+  deductionPerGram: string | null;
   baseAmount: string;
   deductionAmount: string;
   finalAmount: string;
   snapshot: Record<string, unknown>;
-  currentSku: string;
-  currentBarcode: string;
-  currentDisplayName: string;
+  processingType: BuybackProcessingType | null;
+  processingStatus: BuybackProcessingStatus | null;
+  currentSku: string | null;
+  currentBarcode: string | null;
+  currentDisplayName: string | null;
 };
 
 export type BuybackReceiptJobSummary = {

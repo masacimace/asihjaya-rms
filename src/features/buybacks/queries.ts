@@ -2,6 +2,7 @@ import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
+  buybackItemProcessings,
   buybackItems,
   buybackPayouts,
   buybacks,
@@ -19,7 +20,6 @@ import {
   shifts,
   users,
 } from "@/db/schema";
-import { getDefaultPosRegisterCondition } from "@/features/pos/context";
 import type {
   BuybackExistingItemOption,
   BuybackHistoryData,
@@ -27,6 +27,7 @@ import type {
   BuybackHistoryRow,
   BuybackInitialData,
 } from "@/features/buybacks/contracts";
+import { getDefaultPosRegisterCondition } from "@/features/pos/context";
 
 function parseMoney(value: string | null | undefined) {
   const amount = Number(value ?? 0);
@@ -138,19 +139,15 @@ export async function getBuybackInitialData({
   }
 
   return {
-    context: {
-      outlet,
-      register,
-      activeShift,
-    },
+    context: { outlet, register, activeShift },
     customers: customerRows.map((customer) => {
-      const balance = latestLedgerByCustomer.get(customer.id)?.balanceAfter ?? "0";
+      const latest = latestLedgerByCustomer.get(customer.id) ?? null;
+      const balance = latest?.balanceAfter ?? "0";
       return {
         ...customer,
         customerDepositBalanceAmount: balance,
         customerDepositBalance: parseMoney(balance),
-        customerDepositLastLedgerEntryAt:
-          latestLedgerByCustomer.get(customer.id)?.occurredAt ?? null,
+        customerDepositLastLedgerEntryAt: latest?.occurredAt ?? null,
       };
     }),
   };
@@ -170,7 +167,7 @@ export async function searchBuybackExistingItems({
 
   const pattern = `%${normalizedQuery}%`;
   const barcodeRows = await db
-    .select({ itemId: itemBarcodes.itemId, barcodeValue: itemBarcodes.barcodeValue })
+    .select({ itemId: itemBarcodes.itemId })
     .from(itemBarcodes)
     .where(
       and(
@@ -209,9 +206,7 @@ export async function searchBuybackExistingItems({
       categoryName: productCategories.name,
       weightGram: productItems.weightGram,
       purityPercent: productItems.purityPercent,
-      exchangePurityPercent: productItems.exchangePurityPercent,
       color: productItems.color,
-      deductionPerGram: productItems.deductionPerGram,
       imageKey: productItems.imageKey,
     })
     .from(productItems)
@@ -279,7 +274,6 @@ export async function searchBuybackExistingItems({
   });
 }
 
-
 export async function getBuybackHistoryData({
   organizationId,
   outletId,
@@ -328,9 +322,14 @@ export async function getBuybackHistoryData({
           db
             .select({
               buybackId: buybackItems.buybackId,
-              itemCount: sql<number>`count(*)::int`,
+              itemCount: sql<number>`count(${buybackItems.id})::int`,
+              pendingProcessingCount: sql<number>`coalesce(sum(case when ${buybackItemProcessings.status} = 'pending' then 1 else 0 end), 0)::int`,
             })
             .from(buybackItems)
+            .leftJoin(
+              buybackItemProcessings,
+              eq(buybackItemProcessings.buybackItemId, buybackItems.id),
+            )
             .where(inArray(buybackItems.buybackId, ids))
             .groupBy(buybackItems.buybackId),
           db
@@ -346,8 +345,14 @@ export async function getBuybackHistoryData({
         ])
       : [[], []];
 
-  const itemCountByBuyback = new Map(
-    itemCounts.map((row) => [row.buybackId, Number(row.itemCount ?? 0)]),
+  const countByBuyback = new Map(
+    itemCounts.map((row) => [
+      row.buybackId,
+      {
+        itemCount: Number(row.itemCount ?? 0),
+        pendingProcessingCount: Number(row.pendingProcessingCount ?? 0),
+      },
+    ]),
   );
   const payoutsByBuyback = new Map<string, BuybackHistoryPayoutSummary[]>();
   for (const payout of payoutRows) {
@@ -362,7 +367,9 @@ export async function getBuybackHistoryData({
 
   const historyRows: BuybackHistoryRow[] = rows.map((row) => ({
     ...row,
-    itemCount: itemCountByBuyback.get(row.id) ?? 0,
+    itemCount: countByBuyback.get(row.id)?.itemCount ?? 0,
+    pendingProcessingCount:
+      countByBuyback.get(row.id)?.pendingProcessingCount ?? 0,
     payouts: payoutsByBuyback.get(row.id) ?? [],
   }));
 
@@ -406,10 +413,17 @@ export async function getBuybackHistoryData({
       return { rows: historyRows, detail: null };
     }
 
-    const [olderItemCount, olderPayouts] = await Promise.all([
+    const [olderCount, olderPayouts] = await Promise.all([
       db
-        .select({ itemCount: sql<number>`count(*)::int` })
+        .select({
+          itemCount: sql<number>`count(${buybackItems.id})::int`,
+          pendingProcessingCount: sql<number>`coalesce(sum(case when ${buybackItemProcessings.status} = 'pending' then 1 else 0 end), 0)::int`,
+        })
         .from(buybackItems)
+        .leftJoin(
+          buybackItemProcessings,
+          eq(buybackItemProcessings.buybackItemId, buybackItems.id),
+        )
         .where(eq(buybackItems.buybackId, detailId)),
       db
         .select({
@@ -424,7 +438,10 @@ export async function getBuybackHistoryData({
 
     detailBase = {
       ...olderDetail,
-      itemCount: Number(olderItemCount[0]?.itemCount ?? 0),
+      itemCount: Number(olderCount[0]?.itemCount ?? 0),
+      pendingProcessingCount: Number(
+        olderCount[0]?.pendingProcessingCount ?? 0,
+      ),
       payouts: olderPayouts,
     };
   }
@@ -461,13 +478,19 @@ export async function getBuybackHistoryData({
         deductionAmount: buybackItems.deductionAmount,
         finalAmount: buybackItems.finalAmount,
         snapshot: buybackItems.snapshot,
+        processingType: buybackItemProcessings.processingType,
+        processingStatus: buybackItemProcessings.status,
         currentSku: productItems.sku,
         currentBarcode: productItems.barcode,
-        currentDisplayName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,
+        currentDisplayName: sql<string | null>`coalesce(${productItems.displayName}, ${productMasters.name})`,
       })
       .from(buybackItems)
-      .innerJoin(productItems, eq(buybackItems.productItemId, productItems.id))
-      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+      .leftJoin(
+        buybackItemProcessings,
+        eq(buybackItemProcessings.buybackItemId, buybackItems.id),
+      )
+      .leftJoin(productItems, eq(buybackItems.productItemId, productItems.id))
+      .leftJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
       .where(eq(buybackItems.buybackId, detailId))
       .orderBy(asc(buybackItems.lineNumber)),
     db

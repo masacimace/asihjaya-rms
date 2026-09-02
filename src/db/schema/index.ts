@@ -2612,9 +2612,7 @@ export const buybackItems = pgTable(
     buybackId: uuid("buyback_id")
       .notNull()
       .references(() => buybacks.id),
-    productItemId: uuid("product_item_id")
-      .notNull()
-      .references(() => productItems.id),
+    productItemId: uuid("product_item_id").references(() => productItems.id),
     source: buybackItemSourceEnum("source").notNull(),
     lineNumber: integer("line_number").notNull(),
     weightGram: numeric("weight_gram", { precision: 12, scale: 3 }).notNull(),
@@ -2622,11 +2620,11 @@ export const buybackItems = pgTable(
     exchangePurityPercent: numeric("exchange_purity_percent", {
       precision: 7,
       scale: 3,
-    }).notNull(),
+    }),
     buybackPricePerGram: numeric("buyback_price_per_gram", {
       precision: 18,
       scale: 0,
-    }).notNull(),
+    }),
     deductionPerGram: numeric("deduction_per_gram", {
       precision: 18,
       scale: 0,
@@ -2664,11 +2662,11 @@ export const buybackItems = pgTable(
     ),
     check(
       "buyback_items_exchange_purity_range_ck",
-      sql`${table.exchangePurityPercent} > 0 and ${table.exchangePurityPercent} <= 999.999`,
+      sql`${table.exchangePurityPercent} is null or (${table.exchangePurityPercent} > 0 and ${table.exchangePurityPercent} <= 999.999)`,
     ),
     check(
       "buyback_items_price_positive_ck",
-      sql`${table.buybackPricePerGram} > 0`,
+      sql`${table.buybackPricePerGram} is null or ${table.buybackPricePerGram} > 0`,
     ),
     check(
       "buyback_items_deduction_nonnegative_ck",

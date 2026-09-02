@@ -10,10 +10,7 @@ import {
   getBuybackHistoryData,
   getBuybackInitialData,
 } from "@/features/buybacks/queries";
-import {
-  getActiveProductMasterOptions,
-  getProductMasterCategoryOptions,
-} from "@/features/products/product-master-queries";
+import { getProductMasterCategoryOptions } from "@/features/products/product-master-queries";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 
 export const metadata = {
@@ -52,20 +49,18 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
   const detailId =
     query.detail && UUID_PATTERN.test(query.detail) ? query.detail : null;
 
-  const [initialData, categories, productMasters, historyData] =
-    await Promise.all([
-      getBuybackInitialData({
-        organizationId: auth.organization.id,
-        outletId: primaryOutlet.id,
-      }),
-      getProductMasterCategoryOptions(auth.organization.id),
-      getActiveProductMasterOptions(auth.organization.id),
-      getBuybackHistoryData({
-        organizationId: auth.organization.id,
-        outletId: primaryOutlet.id,
-        detailId,
-      }),
-    ]);
+  const [initialData, categories, historyData] = await Promise.all([
+    getBuybackInitialData({
+      organizationId: auth.organization.id,
+      outletId: primaryOutlet.id,
+    }),
+    getProductMasterCategoryOptions(auth.organization.id),
+    getBuybackHistoryData({
+      organizationId: auth.organization.id,
+      outletId: primaryOutlet.id,
+      detailId,
+    }),
+  ]);
 
   const canCreate = hasPermission(auth, "buybacks.create");
   const context = initialData.context;
@@ -88,7 +83,7 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
       <PosPageHeader
         eyebrow="Transaksi barang masuk dari customer"
         title="Buyback"
-        description="Beli kembali produk ASIHJAYA atau terima emas/perhiasan dari luar. Harga Buyback/Gram ditentukan per item transaksi tanpa global rate."
+        description="Catat barang yang dibeli kembali, tentukan Cuci/Rongsok, lalu masukkan Total Harga final. Barang belum tersedia di POS sampai pemrosesan selesai."
         icon={<RefreshCcw className="size-5" />}
         actions={
           <>
@@ -118,9 +113,9 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--accent-soft)] px-3.5 py-2.5 text-xs text-[var(--accent)]">
               <p className="flex items-center gap-1.5 font-semibold">
                 <CircleDollarSign className="size-3.5" />
-                Harga manual per item
+                Total Harga manual
               </p>
-              <p className="mt-1">Tanpa Global Buyback Rate</p>
+              <p className="mt-1">Cuci / Rongsok sebelum dijual</p>
             </div>
           </>
         }
@@ -137,7 +132,6 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
           <BuybackWorkspace
             initialData={initialData}
             categories={categories}
-            initialProductMasters={productMasters}
             initialIdempotencyKey={randomUUID()}
             canCreate={canCreate}
           />

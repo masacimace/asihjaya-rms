@@ -34,9 +34,7 @@ function getBuybackDetailQrValue({
   buybackNumber: string;
 }) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
-  if (!baseUrl) {
-    return `BUYBACK:${buybackNumber}`;
-  }
+  if (!baseUrl) return `BUYBACK:${buybackNumber}`;
   return `${baseUrl}/pos/buyback?detail=${encodeURIComponent(buybackId)}`;
 }
 
@@ -85,9 +83,7 @@ export async function getBuybackReceiptData({
     )
     .limit(1);
 
-  if (!row || row.status !== "completed") {
-    return null;
-  }
+  if (!row || row.status !== "completed") return null;
 
   const [items, payouts, depositRows] = await Promise.all([
     db
@@ -111,8 +107,8 @@ export async function getBuybackReceiptData({
         masterImageKey: productMasters.imageKey,
       })
       .from(buybackItems)
-      .innerJoin(productItems, eq(buybackItems.productItemId, productItems.id))
-      .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+      .leftJoin(productItems, eq(buybackItems.productItemId, productItems.id))
+      .leftJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
       .where(eq(buybackItems.buybackId, buybackId))
       .orderBy(asc(buybackItems.lineNumber)),
     db
@@ -146,9 +142,7 @@ export async function getBuybackReceiptData({
       .orderBy(asc(customerDepositLedger.occurredAt)),
   ]);
 
-  if (items.length === 0) {
-    return null;
-  }
+  if (items.length === 0) return null;
 
   const depositAmount = payouts
     .filter((payout) => payout.method === "customer_deposit")
@@ -156,7 +150,10 @@ export async function getBuybackReceiptData({
   const externalPayoutAmount = payouts
     .filter((payout) => payout.method !== "customer_deposit")
     .reduce((total, payout) => total + Number(payout.amount), 0);
-  const baseTotal = items.reduce((total, item) => total + Number(item.baseAmount), 0);
+  const baseTotal = items.reduce(
+    (total, item) => total + Number(item.baseAmount),
+    0,
+  );
   const deductionTotal = items.reduce(
     (total, item) => total + Number(item.deductionAmount),
     0,
@@ -176,17 +173,9 @@ export async function getBuybackReceiptData({
       address: row.outletAddress,
       phone: row.outletPhone,
     },
-    register: {
-      code: row.registerCode,
-      name: row.registerName,
-    },
-    cashier: {
-      fullName: row.processedByName,
-    },
-    customer: {
-      fullName: row.customerName,
-      phone: row.customerPhone,
-    },
+    register: { code: row.registerCode, name: row.registerName },
+    cashier: { fullName: row.processedByName },
+    customer: { fullName: row.customerName, phone: row.customerPhone },
     sale: {
       id: row.id,
       invoiceNumber: row.buybackNumber,
@@ -206,20 +195,18 @@ export async function getBuybackReceiptData({
         discountAmount: item.deductionAmount,
         finalPriceAmount: item.finalAmount,
         snapshot: {
-          sku:
-            readSnapshotString(snapshot, "sku") ??
-            item.currentSku,
+          sku: readSnapshotString(snapshot, "sku") ?? item.currentSku,
           barcode:
-            readSnapshotString(snapshot, "barcode") ??
-            item.currentBarcode,
-          qrValue:
-            readSnapshotString(snapshot, "qrValue") ??
-            item.currentQrValue,
+            readSnapshotString(snapshot, "barcode") ?? item.currentBarcode,
+          qrValue: readSnapshotString(snapshot, "qrValue") ?? item.currentQrValue,
           serialNumber: readSnapshotString(snapshot, "serialNumber"),
-          productCode: readSnapshotString(snapshot, "productCode"),
+          productCode:
+            readSnapshotString(snapshot, "productCode") ??
+            readSnapshotString(snapshot, "originalProductCode"),
           productName:
             readSnapshotString(snapshot, "displayName") ??
             readSnapshotString(snapshot, "productMasterName") ??
+            readSnapshotString(snapshot, "originalProductMasterName") ??
             item.currentDisplayName ??
             item.masterName,
           itemDisplayName:
@@ -227,14 +214,13 @@ export async function getBuybackReceiptData({
             item.currentDisplayName,
           masterProductName:
             readSnapshotString(snapshot, "productMasterName") ??
+            readSnapshotString(snapshot, "originalProductMasterName") ??
             item.masterName,
           categoryName: readSnapshotString(snapshot, "categoryName"),
           weightGram:
-            readSnapshotString(snapshot, "weightGram") ??
-            item.weightGram,
+            readSnapshotString(snapshot, "weightGram") ?? item.weightGram,
           purityPercent:
-            readSnapshotString(snapshot, "purityPercent") ??
-            item.purityPercent,
+            readSnapshotString(snapshot, "purityPercent") ?? item.purityPercent,
           exchangePurityPercent:
             readSnapshotString(snapshot, "exchangePurityPercent") ??
             item.exchangePurityPercent,
@@ -249,8 +235,7 @@ export async function getBuybackReceiptData({
             readSnapshotString(snapshot, "buybackPricePerGram") ??
             item.buybackPricePerGram,
           imageKey:
-            readSnapshotString(snapshot, "imageKey") ??
-            item.itemImageKey,
+            readSnapshotString(snapshot, "imageKey") ?? item.itemImageKey,
           productImageKey: item.masterImageKey,
         },
       };

@@ -10,7 +10,6 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { buybacks } from "@/db/schema";
 import {
-  calculateBuybackLine,
   normalizeBuybackDecimal,
   normalizeBuybackMoney,
   normalizeBuybackPurity,
@@ -19,8 +18,8 @@ import {
   BUYBACK_MAX_ITEMS,
   type BuybackActionState,
   type BuybackExistingSearchResult,
-  type BuybackItemPayload,
   type BuybackPayoutMethod,
+  type BuybackProcessingType,
   type BuybackSubmitPayload,
   type NormalizedBuybackItem,
   type NormalizedBuybackPayload,
@@ -31,9 +30,8 @@ import {
   BuybackValidationError,
   completeBuybackTransaction,
   getExistingBuybackReplayResult,
-  type BuybackExternalArtifact,
+  type BuybackItemArtifact,
 } from "@/features/buybacks/service";
-import { getActiveGoldPriceRateMap } from "@/features/pricing/metal-price-rates";
 import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 import { buildBuybackReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
@@ -49,6 +47,10 @@ const PAYOUT_METHODS = new Set<BuybackPayoutMethod>([
   "cash",
   "bank_transfer",
   "customer_deposit",
+]);
+const PROCESSING_TYPES = new Set<BuybackProcessingType>([
+  "cleaning",
+  "recondition",
 ]);
 
 function failure(
@@ -90,7 +92,8 @@ function normalizePayload(raw: BuybackSubmitPayload):
 
   const idempotencyKey = String(raw.idempotencyKey ?? "").trim();
   if (!UUID_PATTERN.test(idempotencyKey)) {
-    fieldErrors.idempotencyKey = "Sesi Buyback tidak valid. Refresh halaman lalu coba kembali.";
+    fieldErrors.idempotencyKey =
+      "Sesi Buyback tidak valid. Refresh halaman lalu coba kembali.";
   }
 
   const customerId = String(raw.customerId ?? "").trim();
@@ -115,8 +118,8 @@ function normalizePayload(raw: BuybackSubmitPayload):
 
   for (const [index, rawItem] of (raw.items ?? []).entries()) {
     const prefix = `items.${index}`;
-    const source = rawItem?.source;
     const clientKey = String(rawItem?.clientKey ?? "").trim();
+    const source = rawItem?.source;
 
     if (!CLIENT_KEY_PATTERN.test(clientKey) || seenClientKeys.has(clientKey)) {
       fieldErrors[`${prefix}.clientKey`] = "Identitas item Buyback tidak valid.";
@@ -130,66 +133,67 @@ function normalizePayload(raw: BuybackSubmitPayload):
     }
 
     const productItemId = normalizeNullableText(rawItem.productItemId, 36);
-    const productMasterId = normalizeNullableText(rawItem.productMasterId, 36);
-    const displayName = normalizeNullableText(rawItem.displayName, 220);
-
     if (source === "asihjaya") {
       if (!productItemId || !UUID_PATTERN.test(productItemId)) {
-        fieldErrors[`${prefix}.productItemId`] = "Pilih produk ASIHJAYA yang valid.";
+        fieldErrors[`${prefix}.productItemId`] =
+          "Pilih produk ASIHJAYA yang valid.";
       } else if (seenProductItemIds.has(productItemId)) {
-        fieldErrors[`${prefix}.productItemId`] = "Produk ASIHJAYA yang sama tidak boleh ditambahkan dua kali.";
+        fieldErrors[`${prefix}.productItemId`] =
+          "Produk ASIHJAYA yang sama tidak boleh ditambahkan dua kali.";
       } else {
         seenProductItemIds.add(productItemId);
       }
     }
 
-    if (source === "external") {
-      if (!productMasterId || !UUID_PATTERN.test(productMasterId)) {
-        fieldErrors[`${prefix}.productMasterId`] = "Pilih Product Master untuk produk eksternal.";
-      }
-      if (!displayName || displayName.length < 2 || displayName.length > 220) {
-        fieldErrors[`${prefix}.displayName`] = "Nama produk eksternal harus 2–220 karakter.";
-      }
+    const displayName = normalizeNullableText(rawItem.displayName, 220);
+    if (!displayName || displayName.length < 2) {
+      fieldErrors[`${prefix}.displayName`] =
+        "Nama Produk wajib diisi minimal 2 karakter.";
+    }
+
+    const categoryId = String(rawItem.categoryId ?? "").trim();
+    if (!UUID_PATTERN.test(categoryId)) {
+      fieldErrors[`${prefix}.categoryId`] = "Pilih Kategori yang valid.";
+    }
+
+    const processingType = rawItem.processingType;
+    if (!PROCESSING_TYPES.has(processingType as BuybackProcessingType)) {
+      fieldErrors[`${prefix}.processingType`] =
+        "Pilih kondisi barang: Cuci atau Rongsok.";
     }
 
     const weightGram = normalizeBuybackDecimal(rawItem.weightGram);
     const purityPercent = normalizeBuybackPurity(rawItem.purityPercent, 100);
-    const exchangePurityPercent = normalizeBuybackPurity(
-      rawItem.exchangePurityPercent,
-      999.999,
-    );
-    const deductionPerGram = normalizeBuybackMoney(rawItem.deductionPerGram, {
-      allowZero: true,
-    });
-    const buybackPricePerGram = normalizeBuybackMoney(rawItem.buybackPricePerGram);
+    const totalAmountText = normalizeBuybackMoney(rawItem.totalAmount);
     const color = String(rawItem.color ?? "").trim();
 
-    if (!weightGram) fieldErrors[`${prefix}.weightGram`] = "Berat wajib > 0 dengan maksimal 3 desimal.";
-    if (!purityPercent) fieldErrors[`${prefix}.purityPercent`] = "Kadar Persen wajib > 0 dan maksimal 100.";
-    if (!exchangePurityPercent) fieldErrors[`${prefix}.exchangePurityPercent`] = "Kadar Tukaran wajib > 0 dan maksimal 999,999.";
-    if (color.length < 1 || color.length > 64) fieldErrors[`${prefix}.color`] = "Warna wajib diisi, maksimal 64 karakter.";
-    if (deductionPerGram === null) fieldErrors[`${prefix}.deductionPerGram`] = "Potongan/Gram harus nominal Rupiah ≥ 0.";
-    if (!buybackPricePerGram) fieldErrors[`${prefix}.buybackPricePerGram`] = "Harga Buyback/Gram wajib lebih besar dari Rp 0.";
-
-    if (
-      !weightGram ||
-      !purityPercent ||
-      !exchangePurityPercent ||
-      deductionPerGram === null ||
-      !buybackPricePerGram ||
-      !color
-    ) {
-      continue;
+    if (!weightGram) {
+      fieldErrors[`${prefix}.weightGram`] =
+        "Berat wajib lebih besar dari 0 dengan maksimal 3 desimal.";
+    }
+    if (!purityPercent) {
+      fieldErrors[`${prefix}.purityPercent`] =
+        "Kadar wajib lebih besar dari 0 dan maksimal 100%.";
+    }
+    if (color.length < 1 || color.length > 64) {
+      fieldErrors[`${prefix}.color`] =
+        "Warna wajib diisi, maksimal 64 karakter.";
+    }
+    if (!totalAmountText) {
+      fieldErrors[`${prefix}.totalAmount`] =
+        "Total Harga Buyback wajib lebih besar dari Rp 0.";
     }
 
-    const amounts = calculateBuybackLine({
-      weightGram,
-      pricePerGram: buybackPricePerGram,
-      deductionPerGram,
-    });
-    if (!amounts || amounts.finalAmount <= 0) {
-      fieldErrors[`${prefix}.buybackPricePerGram`] =
-        "Nilai Buyback harus tetap lebih besar dari Rp 0 setelah potongan.";
+    if (
+      !displayName ||
+      displayName.length < 2 ||
+      !UUID_PATTERN.test(categoryId) ||
+      !PROCESSING_TYPES.has(processingType as BuybackProcessingType) ||
+      !weightGram ||
+      !purityPercent ||
+      !color ||
+      !totalAmountText
+    ) {
       continue;
     }
 
@@ -197,15 +201,13 @@ function normalizePayload(raw: BuybackSubmitPayload):
       clientKey,
       source,
       productItemId: source === "asihjaya" ? productItemId : null,
-      productMasterId: source === "external" ? productMasterId : null,
-      displayName: source === "external" ? displayName : null,
+      displayName,
+      categoryId,
+      processingType: processingType as BuybackProcessingType,
       weightGram,
       purityPercent,
-      exchangePurityPercent,
       color,
-      deductionPerGram,
-      buybackPricePerGram,
-      ...amounts,
+      finalAmount: Number(totalAmountText),
     });
   }
 
@@ -221,20 +223,23 @@ function normalizePayload(raw: BuybackSubmitPayload):
     }
     const typedMethod = method as BuybackPayoutMethod;
     if (seenPayoutMethods.has(typedMethod)) {
-      fieldErrors[`payouts.${index}.method`] = "Metode payout yang sama hanya boleh digunakan sekali.";
+      fieldErrors[`payouts.${index}.method`] =
+        "Metode payout yang sama hanya boleh digunakan sekali.";
       continue;
     }
     seenPayoutMethods.add(typedMethod);
 
     const amountText = normalizeBuybackMoney(payout.amount);
     if (!amountText) {
-      fieldErrors[`payouts.${index}.amount`] = "Nominal payout harus lebih besar dari Rp 0.";
+      fieldErrors[`payouts.${index}.amount`] =
+        "Nominal payout harus lebih besar dari Rp 0.";
       continue;
     }
 
     const reference = normalizeNullableText(payout.reference, 160);
     if (String(payout.reference ?? "").trim().length > 160) {
-      fieldErrors[`payouts.${index}.reference`] = "Referensi maksimal 160 karakter.";
+      fieldErrors[`payouts.${index}.reference`] =
+        "Referensi maksimal 160 karakter.";
       continue;
     }
 
@@ -245,17 +250,28 @@ function normalizePayload(raw: BuybackSubmitPayload):
     });
   }
 
-  const totalAmount = normalizedItems.reduce((total, item) => total + item.finalAmount, 0);
-  const payoutTotal = normalizedPayouts.reduce((total, payout) => total + payout.amount, 0);
+  const totalAmount = normalizedItems.reduce(
+    (total, item) => total + item.finalAmount,
+    0,
+  );
+  const payoutTotal = normalizedPayouts.reduce(
+    (total, payout) => total + payout.amount,
+    0,
+  );
 
   if (normalizedPayouts.length === 0) {
     fieldErrors.payouts = "Isi minimal satu metode payout Buyback.";
   } else if (payoutTotal !== totalAmount) {
-    fieldErrors.payouts = "Total payout harus sama persis dengan Total Buyback.";
+    fieldErrors.payouts =
+      "Total payout harus sama persis dengan Total Buyback.";
   }
 
   if (Object.keys(fieldErrors).length > 0) {
-    return { ok: false, message: "Periksa kembali data Buyback.", fieldErrors };
+    return {
+      ok: false,
+      message: "Periksa kembali data Buyback.",
+      fieldErrors,
+    };
   }
 
   return {
@@ -276,7 +292,11 @@ export async function searchBuybackExistingItemsAction(
 ): Promise<BuybackExistingSearchResult> {
   const auth = await requirePermission("buybacks.create");
   if (!hasPermission(auth, "pos.access")) {
-    return { status: "error", message: "User ini belum memiliki akses POS.", items: [] };
+    return {
+      status: "error",
+      message: "User ini belum memiliki akses POS.",
+      items: [],
+    };
   }
 
   try {
@@ -305,7 +325,11 @@ export async function completeBuybackAction(
   }
 
   const rawPayload = parseRawPayload(formData);
-  if (!rawPayload) return failure("Payload Buyback tidak valid. Refresh halaman lalu coba kembali.");
+  if (!rawPayload) {
+    return failure(
+      "Payload Buyback tidak valid. Refresh halaman lalu coba kembali.",
+    );
+  }
 
   const normalized = normalizePayload(rawPayload);
   if (!normalized.ok) {
@@ -327,68 +351,62 @@ export async function completeBuybackAction(
     }
   } catch (error) {
     if (error instanceof BuybackValidationError) {
-      return failure(error.message, {
-        idempotencyKey: error.message,
-      });
+      return failure(error.message, { idempotencyKey: error.message });
     }
     console.error("Gagal memeriksa replay Buyback:", error);
-    return failure("Buyback belum bisa diproses karena terjadi kendala sistem. Coba ulang.");
+    return failure(
+      "Buyback belum bisa diproses karena terjadi kendala sistem. Coba ulang.",
+    );
   }
 
-  const externalArtifacts = new Map<string, BuybackExternalArtifact>();
-  const externalImages = new Map<string, File | null>();
+  const itemArtifacts = new Map<string, BuybackItemArtifact>();
+  const itemImages = new Map<string, File>();
   const storedImageKeys: string[] = [];
 
-  // Validate every external image before writing any file so validation failures
-  // never leave partial runtime media behind.
   for (const item of payload.items) {
-    if (item.source !== "external") continue;
-    const imageValue = formData.get(`externalImage:${item.clientKey}`);
-    const image = imageValue instanceof File && imageValue.size > 0 ? imageValue : null;
-    if (image) {
-      const validation = validateImageFile(image);
-      if (!validation.valid) {
-        return failure("Foto produk eksternal tidak valid.", {
-          [`items.${item.clientKey}.image`]: validation.message,
-        });
-      }
+    const imageValue = formData.get(`itemImage:${item.clientKey}`);
+    const image =
+      imageValue instanceof File && imageValue.size > 0 ? imageValue : null;
+
+    if (!image) {
+      return failure("Foto kondisi barang wajib diambil sebelum Buyback selesai.", {
+        [`items.${item.clientKey}.image`]: "Foto kondisi barang wajib diisi.",
+      });
     }
-    externalImages.set(item.clientKey, image);
+
+    const validation = validateImageFile(image);
+    if (!validation.valid) {
+      return failure("Foto kondisi barang tidak valid.", {
+        [`items.${item.clientKey}.image`]: validation.message,
+      });
+    }
+    itemImages.set(item.clientKey, image);
   }
 
   try {
     for (const item of payload.items) {
-      if (item.source !== "external") continue;
-
-      const itemId = randomUUID();
-      const image = externalImages.get(item.clientKey) ?? null;
-      let imageKey: string | null = null;
-
-      if (image) {
-        imageKey = await storeImageFile({
-          file: image,
-          organizationId: auth.organization.id,
-          entityType: "items",
-          entityId: itemId,
-        });
-        storedImageKeys.push(imageKey);
+      const buybackItemId = randomUUID();
+      const image = itemImages.get(item.clientKey);
+      if (!image) {
+        throw new Error("BUYBACK_ITEM_IMAGE_MISSING_AFTER_VALIDATION");
       }
 
-      externalArtifacts.set(item.clientKey, { itemId, imageKey });
+      const imageKey = await storeImageFile({
+        file: image,
+        organizationId: auth.organization.id,
+        entityType: "items",
+        entityId: buybackItemId,
+      });
+      storedImageKeys.push(imageKey);
+      itemArtifacts.set(item.clientKey, { buybackItemId, imageKey });
     }
 
     const requestMetadata = await getRequestMetadata();
-    const activeSaleRates = await getActiveGoldPriceRateMap(auth.organization.id);
-    const activeSaleRateByPurity = new Map(
-      Array.from(activeSaleRates.entries()).map(([key, value]) => [key, value.ratePerGram]),
-    );
-
     const result = await completeBuybackTransaction({
       auth,
       payload,
       requestMetadata,
-      externalArtifacts,
-      activeSaleRateByPurity,
+      itemArtifacts,
     });
 
     if (result.replayed) {
@@ -415,10 +433,11 @@ export async function completeBuybackAction(
     }
 
     console.error("Gagal menyelesaikan Buyback:", error);
-    return failure("Buyback gagal diselesaikan karena terjadi kendala sistem. Coba ulang.");
+    return failure(
+      "Buyback gagal diselesaikan karena terjadi kendala sistem. Coba ulang.",
+    );
   }
 }
-
 
 function redirectBuybackDetailWithFeedback({
   buybackId,
@@ -535,7 +554,8 @@ export async function reprintBuybackReceiptAction(formData: FormData) {
     redirectBuybackDetailWithFeedback({
       buybackId,
       type: "error",
-      message: "Cetak ulang nota Buyback gagal dibuat. Coba ulang atau cek Hardware Hub.",
+      message:
+        "Cetak ulang nota Buyback gagal dibuat. Coba ulang atau cek Hardware Hub.",
     });
   }
 

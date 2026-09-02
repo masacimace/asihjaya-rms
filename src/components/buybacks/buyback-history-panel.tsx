@@ -6,9 +6,10 @@ import {
   FileText,
   PackageCheck,
   Printer,
-  RefreshCcw,
+  Sparkles,
   UserRound,
   WalletCards,
+  Wrench,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -18,6 +19,7 @@ import type {
   BuybackDetail,
   BuybackHistoryData,
   BuybackPayoutMethod,
+  BuybackProcessingType,
 } from "@/features/buybacks/contracts";
 import { formatCurrency } from "@/features/pos/payment-draft";
 
@@ -25,6 +27,11 @@ const payoutLabels: Record<BuybackPayoutMethod, string> = {
   cash: "Cash",
   bank_transfer: "Transfer",
   customer_deposit: "Dana Titip",
+};
+
+const processingLabels: Record<BuybackProcessingType, string> = {
+  cleaning: "Cuci",
+  recondition: "Rongsok",
 };
 
 function formatDateTime(value: Date | null, timeZone: string) {
@@ -47,7 +54,9 @@ function getItemName(item: BuybackDetail["items"][number]) {
   return (
     readSnapshot(item.snapshot, "displayName") ??
     readSnapshot(item.snapshot, "productMasterName") ??
-    item.currentDisplayName
+    readSnapshot(item.snapshot, "originalProductMasterName") ??
+    item.currentDisplayName ??
+    "Produk Buyback"
   );
 }
 
@@ -93,11 +102,12 @@ export function BuybackHistoryPanel({
     <section className="rounded-2xl border border-[var(--border)] bg-white">
       <div className="flex flex-col gap-3 border-b border-[var(--border)] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div>
-          <h2 className="mt-1 text-base font-semibold text-neutral-950">
+          <h2 className="text-base font-semibold text-neutral-950">
             Transaksi Buyback terbaru
           </h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Detail menyimpan snapshot item, valuasi, payout, dan status nota.
+            Barang Buyback baru menunggu proses Cuci/Rongsok sebelum tersedia di
+            POS.
           </p>
         </div>
         <div className="rounded-xl bg-neutral-50 px-3 py-2 text-xs font-semibold text-neutral-700">
@@ -125,12 +135,13 @@ export function BuybackHistoryPanel({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
+          <table className="w-full min-w-[940px] text-left text-sm">
             <thead className="bg-neutral-50 text-xs uppercase text-[var(--muted)]">
               <tr>
                 <th className="px-4 py-3 sm:px-5">No. Buyback</th>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Item</th>
+                <th className="px-4 py-3">Proses</th>
                 <th className="px-4 py-3">Payout</th>
                 <th className="px-4 py-3 text-right">Total</th>
                 <th className="px-4 py-3 sm:px-5">Aksi</th>
@@ -163,6 +174,17 @@ export function BuybackHistoryPanel({
                       <PackageCheck className="size-3.5" />
                       {row.itemCount} Item
                     </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    {row.pendingProcessingCount > 0 ? (
+                      <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                        {row.pendingProcessingCount} menunggu proses
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                        Tidak ada antrean
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-wrap gap-1.5">
@@ -222,8 +244,8 @@ function BuybackDetailPanel({
               {detail.buybackNumber}
             </h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              {formatDateTime(detail.completedAt ?? detail.createdAt, timeZone)}{" "}
-              · {detail.outletName} · {detail.registerName}
+              {formatDateTime(detail.completedAt ?? detail.createdAt, timeZone)} ·{" "}
+              {detail.outletName} · {detail.registerName}
             </p>
           </div>
 
@@ -276,13 +298,17 @@ function BuybackDetailPanel({
             icon={<PackageCheck className="size-4" />}
             label="Jumlah item"
             value={`${detail.itemCount} item`}
-            helper="Barang sudah masuk inventory"
+            helper={
+              detail.pendingProcessingCount > 0
+                ? `${detail.pendingProcessingCount} menunggu Cuci/Rongsok`
+                : "Tidak ada antrean proses"
+            }
           />
           <InfoCard
             icon={<CircleDollarSign className="size-4" />}
             label="Total Buyback"
             value={formatCurrency(Number(detail.totalAmount))}
-            helper="Nilai final setelah potongan"
+            helper="Nominal final yang disepakati"
           />
           <InfoCard
             icon={<Printer className="size-4" />}
@@ -295,16 +321,10 @@ function BuybackDetailPanel({
             helper={
               detail.receiptJob
                 ? `Attempt ${detail.receiptJob.attempts}`
-                : "Gunakan Cetak Ulang Nota bila diperlukan"
+                : "Cetak ulang bila diperlukan"
             }
           />
         </div>
-
-        {detail.receiptJob?.lastErrorMessage ? (
-          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Error printer terakhir: {detail.receiptJob.lastErrorMessage}
-          </div>
-        ) : null}
 
         {detail.notes ? (
           <div className="mt-4 rounded-xl bg-neutral-50 p-3 text-sm text-neutral-700">
@@ -317,63 +337,85 @@ function BuybackDetailPanel({
         <div className="border-b border-[var(--border)] p-4 sm:p-5">
           <h3 className="font-semibold text-neutral-950">Item Buyback</h3>
           <p className="mt-1 text-xs text-[var(--muted)]">
-            Data di bawah berasal dari snapshot transaksi Buyback, bukan nilai
-            produk yang bisa berubah kemudian.
+            Snapshot di bawah adalah kondisi barang ketika diterima dari customer.
           </p>
         </div>
         <div className="divide-y divide-[var(--border)]">
-          {detail.items.map((item) => (
-            <div
-              key={item.id}
-              className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_auto]"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-semibold text-neutral-950">
-                    {getItemName(item)}
-                  </p>
-                  <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-700">
-                    {item.source === "asihjaya"
-                      ? "Produk ASIHJAYA"
-                      : "Produk Eksternal"}
-                  </span>
+          {detail.items.map((item) => {
+            const processingType = item.processingType;
+            const ProcessingIcon =
+              processingType === "recondition" ? Wrench : Sparkles;
+            const categoryName = readSnapshot(item.snapshot, "categoryName");
+            const color = readSnapshot(item.snapshot, "color");
+            const snapshotSku = readSnapshot(item.snapshot, "sku");
+            const snapshotBarcode = readSnapshot(item.snapshot, "barcode");
+
+            return (
+              <div
+                key={item.id}
+                className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_auto]"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-neutral-950">
+                      {getItemName(item)}
+                    </p>
+                    <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-700">
+                      {item.source === "asihjaya"
+                        ? "Produk ASIHJAYA"
+                        : "Barang Luar"}
+                    </span>
+                    {processingType ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                        <ProcessingIcon className="size-3" />
+                        {processingLabels[processingType]} ·{" "}
+                        {item.processingStatus === "completed"
+                          ? "Selesai"
+                          : "Belum diproses"}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-600">
+                        Transaksi legacy
+                      </span>
+                    )}
+                  </div>
+
+                  {snapshotSku || item.currentSku || snapshotBarcode || item.currentBarcode ? (
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {snapshotSku ?? item.currentSku ?? "-"} ·{" "}
+                      {snapshotBarcode ?? item.currentBarcode ?? "-"}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-neutral-700">
+                    {categoryName ? (
+                      <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
+                        {categoryName}
+                      </span>
+                    ) : null}
+                    <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
+                      Berat {item.weightGram} gr
+                    </span>
+                    <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
+                      Kadar {item.purityPercent}%
+                    </span>
+                    {color ? (
+                      <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
+                        Warna {color}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  {readSnapshot(item.snapshot, "sku") ?? item.currentSku} ·{" "}
-                  {readSnapshot(item.snapshot, "barcode") ??
-                    item.currentBarcode}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-neutral-700">
-                  <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
-                    Berat {item.weightGram} gr
-                  </span>
-                  <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
-                    Kadar {item.purityPercent}%
-                  </span>
-                  <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
-                    Kadar tukaran {item.exchangePurityPercent}%
-                  </span>
-                  <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
-                    Harga/Gr {formatCurrency(Number(item.buybackPricePerGram))}
-                  </span>
-                  <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
-                    Potongan/Gr {formatCurrency(Number(item.deductionPerGram))}
-                  </span>
+
+                <div className="text-left lg:text-right">
+                  <p className="text-xs text-[var(--muted)]">Total Harga</p>
+                  <p className="mt-1 text-lg font-semibold text-neutral-950">
+                    {formatCurrency(Number(item.finalAmount))}
+                  </p>
                 </div>
               </div>
-              <div className="text-left lg:text-right">
-                <p className="text-xs text-[var(--muted)]">Nilai final</p>
-                <p className="mt-1 text-lg font-semibold text-neutral-950">
-                  {formatCurrency(Number(item.finalAmount))}
-                </p>
-                {Number(item.deductionAmount) > 0 ? (
-                  <p className="mt-1 text-xs text-red-600">
-                    Potongan -{formatCurrency(Number(item.deductionAmount))}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -409,6 +451,13 @@ function BuybackDetailPanel({
           })}
         </div>
       </section>
+
+      <Link
+        href="/pos/buyback"
+        className="inline-flex items-center rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800"
+      >
+        Kembali ke Buyback
+      </Link>
     </div>
   );
 }
@@ -426,12 +475,12 @@ function InfoCard({
 }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-neutral-50/60 p-3">
-      <div className="flex items-center gap-2 text-xs font-semibold text-[var(--muted)]">
+      <div className="flex items-center gap-2 text-xs font-semibold text-neutral-600">
         <span className="text-[var(--accent)]">{icon}</span>
         {label}
       </div>
       <p className="mt-2 font-semibold text-neutral-950">{value}</p>
-      <p className="mt-1 text-xs text-[var(--muted)]">{helper}</p>
+      <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">{helper}</p>
     </div>
   );
 }

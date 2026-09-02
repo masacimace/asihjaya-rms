@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditLogs,
+  buybackItemProcessings,
   buybackItems,
   buybackPayouts,
   buybacks,
@@ -10,22 +11,16 @@ import {
   customerDepositLedger,
   customers,
   inventoryMovements,
-  itemBarcodes,
   productCategories,
   productItems,
   productMasters,
   registers,
   shifts,
 } from "@/db/schema";
-import { generateBuybackNumber } from "@/features/buybacks/numbering";
 import type { NormalizedBuybackPayload } from "@/features/buybacks/contracts";
+import { generateBuybackNumber } from "@/features/buybacks/numbering";
 import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
-import { getNextProductItemIdentifiers } from "@/features/inventory/product-item-identifiers";
 import { getDefaultPosRegisterCondition } from "@/features/pos/context";
-import {
-  calculateJewelryBasePrice,
-  normalizePurityKey,
-} from "@/features/pricing/metal-price-rates";
 import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { buildBuybackReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2InTransaction } from "@/lib/hardware/job-producer-v2";
@@ -43,9 +38,9 @@ export type BuybackRequestMetadata = {
   userAgent: string | null;
 };
 
-export type BuybackExternalArtifact = {
-  itemId: string;
-  imageKey: string | null;
+export type BuybackItemArtifact = {
+  buybackItemId: string;
+  imageKey: string;
 };
 
 export type CompleteBuybackResult = {
@@ -79,7 +74,7 @@ function sameNullableText(left: unknown, right: unknown) {
 }
 
 function sameNumeric(left: unknown, right: unknown) {
-  return Number(left) === Number(right);
+  return Number(left ?? 0) === Number(right ?? 0);
 }
 
 async function getExistingBuybackReplayResultInTransaction(
@@ -109,20 +104,23 @@ async function getExistingBuybackReplayResultInTransaction(
   const [storedItems, storedPayouts] = await Promise.all([
     transaction
       .select({
+        id: buybackItems.id,
         productItemId: buybackItems.productItemId,
         source: buybackItems.source,
         lineNumber: buybackItems.lineNumber,
         weightGram: buybackItems.weightGram,
         purityPercent: buybackItems.purityPercent,
-        exchangePurityPercent: buybackItems.exchangePurityPercent,
-        buybackPricePerGram: buybackItems.buybackPricePerGram,
-        deductionPerGram: buybackItems.deductionPerGram,
         baseAmount: buybackItems.baseAmount,
         deductionAmount: buybackItems.deductionAmount,
         finalAmount: buybackItems.finalAmount,
         snapshot: buybackItems.snapshot,
+        processingType: buybackItemProcessings.processingType,
       })
       .from(buybackItems)
+      .innerJoin(
+        buybackItemProcessings,
+        eq(buybackItemProcessings.buybackItemId, buybackItems.id),
+      )
       .where(eq(buybackItems.buybackId, existing.id))
       .orderBy(asc(buybackItems.lineNumber)),
     transaction
@@ -145,7 +143,12 @@ async function getExistingBuybackReplayResultInTransaction(
   if (matches) {
     for (const [index, incoming] of payload.items.entries()) {
       const stored = storedItems[index];
-      if (!stored || stored.lineNumber !== index + 1 || stored.source !== incoming.source) {
+      if (
+        !stored ||
+        stored.lineNumber !== index + 1 ||
+        stored.source !== incoming.source ||
+        stored.processingType !== incoming.processingType
+      ) {
         matches = false;
         break;
       }
@@ -154,20 +157,18 @@ async function getExistingBuybackReplayResultInTransaction(
       const identityMatches =
         incoming.source === "asihjaya"
           ? stored.productItemId === incoming.productItemId
-          : readSnapshotText(snapshot, "productMasterId") === incoming.productMasterId &&
-            sameNullableText(readSnapshotText(snapshot, "displayName"), incoming.displayName);
+          : stored.productItemId === null;
 
       if (
         !identityMatches ||
+        !sameNullableText(readSnapshotText(snapshot, "displayName"), incoming.displayName) ||
+        readSnapshotText(snapshot, "categoryId") !== incoming.categoryId ||
         !sameNumeric(stored.weightGram, incoming.weightGram) ||
         !sameNumeric(stored.purityPercent, incoming.purityPercent) ||
-        !sameNumeric(stored.exchangePurityPercent, incoming.exchangePurityPercent) ||
-        !sameNumeric(stored.buybackPricePerGram, incoming.buybackPricePerGram) ||
-        !sameNumeric(stored.deductionPerGram, incoming.deductionPerGram) ||
-        !sameNumeric(stored.baseAmount, incoming.baseAmount) ||
-        !sameNumeric(stored.deductionAmount, incoming.deductionAmount) ||
-        !sameNumeric(stored.finalAmount, incoming.finalAmount) ||
-        !sameNullableText(readSnapshotText(snapshot, "color"), incoming.color)
+        !sameNullableText(readSnapshotText(snapshot, "color"), incoming.color) ||
+        !sameNumeric(stored.baseAmount, incoming.finalAmount) ||
+        !sameNumeric(stored.deductionAmount, 0) ||
+        !sameNumeric(stored.finalAmount, incoming.finalAmount)
       ) {
         matches = false;
         break;
@@ -228,14 +229,12 @@ export async function completeBuybackTransaction({
   auth,
   payload,
   requestMetadata,
-  externalArtifacts,
-  activeSaleRateByPurity,
+  itemArtifacts,
 }: {
   auth: BuybackServiceAuth;
   payload: NormalizedBuybackPayload;
   requestMetadata: BuybackRequestMetadata;
-  externalArtifacts: Map<string, BuybackExternalArtifact>;
-  activeSaleRateByPurity: Map<string, string>;
+  itemArtifacts: Map<string, BuybackItemArtifact>;
 }): Promise<CompleteBuybackResult> {
   const primaryOutlet = getPrimaryOutlet(auth);
   if (!primaryOutlet) {
@@ -272,10 +271,7 @@ export async function completeBuybackTransaction({
     }
 
     const [activeShift] = await transaction
-      .select({
-        id: shifts.id,
-        expectedCash: shifts.expectedCash,
-      })
+      .select({ id: shifts.id, expectedCash: shifts.expectedCash })
       .from(shifts)
       .where(
         and(
@@ -319,11 +315,6 @@ export async function completeBuybackTransaction({
     const cashPayout =
       payload.payouts.find((payout) => payout.method === "cash")?.amount ?? 0;
 
-    // Payout Cash tetap boleh diproses walaupun expected cash shift menjadi negatif.
-    // expectedCash adalah saldo kas tercatat/reconciliation, bukan hard limit uang fisik.
-    // Cash movement Buyback tetap dicatat sebagai cash_out dan Closing Shift akan
-    // merekonsiliasi expected cash terhadap uang fisik aktual.
-
     const existingItemIds = payload.items
       .filter((item) => item.source === "asihjaya")
       .map((item) => item.productItemId!)
@@ -355,14 +346,20 @@ export async function completeBuybackTransaction({
               productCode: productMasters.code,
               productMasterName: productMasters.name,
               productStatus: productMasters.status,
-              categoryId: productCategories.id,
-              categoryCode: productCategories.code,
-              categoryName: productCategories.name,
-              categoryIsActive: productCategories.isActive,
+              originalCategoryId: productCategories.id,
+              originalCategoryCode: productCategories.code,
+              originalCategoryName: productCategories.name,
+              originalCategoryIsActive: productCategories.isActive,
             })
             .from(productItems)
-            .innerJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
-            .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
+            .innerJoin(
+              productMasters,
+              eq(productItems.productMasterId, productMasters.id),
+            )
+            .innerJoin(
+              productCategories,
+              eq(productMasters.categoryId, productCategories.id),
+            )
             .where(
               and(
                 eq(productItems.organizationId, auth.organization.id),
@@ -391,54 +388,47 @@ export async function completeBuybackTransaction({
           `${row.sku} sudah tidak berada pada status Terjual/Customer dan tidak dapat di-Buyback lagi.`,
         );
       }
-      if (row.productStatus !== "active" || !row.categoryIsActive) {
+      if (row.productStatus !== "active" || !row.originalCategoryIsActive) {
         throw new BuybackValidationError(
           `${row.sku} memakai Product Master/Kategori nonaktif. Aktifkan terlebih dahulu sebelum Buyback.`,
         );
       }
     }
 
-    const externalMasterIds = Array.from(
-      new Set(
-        payload.items
-          .filter((item) => item.source === "external")
-          .map((item) => item.productMasterId!)
-          .filter(Boolean),
-      ),
+    const categoryIds = Array.from(
+      new Set(payload.items.map((item) => item.categoryId)),
     );
-    const externalMasterRows =
-      externalMasterIds.length > 0
-        ? await transaction
-            .select({
-              id: productMasters.id,
-              code: productMasters.code,
-              name: productMasters.name,
-              status: productMasters.status,
-              categoryId: productCategories.id,
-              categoryCode: productCategories.code,
-              categoryName: productCategories.name,
-              categoryIsActive: productCategories.isActive,
-            })
-            .from(productMasters)
-            .innerJoin(productCategories, eq(productMasters.categoryId, productCategories.id))
-            .where(
-              and(
-                eq(productMasters.organizationId, auth.organization.id),
-                inArray(productMasters.id, externalMasterIds),
-              ),
-            )
-        : [];
+    const categoryRows = await transaction
+      .select({
+        id: productCategories.id,
+        code: productCategories.code,
+        name: productCategories.name,
+        isActive: productCategories.isActive,
+      })
+      .from(productCategories)
+      .where(
+        and(
+          eq(productCategories.organizationId, auth.organization.id),
+          inArray(productCategories.id, categoryIds),
+        ),
+      );
 
-    const externalMasterById = new Map(externalMasterRows.map((row) => [row.id, row]));
-    if (externalMasterRows.length !== externalMasterIds.length) {
+    if (categoryRows.length !== categoryIds.length) {
       throw new BuybackValidationError(
-        "Sebagian Product Master produk eksternal tidak ditemukan.",
+        "Sebagian kategori item Buyback tidak ditemukan. Pilih ulang kategori.",
       );
     }
-    for (const row of externalMasterRows) {
-      if (row.status !== "active" || !row.categoryIsActive) {
+    if (categoryRows.some((category) => !category.isActive)) {
+      throw new BuybackValidationError(
+        "Kategori nonaktif tidak dapat dipakai untuk item Buyback.",
+      );
+    }
+    const categoryById = new Map(categoryRows.map((row) => [row.id, row]));
+
+    for (const item of payload.items) {
+      if (!itemArtifacts.has(item.clientKey)) {
         throw new BuybackValidationError(
-          `${row.code} belum aktif dan tidak dapat dipakai untuk produk Buyback eksternal.`,
+          "Foto kondisi salah satu item Buyback belum tersimpan. Tambahkan ulang foto item.",
         );
       }
     }
@@ -471,31 +461,39 @@ export async function completeBuybackTransaction({
 
     if (!buyback) throw new Error("BUYBACK_INSERT_FAILED");
 
-    const completedItems: Array<{
+    const reacquiredItems: Array<{
       productItemId: string;
       sku: string;
-      source: "asihjaya" | "external";
       lineNumber: number;
-      before: Record<string, unknown> | null;
+      before: Record<string, unknown>;
       after: Record<string, unknown>;
+    }> = [];
+    const processingAuditRows: Array<{
+      buybackItemId: string;
+      processingType: "cleaning" | "recondition";
+      source: "asihjaya" | "external";
+      productItemId: string | null;
+      lineNumber: number;
     }> = [];
 
     for (const [index, item] of payload.items.entries()) {
       const lineNumber = index + 1;
-      const salePurityKey = normalizePurityKey(item.purityPercent);
-      const activeSaleRate = salePurityKey
-        ? activeSaleRateByPurity.get(salePurityKey) ?? null
-        : null;
-      const compatibilitySellingAmount = activeSaleRate
-        ? calculateJewelryBasePrice({
-            weightGram: item.weightGram,
-            ratePerGram: activeSaleRate,
-          })
-        : null;
+      const artifact = itemArtifacts.get(item.clientKey);
+      const category = categoryById.get(item.categoryId);
+      if (!artifact || !category) {
+        throw new BuybackValidationError(
+          "Data item Buyback tidak lengkap. Tambahkan ulang item.",
+        );
+      }
+
+      let productItemId: string | null = null;
+      let snapshot: Record<string, unknown>;
 
       if (item.source === "asihjaya") {
         const existing = existingById.get(item.productItemId!);
-        if (!existing) throw new BuybackValidationError("Item Buyback tidak ditemukan.");
+        if (!existing) {
+          throw new BuybackValidationError("Item Buyback tidak ditemukan.");
+        }
 
         const claimed = await transaction
           .update(productItems)
@@ -503,16 +501,12 @@ export async function completeBuybackTransaction({
             currentOutletId: primaryOutlet.id,
             weightGram: item.weightGram,
             purityPercent: item.purityPercent,
-            exchangePurityPercent: item.exchangePurityPercent,
             color: item.color,
             costAmount: String(item.finalAmount),
-            sellingAmount:
-              compatibilitySellingAmount === null
-                ? null
-                : String(compatibilitySellingAmount),
-            pricePerGram: activeSaleRate,
-            deductionPerGram: item.deductionPerGram,
-            availability: "available",
+            sellingAmount: null,
+            pricePerGram: null,
+            deductionPerGram: null,
+            availability: "processing",
             condition: "used",
             locationState: "outlet",
             updatedAt: now,
@@ -534,63 +528,39 @@ export async function completeBuybackTransaction({
           );
         }
 
-        const after = {
-          currentOutletId: primaryOutlet.id,
-          weightGram: item.weightGram,
-          purityPercent: item.purityPercent,
-          exchangePurityPercent: item.exchangePurityPercent,
-          color: item.color,
-          costAmount: String(item.finalAmount),
-          deductionPerGram: item.deductionPerGram,
-          availability: "available",
-          condition: "used",
-          locationState: "outlet",
-        };
-
-        await transaction.insert(buybackItems).values({
-          buybackId: buyback.id,
-          productItemId: existing.id,
+        productItemId = existing.id;
+        snapshot = {
           source: "asihjaya",
-          lineNumber,
+          sku: existing.sku,
+          barcode: existing.barcode,
+          qrValue: existing.qrValue,
+          serialNumber: existing.serialNumber,
+          originalProductMasterId: existing.productMasterId,
+          originalProductCode: existing.productCode,
+          originalProductMasterName: existing.productMasterName,
+          originalDisplayName: existing.displayName,
+          originalCategoryId: existing.originalCategoryId,
+          originalCategoryCode: existing.originalCategoryCode,
+          originalCategoryName: existing.originalCategoryName,
+          displayName: item.displayName,
+          categoryId: category.id,
+          categoryCode: category.code,
+          categoryName: category.name,
+          storedWeightGram: existing.weightGram,
           weightGram: item.weightGram,
+          storedPurityPercent: existing.purityPercent,
           purityPercent: item.purityPercent,
-          exchangePurityPercent: item.exchangePurityPercent,
-          buybackPricePerGram: item.buybackPricePerGram,
-          deductionPerGram: item.deductionPerGram,
-          baseAmount: String(item.baseAmount),
-          deductionAmount: String(item.deductionAmount),
-          finalAmount: String(item.finalAmount),
-          snapshot: {
-            source: "asihjaya",
-            sku: existing.sku,
-            barcode: existing.barcode,
-            qrValue: existing.qrValue,
-            serialNumber: existing.serialNumber,
-            productMasterId: existing.productMasterId,
-            productCode: existing.productCode,
-            productMasterName: existing.productMasterName,
-            displayName: existing.displayName,
-            categoryId: existing.categoryId,
-            categoryCode: existing.categoryCode,
-            categoryName: existing.categoryName,
-            storedWeightGram: existing.weightGram,
-            weightGram: item.weightGram,
-            storedPurityPercent: existing.purityPercent,
-            purityPercent: item.purityPercent,
-            storedExchangePurityPercent: existing.exchangePurityPercent,
-            exchangePurityPercent: item.exchangePurityPercent,
-            storedColor: existing.color,
-            color: item.color,
-            buybackPricePerGram: item.buybackPricePerGram,
-            deductionPerGram: item.deductionPerGram,
-            baseAmount: String(item.baseAmount),
-            deductionAmount: String(item.deductionAmount),
-            finalAmount: String(item.finalAmount),
-            previousCostAmount: existing.costAmount,
-            imageKey: existing.imageKey,
-          },
-          createdAt: now,
-        });
+          storedExchangePurityPercent: existing.exchangePurityPercent,
+          storedColor: existing.color,
+          color: item.color,
+          totalAmount: String(item.finalAmount),
+          baseAmount: String(item.finalAmount),
+          deductionAmount: "0",
+          previousCostAmount: existing.costAmount,
+          previousImageKey: existing.imageKey,
+          imageKey: artifact.imageKey,
+          processingType: item.processingType,
+        };
 
         const before = {
           currentOutletId: existing.currentOutletId,
@@ -604,161 +574,111 @@ export async function completeBuybackTransaction({
           condition: existing.condition,
           locationState: existing.locationState,
         };
-
-        completedItems.push({
+        const after = {
+          currentOutletId: primaryOutlet.id,
+          weightGram: item.weightGram,
+          purityPercent: item.purityPercent,
+          color: item.color,
+          costAmount: String(item.finalAmount),
+          sellingAmount: null,
+          pricePerGram: null,
+          deductionPerGram: null,
+          availability: "processing",
+          condition: "used",
+          locationState: "outlet",
+        };
+        reacquiredItems.push({
           productItemId: existing.id,
           sku: existing.sku,
-          source: "asihjaya",
           lineNumber,
           before,
           after,
         });
       } else {
-        const master = externalMasterById.get(item.productMasterId!);
-        const artifact = externalArtifacts.get(item.clientKey);
-        if (!master || !artifact) {
-          throw new BuybackValidationError(
-            "Data produk eksternal tidak lengkap. Tambahkan ulang item eksternal.",
-          );
-        }
-
-        const identifiers = await getNextProductItemIdentifiers((query) =>
-          transaction.execute(query),
-        );
-
-        await transaction.insert(productItems).values({
-          id: artifact.itemId,
-          organizationId: auth.organization.id,
-          productMasterId: master.id,
+        snapshot = {
+          source: "external",
           displayName: item.displayName,
-          currentOutletId: primaryOutlet.id,
-          sku: identifiers.sku,
-          barcode: identifiers.barcode,
-          qrValue: identifiers.qrValue,
+          categoryId: category.id,
+          categoryCode: category.code,
+          categoryName: category.name,
           weightGram: item.weightGram,
           purityPercent: item.purityPercent,
-          exchangePurityPercent: item.exchangePurityPercent,
-          size: null,
           color: item.color,
-          gemstone: null,
-          costAmount: String(item.finalAmount),
-          sellingAmount:
-            compatibilitySellingAmount === null
-              ? null
-              : String(compatibilitySellingAmount),
-          pricePerGram: activeSaleRate,
-          deductionPerGram: item.deductionPerGram,
-          availability: "available",
-          condition: "used",
-          locationState: "outlet",
-          locationCode: null,
+          totalAmount: String(item.finalAmount),
+          baseAmount: String(item.finalAmount),
+          deductionAmount: "0",
           imageKey: artifact.imageKey,
-          internalNotes: null,
-          isActive: true,
-          createdAt: now,
-          updatedAt: now,
-        });
-
-        await transaction.insert(itemBarcodes).values({
-          organizationId: auth.organization.id,
-          itemId: artifact.itemId,
-          barcodeValue: identifiers.barcode,
-          source: "system_generated",
-          isPrimary: true,
-          isActive: true,
-          createdBy: auth.user.id,
-        });
-
-        await transaction.insert(buybackItems).values({
-          buybackId: buyback.id,
-          productItemId: artifact.itemId,
-          source: "external",
-          lineNumber,
-          weightGram: item.weightGram,
-          purityPercent: item.purityPercent,
-          exchangePurityPercent: item.exchangePurityPercent,
-          buybackPricePerGram: item.buybackPricePerGram,
-          deductionPerGram: item.deductionPerGram,
-          baseAmount: String(item.baseAmount),
-          deductionAmount: String(item.deductionAmount),
-          finalAmount: String(item.finalAmount),
-          snapshot: {
-            source: "external",
-            sku: identifiers.sku,
-            barcode: identifiers.barcode,
-            qrValue: identifiers.qrValue,
-            productMasterId: master.id,
-            productCode: master.code,
-            productMasterName: master.name,
-            displayName: item.displayName,
-            categoryId: master.categoryId,
-            categoryCode: master.categoryCode,
-            categoryName: master.categoryName,
-            weightGram: item.weightGram,
-            purityPercent: item.purityPercent,
-            exchangePurityPercent: item.exchangePurityPercent,
-            color: item.color,
-            buybackPricePerGram: item.buybackPricePerGram,
-            deductionPerGram: item.deductionPerGram,
-            baseAmount: String(item.baseAmount),
-            deductionAmount: String(item.deductionAmount),
-            finalAmount: String(item.finalAmount),
-            imageKey: artifact.imageKey,
-          },
-          createdAt: now,
-        });
-
-        const after = {
-          productMasterId: master.id,
-          currentOutletId: primaryOutlet.id,
-          sku: identifiers.sku,
-          barcode: identifiers.barcode,
-          weightGram: item.weightGram,
-          purityPercent: item.purityPercent,
-          exchangePurityPercent: item.exchangePurityPercent,
-          color: item.color,
-          costAmount: String(item.finalAmount),
-          deductionPerGram: item.deductionPerGram,
-          availability: "available",
-          condition: "used",
-          locationState: "outlet",
-          imageKey: artifact.imageKey,
+          processingType: item.processingType,
         };
-
-        completedItems.push({
-          productItemId: artifact.itemId,
-          sku: identifiers.sku,
-          source: "external",
-          lineNumber,
-          before: null,
-          after,
-        });
       }
+
+      await transaction.insert(buybackItems).values({
+        id: artifact.buybackItemId,
+        buybackId: buyback.id,
+        productItemId,
+        source: item.source,
+        lineNumber,
+        weightGram: item.weightGram,
+        purityPercent: item.purityPercent,
+        exchangePurityPercent: null,
+        buybackPricePerGram: null,
+        deductionPerGram: "0",
+        baseAmount: String(item.finalAmount),
+        deductionAmount: "0",
+        finalAmount: String(item.finalAmount),
+        snapshot,
+        createdAt: now,
+      });
+
+      await transaction.insert(buybackItemProcessings).values({
+        buybackItemId: artifact.buybackItemId,
+        processingType: item.processingType,
+        status: "pending",
+        resultProductItemId: null,
+        resultSnapshot: null,
+        processedBy: null,
+        processedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      processingAuditRows.push({
+        buybackItemId: artifact.buybackItemId,
+        processingType: item.processingType,
+        source: item.source,
+        productItemId,
+        lineNumber,
+      });
     }
 
-    await transaction.insert(inventoryMovements).values(
-      completedItems.map((item) => ({
-        organizationId: auth.organization.id,
-        itemId: item.productItemId,
-        movementType: "buyback" as const,
-        fromOutletId: null,
-        toOutletId: primaryOutlet.id,
-        referenceType: "buyback",
-        referenceId: buyback.id,
-        reason: `Diterima melalui Buyback ${buybackNumber}.`,
-        metadata: {
-          buybackNumber,
-          source: item.source,
-          customerId: customer.id,
-          lineNumber: item.lineNumber,
-          finalAmount: String(payload.items[item.lineNumber - 1]?.finalAmount ?? 0),
-        },
-        performedBy: auth.user.id,
-        approvedBy: null,
-        occurredAt: now,
-        createdAt: now,
-      })),
-    );
+    if (reacquiredItems.length > 0) {
+      await transaction.insert(inventoryMovements).values(
+        reacquiredItems.map((item) => ({
+          organizationId: auth.organization.id,
+          itemId: item.productItemId,
+          movementType: "buyback" as const,
+          fromOutletId: null,
+          toOutletId: primaryOutlet.id,
+          referenceType: "buyback",
+          referenceId: buyback.id,
+          reason: `Diterima melalui Buyback ${buybackNumber}; menunggu pemrosesan.`,
+          metadata: {
+            buybackNumber,
+            source: "asihjaya",
+            customerId: customer.id,
+            lineNumber: item.lineNumber,
+            processingStatus: "pending",
+            finalAmount: String(
+              payload.items[item.lineNumber - 1]?.finalAmount ?? 0,
+            ),
+          },
+          performedBy: auth.user.id,
+          approvedBy: null,
+          occurredAt: now,
+          createdAt: now,
+        })),
+      );
+    }
 
     await transaction.insert(buybackPayouts).values(
       payload.payouts.map((payout) => ({
@@ -766,7 +686,7 @@ export async function completeBuybackTransaction({
         method: payout.method,
         amount: String(payout.amount),
         reference: payout.reference,
-        metadata: { source: "pos.buyback.bb1" },
+        metadata: { source: "pos.buyback.b2" },
         createdBy: auth.user.id,
         createdAt: now,
       })),
@@ -820,7 +740,7 @@ export async function completeBuybackTransaction({
         referenceId: buyback.id,
         description: `Dana Titip dari Buyback ${buybackNumber}.`,
         metadata: {
-          source: "pos.buyback.bb1",
+          source: "pos.buyback.b2",
           buybackNumber,
           totalAmount: String(payload.totalAmount),
         },
@@ -830,16 +750,13 @@ export async function completeBuybackTransaction({
       });
     }
 
-    if (completedItems.length > 0) {
+    if (reacquiredItems.length > 0) {
       await transaction.insert(auditLogs).values(
-        completedItems.map((item) => ({
+        reacquiredItems.map((item) => ({
           organizationId: auth.organization.id,
           outletId: primaryOutlet.id,
           actorUserId: auth.user.id,
-          action:
-            item.source === "asihjaya"
-              ? "product_item.reacquired_by_buyback"
-              : "product_item.created_by_buyback",
+          action: "product_item.reacquired_by_buyback",
           entityType: "product_item",
           entityId: item.productItemId,
           beforeData: item.before,
@@ -847,16 +764,44 @@ export async function completeBuybackTransaction({
           ipAddress: requestMetadata.ipAddress,
           userAgent: requestMetadata.userAgent,
           metadata: {
-            source: "pos.buyback.bb1",
+            source: "pos.buyback.b2",
             buybackId: buyback.id,
             buybackNumber,
             customerId: customer.id,
             sku: item.sku,
+            lifecycle: "processing",
           },
           createdAt: now,
         })),
       );
     }
+
+    await transaction.insert(auditLogs).values(
+      processingAuditRows.map((item) => ({
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet.id,
+        actorUserId: auth.user.id,
+        action: "buyback_item.processing_queued",
+        entityType: "buyback_item",
+        entityId: item.buybackItemId,
+        beforeData: null,
+        afterData: {
+          processingType: item.processingType,
+          processingStatus: "pending",
+          productItemId: item.productItemId,
+        },
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+        metadata: {
+          source: "pos.buyback.b2",
+          buybackId: buyback.id,
+          buybackNumber,
+          itemSource: item.source,
+          lineNumber: item.lineNumber,
+        },
+        createdAt: now,
+      })),
+    );
 
     await transaction.insert(auditLogs).values({
       organizationId: auth.organization.id,
@@ -872,6 +817,7 @@ export async function completeBuybackTransaction({
         customerCode: customer.customerCode,
         customerName: customer.fullName,
         itemCount: payload.items.length,
+        pendingProcessingCount: payload.items.length,
         totalAmount: String(payload.totalAmount),
         payouts: payload.payouts.map((payout) => ({
           method: payout.method,
@@ -882,7 +828,7 @@ export async function completeBuybackTransaction({
       ipAddress: requestMetadata.ipAddress,
       userAgent: requestMetadata.userAgent,
       metadata: {
-        source: "pos.buyback.bb1",
+        source: "pos.buyback.b2",
         registerId: register.id,
         shiftId: activeShift.id,
         idempotencyKey: payload.idempotencyKey,
