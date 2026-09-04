@@ -673,7 +673,7 @@ export function BuybackWorkspace({
                       searchExisting();
                     }
                   }}
-                  placeholder="Scan/cari SKU, barcode, QR, serial, atau nama produk..."
+                  placeholder="SKU, barcode, serial, atau nama produk"
                   className={cn(inputClassName, "pl-10")}
                 />
               </div>
@@ -1174,7 +1174,7 @@ function PayoutCard({
           </div>
           <div>
             <p className="text-sm font-semibold text-neutral-950">{title}</p>
-            <p className="mt-0.5 text-[11px] leading-4 text-[var(--muted)]">
+            <p className="mt-0.5 !text-xs leading-4 text-[var(--muted)]">
               {helper}
             </p>
           </div>
@@ -1182,7 +1182,7 @@ function PayoutCard({
         <button
           type="button"
           onClick={onFill}
-          className="shrink-0 text-[11px] font-semibold text-[var(--accent)]"
+          className="shrink-0 !text-xs font-semibold text-[var(--accent)]"
         >
           Isi sisa
         </button>

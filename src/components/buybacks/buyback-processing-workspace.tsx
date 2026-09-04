@@ -29,7 +29,10 @@ import type {
   ProductMasterCategoryOption,
   ProductMasterOption,
 } from "@/features/products/product-master-queries";
-import { formatCurrency, formatRupiahInput } from "@/features/pos/payment-draft";
+import {
+  formatCurrency,
+  formatRupiahInput,
+} from "@/features/pos/payment-draft";
 import { formatPosWeightInput } from "@/features/pos/transaction-pricing";
 import { cn } from "@/lib/utils";
 
@@ -65,11 +68,7 @@ function weightDifference(before: string, after: string | null) {
   return `${sign}${difference.toFixed(3)} gr`;
 }
 
-function ResultImageInput({
-  error,
-}: {
-  error?: string;
-}) {
+function ResultImageInput({ error }: { error?: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -236,14 +235,14 @@ function ProcessingDialog({
   const suggestedRate = useMemo(() => {
     const key = normalizePurityKey(purityPercent);
     if (!key) return null;
-    return priceRates.find((rate) => rate.purityKey === key)?.ratePerGram ?? null;
+    return (
+      priceRates.find((rate) => rate.purityKey === key)?.ratePerGram ?? null
+    );
   }, [priceRates, purityPercent]);
 
   useEffect(() => {
     if (!priceTouched) {
-      setPricePerGram(
-        suggestedRate ? formatRupiahInput(suggestedRate) : "",
-      );
+      setPricePerGram(suggestedRate ? formatRupiahInput(suggestedRate) : "");
     }
   }, [priceTouched, suggestedRate]);
 
@@ -352,7 +351,9 @@ function ProcessingDialog({
                 </p>
                 <div className="mt-4 grid gap-2 sm:grid-cols-3">
                   <div className="rounded-xl bg-white px-3 py-2">
-                    <p className="text-[11px] text-[var(--muted)]">Berat Sebelum</p>
+                    <p className="text-[11px] text-[var(--muted)]">
+                      Berat Sebelum
+                    </p>
                     <p className="mt-1 text-sm font-semibold">
                       {row.sourceWeightGram} gr
                     </p>
@@ -365,7 +366,9 @@ function ProcessingDialog({
                   </div>
                   <div className="rounded-xl bg-white px-3 py-2">
                     <p className="text-[11px] text-[var(--muted)]">Warna</p>
-                    <p className="mt-1 text-sm font-semibold">{row.sourceColor}</p>
+                    <p className="mt-1 text-sm font-semibold">
+                      {row.sourceColor}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -532,8 +535,8 @@ function ProcessingDialog({
                 ) : null}
                 <p className="mt-1.5 text-[11px] text-[var(--muted)]">
                   Rate global otomatis disarankan. Nilai ini disimpan sebagai
-                  snapshot hasil; pricing transaksi POS tetap memakai flow global
-                  rate + override yang sudah ada.
+                  snapshot hasil; pricing transaksi POS tetap memakai flow
+                  global rate + override yang sudah ada.
                 </p>
               </label>
             </div>
@@ -620,8 +623,9 @@ export function BuybackProcessingWorkspace({
     "pending",
   );
   const [query, setQuery] = useState("");
-  const [selected, setSelected] =
-    useState<BuybackProcessingQueueRow | null>(null);
+  const [selected, setSelected] = useState<BuybackProcessingQueueRow | null>(
+    null,
+  );
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const rows = useMemo(() => {
@@ -731,7 +735,7 @@ export function BuybackProcessingWorkspace({
                   type="button"
                   onClick={() => setTypeFilter(value)}
                   className={cn(
-                    "rounded-xl px-3 py-2 text-xs font-semibold",
+                    "rounded-xl px-3 py-2 !text-xs !font-semibold",
                     typeFilter === value
                       ? "bg-neutral-950 text-white"
                       : "border border-[var(--border)] bg-white text-neutral-700",
@@ -752,7 +756,7 @@ export function BuybackProcessingWorkspace({
                   type="button"
                   onClick={() => setStatusFilter(value)}
                   className={cn(
-                    "rounded-xl px-3 py-2 text-xs font-semibold",
+                    "rounded-xl px-3 py-2 !text-xs !font-semibold",
                     statusFilter === value
                       ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                       : "border border-[var(--border)] bg-white text-neutral-700",
@@ -784,7 +788,10 @@ export function BuybackProcessingWorkspace({
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
                   {rows.map((row) => (
-                    <tr key={row.id} className="align-top hover:bg-neutral-50/60">
+                    <tr
+                      key={row.id}
+                      className="align-top hover:bg-neutral-50/60"
+                    >
                       <td className="px-4 py-4 sm:px-5">
                         <p className="font-semibold text-neutral-950">
                           {row.buybackNumber}

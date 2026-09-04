@@ -43,7 +43,7 @@ export function PosPageHeader({
         className,
       )}
     >
-      <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 items-start gap-3 sm:gap-4">
           {icon ? (
             <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)] sm:size-12">

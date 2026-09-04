@@ -41,13 +41,13 @@ export default async function PosCreateProductPage() {
   return (
     <PosPageContainer>
       <section className="mb-5 rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
               <PackagePlus className="size-3.5" />
               Produk baru dari POS
             </span>
-            <h1 className="mt-3 text-2xl font-semibold text-neutral-950 sm:text-3xl">
+            <h1 className="mt-3 text-xl font-semibold text-neutral-950 sm:text-2xl">
               Tambah Produk
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">

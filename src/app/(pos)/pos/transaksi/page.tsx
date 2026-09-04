@@ -235,7 +235,7 @@ function SummaryCard({
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm text-[var(--muted)]">{title}</p>
-          <p className="mt-2 truncate text-md font-semibold text-neutral-950 sm:text-sm">
+          <p className="mt-2 truncate text-md font-semibold text-neutral-950 sm:text-xl">
             {value}
           </p>
           <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{helper}</p>
@@ -614,7 +614,8 @@ function TransactionDetailPanel({
                             Dana Titip
                           </p>
                           <p className="mt-1 text-xs text-[var(--muted)]">
-                            Saldo Dana Titip customer digunakan untuk transaksi ini.
+                            Saldo Dana Titip customer digunakan untuk transaksi
+                            ini.
                           </p>
                         </div>
                         <div className="text-left sm:text-right">
@@ -877,7 +878,9 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs font-medium text-[var(--muted)]">Outlet</p>
+                  <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+                    Outlet
+                  </p>
                   <span
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold",
@@ -904,269 +907,262 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
         }
       />
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <SummaryCard
-            title="Transaksi"
-            value={String(data.summary.totalTransactions)}
-            helper={`Filter: ${rangeLabels[data.range]}`}
-            icon={<ReceiptText className="size-5" />}
-          />
-          <SummaryCard
-            title="Total nilai"
-            value={formatMoney(data.summary.totalAmount)}
-            helper="Akumulasi transaksi yang sedang ditampilkan."
-            icon={<WalletCards className="size-5" />}
-          />
-          <SummaryCard
-            title="Item terjual"
-            value={String(data.summary.totalItems)}
-            helper="Jumlah item fisik pada transaksi tampil."
-            icon={<ShoppingBag className="size-5" />}
-          />
-        </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <SummaryCard
+          title="Transaksi"
+          value={String(data.summary.totalTransactions)}
+          helper={`Filter: ${rangeLabels[data.range]}`}
+          icon={<ReceiptText className="size-5" />}
+        />
+        <SummaryCard
+          title="Total nilai"
+          value={formatMoney(data.summary.totalAmount)}
+          helper="Akumulasi transaksi yang sedang ditampilkan."
+          icon={<WalletCards className="size-5" />}
+        />
+        <SummaryCard
+          title="Item terjual"
+          value={String(data.summary.totalItems)}
+          helper="Jumlah item fisik pada transaksi tampil."
+          icon={<ShoppingBag className="size-5" />}
+        />
+      </div>
 
-        <section className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-4">
-          <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-            <label className="flex h-11 min-w-0 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3">
-              <Search className="size-4 shrink-0 text-neutral-400" />
-              <input
-                type="search"
-                name="q"
-                defaultValue={data.query}
-                placeholder="Cari invoice, customer, SKU, barcode, nama item..."
-                className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
-              />
-              {data.shiftId ? (
-                <input type="hidden" name="shift" value={data.shiftId} />
-              ) : null}
-            </label>
+      <section className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-4">
+        <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <label className="flex h-11 min-w-0 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3">
+            <Search className="size-4 shrink-0 text-neutral-400" />
+            <input
+              type="search"
+              name="q"
+              defaultValue={data.query}
+              placeholder="Cari invoice, customer, SKU, barcode, nama item..."
+              className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
+            />
+            {data.shiftId ? (
+              <input type="hidden" name="shift" value={data.shiftId} />
+            ) : null}
+          </label>
 
-            <div className="flex flex-wrap gap-2">
-              {(Object.keys(rangeLabels) as PosTransactionRange[]).map(
-                (rangeValue) => (
-                  <button
-                    key={rangeValue}
-                    type="submit"
-                    name="range"
-                    value={rangeValue}
-                    className={cn(
-                      "h-10 rounded-xl px-3 text-xs font-semibold transition",
-                      data.range === rangeValue
-                        ? "bg-[var(--accent)] text-white"
-                        : "border border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
-                    )}
-                  >
-                    {rangeLabels[rangeValue]}
-                  </button>
-                ),
-              )}
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(rangeLabels) as PosTransactionRange[]).map(
+              (rangeValue) => (
+                <button
+                  key={rangeValue}
+                  type="submit"
+                  name="range"
+                  value={rangeValue}
+                  className={cn(
+                    "h-10 rounded-xl px-3 !text-xs !font-semibold transition",
+                    data.range === rangeValue
+                      ? "bg-[var(--accent)] text-white"
+                      : "border border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
+                  )}
+                >
+                  {rangeLabels[rangeValue]}
+                </button>
+              ),
+            )}
+          </div>
+        </form>
+
+        {data.query ? (
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Search aktif: <span className="font-semibold">{data.query}</span>.
+            Kosongkan kolom pencarian lalu submit untuk kembali melihat semua
+            transaksi pada rentang ini.
+          </p>
+        ) : null}
+
+        {data.shiftId ? (
+          <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
+            Filter shift aktif sedang digunakan.{" "}
+            <Link
+              href={buildTransactionsHref({
+                query: data.query,
+                range: data.range,
+              })}
+              className="font-semibold text-[var(--accent)] hover:underline"
+            >
+              Hapus filter shift
+            </Link>
+          </p>
+        ) : null}
+      </section>
+
+      {feedbackMessage ? (
+        <TransactionFeedbackNotice
+          type={feedbackType}
+          message={feedbackMessage}
+        />
+      ) : null}
+
+      {selectedTransactionDetail ? (
+        <TransactionDetailPanel
+          detail={selectedTransactionDetail}
+          closeHref={detailCloseHref}
+          reprintReturnHref={detailCurrentHref}
+        />
+      ) : detailId ? (
+        <section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+          Detail transaksi tidak ditemukan untuk outlet aktif ini, atau
+          transaksi sudah tidak termasuk status completed.
+        </section>
+      ) : null}
+
+      {data.transactions.length === 0 ? (
+        <section className="mt-5 grid min-h-72 place-items-center rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
+          <div>
+            <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+              <ReceiptText className="size-7" />
             </div>
-          </form>
-
-          {data.query ? (
-            <p className="mt-3 text-xs text-[var(--muted)]">
-              Search aktif: <span className="font-semibold">{data.query}</span>.
-              Kosongkan kolom pencarian lalu submit untuk kembali melihat semua
-              transaksi pada rentang ini.
+            <h2 className="mt-4 font-semibold text-neutral-950">
+              Transaksi belum ditemukan
+            </h2>
+            <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
+              Belum ada transaksi completed untuk filter ini. Coba ubah rentang
+              waktu atau kata kunci pencarian.
             </p>
-          ) : null}
-
-          {data.shiftId ? (
-            <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
-              Filter shift aktif sedang digunakan.{" "}
-              <Link
-                href={buildTransactionsHref({
+          </div>
+        </section>
+      ) : (
+        <>
+          <div className="mt-5 space-y-3 sm:hidden">
+            {data.transactions.map((transaction) => (
+              <TransactionCard
+                key={transaction.id}
+                transaction={transaction}
+                detailHref={buildTransactionsHref({
                   query: data.query,
                   range: data.range,
+                  detailId: transaction.id,
+                  shiftId: data.shiftId,
                 })}
-                className="font-semibold text-[var(--accent)] hover:underline"
-              >
-                Hapus filter shift
-              </Link>
-            </p>
-          ) : null}
-        </section>
+                isSelected={transaction.id === detailId}
+              />
+            ))}
+          </div>
 
-        {feedbackMessage ? (
-          <TransactionFeedbackNotice
-            type={feedbackType}
-            message={feedbackMessage}
-          />
-        ) : null}
+          <section className="mt-5 hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-white sm:block">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-[var(--border)] text-sm">
+                <thead className="bg-neutral-50 text-left text-xs uppercase text-[var(--muted)]">
+                  <tr>
+                    <th className="px-4 py-3 !font-medium">Invoice</th>
+                    <th className="px-4 py-3 !font-medium">Customer</th>
+                    <th className="px-4 py-3 !font-medium">Item</th>
+                    <th className="px-4 py-3 !font-medium">Payment</th>
+                    <th className="px-4 py-3 text-right !font-medium">Total</th>
+                    <th className="px-4 py-3 text-right font-semibold">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {data.transactions.map((transaction) => {
+                    const isSelected = transaction.id === detailId;
 
-        {selectedTransactionDetail ? (
-          <TransactionDetailPanel
-            detail={selectedTransactionDetail}
-            closeHref={detailCloseHref}
-            reprintReturnHref={detailCurrentHref}
-          />
-        ) : detailId ? (
-          <section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
-            Detail transaksi tidak ditemukan untuk outlet aktif ini, atau
-            transaksi sudah tidak termasuk status completed.
-          </section>
-        ) : null}
-
-        {data.transactions.length === 0 ? (
-          <section className="mt-5 grid min-h-72 place-items-center rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
-            <div>
-              <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                <ReceiptText className="size-7" />
-              </div>
-              <h2 className="mt-4 font-semibold text-neutral-950">
-                Transaksi belum ditemukan
-              </h2>
-              <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-                Belum ada transaksi completed untuk filter ini. Coba ubah
-                rentang waktu atau kata kunci pencarian.
-              </p>
-            </div>
-          </section>
-        ) : (
-          <>
-            <div className="mt-5 space-y-3 sm:hidden">
-              {data.transactions.map((transaction) => (
-                <TransactionCard
-                  key={transaction.id}
-                  transaction={transaction}
-                  detailHref={buildTransactionsHref({
-                    query: data.query,
-                    range: data.range,
-                    detailId: transaction.id,
-                    shiftId: data.shiftId,
-                  })}
-                  isSelected={transaction.id === detailId}
-                />
-              ))}
-            </div>
-
-            <section className="mt-5 hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-white sm:block">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-                  <thead className="bg-neutral-50 text-left text-xs uppercase text-[var(--muted)]">
-                    <tr>
-                      <th className="px-4 py-3 !font-medium">Invoice</th>
-                      <th className="px-4 py-3 !font-medium">Customer</th>
-                      <th className="px-4 py-3 !font-medium">Item</th>
-                      <th className="px-4 py-3 !font-medium">Payment</th>
-                      <th className="px-4 py-3 text-right !font-medium">
-                        Total
-                      </th>
-                      <th className="px-4 py-3 text-right font-semibold">
-                        Aksi
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border)]">
-                    {data.transactions.map((transaction) => {
-                      const isSelected = transaction.id === detailId;
-
-                      return (
-                        <tr
-                          key={transaction.id}
-                          className={cn(
-                            "align-top",
-                            isSelected && "bg-[var(--accent-soft)]/30",
-                          )}
-                        >
-                          <td className="px-4 py-4">
-                            <p className="font-semibold text-neutral-950">
-                              {transaction.invoiceNumber}
-                            </p>
-                            <p className="mt-1 text-xs text-[var(--muted)]">
-                              {formatTransactionDate(
-                                transaction.completedAt ??
-                                  transaction.createdAt,
-                              )}
-                            </p>
-                            <p className="mt-1 text-xs text-[var(--muted)]">
-                              {transaction.registerName} ·{" "}
-                              {transaction.cashierName}
-                            </p>
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="flex items-start gap-2">
-                              <UserRound className="mt-0.5 size-4 shrink-0 text-neutral-400" />
-                              <div className="min-w-0">
-                                <p className="font-medium text-neutral-900">
-                                  {transaction.customerName ?? "Customer umum"}
-                                </p>
-                                {transaction.customerCode ? (
-                                  <p className="mt-1 text-xs font-medium text-[var(--accent)]">
-                                    {transaction.customerCode}
-                                  </p>
-                                ) : null}
-                                {transaction.customerPhone ? (
-                                  <p className="mt-1 text-xs text-[var(--muted)]">
-                                    {transaction.customerPhone}
-                                  </p>
-                                ) : null}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="max-w-[280px] px-4 py-4">
-                            <TransactionItemsPreview
-                              transaction={transaction}
-                            />
-                          </td>
-                          <td className="px-4 py-4">
-                            <PaymentStatusPill transaction={transaction} />
-                            <p className="mt-2 text-xs text-[var(--muted)]">
-                              {getPaymentMethodSummary(transaction)}
-                            </p>
-                            <p className="mt-1 text-xs font-medium text-neutral-800">
-                              Paid {formatMoney(transaction.paidAmount)}
-                            </p>
-                          </td>
-                          <td className="px-4 py-4 text-right">
-                            <p className="font-semibold text-neutral-950">
-                              {formatMoney(transaction.totalAmount)}
-                            </p>
-                            {Number(transaction.discountAmount) > 0 ? (
-                              <p className="mt-1 text-xs text-red-600">
-                                Diskon {formatMoney(transaction.discountAmount)}
+                    return (
+                      <tr
+                        key={transaction.id}
+                        className={cn(
+                          "align-top",
+                          isSelected && "bg-[var(--accent-soft)]/30",
+                        )}
+                      >
+                        <td className="px-4 py-4">
+                          <p className="font-semibold text-neutral-950">
+                            {transaction.invoiceNumber}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">
+                            {formatTransactionDate(
+                              transaction.completedAt ?? transaction.createdAt,
+                            )}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">
+                            {transaction.registerName} ·{" "}
+                            {transaction.cashierName}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-start gap-2">
+                            <UserRound className="mt-0.5 size-4 shrink-0 text-neutral-400" />
+                            <div className="min-w-0">
+                              <p className="font-medium text-neutral-900">
+                                {transaction.customerName ?? "Customer umum"}
                               </p>
-                            ) : null}
-                          </td>
-                          <td className="px-4 py-4 text-right">
-                            <div className="inline-flex flex-col gap-2">
-                              <Link
-                                href={buildTransactionsHref({
-                                  query: data.query,
-                                  range: data.range,
-                                  detailId: transaction.id,
-                                  shiftId: data.shiftId,
-                                })}
-                                className={cn(
-                                  "inline-flex h-9 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition",
-                                  isSelected
-                                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                                    : "border border-[var(--border)] text-neutral-700 hover:bg-neutral-50",
-                                )}
-                              >
-                                <Package className="size-3.5" />
-                                Detail
-                              </Link>
-                              <a
-                                href={`/api/sales/${transaction.id}/receipt-certificate`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                              >
-                                <FileText className="size-3.5" />
-                                Lihat Invoice
-                              </a>
+                              {transaction.customerCode ? (
+                                <p className="mt-1 text-xs font-medium text-[var(--accent)]">
+                                  {transaction.customerCode}
+                                </p>
+                              ) : null}
+                              {transaction.customerPhone ? (
+                                <p className="mt-1 text-xs text-[var(--muted)]">
+                                  {transaction.customerPhone}
+                                </p>
+                              ) : null}
                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </>
-        )}
+                          </div>
+                        </td>
+                        <td className="max-w-[280px] px-4 py-4">
+                          <TransactionItemsPreview transaction={transaction} />
+                        </td>
+                        <td className="px-4 py-4">
+                          <PaymentStatusPill transaction={transaction} />
+                          <p className="mt-2 text-xs text-[var(--muted)]">
+                            {getPaymentMethodSummary(transaction)}
+                          </p>
+                          <p className="mt-1 text-xs font-medium text-neutral-800">
+                            Paid {formatMoney(transaction.paidAmount)}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <p className="font-semibold text-neutral-950">
+                            {formatMoney(transaction.totalAmount)}
+                          </p>
+                          {Number(transaction.discountAmount) > 0 ? (
+                            <p className="mt-1 text-xs text-red-600">
+                              Diskon {formatMoney(transaction.discountAmount)}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <div className="inline-flex flex-col gap-2">
+                            <Link
+                              href={buildTransactionsHref({
+                                query: data.query,
+                                range: data.range,
+                                detailId: transaction.id,
+                                shiftId: data.shiftId,
+                              })}
+                              className={cn(
+                                "inline-flex h-9 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition",
+                                isSelected
+                                  ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                                  : "border border-[var(--border)] text-neutral-700 hover:bg-neutral-50",
+                              )}
+                            >
+                              <Package className="size-3.5" />
+                              Detail
+                            </Link>
+                            <a
+                              href={`/api/sales/${transaction.id}/receipt-certificate`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                            >
+                              <FileText className="size-3.5" />
+                              Lihat Invoice
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
     </PosPageContainer>
   );
 }
