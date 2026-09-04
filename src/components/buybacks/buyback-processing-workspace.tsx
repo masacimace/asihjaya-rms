@@ -184,7 +184,7 @@ function ResultImageInput({ error }: { error?: string }) {
   );
 }
 
-function ProcessingDialog({
+function ProcessingDrawer({
   row,
   categories,
   productMasters,
@@ -231,6 +231,14 @@ function ProcessingDialog({
   const [quickMasterOpen, setQuickMasterOpen] = useState(false);
   const [localMasters, setLocalMasters] =
     useState<ProductMasterOption[]>(availableMasters);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
 
   const suggestedRate = useMemo(() => {
     const key = normalizePurityKey(purityPercent);
@@ -275,13 +283,13 @@ function ProcessingDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[70] overflow-y-auto bg-black/40 p-3 sm:p-6"
+      className="fixed inset-0 z-[70] bg-black/35 lg:flex lg:justify-end"
       role="dialog"
       aria-modal="true"
       aria-labelledby="buyback-processing-title"
     >
-      <div className="mx-auto w-full max-w-5xl overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-5 py-4 sm:px-6">
+      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white lg:w-[min(720px,calc(100vw-48px))] lg:border-l lg:border-[var(--border)]">
+        <div className="shrink-0 flex items-start justify-between gap-4 border-b border-[var(--border)] bg-white px-4 py-4 sm:px-5 lg:px-6">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--accent)]">
@@ -312,7 +320,7 @@ function ProcessingDialog({
           </button>
         </div>
 
-        <form action={formAction} className="space-y-5 p-5 sm:p-6">
+        <form action={formAction} className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:p-6">
           <input type="hidden" name="payload" value={JSON.stringify(payload)} />
 
           {state.status === "error" ? (
@@ -905,7 +913,7 @@ export function BuybackProcessingWorkspace({
       </div>
 
       {selected ? (
-        <ProcessingDialog
+        <ProcessingDrawer
           key={selected.id}
           row={selected}
           categories={categories}
