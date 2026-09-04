@@ -631,9 +631,9 @@ export async function getAdminCustomerDetailData(
             .select({
               saleId: saleItems.saleId,
               productItemId: saleItems.productItemId,
-              sku: productItems.sku,
-              productName: sql<string>`coalesce(${saleItems.snapshot}->>'productName', ${productItems.displayName}, ${productMasters.name})`,
-              categoryName: productCategories.name,
+              sku: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'sku', ''), ${productItems.sku})`,
+              productName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'itemDisplayName', ''), nullif(${saleItems.snapshot}->>'productName', ''), ${productItems.displayName}, ${productMasters.name})`,
+              categoryName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'categoryName', ''), ${productCategories.name})`,
               finalPriceAmount: saleItems.finalPriceAmount,
             })
             .from(saleItems)

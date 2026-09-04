@@ -216,7 +216,14 @@ function createSearchCondition(search: string) {
       inner join ${productMasters} on ${productItems.productMasterId} = ${productMasters.id}
       where ${saleItems.saleId} = ${sales.id}
         and (
-          ${productItems.sku} ilike ${pattern}
+          ${saleItems.snapshot}->>'sku' ilike ${pattern}
+          or ${saleItems.snapshot}->>'barcode' ilike ${pattern}
+          or ${saleItems.snapshot}->>'serialNumber' ilike ${pattern}
+          or ${saleItems.snapshot}->>'itemDisplayName' ilike ${pattern}
+          or ${saleItems.snapshot}->>'productName' ilike ${pattern}
+          or ${saleItems.snapshot}->>'productCode' ilike ${pattern}
+          or ${saleItems.snapshot}->>'categoryName' ilike ${pattern}
+          or ${productItems.sku} ilike ${pattern}
           or ${productItems.barcode} ilike ${pattern}
           or ${productItems.serialNumber} ilike ${pattern}
           or ${productItems.displayName} ilike ${pattern}
@@ -491,10 +498,10 @@ export async function getAdminSalesListData(
             .select({
               saleId: saleItems.saleId,
               productItemId: saleItems.productItemId,
-              sku: productItems.sku,
-              barcode: productItems.barcode,
-              productName: sql<string>`coalesce(${saleItems.snapshot}->>'productName', ${productItems.displayName}, ${productMasters.name})`,
-              categoryName: productCategories.name,
+              sku: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'sku', ''), ${productItems.sku})`,
+              barcode: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'barcode', ''), ${productItems.barcode})`,
+              productName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'itemDisplayName', ''), nullif(${saleItems.snapshot}->>'productName', ''), ${productItems.displayName}, ${productMasters.name})`,
+              categoryName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'categoryName', ''), ${productCategories.name})`,
               finalPriceAmount: saleItems.finalPriceAmount,
             })
             .from(saleItems)
@@ -763,10 +770,10 @@ export async function getAdminSalesExportRows(
         .select({
           saleId: saleItems.saleId,
           lineNumber: saleItems.lineNumber,
-          sku: productItems.sku,
-          barcode: productItems.barcode,
-          productName: sql<string>`coalesce(${saleItems.snapshot}->>'itemDisplayName', ${saleItems.snapshot}->>'productName', ${productItems.displayName}, ${productMasters.name})`,
-          categoryName: productCategories.name,
+          sku: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'sku', ''), ${productItems.sku})`,
+          barcode: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'barcode', ''), ${productItems.barcode})`,
+          productName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'itemDisplayName', ''), nullif(${saleItems.snapshot}->>'productName', ''), ${productItems.displayName}, ${productMasters.name})`,
+          categoryName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'categoryName', ''), ${productCategories.name})`,
           finalPriceAmount: saleItems.finalPriceAmount,
         })
         .from(saleItems)
@@ -1049,11 +1056,11 @@ export async function getAdminSaleDetailData({
         id: saleItems.id,
         productItemId: saleItems.productItemId,
         lineNumber: saleItems.lineNumber,
-        sku: productItems.sku,
-        barcode: productItems.barcode,
-        serialNumber: productItems.serialNumber,
-        productName: sql<string>`coalesce(${saleItems.snapshot}->>'productName', ${productItems.displayName}, ${productMasters.name})`,
-        categoryName: productCategories.name,
+        sku: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'sku', ''), ${productItems.sku})`,
+        barcode: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'barcode', ''), ${productItems.barcode})`,
+        serialNumber: sql<string | null>`coalesce(nullif(${saleItems.snapshot}->>'serialNumber', ''), ${productItems.serialNumber})`,
+        productName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'itemDisplayName', ''), nullif(${saleItems.snapshot}->>'productName', ''), ${productItems.displayName}, ${productMasters.name})`,
+        categoryName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'categoryName', ''), ${productCategories.name})`,
         weightGram: sql<string | null>`coalesce(nullif(${saleItems.snapshot}->>'weightGram', ''), nullif(${saleItems.snapshot}->>'storedWeightGram', ''))`,
         purityPercent: sql<string | null>`nullif(${saleItems.snapshot}->>'purityPercent', '')`,
         exchangePurityPercent: sql<string | null>`nullif(${saleItems.snapshot}->>'exchangePurityPercent', '')`,

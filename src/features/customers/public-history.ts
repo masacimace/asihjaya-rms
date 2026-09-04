@@ -385,7 +385,7 @@ export async function getPublicCustomerHistoryData(
               sku: productItems.sku,
               productItemImageKey: productItems.imageKey,
               productMasterImageKey: productMasters.imageKey,
-              productName: sql<string>`coalesce(${saleItems.snapshot}->>'productName', ${saleItems.snapshot}->>'itemDisplayName', ${productItems.displayName}, ${productMasters.name})`,
+              productName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'itemDisplayName', ''), nullif(${saleItems.snapshot}->>'productName', ''), ${productItems.displayName}, ${productMasters.name})`,
               categoryName: sql<string | null>`coalesce(${saleItems.snapshot}->>'categoryName', ${productCategories.name})`,
             })
             .from(saleItems)
