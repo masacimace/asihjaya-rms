@@ -49,31 +49,43 @@ export default async function BuybackProcessingPage() {
         description="Selesaikan pekerjaan fisik, catat hasil barang, lalu item langsung masuk inventory saleable. Tidak ada approval atau aktivasi tambahan."
         icon={<Wrench className="size-5" />}
         actions={
-          <>
+          <div className="w-full rounded-[22px] border border-[var(--border)] bg-neutral-50 p-4 sm:p-5 lg:w-[560px] xl:w-[500px]">
+            <div className="mt-2 grid gap-2.5 sm:grid-cols-2">
+              <div className="min-w-0 rounded-2xl border border-[var(--border)] bg-white/80 p-3.5">
+                <div className="flex items-start gap-2 text-[11px] font-medium text-[var(--muted)]">
+                  <Store className="size-3.5 shrink-0 text-[var(--accent)]" />
+                  Outlet aktif
+                </div>
+                <p className="mt-2 truncate text-sm font-semibold text-neutral-950">
+                  {primaryOutlet.name}
+                </p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {data.pendingCount} item menunggu proses
+                </p>
+              </div>
+
+              <div className="min-w-0 rounded-2xl border border-[var(--border)] bg-white/80 p-3.5">
+                <div className="flex items-start gap-2 text-[11px] font-medium text-[var(--muted)]">
+                  <PackageCheck className="size-3.5 shrink-0 text-[var(--accent)]" />
+                  Hasil pemrosesan
+                </div>
+                <p className="mt-2 text-sm font-semibold text-neutral-950">
+                  Submit = Siap Jual
+                </p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  Langsung tersedia di inventory dan POS
+                </p>
+              </div>
+            </div>
+
             <Link
               href="/pos/buyback"
-              className="inline-flex h-11 items-center gap-2 rounded-2xl border border-[var(--border)] bg-white px-4 text-xs font-semibold text-neutral-800 transition hover:bg-neutral-50"
+              className="mt-3 mb-2 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Buyback
             </Link>
-            <div className="rounded-2xl border border-[var(--border)] bg-white px-3.5 py-2.5 text-xs">
-              <p className="flex items-center gap-1.5 font-semibold text-neutral-900">
-                <Store className="size-3.5 text-[var(--accent)]" />
-                {primaryOutlet.name}
-              </p>
-              <p className="mt-1 text-[var(--muted)]">
-                {data.pendingCount} item menunggu proses
-              </p>
-            </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--accent-soft)] px-3.5 py-2.5 text-xs text-[var(--accent)]">
-              <p className="flex items-center gap-1.5 font-semibold">
-                <PackageCheck className="size-3.5" />
-                Submit = Siap Jual
-              </p>
-              <p className="mt-1">Langsung tersedia di POS</p>
-            </div>
-          </>
+          </div>
         }
       />
 

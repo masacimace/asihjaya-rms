@@ -781,9 +781,9 @@ export function BuybackProcessingWorkspace({
                     <th className="px-4 py-3">Customer</th>
                     <th className="px-4 py-3">Produk</th>
                     <th className="px-4 py-3">Proses</th>
-                    <th className="px-4 py-3">Berat</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 sm:px-5">Aksi</th>
+                    <th className="whitespace-nowrap px-4 py-3">Berat</th>
+                    <th className="whitespace-nowrap px-4 py-3">Status</th>
+                    <th className="whitespace-nowrap px-4 py-3 sm:px-5">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
@@ -835,7 +835,7 @@ export function BuybackProcessingWorkspace({
                         </span>
                       </td>
                       <td className="px-4 py-4">
-                        <p className="font-medium">
+                        <p className="whitespace-nowrap font-medium">
                           {row.sourceWeightGram} gr
                           {row.resultWeightGram
                             ? ` → ${row.resultWeightGram} gr`
@@ -856,11 +856,11 @@ export function BuybackProcessingWorkspace({
                       </td>
                       <td className="px-4 py-4">
                         {row.status === "pending" ? (
-                          <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                          <span className="inline-flex whitespace-nowrap rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
                             Belum Diproses
                           </span>
                         ) : (
-                          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                          <span className="inline-flex whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                             Selesai
                           </span>
                         )}
@@ -871,7 +871,7 @@ export function BuybackProcessingWorkspace({
                             type="button"
                             disabled={!canProcess}
                             onClick={() => setSelected(row)}
-                            className="inline-flex h-9 items-center gap-2 rounded-xl bg-neutral-950 px-3 text-xs font-semibold text-white disabled:opacity-40"
+                            className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-neutral-950 px-3 text-xs font-semibold text-white disabled:opacity-40"
                           >
                             {row.processingType === "cleaning" ? (
                               <Sparkles className="size-3.5" />
