@@ -80,6 +80,11 @@ export function BuybackHistoryPanel({
   data,
   timeZone,
   feedback,
+  mode = "preview",
+  page = 1,
+  pageSize = 10,
+  filters,
+  detailBackHref,
 }: {
   data: BuybackHistoryData;
   timeZone: string;
@@ -87,15 +92,62 @@ export function BuybackHistoryPanel({
     type: "success" | "error" | "info";
     message: string;
   } | null;
+  mode?: "preview" | "history";
+  page?: number;
+  pageSize?: number;
+  filters?: {
+    q?: string;
+    process?: string;
+    payout?: string;
+  };
+  detailBackHref?: string;
 }) {
+  function buildHistoryHref({
+    targetPage,
+    detailId,
+  }: {
+    targetPage?: number;
+    detailId?: string;
+  }) {
+    const params = new URLSearchParams();
+
+    if (targetPage && targetPage > 1) {
+      params.set("page", String(targetPage));
+    }
+    if (filters?.q) params.set("q", filters.q);
+    if (filters?.process && filters.process !== "all") {
+      params.set("process", filters.process);
+    }
+    if (filters?.payout && filters.payout !== "all") {
+      params.set("payout", filters.payout);
+    }
+    if (detailId) params.set("detail", detailId);
+
+    const query = params.toString();
+    return query
+      ? `/pos/buyback/riwayat?${query}`
+      : "/pos/buyback/riwayat";
+  }
+
   if (data.detail) {
     return (
       <BuybackDetailPanel
         detail={data.detail}
         timeZone={timeZone}
         feedback={feedback}
+        backHref={detailBackHref ?? "/pos/buyback"}
       />
     );
+  }
+
+  const totalPages = Math.max(1, Math.ceil(data.totalCount / pageSize));
+  const firstRow = data.totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastRow = Math.min(page * pageSize, data.totalCount);
+
+  function detailHref(id: string) {
+    return mode === "history"
+      ? buildHistoryHref({ targetPage: page, detailId: id })
+      : `/pos/buyback?detail=${id}`;
   }
 
   return (
@@ -103,15 +155,18 @@ export function BuybackHistoryPanel({
       <div className="flex flex-col gap-3 border-b border-[var(--border)] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div>
           <h2 className="text-base font-semibold text-neutral-950">
-            Transaksi Buyback terbaru
+            {mode === "history"
+              ? "Riwayat transaksi Buyback"
+              : "Transaksi Buyback terbaru"}
           </h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Barang Buyback baru menunggu proses Cuci/Rongsok sebelum tersedia di
-            POS.
+            {mode === "history"
+              ? "Riwayat lengkap Buyback outlet dengan detail transaksi dan status pemrosesan."
+              : "Menampilkan 5 transaksi terakhir. Riwayat lengkap tersedia di halaman khusus."}
           </p>
         </div>
         <div className="rounded-xl bg-neutral-50 px-3 py-2 text-xs font-semibold text-neutral-700">
-          {data.rows.length} transaksi
+          {data.totalCount} transaksi
         </div>
       </div>
 
@@ -131,27 +186,18 @@ export function BuybackHistoryPanel({
 
       {data.rows.length === 0 ? (
         <div className="p-8 text-center text-sm text-[var(--muted)]">
-          Belum ada transaksi Buyback pada outlet ini.
+          {mode === "history"
+            ? "Tidak ada transaksi Buyback yang cocok dengan filter."
+            : "Belum ada transaksi Buyback pada outlet ini."}
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[940px] text-left text-sm">
-            <thead className="bg-neutral-50 text-xs uppercase text-[var(--muted)]">
-              <tr>
-                <th className="px-4 py-3 sm:px-5">No. Buyback</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Item</th>
-                <th className="px-4 py-3">Proses</th>
-                <th className="px-4 py-3">Payout</th>
-                <th className="px-4 py-3 text-right">Total</th>
-                <th className="px-4 py-3 sm:px-5">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {data.rows.map((row) => (
-                <tr key={row.id} className="align-top hover:bg-neutral-50/60">
-                  <td className="px-4 py-4 sm:px-5">
-                    <p className="font-semibold text-neutral-950">
+        <>
+          <div className="divide-y divide-[var(--border)] md:hidden">
+            {data.rows.map((row) => (
+              <article key={row.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-neutral-950">
                       {row.buybackNumber}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
@@ -160,70 +206,209 @@ export function BuybackHistoryPanel({
                         timeZone,
                       )}
                     </p>
-                  </td>
-                  <td className="px-4 py-4">
-                    <p className="font-medium text-neutral-900">
-                      {row.customerName}
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      {row.customerCode ?? row.customerPhone ?? "-"}
-                    </p>
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
-                      <PackageCheck className="size-3.5" />
-                      {row.itemCount} Item
-                    </span>
-                  </td>
-                  <td className="px-4 py-4">
-                    {row.pendingProcessingCount > 0 ? (
-                      <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                        {row.pendingProcessingCount} menunggu proses
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                        Tidak ada antrean
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex flex-wrap gap-1.5">
-                      {row.payouts.map((payout) => (
-                        <span
-                          key={payout.method}
-                          className="rounded-full border border-[var(--border)] bg-white px-2.5 py-1 text-xs text-neutral-700"
-                        >
-                          {payoutLabels[payout.method]}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 text-right font-semibold text-neutral-950">
+                  </div>
+                  <p className="shrink-0 text-sm font-bold text-neutral-950">
                     {formatCurrency(Number(row.totalAmount))}
-                  </td>
-                  <td className="px-4 py-4 sm:px-5">
-                    <Link
-                      href={`/pos/buyback?detail=${row.id}`}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold text-neutral-800 transition hover:bg-neutral-50"
-                    >
-                      <FileText className="size-3.5" />
-                      Detail
-                    </Link>
-                  </td>
+                  </p>
+                </div>
+
+                <div className="mt-3 rounded-xl bg-neutral-50 p-3">
+                  <p className="text-sm font-medium text-neutral-900">
+                    {row.customerName}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {row.customerCode ?? row.customerPhone ?? "-"}
+                  </p>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
+                    <PackageCheck className="size-3.5" />
+                    {row.itemCount} Item
+                  </span>
+                  {row.pendingProcessingCount > 0 ? (
+                    <span className="whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                      {row.pendingProcessingCount} menunggu proses
+                    </span>
+                  ) : (
+                    <span className="whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                      Tidak ada antrean
+                    </span>
+                  )}
+                </div>
+
+                {row.payouts.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {row.payouts.map((payout) => (
+                      <span
+                        key={payout.method}
+                        className="rounded-full border border-[var(--border)] bg-white px-2.5 py-1 text-xs text-neutral-700"
+                      >
+                        {payoutLabels[payout.method]}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                <Link
+                  href={detailHref(row.id)}
+                  className="mt-4 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-800"
+                >
+                  <FileText className="size-3.5" />
+                  Detail
+                </Link>
+              </article>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[940px] text-left text-sm">
+              <thead className="bg-neutral-50 text-xs uppercase text-[var(--muted)]">
+                <tr>
+                  <th className="px-4 py-3 sm:px-5">No. Buyback</th>
+                  <th className="px-4 py-3">Customer</th>
+                  <th className="px-4 py-3">Item</th>
+                  <th className="px-4 py-3">Proses</th>
+                  <th className="px-4 py-3">Payout</th>
+                  <th className="px-4 py-3 text-right">Total</th>
+                  <th className="px-4 py-3 sm:px-5">Aksi</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {data.rows.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="align-top hover:bg-neutral-50/60"
+                  >
+                    <td className="px-4 py-4 sm:px-5">
+                      <p className="font-semibold text-neutral-950">
+                        {row.buybackNumber}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {formatDateTime(
+                          row.completedAt ?? row.createdAt,
+                          timeZone,
+                        )}
+                      </p>
+                    </td>
+                    <td className="px-4 py-4">
+                      <p className="font-medium text-neutral-900">
+                        {row.customerName}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {row.customerCode ?? row.customerPhone ?? "-"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
+                        <PackageCheck className="size-3.5" />
+                        {row.itemCount} Item
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      {row.pendingProcessingCount > 0 ? (
+                        <span className="whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                          {row.pendingProcessingCount} menunggu proses
+                        </span>
+                      ) : (
+                        <span className="whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                          Tidak ada antrean
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex flex-wrap gap-1.5">
+                        {row.payouts.map((payout) => (
+                          <span
+                            key={payout.method}
+                            className="rounded-full border border-[var(--border)] bg-white px-2.5 py-1 text-xs text-neutral-700"
+                          >
+                            {payoutLabels[payout.method]}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-4 text-right font-semibold text-neutral-950">
+                      {formatCurrency(Number(row.totalAmount))}
+                    </td>
+                    <td className="px-4 py-4 sm:px-5">
+                      <Link
+                        href={detailHref(row.id)}
+                        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold text-neutral-800 transition hover:bg-neutral-50"
+                      >
+                        <FileText className="size-3.5" />
+                        Detail
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
+
+      {mode === "preview" && data.totalCount > 0 ? (
+        <div className="flex flex-col gap-3 border-t border-[var(--border)] p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <p className="text-xs text-[var(--muted)]">
+            Menampilkan {data.rows.length} transaksi terbaru dari{" "}
+            {data.totalCount} transaksi.
+          </p>
+          <Link
+            href="/pos/buyback/riwayat"
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-neutral-950 px-4 text-xs font-semibold !text-white"
+          >
+            Lihat semua riwayat &rarr;
+          </Link>
+        </div>
+      ) : null}
+
+      {mode === "history" && data.totalCount > 0 ? (
+        <div className="flex flex-col gap-3 border-t border-[var(--border)] p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <p className="text-xs text-[var(--muted)]">
+            Menampilkan {firstRow}-{lastRow} dari {data.totalCount} transaksi.
+          </p>
+          <div className="flex items-center justify-between gap-2 sm:justify-end">
+            {page > 1 ? (
+              <Link
+                href={buildHistoryHref({ targetPage: page - 1 })}
+                className="inline-flex h-10 items-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700"
+              >
+                &larr; Sebelumnya
+              </Link>
+            ) : (
+              <span className="inline-flex h-10 items-center rounded-xl border border-[var(--border)] bg-neutral-50 px-3 text-xs font-semibold text-neutral-400">
+                &larr; Sebelumnya
+              </span>
+            )}
+
+            <span className="whitespace-nowrap px-2 text-xs font-semibold text-neutral-700">
+              {page} / {totalPages}
+            </span>
+
+            {page < totalPages ? (
+              <Link
+                href={buildHistoryHref({ targetPage: page + 1 })}
+                className="inline-flex h-10 items-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700"
+              >
+                Berikutnya &rarr;
+              </Link>
+            ) : (
+              <span className="inline-flex h-10 items-center rounded-xl border border-[var(--border)] bg-neutral-50 px-3 text-xs font-semibold text-neutral-400">
+                Berikutnya &rarr;
+              </span>
+            )}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
-
 function BuybackDetailPanel({
   detail,
   timeZone,
   feedback,
+  backHref,
 }: {
   detail: BuybackDetail;
   timeZone: string;
@@ -231,6 +416,7 @@ function BuybackDetailPanel({
     type: "success" | "error" | "info";
     message: string;
   } | null;
+  backHref: string;
 }) {
   return (
     <div className="space-y-5">
@@ -457,7 +643,7 @@ function BuybackDetailPanel({
       </section>
 
       <Link
-        href="/pos/buyback"
+        href={backHref}
         className="inline-flex items-center rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800"
       >
         Kembali ke Buyback

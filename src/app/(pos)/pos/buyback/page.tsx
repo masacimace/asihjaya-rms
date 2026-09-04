@@ -67,6 +67,7 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
       organizationId: auth.organization.id,
       outletId: primaryOutlet.id,
       detailId,
+      limit: 5,
     }),
   ]);
 

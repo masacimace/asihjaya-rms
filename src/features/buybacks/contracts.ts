@@ -189,7 +189,12 @@ export type BuybackDetail = BuybackHistoryRow & {
   receiptJob: BuybackReceiptJobSummary;
 };
 
+export type BuybackHistoryProcessingFilter = "all" | "pending" | "clear";
+
+export type BuybackHistoryPayoutFilter = "all" | BuybackPayoutMethod;
+
 export type BuybackHistoryData = {
   rows: BuybackHistoryRow[];
   detail: BuybackDetail | null;
+  totalCount: number;
 };

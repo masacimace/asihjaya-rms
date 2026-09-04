@@ -23,6 +23,8 @@ import {
 import type {
   BuybackExistingItemOption,
   BuybackHistoryData,
+  BuybackHistoryPayoutFilter,
+  BuybackHistoryProcessingFilter,
   BuybackHistoryPayoutSummary,
   BuybackHistoryRow,
   BuybackInitialData,
@@ -279,12 +281,79 @@ export async function getBuybackHistoryData({
   outletId,
   detailId,
   limit = 80,
+  offset = 0,
+  search = "",
+  processingFilter = "all",
+  payoutFilter = "all",
 }: {
   organizationId: string;
   outletId: string;
   detailId?: string | null;
   limit?: number;
+  offset?: number;
+  search?: string;
+  processingFilter?: BuybackHistoryProcessingFilter;
+  payoutFilter?: BuybackHistoryPayoutFilter;
 }): Promise<BuybackHistoryData> {
+  const normalizedSearch = search.trim().slice(0, 160);
+  const historyConditions = [
+    eq(buybacks.organizationId, organizationId),
+    eq(buybacks.outletId, outletId),
+  ];
+
+  if (normalizedSearch) {
+    const pattern = `%${normalizedSearch}%`;
+    const searchCondition = or(
+      ilike(buybacks.buybackNumber, pattern),
+      ilike(customers.fullName, pattern),
+      ilike(customers.customerCode, pattern),
+      ilike(customers.phone, pattern),
+    );
+    if (searchCondition) historyConditions.push(searchCondition);
+  }
+
+  if (processingFilter === "pending") {
+    historyConditions.push(sql`exists (
+      select 1
+      from ${buybackItems} history_item
+      inner join ${buybackItemProcessings} history_processing
+        on history_processing.buyback_item_id = history_item.id
+      where history_item.buyback_id = ${buybacks.id}
+        and history_processing.status = 'pending'
+    )`);
+  } else if (processingFilter === "clear") {
+    historyConditions.push(sql`not exists (
+      select 1
+      from ${buybackItems} history_item
+      inner join ${buybackItemProcessings} history_processing
+        on history_processing.buyback_item_id = history_item.id
+      where history_item.buyback_id = ${buybacks.id}
+        and history_processing.status = 'pending'
+    )`);
+  }
+
+  if (payoutFilter !== "all") {
+    historyConditions.push(sql`exists (
+      select 1
+      from ${buybackPayouts} history_payout
+      where history_payout.buyback_id = ${buybacks.id}
+        and history_payout.method = ${payoutFilter}
+    )`);
+  }
+
+  const safeLimit = Math.max(1, Math.min(200, limit));
+  const safeOffset = Math.max(0, offset);
+
+  const [totalRow] = await db
+    .select({
+      total: sql<number>`count(${buybacks.id})::int`,
+    })
+    .from(buybacks)
+    .innerJoin(customers, eq(buybacks.customerId, customers.id))
+    .where(and(...historyConditions));
+
+  const totalCount = Number(totalRow?.total ?? 0);
+
   const rows = await db
     .select({
       id: buybacks.id,
@@ -306,14 +375,10 @@ export async function getBuybackHistoryData({
     .innerJoin(customers, eq(buybacks.customerId, customers.id))
     .innerJoin(users, eq(buybacks.processedBy, users.id))
     .innerJoin(outlets, eq(buybacks.outletId, outlets.id))
-    .where(
-      and(
-        eq(buybacks.organizationId, organizationId),
-        eq(buybacks.outletId, outletId),
-      ),
-    )
+    .where(and(...historyConditions))
     .orderBy(desc(buybacks.completedAt), desc(buybacks.createdAt))
-    .limit(Math.max(1, Math.min(200, limit)));
+    .limit(safeLimit)
+    .offset(safeOffset);
 
   const ids = rows.map((row) => row.id);
   const [itemCounts, payoutRows] =
@@ -374,7 +439,7 @@ export async function getBuybackHistoryData({
   }));
 
   if (!detailId) {
-    return { rows: historyRows, detail: null };
+    return { rows: historyRows, detail: null, totalCount };
   }
 
   let detailBase = historyRows.find((row) => row.id === detailId) ?? null;
@@ -410,7 +475,7 @@ export async function getBuybackHistoryData({
       .limit(1);
 
     if (!olderDetail) {
-      return { rows: historyRows, detail: null };
+      return { rows: historyRows, detail: null, totalCount };
     }
 
     const [olderCount, olderPayouts] = await Promise.all([
@@ -490,7 +555,10 @@ export async function getBuybackHistoryData({
         eq(buybackItemProcessings.buybackItemId, buybackItems.id),
       )
       .leftJoin(productItems, eq(buybackItems.productItemId, productItems.id))
-      .leftJoin(productMasters, eq(productItems.productMasterId, productMasters.id))
+      .leftJoin(
+        productMasters,
+        eq(productItems.productMasterId, productMasters.id),
+      )
       .where(eq(buybackItems.buybackId, detailId))
       .orderBy(asc(buybackItems.lineNumber)),
     db
@@ -517,11 +585,12 @@ export async function getBuybackHistoryData({
 
   const register = registerRow[0];
   if (!register) {
-    return { rows: historyRows, detail: null };
+    return { rows: historyRows, detail: null, totalCount };
   }
 
   return {
     rows: historyRows,
+    totalCount,
     detail: {
       ...detailBase,
       registerCode: register.code,
