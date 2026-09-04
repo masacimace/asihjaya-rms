@@ -244,8 +244,8 @@ function BuybackDetailPanel({
               {detail.buybackNumber}
             </h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              {formatDateTime(detail.completedAt ?? detail.createdAt, timeZone)} ·{" "}
-              {detail.outletName} · {detail.registerName}
+              {formatDateTime(detail.completedAt ?? detail.createdAt, timeZone)}{" "}
+              · {detail.outletName} · {detail.registerName}
             </p>
           </div>
 
@@ -337,7 +337,8 @@ function BuybackDetailPanel({
         <div className="border-b border-[var(--border)] p-4 sm:p-5">
           <h3 className="font-semibold text-neutral-950">Item Buyback</h3>
           <p className="mt-1 text-xs text-[var(--muted)]">
-            Snapshot di bawah adalah kondisi barang ketika diterima dari customer.
+            Snapshot di bawah adalah kondisi barang ketika diterima dari
+            customer.
           </p>
         </div>
         <div className="divide-y divide-[var(--border)]">
@@ -380,7 +381,10 @@ function BuybackDetailPanel({
                     )}
                   </div>
 
-                  {snapshotSku || item.currentSku || snapshotBarcode || item.currentBarcode ? (
+                  {snapshotSku ||
+                  item.currentSku ||
+                  snapshotBarcode ||
+                  item.currentBarcode ? (
                     <p className="mt-1 text-xs text-[var(--muted)]">
                       {snapshotSku ?? item.currentSku ?? "-"} ·{" "}
                       {snapshotBarcode ?? item.currentBarcode ?? "-"}

@@ -660,7 +660,7 @@ export function BuybackProcessingWorkspace({
           </div>
         ) : null}
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-[var(--muted)]">
               <Clock3 className="size-4" />
@@ -783,7 +783,9 @@ export function BuybackProcessingWorkspace({
                     <th className="px-4 py-3">Proses</th>
                     <th className="whitespace-nowrap px-4 py-3">Berat</th>
                     <th className="whitespace-nowrap px-4 py-3">Status</th>
-                    <th className="whitespace-nowrap px-4 py-3 sm:px-5">Aksi</th>
+                    <th className="whitespace-nowrap px-4 py-3 sm:px-5">
+                      Aksi
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
