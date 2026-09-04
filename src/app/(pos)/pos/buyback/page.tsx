@@ -98,7 +98,7 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
       <PosPageHeader
         eyebrow="Transaksi barang masuk dari customer"
         title="Buyback Pembelian"
-        description="Catat barang yang dibeli kembali, tentukan Cuci/Rongsok, lalu masukkan Total Harga final. Barang belum tersedia di POS sampai pemrosesan selesai."
+        description="Catat barang yang dibeli kembali, tentukan Cuci/Rongsok, lalu masukkan Total Harga final. Barang belum tersedia di inventory dan POS sampai pemrosesan rekondisi selesai di proses."
         icon={<RefreshCcw className="size-5" />}
         actions={
           <div className="w-full rounded-[22px] border border-[var(--border)] bg-neutral-50 p-4 sm:p-5 lg:w-[560px] xl:w-[500px]">

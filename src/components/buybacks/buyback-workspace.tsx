@@ -657,11 +657,11 @@ export function BuybackWorkspace({
             </button>
           </div>
 
-          <div className="mt-4 rounded-2xl bg-[var(--surface-muted)] p-3">
+          <div className="mt-4 min-w-0 max-w-full overflow-hidden rounded-2xl bg-[var(--surface-muted)] p-3">
             <p className="mb-2 text-xs font-semibold text-neutral-700">
               Produk ASIHJAYA yang pernah dijual
             </p>
-            <div className="flex gap-2">
+            <div className="flex min-w-0 max-w-full gap-2">
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-3.5 size-4 text-neutral-400" />
                 <input
@@ -693,25 +693,25 @@ export function BuybackWorkspace({
             </div>
 
             {existingResults.length > 0 ? (
-              <div className="mt-3 grid gap-2 lg:grid-cols-2">
+              <div className="mt-3 grid min-w-0 w-full max-w-full gap-2 lg:grid-cols-2">
                 {existingResults.map((result) => (
                   <button
                     key={result.id}
                     type="button"
                     onClick={() => addExistingItem(result)}
-                    className="rounded-xl border border-[var(--border)] bg-white p-3 text-left transition hover:border-[var(--accent)]"
+                    className="min-w-0 w-full max-w-full overflow-hidden rounded-xl border border-[var(--border)] bg-white p-3 text-left transition hover:border-[var(--accent)]"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                    <div className="flex min-w-0 w-full max-w-full items-start justify-between gap-3 overflow-hidden">
+                      <div className="min-w-0 flex-1 overflow-hidden">
                         <p className="truncate text-sm font-semibold text-neutral-950">
                           {result.sku} · {result.productName}
                         </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
+                        <p className="mt-1 max-w-full truncate text-xs text-[var(--muted)]">
                           {result.categoryName} · {result.weightGram ?? "-"} gr
                           · Kadar {result.purityPercent ?? "-"}%
                         </p>
                         {result.lastInvoiceNumber ? (
-                          <p className="mt-1 text-[11px] text-neutral-500">
+                          <p className="mt-1 max-w-full truncate text-[11px] text-neutral-500">
                             Sale terakhir: {result.lastInvoiceNumber}
                           </p>
                         ) : null}
