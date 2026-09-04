@@ -320,6 +320,7 @@ export function BuybackWorkspace({
   const [existingResults, setExistingResults] = useState<
     BuybackExistingItemOption[]
   >([]);
+  const existingSearchRequestRef = useRef(0);
   const [isSearching, startSearchTransition] = useTransition();
   const [payouts, setPayouts] = useState<PayoutState>({
     cash: "",
@@ -467,8 +468,15 @@ export function BuybackWorkspace({
       return;
     }
 
+    const requestId = ++existingSearchRequestRef.current;
+
     startSearchTransition(async () => {
       const result = await searchBuybackExistingItemsAction(query);
+
+      if (requestId !== existingSearchRequestRef.current) {
+        return;
+      }
+
       if (result.status === "error") {
         setExistingResults([]);
         setFeedback(result.message);
@@ -666,7 +674,16 @@ export function BuybackWorkspace({
                 <Search className="pointer-events-none absolute left-3 top-3.5 size-4 text-neutral-400" />
                 <input
                   value={existingQuery}
-                  onChange={(event) => setExistingQuery(event.target.value)}
+                  onChange={(event) => {
+                    const nextQuery = event.target.value;
+                    existingSearchRequestRef.current += 1;
+                    setExistingQuery(nextQuery);
+
+                    if (!nextQuery.trim()) {
+                      setExistingResults([]);
+                      setFeedback(null);
+                    }
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
@@ -693,34 +710,42 @@ export function BuybackWorkspace({
             </div>
 
             {existingResults.length > 0 ? (
-              <div className="mt-3 grid min-w-0 w-full max-w-full gap-2 lg:grid-cols-2">
-                {existingResults.map((result) => (
-                  <button
-                    key={result.id}
-                    type="button"
-                    onClick={() => addExistingItem(result)}
-                    className="min-w-0 w-full max-w-full overflow-hidden rounded-xl border border-[var(--border)] bg-white p-3 text-left transition hover:border-[var(--accent)]"
-                  >
-                    <div className="flex min-w-0 w-full max-w-full items-start justify-between gap-3 overflow-hidden">
-                      <div className="min-w-0 flex-1 overflow-hidden">
-                        <p className="truncate text-sm font-semibold text-neutral-950">
-                          {result.sku} · {result.productName}
-                        </p>
-                        <p className="mt-1 max-w-full truncate text-xs text-[var(--muted)]">
-                          {result.categoryName} · {result.weightGram ?? "-"} gr
-                          · Kadar {result.purityPercent ?? "-"}%
-                        </p>
-                        {result.lastInvoiceNumber ? (
-                          <p className="mt-1 max-w-full truncate text-[11px] text-neutral-500">
-                            Sale terakhir: {result.lastInvoiceNumber}
+              <>
+                <div className="mt-3 grid min-w-0 w-full max-w-full max-h-[452px] gap-2 overflow-y-auto overscroll-contain pr-1 lg:max-h-none lg:grid-cols-2 lg:overflow-visible lg:pr-0">
+                  {existingResults.map((result) => (
+                    <button
+                      key={result.id}
+                      type="button"
+                      onClick={() => addExistingItem(result)}
+                      className="h-[84px] min-w-0 w-full max-w-full overflow-hidden rounded-xl border border-[var(--border)] bg-white p-3 text-left transition hover:border-[var(--accent)] lg:h-auto"
+                    >
+                      <div className="flex min-w-0 w-full max-w-full items-start justify-between gap-3 overflow-hidden">
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                          <p className="truncate text-sm font-semibold text-neutral-950">
+                            {result.sku} · {result.productName}
                           </p>
-                        ) : null}
+                          <p className="mt-1 max-w-full truncate text-xs text-[var(--muted)]">
+                            {result.categoryName} · {result.weightGram ?? "-"}{" "}
+                            gr · Kadar {result.purityPercent ?? "-"}%
+                          </p>
+                          {result.lastInvoiceNumber ? (
+                            <p className="mt-1 max-w-full truncate text-[11px] text-neutral-500">
+                              Sale terakhir: {result.lastInvoiceNumber}
+                            </p>
+                          ) : null}
+                        </div>
+                        <Plus className="size-4 shrink-0 text-[var(--accent)]" />
                       </div>
-                      <Plus className="size-4 shrink-0 text-[var(--accent)]" />
-                    </div>
-                  </button>
-                ))}
-              </div>
+                    </button>
+                  ))}
+                </div>
+                {existingResults.length > 5 ? (
+                  <p className="mt-2 text-[11px] text-[var(--muted)] lg:hidden">
+                    Scroll daftar untuk melihat {existingResults.length - 5}{" "}
+                    hasil lainnya.
+                  </p>
+                ) : null}
+              </>
             ) : null}
           </div>
 
@@ -1182,7 +1207,7 @@ function PayoutCard({
         <button
           type="button"
           onClick={onFill}
-          className="shrink-0 !text-xs font-semibold text-[var(--accent)]"
+          className="shrink-0 !text-sm font-semibold text-[var(--accent)]"
         >
           Isi sisa
         </button>
