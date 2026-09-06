@@ -107,13 +107,13 @@ const fallbackStatus: PosShellStatus = {
 const navigation = [
   { label: "Beranda", href: "/pos", icon: ShoppingBag },
   {
-    label: "Produk Baru",
+    label: "Tambah Produk",
     href: "/pos/produk/tambah",
     icon: PackagePlus,
     requiresProductCreate: true,
   },
   {
-    label: "Buyback Produk",
+    label: "Buyback Pembelian",
     href: "/pos/buyback",
     icon: RefreshCcw,
     requiresBuybackAccess: true,
@@ -145,12 +145,12 @@ const mobileMoreNavigation = [
     requiresProductCreate: true,
   },
   {
-    label: "Buyback",
+    label: "Buyback Pembelian",
     href: "/pos/buyback",
     icon: RefreshCcw,
     requiresBuybackAccess: true,
   },
-  { label: "Hold Cart", href: "/pos/ditahan", icon: Pause },
+  { label: "Transaksi Ditahan", href: "/pos/ditahan", icon: Pause },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
 ] as const;
 
@@ -342,7 +342,6 @@ function SidebarContent({
             if ("requiresBuybackAccess" in item && item.requiresBuybackAccess) {
               return canAccessBuybacks;
             }
-
 
             return true;
           })
@@ -653,7 +652,7 @@ export function PosShell({
             <SidebarContent
               pathname={pathname}
               canAccessAdmin={user.canAccessAdmin}
-                  canCreateProducts={user.canCreateProducts}
+              canCreateProducts={user.canCreateProducts}
               canAccessBuybacks={user.canAccessBuybacks}
               onNavigate={() => setIsNavigationOpen(false)}
             />
@@ -708,7 +707,6 @@ export function PosShell({
                   ) {
                     return user.canAccessBuybacks;
                   }
-
 
                   return true;
                 })

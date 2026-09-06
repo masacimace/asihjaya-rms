@@ -5,8 +5,6 @@ import {
   Package,
   Pause,
   ReceiptText,
-  Search,
-  Store,
   Trash2,
   X,
 } from "lucide-react";
@@ -148,31 +146,6 @@ function SummaryCard({
         </div>
       </div>
     </article>
-  );
-}
-
-function OutletBadge({ data }: { data: PosHeldCartListData }) {
-  const isOnline = data.outlet?.hardwareStatus === "online";
-
-  return (
-    <div className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm">
-      <div className="flex items-start gap-3">
-        <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-          <Store className="size-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-neutral-950">
-            {data.outlet?.name ?? "Outlet belum tersedia"}
-          </p>
-          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Register: {data.register?.name ?? "belum tersedia"} · Hardware{" "}
-            <span className={isOnline ? "text-emerald-700" : "text-amber-700"}>
-              {isOnline ? "online" : "offline/stale"}
-            </span>
-          </p>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -459,34 +432,6 @@ export function HeldCartsClient({ data }: HeldCartsClientProps) {
             helper="Estimasi nilai transaksi yang sedang ditahan."
             icon={<ReceiptText className="size-5" />}
           />
-        </div>
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <form
-            action="/pos/ditahan"
-            className="rounded-2xl border border-[var(--border)] bg-white p-3"
-          >
-            <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-neutral-50 px-3 focus-within:border-[var(--accent)] focus-within:bg-white focus-within:ring-4 focus-within:ring-[var(--accent-soft)]">
-              <Search className="size-4 shrink-0 text-neutral-400" />
-              <input
-                name="q"
-                defaultValue={data.query}
-                placeholder="Cari hold number, customer, SKU, barcode..."
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
-              />
-              {data.query ? (
-                <Link
-                  href="/pos/ditahan"
-                  className="grid size-7 shrink-0 place-items-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
-                  aria-label="Reset pencarian"
-                >
-                  <X className="size-4" />
-                </Link>
-              ) : null}
-            </label>
-          </form>
-
-          <OutletBadge data={data} />
         </div>
 
       {!data.outlet || !data.register ? (
