@@ -16,11 +16,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { ProductMasterCreateDrawer } from "@/components/products/product-master-create-drawer";
 import {
   parseProductListFilters,
   type ProductListFilters,
   type ProductStatus,
 } from "@/features/products/contracts";
+import { getProductMasterCategoryOptions } from "@/features/products/product-master-queries";
 import {
   getProductCategoryOptions,
   getProductList,
@@ -227,11 +229,15 @@ export default async function ProductCatalogPage({
   const canBatchImport = hasPermission(auth, "products.batch_import");
   const filters = parseProductListFilters(await searchParams);
 
-  const [overview, categoryOptions, productList] = await Promise.all([
-    getProductOverview(auth.organization.id),
-    getProductCategoryOptions(auth.organization.id),
-    getProductList(auth.organization.id, filters),
-  ]);
+  const [overview, categoryOptions, productList, createCategoryOptions] =
+    await Promise.all([
+      getProductOverview(auth.organization.id),
+      getProductCategoryOptions(auth.organization.id),
+      getProductList(auth.organization.id, filters),
+      canManage
+        ? getProductMasterCategoryOptions(auth.organization.id)
+        : Promise.resolve([]),
+    ]);
 
   const effectivePage = productList.page;
   const isFiltered = Boolean(
@@ -340,13 +346,7 @@ export default async function ProductCatalogPage({
 
           <div className="flex flex-wrap gap-2">
             {canManage ? (
-              <Link
-                href="/admin/produk/master/tambah"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/50 hover:text-[var(--accent)]"
-              >
-                <Plus className="size-4" />
-                Tambah Product Master
-              </Link>
+              <ProductMasterCreateDrawer categories={createCategoryOptions} />
             ) : null}
 
           <Link

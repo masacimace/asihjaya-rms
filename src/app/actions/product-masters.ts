@@ -182,6 +182,7 @@ export async function createProductMasterAction(
   const collection = readText(formData, "collection");
   const description = readText(formData, "description");
   const rawStatus = readText(formData, "status");
+  const responseMode = readText(formData, "responseMode");
 
   const fieldErrors = validateCommonFields({
     name,
@@ -308,6 +309,11 @@ export async function createProductMasterAction(
   }
 
   revalidateProductPages(createdProductId);
+
+  if (responseMode === "inline") {
+    return success("Product Master berhasil dibuat.");
+  }
+
   redirect(`/admin/produk/${createdProductId}?created=1`);
 }
 

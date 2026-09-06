@@ -36,7 +36,7 @@ type ProductMasterData = {
   status: ProductStatus;
 };
 
-type ProductMasterFormProps =
+type ProductMasterFormProps = (
   | {
       mode: "create";
       categories: ProductMasterCategoryOption[];
@@ -45,7 +45,11 @@ type ProductMasterFormProps =
       mode: "edit";
       categories: ProductMasterCategoryOption[];
       product: ProductMasterData;
-    };
+    }
+) & {
+  inlineSubmit?: boolean;
+  onSuccess?: () => void;
+};
 
 function ActionMessage({ state }: { state: ProductMasterActionState }) {
   if (state.status === "idle" || !state.message) return null;
@@ -87,8 +91,11 @@ export function ProductMasterForm(props: ProductMasterFormProps) {
   );
 
   useEffect(() => {
-    if (state.status === "success") router.refresh();
-  }, [router, state.status]);
+    if (state.status !== "success") return;
+
+    router.refresh();
+    props.onSuccess?.();
+  }, [props.onSuccess, router, state.status]);
 
   const statusOptions: ProductStatus[] =
     props.mode === "create"
@@ -99,6 +106,9 @@ export function ProductMasterForm(props: ProductMasterFormProps) {
 
   return (
     <form action={formAction} className="space-y-5">
+      {props.mode === "create" && props.inlineSubmit ? (
+        <input type="hidden" name="responseMode" value="inline" />
+      ) : null}
       <ActionMessage state={state} />
 
       <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
