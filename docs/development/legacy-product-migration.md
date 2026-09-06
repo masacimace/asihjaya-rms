@@ -1,303 +1,547 @@
-# Legacy Product Migration
+# Migrasi Produk Legacy — Direct Import Current-State
 
-## Milestone 1 — XLSX staging foundation
+Dokumen ini adalah referensi teknis untuk workflow **Migrasi Produk Legacy yang aktif saat ini**.
 
-Milestone ini menerima export master produk dari dashboard lama dan menyimpan seluruh baris ke staging terisolasi.
+Flow lama berbasis stock opname, verification session, manager review, hold, reconciliation, dan cutover sudah dipensiunkan dari UI/operasional aktif.
 
-Guardrail utama:
+## 1. Tujuan
 
-- Tidak membuat `product_items`.
-- Tidak mengubah status inventaris.
-- Tidak mengubah lookup POS.
-- Harga dan potongan lama hanya menjadi referensi.
-- Keberadaan stok tetap harus dibuktikan melalui scan barang fisik pada milestone berikutnya.
-- File yang sama dicegah masuk dua kali melalui SHA-256 dan advisory lock PostgreSQL.
-
-## Data flow
+Fitur ini digunakan untuk memindahkan export master produk dari sistem lama ke ASIHJAYA RMS dengan workflow sesingkat mungkin:
 
 ```text
-XLSX legacy
-  -> parser dan normalisasi
-  -> validasi barcode/data
-  -> legacy_product_import_batches
-  -> legacy_product_rows
+upload XLSX
+   ↓
+parse + validasi
+   ↓
+resolve kategori dan Product Master
+   ↓
+buat seluruh Product Item
+   ↓
+langsung available di Inventory + POS
+   ↓
+sinkronisasi foto legacy berjalan non-blocking
 ```
 
-Barcode legacy dinormalisasi menjadi string enam digit. Nilai `003037` tidak boleh berubah menjadi `3037`.
-
-## Permissions
-
-- `migration.view`: melihat batch dan baris staging.
-- `migration.import`: mengunggah workbook legacy ke staging.
-
-Migration database memberikan kedua permission tersebut kepada system role `system_admin`, `owner`, `manager`, dan `stock_admin`. Role custom dapat diatur melalui halaman role setelah migration diterapkan.
-
-## Pemeriksaan
-
-```bash
-npm run check:legacy-product-migration
-npm run check:database
-npm run routes:check
-npm run typecheck
-npm run lint
-npm run build
-```
-
-## Milestone 2 — Master Mapping dan Session Management
-
-- Satu mapping berlaku untuk seluruh item dengan `legacy_master_code` yang sama.
-- Tombol auto-draft membuat Product Master berstatus `draft`, bukan `active`.
-- Alias kategori legacy: Cincin, Gelang, Kalung, Liontin, Anting/Giwang, dan Logam Mulia dinormalisasi ke kategori sistem baru.
-- Manager dapat memetakan ke Product Master existing, mengabaikan master dengan alasan, atau mereset mapping ke pending.
-- Sesi migrasi dibagi per etalase/lokasi dan memiliki operator serta satu Migration Lead opsional.
-- Status sesi: `draft`, `active`, `locked`, `completed`, dan `cancelled`. Milestone 2 belum menyediakan scan sehingga status `completed` belum ditransisikan dari UI.
-- Tidak ada item yang dibuat atau diaktifkan pada milestone ini.
-
-## Milestone 3 — Mobile Physical Verification
-
-Milestone 3 menambahkan scanner mobile pada area POS tanpa mengaktifkan inventory.
-
-Alur:
+Prinsip utama:
 
 ```text
-Sesi aktif + assignment operator/lead
-  -> scan kamera atau input manual
-  -> lookup barcode pada batch staging
-  -> prefill data legacy atau physical unmatched
-  -> verifikasi data fisik dan foto
-  -> submit ke legacy_migration_verifications
-  -> antrean manager
+Import data tidak boleh menjadi proyek stock opname berlapis.
 ```
 
-Guardrail:
+Workbook adalah sumber data migrasi. Warning kualitas data tetap dicatat, tetapi tidak memblokir seluruh operasional.
 
-- Hanya sesi `active` yang menerima lookup dan submit.
-- Operator/lead wajib ditugaskan pada sesi; manager dengan `migration.session.manage` dapat melakukan override.
-- Barcode dinormalisasi memakai panjang barcode batch, termasuk leading zero.
-- Satu barcode hanya memiliki satu verification pada seluruh organization, sehingga tidak dapat didaftarkan ulang di outlet lain.
-- Advisory transaction lock dan unique index melindungi concurrent submit.
-- Retry dengan fingerprint sama bersifat idempotent.
-- Barcode yang tidak ada pada export memakai source `physical_unmatched`, wajib foto aktual, dan selalu `needs_review`.
-- Perubahan master, nama, berat, kadar, warna, kondisi rusak, atau warning legacy menghasilkan review flags.
-- Setiap verifikasi wajib memiliki tepat satu sumber foto: foto legacy atau foto aktual; keduanya tidak boleh dipilih bersamaan.
-- Milestone ini tidak melakukan insert ke `product_items` atau `item_barcodes`.
-- Milestone ini tidak mengubah item menjadi `available` dan tidak mengubah lookup checkout POS.
+## 2. Route
+
+Route utama:
+
+```text
+/admin/migrasi-produk
+```
+
+Detail batch:
+
+```text
+/admin/migrasi-produk/[batchId]
+```
 
 Permission:
 
-- `migration.scan`
-- `migration.verification.submit`
+```text
+migration.view
+migration.import
+```
 
-System role `cashier`, `manager`, `stock_admin`, `owner`, dan `system_admin` memperoleh permission tersebut melalui migration. Assignment sesi tetap menjadi pembatas operasional tambahan.
+## 3. Input XLSX
 
-Route:
+Import menerima workbook `.xlsx`.
+
+Source row dinormalisasi dan divalidasi sebelum direct import.
+
+Data legacy yang dipertahankan mencakup informasi seperti:
+
+- barcode legacy;
+- nama item;
+- Product Master/code legacy;
+- kategori;
+- berat;
+- kadar;
+- kadar tukaran bila tersedia;
+- warna;
+- potongan per gram;
+- harga legacy sebagai referensi;
+- URL foto legacy.
+
+Leading zero pada barcode harus tetap dipertahankan.
+
+Contoh:
 
 ```text
-/pos/migrasi-barang
-/pos/migrasi-barang/[sessionId]
+003037
 ```
 
-### Remote smoke test
-
-1. Buat sesi dan assign akun operator/lead.
-2. Ubah sesi menjadi Aktif.
-3. Login akun staff pada smartphone atau browser profile terpisah.
-4. Uji barcode clean, leading zero, warning, unmatched, duplicate, dan sesi locked.
-5. Untuk smartphone camera gunakan origin HTTPS sementara; input manual tetap tersedia untuk localhost.
-6. Pastikan jumlah `product_items` dan `item_barcodes` tidak berubah.
-
-### Onsite acceptance yang tetap diperlukan
-
-- Label pudar atau terlipat.
-- Pantulan lampu/plastik etalase.
-- Kamera smartphone staff.
-- Koneksi outlet saat beberapa staff scan bersamaan.
-- Pilot satu etalase sebelum migrasi massal.
-
-## Milestone 4 — Manager Review dan Inventory Hold
-
-Milestone 4 menambahkan antrean review manager pada:
+tidak boleh berubah menjadi:
 
 ```text
-/admin/migrasi-produk/[batchId]/review
+3037
 ```
 
-Aturan utama:
+## 4. Semua Row Tetap Masuk
 
-- `submitted` tanpa review flag dan kondisi `good` dapat diproses melalui bulk approval.
-- `needs_review` dan item `physical_unmatched` wajib dibuka satu per satu.
-- Manager dapat mengembalikan verification ke staff dengan alasan wajib.
-- Staff dapat scan barcode yang sama dan mengirim ulang verification yang berstatus `returned` selama sesi masih aktif dan assignment masih berlaku.
-- Penolakan tidak membuat Product Item ataupun barcode alias.
-- Approval membuat Product Item dengan `availability = migration_hold`.
-- Approval membuat satu alias barcode aktif dan primary pada `item_barcodes`.
-- Barcode hasil sequence sistem tetap disimpan pada `product_items.barcode` sebagai identitas internal; barcode lama menjadi alias fisik utama.
-- Approval tidak membuat `inventory_movements` dan tidak pernah mengubah item menjadi `available`.
-- Verification ditautkan ke Product Item melalui `product_item_id` untuk idempotency dan audit.
-
-### Flow approval
+Current contract:
 
 ```text
-verification submitted / needs_review
-  -> manager review
-  -> transaction lock verification + barcode
-  -> generate SKU dan internal barcode
-  -> insert product_items (migration_hold)
-  -> insert item_barcodes (legacy primary alias)
-  -> update verification approved + product_item_id
+warning / invalid source data
+        ↓
+item tetap dibuat
+        ↓
+needsCleanup = true
 ```
 
-Seluruh langkah berada dalam satu transaction. Kegagalan pada salah satu langkah melakukan rollback penuh.
+Warning atau kekurangan data tidak membentuk approval queue baru.
 
-### Return dan resubmit
+Data cleanup dapat dirapikan setelah item aktif sambil operasional berjalan.
+
+Contoh kondisi yang dapat membuat `needsCleanup`:
+
+- source row memiliki warning/invalid marker;
+- legacy barcode tidak dapat dipakai sebagai alias;
+- berat tidak valid/tidak tersedia;
+- kadar tidak valid/tidak tersedia;
+- nama item tidak tersedia;
+- legacy master code tidak tersedia.
+
+## 5. Resolusi Kategori
+
+Kategori legacy dinormalisasi ke kategori ASIHJAYA.
+
+Jika kategori yang cocok sudah ada:
 
 ```text
-manager return + reason
-  -> status returned
-  -> operator scan barcode yang sama
-  -> form terisi data sebelumnya + catatan manager
-  -> operator memperbaiki
-  -> resubmit meningkatkan revision
-  -> kembali ke submitted / needs_review
+reuse kategori existing
 ```
 
-Milestone 4 belum mencakup cutover, aktivasi massal menjadi `available`, pencatatan barang yang terjual di sistem lama, atau lookup alias barcode pada checkout POS. Bagian tersebut masuk Milestone 5.
-
-## Milestone 5A — Sold during migration
-
-Flow operasional dibuat satu langkah: manager membuka halaman **Terjual di Sistem Lama**, menempel satu barcode atau satu kolom barcode dari Excel, memilih tanggal penjualan, lalu menyimpan. Referensi transaksi dan catatan bersifat opsional.
-
-Guardrail:
-
-- barcode staging dapat ditandai meskipun belum pernah discan;
-- barcode dengan sold record aktif ditolak oleh scanner, resubmit, return/reject, dan approval;
-- semua jalur memakai advisory lock `legacy-barcode:<organization>:<barcode>`;
-- verification yang sudah ada berubah menjadi `sold_during_migration`;
-- Product Item `migration_hold` berubah menjadi `sold`, `is_active=false`, dan alias legacy dinonaktifkan;
-- tidak ada inventory movement dan tidak ada item yang menjadi `available`;
-- pembatalan mengembalikan status verification, Product Item, dan alias barcode dalam satu transaction;
-- permission pengelolaan adalah `migration.sold.manage`.
-
-Tabel `legacy_migration_sold_records` diperlukan agar barang yang terjual sebelum scan tetap tercatat dan dapat dikecualikan dari cutover. Hanya satu record aktif yang diizinkan per organization dan barcode; record lama tetap tersimpan sebagai audit history setelah dibatalkan.
-
-## Milestone 5B — Final reconciliation dan migrasi foto legacy
-
-Route manager:
+Jika belum ada:
 
 ```text
-/admin/migrasi-produk/[batchId]/rekonsiliasi
+buat kategori otomatis
+→ is_active = true
 ```
 
-Flow sengaja dibuat ringkas:
+Kategori hasil auto-create diberi jejak bahwa source berasal dari import legacy.
+
+## 6. Resolusi Product Master
+
+Direct import tidak menunggu mapping manual.
+
+Untuk setiap grup Product Master:
 
 ```text
-lihat blocker live
-  -> perbaiki hanya blocker
-  -> salin foto legacy per batch maksimal 100
-  -> ulangi foto gagal bila diperlukan
-  -> lanjut ke preflight cutover Milestone 5C
+legacy master cocok dengan existing
+        ↓
+reuse existing Product Master
+
+atau
+
+legacy master belum ada / tidak cocok
+        ↓
+buat Product Master baru otomatis
 ```
 
-Readiness tidak disimpan sebagai workflow baru. Query menghitung keadaan live dari sesi migrasi, verification, sold record aktif, Product Item `migration_hold`, Product Master, dan alias barcode legacy.
+Product Master yang digunakan direct import harus berada pada status aktif.
 
-Blocker yang ditampilkan:
+Metadata legacy tetap disimpan untuk audit dan cleanup.
 
-- belum ada sesi migrasi;
-- sesi masih `draft` atau `active`;
-- verification masih `submitted`, `needs_review`, atau `returned`;
-- jumlah barang fisik terproses masih di bawah total target sesi yang diisi;
-- verification approved kehilangan Product Item;
-- Product Item approved tidak lagi `migration_hold`/aktif;
-- Product Master belum `active`;
-- alias barcode legacy hilang, nonaktif, atau bukan primary.
+## 7. Pembuatan Product Item
 
-Target sesi yang tidak diisi hanya menjadi warning operasional. Staging XLSX berisi data historis sehingga seluruh 11.394 baris tidak pernah dianggap sebagai stok aktif yang wajib discan.
+Setiap source row menghasilkan satu Physical Product Item.
 
-### Migrasi foto
-
-Hanya verification `approved` yang memilih foto legacy dan masih memiliki Product Item `migration_hold` yang diproses. Foto aktual hasil upload sudah berada di private storage sehingga tidak disalin ulang.
-
-Download guard:
-
-- HTTPS wajib;
-- host dan seluruh redirect harus berada pada `LEGACY_IMAGE_ALLOWED_HOSTS`;
-- hostname IP/localhost, credential URL, dan port non-443 ditolak;
-- timeout dan batas byte diterapkan sebelum Sharp memproses gambar;
-- content type wajib JPG, PNG, atau WebP;
-- output selalu WebP melalui pipeline `image-storage` yang sama dengan upload normal;
-- update Product Item dan audit log dilakukan setelah validasi status ulang dengan advisory lock per item;
-- file hasil download dihapus bila item berubah atau proses database tidak dapat memakai file tersebut.
-
-Metadata hasil copy disimpan pada `product_items.attributes.legacyPhotoMigration`, tanpa tabel tambahan. Link asli pada `legacy_url` tetap dipertahankan sebagai jejak sumber.
-
-Urutan fallback tampilan tetap:
+State current setelah import berhasil:
 
 ```text
-Product Item imageKey internal
-  -> Product Master imageKey
-  -> placeholder sistem
+availability = available
+condition    = good
+location     = outlet
+is_active    = true
 ```
 
-Foto pending/gagal bukan blocker cutover. Item diberi warning dan dapat dilengkapi foto aktual setelah cutover. Item `physical_unmatched` tetap menggunakan foto aktual yang diwajibkan sejak Milestone 3.
-
-Environment opsional:
-
-```env
-LEGACY_IMAGE_ALLOWED_HOSTS=asihjaya.com
-LEGACY_IMAGE_DOWNLOAD_TIMEOUT_MS=12000
-LEGACY_IMAGE_DOWNLOAD_MAX_MB=8
-```
-
-Milestone 5B tidak membuat `inventory_movements`, tidak mengubah `migration_hold` menjadi `available`, dan tidak mengubah lookup checkout POS.
-
-## Milestone 5C — Transactional cutover dan aktivasi stok
-
-Route manager:
+Identifiers internal tetap dibuat oleh sequence sistem:
 
 ```text
-/admin/migrasi-produk/[batchId]/cutover
+SKU
+barcode internal
+QR value
 ```
 
-Cutover dijalankan per sesi/etalase agar dampak tetap kecil dan mudah diverifikasi. Tidak ada approval tambahan. Manager hanya membuka halaman aktivasi, memastikan preflight bersih, mengetik `AKTIFKAN STOK`, lalu menjalankan satu sesi.
+Nilai current inventory seperti nama, berat, kadar, warna, dan outlet diisi dari source yang berhasil dinormalisasi.
 
-Syarat utama:
+## 8. Barcode Legacy
 
-- seluruh sesi batch sudah `locked`, `completed`, atau `cancelled`;
-- tidak ada verification `submitted`, `needs_review`, atau `returned`;
-- target fisik yang diisi tidak mengalami shortfall;
-- verification approved memiliki Product Item aktif dengan `migration_hold`;
-- Product Master aktif;
-- alias barcode legacy aktif, primary, dan memiliki source yang benar;
-- barcode tidak memiliki sold record aktif.
+Barcode internal sistem selalu tersedia.
 
-Flow transaction:
+Barcode legacy digunakan sebagai alias bila memenuhi contract:
+
+- format legacy yang didukung;
+- nilainya unik pada active barcode namespace;
+- tidak bentrok dengan barcode internal atau alias aktif lain.
+
+Jika legacy barcode valid dan unik:
 
 ```text
-batch advisory lock
-  -> session row lock
-  -> barcode advisory locks terurut
-  -> validasi ulang verification, Product Item, master, alias, dan sold record
-  -> insert legacy_migration_cutover_runs
-  -> insert inventory_movements (migration_opening)
-  -> product_items migration_hold -> available
-  -> verification approved -> activated
-  -> session -> completed
-  -> audit log
-  -> commit
+legacy barcode
+→ item_barcodes
+→ source = legacy_import
+→ active
+→ primary
 ```
 
-Satu `legacy_migration_cutover_runs` hanya dapat dibuat untuk satu sesi. Retry setelah transaksi sukses tidak membuat movement atau item aktif kedua. Jika satu item gagal validasi, seluruh sesi rollback dan tidak ada aktivasi parsial.
+Jika barcode legacy bentrok/tidak dapat dipakai:
 
-Opening movement memakai:
+```text
+item tetap diimport
+→ memakai barcode internal
+→ needsCleanup dapat ditandai
+```
+
+Konflik barcode legacy **tidak boleh menggagalkan Product Item**.
+
+## 9. Harga dan Kadar
+
+Harga legacy bukan source harga jual aktif POS.
+
+Flow pricing:
+
+```text
+Kadar Persen item
+    ↓
+Harga/Gram aktif ASIHJAYA
+    ↓
+base selling price
+```
+
+Nilai harga legacy disimpan sebagai referensi metadata migrasi.
+
+Jika kadar dapat dinormalisasi dan ada active rate untuk kadar tersebut, base price current dapat dihitung dari Harga/Gram aktif.
+
+Manual pricing override pada POS tetap mengikuti contract POS yang berlaku.
+
+## 10. Inventory Opening Movement
+
+Direct import merepresentasikan masuknya stok awal ke ASIHJAYA RMS.
+
+Setiap item membuat inventory movement:
 
 ```text
 movement_type  = migration_opening
-reference_type = legacy_migration_cutover
-reference_id   = cutover run id
 from_outlet    = null
-to_outlet      = outlet sesi
+to_outlet      = outlet tujuan import
+reference_type = legacy_product_import_batch
+reference_id   = batch id
 ```
 
-Foto legacy pending/gagal tidak memblokir cutover. Proses copy foto Milestone 5B tetap dapat dijalankan untuk verification `activated` dengan Product Item `available`, sehingga fallback Product Master/placeholder tidak menjadi ketergantungan permanen.
+Movement dan Product Item dibuat dalam transaction import yang sama.
 
-Milestone 5C belum mengubah lookup checkout agar membaca `item_barcodes`. Item sudah `available`, tetapi scan label legacy pada checkout baru menjadi acceptance flow setelah Milestone 5D.
+## 11. Transaction Safety
+
+Direct import harus atomik.
+
+Flow sederhananya:
+
+```text
+BEGIN TRANSACTION
+→ resolve/create kategori
+→ resolve/create Product Master
+→ allocate identifiers
+→ build Product Item
+→ build barcode aliases
+→ build migration_opening movements
+→ insert Product Items
+→ insert aliases
+→ insert movements
+→ update batch ready
+→ audit direct commit
+COMMIT
+```
+
+Jika operation gagal sebelum commit:
+
+```text
+ROLLBACK
+```
+
+Tidak boleh ada sebagian Product Item aktif dari batch yang gagal.
+
+## 12. Retry dan Duplicate Guard
+
+Retry batch tidak boleh membuat Product Item kedua untuk source row yang sama.
+
+Ketika ditemukan Product Item existing dari batch:
+
+- jumlah item dibandingkan dengan jumlah source row;
+- metadata `rowId` diverifikasi;
+- duplicate row identity diperiksa;
+- missing source row diperiksa;
+- unknown metadata diperiksa.
+
+Jika satu Product Item committed ditemukan untuk setiap source row secara konsisten, batch dapat dipulihkan menjadi `ready` tanpa membuat item baru.
+
+Jika struktur existing tidak konsisten, retry dihentikan dengan error agar tidak menghasilkan duplikasi.
+
+## 13. Batch Status
+
+Status operasional utama direct import:
+
+```text
+processing
+ready
+failed
+```
+
+Pada UI:
+
+```text
+ready      → Selesai
+processing → Mengimport
+failed     → Gagal
+```
+
+Ketika `ready`, item hasil import sudah aktif pada Inventory dan POS.
+
+## 14. Sinkronisasi Foto Legacy
+
+Foto legacy menggunakan workflow non-blocking.
+
+Setelah direct import selesai:
+
+```text
+Product Item sudah available
+        ↓
+legacy_url tersedia
+        ↓
+image status = pending
+        ↓
+download
+        ↓
+private/internal storage
+        ↓
+product_items.imageKey
+        ↓
+image status = synced
+```
+
+Jika source tidak memiliki URL foto:
+
+```text
+image status = missing
+```
+
+Jika download gagal:
+
+```text
+image status = failed
+```
+
+Kegagalan foto tidak mengubah availability item.
+
+## 15. Auto Image Sync
+
+Halaman detail batch menjalankan `LegacyImageSyncRunner`.
+
+Jika:
+
+```text
+batch ready
++ permission migration.import
++ pending image > 0
+```
+
+runner mulai memproses foto secara otomatis.
+
+Pemrosesan dilakukan bertahap:
+
+```text
+batch size = 36
+concurrency = 6
+```
+
+Sinkronisasi dapat dilanjutkan dengan tombol **Lanjutkan sinkronisasi** jika masih ada pending item.
+
+## 16. Image Storage Contract
+
+Foto legacy tidak dipakai langsung sebagai hotlink permanen.
+
+Service:
+
+```text
+importLegacyImageToPrivateStorage(...)
+```
+
+menyalin source image ke storage internal/private project.
+
+Setelah berhasil:
+
+```text
+product_items.imageKey = imported image key
+```
+
+Metadata import menyimpan status dan informasi sync untuk audit.
+
+`legacyUrl` tetap dipertahankan sebagai jejak source.
+
+## 17. Failure Foto Tidak Memblokir POS
+
+Invariant:
+
+```text
+foto pending / failed != item unavailable
+```
+
+Item sudah aktif sebelum image sync.
+
+Jika foto gagal:
+
+- item tetap dapat muncul di Inventory/POS;
+- error code/message dicatat;
+- sync dapat dicoba kembali;
+- foto manual dapat ditambahkan kemudian.
+
+## 18. Audit Trail
+
+Direct import mencatat audit event untuk commit import.
+
+Informasi penting meliputi:
+
+- batch;
+- imported item count;
+- Product Master created/reused;
+- kategori created;
+- cleanup item count;
+- legacy alias count;
+- system-only barcode count;
+- image pending/missing count;
+- actor;
+- outlet;
+- timestamp/request metadata yang diizinkan.
+
+Retry recovery juga memiliki audit trail tersendiri.
+
+## 19. Data Cleanup Setelah Import
+
+Cleanup tidak memblokir operasional.
+
+Halaman detail batch menyediakan visibility terhadap:
+
+- row bersih;
+- row warning;
+- row invalid/perlu dirapikan;
+- Product Master created/reused;
+- legacy barcode alias;
+- item yang hanya memakai barcode internal;
+- URL foto;
+- foto tersalin/pending/gagal/missing.
+
+Source row tetap dipertahankan agar operator/admin dapat menelusuri asal data.
+
+## 20. Contract yang Tidak Boleh Kembali
+
+Workflow aktif tidak boleh kembali bergantung pada flow lama seperti:
+
+```text
+mapping manual berlapis
+verification session
+mobile stock-opname scanner
+manager approval queue
+hold sebelum aktivasi
+final reconciliation
+manual cutover
+sold-during-migration workflow
+```
+
+Jika kebutuhan bisnis berubah di masa depan, perubahan tersebut harus diperlakukan sebagai feature baru dan didokumentasikan secara eksplisit.
+
+## 21. Regression Checker
+
+Targeted checker:
+
+```powershell
+npm run check:legacy-product-migration
+```
+
+Contract penting yang dikunci:
+
+```text
+availability: "available"
+condition: "good"
+movementType: "migration_opening"
+source: "legacy_import"
+status: "ready"
+legacyPricePerGram
+needsCleanup
+DIRECT_IMPORT_EXISTING_ITEMS_INCONSISTENT
+completeCommittedImport
+```
+
+UI checker juga memastikan flow route lama tidak direferensikan kembali.
+
+## 22. Smoke Test Minimal
+
+### Direct import
+
+1. buka `/admin/migrasi-produk`;
+2. pilih outlet;
+3. upload XLSX valid;
+4. pastikan batch selesai;
+5. pastikan seluruh row menghasilkan item;
+6. pastikan item langsung terlihat di Inventory;
+7. pastikan item saleable dapat ditemukan POS;
+8. cek Product Master/category auto-create/reuse;
+9. cek barcode legacy unik dapat dipindai;
+10. cek conflict barcode tetap menghasilkan item dengan barcode internal.
+
+### Cleanup
+
+1. import row warning/invalid;
+2. pastikan item tetap masuk;
+3. pastikan row/item ditandai perlu dirapikan;
+4. pastikan cleanup marker tidak memblokir POS.
+
+### Foto
+
+1. gunakan row dengan URL foto valid;
+2. buka detail batch;
+3. pastikan runner mulai otomatis;
+4. pastikan image masuk ke internal storage;
+5. pastikan `imageKey` terisi;
+6. uji URL gagal;
+7. pastikan item tetap available.
+
+### Retry
+
+1. simulasikan retry batch setelah commit sukses;
+2. pastikan Product Item tidak terduplikasi;
+3. pastikan batch dapat direcover bila source-row identity lengkap;
+4. pastikan inconsistency menghasilkan guard error.
+
+## 23. Quality Gate
+
+Setelah perubahan pada domain ini:
+
+```powershell
+npm run check:legacy-product-migration
+npm run typecheck
+npm run lint
+npm run routes:check
+npm run build:clean
+```
+
+Jika perubahan menyentuh schema/database:
+
+```powershell
+npm run check:database
+npm run check:database:live
+```
+
+## 24. Kebijakan Dokumentasi
+
+Dokumen ini menjelaskan **workflow direct import yang aktif sekarang**.
+
+Sejarah milestone migrasi lama tetap tersedia melalui Git history dan tidak perlu dipertahankan sebagai current operational documentation.

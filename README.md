@@ -1,24 +1,24 @@
 # ASIHJAYA Retail Management System
 
-ASIHJAYA RMS adalah web application untuk operasional retail perhiasan yang menggabungkan **Admin Dashboard**, **Point of Sale**, inventory per physical item, customer management, Buyback, reporting, Telegram reporting, private storage, database backup/restore, dan Local Hardware Hub.
+ASIHJAYA RMS adalah aplikasi web untuk operasional retail perhiasan yang menggabungkan **Admin Dashboard**, **Point of Sale (POS)**, inventaris per barang fisik, pelanggan, Buyback, laporan, Telegram Reporting, private storage, backup/restore database, dan Local Hardware Hub.
 
-> **Current status:** active development / UAT dan preview deployment. Sistem belum dinyatakan final production go-live.
+> **Status saat ini:** pengembangan aktif / UAT / preview deployment. Sistem belum dinyatakan final production go-live.
 >
-> **Development workflow:** LOCAL FIRST. Perubahan diimplementasikan, diuji, dan distabilkan di local development terlebih dahulu. Setelah quality gate dan smoke test hijau, source yang sama dideploy ke preview VPS.
+> **Alur pengembangan:** **LOCAL FIRST**. Perubahan diimplementasikan, diuji, dan distabilkan di local development terlebih dahulu. Setelah quality gate dan smoke test hijau, source yang sama dideploy ke preview VPS.
 
-## Source of Truth
+## Sumber Kebenaran Project
 
-README ini menjelaskan **state project saat ini**, bukan sejarah seluruh milestone pengembangan.
+README ini menjelaskan **kondisi project saat ini**, bukan sejarah seluruh milestone pengembangan.
 
 Aturan dokumentasi:
 
-- Implementasi source code dan database migration adalah sumber kebenaran utama untuk behavior runtime.
-- README merangkum arsitektur, module, workflow, dan operational posture yang masih relevan.
-- Dokumentasi detail berada di `docs/`.
-- Milestone lama yang sudah superseded tidak boleh diperlakukan sebagai behavior aktif.
-- Jangan menambahkan roadmap atau integration yang tidak benar-benar digunakan oleh operational flow saat ini.
+- implementasi source code dan database migration adalah sumber kebenaran utama untuk perilaku runtime;
+- README merangkum arsitektur, modul, workflow, dan kondisi operasional yang masih relevan;
+- dokumentasi teknis yang lebih detail berada di `docs/`;
+- flow lama yang sudah digantikan tidak boleh diperlakukan sebagai behavior aktif;
+- integrasi atau fitur yang tidak digunakan oleh operasional saat ini tidak boleh ditulis sebagai fitur aktif.
 
-## Operational Model
+## Model Operasional
 
 Baseline operasional yang sedang dituju:
 
@@ -26,39 +26,39 @@ Baseline operasional yang sedang dituju:
 - satu outlet aktif pada deployment saat ini;
 - manager/admin menggunakan desktop atau mini PC;
 - sales/cashier dapat menggunakan desktop maupun mobile;
-- arsitektur authorization dan data tetap organization/outlet scoped;
-- web app dapat berjalan di VPS sementara Hardware Hub berjalan pada Windows mini PC lokal outlet.
+- authorization dan data tetap menggunakan organization/outlet scope;
+- web application dapat berjalan di VPS sementara Hardware Hub berjalan pada Windows mini PC lokal outlet.
 
-Arsitektur tetap memungkinkan perluasan multi-outlet tanpa menjadikan multi-outlet sebagai requirement deployment saat ini.
+Arsitektur tetap mempertahankan scope organization/outlet sehingga perluasan outlet di masa depan tidak membutuhkan perubahan konsep data utama.
 
-## Current Core Modules
+## Modul Utama Saat Ini
 
-| Module                         | Current capability                                                                 |
-| ------------------------------ | ---------------------------------------------------------------------------------- |
-| Authentication & Authorization | Database-backed session, role/permission, organization/outlet scope                |
-| Admin Dashboard                | Operational overview, reports, management entry points                             |
-| POS                            | Catalog, scan/search item, cart, pricing, checkout, held cart, transaction history |
-| Jewelry Pricing                | Global Harga/Gram per Kadar Persen + manual per-transaction override               |
-| Manual Payment                 | Cash, EDC, Transfer, payment profile, verification metadata                        |
-| Customer                       | Customer master, transaction history, Dana Titip, public receipt history           |
-| Product Master                 | Product identity, category, image, active/draft lifecycle                          |
-| Physical Inventory             | SKU, barcode/QR, item image, weight, purity, condition, location, availability     |
-| Buyback                        | Acquisition, Cuci/Rongsok processing, historical snapshots, resale                 |
-| Shift & Cash                   | Opening, closing, expected cash, controlled reopen, cash movement                  |
-| Sales History                  | POS/Admin history, receipt, historical item snapshots                              |
-| Refund / Return                | Financial correction and physical return workflow                                  |
-| Reporting                      | Sales, inventory, financial and operational reporting/export                       |
-| Legacy Product Migration       | XLSX staging, physical verification, reconciliation, cutover                       |
-| Notification Center            | In-app operational notifications and lifecycle                                     |
-| Telegram Reporting             | Outbound opening/daily/weekly/monthly reporting and delivery operations            |
-| Settings Hub                   | Manual payment profile, Harga/Gram, Telegram configuration                         |
-| Hardware Hub                   | Signed agent, job polling, print job protocol, label/document printer adapters     |
-| Database Operations            | Forward migrations, backup, restore, off-site replication                          |
-| Deployment Operations          | Production container contract, health checks, rollback automation                  |
+| Modul | Kemampuan saat ini |
+| --- | --- |
+| Authentication & Authorization | Session berbasis database, role/permission, organization/outlet scope |
+| Admin Dashboard | Ringkasan operasional, laporan, dan entry point manajemen |
+| POS | Catalog, scan/search item, cart, pricing, checkout, held cart, riwayat transaksi |
+| Harga Jewelry | Harga/Gram global per Kadar Persen + override per transaksi |
+| Pembayaran Manual | Cash, EDC, Transfer, payment profile, metadata verifikasi |
+| Pelanggan | Customer master, riwayat transaksi, Dana Titip, public receipt history |
+| Product Master | Identitas produk, kategori, foto, lifecycle active/draft |
+| Inventaris Fisik | SKU, barcode/QR, foto item, berat, kadar, kondisi, lokasi, availability |
+| Buyback | Pembelian kembali, Cuci/Rongsok, historical snapshots, penjualan kembali |
+| Shift & Cash | Opening, closing, expected cash, controlled reopen, cash movement |
+| Riwayat Penjualan | Riwayat POS/Admin, receipt, historical item snapshots |
+| Refund / Return | Koreksi finansial dan pengembalian barang fisik |
+| Laporan | Laporan sales, inventory, financial, operational, dan export |
+| Migrasi Produk Legacy | Direct import XLSX langsung menjadi stok tersedia + sinkronisasi foto legacy |
+| Notification Center | Notifikasi operasional di dalam aplikasi |
+| Telegram Reporting | Opening/daily/weekly/monthly outbound reporting dan delivery operations |
+| Settings Hub | Payment profile, Harga/Gram, konfigurasi Telegram |
+| Hardware Hub | Signed agent, job polling, print job protocol, label/document printer adapter |
+| Operasi Database | Forward migration, backup, restore, off-site replication |
+| Operasi Deployment | Container contract, health check, backup, rollback automation |
 
-## Active POS Payment Model
+## Model Pembayaran POS
 
-Active checkout payment methods are intentionally simple:
+Metode pembayaran checkout POS yang aktif:
 
 ```text
 Cash
@@ -66,36 +66,38 @@ EDC
 Transfer
 ```
 
-EDC terminal dan rekening transfer dikelola melalui Settings Hub sehingga outlet dapat menentukan profile pembayaran manual yang tersedia di POS.
+Terminal EDC dan rekening transfer dikelola melalui Settings Hub sehingga outlet dapat menentukan profile pembayaran manual yang tersedia pada POS.
 
-Dana Titip customer memiliki ledger terpisah dan dapat menjadi bagian dari financial workflow customer.
+Dana Titip pelanggan memiliki ledger terpisah dan tidak diperlakukan sebagai payment gateway.
 
-### Important payment scope
+### Batasan payment integration
 
-Operational POS saat ini **tidak menggunakan payment gateway/webhook flow**.
+POS operasional saat ini **tidak menggunakan payment gateway/webhook flow**.
 
-Database schema dan beberapa reporting labels dapat tetap memiliki enum legacy untuk backward compatibility, tetapi itu tidak berarti method tersebut aktif pada checkout. Source of truth untuk method pembayaran POS aktif berada pada manual checkout payment contract.
+Database schema dan sebagian reporting compatibility dapat tetap memiliki enum historis yang lebih luas, tetapi enum tersebut tidak otomatis berarti metode itu aktif pada checkout.
 
-## Hybrid Jewelry Pricing
+Source of truth untuk metode pembayaran POS aktif berada pada contract manual checkout payment.
 
-Harga jual jewelry memakai model hybrid:
+## Harga Jewelry Hybrid
+
+Harga jual jewelry menggunakan model hybrid:
 
 ```text
 Kadar Persen
     ↓
 Harga / Gram Aktif
     ↓
-default harga transaksi
+harga default transaksi
     ↓
 operator dapat menggunakan harga khusus per transaksi
 ```
 
-Rules penting:
+Aturan penting:
 
-- global Harga/Gram tetap menjadi default berdasarkan Kadar Persen;
+- Harga/Gram global menjadi default berdasarkan Kadar Persen;
 - item dengan kadar sama dapat memakai default rate yang sama;
-- operator tetap dapat memberikan **manual override** pada transaksi tertentu;
-- source harga transaksi disimpan sebagai snapshot sehingga history tidak ikut berubah ketika global rate diperbarui;
+- operator tetap dapat melakukan manual override pada transaksi tertentu;
+- harga transaksi disimpan sebagai snapshot sehingga riwayat tidak berubah ketika global rate diperbarui;
 - perubahan Harga/Gram dilakukan melalui Settings Hub.
 
 Route:
@@ -104,9 +106,9 @@ Route:
 /admin/pengaturan/harga-gram
 ```
 
-## Buyback — Current Final Lifecycle
+## Buyback — Lifecycle Final Saat Ini
 
-Buyback bukan shortcut untuk mengembalikan barang langsung ke stok jual.
+Buyback tidak langsung mengembalikan barang menjadi stok jual.
 
 Invariant utama:
 
@@ -114,7 +116,7 @@ Invariant utama:
 Buyback completed != saleable inventory
 ```
 
-Final lifecycle:
+Lifecycle final:
 
 ```text
 Customer
@@ -131,10 +133,10 @@ availability = available
 condition    = used
 location     = outlet
    ↓
-Saleable di POS
+dapat dijual di POS
 ```
 
-### Buyback acquisition
+### Akuisisi Buyback
 
 Operator mencatat:
 
@@ -146,11 +148,11 @@ Operator mencatat:
 - kadar;
 - berat;
 - Total Harga final;
-- foto kondisi ketika diterima.
+- foto kondisi saat diterima.
 
 Tidak ada Product Master mapping wajib pada intake barang luar.
 
-Tidak ada flow approval/activation tambahan setelah pekerjaan fisik selesai.
+Tidak ada approval/activation tambahan setelah pekerjaan fisik selesai.
 
 ### Existing ASIHJAYA item
 
@@ -160,7 +162,7 @@ Jika Buyback berasal dari item ASIHJAYA yang sebelumnya terjual:
 - Product Item ID tetap;
 - SKU tetap;
 - barcode/QR identity tetap;
-- setelah Buyback item masuk `processing`;
+- setelah Buyback, item masuk `processing`;
 - current identity baru diterapkan ketika Cuci/Rongsok selesai;
 - cost item setelah processing berasal dari nilai acquisition Buyback;
 - item menjadi `used + available + outlet` setelah completion.
@@ -171,10 +173,10 @@ Untuk barang luar:
 
 - Buyback acquisition tidak langsung membuat Product Item saleable;
 - `product_item_id` dapat tetap `NULL` selama antrean processing;
-- pada completion operator memilih atau membuat Product Master;
-- Product Item, SKU, barcode/QR, dan current inventory identity dibuat secara atomik;
+- saat completion operator memilih atau membuat Product Master;
+- Product Item, SKU, barcode/QR, dan current inventory identity dibuat atomik;
 - cost item menggunakan nilai final Buyback;
-- hasil langsung masuk sebagai `used + available + outlet`.
+- hasil langsung menjadi `used + available + outlet`.
 
 ### Historical identity
 
@@ -194,30 +196,23 @@ CURRENT INVENTORY
 kondisi physical item saat ini
 ```
 
-Contoh: Sale lama tidak boleh berubah nama, berat, kadar, kategori, SKU display, atau economic snapshot hanya karena item yang sama kemudian di-Buyback dan direkondisi.
+Sale lama tidak boleh berubah identitas atau nilai ekonominya hanya karena item yang sama kemudian di-Buyback dan direkondisi.
 
-Detail engineering ada di:
+Dokumentasi teknis:
 
 ```text
 docs/development/buyback-lifecycle.md
 ```
 
-### Buyback routes
+### Route Buyback
 
-| Route                     | Purpose                                         |
-| ------------------------- | ----------------------------------------------- |
-| `/pos/buyback`            | acquisition + preview 5 transaksi terbaru       |
-| `/pos/buyback/pemrosesan` | queue dan completion Cuci/Rongsok               |
-| `/pos/buyback/riwayat`    | full history, search/filter, pagination 10/page |
+| Route | Fungsi |
+| --- | --- |
+| `/pos/buyback` | acquisition + preview 5 transaksi terbaru |
+| `/pos/buyback/pemrosesan` | antrean dan completion Cuci/Rongsok |
+| `/pos/buyback/riwayat` | full history, search/filter, pagination 10/page |
 
-Responsive UX:
-
-- Buyback list menggunakan responsive layout;
-- processing form menggunakan right-side drawer pada desktop;
-- processing form menjadi fullscreen pada tablet/mobile;
-- history dedicated menggunakan table pada desktop dan transaction card pada mobile.
-
-### Buyback implementation status
+### Status implementasi Buyback
 
 ```text
 B1 Data Model & Lifecycle              DONE
@@ -227,38 +222,37 @@ UI/UX Refinement                       DONE
 B4 POS + Historical Identity Audit     DONE
 ```
 
-Schema milestones terkait:
+Migration terkait:
 
 ```text
 0022_buyback_processing_lifecycle
 0023_buyback_simplified_acquisition
 ```
 
-## Product & Inventory Lifecycle
+## Product Master dan Inventaris Fisik
 
-Product Master adalah reusable product definition. Product Item mewakili satu physical item.
+Product Master adalah definisi reusable sebuah produk. Product Item mewakili satu barang fisik.
 
-Physical inventory menyimpan identity dan state seperti:
+Physical inventory menyimpan data seperti:
 
 - SKU;
 - barcode dan QR;
 - Product Master;
-- item display name;
-- current outlet;
-- weight;
-- purity;
-- color/size/gemstone;
-- image;
+- nama item saat ini;
+- outlet saat ini;
+- berat;
+- kadar;
+- warna/ukuran/batu;
+- foto;
 - acquisition cost;
 - condition;
 - availability;
 - location state.
 
-Availability penting yang digunakan antara lain:
+State availability yang digunakan sistem antara lain:
 
 ```text
 draft
-migration_hold
 processing
 available
 reserved
@@ -266,7 +260,9 @@ inspection
 sold
 ```
 
-POS sale gate hanya menerima item yang memenuhi invariant saleable, termasuk:
+Enum historis seperti `migration_hold` dapat tetap ada untuk backward compatibility database, tetapi **bukan bagian dari workflow Migrasi Produk Legacy yang aktif saat ini**.
+
+POS hanya menerima item yang memenuhi sale gate, termasuk:
 
 ```text
 availability = available
@@ -275,56 +271,93 @@ location     = outlet
 item active
 Product Master active
 category active
-correct outlet
-not held by active held cart
+outlet sesuai
+tidak sedang dikunci held cart aktif
 ```
 
-## Legacy Product Migration
+## Migrasi Produk Legacy — Direct Import
 
-Legacy migration tetap memakai pendekatan staging dan physical verification, bukan import langsung menjadi stok jual.
+Migrasi produk legacy sekarang menggunakan **direct import sederhana**, bukan flow verifikasi berlapis.
 
-High-level flow:
+Route utama:
 
 ```text
-Legacy XLSX
-   ↓
-staging
-   ↓
-Product Master mapping
-   ↓
-physical verification
-   ↓
-manager review
-   ↓
-migration_hold
-   ↓
-final reconciliation
-   ↓
-transactional cutover
-   ↓
-available inventory
+/admin/migrasi-produk
 ```
 
-Fitur yang sudah tersedia mencakup:
+Flow aktif:
 
-- preserve legacy barcode sebagai string;
-- mapping master;
-- session/assignment per area kerja;
-- physical verification;
-- unmatched barcode handling;
-- sold-during-migration exclusion;
-- legacy image migration ke private storage;
-- final reconciliation;
-- transactional cutover;
-- barcode alias support.
+```text
+XLSX dari sistem lama
+        ↓
+parse + normalisasi + validasi
+        ↓
+kategori di-resolve / dibuat otomatis
+        ↓
+Product Master di-resolve / dibuat otomatis
+        ↓
+Product Item dibuat
+        ↓
+availability = available
+condition    = good
+location     = outlet
+is_active    = true
+        ↓
+inventory movement = migration_opening
+        ↓
+langsung tersedia di Inventory + POS
+```
 
-Detail:
+Aturan penting:
+
+- seluruh row workbook tetap diimport;
+- warning/invalid tidak memblokir item masuk;
+- data yang perlu dirapikan ditandai sebagai cleanup sambil operasional berjalan;
+- Product Master existing digunakan kembali bila cocok;
+- Product Master dan kategori baru dapat dibuat otomatis;
+- sistem selalu membuat SKU/barcode/QR internal;
+- barcode legacy dipertahankan sebagai alias bila unik dan memenuhi contract;
+- konflik barcode legacy tidak menggagalkan import item;
+- Harga/Gram aktif berdasarkan Kadar Persen tetap menjadi pricing source POS;
+- nilai harga legacy disimpan sebagai referensi, bukan sebagai pricing source aktif POS;
+- direct import bersifat transactional sehingga kegagalan tidak boleh menghasilkan aktivasi item parsial;
+- retry dilindungi agar tidak membuat duplikasi Product Item untuk source row yang sama.
+
+### Sinkronisasi foto legacy
+
+Foto tidak menjadi blocker inventory.
+
+Setelah direct import berhasil:
+
+```text
+item sudah available
+        ↓
+legacy image URL
+        ↓
+download bertahap
+        ↓
+private/internal storage
+        ↓
+product_items.imageKey
+```
+
+Sinkronisasi foto dimulai otomatis pada halaman detail batch selama masih ada foto pending.
+
+Jika download foto gagal:
+
+- item tetap available;
+- POS tetap dapat menggunakan item;
+- kegagalan dicatat;
+- sinkronisasi dapat dilanjutkan;
+- foto dapat dilengkapi manual bila diperlukan.
+
+Dokumentasi teknis current-state:
 
 ```text
 docs/development/legacy-product-migration.md
 ```
 
-## Customer & Historical Sales
+## Pelanggan dan Riwayat Penjualan
 
 Customer dapat memiliki:
 
@@ -334,11 +367,11 @@ Customer dapat memiliki:
 - Dana Titip ledger;
 - public receipt history access.
 
-Historical Sale read path bersifat **snapshot-first**.
+Historical Sale menggunakan prinsip **snapshot-first**.
 
-Artinya history Sale, customer history, Admin Sale detail, receipt, refund expected weight, dan reporting tidak boleh mengambil current item state sebagai primary historical truth setelah physical item berubah di kemudian hari.
+Artinya history Sale, customer history, Admin Sale detail, receipt, refund expected weight, dan reporting tidak boleh memakai current Product Item sebagai kebenaran historis utama setelah barang berubah di kemudian hari.
 
-## Shift & Cash
+## Shift dan Kas
 
 POS menggunakan shift sebagai konteks transaksi finansial.
 
@@ -354,7 +387,13 @@ cash movement / transaction
 Close shift + reconciliation
 ```
 
-Controlled shift reopen tersedia untuk kondisi operasional yang memang memerlukan koreksi, dengan authorization dan audit guard.
+Controlled shift reopen tersedia untuk koreksi operasional yang memang diizinkan, dengan authorization dan audit guard.
+
+Dokumentasi:
+
+```text
+docs/development/controlled-shift-reopen.md
+```
 
 ## Settings Hub
 
@@ -363,8 +402,6 @@ Route:
 ```text
 /admin/pengaturan
 ```
-
-Current settings groups:
 
 ### Pembayaran
 
@@ -380,7 +417,7 @@ Mengelola terminal EDC dan rekening transfer yang tersedia pada POS.
 /admin/pengaturan/harga-gram
 ```
 
-Mengelola global Harga/Gram aktif berdasarkan Kadar Persen.
+Mengelola Harga/Gram aktif berdasarkan Kadar Persen.
 
 ### Telegram Reporting
 
@@ -399,11 +436,11 @@ Mengelola:
 - delivery history;
 - manual retry.
 
-Telegram integration bersifat **outbound reporting**, bukan conversational bot untuk customer.
+Telegram adalah **outbound reporting**, bukan conversational bot untuk customer.
 
 ## Notification Center
 
-In-app Notification Center menangani awareness/follow-up operasional seperti transaction event, shift, correction, hardware, dan event administratif yang relevan.
+Notification Center menangani awareness dan follow-up operasional seperti transaction event, shift, correction, hardware, serta event administratif yang relevan.
 
 Notification Center bukan pengganti backend authorization dan bukan pengganti transactional guard.
 
@@ -411,19 +448,19 @@ Notification Center bukan pengganti backend authorization dan bukan pengganti tr
 
 Web application dapat berkomunikasi dengan Hardware Hub yang berjalan pada Windows mini PC outlet.
 
-High-level architecture:
+Arsitektur:
 
 ```text
-ASIHJAYA RMS on VPS
+ASIHJAYA RMS di VPS
         ↓ HTTPS signed protocol
-Hardware Hub on local Windows mini PC
+Hardware Hub di Windows mini PC lokal
         ↓
 device adapters
 ├── Label printer
 └── Document / receipt printer
 ```
 
-Capability yang tersedia:
+Kemampuan utama:
 
 - hardware agent registration/provisioning;
 - credential lifecycle;
@@ -433,7 +470,7 @@ Capability yang tersedia:
 - print payload protocol;
 - label print pipeline;
 - document print pipeline;
-- Hardware Hub status di web application.
+- status Hardware Hub pada web application.
 
 Real hardware tetap harus divalidasi per device/profile sebelum final production go-live.
 
@@ -447,7 +484,7 @@ docs/hardware-hub/sato-cg408-profile.md
 docs/hardware-hub/receipt-a4-epson-profile.md
 ```
 
-## Architecture
+## Arsitektur Aplikasi
 
 ```text
 Desktop / Mobile Browser
@@ -463,7 +500,7 @@ Drizzle ORM
 PostgreSQL
 ```
 
-Side systems:
+Sistem pendamping:
 
 ```text
                          ┌─ Private image/file storage
@@ -472,18 +509,18 @@ Next.js application  ────┼─ Telegram outbound delivery
                          └─ PostgreSQL backup → local retention → Backblaze B2
 ```
 
-Critical financial and inventory operations use transaction-level protections such as:
+Operasi inventory dan financial yang kritis menggunakan proteksi seperti:
 
 - database transaction;
-- row/advisory locks where required;
+- row/advisory lock bila diperlukan;
 - idempotency;
-- unique constraints;
+- unique constraint;
 - audit log;
-- immutable transaction snapshots.
+- immutable transaction snapshot.
 
 ## Technology Stack
 
-Current baseline:
+Baseline saat ini:
 
 - Next.js App Router;
 - React 19;
@@ -494,26 +531,26 @@ Current baseline:
 - Node.js `>=24.14.0 <25`;
 - npm `>=11.9.0 <12`;
 - Docker Compose;
-- Playwright for PDF/contract flows;
+- Playwright untuk PDF/contract flow;
 - local + S3-compatible private storage abstraction;
 - Windows Hardware Hub.
 
-## Repository Layout
+## Struktur Repository
 
 ```text
 src/
-├── app/                    Next.js routes, actions, route handlers
-├── components/             Admin/POS/shared UI
-├── db/                     schema, seed, DB integration
-├── features/               domain queries/services/contracts
+├── app/                    route Next.js, action, route handler
+├── components/             UI Admin/POS/shared
+├── db/                     schema, seed, integrasi DB
+├── features/               query/service/contract domain
 ├── lib/                    shared infrastructure
 └── server/                 server integrations
 
-hardware-hub/               local Windows hardware runtime
+hardware-hub/               runtime hardware lokal Windows
 
-drizzle/                    forward-only database migrations
-scripts/                    checkers, tests, deployment/backup tooling
-ops/                        VPS/operations assets
+drizzle/                    forward-only database migration
+scripts/                    checker, test, deployment/backup tooling
+ops/                        asset operasional VPS
 docs/
 ├── development/
 ├── hardware-hub/
@@ -524,21 +561,21 @@ docs/
 
 ### Toolchain
 
-Verify:
+Periksa:
 
 ```powershell
 node --version
 npm --version
 ```
 
-Supported:
+Versi yang didukung:
 
 ```text
 Node >=24.14.0 <25
 npm  >=11.9.0 <12
 ```
 
-### First-time setup
+### Setup pertama
 
 ```powershell
 Copy-Item .env.example .env
@@ -553,11 +590,11 @@ npm run db:seed
 npm run dev
 ```
 
-`db:seed` hanya digunakan untuk database baru/reset yang disengaja.
+`db:seed` hanya digunakan untuk database baru atau reset yang memang disengaja.
 
 Jangan menjalankan seed setiap selesai migration pada database development yang sudah memiliki data.
 
-### Existing development database
+### Development database yang sudah ada
 
 ```powershell
 npm ci
@@ -568,32 +605,32 @@ npm run typecheck
 npm run dev
 ```
 
-### Safe local reset
+### Reset local yang disengaja
 
 ```powershell
 npm run db:fresh:local -- --confirm=RESET_LOCAL_DATABASE
 ```
 
-Dengan local upload purge:
+Dengan purge local upload:
 
 ```powershell
 npm run db:fresh:local -- --confirm=RESET_LOCAL_DATABASE --purge-local-storage
 ```
 
-## Database Migration Rules
+## Aturan Database Migration
 
 Migration bersifat forward-only.
 
-Rules:
+Aturan:
 
 - jangan mengedit migration yang sudah pernah diterapkan;
-- perubahan schema baru harus dibuat melalui migration berikutnya;
+- perubahan schema baru dibuat melalui migration berikutnya;
 - backup sebelum migration besar;
 - schema dan `drizzle.__drizzle_migrations` harus sinkron;
-- gunakan database disposable untuk migration rehearsal/integration tests;
+- gunakan database disposable untuk migration rehearsal/integration test;
 - `db:seed` bukan langkah otomatis setelah setiap migration.
 
-Core commands:
+Command utama:
 
 ```powershell
 npm run db:generate
@@ -602,9 +639,9 @@ npm run db:migrate
 npm run check:database:live
 ```
 
-## Backup, Restore & Off-site Safety
+## Backup, Restore, dan Off-site Safety
 
-Project memiliki database operations untuk:
+Project memiliki database operation untuk:
 
 - daily backup;
 - weekly backup;
@@ -615,7 +652,7 @@ Project memiliki database operations untuk:
 - verification;
 - Backblaze B2 off-site replication.
 
-Operational goal:
+Tujuan operasional:
 
 ```text
 Server boleh rusak.
@@ -628,10 +665,10 @@ provision VPS baru
         ↓
 restore
         ↓
-continue operation
+lanjut operasional
 ```
 
-Relevant commands:
+Command terkait:
 
 ```powershell
 npm run db:backup:production
@@ -642,7 +679,7 @@ npm run db:backup:offsite:verify
 npm run db:restore:production
 ```
 
-Detailed docs:
+Dokumentasi:
 
 ```text
 docs/development/database-backup-restore.md
@@ -651,16 +688,16 @@ docs/development/database-deployment.md
 docs/development/deployment-rollback-automation.md
 ```
 
-## Deployment Posture
+## Pola Deployment Saat Ini
 
-Current workflow:
+Workflow:
 
 ```text
 LOCAL DEVELOPMENT
     ↓
 targeted checker
     ↓
-typecheck / build / smoke
+typecheck / lint / route check / build / smoke test
     ↓
 commit + push
     ↓
@@ -669,11 +706,11 @@ PREVIEW VPS
 preview smoke test
 ```
 
-The preview VPS is not treated as the only copy of application state.
+Preview VPS bukan satu-satunya copy application state.
 
-Production deployment tooling includes container contract, database deployment guard, health checks, backup, and rollback automation.
+Production tooling sudah memiliki container contract, database deployment guard, health check, backup, dan rollback automation.
 
-Useful documentation:
+Dokumentasi:
 
 ```text
 docs/development/asihjaya-rms-production-handoff.md
@@ -681,16 +718,16 @@ docs/production-readiness/logging-monitoring.md
 docs/production-readiness/reverse-proxy-cloudflare.md
 ```
 
-## Environment & Secrets
+## Environment dan Secrets
 
-Templates:
+Template:
 
 ```text
 .env.example
 .env.production.example
 ```
 
-Useful commands:
+Command:
 
 ```powershell
 npm run env:generate-secrets -- --write .env
@@ -699,7 +736,7 @@ npm run env:validate
 npm run env:validate:production
 ```
 
-Never commit:
+Jangan commit:
 
 - `.env`;
 - database dump;
@@ -710,53 +747,53 @@ Never commit:
 - Backblaze application key;
 - production access token.
 
-Environment documentation:
+Dokumentasi:
 
 ```text
 docs/development/environment-configuration.md
 ```
 
-## Main Routes
+## Route Utama
 
 ### POS
 
-| Route                     | Purpose                 |
-| ------------------------- | ----------------------- |
-| `/pos`                    | POS workspace           |
-| `/pos/produk`             | product/catalog access  |
-| `/pos/pelanggan`          | customer access         |
-| `/pos/ditahan`            | held transactions       |
-| `/pos/shift`              | shift operations        |
-| `/pos/transaksi`          | POS transaction history |
-| `/pos/buyback`            | Buyback acquisition     |
+| Route | Fungsi |
+| --- | --- |
+| `/pos` | workspace POS |
+| `/pos/produk` | product/catalog access |
+| `/pos/pelanggan` | customer access |
+| `/pos/ditahan` | transaksi ditahan |
+| `/pos/shift` | operasi shift |
+| `/pos/transaksi` | riwayat transaksi POS |
+| `/pos/buyback` | acquisition Buyback |
 | `/pos/buyback/pemrosesan` | Cuci/Rongsok processing |
-| `/pos/buyback/riwayat`    | full Buyback history    |
+| `/pos/buyback/riwayat` | full Buyback history |
 
 ### Admin
 
-| Route                                     | Purpose                                        |
-| ----------------------------------------- | ---------------------------------------------- |
-| `/admin`                                  | dashboard                                      |
-| `/admin/produk`                           | Product Master                                 |
-| `/admin/inventaris`                       | physical inventory                             |
-| `/admin/penjualan`                        | sales history/admin transaction tools          |
-| `/admin/pelanggan`                        | customer administration                        |
-| `/admin/laporan`                          | reporting                                      |
-| `/admin/migrasi-produk`                   | legacy product migration                       |
-| `/admin/operasional/*`                    | shift/cash/hardware operational administration |
-| `/admin/notifikasi`                       | Notification Center                            |
-| `/admin/pengaturan`                       | Settings Hub                                   |
-| `/admin/pengaturan/pembayaran/manual-edc` | EDC/bank transfer profiles                     |
-| `/admin/pengaturan/harga-gram`            | Harga/Gram                                     |
-| `/admin/pengaturan/integrasi/telegram`    | Telegram Reporting                             |
+| Route | Fungsi |
+| --- | --- |
+| `/admin` | dashboard |
+| `/admin/produk` | Product Master |
+| `/admin/inventaris` | inventaris fisik |
+| `/admin/penjualan` | sales history/admin transaction tools |
+| `/admin/pelanggan` | customer administration |
+| `/admin/laporan` | reporting |
+| `/admin/migrasi-produk` | direct import produk legacy |
+| `/admin/operasional/*` | shift/cash/hardware operations |
+| `/admin/notifikasi` | Notification Center |
+| `/admin/pengaturan` | Settings Hub |
+| `/admin/pengaturan/pembayaran/manual-edc` | profile EDC/transfer |
+| `/admin/pengaturan/harga-gram` | Harga/Gram |
+| `/admin/pengaturan/integrasi/telegram` | Telegram Reporting |
 
-All sensitive routes/actions must perform backend authorization. Menu visibility alone is never an authorization boundary.
+Semua route/action sensitif wajib melakukan backend authorization. Menu visibility bukan authorization boundary.
 
-## Quality Gates
+## Quality Gate
 
-### Fast local gate
+### Gate local cepat
 
-For normal feature work:
+Untuk feature work normal:
 
 ```powershell
 npm run typecheck
@@ -765,9 +802,9 @@ npm run routes:check
 npm run build:clean
 ```
 
-Run feature-specific checker for touched domains.
+Jalankan targeted checker untuk domain yang disentuh.
 
-### Database changes
+### Perubahan database
 
 ```powershell
 npm run check:database
@@ -775,7 +812,7 @@ npm run db:migrate
 npm run check:database:live
 ```
 
-### Full project gate
+### Gate project lengkap
 
 ```powershell
 npm run check:all
@@ -787,62 +824,78 @@ High-risk financial/integration gate:
 npm run check:critical
 ```
 
-Financial PostgreSQL disposable tests:
+Financial PostgreSQL disposable test:
 
 ```powershell
 npm run test:financial:local
 ```
 
-Buyback final historical-identity audit:
+Legacy direct-import contract:
+
+```powershell
+npm run check:legacy-product-migration
+```
+
+Buyback historical-identity audit:
 
 ```powershell
 npx tsx scripts/check-buyback-b4-final-audit.ts
 ```
 
-Quality documentation:
+Sinkronisasi dokumentasi:
+
+```powershell
+npx tsx scripts/check-documentation-current-state.ts
+```
+
+Dokumentasi quality:
 
 ```text
 docs/development/quality-gates.md
 docs/development/financial-concurrency-tests.md
 ```
 
-## Important Engineering Invariants
+## Invariant Engineering Penting
 
-### Transaction history is immutable in meaning
+### Riwayat transaksi harus tetap benar secara historis
 
-Current Product Item may change later. Historical transaction representation may not.
+Current Product Item dapat berubah. Representasi transaksi lama tidak boleh ikut berubah.
 
-Use:
+Gunakan:
 
 ```text
 Sale event     → sale_items.snapshot
-Buyback event  → buyback_items snapshot/acquisition fields
+Buyback event  → buyback_items acquisition snapshot
 Processing     → source snapshot + result snapshot
 Inventory now  → product_items current state
 ```
 
-### Inventory admission is explicit
+### Inventory admission harus eksplisit
 
-A physical item may be sold only after it satisfies current sale gate. Completing a Buyback transaction alone is not inventory admission.
+POS hanya boleh menjual item yang memenuhi sale gate saat ini.
 
-### Financial state stays server-side
+Buyback completion saja tidak membuat item saleable sebelum processing selesai.
 
-Pricing, payment normalization, shift financials, checkout, refund, Buyback completion, and other sensitive mutations must be validated and committed on server-side transactional boundaries.
+Sebaliknya, **Legacy Product Migration current flow memang merupakan direct inventory admission**: item yang berhasil diimport dibuat langsung `available` dalam transaction import.
 
-### Physical identity must survive lifecycle transitions
+### Financial state harus divalidasi server-side
 
-Existing ASIHJAYA Buyback items preserve physical item identity. Business-state transitions should not manufacture a replacement identity merely to represent a new lifecycle state.
+Pricing, payment normalization, shift financials, checkout, refund, Buyback completion, dan sensitive mutation lain harus divalidasi dan dikomit pada server-side transactional boundary.
 
-## Documentation Index
+### Identitas fisik harus konsisten
 
-### Current business/domain docs
+Existing ASIHJAYA Buyback item mempertahankan physical item identity. Perubahan lifecycle tidak boleh membuat identitas pengganti tanpa alasan bisnis yang valid.
+
+## Indeks Dokumentasi
+
+### Domain dan bisnis
 
 - `docs/development/buyback-lifecycle.md`
 - `docs/development/legacy-product-migration.md`
 - `docs/development/controlled-shift-reopen.md`
 - `docs/development/financial-concurrency-tests.md`
 
-### Infrastructure & deployment
+### Infrastructure dan deployment
 
 - `docs/development/environment-configuration.md`
 - `docs/development/quality-gates.md`
@@ -861,12 +914,12 @@ Existing ASIHJAYA Buyback items preserve physical item identity. Business-state 
 - `docs/hardware-hub/sato-label-v3-final.md`
 - `docs/hardware-hub/receipt-a4-epson-profile.md`
 
-### Production-readiness references
+### Production readiness
 
 - `docs/production-readiness/logging-monitoring.md`
 - `docs/production-readiness/reverse-proxy-cloudflare.md`
 
-## Before Commit
+## Sebelum Commit
 
 Minimum:
 
@@ -877,29 +930,29 @@ npm run routes:check
 npm run build:clean
 ```
 
-Documentation sync:
+Dokumentasi:
 
 ```powershell
 npx tsx scripts/check-documentation-current-state.ts
 ```
 
-For schema changes also run database checks.
+Untuk perubahan schema, jalankan juga database checks.
 
-## Production Status
+## Status Production
 
-The codebase already contains substantial production-safety infrastructure, but project status remains:
+Codebase memiliki banyak production-safety infrastructure, tetapi status project tetap:
 
 ```text
 ACTIVE DEVELOPMENT / UAT / PREVIEW
 ```
 
-Do not call a deployment production-ready merely because the application starts successfully.
+Jangan menyebut deployment production-ready hanya karena aplikasi dapat start.
 
-Before final real-production cutover, repeat and document:
+Sebelum final real-production cutover, ulangi dan dokumentasikan:
 
 - full store UAT;
-- real hardware validation for every production device;
-- production secrets review;
+- validasi real hardware untuk seluruh production device;
+- review production secrets;
 - production database backup + restore drill;
 - off-site backup verification;
 - migration/deployment rehearsal;
@@ -907,20 +960,20 @@ Before final real-production cutover, repeat and document:
 - monitoring/alert verification;
 - final operational handoff.
 
-## Contribution Principles
+## Prinsip Kontribusi
 
-When changing source:
+Ketika mengubah source:
 
-- preserve server-side authorization;
-- do not move sensitive business rules into client-only code;
-- keep migrations forward-only;
-- preserve historical snapshots;
-- avoid broad refactors in high-blast-radius transaction files unless required;
-- add or maintain audit trails for sensitive actions;
-- never log secrets or sensitive customer credentials;
-- run targeted checker + quality gate before commit;
-- update README/docs when the actual operational flow changes.
+- pertahankan server-side authorization;
+- jangan memindahkan business rule sensitif menjadi client-only;
+- migration harus forward-only;
+- pertahankan historical snapshot;
+- hindari broad refactor pada high-blast-radius transaction file kecuali diperlukan;
+- pertahankan audit trail untuk sensitive action;
+- jangan log secret atau credential sensitif;
+- jalankan targeted checker + quality gate sebelum commit;
+- update README/docs ketika operational flow benar-benar berubah.
 
 ---
 
-**ASIHJAYA RMS README policy:** describe what the system does **today**. Historical ideas, abandoned integrations, and superseded milestone behavior do not belong in the current project overview.
+**Kebijakan README ASIHJAYA RMS:** dokumentasikan apa yang sistem lakukan **sekarang**. Ide historis, integration yang dibatalkan, dan flow milestone yang sudah digantikan tidak termasuk current project overview.
