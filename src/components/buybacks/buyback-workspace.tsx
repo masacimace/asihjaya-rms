@@ -403,20 +403,29 @@ export function BuybackWorkspace({
   useEffect(() => {
     if (state.status !== "success" || !state.result) return;
 
-    setItems([]);
-    setNotes("");
-    setPayouts({
-      cash: "",
-      bank_transfer: "",
-      customer_deposit: "",
-      bankTransferReference: "",
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      setItems([]);
+      setNotes("");
+      setPayouts({
+        cash: "",
+        bank_transfer: "",
+        customer_deposit: "",
+        bankTransferReference: "",
+      });
+      setExistingQuery("");
+      setExistingResults([]);
+      clearCustomerState();
+      if (typeof window !== "undefined" && window.crypto?.randomUUID) {
+        setIdempotencyKey(window.crypto.randomUUID());
+      }
     });
-    setExistingQuery("");
-    setExistingResults([]);
-    clearCustomerState();
-    if (typeof window !== "undefined" && window.crypto?.randomUUID) {
-      setIdempotencyKey(window.crypto.randomUUID());
-    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [clearCustomerState, state.result, state.status]);
 
   function updateItem(clientKey: string, patch: Partial<DraftItem>) {

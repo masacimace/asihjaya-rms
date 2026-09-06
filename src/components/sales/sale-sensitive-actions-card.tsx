@@ -67,13 +67,11 @@ function ChoiceGroup<T extends string>({
 
 function CorrectionForm({
   saleId,
-  invoiceNumber,
   returnTo,
   eligibility,
   capabilities,
 }: {
   saleId: string;
-  invoiceNumber: string;
   returnTo: string;
   eligibility: SaleCorrectionEligibility;
   capabilities: SaleSensitiveCapabilities;
@@ -203,7 +201,6 @@ function CorrectionForm({
 
 export function SaleSensitiveActionsCard({
   saleId,
-  invoiceNumber,
   saleStatus,
   returnTo,
   capabilities,
@@ -211,7 +208,6 @@ export function SaleSensitiveActionsCard({
   returnWorkflowHref,
 }: {
   saleId: string;
-  invoiceNumber: string;
   saleStatus: AdminSaleStatus;
   returnTo: string;
   capabilities: SaleSensitiveCapabilities;
@@ -270,7 +266,6 @@ export function SaleSensitiveActionsCard({
           ) : (
             <CorrectionForm
               saleId={saleId}
-              invoiceNumber={invoiceNumber}
               returnTo={returnTo}
               eligibility={eligibility}
               capabilities={capabilities}

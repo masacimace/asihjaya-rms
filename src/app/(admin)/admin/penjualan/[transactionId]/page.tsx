@@ -1033,7 +1033,6 @@ export default async function SaleDetailPage({
           {canViewSensitiveActions ? (
             <SaleSensitiveActionsCard
               saleId={sale.id}
-              invoiceNumber={sale.invoiceNumber}
               saleStatus={sale.status}
               returnTo={currentDetailHref}
               capabilities={sensitiveCapabilities}

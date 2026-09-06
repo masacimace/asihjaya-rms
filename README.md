@@ -1,175 +1,544 @@
-# Asihjaya Retail Management System
+# ASIHJAYA Retail Management System
 
-Asihjaya RMS adalah sistem retail dan point-of-sale berbasis web untuk operasional toko perhiasan. Project ini mencakup **Admin Dashboard**, **POS Web App**, pengelolaan produk dan inventaris, payment verification, approval, refund dan retur, rekonsiliasi settlement, Notification Center, private file storage, serta fondasi local Hardware Hub.
+ASIHJAYA RMS adalah web application untuk operasional retail perhiasan yang menggabungkan **Admin Dashboard**, **Point of Sale**, inventory per physical item, customer management, Buyback, reporting, Telegram reporting, private storage, database backup/restore, dan Local Hardware Hub.
 
-> **Status:** active development dan UAT. Project belum dinyatakan production-ready.
+> **Current status:** active development / UAT dan preview deployment. Sistem belum dinyatakan final production go-live.
+>
+> **Development workflow:** LOCAL FIRST. Perubahan diimplementasikan, diuji, dan distabilkan di local development terlebih dahulu. Setelah quality gate dan smoke test hijau, source yang sama dideploy ke preview VPS.
 
-## Target Operasional
+## Source of Truth
 
-Konfigurasi operasional saat ini:
+README ini menjelaskan **state project saat ini**, bukan sejarah seluruh milestone pengembangan.
 
-- 1 organisasi
-- 1 outlet aktif
-- 1 manager menggunakan mini PC
-- 4 sales menggunakan perangkat mobile
-- Traffic sekitar 1–15 transaksi per hari
-- Arsitektur disiapkan untuk multi-outlet
+Aturan dokumentasi:
 
-## Status Project
+- Implementasi source code dan database migration adalah sumber kebenaran utama untuk behavior runtime.
+- README merangkum arsitektur, module, workflow, dan operational posture yang masih relevan.
+- Dokumentasi detail berada di `docs/`.
+- Milestone lama yang sudah superseded tidak boleh diperlakukan sebagai behavior aktif.
+- Jangan menambahkan roadmap atau integration yang tidak benar-benar digunakan oleh operational flow saat ini.
 
-### Sudah tersedia
+## Operational Model
 
-- Custom authentication dan database-backed session
-- Role-based access control per organisasi dan outlet
-- Admin Dashboard dan POS
-- Product master dan inventory item
-- Foto produk dan item
-- Barcode dan status lifecycle inventaris
-- Shift kasir dan pergerakan kas
-- Checkout atomik dengan idempotency dan recovery
-- Manual payment verification
-- Payment profile per outlet
-- Duplicate payment reference detection
-- Maker-checker approval
-- Void dan refund transaction service
-- Refund ledger
-- Return receipt dan physical inspection workflow
-- Payment reconciliation
-- Settlement CSV import dan auto-matching
-- Notification Center V1
-- Local/S3-compatible private storage abstraction
-- Hardware Hub dan print-job foundation
+Baseline operasional yang sedang dituju:
 
-### Sedang direncanakan
+- satu organisasi ASIHJAYA;
+- satu outlet aktif pada deployment saat ini;
+- manager/admin menggunakan desktop atau mini PC;
+- sales/cashier dapat menggunakan desktop maupun mobile;
+- arsitektur authorization dan data tetap organization/outlet scoped;
+- web app dapat berjalan di VPS sementara Hardware Hub berjalan pada Windows mini PC lokal outlet.
 
-- Settings Center
-- Pengaturan umum organisasi
-- Notification preferences
-- Security dan session management
-- Cloud Storage
-- Backup Destination
-- Telegram notification delivery
+Arsitektur tetap memungkinkan perluasan multi-outlet tanpa menjadikan multi-outlet sebagai requirement deployment saat ini.
 
-### Ditahan
+## Current Core Modules
 
-- Automated Payment & Concurrency Tests
-- Midtrans QRIS Gateway
-- Gateway webhook dan payment recovery
-- Gateway refund dan reconciliation
-- WhatsApp integration
-- Email integration
-- Production Readiness Review
+| Module                         | Current capability                                                                 |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| Authentication & Authorization | Database-backed session, role/permission, organization/outlet scope                |
+| Admin Dashboard                | Operational overview, reports, management entry points                             |
+| POS                            | Catalog, scan/search item, cart, pricing, checkout, held cart, transaction history |
+| Jewelry Pricing                | Global Harga/Gram per Kadar Persen + manual per-transaction override               |
+| Manual Payment                 | Cash, EDC, Transfer, payment profile, verification metadata                        |
+| Customer                       | Customer master, transaction history, Dana Titip, public receipt history           |
+| Product Master                 | Product identity, category, image, active/draft lifecycle                          |
+| Physical Inventory             | SKU, barcode/QR, item image, weight, purity, condition, location, availability     |
+| Buyback                        | Acquisition, Cuci/Rongsok processing, historical snapshots, resale                 |
+| Shift & Cash                   | Opening, closing, expected cash, controlled reopen, cash movement                  |
+| Sales History                  | POS/Admin history, receipt, historical item snapshots                              |
+| Refund / Return                | Financial correction and physical return workflow                                  |
+| Reporting                      | Sales, inventory, financial and operational reporting/export                       |
+| Legacy Product Migration       | XLSX staging, physical verification, reconciliation, cutover                       |
+| Notification Center            | In-app operational notifications and lifecycle                                     |
+| Telegram Reporting             | Outbound opening/daily/weekly/monthly reporting and delivery operations            |
+| Settings Hub                   | Manual payment profile, Harga/Gram, Telegram configuration                         |
+| Hardware Hub                   | Signed agent, job polling, print job protocol, label/document printer adapters     |
+| Database Operations            | Forward migrations, backup, restore, off-site replication                          |
+| Deployment Operations          | Production container contract, health checks, rollback automation                  |
 
-## Modul Utama
+## Active POS Payment Model
 
-| Modul               | Fungsi                                             | Status      |
-| ------------------- | -------------------------------------------------- | ----------- |
-| Admin Dashboard     | Ringkasan operasional dan monitoring               | Aktif       |
-| POS                 | Checkout, pembayaran, invoice, dan recovery        | Aktif       |
-| Produk Master       | Data produk dan foto                               | Aktif       |
-| Inventaris          | Item fisik, barcode, availability, dan movement    | Aktif       |
-| Penjualan           | Riwayat, detail, dan koreksi transaksi             | Aktif       |
-| Approval            | Maker-checker untuk tindakan sensitif              | Aktif       |
-| Refund & Return     | Refund finansial dan inspeksi barang fisik         | Aktif       |
-| Rekonsiliasi        | Review settlement dan mismatch                     | Aktif       |
-| Settlement Import   | CSV import dan auto-matching                       | Aktif       |
-| Notification Center | Event, recipient, filter, archive, auto-resolution | Aktif       |
-| Hardware Hub        | Device monitoring dan print-job foundation         | Development |
-| Settings Center     | Pengaturan terpusat                                | Planned     |
-| Midtrans            | QRIS payment gateway                               | On hold     |
-
-## Arsitektur
+Active checkout payment methods are intentionally simple:
 
 ```text
-Browser Admin / POS
+Cash
+EDC
+Transfer
+```
+
+EDC terminal dan rekening transfer dikelola melalui Settings Hub sehingga outlet dapat menentukan profile pembayaran manual yang tersedia di POS.
+
+Dana Titip customer memiliki ledger terpisah dan dapat menjadi bagian dari financial workflow customer.
+
+### Important payment scope
+
+Operational POS saat ini **tidak menggunakan payment gateway/webhook flow**.
+
+Database schema dan beberapa reporting labels dapat tetap memiliki enum legacy untuk backward compatibility, tetapi itu tidak berarti method tersebut aktif pada checkout. Source of truth untuk method pembayaran POS aktif berada pada manual checkout payment contract.
+
+## Hybrid Jewelry Pricing
+
+Harga jual jewelry memakai model hybrid:
+
+```text
+Kadar Persen
+    ↓
+Harga / Gram Aktif
+    ↓
+default harga transaksi
+    ↓
+operator dapat menggunakan harga khusus per transaksi
+```
+
+Rules penting:
+
+- global Harga/Gram tetap menjadi default berdasarkan Kadar Persen;
+- item dengan kadar sama dapat memakai default rate yang sama;
+- operator tetap dapat memberikan **manual override** pada transaksi tertentu;
+- source harga transaksi disimpan sebagai snapshot sehingga history tidak ikut berubah ketika global rate diperbarui;
+- perubahan Harga/Gram dilakukan melalui Settings Hub.
+
+Route:
+
+```text
+/admin/pengaturan/harga-gram
+```
+
+## Buyback — Current Final Lifecycle
+
+Buyback bukan shortcut untuk mengembalikan barang langsung ke stok jual.
+
+Invariant utama:
+
+```text
+Buyback completed != saleable inventory
+```
+
+Final lifecycle:
+
+```text
+Customer
+   ↓
+Buyback acquisition
+   ↓
+availability = processing
+   ↓
+Cuci / Rongsok
+   ↓
+processing completion
+   ↓
+availability = available
+condition    = used
+location     = outlet
+   ↓
+Saleable di POS
+```
+
+### Buyback acquisition
+
+Operator mencatat:
+
+- source barang: existing ASIHJAYA item atau barang luar;
+- nama/keterangan barang;
+- Cuci atau Rongsok;
+- kategori;
+- warna;
+- kadar;
+- berat;
+- Total Harga final;
+- foto kondisi ketika diterima.
+
+Tidak ada Product Master mapping wajib pada intake barang luar.
+
+Tidak ada flow approval/activation tambahan setelah pekerjaan fisik selesai.
+
+### Existing ASIHJAYA item
+
+Jika Buyback berasal dari item ASIHJAYA yang sebelumnya terjual:
+
+- Physical Product Item tetap item yang sama;
+- Product Item ID tetap;
+- SKU tetap;
+- barcode/QR identity tetap;
+- setelah Buyback item masuk `processing`;
+- current identity baru diterapkan ketika Cuci/Rongsok selesai;
+- cost item setelah processing berasal dari nilai acquisition Buyback;
+- item menjadi `used + available + outlet` setelah completion.
+
+### External Buyback
+
+Untuk barang luar:
+
+- Buyback acquisition tidak langsung membuat Product Item saleable;
+- `product_item_id` dapat tetap `NULL` selama antrean processing;
+- pada completion operator memilih atau membuat Product Master;
+- Product Item, SKU, barcode/QR, dan current inventory identity dibuat secara atomik;
+- cost item menggunakan nilai final Buyback;
+- hasil langsung masuk sebagai `used + available + outlet`.
+
+### Historical identity
+
+Empat perspektif data harus tetap terpisah:
+
+```text
+SALE SNAPSHOT
+kondisi barang ketika transaksi Sale terjadi
+
+BUYBACK SNAPSHOT
+kondisi barang ketika diterima kembali dari customer
+
+PROCESSING SNAPSHOT
+source/before + result/after Cuci atau Rongsok
+
+CURRENT INVENTORY
+kondisi physical item saat ini
+```
+
+Contoh: Sale lama tidak boleh berubah nama, berat, kadar, kategori, SKU display, atau economic snapshot hanya karena item yang sama kemudian di-Buyback dan direkondisi.
+
+Detail engineering ada di:
+
+```text
+docs/development/buyback-lifecycle.md
+```
+
+### Buyback routes
+
+| Route                     | Purpose                                         |
+| ------------------------- | ----------------------------------------------- |
+| `/pos/buyback`            | acquisition + preview 5 transaksi terbaru       |
+| `/pos/buyback/pemrosesan` | queue dan completion Cuci/Rongsok               |
+| `/pos/buyback/riwayat`    | full history, search/filter, pagination 10/page |
+
+Responsive UX:
+
+- Buyback list menggunakan responsive layout;
+- processing form menggunakan right-side drawer pada desktop;
+- processing form menjadi fullscreen pada tablet/mobile;
+- history dedicated menggunakan table pada desktop dan transaction card pada mobile.
+
+### Buyback implementation status
+
+```text
+B1 Data Model & Lifecycle              DONE
+B2 Simplified Acquisition              DONE
+B3 Cuci / Rongsok Processing           DONE
+UI/UX Refinement                       DONE
+B4 POS + Historical Identity Audit     DONE
+```
+
+Schema milestones terkait:
+
+```text
+0022_buyback_processing_lifecycle
+0023_buyback_simplified_acquisition
+```
+
+## Product & Inventory Lifecycle
+
+Product Master adalah reusable product definition. Product Item mewakili satu physical item.
+
+Physical inventory menyimpan identity dan state seperti:
+
+- SKU;
+- barcode dan QR;
+- Product Master;
+- item display name;
+- current outlet;
+- weight;
+- purity;
+- color/size/gemstone;
+- image;
+- acquisition cost;
+- condition;
+- availability;
+- location state.
+
+Availability penting yang digunakan antara lain:
+
+```text
+draft
+migration_hold
+processing
+available
+reserved
+inspection
+sold
+```
+
+POS sale gate hanya menerima item yang memenuhi invariant saleable, termasuk:
+
+```text
+availability = available
+condition    = good | used
+location     = outlet
+item active
+Product Master active
+category active
+correct outlet
+not held by active held cart
+```
+
+## Legacy Product Migration
+
+Legacy migration tetap memakai pendekatan staging dan physical verification, bukan import langsung menjadi stok jual.
+
+High-level flow:
+
+```text
+Legacy XLSX
+   ↓
+staging
+   ↓
+Product Master mapping
+   ↓
+physical verification
+   ↓
+manager review
+   ↓
+migration_hold
+   ↓
+final reconciliation
+   ↓
+transactional cutover
+   ↓
+available inventory
+```
+
+Fitur yang sudah tersedia mencakup:
+
+- preserve legacy barcode sebagai string;
+- mapping master;
+- session/assignment per area kerja;
+- physical verification;
+- unmatched barcode handling;
+- sold-during-migration exclusion;
+- legacy image migration ke private storage;
+- final reconciliation;
+- transactional cutover;
+- barcode alias support.
+
+Detail:
+
+```text
+docs/development/legacy-product-migration.md
+```
+
+## Customer & Historical Sales
+
+Customer dapat memiliki:
+
+- customer code;
+- phone/email/address;
+- transaction history;
+- Dana Titip ledger;
+- public receipt history access.
+
+Historical Sale read path bersifat **snapshot-first**.
+
+Artinya history Sale, customer history, Admin Sale detail, receipt, refund expected weight, dan reporting tidak boleh mengambil current item state sebagai primary historical truth setelah physical item berubah di kemudian hari.
+
+## Shift & Cash
+
+POS menggunakan shift sebagai konteks transaksi finansial.
+
+Flow utama:
+
+```text
+Open shift
+   ↓
+POS operations
+   ↓
+cash movement / transaction
+   ↓
+Close shift + reconciliation
+```
+
+Controlled shift reopen tersedia untuk kondisi operasional yang memang memerlukan koreksi, dengan authorization dan audit guard.
+
+## Settings Hub
+
+Route:
+
+```text
+/admin/pengaturan
+```
+
+Current settings groups:
+
+### Pembayaran
+
+```text
+/admin/pengaturan/pembayaran/manual-edc
+```
+
+Mengelola terminal EDC dan rekening transfer yang tersedia pada POS.
+
+### Harga Jewelry
+
+```text
+/admin/pengaturan/harga-gram
+```
+
+Mengelola global Harga/Gram aktif berdasarkan Kadar Persen.
+
+### Telegram Reporting
+
+```text
+/admin/pengaturan/integrasi/telegram
+```
+
+Mengelola:
+
+- private outlet group;
+- opening report;
+- daily report;
+- weekly report;
+- monthly report;
+- test message;
+- delivery history;
+- manual retry.
+
+Telegram integration bersifat **outbound reporting**, bukan conversational bot untuk customer.
+
+## Notification Center
+
+In-app Notification Center menangani awareness/follow-up operasional seperti transaction event, shift, correction, hardware, dan event administratif yang relevan.
+
+Notification Center bukan pengganti backend authorization dan bukan pengganti transactional guard.
+
+## Local Hardware Hub
+
+Web application dapat berkomunikasi dengan Hardware Hub yang berjalan pada Windows mini PC outlet.
+
+High-level architecture:
+
+```text
+ASIHJAYA RMS on VPS
+        ↓ HTTPS signed protocol
+Hardware Hub on local Windows mini PC
         ↓
+device adapters
+├── Label printer
+└── Document / receipt printer
+```
+
+Capability yang tersedia:
+
+- hardware agent registration/provisioning;
+- credential lifecycle;
+- signed request;
+- job claim/lease;
+- retry/recovery contract;
+- print payload protocol;
+- label print pipeline;
+- document print pipeline;
+- Hardware Hub status di web application.
+
+Real hardware tetap harus divalidasi per device/profile sebelum final production go-live.
+
+Dokumentasi:
+
+```text
+docs/hardware-hub/windows-setup-guide.md
+docs/hardware-hub/windows-production-operations.md
+docs/hardware-hub/hardware-job-protocol-v2.md
+docs/hardware-hub/sato-cg408-profile.md
+docs/hardware-hub/receipt-a4-epson-profile.md
+```
+
+## Architecture
+
+```text
+Desktop / Mobile Browser
+          ↓
 Next.js App Router
-        ↓
-Server Actions dan Route Handlers
-        ↓
-Feature Services / Transaction Services
-        ↓
+          ↓
+Server Components / Server Actions / Route Handlers
+          ↓
+Feature Services & Transaction Services
+          ↓
 Drizzle ORM
-        ↓
+          ↓
 PostgreSQL
 ```
 
-Private file storage:
+Side systems:
 
 ```text
-Storage Provider
-├── Local storage — development
-└── S3-compatible storage — production target
+                         ┌─ Private image/file storage
+Next.js application  ────┼─ Telegram outbound delivery
+                         ├─ Hardware job queue → Local Hardware Hub
+                         └─ PostgreSQL backup → local retention → Backblaze B2
 ```
 
-Hardware:
+Critical financial and inventory operations use transaction-level protections such as:
 
-```text
-Asihjaya RMS
-        ↓
-Local Hardware Hub
-├── Printer
-├── Barcode device
-└── Hardware job polling
-```
-
-Operasi finansial penting menggunakan database transaction, idempotency, constraint, dan advisory lock sesuai kebutuhan.
+- database transaction;
+- row/advisory locks where required;
+- idempotency;
+- unique constraints;
+- audit log;
+- immutable transaction snapshots.
 
 ## Technology Stack
 
-- Next.js App Router
-- React
-- TypeScript strict mode
-- Tailwind CSS
-- PostgreSQL 17
-- Drizzle ORM dan Drizzle Kit
-- Docker Compose
-- Custom database-backed authentication
-- Organization dan outlet-scoped authorization
-- Server Actions dan Route Handlers
-- Local/S3-compatible private file storage
-- Playwright foundation
-- Local Hardware Hub
+Current baseline:
+
+- Next.js App Router;
+- React 19;
+- TypeScript strict mode;
+- Tailwind CSS;
+- PostgreSQL 17;
+- Drizzle ORM / Drizzle Kit;
+- Node.js `>=24.14.0 <25`;
+- npm `>=11.9.0 <12`;
+- Docker Compose;
+- Playwright for PDF/contract flows;
+- local + S3-compatible private storage abstraction;
+- Windows Hardware Hub.
+
+## Repository Layout
+
+```text
+src/
+├── app/                    Next.js routes, actions, route handlers
+├── components/             Admin/POS/shared UI
+├── db/                     schema, seed, DB integration
+├── features/               domain queries/services/contracts
+├── lib/                    shared infrastructure
+└── server/                 server integrations
+
+hardware-hub/               local Windows hardware runtime
+
+drizzle/                    forward-only database migrations
+scripts/                    checkers, tests, deployment/backup tooling
+ops/                        VPS/operations assets
+docs/
+├── development/
+├── hardware-hub/
+└── production-readiness/
+```
 
 ## Local Development
 
-- Windows 10
-- Node.js `24.14.0` sesuai `.nvmrc`
-- npm `11.9.0` sesuai `packageManager`
-- Docker Desktop atau Docker Engine dengan Compose
-- Git
-- Vscode
+### Toolchain
 
-## Reproducible Toolchain
-
-Project mengunci baseline development pada Node.js `24.14.0` dan npm `11.9.0`. Verifikasi sebelum install:
+Verify:
 
 ```powershell
 node --version
 npm --version
 ```
 
-Output yang diharapkan:
+Supported:
 
 ```text
-v24.14.0
-11.9.0
+Node >=24.14.0 <25
+npm  >=11.9.0 <12
 ```
 
-`.npmrc` mengaktifkan `engine-strict`, sehingga install akan dihentikan ketika major toolchain tidak sesuai.
-
-SheetJS CE disimpan sebagai archive lokal agar fresh install, CI, dan Docker build tidak bergantung pada CDN. Setelah menerapkan perubahan ini untuk pertama kali, unduh dan verifikasi archive resmi satu kali melalui:
-
-```powershell
-npm run vendor:xlsx
-npm ci
-```
-
-Commit file `vendor/xlsx-0.20.3.tgz`, checksum, `package.json`, dan `package-lock.json` yang dihasilkan. Fresh clone berikutnya cukup menjalankan `npm ci`.
-
-## First-time Local Setup
-
-### Windows PowerShell
+### First-time setup
 
 ```powershell
 Copy-Item .env.example .env
@@ -184,285 +553,47 @@ npm run db:seed
 npm run dev
 ```
 
-### Bash
+`db:seed` hanya digunakan untuk database baru/reset yang disengaja.
 
-```bash
-cp .env.example .env
-npm run env:generate-secrets -- --write .env
-npm run env:validate
+Jangan menjalankan seed setiap selesai migration pada database development yang sudah memiliki data.
 
-docker compose up -d db
-
-npm ci
-npm run db:migrate
-npm run db:seed
-npm run dev
-```
-
-> `npm run db:seed` hanya dijalankan untuk database baru atau reset yang disengaja. Jangan menjalankan seed setiap selesai migration pada database development yang sudah berisi data.
-
-## Memperbarui Database Development yang Sudah Ada
+### Existing development database
 
 ```powershell
 npm ci
 npm run db:migrate
+npm run check:database
+npm run check:database:live
 npm run typecheck
 npm run dev
 ```
 
-Tidak perlu menjalankan `npm run db:seed`, kecuali dokumentasi migration atau fitur secara eksplisit memintanya.
-
-### Aturan Migration
-
-- Jangan mengedit migration yang sudah diterapkan ke database.
-- Gunakan migration forward-only untuk repair atau perubahan lanjutan.
-- Jalankan preflight fitur sebelum migration jika script tersedia.
-- Backup database sebelum migration besar.
-- Jangan menjalankan migration utama langsung melalui `psql`, kecuali file tersebut memang dibuat sebagai recovery script.
-- Jaga schema PostgreSQL dan `drizzle.__drizzle_migrations` tetap sinkron.
-- Tidak perlu membuat database development baru setiap ada perubahan schema.
-- Gunakan database disposable terpisah untuk rehearsal dan automated test.
-
-## Quality Gate dan CI
-
-Sebelum perubahan digabungkan atau dideploy, jalankan quality gate lengkap:
-
-```bash
-npm ci
-npm run check:build-baseline
-npm run check:all
-```
-
-Kelompok check dapat dijalankan terpisah:
-
-```bash
-npm run check:build-baseline
-npm run check:quality
-npm run check:static
-npm run check:security
-npm run check:business
-npm run check:hardware
-npm run build
-```
-
-GitHub Actions menjalankan static quality, security/business contracts, rehearsal migration PostgreSQL 17, Hardware Hub checks, dan production container build pada push serta pull request. Dokumentasi lengkap tersedia di `docs/development/quality-gates.md`.
-
-Validasi clean build dan Docker image secara lokal:
-
-```powershell
-npm run build:clean
-docker build --pull --tag asihjaya-rms:local .
-```
-
-## Environment Configuration
-
-Lihat `.env.example` untuk template dan `docs/development/environment-configuration.md` untuk aturan production. Template tidak lagi membawa contoh secret yang dapat dipakai langsung.
-
-Command utama:
-
-```powershell
-npm run env:generate-secrets -- --write .env
-npm run env:validate
-npm run env:validate -- --mode production --env-file .env.production
-```
-
-Production server melakukan fail-fast validation sebelum menerima traffic. Secret inti wajib unik, minimal 32 karakter, dan tidak boleh menggunakan placeholder.
-
-Kelompok konfigurasi yang digunakan project:
-
-- Database
-- Authentication dan session
-- Application URL
-- Local/private storage
-- S3-compatible storage
-- Hardware Hub
-- Notification lifecycle
-- Notification anti-spam
-- Integration credentials
-
-Jangan commit file `.env`, database dump, token, access key, secret key, atau credential production.
-
-## URL Lokal
-
-Setelah `npm run dev`, buka:
-
-- `http://localhost:3000/login`
-- `http://localhost:3000/admin`
-- `http://localhost:3000/pos`
-- `http://localhost:3000/api/health`
-- `http://localhost:3000/api/health/database`
-
-## Route Utama
-
-| Route                                 | Fungsi                       |
-| ------------------------------------- | ---------------------------- |
-| `/login`                              | Login                        |
-| `/admin`                              | Admin Dashboard              |
-| `/pos`                                | Point of Sale                |
-| `/admin/produk`                       | Product master               |
-| `/admin/inventaris`                   | Inventory items              |
-| `/admin/penjualan`                    | Riwayat transaksi            |
-| `/admin/pelanggan`                    | Daftar customer              |
-| `/admin/operasional/shift`            | Shift kasir                  |
-| `/admin/operasional/approval`         | Riwayat approval             |
-| `/admin/operasional/kas`              | Pergerakan kas               |
-| `/admin/operasional/hardware`         | Hardware Hub                 |
-| `/admin/keuangan/rekonsiliasi`        | Payment reconciliation       |
-| `/admin/keuangan/rekonsiliasi/import` | Settlement import            |
-| `/admin/notifikasi`                   | Notification Center          |
-| `/admin/administrasi`                 | User, role, dan administrasi |
-| `/admin/pengaturan`                   | Settings Center              |
-
-Route dan server action tetap dilindungi oleh backend authorization. Visibility menu pada navbar bukan pengganti pemeriksaan permission.
-
-## Authorization Model
-
-Akses menggunakan permission berbasis organisasi dan outlet.
-
-Role bawaan:
-
-- System Administrator
-- Owner
-- Manager
-- Finance
-- Stock Admin
-- Sales/Cashier
-
-Nama role tidak menjadi authorization bypass. Server tetap memeriksa permission spesifik untuk setiap operasi.
-
-## Financial and Transaction Safety
-
-Guardrail yang sudah tersedia:
-
-- Atomic checkout transaction
-- Persistent checkout attempt
-- Idempotency key dan payload fingerprint
-- Checkout recovery setelah timeout atau refresh
-- Duplicate payment reference detection
-- Manual payment verification metadata
-- Co-verification untuk kondisi tertentu
-- Maker-checker approval
-- Atomic void dan refund
-- Refund ledger
-- Return inspection sebelum restock
-- One-payment-one-reconciliation guard
-- Settlement duplicate-file protection
-- Exact dan manual matching
-- Advisory lock untuk operasi concurrent
-- Audit trail untuk tindakan sensitif
-
-## Notification Center
-
-Notification Center V1 mendukung:
-
-- Event dan recipient state per user
-- Organization dan outlet-scoped targeting
-- Transaction notifications
-- High-value dan split-payment metadata
-- Checkout recovery notifications
-- Approval result notifications
-- Refund, return, reconciliation, shift, cash, dan hardware events
-- Read dan unread
-- Archive tanpa hard delete
-- Expandable Admin Drawer
-- Full notification page
-- Search, filter, pagination, dan bulk action
-- Auto-resolution
-- Auto-archive
-- Anti-spam aggregation
-- Occurrence count dan deduplication
-
-**Approval Drawer tetap terpisah** karena berfungsi sebagai action inbox untuk approve/reject, sedangkan Notification Center berfungsi sebagai awareness dan follow-up center.
-
-## Development Commands
-
-### Application
-
-```powershell
-npm run dev
-npm run build
-npm run start
-npm run env:validate
-npm run env:generate-secrets -- --write .env
-```
-
-### Quality Checks
-
-```powershell
-npm run typecheck
-npm run lint
-npm run routes:check
-```
-
-### Database
-
-```powershell
-npm run db:generate
-npm run db:migrate
-npm run db:seed
-npm run db:studio
-```
-
-### Reset Database Development Lokal
-
-Hentikan `npm run dev` terlebih dahulu. Untuk menghapus volume PostgreSQL lokal,
-menjalankan seluruh migration, seed, dan pemeriksaan database live:
+### Safe local reset
 
 ```powershell
 npm run db:fresh:local -- --confirm=RESET_LOCAL_DATABASE
 ```
 
-Untuk reset penuh yang sekaligus menghapus file upload development di
-`.data/uploads`:
+Dengan local upload purge:
 
 ```powershell
 npm run db:fresh:local -- --confirm=RESET_LOCAL_DATABASE --purge-local-storage
 ```
 
-Command ini hanya menerima target PostgreSQL Compose lokal
-`asihjaya@localhost:5432/asihjaya_rms`. Target non-local, environment production,
-dan storage selain folder `.data` akan ditolak.
+## Database Migration Rules
 
-### Domain dan Production-readiness Checks
+Migration bersifat forward-only.
 
-Gunakan kelompok check berdasarkan domain, tanpa command milestone historis:
+Rules:
 
-```powershell
-npm run check:transactions
-npm run check:security
-npm run check:business
-npm run check:hardware-app
-npm run check:hardware
-```
+- jangan mengedit migration yang sudah pernah diterapkan;
+- perubahan schema baru harus dibuat melalui migration berikutnya;
+- backup sebelum migration besar;
+- schema dan `drizzle.__drizzle_migrations` harus sinkron;
+- gunakan database disposable untuk migration rehearsal/integration tests;
+- `db:seed` bukan langkah otomatis setelah setiap migration.
 
-Contract PDF yang memerlukan Chromium dijalankan terpisah:
-
-```powershell
-npm run check:manual
-```
-
-Untuk pemeriksaan lengkap yang sesuai dengan quality gate CI:
-
-```powershell
-npm run check:all
-```
-
-Script preflight dan repair sekali pakai sudah dipensiunkan. Validasi schema dilakukan melalui migration metadata checker dan rehearsal PostgreSQL disposable.
-
-## Pemeriksaan Sebelum Commit
-
-Minimal jalankan:
-
-```powershell
-npm run typecheck
-npm run lint
-npm run routes:check
-npm run build
-```
-
-Jalankan feature-specific check untuk modul yang diubah.
-
-Jika ada perubahan schema:
+Core commands:
 
 ```powershell
 npm run db:generate
@@ -471,172 +602,325 @@ npm run db:migrate
 npm run check:database:live
 ```
 
-Jangan menjalankan `db:seed` pada database yang sudah berisi data hanya karena migration baru diterapkan.
+## Backup, Restore & Off-site Safety
 
-## Backup Database Development
+Project memiliki database operations untuk:
 
-Contoh backup PostgreSQL melalui Docker:
+- daily backup;
+- weekly backup;
+- pre-deployment backup;
+- checksum/metadata;
+- retention;
+- restore;
+- verification;
+- Backblaze B2 off-site replication.
 
-```powershell
-New-Item -ItemType Directory -Force ".\.local-backups" | Out-Null
-
-docker compose exec -T db sh -lc 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --file=/tmp/asihjaya-rms.dump'
-
-docker compose cp db:/tmp/asihjaya-rms.dump ./.local-backups/asihjaya-rms.dump
-```
-
-Folder backup lokal harus tetap diabaikan oleh Git.
-
-## Script Operasional
-
-Pembersihan upload bukti pembayaran yang kedaluwarsa:
-
-```powershell
-npm run maintenance:payment-evidence-cleanup
-```
-
-Regenerasi panduan Hardware Hub dari source terstruktur:
-
-```powershell
-npm run docs:hardware:generate
-```
-
-## Dokumentasi
-
-### Roadmap
-
-- `docs/roadmap/payment-production-roadmap.md`
-- `docs/roadmap/settings-center-roadmap.md`
-
-### Environment and Production-readiness Notes
-
-- `docs/development/environment-configuration.md`
-
-Dokumentasi implementasi detail berada di:
+Operational goal:
 
 ```text
-docs/production-readiness/
+Server boleh rusak.
+Disk boleh hilang.
+VM boleh dihapus.
+
+Source + secrets + database backup tetap tersedia.
+        ↓
+provision VPS baru
+        ↓
+restore
+        ↓
+continue operation
 ```
 
-Topik yang tercakup antara lain:
+Relevant commands:
 
-- Checkout recovery dan idempotency
-- Manual payment verification
-- Refund dan return inspection
-- Transaction correction
-- Payment reconciliation
-- Settlement import
-- Notification Center
+```powershell
+npm run db:backup:production
+npm run db:backup:weekly
+npm run db:backup:pre-deployment:verified
+npm run db:backup:offsite
+npm run db:backup:offsite:verify
+npm run db:restore:production
+```
 
-## Financial dan Concurrency Tests
+Detailed docs:
 
-Invariant finansial kritis diuji otomatis terhadap PostgreSQL 17 disposable:
+```text
+docs/development/database-backup-restore.md
+docs/development/database-backup-offsite.md
+docs/development/database-deployment.md
+docs/development/deployment-rollback-automation.md
+```
+
+## Deployment Posture
+
+Current workflow:
+
+```text
+LOCAL DEVELOPMENT
+    ↓
+targeted checker
+    ↓
+typecheck / build / smoke
+    ↓
+commit + push
+    ↓
+PREVIEW VPS
+    ↓
+preview smoke test
+```
+
+The preview VPS is not treated as the only copy of application state.
+
+Production deployment tooling includes container contract, database deployment guard, health checks, backup, and rollback automation.
+
+Useful documentation:
+
+```text
+docs/development/asihjaya-rms-production-handoff.md
+docs/production-readiness/logging-monitoring.md
+docs/production-readiness/reverse-proxy-cloudflare.md
+```
+
+## Environment & Secrets
+
+Templates:
+
+```text
+.env.example
+.env.production.example
+```
+
+Useful commands:
+
+```powershell
+npm run env:generate-secrets -- --write .env
+npm run env:prepare:production
+npm run env:validate
+npm run env:validate:production
+```
+
+Never commit:
+
+- `.env`;
+- database dump;
+- session secret;
+- Telegram token;
+- Hardware Hub credential;
+- storage key;
+- Backblaze application key;
+- production access token.
+
+Environment documentation:
+
+```text
+docs/development/environment-configuration.md
+```
+
+## Main Routes
+
+### POS
+
+| Route                     | Purpose                 |
+| ------------------------- | ----------------------- |
+| `/pos`                    | POS workspace           |
+| `/pos/produk`             | product/catalog access  |
+| `/pos/pelanggan`          | customer access         |
+| `/pos/ditahan`            | held transactions       |
+| `/pos/shift`              | shift operations        |
+| `/pos/transaksi`          | POS transaction history |
+| `/pos/buyback`            | Buyback acquisition     |
+| `/pos/buyback/pemrosesan` | Cuci/Rongsok processing |
+| `/pos/buyback/riwayat`    | full Buyback history    |
+
+### Admin
+
+| Route                                     | Purpose                                        |
+| ----------------------------------------- | ---------------------------------------------- |
+| `/admin`                                  | dashboard                                      |
+| `/admin/produk`                           | Product Master                                 |
+| `/admin/inventaris`                       | physical inventory                             |
+| `/admin/penjualan`                        | sales history/admin transaction tools          |
+| `/admin/pelanggan`                        | customer administration                        |
+| `/admin/laporan`                          | reporting                                      |
+| `/admin/migrasi-produk`                   | legacy product migration                       |
+| `/admin/operasional/*`                    | shift/cash/hardware operational administration |
+| `/admin/notifikasi`                       | Notification Center                            |
+| `/admin/pengaturan`                       | Settings Hub                                   |
+| `/admin/pengaturan/pembayaran/manual-edc` | EDC/bank transfer profiles                     |
+| `/admin/pengaturan/harga-gram`            | Harga/Gram                                     |
+| `/admin/pengaturan/integrasi/telegram`    | Telegram Reporting                             |
+
+All sensitive routes/actions must perform backend authorization. Menu visibility alone is never an authorization boundary.
+
+## Quality Gates
+
+### Fast local gate
+
+For normal feature work:
+
+```powershell
+npm run typecheck
+npm run lint
+npm run routes:check
+npm run build:clean
+```
+
+Run feature-specific checker for touched domains.
+
+### Database changes
+
+```powershell
+npm run check:database
+npm run db:migrate
+npm run check:database:live
+```
+
+### Full project gate
+
+```powershell
+npm run check:all
+```
+
+High-risk financial/integration gate:
+
+```powershell
+npm run check:critical
+```
+
+Financial PostgreSQL disposable tests:
 
 ```powershell
 npm run test:financial:local
 ```
 
-Command tersebut menyalakan database test pada port `55433`, menjalankan migration, mengeksekusi checkout/idempotency/inventory/Dana Titip/refund/settlement/Hardware Job/tenant-isolation tests, lalu menghapus container dan volume sementara.
-
-Untuk database CI/test yang sudah tersedia:
+Buyback final historical-identity audit:
 
 ```powershell
-npm run test:financial
+npx tsx scripts/check-buyback-b4-final-audit.ts
 ```
 
-Lihat `docs/development/financial-concurrency-tests.md` untuk batas keselamatan dan daftar skenario.
+Quality documentation:
 
-## Saat Ini Ditahan
+```text
+docs/development/quality-gates.md
+docs/development/financial-concurrency-tests.md
+```
 
-Tahapan berikut sengaja belum dilanjutkan:
+## Important Engineering Invariants
 
-- P2-A — Midtrans QRIS Gateway Foundation
-- P2-B — Webhook, Expiry & Payment Recovery
-- P2-C — Gateway Refund & Reconciliation
-- Production Readiness Review
-- WhatsApp integration
-- Email integration
+### Transaction history is immutable in meaning
 
-Lihat roadmap terkait sebelum melanjutkan pekerjaan tersebut.
+Current Product Item may change later. Historical transaction representation may not.
+
+Use:
+
+```text
+Sale event     → sale_items.snapshot
+Buyback event  → buyback_items snapshot/acquisition fields
+Processing     → source snapshot + result snapshot
+Inventory now  → product_items current state
+```
+
+### Inventory admission is explicit
+
+A physical item may be sold only after it satisfies current sale gate. Completing a Buyback transaction alone is not inventory admission.
+
+### Financial state stays server-side
+
+Pricing, payment normalization, shift financials, checkout, refund, Buyback completion, and other sensitive mutations must be validated and committed on server-side transactional boundaries.
+
+### Physical identity must survive lifecycle transitions
+
+Existing ASIHJAYA Buyback items preserve physical item identity. Business-state transitions should not manufacture a replacement identity merely to represent a new lifecycle state.
+
+## Documentation Index
+
+### Current business/domain docs
+
+- `docs/development/buyback-lifecycle.md`
+- `docs/development/legacy-product-migration.md`
+- `docs/development/controlled-shift-reopen.md`
+- `docs/development/financial-concurrency-tests.md`
+
+### Infrastructure & deployment
+
+- `docs/development/environment-configuration.md`
+- `docs/development/quality-gates.md`
+- `docs/development/database-deployment.md`
+- `docs/development/database-backup-restore.md`
+- `docs/development/database-backup-offsite.md`
+- `docs/development/deployment-rollback-automation.md`
+- `docs/development/asihjaya-rms-production-handoff.md`
+
+### Hardware Hub
+
+- `docs/hardware-hub/windows-setup-guide.md`
+- `docs/hardware-hub/windows-production-operations.md`
+- `docs/hardware-hub/hardware-job-protocol-v2.md`
+- `docs/hardware-hub/sato-cg408-profile.md`
+- `docs/hardware-hub/sato-label-v3-final.md`
+- `docs/hardware-hub/receipt-a4-epson-profile.md`
+
+### Production-readiness references
+
+- `docs/production-readiness/logging-monitoring.md`
+- `docs/production-readiness/reverse-proxy-cloudflare.md`
+
+## Before Commit
+
+Minimum:
+
+```powershell
+npm run typecheck
+npm run lint
+npm run routes:check
+npm run build:clean
+```
+
+Documentation sync:
+
+```powershell
+npx tsx scripts/check-documentation-current-state.ts
+```
+
+For schema changes also run database checks.
 
 ## Production Status
 
-Project belum dinyatakan production-ready.
-
-Sebelum go-live, minimal perlu diselesaikan:
-
-- Cloud storage configuration
-- Backup dan restore drill
-- Security dan session hardening
-- Monitoring dan alerting
-- Production migration rehearsal
-- Store UAT simulation
-- Production Readiness Review
-
-## Kontribusi dan Perubahan Source
-
-Saat membuat perubahan:
-
-- Pertahankan pola feature service dan transaction service yang sudah ada.
-- Jangan memindahkan business rule sensitif ke client.
-- Selalu lakukan authorization di server.
-- Jangan mengubah migration yang sudah pernah diterapkan.
-- Jangan menyimpan secret atau data customer sensitif ke log.
-- Tambahkan audit trail untuk tindakan administratif dan finansial sensitif.
-- Jalankan quality checks sebelum commit.
-
-## Migrasi Produk Legacy
-
-Fondasi staging XLSX tersedia pada:
+The codebase already contains substantial production-safety infrastructure, but project status remains:
 
 ```text
-/admin/migrasi-produk
+ACTIVE DEVELOPMENT / UAT / PREVIEW
 ```
 
-Workbook sistem lama dianalisis tanpa otomatis membuat stok aktif. Barcode enam digit, termasuk leading zero, dipertahankan sebagai string; harga lama hanya menjadi referensi sampai verifikasi fisik dan pricing baru selesai.
+Do not call a deployment production-ready merely because the application starts successfully.
 
-```powershell
-npm run check:legacy-product-migration
-```
+Before final real-production cutover, repeat and document:
 
-Lihat `docs/development/legacy-product-migration.md` untuk scope dan guardrail milestone.
+- full store UAT;
+- real hardware validation for every production device;
+- production secrets review;
+- production database backup + restore drill;
+- off-site backup verification;
+- migration/deployment rehearsal;
+- rollback rehearsal;
+- monitoring/alert verification;
+- final operational handoff.
 
-## Legacy Migration Milestone 2
+## Contribution Principles
 
-Master legacy dapat dipetakan sekali ke Product Master sistem baru melalui route:
+When changing source:
 
-```text
-/admin/migrasi-produk/[batchId]/mapping
-```
+- preserve server-side authorization;
+- do not move sensitive business rules into client-only code;
+- keep migrations forward-only;
+- preserve historical snapshots;
+- avoid broad refactors in high-blast-radius transaction files unless required;
+- add or maintain audit trails for sensitive actions;
+- never log secrets or sensitive customer credentials;
+- run targeted checker + quality gate before commit;
+- update README/docs when the actual operational flow changes.
 
-Manager juga dapat membagi pekerjaan per etalase dan menugaskan operator/lead melalui:
+---
 
-```text
-/admin/migrasi-produk/[batchId]/sesi
-```
-
-Semua Product Master hasil otomatis tetap berstatus `draft`. Milestone ini belum mengaktifkan item, belum mengubah stok, dan belum mengubah lookup POS.
-
-### Legacy physical verification
-
-Staff yang ditugaskan pada sesi aktif dapat membuka `/pos/migrasi-barang`, memindai barcode lama, memverifikasi data fisik, dan mengirim hasil ke antrean manager. Barcode unmatched didukung dengan foto aktual wajib. Tahap ini tetap staging-only: tidak membuat stok aktif dan tidak mengubah checkout POS. Lihat `docs/development/legacy-product-migration.md`.
-
-### Legacy migration Milestone 4
-
-Manager review tersedia pada halaman batch migrasi. Approval bersifat transactional dan hanya membuat Product Item berstatus `migration_hold` beserta alias barcode legacy. Item belum tersedia di POS sampai proses cutover pada milestone berikutnya.
-
-### Legacy product migration Milestone 5A — sold during migration
-
-Manager dapat menandai satu atau banyak barcode yang terjual pada sistem legacy selama proses migrasi melalui `/admin/migrasi-produk/[batchId]/sold`. Barcode aktif langsung dikecualikan dari scanner, manager approval, dan cutover. Barcode staging yang belum pernah discan tetap dapat ditandai. Product Item yang sudah berstatus `migration_hold` akan dipindahkan ke `sold`, dinonaktifkan, dan alias barcode legacy-nya ikut dinonaktifkan tanpa membuat inventory movement. Salah penandaan dapat dibatalkan dengan alasan wajib untuk memulihkan status sebelumnya secara transactional.
-
-### Legacy product migration Milestone 5B — final reconciliation dan foto legacy
-
-Manager membuka `/admin/migrasi-produk/[batchId]/rekonsiliasi` untuk melihat blocker cutover dan memindahkan foto item legacy dari link XLSX ke private image storage. Readiness dihitung langsung dari sesi, verification, sold record, Product Item `migration_hold`, Product Master, dan alias barcode; tidak ada approval tambahan atau tabel workflow baru.
-
-Foto legacy diproses maksimal 100 item per klik dengan concurrency terbatas. Download hanya menerima HTTPS dari host `LEGACY_IMAGE_ALLOWED_HOSTS`, memvalidasi redirect/content type/ukuran, lalu mengubah gambar menjadi WebP melalui pipeline image storage yang sama dengan upload normal. Kegagalan foto menjadi warning dan UI memakai foto Product Master lalu placeholder; kegagalan tersebut tidak menghalangi cutover. Milestone 5B belum membuat inventory movement, belum mengubah item menjadi `available`, dan belum mengaktifkan barcode alias pada checkout POS.
-
-### Legacy product migration Milestone 5C — transactional cutover
-
-Manager membuka `/admin/migrasi-produk/[batchId]/cutover` setelah rekonsiliasi akhir bersih. Aktivasi dilakukan per sesi/etalase dalam satu transaction: cutover run dibuat, opening inventory movement `migration_opening` dicatat untuk setiap item, Product Item berubah dari `migration_hold` menjadi `available`, verification menjadi `activated`, dan sesi menjadi `completed`.
-
-Cutover memakai batch lock, barcode lock yang sama dengan scanner/approval/sold flow, unique run per sesi, serta konfirmasi `AKTIFKAN STOK`. Kegagalan satu item melakukan rollback seluruh sesi. Foto legacy gagal tetap dapat diulang setelah aktivasi. Lookup checkout melalui alias barcode legacy tetap ditahan sampai Milestone 5D.
+**ASIHJAYA RMS README policy:** describe what the system does **today**. Historical ideas, abandoned integrations, and superseded milestone behavior do not belong in the current project overview.

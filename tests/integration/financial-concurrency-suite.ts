@@ -4,11 +4,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db, pool } from "@/db";
-import {
-  customerDepositLedger,
-  payments,
-  sales,
-} from "@/db/schema";
+import { customerDepositLedger } from "@/db/schema";
 import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
 import {
   claimPosCheckoutAttempt,

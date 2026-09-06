@@ -226,7 +226,7 @@ function ProcessingDrawer({
   const [color, setColor] = useState(
     row.sourceColor === "-" ? "" : row.sourceColor,
   );
-  const [pricePerGram, setPricePerGram] = useState("");
+  const [pricePerGramInput, setPricePerGramInput] = useState("");
   const [priceTouched, setPriceTouched] = useState(false);
   const [quickMasterOpen, setQuickMasterOpen] = useState(false);
   const [localMasters, setLocalMasters] =
@@ -248,11 +248,12 @@ function ProcessingDrawer({
     );
   }, [priceRates, purityPercent]);
 
-  useEffect(() => {
-    if (!priceTouched) {
-      setPricePerGram(suggestedRate ? formatRupiahInput(suggestedRate) : "");
-    }
-  }, [priceTouched, suggestedRate]);
+  const suggestedPricePerGram = suggestedRate
+    ? formatRupiahInput(suggestedRate)
+    : "";
+  const pricePerGram = priceTouched
+    ? pricePerGramInput
+    : suggestedPricePerGram;
 
   useEffect(() => {
     if (state.status === "success") {
@@ -529,7 +530,9 @@ function ProcessingDrawer({
                     value={pricePerGram}
                     onChange={(event) => {
                       setPriceTouched(true);
-                      setPricePerGram(formatRupiahInput(event.target.value));
+                      setPricePerGramInput(
+                        formatRupiahInput(event.target.value),
+                      );
                     }}
                     inputMode="numeric"
                     className={cn(inputClassName, "pl-9")}

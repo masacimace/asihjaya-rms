@@ -153,7 +153,6 @@ export function usePosCheckout({
     [
       applyCheckoutSuccess,
       getRecoveryStatus,
-      invalidateCheckoutAttempt,
       setPaymentFeedback,
       waitForRecovery,
     ],

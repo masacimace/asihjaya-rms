@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 
 import {
-  CircleDollarSign,
   RefreshCcw,
   Store,
   WalletCards,

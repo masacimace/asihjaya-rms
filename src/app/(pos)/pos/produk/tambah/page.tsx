@@ -1,5 +1,4 @@
-import { ArrowLeft, CircleDollarSign, PackagePlus, Zap } from "lucide-react";
-import Link from "next/link";
+import { CircleDollarSign, PackagePlus, Zap } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { PosPageContainer } from "@/components/layout/pos-page";

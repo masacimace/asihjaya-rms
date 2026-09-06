@@ -70,7 +70,10 @@ export function usePosCatalog({
   const isFirstFilterEffectRef = useRef(true);
   const isLoadingMoreRef = useRef(false);
   const loadPageRef = useRef(loadPage);
-  loadPageRef.current = loadPage;
+
+  useEffect(() => {
+    loadPageRef.current = loadPage;
+  }, [loadPage]);
 
   useEffect(() => {
     if (activeCategoryId !== "all" || debouncedSearchQuery) {
@@ -79,12 +82,22 @@ export function usePosCatalog({
 
     requestVersionRef.current += 1;
     isLoadingMoreRef.current = false;
-    setCatalogItems(initialItems);
-    setNextCursor(initialCursor);
-    setHasMore(initialHasMore);
-    setCatalogError(null);
-    setIsRefreshing(false);
-    setIsLoadingMore(false);
+
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      setCatalogItems(initialItems);
+      setNextCursor(initialCursor);
+      setHasMore(initialHasMore);
+      setCatalogError(null);
+      setIsRefreshing(false);
+      setIsLoadingMore(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     activeCategoryId,
     debouncedSearchQuery,
@@ -109,48 +122,62 @@ export function usePosCatalog({
 
     const requestVersion = ++requestVersionRef.current;
     const categoryId = activeCategoryId === "all" ? null : activeCategoryId;
+    let cancelled = false;
 
-    setCatalogItems([]);
-    setNextCursor(null);
-    setHasMore(false);
-    setCatalogError(null);
-    setIsRefreshing(true);
-    isLoadingMoreRef.current = false;
-    setIsLoadingMore(false);
+    queueMicrotask(() => {
+      if (cancelled || requestVersion !== requestVersionRef.current) {
+        return;
+      }
 
-    void loadPageRef.current({
-      cursor: null,
-      searchQuery: debouncedSearchQuery || null,
-      categoryId,
-    })
-      .then((result) => {
-        if (requestVersion !== requestVersionRef.current) {
-          return;
-        }
+      setCatalogItems([]);
+      setNextCursor(null);
+      setHasMore(false);
+      setCatalogError(null);
+      setIsRefreshing(true);
+      isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
 
-        if (result.status === "error") {
-          setCatalogError(result.message);
-          return;
-        }
-
-        setCatalogItems(result.items);
-        setNextCursor(result.nextCursor);
-        setHasMore(result.hasMore);
+      void loadPageRef.current({
+        cursor: null,
+        searchQuery: debouncedSearchQuery || null,
+        categoryId,
       })
-      .catch(() => {
-        if (requestVersion !== requestVersionRef.current) {
-          return;
-        }
+        .then((result) => {
+          if (cancelled || requestVersion !== requestVersionRef.current) {
+            return;
+          }
 
-        setCatalogError(
-          "Katalog POS belum bisa dimuat. Ubah pencarian atau kategori untuk mencoba lagi.",
-        );
-      })
-      .finally(() => {
-        if (requestVersion === requestVersionRef.current) {
-          setIsRefreshing(false);
-        }
-      });
+          if (result.status === "error") {
+            setCatalogError(result.message);
+            return;
+          }
+
+          setCatalogItems(result.items);
+          setNextCursor(result.nextCursor);
+          setHasMore(result.hasMore);
+        })
+        .catch(() => {
+          if (cancelled || requestVersion !== requestVersionRef.current) {
+            return;
+          }
+
+          setCatalogError(
+            "Katalog POS belum bisa dimuat. Ubah pencarian atau kategori untuk mencoba lagi.",
+          );
+        })
+        .finally(() => {
+          if (
+            !cancelled &&
+            requestVersion === requestVersionRef.current
+          ) {
+            setIsRefreshing(false);
+          }
+        });
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeCategoryId, debouncedSearchQuery]);
 
   const loadMore = useCallback(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   BadgePercent,
   CircleDollarSign,
@@ -34,48 +34,57 @@ export type PosItemPricingDialogProps = {
   onConfirm: (item: PosCartItem) => void;
 };
 
-export function PosItemPricingDialog({
+export function PosItemPricingDialog(
+  props: PosItemPricingDialogProps,
+) {
+  const existingItem = props.existingItem ?? null;
+  const resetKey = [
+    props.item.id,
+    existingItem?.transactionWeightGram ?? props.item.weightGram ?? "",
+    existingItem?.pricePerGram ?? props.item.activePricePerGram ?? "",
+    existingItem?.discountAmount ?? "",
+    existingItem?.laborAmount ?? "",
+    existingItem?.adjustmentAmount ?? "",
+  ].join("|");
+
+  return <PosItemPricingDialogContent key={resetKey} {...props} />;
+}
+
+function PosItemPricingDialogContent({
   item,
   existingItem = null,
   onCancel,
   onConfirm,
 }: PosItemPricingDialogProps) {
-  const [transactionWeightInput, setTransactionWeightInput] = useState("");
-  const [pricePerGramInput, setPricePerGramInput] = useState("");
-  const [discountInput, setDiscountInput] = useState("");
-  const [laborInput, setLaborInput] = useState("");
-  const [adjustmentInput, setAdjustmentInput] = useState("");
+  const initialPricePerGram =
+    existingItem?.pricePerGram ?? item.activePricePerGram ?? "";
+
+  const [transactionWeightInput, setTransactionWeightInput] = useState(() =>
+    formatPosWeightInput(
+      existingItem?.transactionWeightGram ?? item.weightGram ?? "",
+    ),
+  );
+  const [pricePerGramInput, setPricePerGramInput] = useState(() =>
+    Number(initialPricePerGram) > 0
+      ? formatRupiahInput(initialPricePerGram)
+      : "",
+  );
+  const [discountInput, setDiscountInput] = useState(() =>
+    existingItem && Number(existingItem.discountAmount) > 0
+      ? formatRupiahInput(existingItem.discountAmount)
+      : "",
+  );
+  const [laborInput, setLaborInput] = useState(() =>
+    existingItem && Number(existingItem.laborAmount) > 0
+      ? formatRupiahInput(existingItem.laborAmount)
+      : "",
+  );
+  const [adjustmentInput, setAdjustmentInput] = useState(() =>
+    existingItem && Number(existingItem.adjustmentAmount) > 0
+      ? formatRupiahInput(existingItem.adjustmentAmount)
+      : "",
+  );
   const [feedback, setFeedback] = useState<string | null>(null);
-
-  useEffect(() => {
-    const initialPricePerGram =
-      existingItem?.pricePerGram ?? item.activePricePerGram ?? "";
-
-    setTransactionWeightInput(
-      formatPosWeightInput(existingItem?.transactionWeightGram ?? item.weightGram ?? ""),
-    );
-    setPricePerGramInput(
-      Number(initialPricePerGram) > 0
-        ? formatRupiahInput(initialPricePerGram)
-        : "",
-    );
-    setDiscountInput(
-      existingItem && Number(existingItem.discountAmount) > 0
-        ? formatRupiahInput(existingItem.discountAmount)
-        : "",
-    );
-    setLaborInput(
-      existingItem && Number(existingItem.laborAmount) > 0
-        ? formatRupiahInput(existingItem.laborAmount)
-        : "",
-    );
-    setAdjustmentInput(
-      existingItem && Number(existingItem.adjustmentAmount) > 0
-        ? formatRupiahInput(existingItem.adjustmentAmount)
-        : "",
-    );
-    setFeedback(null);
-  }, [existingItem, item.activePricePerGram, item.id]);
 
   const transactionWeightGram = normalizePosTransactionWeight(transactionWeightInput);
   const transactionPricePerGram = parsePaymentAmountInput(pricePerGramInput);
@@ -92,14 +101,10 @@ export function PosItemPricingDialog({
     activePricePerGram: item.activePricePerGram,
     transactionPricePerGram: transactionPricePerGramText,
   });
-  const basePriceAmount = useMemo(
-    () =>
-      calculatePosBasePrice({
-        weightGram: transactionWeightGram,
-        pricePerGram: transactionPricePerGramText,
-      }),
-    [transactionWeightGram, transactionPricePerGramText],
-  );
+  const basePriceAmount = calculatePosBasePrice({
+    weightGram: transactionWeightGram,
+    pricePerGram: transactionPricePerGramText,
+  });
   const projectedFinalAmount = basePriceAmount
     ? basePriceAmount - discountAmount + laborAmount + adjustmentAmount
     : 0;

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -41,8 +41,6 @@ export type CompleteBuybackProcessingResult = {
   barcode: string;
   replayed: boolean;
 };
-
-type ProcessingTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function readSnapshotText(
   snapshot: Record<string, unknown> | null | undefined,
