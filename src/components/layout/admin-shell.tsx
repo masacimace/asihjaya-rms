@@ -5,7 +5,6 @@ import {
   Boxes,
   ChevronDown,
   ChevronRight,
-  FileSpreadsheet,
   Gem,
   LayoutDashboard,
   Menu,
@@ -58,7 +57,7 @@ type NavigationItem = {
     | "inventory"
     | "migration"
     | "settings";
-  children?: { label: string; href: string }[];
+  children?: { label: string; href: string; access?: "migration" }[];
 };
 
 const navigation: NavigationItem[] = [
@@ -80,12 +79,6 @@ const navigation: NavigationItem[] = [
     access: "inventory",
   },
   {
-    label: "Migrasi Data Produk",
-    href: "/admin/migrasi-produk",
-    icon: FileSpreadsheet,
-    access: "migration",
-  },
-  {
     label: "Riwayat Penjualan",
     href: "/admin/penjualan",
     icon: ReceiptText,
@@ -102,6 +95,11 @@ const navigation: NavigationItem[] = [
       /* Sidebar mobile label: "Shift Kasir", href: "/admin/operasional/shift" */
       { label: "Laporan Outlet", href: "/admin/laporan" },
       { label: "Pergerakan Kas", href: "/admin/operasional/kas" },
+      {
+        label: "Migrasi Produk",
+        href: "/admin/migrasi-produk",
+        access: "migration",
+      },
       { label: "Hardware Hub", href: "/admin/operasional/hardware" },
     ],
   },
@@ -258,7 +256,9 @@ function SidebarContent({
       <nav className="space-y-1">
         {visibleNavigation.map(({ label, href, icon: Icon, children }) => {
           if (children) {
-            const visibleChildren = children;
+            const visibleChildren = children.filter(
+              (child) => child.access !== "migration" || canAccessMigration,
+            );
             const isChildActive = visibleChildren.some((child) =>
               isNavigationActive(pathname, child.href),
             );
