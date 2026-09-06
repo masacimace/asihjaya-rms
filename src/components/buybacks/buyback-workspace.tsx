@@ -34,6 +34,7 @@ import {
   searchBuybackExistingItemsAction,
 } from "@/app/actions/buybacks";
 import { createPosQuickCustomerAction } from "@/app/actions/pos";
+import { CameraCaptureModal } from "@/components/media/camera-capture-modal";
 import { PosQuickCustomerDialog } from "@/components/pos/workspace/pos-quick-customer-dialog";
 import {
   normalizeBuybackDecimal,
@@ -103,10 +104,10 @@ function BuybackImageInput({
   onSelectionChange: (selected: boolean) => void;
 }) {
   const galleryInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const generatedPreviewRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   useEffect(
     () => () => {
@@ -138,18 +139,14 @@ function BuybackImageInput({
     const file = event.target.files?.[0] ?? null;
     if (!file) return;
 
-    if (cameraInputRef.current) {
-      cameraInputRef.current.value = "";
-    }
     applySelectedFile(file);
   }
 
-  function handleCameraChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    if (!file || !galleryInputRef.current) return;
+  function handleCameraCapture(file: File) {
+    if (!galleryInputRef.current) return;
 
     // Pertahankan nama field FormData Buyback existing dengan menyalin hasil
-    // capture ke input upload utama sebelum transaksi disubmit.
+    // custom camera ke input upload utama sebelum transaksi disubmit.
     const transfer = new DataTransfer();
     transfer.items.add(file);
     galleryInputRef.current.files = transfer.files;
@@ -162,8 +159,7 @@ function BuybackImageInput({
   }
 
   function openCamera() {
-    if (!cameraInputRef.current) return;
-    cameraInputRef.current.click();
+    setIsCameraOpen(true);
   }
 
   function removeImage() {
@@ -172,7 +168,6 @@ function BuybackImageInput({
     setFileName(null);
     onSelectionChange(false);
     if (galleryInputRef.current) galleryInputRef.current.value = "";
-    if (cameraInputRef.current) cameraInputRef.current.value = "";
   }
 
   return (
@@ -202,17 +197,6 @@ function BuybackImageInput({
         onChange={handleGalleryChange}
         className="hidden"
       />
-      {showCamera ? (
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleCameraChange}
-          className="hidden"
-        />
-      ) : null}
-
       <div
         className={cn(
           "grid gap-3 rounded-2xl border p-3 sm:grid-cols-[112px_minmax(0,1fr)]",
@@ -278,6 +262,16 @@ function BuybackImageInput({
           ) : null}
         </div>
       </div>
+
+      {showCamera ? (
+        <CameraCaptureModal
+          isOpen={isCameraOpen}
+          title="Ambil Foto Barang Buyback"
+          description="Foto kondisi barang sebelum Cuci/Rongsok menggunakan kamera belakang."
+          onClose={() => setIsCameraOpen(false)}
+          onCapture={handleCameraCapture}
+        />
+      ) : null}
     </div>
   );
 }

@@ -3,6 +3,8 @@
 import { Camera, ImagePlus, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { CameraCaptureModal } from "@/components/media/camera-capture-modal";
+
 const acceptedTypes = "image/jpeg,image/png,image/webp";
 
 export type SingleImageInputState = {
@@ -31,7 +33,7 @@ export function SingleImageInput({
   const [removeExisting, setRemoveExisting] = useState(false);
   const generatedPreviewRef = useRef<string | null>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   function revokeGeneratedPreview() {
     if (generatedPreviewRef.current) {
@@ -54,18 +56,14 @@ export function SingleImageInput({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (cameraInputRef.current) {
-      cameraInputRef.current.value = "";
-    }
     applySelectedFile(file);
   }
 
-  function handleCameraChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file || !galleryInputRef.current) return;
+  function handleCameraCapture(file: File) {
+    if (!galleryInputRef.current) return;
 
-    // Form tetap memakai field upload lama. Salin hasil capture ke input
-    // bernama agar server action/storage pipeline tidak perlu berubah.
+    // Form tetap memakai field upload lama. Salin hasil custom camera ke
+    // input bernama agar server action/storage pipeline tidak perlu berubah.
     const transfer = new DataTransfer();
     transfer.items.add(file);
     galleryInputRef.current.files = transfer.files;
@@ -81,11 +79,8 @@ export function SingleImageInput({
   }
 
   function openCamera() {
-    if (disabled || !cameraInputRef.current) {
-      return;
-    }
-
-    cameraInputRef.current.click();
+    if (disabled) return;
+    setIsCameraOpen(true);
   }
 
   function removeImage() {
@@ -105,9 +100,6 @@ export function SingleImageInput({
 
     if (galleryInputRef.current) {
       galleryInputRef.current.value = "";
-    }
-    if (cameraInputRef.current) {
-      cameraInputRef.current.value = "";
     }
   }
 
@@ -165,18 +157,6 @@ export function SingleImageInput({
             aria-hidden="true"
             tabIndex={-1}
           />
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            disabled={disabled}
-            onChange={handleCameraChange}
-            className="hidden"
-            aria-hidden="true"
-            tabIndex={-1}
-          />
-
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -225,6 +205,14 @@ export function SingleImageInput({
           </div>
         </div>
       </div>
+
+      <CameraCaptureModal
+        isOpen={isCameraOpen}
+        title="Ambil Foto Produk"
+        description="Gunakan kamera belakang dan pastikan produk terlihat jelas."
+        onClose={() => setIsCameraOpen(false)}
+        onCapture={handleCameraCapture}
+      />
     </div>
   );
 }
