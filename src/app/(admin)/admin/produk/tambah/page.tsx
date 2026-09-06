@@ -33,7 +33,7 @@ export default async function CreateProductPage() {
   ]);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-5 overflow-x-clip pb-6">
+    <div className="flex w-full min-w-0 max-w-full flex-col gap-5 overflow-x-clip pb-6">
       <section className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5">
         <Link
           href="/admin/inventaris"

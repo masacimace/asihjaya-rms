@@ -131,7 +131,7 @@ export default async function ProductDetailPage({
   const shouldScrollRecentItems = recentItems.length > 6;
 
   return (
-    <div className="mx-auto w-full max-w-7xl min-w-0 space-y-5 overflow-x-hidden pb-6">
+    <div className="w-full min-w-0 max-w-full space-y-5 overflow-x-hidden pb-6">
       <section className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5">
         <Link
           href="/admin/produk"
@@ -189,7 +189,9 @@ export default async function ProductDetailPage({
               Status pengelolaan
             </p>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Halaman ini hanya untuk reference dan pengelompokan. Produk fisik baru bisa ditambahkan langsung dari sini atau dari menu Tambah Produk.
+              Halaman ini hanya untuk reference dan pengelompokan. Produk fisik
+              baru bisa ditambahkan langsung dari sini atau dari menu Tambah
+              Produk.
             </p>
 
             <div className="mt-4 flex flex-col gap-2">
@@ -309,9 +311,7 @@ export default async function ProductDetailPage({
             >
               <div className="hidden min-w-[760px] divide-y divide-[var(--border)] lg:block">
                 {recentItems.map((item) => {
-                  const itemImageUrl = getImageUrl(
-                    item.imageKey,
-                  );
+                  const itemImageUrl = getImageUrl(item.imageKey);
 
                   return (
                     <article
@@ -340,14 +340,14 @@ export default async function ProductDetailPage({
 
                       <div>
                         <p className="text-xs text-[var(--muted)]">Berat</p>
-                        <p className="mt-1 font-semibold text-neutral-950">
+                        <p className="mt-1 text-sm font-semibold text-neutral-950">
                           {formatWeight(item.weightGram)}
                         </p>
                       </div>
 
                       <div>
                         <p className="text-xs text-[var(--muted)]">Outlet</p>
-                        <p className="mt-1 truncate font-semibold text-neutral-950">
+                        <p className="mt-1 truncate text-sm font-semibold text-neutral-950">
                           {item.outletName ?? "Belum ditempatkan"}
                         </p>
                       </div>
@@ -362,7 +362,11 @@ export default async function ProductDetailPage({
                           {availabilityLabels[item.availability]}
                         </span>
                         <p className="mt-2 text-xs text-[var(--muted)]">
-                          {item.condition === "used" ? "Bekas" : item.condition === "good" ? "Baru" : "Perlu perhatian"}
+                          {item.condition === "used"
+                            ? "Bekas"
+                            : item.condition === "good"
+                              ? "Baru"
+                              : "Perlu perhatian"}
                         </p>
                       </div>
 
@@ -380,9 +384,7 @@ export default async function ProductDetailPage({
 
               <div className="divide-y divide-[var(--border)] lg:hidden">
                 {recentItems.map((item) => {
-                  const itemImageUrl = getImageUrl(
-                    item.imageKey,
-                  );
+                  const itemImageUrl = getImageUrl(item.imageKey);
 
                   return (
                     <Link
@@ -427,7 +429,7 @@ export default async function ProductDetailPage({
                             </div>
                             <div>
                               <p className="text-[var(--muted)]">Outlet</p>
-                              <p className="mt-1 truncate font-semibold text-neutral-950">
+                              <p className="mt-1 truncate text-xs font-semibold text-neutral-950">
                                 {item.outletName ?? "Belum ditempatkan"}
                               </p>
                             </div>
@@ -462,7 +464,10 @@ export default async function ProductDetailPage({
             <dl className="mt-5 space-y-4">
               {[
                 ["Kode Master", product.code],
-                ["Kategori", `${product.categoryName} · ${product.categoryCode}`],
+                [
+                  "Kategori",
+                  `${product.categoryName} · ${product.categoryCode}`,
+                ],
                 ["Total item", `${formatInteger(product.totalItems)} item`],
                 ["Dibuat", formatDateTime(product.createdAt)],
                 ["Diperbarui", formatDateTime(product.updatedAt)],
@@ -479,7 +484,6 @@ export default async function ProductDetailPage({
               ))}
             </dl>
           </section>
-
         </aside>
       </section>
 
@@ -495,7 +499,8 @@ export default async function ProductDetailPage({
                 Edit data produk
               </h2>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Ubah kategori, nama, atau status Product Master. Data fisik dan pricing tetap dikelola pada item produk.
+                Ubah kategori, nama, atau status Product Master. Data fisik dan
+                pricing tetap dikelola pada item produk.
               </p>
             </div>
 
