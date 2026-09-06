@@ -30,7 +30,8 @@ export function SingleImageInput({
   const [previewUrl, setPreviewUrl] = useState<string | null>(initialImageUrl);
   const [removeExisting, setRemoveExisting] = useState(false);
   const generatedPreviewRef = useRef<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   function revokeGeneratedPreview() {
     if (generatedPreviewRef.current) {
@@ -39,26 +40,52 @@ export function SingleImageInput({
     }
   }
 
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
+  function applySelectedFile(file: File) {
     revokeGeneratedPreview();
-
-    if (!file) {
-      const hasImage = removeExisting ? false : Boolean(initialImageUrl);
-      setPreviewUrl(hasImage ? initialImageUrl : null);
-      onStateChange?.({
-        hasImage,
-        changed: removeExisting,
-      });
-      return;
-    }
 
     const objectUrl = URL.createObjectURL(file);
     generatedPreviewRef.current = objectUrl;
     setPreviewUrl(objectUrl);
     setRemoveExisting(false);
     onStateChange?.({ hasImage: true, changed: true });
+  }
+
+  function handleGalleryChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = "";
+    }
+    applySelectedFile(file);
+  }
+
+  function handleCameraChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file || !galleryInputRef.current) return;
+
+    // Form tetap memakai field upload lama. Salin hasil capture ke input
+    // bernama agar server action/storage pipeline tidak perlu berubah.
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    galleryInputRef.current.files = transfer.files;
+    applySelectedFile(file);
+  }
+
+  function openImagePicker() {
+    if (disabled || !galleryInputRef.current) {
+      return;
+    }
+
+    galleryInputRef.current.click();
+  }
+
+  function openCamera() {
+    if (disabled || !cameraInputRef.current) {
+      return;
+    }
+
+    cameraInputRef.current.click();
   }
 
   function removeImage() {
@@ -76,8 +103,11 @@ export function SingleImageInput({
       changed: shouldRemoveExisting,
     });
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+    if (galleryInputRef.current) {
+      galleryInputRef.current.value = "";
+    }
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = "";
     }
   }
 
@@ -125,35 +155,58 @@ export function SingleImageInput({
 
         <div className="space-y-3">
           <input
-            ref={fileInputRef}
+            ref={galleryInputRef}
             type="file"
             name={name}
             accept={acceptedTypes}
             disabled={disabled}
-            onChange={handleFileChange}
+            onChange={handleGalleryChange}
+            className="hidden"
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            disabled={disabled}
+            onChange={handleCameraChange}
             className="hidden"
             aria-hidden="true"
             tabIndex={-1}
           />
 
-          <button
-            type="button"
-            onClick={() => {
-              if (!disabled) {
-                fileInputRef.current?.click();
-              }
-            }}
-            disabled={disabled}
-            aria-required={required && !initialImageUrl ? true : undefined}
-            className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition ${
-              disabled
-                ? "cursor-not-allowed opacity-50"
-                : "cursor-pointer hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
-            }`}
-          >
-            <ImagePlus className="size-4" />
-            {previewUrl ? "Ganti Foto" : "Pilih Foto"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={openImagePicker}
+              disabled={disabled}
+              aria-required={required && !initialImageUrl ? true : undefined}
+              className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition ${
+                disabled
+                  ? "cursor-not-allowed opacity-50"
+                  : "cursor-pointer hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+              }`}
+            >
+              <ImagePlus className="size-4" />
+              {previewUrl ? "Ganti Foto" : "Pilih Foto"}
+            </button>
+
+            <button
+              type="button"
+              onClick={openCamera}
+              disabled={disabled}
+              className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-neutral-700 transition ${
+                disabled
+                  ? "cursor-not-allowed opacity-50"
+                  : "cursor-pointer hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+              }`}
+            >
+              <Camera className="size-4" />
+              Ambil Foto
+            </button>
+          </div>
 
           {previewUrl ? (
             <button

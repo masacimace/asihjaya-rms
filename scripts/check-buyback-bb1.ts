@@ -57,8 +57,21 @@ assert.match(queries, /lastInvoiceNumber/);
 
 assert.match(action, /requirePermission\("buybacks\.create"\)/);
 assert.match(action, /Total payout harus sama persis dengan Total Buyback/);
-assert.match(action, /externalImages = new Map<string, File \| null>/);
-assert.match(action, /Validate every external image before writing any file/);
+assert.match(action, /const itemImages = new Map<string, File>\(\)/);
+assert.match(action, /formData\.get\(`itemImage:\$\{item\.clientKey\}`\)/);
+assert.match(action, /const validation = validateImageFile\(image\)/);
+const imageValidationIndex = action.indexOf(
+  "const validation = validateImageFile(image);",
+);
+const imageStoreIndex = action.indexOf(
+  "const imageKey = await storeImageFile({",
+);
+assert.ok(
+  imageValidationIndex >= 0 &&
+    imageStoreIndex >= 0 &&
+    imageValidationIndex < imageStoreIndex,
+  "Semua foto item Buyback harus divalidasi sebelum file pertama disimpan.",
+);
 assert.match(action, /eq\(buybacks\.organizationId, auth\.organization\.id\)/);
 assert.match(action, /storeImageFile/);
 assert.match(action, /deleteImageFile/);
@@ -67,7 +80,7 @@ assert.match(service, /db\.transaction/);
 assert.match(service, /pg_advisory_xact_lock/);
 assert.match(service, /eq\(productItems\.availability, "sold"\)/);
 assert.match(service, /eq\(productItems\.locationState, "customer"\)/);
-assert.match(service, /availability: "available"/);
+assert.match(service, /availability: "processing"/);
 assert.match(service, /condition: "used"/);
 assert.match(service, /locationState: "outlet"/);
 assert.match(service, /costAmount: String\(item\.finalAmount\)/);
@@ -77,20 +90,23 @@ assert.match(service, /entryType: "deposit_in"/);
 assert.match(service, /direction: "credit"/);
 assert.match(service, /lockCustomerDepositBalance/);
 assert.match(service, /product_item\.reacquired_by_buyback/);
-assert.match(service, /product_item\.created_by_buyback/);
+assert.match(service, /buyback_item\.processing_queued/);
+assert.match(service, /transaction\.insert\(buybackItemProcessings\)/);
+assert.match(service, /status: "pending"/);
 assert.match(service, /action: "buyback\.completed"/);
 assert.match(service, /expectedCash: sql`coalesce\(\$\{shifts\.expectedCash\}, 0\) - \$\{cashPayout\}`/);
 assert.match(inventoryItemPage, /buyback: "Buyback"/);
 
-assert.match(page, /title="Buyback"/);
-assert.match(page, /Tanpa Global Buyback Rate/);
+assert.match(page, /title="Buyback Pembelian"/);
+assert.match(page, /Pemrosesan Cuci\/Rongsok/);
 assert.match(page, /BuybackWorkspace/);
 assert.match(workspace, /Produk ASIHJAYA/);
-assert.match(workspace, /Produk Eksternal/);
-assert.match(workspace, /Harga Buyback \/ Gram/);
+assert.match(workspace, /Tambah Produk External/);
+assert.match(workspace, /Total Harga Buyback/);
 assert.match(workspace, /Dana Titip/);
 assert.match(workspace, /Selesaikan Buyback/);
-assert.match(workspace, /externalImage:/);
+assert.match(workspace, /imageSelected: boolean/);
+assert.match(workspace, /name={`itemImage:\$\{clientKey\}`}/);
 
 const buybackNavOccurrences = posShell.match(/href: "\/pos\/buyback"/g)?.length ?? 0;
 assert.ok(buybackNavOccurrences >= 2, "Buyback harus tersedia pada desktop dan Menu Lainnya mobile.");

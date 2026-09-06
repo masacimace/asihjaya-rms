@@ -94,13 +94,16 @@ type PayoutState = Record<BuybackPayoutMethod, string> & {
 function BuybackImageInput({
   clientKey,
   error,
+  showCamera = false,
   onSelectionChange,
 }: {
   clientKey: string;
   error?: string;
+  showCamera?: boolean;
   onSelectionChange: (selected: boolean) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const generatedPreviewRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -121,16 +124,8 @@ function BuybackImageInput({
     }
   }
 
-  function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
+  function applySelectedFile(file: File) {
     clearGeneratedPreview();
-
-    if (!file) {
-      setPreviewUrl(null);
-      setFileName(null);
-      onSelectionChange(false);
-      return;
-    }
 
     const objectUrl = URL.createObjectURL(file);
     generatedPreviewRef.current = objectUrl;
@@ -139,12 +134,45 @@ function BuybackImageInput({
     onSelectionChange(true);
   }
 
+  function handleGalleryChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) return;
+
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = "";
+    }
+    applySelectedFile(file);
+  }
+
+  function handleCameraChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    if (!file || !galleryInputRef.current) return;
+
+    // Pertahankan nama field FormData Buyback existing dengan menyalin hasil
+    // capture ke input upload utama sebelum transaksi disubmit.
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    galleryInputRef.current.files = transfer.files;
+    applySelectedFile(file);
+  }
+
+  function openImagePicker() {
+    if (!galleryInputRef.current) return;
+    galleryInputRef.current.click();
+  }
+
+  function openCamera() {
+    if (!cameraInputRef.current) return;
+    cameraInputRef.current.click();
+  }
+
   function removeImage() {
     clearGeneratedPreview();
     setPreviewUrl(null);
     setFileName(null);
     onSelectionChange(false);
-    if (inputRef.current) inputRef.current.value = "";
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
   }
 
   return (
@@ -167,13 +195,23 @@ function BuybackImageInput({
       </div>
 
       <input
-        ref={inputRef}
+        ref={galleryInputRef}
         type="file"
         name={`itemImage:${clientKey}`}
         accept="image/jpeg,image/png,image/webp"
-        onChange={handleChange}
+        onChange={handleGalleryChange}
         className="hidden"
       />
+      {showCamera ? (
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleCameraChange}
+          className="hidden"
+        />
+      ) : null}
 
       <div
         className={cn(
@@ -208,12 +246,22 @@ function BuybackImageInput({
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => inputRef.current?.click()}
+              onClick={openImagePicker}
               className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
             >
               <ImagePlus className="size-4" />
               {previewUrl ? "Ganti Foto" : "Pilih Foto"}
             </button>
+            {showCamera ? (
+              <button
+                type="button"
+                onClick={openCamera}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+              >
+                <Camera className="size-4" />
+                Ambil Foto
+              </button>
+            ) : null}
             {previewUrl ? (
               <button
                 type="button"
@@ -956,6 +1004,7 @@ export function BuybackWorkspace({
                   <div className="lg:col-span-2">
                     <BuybackImageInput
                       clientKey={item.clientKey}
+                      showCamera={item.source === "external"}
                       error={
                         state.fieldErrors?.[`items.${item.clientKey}.image`]
                       }
