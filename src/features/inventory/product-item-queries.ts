@@ -364,6 +364,7 @@ export async function getRecentProductItems(
   organizationId: string,
   productId: string,
   limit = 12,
+  offset = 0,
 ) {
   return db
     .select({
@@ -387,7 +388,8 @@ export async function getRecentProductItems(
       ),
     )
     .orderBy(desc(productItems.createdAt))
-    .limit(limit);
+    .limit(limit)
+    .offset(offset);
 }
 
 export async function getProductItemEditContext({

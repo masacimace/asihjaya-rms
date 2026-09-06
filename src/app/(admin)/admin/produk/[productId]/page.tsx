@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  ArrowRight,
   ChevronRight,
   Boxes,
   CircleDot,
@@ -26,6 +25,8 @@ import { cn } from "@/lib/utils";
 export const metadata = {
   title: "Detail Produk",
 };
+
+const ITEM_HISTORY_PAGE_SIZE = 8;
 
 const statusLabels = {
   draft: "Draft",
@@ -105,7 +106,7 @@ export default async function ProductDetailPage({
   searchParams,
 }: {
   params: Promise<{ productId: string }>;
-  searchParams: Promise<{ created?: string }>;
+  searchParams: Promise<{ created?: string; itemPage?: string }>;
 }) {
   const auth = await requireAnyPermission(["products.view", "products.manage"]);
   const canManage = hasPermission(auth, "products.manage");
@@ -125,10 +126,36 @@ export default async function ProductDetailPage({
       )
     : [];
 
+  const parsedItemPage = Number.parseInt(query.itemPage ?? "1", 10);
+  const requestedItemPage = Number.isFinite(parsedItemPage)
+    ? Math.max(1, parsedItemPage)
+    : 1;
+  const itemPageCount = Math.max(
+    1,
+    Math.ceil(product.totalItems / ITEM_HISTORY_PAGE_SIZE),
+  );
+  const itemPage = Math.min(requestedItemPage, itemPageCount);
+  const itemOffset = (itemPage - 1) * ITEM_HISTORY_PAGE_SIZE;
   const recentItems = access.canAccessInventory
-    ? await getRecentProductItems(auth.organization.id, product.id)
+    ? await getRecentProductItems(
+        auth.organization.id,
+        product.id,
+        ITEM_HISTORY_PAGE_SIZE,
+        itemOffset,
+      )
     : [];
-  const shouldScrollRecentItems = recentItems.length > 6;
+  const itemRangeStart = product.totalItems === 0 ? 0 : itemOffset + 1;
+  const itemRangeEnd = Math.min(
+    itemOffset + recentItems.length,
+    product.totalItems,
+  );
+
+  const buildItemHistoryUrl = (page: number) => {
+    const search = new URLSearchParams();
+    if (page > 1) search.set("itemPage", String(page));
+    const queryString = search.toString();
+    return `/admin/produk/${product.id}${queryString ? `?${queryString}` : ""}#item-history`;
+  };
 
   return (
     <div className="w-full min-w-0 max-w-full space-y-5 overflow-x-hidden pb-6">
@@ -189,9 +216,7 @@ export default async function ProductDetailPage({
               Status pengelolaan
             </p>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Halaman ini hanya untuk reference dan pengelompokan. Produk fisik
-              baru bisa ditambahkan langsung dari sini atau dari menu Tambah
-              Produk.
+              Halaman ini hanya untuk reference dan pengelompokan. Produk fisik baru bisa ditambahkan langsung dari sini atau dari menu Tambah Produk.
             </p>
 
             <div className="mt-4 flex flex-col gap-2">
@@ -219,56 +244,12 @@ export default async function ProductDetailPage({
         </div>
       ) : null}
 
-      <section className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
-        {[
-          {
-            label: "Total item fisik",
-            value: formatInteger(product.totalItems),
-            icon: Boxes,
-            iconClassName: "bg-violet-50 text-violet-700",
-          },
-          {
-            label: "Item tersedia",
-            value: formatInteger(product.availableItems),
-            icon: CircleDot,
-            iconClassName: "bg-emerald-50 text-emerald-700",
-          },
-          {
-            label: "Item reserved",
-            value: formatInteger(product.reservedItems),
-            icon: Gem,
-            iconClassName: "bg-amber-50 text-amber-700",
-          },
-          {
-            label: "Item terjual",
-            value: formatInteger(product.soldItems),
-            icon: Gem,
-            iconClassName: "bg-neutral-100 text-neutral-600",
-          },
-        ].map(({ label, value, icon: Icon, iconClassName }) => (
-          <article
-            key={label}
-            className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5"
-          >
-            <div
-              className={cn(
-                "grid size-10 place-items-center rounded-xl",
-                iconClassName,
-              )}
-            >
-              <Icon className="size-5" />
-            </div>
-            <p className="mt-4 text-2xl font-semibold text-neutral-950">
-              {value}
-            </p>
-            <p className="mt-1 text-xs text-[var(--muted)]">{label}</p>
-          </article>
-        ))}
-      </section>
-
       <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
-        <article className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-          <div className="flex flex-col gap-3 border-b border-[var(--border)] px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+        <article
+          id="item-history"
+          className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white scroll-mt-5"
+        >
+          <div className="flex flex-col gap-4 border-b border-[var(--border)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div className="min-w-0">
               <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
                 <Boxes className="size-3.5" />
@@ -277,11 +258,20 @@ export default async function ProductDetailPage({
               <h2 className="mt-3 font-semibold text-neutral-950">
                 Riwayat item produk
               </h2>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Unit perhiasan individual yang memiliki barcode, berat, harga,
-                outlet, dan status inventaris masing-masing.
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--muted)]">
+                Unit perhiasan individual dengan barcode, berat, outlet, kondisi,
+                dan status inventaris masing-masing. Klik item untuk membuka detail.
               </p>
             </div>
+
+            {access.canAccessInventory && product.totalItems > 0 ? (
+              <div className="shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-right">
+                <p className="text-xs text-[var(--muted)]">Total item</p>
+                <p className="mt-0.5 text-sm font-semibold text-neutral-950">
+                  {formatInteger(product.totalItems)} unit
+                </p>
+              </div>
+            ) : null}
           </div>
 
           {!access.canAccessInventory ? (
@@ -303,20 +293,16 @@ export default async function ProductDetailPage({
               </p>
             </div>
           ) : (
-            <div
-              className={cn(
-                shouldScrollRecentItems &&
-                  "scrollbar-clean max-h-[620px] overflow-y-auto overscroll-contain",
-              )}
-            >
-              <div className="hidden min-w-[760px] divide-y divide-[var(--border)] lg:block">
+            <>
+              <div className="hidden divide-y divide-[var(--border)] lg:block">
                 {recentItems.map((item) => {
                   const itemImageUrl = getImageUrl(item.imageKey);
 
                   return (
-                    <article
+                    <Link
                       key={item.id}
-                      className="grid grid-cols-[minmax(0,1.8fr)_120px_160px_130px_92px] items-center gap-4 px-5 py-4"
+                      href={`/admin/inventaris/item/${item.id}`}
+                      className="group grid grid-cols-[minmax(0,2.1fr)_0.75fr_1fr_0.4fr_10px] items-center gap-5 px-5 py-4 transition hover:bg-[var(--surface-muted)]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <ProductImage
@@ -340,14 +326,14 @@ export default async function ProductDetailPage({
 
                       <div>
                         <p className="text-xs text-[var(--muted)]">Berat</p>
-                        <p className="mt-1 text-sm font-semibold text-neutral-950">
+                        <p className="mt-1 font-semibold text-neutral-950">
                           {formatWeight(item.weightGram)}
                         </p>
                       </div>
 
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs text-[var(--muted)]">Outlet</p>
-                        <p className="mt-1 truncate text-sm font-semibold text-neutral-950">
+                        <p className="mt-1 truncate font-semibold text-neutral-950">
                           {item.outletName ?? "Belum ditempatkan"}
                         </p>
                       </div>
@@ -370,14 +356,8 @@ export default async function ProductDetailPage({
                         </p>
                       </div>
 
-                      <Link
-                        href={`/admin/inventaris/item/${item.id}`}
-                        className="inline-flex items-center justify-end gap-2 text-sm font-semibold text-[var(--accent)] transition hover:text-neutral-950"
-                      >
-                        Detail
-                        <ArrowRight className="size-4" />
-                      </Link>
-                    </article>
+                      <ChevronRight className="size-4 justify-self-end text-neutral-400 transition group-hover:translate-x-0.5 group-hover:text-neutral-700" />
+                    </Link>
                   );
                 })}
               </div>
@@ -390,7 +370,7 @@ export default async function ProductDetailPage({
                     <Link
                       key={item.id}
                       href={`/admin/inventaris/item/${item.id}`}
-                      className="block px-4 py-4 transition hover:bg-[var(--surface-muted)]"
+                      className="group block px-4 py-4 transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
                     >
                       <div className="flex min-w-0 items-start gap-3">
                         <ProductImage
@@ -408,16 +388,12 @@ export default async function ProductDetailPage({
                               <p className="mt-1 truncate font-mono text-xs text-neutral-700">
                                 {item.sku}
                               </p>
+                              <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
+                                {item.barcode}
+                              </p>
                             </div>
 
-                            <span
-                              className={cn(
-                                "shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold",
-                                getAvailabilityClass(item.availability),
-                              )}
-                            >
-                              {availabilityLabels[item.availability]}
-                            </span>
+                            <ChevronRight className="mt-1 size-4 shrink-0 text-neutral-400 transition group-hover:translate-x-0.5" />
                           </div>
 
                           <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-xs">
@@ -427,12 +403,30 @@ export default async function ProductDetailPage({
                                 {formatWeight(item.weightGram)}
                               </p>
                             </div>
-                            <div>
+                            <div className="min-w-0">
                               <p className="text-[var(--muted)]">Outlet</p>
-                              <p className="mt-1 truncate text-xs font-semibold text-neutral-950">
+                              <p className="mt-1 truncate font-semibold text-neutral-950">
                                 {item.outletName ?? "Belum ditempatkan"}
                               </p>
                             </div>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <span
+                              className={cn(
+                                "rounded-full border px-2 py-1 text-[11px] font-semibold",
+                                getAvailabilityClass(item.availability),
+                              )}
+                            >
+                              {availabilityLabels[item.availability]}
+                            </span>
+                            <span className="text-xs text-[var(--muted)]">
+                              {item.condition === "used"
+                                ? "Bekas"
+                                : item.condition === "good"
+                                  ? "Baru"
+                                  : "Perlu perhatian"}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -440,7 +434,47 @@ export default async function ProductDetailPage({
                   );
                 })}
               </div>
-            </div>
+
+              <div className="flex flex-col gap-3 border-t border-[var(--border)] bg-[var(--surface-muted)]/35 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <p className="text-xs text-[var(--muted)]">
+                  Menampilkan {formatInteger(itemRangeStart)}–{formatInteger(itemRangeEnd)} dari {formatInteger(product.totalItems)} item · Halaman {formatInteger(itemPage)} dari {formatInteger(itemPageCount)}
+                </p>
+
+                {itemPageCount > 1 ? (
+                  <nav
+                    aria-label="Pagination riwayat item produk"
+                    className="grid grid-cols-2 gap-2 sm:flex"
+                  >
+                    <Link
+                      href={buildItemHistoryUrl(Math.max(1, itemPage - 1))}
+                      aria-disabled={itemPage <= 1}
+                      className={cn(
+                        "inline-flex h-9 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-900 transition",
+                        itemPage <= 1
+                          ? "pointer-events-none opacity-40"
+                          : "hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40",
+                      )}
+                    >
+                      Sebelumnya
+                    </Link>
+                    <Link
+                      href={buildItemHistoryUrl(
+                        Math.min(itemPageCount, itemPage + 1),
+                      )}
+                      aria-disabled={itemPage >= itemPageCount}
+                      className={cn(
+                        "inline-flex h-9 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-900 transition",
+                        itemPage >= itemPageCount
+                          ? "pointer-events-none opacity-40"
+                          : "hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40",
+                      )}
+                    >
+                      Berikutnya
+                    </Link>
+                  </nav>
+                ) : null}
+              </div>
+            </>
           )}
         </article>
 
@@ -461,14 +495,67 @@ export default async function ProductDetailPage({
               </div>
             </div>
 
-            <dl className="mt-5 space-y-4">
+            <div className="mt-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Ringkasan inventaris
+              </p>
+
+              <div className="mt-3 grid grid-cols-2 gap-2.5">
+                {[
+                  {
+                    label: "Total item fisik",
+                    value: formatInteger(product.totalItems),
+                    icon: Boxes,
+                    iconClassName: "bg-violet-50 text-violet-700",
+                  },
+                  {
+                    label: "Item tersedia",
+                    value: formatInteger(product.availableItems),
+                    icon: CircleDot,
+                    iconClassName: "bg-emerald-50 text-emerald-700",
+                  },
+                  {
+                    label: "Item reserved",
+                    value: formatInteger(product.reservedItems),
+                    icon: Gem,
+                    iconClassName: "bg-amber-50 text-amber-700",
+                  },
+                  {
+                    label: "Item terjual",
+                    value: formatInteger(product.soldItems),
+                    icon: PackageCheck,
+                    iconClassName: "bg-neutral-100 text-neutral-600",
+                  },
+                ].map(({ label, value, icon: Icon, iconClassName }) => (
+                  <div
+                    key={label}
+                    className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "grid size-8 shrink-0 place-items-center rounded-lg",
+                          iconClassName,
+                        )}
+                      >
+                        <Icon className="size-4" />
+                      </span>
+                      <p className="text-lg font-semibold text-neutral-950">
+                        {value}
+                      </p>
+                    </div>
+                    <p className="mt-2 text-[11px] leading-4 text-[var(--muted)]">
+                      {label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <dl className="mt-5 space-y-4 border-t border-[var(--border)] pt-5">
               {[
                 ["Kode Master", product.code],
-                [
-                  "Kategori",
-                  `${product.categoryName} · ${product.categoryCode}`,
-                ],
-                ["Total item", `${formatInteger(product.totalItems)} item`],
+                ["Kategori", `${product.categoryName} · ${product.categoryCode}`],
                 ["Dibuat", formatDateTime(product.createdAt)],
                 ["Diperbarui", formatDateTime(product.updatedAt)],
               ].map(([label, value]) => (
@@ -484,6 +571,7 @@ export default async function ProductDetailPage({
               ))}
             </dl>
           </section>
+
         </aside>
       </section>
 
@@ -499,8 +587,7 @@ export default async function ProductDetailPage({
                 Edit data produk
               </h2>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Ubah kategori, nama, atau status Product Master. Data fisik dan
-                pricing tetap dikelola pada item produk.
+                Ubah kategori, nama, atau status Product Master. Data fisik dan pricing tetap dikelola pada item produk.
               </p>
             </div>
 
