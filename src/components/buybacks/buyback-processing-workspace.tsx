@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Camera,
   CheckCircle2,
   Clock3,
   ImagePlus,
@@ -17,6 +18,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { completeBuybackProcessingAction } from "@/app/actions/buyback-processing";
+import { CameraCaptureModal } from "@/components/media/camera-capture-modal";
 import { QuickProductMasterDialog } from "@/components/products/quick-product-master-dialog";
 import {
   initialBuybackProcessingActionState,
@@ -72,6 +74,7 @@ function ResultImageInput({ error }: { error?: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   useEffect(
     () => () => {
@@ -87,18 +90,35 @@ function ResultImageInput({ error }: { error?: string }) {
     }
   }
 
-  function changeImage(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
+  function applySelectedFile(file: File) {
     clearPreview();
-
-    if (!file) {
-      setPreviewUrl(null);
-      return;
-    }
 
     const url = URL.createObjectURL(file);
     objectUrlRef.current = url;
     setPreviewUrl(url);
+  }
+
+  function changeImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      clearPreview();
+      setPreviewUrl(null);
+      return;
+    }
+
+    applySelectedFile(file);
+  }
+
+  function handleCameraCapture(file: File) {
+    if (!inputRef.current) return;
+
+    // Pertahankan field FormData resultImage existing. Hasil custom camera
+    // disalin ke input upload utama agar action/storage tidak perlu berubah.
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    inputRef.current.files = transfer.files;
+    applySelectedFile(file);
   }
 
   function removeImage() {
@@ -164,6 +184,14 @@ function ResultImageInput({ error }: { error?: string }) {
               <ImagePlus className="size-4" />
               {previewUrl ? "Ganti Foto" : "Pilih Foto"}
             </button>
+            <button
+              type="button"
+              onClick={() => setIsCameraOpen(true)}
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700"
+            >
+              <Camera className="size-4" />
+              Ambil Foto
+            </button>
             {previewUrl ? (
               <button
                 type="button"
@@ -180,6 +208,14 @@ function ResultImageInput({ error }: { error?: string }) {
           ) : null}
         </div>
       </div>
+
+      <CameraCaptureModal
+        isOpen={isCameraOpen}
+        title="Ambil Foto Setelah Pemrosesan"
+        description="Pastikan kondisi akhir produk setelah Cuci/Rongsok terlihat jelas."
+        onClose={() => setIsCameraOpen(false)}
+        onCapture={handleCameraCapture}
+      />
     </div>
   );
 }
