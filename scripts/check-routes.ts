@@ -14,9 +14,18 @@ const retiredExactRoutes = [
   "/admin/operasional",
   "/admin/laporan/export",
   "/admin/laporan/export/xlsx",
+  "/admin/laporan/penjualan/export",
+  "/admin/laporan/stok/export",
+  "/admin/operasional/kas/export",
+  "/admin/penjualan/export",
 ];
 
-const retiredRouteFiles: string[] = [];
+const retiredRouteFiles = [
+  "app/(admin)/admin/laporan/penjualan/export/route.ts",
+  "app/(admin)/admin/laporan/stok/export/route.ts",
+  "app/(admin)/admin/operasional/kas/export/route.ts",
+  "app/(admin)/admin/penjualan/export/route.ts",
+];
 
 const expectedRouteFiles = [
   "app/(admin)/admin/[section]/page.tsx",
@@ -41,10 +50,8 @@ const expectedRouteFiles = [
   "app/(admin)/admin/laporan/kas/page.tsx",
   "app/(admin)/admin/laporan/layout.tsx",
   "app/(admin)/admin/laporan/page.tsx",
-  "app/(admin)/admin/laporan/penjualan/export/route.ts",
   "app/(admin)/admin/laporan/penjualan/export/xlsx/route.ts",
   "app/(admin)/admin/laporan/penjualan/page.tsx",
-  "app/(admin)/admin/laporan/stok/export/route.ts",
   "app/(admin)/admin/laporan/stok/export/xlsx/route.ts",
   "app/(admin)/admin/laporan/stok/page.tsx",
   "app/(admin)/admin/migrasi-produk/[batchId]/page.tsx",
@@ -54,7 +61,6 @@ const expectedRouteFiles = [
   "app/(admin)/admin/operasional/hardware/jobs/[jobId]/page.tsx",
   "app/(admin)/admin/operasional/hardware/page.tsx",
   "app/(admin)/admin/operasional/hardware/setup-guide/page.tsx",
-  "app/(admin)/admin/operasional/kas/export/route.ts",
   "app/(admin)/admin/operasional/kas/export/xlsx/route.ts",
   "app/(admin)/admin/operasional/kas/page.tsx",
   "app/(admin)/admin/operasional/shift/page.tsx",
@@ -70,7 +76,6 @@ const expectedRouteFiles = [
   "app/(admin)/admin/pengaturan/pembayaran/manual-edc/page.tsx",
   "app/(admin)/admin/penjualan/[transactionId]/page.tsx",
   "app/(admin)/admin/penjualan/[transactionId]/retur/page.tsx",
-  "app/(admin)/admin/penjualan/export/route.ts",
   "app/(admin)/admin/penjualan/export/xlsx/route.ts",
   "app/(admin)/admin/penjualan/page.tsx",
   "app/(admin)/admin/penjualan/preview-nota/html/page.tsx",

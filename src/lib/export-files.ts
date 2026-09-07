@@ -35,40 +35,6 @@ function sanitizeXlsxCell(value: ExportCell): ExportCell {
   return sanitizeText(value);
 }
 
-function escapeCsvCell(value: ExportCell) {
-  const stringValue = sanitizeText(value);
-
-  if (
-    stringValue.includes('"') ||
-    stringValue.includes(",") ||
-    stringValue.includes("\n")
-  ) {
-    return `"${stringValue.replaceAll('"', '""')}"`;
-  }
-
-  return stringValue;
-}
-
-export function buildCsvFromRows(rows: ExportCell[][]) {
-  return rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n");
-}
-
-export function buildCsvFromSheets(sheets: ExportSheet[]) {
-  const rows: ExportCell[][] = [];
-
-  sheets.forEach((sheet, index) => {
-    if (index > 0) {
-      rows.push([]);
-    }
-
-    rows.push([sheet.name]);
-    rows.push(sheet.columns);
-    rows.push(...sheet.rows);
-  });
-
-  return `\ufeff${buildCsvFromRows(rows)}`;
-}
-
 function sanitizeSheetName(name: string) {
   return name.replace(/[\\/?*\[\]:]/g, " ").trim().slice(0, 31) || "Sheet";
 }
@@ -107,23 +73,6 @@ export function buildXlsxBuffer(sheets: ExportSheet[]) {
     compression: true,
     type: "buffer",
   }) as Buffer;
-}
-
-export function createCsvResponse({
-  filename,
-  sheets,
-}: {
-  filename: string;
-  sheets: ExportSheet[];
-}) {
-  return new Response(buildCsvFromSheets(sheets), {
-    status: 200,
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "no-store",
-    },
-  });
 }
 
 export function createXlsxResponse({

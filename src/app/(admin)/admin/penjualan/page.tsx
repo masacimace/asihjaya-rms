@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Download,
   Filter,
+  MonitorUp,
   Printer,
   ReceiptText,
   RotateCcw,
@@ -332,13 +333,6 @@ function buildAdminSalesListUrl(page: number, filters: AdminSalesFilters) {
   return query ? `/admin/penjualan?${query}` : "/admin/penjualan";
 }
 
-function buildAdminSalesCsvExportUrl(filters: AdminSalesFilters) {
-  const params = buildAdminSalesQueryParams(filters);
-  const query = params.toString();
-
-  return query ? `/admin/penjualan/export?${query}` : "/admin/penjualan/export";
-}
-
 function buildAdminSalesXlsxExportUrl(filters: AdminSalesFilters) {
   const params = buildAdminSalesQueryParams(filters);
   const query = params.toString();
@@ -419,7 +413,7 @@ export default async function PenjualanListPage({
           <div className="min-w-0 space-y-4">
             <Link
               href="/admin"
-              className="inline-flex h-10 items-center justify-center gap-2 bg-white px-4 text-sm font-semibold text-neutral-700"
+              className="inline-flex h-10 items-center justify-center gap-2 bg-white px-4 text-sm font-medium text-neutral-700"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
@@ -454,20 +448,20 @@ export default async function PenjualanListPage({
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <a
-                href={buildAdminSalesCsvExportUrl(data.filters)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+            <div className="mt-4 grid grid-cols-1 gap-2">
+              <Link
+                href="/pos"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-950 bg-neutral-950 px-3 text-xs font-medium !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
               >
-                <Download className="size-4" />
-                CSV
-              </a>
+                <MonitorUp className="size-4" />
+                Buka POS
+              </Link>
               <a
                 href={buildAdminSalesXlsxExportUrl(data.filters)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                className="col-span-2 inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
               >
                 <Download className="size-4" />
-                XLSX
+                Export Excel
               </a>
             </div>
           </div>

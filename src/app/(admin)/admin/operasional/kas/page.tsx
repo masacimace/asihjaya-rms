@@ -135,16 +135,10 @@ function buildCashListUrl(page: number, filters: AdminCashMovementFilters) {
   return query ? `/admin/operasional/kas?${query}` : "/admin/operasional/kas";
 }
 
-function buildCashExportUrl(
-  format: "csv" | "xlsx",
-  filters: AdminCashMovementFilters,
-) {
+function buildCashExportUrl(filters: AdminCashMovementFilters) {
   const params = buildCashQueryParams(filters);
   const query = params.toString();
-  const basePath =
-    format === "xlsx"
-      ? "/admin/operasional/kas/export/xlsx"
-      : "/admin/operasional/kas/export";
+  const basePath = "/admin/operasional/kas/export/xlsx";
 
   return query ? `${basePath}?${query}` : basePath;
 }
@@ -664,22 +658,13 @@ export default async function KasPage({ searchParams }: PageProps) {
                   {formatInteger(data.total)} movement.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
-                <Link
-                  href={buildCashExportUrl("csv", filters)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                >
-                  <Download className="size-4" />
-                  CSV
-                </Link>
-                <Link
-                  href={buildCashExportUrl("xlsx", filters)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                >
-                  <Download className="size-4" />
-                  XLSX
-                </Link>
-              </div>
+              <Link
+                href={buildCashExportUrl(filters)}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+              >
+                <Download className="size-4" />
+                XLSX
+              </Link>
             </div>
 
             {data.rows.length === 0 ? (

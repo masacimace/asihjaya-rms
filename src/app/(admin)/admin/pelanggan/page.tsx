@@ -9,7 +9,6 @@ import {
   MessageCircle,
   Phone,
   Plus,
-  RefreshCw,
   Search,
   ShoppingBag,
   Sparkles,
@@ -358,21 +357,13 @@ export default async function CustomerListPage({
               </div>
             </div>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <Link
-                href={buildCustomersListUrl(data.page, data.filters)}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-900 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"
-              >
-                <RefreshCw className="size-4" />
-                Refresh
-              </Link>
-
+            <div className="mt-4 grid gap-2 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-1">
               <Link
                 href="/admin/pelanggan/baru"
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
               >
                 <Plus className="size-4" />
-                Customer
+                Tambah Customer
               </Link>
             </div>
           </div>

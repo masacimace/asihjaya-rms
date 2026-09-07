@@ -138,13 +138,9 @@ function getSalesChartMax(points: ReportSalesDailyPoint[]) {
   return Math.ceil(maxValue / step) * step;
 }
 
-function buildSalesReportExportUrl({
-  format,
-  params,
-}: {
-  format: "csv" | "xlsx";
-  params: Record<string, string | null | undefined>;
-}) {
+function buildSalesReportExportUrl(
+  params: Record<string, string | null | undefined>,
+) {
   const searchParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -153,10 +149,7 @@ function buildSalesReportExportUrl({
     }
   });
 
-  const basePath =
-    format === "xlsx"
-      ? "/admin/laporan/penjualan/export/xlsx"
-      : "/admin/laporan/penjualan/export";
+  const basePath = "/admin/laporan/penjualan/export/xlsx";
   const query = searchParams.toString();
 
   return query ? `${basePath}?${query}` : basePath;
@@ -952,52 +945,25 @@ export default async function LaporanPenjualanPage({
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
-              <Link
-                href={buildSalesReportExportUrl({
-                  format: "csv",
-                  params: {
-                    range: data.filters.range,
-                    outletId: data.filters.outletId,
-                    q: data.filters.query,
-                    status:
-                      data.filters.status === "all"
-                        ? null
-                        : data.filters.status,
-                    paymentMethod:
-                      data.filters.paymentMethod === "all"
-                        ? null
-                        : data.filters.paymentMethod,
-                  },
-                })}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-black px-4 text-sm font-semibold !text-white"
-              >
-                <Download className="size-4" />
-                Export CSV
-              </Link>
-              <Link
-                href={buildSalesReportExportUrl({
-                  format: "xlsx",
-                  params: {
-                    range: data.filters.range,
-                    outletId: data.filters.outletId,
-                    q: data.filters.query,
-                    status:
-                      data.filters.status === "all"
-                        ? null
-                        : data.filters.status,
-                    paymentMethod:
-                      data.filters.paymentMethod === "all"
-                        ? null
-                        : data.filters.paymentMethod,
-                  },
-                })}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-black px-4 text-sm font-semibold !text-white"
-              >
-                <Download className="size-4" />
-                Export XLSX
-              </Link>
-            </div>
+            <Link
+              href={buildSalesReportExportUrl({
+                range: data.filters.range,
+                outletId: data.filters.outletId,
+                q: data.filters.query,
+                status:
+                  data.filters.status === "all"
+                    ? null
+                    : data.filters.status,
+                paymentMethod:
+                  data.filters.paymentMethod === "all"
+                    ? null
+                    : data.filters.paymentMethod,
+              })}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-black px-4 text-sm font-semibold !text-white"
+            >
+              <Download className="size-4" />
+              Export XLSX
+            </Link>
           </div>
         </div>
 
