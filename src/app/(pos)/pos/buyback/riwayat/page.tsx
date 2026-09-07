@@ -1,4 +1,4 @@
-import { ArrowLeft, History, Store } from "lucide-react";
+import { ArrowLeft, Download, History, Store } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -74,6 +74,26 @@ function buildListHref({
   return query ? `/pos/buyback/riwayat?${query}` : "/pos/buyback/riwayat";
 }
 
+function buildExportHref({
+  q,
+  process,
+  payout,
+}: {
+  q: string;
+  process: BuybackHistoryProcessingFilter;
+  payout: BuybackHistoryPayoutFilter;
+}) {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (process !== "all") params.set("process", process);
+  if (payout !== "all") params.set("payout", payout);
+
+  const query = params.toString();
+  return query
+    ? `/pos/buyback/riwayat/export/xlsx?${query}`
+    : "/pos/buyback/riwayat/export/xlsx";
+}
+
 export default async function BuybackHistoryPage({
   searchParams,
 }: PageProps) {
@@ -133,6 +153,11 @@ export default async function BuybackHistoryPage({
     process: processingFilter,
     payout: payoutFilter,
   });
+  const exportHref = buildExportHref({
+    q: search,
+    process: processingFilter,
+    payout: payoutFilter,
+  });
 
   return (
     <PosPageContainer>
@@ -156,9 +181,17 @@ export default async function BuybackHistoryPage({
               </p>
             </div>
 
+            <a
+              href={exportHref}
+              className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50"
+            >
+              <Download className="size-4" />
+              Export XLSX
+            </a>
+
             <Link
               href="/pos/buyback"
-              className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800"
+              className="mt-2 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Buyback

@@ -99,6 +99,7 @@ const expectedRouteFiles = [
   "app/(pos)/pos/[section]/page.tsx",
   "app/(pos)/pos/buyback/page.tsx",
   "app/(pos)/pos/buyback/pemrosesan/page.tsx",
+  "app/(pos)/pos/buyback/riwayat/export/xlsx/route.ts",
   "app/(pos)/pos/buyback/riwayat/page.tsx",
   "app/(pos)/pos/ditahan/page.tsx",
   "app/(pos)/pos/layout.tsx",
