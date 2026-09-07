@@ -139,8 +139,24 @@ export type AdminSaleListRow = {
   printStatus: AdminSalePrintStatus;
 };
 
+export type AdminSalesExportPayment = {
+  method: AdminPaymentMethod;
+  provider: string;
+  profileName: string | null;
+  amount: string;
+  status: string;
+  providerReference: string | null;
+};
+
+export type AdminSalesExportRefund = {
+  method: AdminPaymentMethod;
+  provider: string;
+  amount: string;
+  status: string;
+};
 
 export type AdminSalesExportItem = {
+  lineNumber: number;
   productName: string;
   sku: string;
   barcode: string;
@@ -176,6 +192,8 @@ export type AdminSalesExportRow = {
   customerPhone: string | null;
   totalItems: number;
   items: AdminSalesExportItem[];
+  payments: AdminSalesExportPayment[];
+  refunds: AdminSalesExportRefund[];
   paymentMethods: AdminPaymentMethod[];
   printStatus: AdminSalePrintStatus;
 };

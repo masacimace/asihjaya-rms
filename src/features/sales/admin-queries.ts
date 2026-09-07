@@ -20,6 +20,7 @@ import {
   customerDepositLedger,
   hardwareJobs,
   outlets,
+  paymentRefunds,
   payments,
   productCategories,
   productItems,
@@ -751,14 +752,21 @@ export async function getAdminSalesExportRows(
     return [];
   }
 
-  const [paymentRows, itemRows, hardwareJobRows, customerDepositRows] =
-    await Promise.all([
+  const [
+    paymentRows,
+    itemRows,
+    hardwareJobRows,
+    customerDepositRows,
+    refundRows,
+  ] = await Promise.all([
       db
         .select({
           saleId: payments.saleId,
           method: payments.method,
+          provider: payments.provider,
           amount: payments.amount,
           status: payments.status,
+          providerReference: payments.providerReference,
           metadata: payments.metadata,
           createdAt: payments.createdAt,
         })
@@ -816,11 +824,31 @@ export async function getAdminSalesExportRows(
           ),
         )
         .orderBy(asc(customerDepositLedger.occurredAt)),
+
+      db
+        .select({
+          saleId: paymentRefunds.saleId,
+          method: paymentRefunds.method,
+          provider: paymentRefunds.provider,
+          amount: paymentRefunds.amount,
+          status: paymentRefunds.status,
+          confirmedAt: paymentRefunds.confirmedAt,
+        })
+        .from(paymentRefunds)
+        .where(
+          and(
+            eq(paymentRefunds.organizationId, auth.organization.id),
+            eq(paymentRefunds.status, "confirmed"),
+            inArray(paymentRefunds.saleId, saleIds),
+          ),
+        )
+        .orderBy(asc(paymentRefunds.confirmedAt)),
     ]);
 
   const paymentsBySaleId = new Map<string, typeof paymentRows>();
   const itemsBySaleId = new Map<string, typeof itemRows>();
   const customerDepositsBySaleId = new Map<string, typeof customerDepositRows>();
+  const refundsBySaleId = new Map<string, typeof refundRows>();
   const printStatusBySaleId = new Map<string, AdminSalePrintStatus>();
 
   for (const payment of paymentRows) {
@@ -843,6 +871,12 @@ export async function getAdminSalesExportRows(
     customerDepositsBySaleId.set(deposit.saleId, currentDeposits);
   }
 
+  for (const refund of refundRows) {
+    const currentRefunds = refundsBySaleId.get(refund.saleId) ?? [];
+    currentRefunds.push(refund);
+    refundsBySaleId.set(refund.saleId, currentRefunds);
+  }
+
   for (const job of hardwareJobRows) {
     if (job.sourceId && !printStatusBySaleId.has(job.sourceId)) {
       printStatusBySaleId.set(job.sourceId, normalizePrintStatus(job.status));
@@ -853,6 +887,7 @@ export async function getAdminSalesExportRows(
     const salePayments = paymentsBySaleId.get(sale.id) ?? [];
     const saleItemsRows = itemsBySaleId.get(sale.id) ?? [];
     const saleDepositEntries = customerDepositsBySaleId.get(sale.id) ?? [];
+    const saleRefundRows = refundsBySaleId.get(sale.id) ?? [];
     const totalAmount = parseAmount(sale.totalAmount);
     const paidPayments = salePayments.filter((payment) => payment.status === "paid");
     const refundedPayments = salePayments.filter(
@@ -883,16 +918,22 @@ export async function getAdminSalesExportRows(
       0,
       externalPaidAmount + customerDepositUsedAmount - customerDepositInAmount,
     );
-    const refundedAmount = refundedPayments.reduce(
+    const refundLedgerAmount = saleRefundRows.reduce(
+      (refundTotal, refund) => refundTotal + parseAmount(refund.amount),
+      0,
+    );
+    const refundedPaymentAmount = refundedPayments.reduce(
       (paymentTotal, payment) => paymentTotal + parseAmount(payment.amount),
       0,
     );
-    const receivedAmount = paidPayments.reduce(
+    const refundedAmount =
+      refundLedgerAmount > 0 ? refundLedgerAmount : refundedPaymentAmount;
+    const receivedAmount = displayPayments.reduce(
       (paymentTotal, payment) =>
         paymentTotal + (getPaymentMetadataNumber(payment.metadata, "receivedAmount") ?? 0),
       0,
     );
-    const changeAmount = paidPayments.reduce(
+    const changeAmount = displayPayments.reduce(
       (paymentTotal, payment) =>
         paymentTotal + (getPaymentMetadataNumber(payment.metadata, "changeAmount") ?? 0),
       0,
@@ -929,11 +970,33 @@ export async function getAdminSalesExportRows(
       customerPhone: sale.customerPhone,
       totalItems: saleItemsRows.length,
       items: saleItemsRows.map((item) => ({
+        lineNumber: item.lineNumber,
         productName: item.productName,
         sku: item.sku,
         barcode: item.barcode,
         categoryName: item.categoryName,
         finalPriceAmount: item.finalPriceAmount,
+      })),
+      payments: displayPayments.map((payment) => {
+        const profile = getPaymentMetadataStringRecord(
+          payment.metadata,
+          "manualPaymentProfile",
+        );
+
+        return {
+          method: payment.method,
+          provider: payment.provider,
+          profileName: profile.name ?? null,
+          amount: payment.amount,
+          status: payment.status,
+          providerReference: payment.providerReference,
+        };
+      }),
+      refunds: saleRefundRows.map((refund) => ({
+        method: refund.method,
+        provider: refund.provider,
+        amount: refund.amount,
+        status: refund.status,
       })),
       paymentMethods,
       printStatus: printStatusBySaleId.get(sale.id) ?? "not_queued",
