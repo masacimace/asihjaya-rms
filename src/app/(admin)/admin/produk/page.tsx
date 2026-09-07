@@ -225,7 +225,8 @@ export default async function ProductCatalogPage({
   const auth = await requireAnyPermission(["products.view", "products.manage"]);
   const canManage = hasPermission(auth, "products.manage");
   const canCreatePhysicalProduct =
-    hasPermission(auth, "inventory.receive") || hasPermission(auth, "inventory.manage");
+    hasPermission(auth, "inventory.receive") ||
+    hasPermission(auth, "inventory.manage");
   const canBatchImport = hasPermission(auth, "products.batch_import");
   const filters = parseProductListFilters(await searchParams);
 
@@ -262,7 +263,10 @@ export default async function ProductCatalogPage({
             </h1>
 
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Product Master sekarang berfungsi sebagai administrasi/reference untuk mengelompokkan produk fisik. Staff dapat membuat master langsung saat menambahkan produk baru tanpa harus masuk ke halaman ini terlebih dahulu.
+              Produk Master sekarang berfungsi sebagai administrasi/reference
+              untuk mengelompokkan produk fisik. Staff dapat membuat master
+              langsung saat menambahkan produk baru tanpa harus masuk ke halaman
+              ini terlebih dahulu.
             </p>
           </div>
 
@@ -274,7 +278,7 @@ export default async function ProductCatalogPage({
                   Master aktif
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-neutral-950">
-                  {formatInteger(overview.activeProducts)} produk
+                  {formatInteger(overview.activeProducts)} Master Produk
                 </p>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
                   {formatInteger(overview.totalProducts)} total master ·{" "}
@@ -344,18 +348,18 @@ export default async function ProductCatalogPage({
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 flex-wrap gap-2 text-sm font-semibold">
             {canManage ? (
               <ProductMasterCreateDrawer categories={createCategoryOptions} />
             ) : null}
 
-          <Link
-            href="/admin/produk/kategori"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/50 hover:text-[var(--accent)]"
-          >
-            <FolderTree className="size-4" />
-            Kelola Kategori
-          </Link>
+            <Link
+              href="/admin/produk/kategori"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/50 hover:text-[var(--accent)]"
+            >
+              <FolderTree className="size-4" />
+              Kelola Kategori
+            </Link>
           </div>
         </div>
 
@@ -442,7 +446,9 @@ export default async function ProductCatalogPage({
               Tidak ada produk yang cocok
             </h3>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-              Coba ubah kata kunci, kategori, atau status. Jika masih kosong, kamu bisa langsung membuat produk fisik dan quick-create Product Master dari form.
+              Coba ubah kata kunci, kategori, atau status. Jika masih kosong,
+              kamu bisa langsung membuat produk fisik dan quick-create Product
+              Master dari form.
             </p>
 
             {canCreatePhysicalProduct ? (

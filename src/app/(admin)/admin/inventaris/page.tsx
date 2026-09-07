@@ -6,8 +6,6 @@ import {
   CircleDot,
   Filter,
   PackageCheck,
-  Plus,
-  RefreshCw,
   Scale,
   Search,
   Sparkles,
@@ -286,7 +284,7 @@ export default async function InventoryPage({
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
-        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_23rem] lg:items-start lg:p-7">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_23rem] lg:items-end lg:p-7">
           <div>
             <Link
               href="/admin"
@@ -321,24 +319,6 @@ export default async function InventoryPage({
                   {formatNumber(overview.total)} total item aktif.
                 </p>
               </div>
-            </div>
-
-            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <Link
-                href={buildInventoryUrl(itemList.page, filters)}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-xs font-semibold text-neutral-900 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"
-              >
-                <RefreshCw className="size-4" />
-                Refresh
-              </Link>
-
-              <Link
-                href="/admin/produk/tambah"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-xs font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
-              >
-                <Plus className="size-4" />
-                Tambah Produk
-              </Link>
             </div>
           </div>
         </div>

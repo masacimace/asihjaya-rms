@@ -35,7 +35,9 @@ export default async function CreateProductMasterPage() {
             Tambah Product Master
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            Halaman ini hanya untuk administrasi/reference. Pada pekerjaan harian, Product Master baru bisa dibuat langsung dari form Tambah Produk.
+            Halaman ini hanya untuk administrasi/reference. Pada pekerjaan
+            harian, Product Master baru bisa dibuat langsung dari form Tambah
+            Produk.
           </p>
         </div>
       </section>
@@ -44,7 +46,8 @@ export default async function CreateProductMasterPage() {
         <ProductMasterForm mode="create" categories={categories} />
       ) : (
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
-          Belum ada kategori aktif. Buat kategori terlebih dahulu sebelum membuat Product Master.
+          Belum ada kategori aktif. Buat kategori terlebih dahulu sebelum
+          membuat Product Master.
         </section>
       )}
     </div>

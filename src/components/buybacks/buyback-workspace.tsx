@@ -696,7 +696,7 @@ export function BuybackWorkspace({
         </section>
 
         <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-base font-semibold text-neutral-950">
                 2. Barang Buyback

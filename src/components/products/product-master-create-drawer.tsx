@@ -41,7 +41,7 @@ export function ProductMasterCreateDrawer({
         className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/50 hover:text-[var(--accent)]"
       >
         <Plus className="size-4" />
-        Tambah Product Master
+        Produk Master
       </button>
 
       {open ? (
@@ -53,7 +53,7 @@ export function ProductMasterCreateDrawer({
         >
           <button
             type="button"
-            aria-label="Tutup panel Tambah Product Master"
+            aria-label="Tutup panel Tambah Produk Master"
             className="absolute inset-0 cursor-default"
             onClick={() => setOpen(false)}
           />
@@ -70,7 +70,7 @@ export function ProductMasterCreateDrawer({
                       id="create-product-master-title"
                       className="text-lg font-semibold text-neutral-950"
                     >
-                      Tambah Product Master
+                      Tambah Produk Master
                     </h2>
                     <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
                       Buat master baru tanpa meninggalkan daftar produk.
@@ -99,7 +99,8 @@ export function ProductMasterCreateDrawer({
                 />
               ) : (
                 <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-800">
-                  Belum ada kategori aktif. Buat kategori terlebih dahulu sebelum membuat Product Master.
+                  Belum ada kategori aktif. Buat kategori terlebih dahulu
+                  sebelum membuat Product Master.
                 </section>
               )}
             </div>

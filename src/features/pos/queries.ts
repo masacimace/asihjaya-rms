@@ -357,11 +357,10 @@ export async function getPosInitialData({
           productCategories.id,
           productCategories.code,
           productCategories.name,
-          productCategories.displayOrder,
         )
         .orderBy(
-          asc(productCategories.displayOrder),
           asc(productCategories.name),
+          asc(productCategories.code),
         ),
 
       db

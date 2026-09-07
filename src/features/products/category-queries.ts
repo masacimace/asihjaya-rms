@@ -5,7 +5,6 @@ import {
   eq,
   ilike,
   inArray,
-  isNotNull,
   isNull,
   ne,
   or,
@@ -23,16 +22,12 @@ export async function getCategoryOverview(organizationId: string) {
   const [categoryRows, productRows] = await Promise.all([
     db
       .select({
-        parentCategoryId: productCategories.parentCategoryId,
         isActive: productCategories.isActive,
         total: count(),
       })
       .from(productCategories)
       .where(eq(productCategories.organizationId, organizationId))
-      .groupBy(
-        productCategories.parentCategoryId,
-        productCategories.isActive,
-      ),
+      .groupBy(productCategories.isActive),
 
     db
       .select({ total: count() })
@@ -45,34 +40,17 @@ export async function getCategoryOverview(organizationId: string) {
       ),
   ]);
 
-  const categoryCount = ({
-    active,
-    child,
-  }: {
-    active?: boolean;
-    child?: boolean;
-  }) =>
-    categoryRows.reduce((total, row) => {
-      if (active !== undefined && row.isActive !== active) {
-        return total;
-      }
-
-      if (child !== undefined) {
-        const rowIsChild = row.parentCategoryId !== null;
-
-        if (rowIsChild !== child) {
-          return total;
-        }
-      }
-
-      return total + Number(row.total);
-    }, 0);
+  const activeCategories = Number(
+    categoryRows.find((row) => row.isActive)?.total ?? 0,
+  );
+  const inactiveCategories = Number(
+    categoryRows.find((row) => !row.isActive)?.total ?? 0,
+  );
 
   return {
-    totalCategories: categoryCount({}),
-    activeRootCategories: categoryCount({ active: true, child: false }),
-    activeChildCategories: categoryCount({ active: true, child: true }),
-    inactiveCategories: categoryCount({ active: false }),
+    totalCategories: activeCategories + inactiveCategories,
+    activeCategories,
+    inactiveCategories,
     activeProducts: Number(productRows[0]?.total ?? 0),
   };
 }
@@ -143,14 +121,6 @@ export async function getCategoryList(
     conditions.push(eq(productCategories.isActive, false));
   }
 
-  if (filters.type === "root") {
-    conditions.push(isNull(productCategories.parentCategoryId));
-  }
-
-  if (filters.type === "child") {
-    conditions.push(isNotNull(productCategories.parentCategoryId));
-  }
-
   const whereClause = and(...conditions);
 
   const totalRows = await db
@@ -166,52 +136,24 @@ export async function getCategoryList(
   const rows = await db
     .select({
       id: productCategories.id,
-      parentCategoryId: productCategories.parentCategoryId,
       code: productCategories.code,
       name: productCategories.name,
       description: productCategories.description,
-      displayOrder: productCategories.displayOrder,
       isActive: productCategories.isActive,
       createdAt: productCategories.createdAt,
       updatedAt: productCategories.updatedAt,
     })
     .from(productCategories)
     .where(whereClause)
-    .orderBy(
-      asc(productCategories.displayOrder),
-      asc(productCategories.name),
-    )
+    .orderBy(asc(productCategories.name), asc(productCategories.code))
     .limit(CATEGORY_PAGE_SIZE)
     .offset(offset);
 
   const categoryIds = rows.map((row) => row.id);
-  const parentIds = Array.from(
-    new Set(
-      rows
-        .map((row) => row.parentCategoryId)
-        .filter((id): id is string => id !== null),
-    ),
-  );
 
-  const [parentRows, productCountRows, childCountRows] = await Promise.all([
-    parentIds.length > 0
-      ? db
-          .select({
-            id: productCategories.id,
-            code: productCategories.code,
-            name: productCategories.name,
-          })
-          .from(productCategories)
-          .where(
-            and(
-              eq(productCategories.organizationId, organizationId),
-              inArray(productCategories.id, parentIds),
-            ),
-          )
-      : Promise.resolve([]),
-
+  const productCountRows =
     categoryIds.length > 0
-      ? db
+      ? await db
           .select({
             categoryId: productMasters.categoryId,
             status: productMasters.status,
@@ -225,30 +167,7 @@ export async function getCategoryList(
             ),
           )
           .groupBy(productMasters.categoryId, productMasters.status)
-      : Promise.resolve([]),
-
-    categoryIds.length > 0
-      ? db
-          .select({
-            parentCategoryId: productCategories.parentCategoryId,
-            isActive: productCategories.isActive,
-            total: count(),
-          })
-          .from(productCategories)
-          .where(
-            and(
-              eq(productCategories.organizationId, organizationId),
-              inArray(productCategories.parentCategoryId, categoryIds),
-            ),
-          )
-          .groupBy(
-            productCategories.parentCategoryId,
-            productCategories.isActive,
-          )
-      : Promise.resolve([]),
-  ]);
-
-  const parentById = new Map(parentRows.map((parent) => [parent.id, parent]));
+      : [];
 
   return {
     rows: rows.map((row) => {
@@ -256,15 +175,8 @@ export async function getCategoryList(
         (productRow) => productRow.categoryId === row.id,
       );
 
-      const childRowsForCategory = childCountRows.filter(
-        (childRow) => childRow.parentCategoryId === row.id,
-      );
-
       return {
         ...row,
-        parent: row.parentCategoryId
-          ? (parentById.get(row.parentCategoryId) ?? null)
-          : null,
         productCount: productRowsForCategory.reduce(
           (sum, productRow) => sum + Number(productRow.total),
           0,
@@ -273,14 +185,6 @@ export async function getCategoryList(
           productRowsForCategory.find(
             (productRow) => productRow.status === "active",
           )?.total ?? 0,
-        ),
-        childCount: childRowsForCategory.reduce(
-          (sum, childRow) => sum + Number(childRow.total),
-          0,
-        ),
-        activeChildCount: Number(
-          childRowsForCategory.find((childRow) => childRow.isActive)?.total ??
-            0,
         ),
       };
     }),

@@ -4,10 +4,8 @@ import {
   CalendarDays,
   Download,
   Filter,
-  MonitorUp,
   Printer,
   ReceiptText,
-  RefreshCw,
   RotateCcw,
   Search,
   ShoppingBag,
@@ -421,7 +419,7 @@ export default async function PenjualanListPage({
           <div className="min-w-0 space-y-4">
             <Link
               href="/admin"
-              className="inline-flex h-10 items-center justify-center gap-2 bg-white px-4 text-sm font-medium text-neutral-700"
+              className="inline-flex h-10 items-center justify-center gap-2 bg-white px-4 text-sm font-semibold text-neutral-700"
             >
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
@@ -457,20 +455,6 @@ export default async function PenjualanListPage({
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <Link
-                href={buildAdminSalesListUrl(data.page, data.filters)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
-              >
-                <RefreshCw className="size-4" />
-                Refresh
-              </Link>
-              <Link
-                href="/pos"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-950 bg-neutral-950 px-3 text-xs font-medium !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
-              >
-                <MonitorUp className="size-4" />
-                Buka POS
-              </Link>
               <a
                 href={buildAdminSalesCsvExportUrl(data.filters)}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
@@ -750,7 +734,9 @@ export default async function PenjualanListPage({
                       sale.customerDepositUsedAmount > 0 ? (
                         <div className="mt-2">
                           <PaymentBadges
-                            customerDepositUsedAmount={sale.customerDepositUsedAmount}
+                            customerDepositUsedAmount={
+                              sale.customerDepositUsedAmount
+                            }
                             methods={sale.paymentMethods}
                           />
                         </div>
@@ -865,7 +851,9 @@ export default async function PenjualanListPage({
                       {sale.paymentMethods.length > 0 ||
                       sale.customerDepositUsedAmount > 0 ? (
                         <PaymentBadges
-                          customerDepositUsedAmount={sale.customerDepositUsedAmount}
+                          customerDepositUsedAmount={
+                            sale.customerDepositUsedAmount
+                          }
                           methods={sale.paymentMethods}
                         />
                       ) : (

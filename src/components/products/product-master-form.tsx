@@ -115,10 +115,10 @@ export function ProductMasterForm(props: ProductMasterFormProps) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="font-semibold text-neutral-950">
-              Data Product Master
+              Data Produk Master
             </h2>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Product Master hanya menjadi pengelompokan barang fisik. Harga,
+              Produk Master hanya menjadi pengelompokan barang fisik. Harga,
               berat, kadar, warna, kondisi, dan foto tetap milik item fisik.
             </p>
           </div>
@@ -159,7 +159,7 @@ export function ProductMasterForm(props: ProductMasterFormProps) {
 
           <label className="block text-sm">
             <span className="mb-2 block font-medium text-neutral-800">
-              Kode Product Master <span className="text-red-500">*</span>
+              Kode Produk Master <span className="text-red-500">*</span>
             </span>
             {props.mode === "create" ? (
               <input
@@ -184,7 +184,7 @@ export function ProductMasterForm(props: ProductMasterFormProps) {
 
           <label className="block text-sm sm:col-span-2">
             <span className="mb-2 block font-medium text-neutral-800">
-              Nama Product Master <span className="text-red-500">*</span>
+              Nama Produk Master <span className="text-red-500">*</span>
             </span>
             <input
               name="name"
@@ -235,7 +235,9 @@ export function ProductMasterForm(props: ProductMasterFormProps) {
             }
           >
             <Save className="size-4" />
-            {props.mode === "create" ? "Simpan Product Master" : "Simpan Perubahan"}
+            {props.mode === "create"
+              ? "Simpan Product Master"
+              : "Simpan Perubahan"}
           </FormSubmitButton>
         </div>
       </section>

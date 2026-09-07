@@ -129,10 +129,7 @@ export async function getProductCategoryOptions(organizationId: string) {
     })
     .from(productCategories)
     .where(eq(productCategories.organizationId, organizationId))
-    .orderBy(
-      asc(productCategories.displayOrder),
-      asc(productCategories.name),
-    );
+    .orderBy(asc(productCategories.name), asc(productCategories.code));
 }
 
 export async function getProductList(
