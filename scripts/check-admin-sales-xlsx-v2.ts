@@ -9,6 +9,7 @@ import {
   describeAdminSalesWorkbookSummary,
   getAdminSalesPaymentMethodLabel,
   getAdminSalesPaymentStatusLabel,
+  writeAdminSalesWorkbook,
 } from "../src/features/sales/admin-sales-xlsx";
 
 const now = new Date("2026-09-08T01:00:00+07:00");
@@ -21,6 +22,14 @@ assert.match(querySource, /paymentRefunds/);
 assert.match(querySource, /provider: payments\.provider/);
 assert.match(querySource, /profileName: profile\.name \?\? null/);
 assert.match(querySource, /refunds: saleRefundRows\.map/);
+
+const styleSource = readFileSync(
+  new URL("../src/features/sales/admin-sales-xlsx-styles.ts", import.meta.url),
+  "utf8",
+);
+assert.match(styleSource, /<name val=\"Arial\"\/>/);
+assert.match(styleSource, /showGridLines=\"0\"/);
+assert.match(styleSource, /state=\"frozen\"/);
 
 function sale(
   overrides: Partial<AdminSalesExportRow> &
@@ -173,12 +182,17 @@ const workbook = buildAdminSalesWorkbook({
 
 assert.deepEqual(workbook.SheetNames, ["Ringkasan", "Transaksi", "Item Penjualan"]);
 
-const buffer = XLSX.write(workbook, {
-  bookType: "xlsx",
+function getFillRgb(cell: XLSX.CellObject | undefined) {
+  const style = cell?.s as { fgColor?: { rgb?: string } } | undefined;
+  return style?.fgColor?.rgb;
+}
+
+const buffer = writeAdminSalesWorkbook(workbook);
+const reloaded = XLSX.read(buffer, {
   type: "buffer",
-  compression: true,
-}) as Buffer;
-const reloaded = XLSX.read(buffer, { type: "buffer" });
+  cellStyles: true,
+  cellNF: true,
+});
 
 const summarySheet = reloaded.Sheets.Ringkasan;
 const transactionSheet = reloaded.Sheets.Transaksi;
@@ -189,15 +203,34 @@ assert.ok(transactionSheet);
 assert.ok(itemSheet);
 
 assert.equal(summarySheet.A1?.v, "LAPORAN PENJUALAN ASIHJAYA");
-assert.equal(summarySheet.B24?.v, 3_500_000);
-assert.equal(summarySheet.B25?.v, 500_000);
+assert.equal(summarySheet.B22?.v, 3_500_000);
+assert.equal(summarySheet.B23?.v, 500_000);
 assert.equal(summarySheet.B26?.v, 3_000_000);
+assert.equal(summarySheet.A2?.v, "Periode");
 
-assert.equal(transactionSheet.L6?.v, "BCA");
-assert.equal(transactionSheet.K7?.v, "Refund Penuh");
-assert.equal(transactionSheet.R7?.v, 0);
-assert.equal(itemSheet.C6?.v, "Refund Penuh");
-assert.equal(itemSheet.D6?.v, "Refund Penuh");
+assert.equal(transactionSheet.L7?.v, "BCA");
+assert.equal(transactionSheet.K8?.v, "Refund Penuh");
+assert.equal(transactionSheet.R8?.v, 0);
+assert.equal(itemSheet.A1?.v, "Invoice");
+assert.equal(workbook.Sheets.Transaksi?.["!autofilter"], undefined);
+assert.equal(workbook.Sheets["Item Penjualan"]?.["!autofilter"], undefined);
+assert.equal(itemSheet.C3?.v, "Refund Penuh");
+assert.equal(itemSheet.D3?.v, "Refund Penuh");
+assert.notEqual(itemSheet.A1?.v, "ITEM PENJUALAN");
+
+assert.equal(getFillRgb(summarySheet.A1), "404040");
+assert.equal(getFillRgb(summarySheet.A26), "000000");
+assert.equal(transactionSheet.A1?.v, "DETAIL TRANSAKSI PENJUALAN");
+assert.equal(transactionSheet.A2?.v, "Penjualan Kotor");
+assert.equal(transactionSheet.A3?.v, "Total Refund");
+assert.equal(transactionSheet.A4?.v, "GRAND TOTAL PENJUALAN");
+assert.equal(transactionSheet.B2?.v, 3_500_000);
+assert.equal(transactionSheet.B3?.v, 500_000);
+assert.equal(transactionSheet.B4?.v, 3_000_000);
+assert.equal(getFillRgb(transactionSheet.A1), "24483F");
+assert.equal(getFillRgb(transactionSheet.A4), "24483F");
+assert.equal(getFillRgb(transactionSheet.A6), "24483F");
+assert.equal(getFillRgb(itemSheet.A1), "24483F");
 
 const summaryRows = XLSX.utils.sheet_to_json<Array<string | number>>(summarySheet, {
   header: 1,
@@ -209,5 +242,7 @@ const paymentLabels = summaryRows.flatMap((row) =>
 assert.ok(paymentLabels.includes("BCA (EDC)"));
 assert.ok(paymentLabels.includes("Cash"));
 assert.ok(paymentLabels.includes("Mandiri (Transfer)"));
+assert.ok(!paymentLabels.includes("CATATAN"));
+assert.notEqual(transactionSheet.A3?.v, "Periode: Hari ini · Outlet: Semua outlet yang dapat diakses");
 
 console.log("Admin Sales XLSX V2 contracts: OK");

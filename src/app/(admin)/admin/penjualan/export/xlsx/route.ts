@@ -1,11 +1,10 @@
 import type { NextRequest } from "next/server";
-import * as XLSX from "xlsx";
-
 import { parseAdminSalesFilters } from "@/features/sales/admin-contracts";
 import { getAdminSalesExportRows } from "@/features/sales/admin-queries";
 import {
   buildAdminSalesExportFilename,
   buildAdminSalesWorkbook,
+  writeAdminSalesWorkbook,
 } from "@/features/sales/admin-sales-xlsx";
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
 
@@ -41,11 +40,7 @@ export async function GET(request: NextRequest) {
     auth,
     generatedAt,
   });
-  const workbookBuffer = XLSX.write(workbook, {
-    bookType: "xlsx",
-    compression: true,
-    type: "buffer",
-  }) as Buffer;
+  const workbookBuffer = writeAdminSalesWorkbook(workbook);
   const responseBody = new Uint8Array(workbookBuffer.length);
   responseBody.set(workbookBuffer);
   const filename = buildAdminSalesExportFilename(

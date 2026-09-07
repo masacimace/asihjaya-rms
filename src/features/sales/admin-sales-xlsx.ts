@@ -1,5 +1,7 @@
 import * as XLSX from "xlsx";
 
+import { styleAdminSalesWorkbookBuffer } from "@/features/sales/admin-sales-xlsx-styles";
+
 import type {
   AdminPaymentMethod,
   AdminSalesDateRange,
@@ -372,7 +374,6 @@ function setAmountColumnFormats(
 
 function createDetailWorksheet({
   title,
-  filterDescription,
   rows,
   headers,
   widths,
@@ -380,47 +381,38 @@ function createDetailWorksheet({
   summary,
 }: {
   title: string;
-  filterDescription: string;
   rows: unknown[][];
   headers: string[];
   widths: number[];
   amountColumnIndexes: number[];
-  summary?: { grossSales: number; refundAmount: number; netSales: number };
+  summary: { grossSales: number; refundAmount: number; netSales: number };
 }) {
   const lastColumnIndex = Math.max(headers.length - 1, 0);
-  const lastColumn = XLSX.utils.encode_col(lastColumnIndex);
-  const topRows: unknown[][] = summary
-    ? [
-        [title],
-        [
-          "Penjualan Kotor",
-          summary.grossSales,
-          "Total Refund",
-          summary.refundAmount,
-          "GRAND TOTAL PENJUALAN",
-          summary.netSales,
-        ],
-        [filterDescription],
-        [],
-        headers,
-      ]
-    : [[title], [filterDescription], [], headers];
+  const fillRow = (value: unknown) => [
+    value,
+    ...Array.from({ length: lastColumnIndex }, () => ""),
+  ];
+  const topRows: unknown[][] = [
+    fillRow(title),
+    ["Penjualan Kotor", summary.grossSales],
+    ["Total Refund", summary.refundAmount],
+    ["GRAND TOTAL PENJUALAN", summary.netSales],
+    [],
+    headers,
+  ];
   const headerRowIndex = topRows.length - 1;
   const firstDataRowIndex = topRows.length;
   const worksheet = XLSX.utils.aoa_to_sheet([...topRows, ...rows]);
-  const lastDataRowNumber = Math.max(firstDataRowIndex + rows.length, headerRowIndex + 1);
 
   worksheet["!cols"] = widths.map((wch) => ({ wch }));
-  worksheet["!rows"] = summary
-    ? [{ hpt: 28 }, { hpt: 22 }, { hpt: 20 }, { hpt: 8 }, { hpt: 24 }]
-    : [{ hpt: 28 }, { hpt: 20 }, { hpt: 8 }, { hpt: 24 }];
-  worksheet["!merges"] = [
-    XLSX.utils.decode_range(`A1:${lastColumn}1`),
-    XLSX.utils.decode_range(`A${summary ? 3 : 2}:${lastColumn}${summary ? 3 : 2}`),
+  worksheet["!rows"] = [
+    { hpt: 30 },
+    { hpt: 22 },
+    { hpt: 22 },
+    { hpt: 24 },
+    { hpt: 8 },
+    { hpt: 34 },
   ];
-  worksheet["!autofilter"] = {
-    ref: `A${headerRowIndex + 1}:${lastColumn}${lastDataRowNumber}`,
-  };
 
   setAmountColumnFormats(
     worksheet,
@@ -428,12 +420,33 @@ function createDetailWorksheet({
     rows.length,
     amountColumnIndexes,
   );
+  setNumberFormat(worksheet, 1, 1);
+  setNumberFormat(worksheet, 2, 1);
+  setNumberFormat(worksheet, 3, 1);
 
-  if (summary) {
-    setNumberFormat(worksheet, 1, 1);
-    setNumberFormat(worksheet, 1, 3);
-    setNumberFormat(worksheet, 1, 5);
-  }
+  return worksheet;
+}
+
+function createTableWorksheet({
+  rows,
+  headers,
+  widths,
+  amountColumnIndexes,
+}: {
+  rows: unknown[][];
+  headers: string[];
+  widths: number[];
+  amountColumnIndexes: number[];
+}) {
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+  worksheet["!cols"] = widths.map((wch) => ({ wch }));
+  worksheet["!rows"] = [
+    { hpt: 34 },
+    ...rows.map(() => ({ hpt: 24 })),
+  ];
+
+  setAmountColumnFormats(worksheet, 1, rows.length, amountColumnIndexes);
 
   return worksheet;
 }
@@ -451,17 +464,9 @@ function buildSummaryWorksheet({
 }) {
   const summary = getWorkbookSummary(rows);
   const paymentSummary = buildPaymentSummary(rows);
-  const filterDescription = getFilterDescription(auth, filters);
-  const paymentSectionRowIndex = 29;
-  const paymentDataStartRowIndex = 31;
-  const noteTitleRowIndex = paymentDataStartRowIndex + paymentSummary.length + 1;
-  const noteFirstRowIndex = noteTitleRowIndex + 1;
-  const noteSecondRowIndex = noteTitleRowIndex + 2;
-  const noteFilterRowIndex = noteTitleRowIndex + 3;
+  const paymentDataStartRowIndex = 29;
   const data: unknown[][] = [
-    ["LAPORAN PENJUALAN ASIHJAYA"],
-    [auth.organization.name],
-    [],
+    ["LAPORAN PENJUALAN ASIHJAYA", "", "", ""],
     ["Periode", dateRangeLabels[filters.dateRange]],
     ["Outlet", getOutletFilterLabel(auth, filters)],
     ["Status filter", filters.status ? saleStatusLabels[filters.status] : "Semua status"],
@@ -473,7 +478,7 @@ function buildSummaryWorksheet({
     ["Dibuat", formatDateTime(generatedAt, auth.organization.timezone)],
     ["Dibuat oleh", auth.user.fullName],
     [],
-    ["RINGKASAN TRANSAKSI"],
+    ["RINGKASAN TRANSAKSI", "", "", ""],
     ["Jumlah transaksi", summary.totalTransactions],
     ["Transaksi selesai", summary.completedTransactions],
     ["Refund penuh", summary.refundedTransactions],
@@ -484,14 +489,14 @@ function buildSummaryWorksheet({
     ["Draft", summary.draftTransactions],
     ["Jumlah item pada transaksi", summary.totalItems],
     [],
-    ["RINGKASAN NILAI"],
+    ["RINGKASAN NILAI", "", "", ""],
     ["Penjualan Kotor", summary.grossSales],
     ["Total Refund", summary.refundAmount],
-    ["GRAND TOTAL PENJUALAN", summary.netSales],
     ["Dana Titip Digunakan", summary.customerDepositUsedAmount],
     ["Deposit Saldo Masuk", summary.customerDepositInAmount],
+    ["GRAND TOTAL PENJUALAN", summary.netSales],
     [],
-    ["RINGKASAN METODE PEMBAYARAN"],
+    ["RINGKASAN METODE PEMBAYARAN", "", "", ""],
     ["Metode", "Penerimaan", "Refund", "Bersih"],
     ...paymentSummary.map((payment) => [
       payment.label,
@@ -499,39 +504,18 @@ function buildSummaryWorksheet({
       payment.refundAmount,
       payment.receivedAmount - payment.refundAmount,
     ]),
-    [],
-    ["CATATAN"],
-    [
-      "Grand Total Penjualan = Penjualan Kotor - Total Refund. Void, pembatalan, draft, dan transaksi menunggu bayar tidak dihitung sebagai penjualan.",
-    ],
-    [
-      "Penerimaan metode pembayaran menunjukkan payment eksternal asli pada transaksi penjualan; Deposit Saldo Masuk ditampilkan terpisah karena bukan omzet penjualan.",
-    ],
-    [filterDescription],
   ];
 
   const worksheet = XLSX.utils.aoa_to_sheet(data);
-  worksheet["!cols"] = [{ wch: 34 }, { wch: 24 }, { wch: 24 }, { wch: 24 }];
-  worksheet["!rows"] = [
-    { hpt: 30 },
-    { hpt: 22 },
-    { hpt: 8 },
+  worksheet["!cols"] = [
+    { wch: 45 },
+    { wch: 40 },
+    { wch: 18 },
+    { wch: 22 },
   ];
-  worksheet["!merges"] = [
-    XLSX.utils.decode_range("A1:D1"),
-    XLSX.utils.decode_range("A2:D2"),
-    XLSX.utils.decode_range("A12:D12"),
-    XLSX.utils.decode_range("A23:D23"),
-    XLSX.utils.decode_range(
-      `A${paymentSectionRowIndex + 1}:D${paymentSectionRowIndex + 1}`,
-    ),
-    XLSX.utils.decode_range(`A${noteTitleRowIndex + 1}:D${noteTitleRowIndex + 1}`),
-    XLSX.utils.decode_range(`A${noteFirstRowIndex + 1}:D${noteFirstRowIndex + 1}`),
-    XLSX.utils.decode_range(`A${noteSecondRowIndex + 1}:D${noteSecondRowIndex + 1}`),
-    XLSX.utils.decode_range(`A${noteFilterRowIndex + 1}:D${noteFilterRowIndex + 1}`),
-  ];
+  worksheet["!rows"] = [{ hpt: 30 }];
 
-  for (const rowIndex of [23, 24, 25, 26, 27]) {
+  for (const rowIndex of [21, 22, 23, 24, 25]) {
     setNumberFormat(worksheet, rowIndex, 1);
   }
 
@@ -642,12 +626,11 @@ export function buildAdminSalesWorkbook({
   ];
   const transactionWorksheet = createDetailWorksheet({
     title: "DETAIL TRANSAKSI PENJUALAN",
-    filterDescription,
     headers: transactionHeaders,
     rows: buildTransactionRows(rows, auth.organization.timezone),
     widths: [
-      30, 22, 26, 20, 22, 20, 26, 19, 12, 18, 20, 32, 18, 18, 18, 18, 18,
-      20, 22, 21, 21, 21, 18,
+      38, 26, 38, 21, 23, 32, 27, 22, 14, 19, 21, 33, 19, 19, 19, 19, 19,
+      21, 23, 22, 22, 22, 19,
     ],
     amountColumnIndexes: [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
     summary,
@@ -670,12 +653,10 @@ export function buildAdminSalesWorkbook({
     "Refund Transaksi",
     "Penjualan Bersih Transaksi",
   ];
-  const itemWorksheet = createDetailWorksheet({
-    title: "ITEM PENJUALAN",
-    filterDescription,
+  const itemWorksheet = createTableWorksheet({
     headers: itemHeaders,
     rows: buildItemRows(rows, auth.organization.timezone),
-    widths: [30, 22, 18, 20, 26, 26, 8, 38, 22, 20, 20, 18, 18, 20, 24],
+    widths: [38, 23, 19, 21, 27, 27, 9, 66, 23, 21, 21, 19, 19, 21, 23],
     amountColumnIndexes: [11, 12, 13, 14],
   });
 
@@ -692,6 +673,16 @@ export function buildAdminSalesWorkbook({
   XLSX.utils.book_append_sheet(workbook, itemWorksheet, "Item Penjualan");
 
   return workbook;
+}
+
+export function writeAdminSalesWorkbook(workbook: XLSX.WorkBook) {
+  const workbookBuffer = XLSX.write(workbook, {
+    bookType: "xlsx",
+    compression: true,
+    type: "buffer",
+  }) as Buffer;
+
+  return styleAdminSalesWorkbookBuffer(workbookBuffer);
 }
 
 export function buildAdminSalesExportFilename(generatedAt: Date, timeZone: string) {
