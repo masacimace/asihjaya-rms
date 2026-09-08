@@ -1,12 +1,14 @@
 import {
   AlertTriangle,
   BadgeDollarSign,
+  Banknote,
   Boxes,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
+  History,
   LayoutDashboard,
   PackageCheck,
   ReceiptText,
@@ -34,7 +36,9 @@ import {
   getAdminDashboardData,
   parseAdminDashboardPeriodRange,
 } from "@/features/admin/dashboard/queries";
-import { requirePermission } from "@/lib/auth/session";
+import { MetalPriceRateDrawer } from "@/components/pricing/metal-price-rate-drawer";
+import { getMetalPriceRateSettingsData } from "@/features/pricing/metal-price-rates";
+import { hasPermission, requirePermission } from "@/lib/auth/session";
 
 export const metadata = {
   title: "Dashboard",
@@ -60,10 +64,16 @@ const quickActions = [
     icon: ReceiptText,
   },
   {
-    label: "Lihat Laporan",
-    description: "Pusat analisa performa bisnis",
-    href: "/admin/laporan",
-    icon: TrendingUp,
+    label: "Riwayat Buyback",
+    description: "Tinjau transaksi Buyback",
+    href: "/admin/buyback?q=&range=thisMonth&process=all&payout=all",
+    icon: History,
+  },
+  {
+    label: "Pemasukan Bank",
+    description: "Tinjau transaksi Buyback",
+    href: "/admin/buyback?q=&range=thisMonth&process=all&payout=all",
+    icon: Banknote,
   },
 ] as const;
 
@@ -506,7 +516,13 @@ export default async function AdminDashboardPage({
   const selectedRange = parseAdminDashboardPeriodRange(
     resolvedSearchParams.range,
   );
-  const dashboard = await getAdminDashboardData(auth, selectedRange);
+  const canManagePricing = hasPermission(auth, "pricing.manage");
+  const [dashboard, metalPriceRows] = await Promise.all([
+    getAdminDashboardData(auth, selectedRange),
+    canManagePricing
+      ? getMetalPriceRateSettingsData(auth.organization.id)
+      : Promise.resolve([]),
+  ]);
   const firstName = auth.user.fullName.split(" ")[0] ?? auth.user.fullName;
   const statisticCards = [
     {
@@ -1017,6 +1033,10 @@ export default async function AdminDashboardPage({
                   </p>
                 </Link>
               ))}
+
+              {canManagePricing ? (
+                <MetalPriceRateDrawer rows={metalPriceRows} />
+              ) : null}
             </div>
           </section>
 

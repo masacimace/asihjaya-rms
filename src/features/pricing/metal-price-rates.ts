@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { metalPriceRates, metalPurities, metals, productItems } from "@/db/schema";
@@ -138,6 +138,7 @@ export async function getMetalPriceRateSettingsData(organizationId: string) {
         and(
           eq(productItems.organizationId, organizationId),
           eq(productItems.isActive, true),
+          ne(productItems.availability, "sold"),
           sql`${productItems.purityPercent} is not null`,
         ),
       )

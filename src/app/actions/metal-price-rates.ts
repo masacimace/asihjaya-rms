@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
@@ -10,6 +10,7 @@ import {
   metalPriceRates,
   metalPurities,
   metals,
+  productItems,
 } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
@@ -101,6 +102,155 @@ async function getOrCreatePurity({
   }
 
   return created[0];
+}
+
+export async function retireMetalPriceRateAction(
+  purityValue: string,
+): Promise<MetalPriceRateActionState> {
+  const auth = await requirePermission("pricing.manage");
+  const purityKey = normalizePurityKey(purityValue);
+
+  if (!purityKey) {
+    return {
+      status: "error",
+      message: "Kadar Persen yang akan dihapus tidak valid.",
+    };
+  }
+
+  const metalId = await getGoldMetalId(auth.organization.id);
+
+  if (!metalId) {
+    return {
+      status: "error",
+      message: "Master logam Emas belum tersedia.",
+    };
+  }
+
+  const headerStore = await headers();
+
+  try {
+    const result = await db.transaction(async (transaction) => {
+      const purityRows = await transaction
+        .select({
+          id: metalPurities.id,
+          displayName: metalPurities.displayName,
+        })
+        .from(metalPurities)
+        .where(
+          and(
+            eq(metalPurities.metalId, metalId),
+            sql`${metalPurities.purityPercentage}::numeric = ${purityKey}::numeric`,
+          ),
+        )
+        .limit(1);
+
+      const purity = purityRows[0] ?? null;
+
+      if (!purity) {
+        return { kind: "missing" as const };
+      }
+
+      const usageRows = await transaction
+        .select({ count: sql<number>`count(*)::int` })
+        .from(productItems)
+        .where(
+          and(
+            eq(productItems.organizationId, auth.organization.id),
+            eq(productItems.isActive, true),
+            ne(productItems.availability, "sold"),
+            sql`${productItems.purityPercent}::numeric = ${purityKey}::numeric`,
+          ),
+        );
+
+      const itemCount = Number(usageRows[0]?.count ?? 0);
+
+      if (itemCount > 0) {
+        return { kind: "in_use" as const, itemCount };
+      }
+
+      const activeRows = await transaction
+        .select({
+          id: metalPriceRates.id,
+          ratePerGram: metalPriceRates.ratePerGram,
+          effectiveFrom: metalPriceRates.effectiveFrom,
+        })
+        .from(metalPriceRates)
+        .where(
+          and(
+            eq(metalPriceRates.metalPurityId, purity.id),
+            isNull(metalPriceRates.effectiveUntil),
+          ),
+        )
+        .limit(1);
+
+      const active = activeRows[0] ?? null;
+
+      if (!active) {
+        return { kind: "missing" as const };
+      }
+
+      const effectiveUntil = new Date(
+        Math.max(Date.now(), active.effectiveFrom.getTime() + 1),
+      );
+
+      await transaction
+        .update(metalPriceRates)
+        .set({ effectiveUntil })
+        .where(eq(metalPriceRates.id, active.id));
+
+      await transaction.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        actorUserId: auth.user.id,
+        action: "pricing.metal_rate.retire",
+        entityType: "metal_purity",
+        entityId: purity.id,
+        beforeData: {
+          purityPercent: purityKey,
+          ratePerGram: active.ratePerGram,
+          effectiveFrom: active.effectiveFrom.toISOString(),
+        },
+        afterData: {
+          purityPercent: purityKey,
+          status: "retired",
+          effectiveUntil: effectiveUntil.toISOString(),
+        },
+        ipAddress: getClientIp(headerStore),
+        userAgent: headerStore.get("user-agent"),
+      });
+
+      return { kind: "retired" as const };
+    });
+
+    if (result.kind === "in_use") {
+      return {
+        status: "error",
+        message: `Rate Global ${purityKey}% masih dipakai ${result.itemCount} item yang belum terjual. Koreksi item tersebut terlebih dahulu sebelum menghapus rate.`,
+      };
+    }
+
+    if (result.kind === "missing") {
+      return {
+        status: "error",
+        message: `Rate Global ${purityKey}% sudah tidak aktif atau tidak ditemukan.`,
+      };
+    }
+  } catch (error) {
+    console.error("Gagal menghapus Harga/Gram aktif", error);
+    return {
+      status: "error",
+      message: "Rate Global belum bisa dihapus karena terjadi kendala sistem.",
+    };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/pengaturan/harga-gram");
+  revalidatePath("/admin/inventaris");
+  revalidatePath("/pos");
+
+  return {
+    status: "success",
+    message: `Rate Global ${purityKey}% berhasil dihapus. Histori rate tetap tersimpan.`,
+  };
 }
 
 export async function saveMetalPriceRatesAction(
@@ -253,6 +403,7 @@ export async function saveMetalPriceRatesAction(
     };
   }
 
+  revalidatePath("/admin");
   revalidatePath("/admin/pengaturan/harga-gram");
   revalidatePath("/admin/inventaris");
   revalidatePath("/pos");
