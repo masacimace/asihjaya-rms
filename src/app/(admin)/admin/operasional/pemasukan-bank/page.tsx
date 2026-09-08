@@ -527,14 +527,16 @@ export default async function BankInflowPage({ searchParams }: PageProps) {
                     <th className="px-4 py-3 font-semibold">Outlet</th>
                     <th className="px-4 py-3 font-semibold">Bank</th>
                     <th className="px-4 py-3 font-semibold">Metode</th>
-                    <th className="px-4 py-3 font-semibold">Jenis</th>
-                    <th className="px-4 py-3 text-right font-semibold">
+                    <th className="px-4 py-3 text-center font-semibold">
+                      Jenis
+                    </th>
+                    <th className="px-4 py-3 text-center font-semibold">
                       Penerimaan
                     </th>
-                    <th className="px-4 py-3 text-right font-semibold">
+                    <th className="px-4 py-3 text-center font-semibold">
                       Refund
                     </th>
-                    <th className="px-4 py-3 text-right font-semibold">
+                    <th className="px-4 py-3 text-center font-semibold">
                       Bersih
                     </th>
                     <th className="px-4 py-3 font-semibold">
@@ -628,7 +630,7 @@ export default async function BankInflowPage({ searchParams }: PageProps) {
                       <div className="min-w-0">
                         <Link
                           href={`/admin/penjualan/${row.saleId}`}
-                          className="truncate font-semibold text-[13px] text-neutral-950 hover:text-[var(--accent)]"
+                          className="truncate font-semibold text-[11px] text-neutral-950 hover:text-[var(--accent)]"
                         >
                           {row.invoiceNumber}
                         </Link>
