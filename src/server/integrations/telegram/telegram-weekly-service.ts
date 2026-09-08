@@ -6,6 +6,7 @@ import {
   findEnabledTelegramDestinationForOutlet,
   type TelegramRepositoryTransaction,
 } from "@/server/integrations/telegram/telegram-outbox-repository";
+import { loadTelegramReportSummary } from "@/server/integrations/telegram/telegram-report-summary";
 import {
   buildTelegramWeeklyFinanceEventKey,
   buildTelegramWeeklyFinanceSnapshot,
@@ -192,7 +193,7 @@ export async function enqueueTelegramWeeklyPeriodInTransaction(
 
   const period = input.period;
   const previousPeriod = getPreviousWeeklyPeriod(period);
-  const [current, previous, depositBoundary] = await Promise.all([
+  const [current, previous, depositBoundary, currentSummary, previousSummary] = await Promise.all([
     aggregateWeeklyPeriod(transaction, {
       organizationId: input.organizationId,
       outletId: input.outletId,
@@ -208,6 +209,26 @@ export async function enqueueTelegramWeeklyPeriodInTransaction(
       outletId: input.outletId,
       period,
     }),
+    loadTelegramReportSummary(transaction, {
+      organizationId: input.organizationId,
+      outletId: input.outletId,
+      scope: {
+        kind: "period",
+        periodStart: period.start,
+        periodEnd: period.end,
+        timezone: destination.timezone,
+      },
+    }),
+    loadTelegramReportSummary(transaction, {
+      organizationId: input.organizationId,
+      outletId: input.outletId,
+      scope: {
+        kind: "period",
+        periodStart: previousPeriod.start,
+        periodEnd: previousPeriod.end,
+        timezone: destination.timezone,
+      },
+    }),
   ]);
 
   if (current.snapshotDays === 0 || !depositBoundary) {
@@ -215,9 +236,10 @@ export async function enqueueTelegramWeeklyPeriodInTransaction(
   }
 
   const costSnapshotComplete = current.incompleteCostDays === 0;
-  const previousNetSales = previous.snapshotDays === 0 ? null : previous.netSales;
+  const previousNetSales =
+    previous.snapshotDays === 0 ? null : previousSummary.sales.netSales;
   const comparisonRate = calculateWeeklyNetSalesChangeRate(
-    current.netSales,
+    currentSummary.sales.netSales,
     previousNetSales,
   );
   const snapshot = buildTelegramWeeklyFinanceSnapshot({
@@ -265,6 +287,7 @@ export async function enqueueTelegramWeeklyPeriodInTransaction(
       previousNetSales,
       netSalesChangeRate: comparisonRate,
     },
+    summary: currentSummary,
   });
 
   const baseEventKey = buildTelegramWeeklyFinanceEventKey(input.outletId, period.start);

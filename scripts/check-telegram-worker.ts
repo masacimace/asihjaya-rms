@@ -70,6 +70,15 @@ assert.ok(
   "Worker wajib menghormati Telegram retry_after.",
 );
 assert.ok(
+  workerSource.includes("isTelegramHtmlPayload") &&
+    workerSource.includes('parseMode: "HTML"'),
+  "Worker harus memakai HTML parse mode hanya untuk payload Telegram format baru.",
+);
+assert.ok(
+  repositorySource.includes("payloadSnapshot: telegramDeliveryOutbox.payloadSnapshotJson"),
+  "Claim worker harus membawa payload snapshot untuk backward-compatible parse mode.",
+);
+assert.ok(
   workerSource.includes('lastErrorCode: "WORKER_UNEXPECTED_ERROR"'),
   "Unexpected worker error wajib menjadi failed non-retryable.",
 );

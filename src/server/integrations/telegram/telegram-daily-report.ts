@@ -3,10 +3,19 @@ import {
   normalizeBusinessTimeZone,
 } from "@/lib/time/business-time";
 import { assertIsoBusinessDate } from "@/server/integrations/telegram/telegram-outbox-contract";
+import {
+  TELEGRAM_MESSAGE_FORMAT_HTML,
+  escapeTelegramHtml,
+  formatTelegramRate,
+  formatTelegramRupiah,
+  telegramBold,
+} from "@/server/integrations/telegram/telegram-message-format";
+import type { TelegramReportSummary } from "@/server/integrations/telegram/telegram-report-summary";
 
 export type TelegramDailyFinanceSnapshot = {
   schemaVersion: 2;
   reportType: "closing_daily";
+  messageFormat: typeof TELEGRAM_MESSAGE_FORMAT_HTML;
   shiftId: string;
   revision: number;
   outlet: {
@@ -56,11 +65,12 @@ export type TelegramDailyFinanceSnapshot = {
     itemsSoldCount: number;
     heldTransactionCount: number;
   };
+  summary: TelegramReportSummary;
 };
 
 export type BuildTelegramDailyFinanceSnapshotInput = Omit<
   TelegramDailyFinanceSnapshot,
-  "schemaVersion" | "reportType" | "openedAt" | "closedAt" | "timezone"
+  "schemaVersion" | "reportType" | "messageFormat" | "openedAt" | "closedAt" | "timezone"
 > & {
   openedAt: Date;
   closedAt: Date;
@@ -204,6 +214,7 @@ export function buildTelegramDailyFinanceSnapshot(
   return {
     schemaVersion: 2,
     reportType: "closing_daily",
+    messageFormat: TELEGRAM_MESSAGE_FORMAT_HTML,
     shiftId: assertNonBlank(input.shiftId, "TELEGRAM_SHIFT_ID_REQUIRED"),
     revision,
     outlet: {
@@ -313,6 +324,7 @@ export function buildTelegramDailyFinanceSnapshot(
         "TELEGRAM_HELD_COUNT_INVALID",
       ),
     },
+    summary: input.summary,
   };
 }
 
@@ -320,90 +332,85 @@ export function formatTelegramDailyFinanceMessage(
   snapshot: TelegramDailyFinanceSnapshot,
 ): string {
   const timeZone = normalizeBusinessTimeZone(snapshot.timezone);
-  const marginLines = snapshot.sales.costSnapshotComplete
-    ? [
-        `Cost of goods: ${formatRupiah(snapshot.sales.costOfGoods!)}`,
-        `Gross margin: ${formatRupiah(snapshot.sales.grossMargin!)}`,
-        `Gross margin rate: ${formatRate(snapshot.sales.grossMarginRate!)}`,
-      ]
-    : [
-        "Cost of goods: Belum tersedia",
-        "Gross margin: Belum tersedia",
-        "Gross margin rate: Belum tersedia",
-        "Cost snapshot: Tidak lengkap",
-      ];
+  const summary = snapshot.summary;
+  const hasVariance = BigInt(snapshot.cash.variance) !== BIGINT_ZERO;
+  const revisionLabel = snapshot.revision > 1 ? ` · REVISI ${snapshot.revision}` : "";
 
-  const depositLines = [
-    `Saldo awal: ${formatRupiah(snapshot.customerDeposit.openingBalance)}`,
-    `Masuk: ${formatRupiah(snapshot.customerDeposit.depositIn)}`,
-    `Digunakan: ${formatRupiah(snapshot.customerDeposit.depositUsed)}`,
-    `Dicairkan: ${formatRupiah(snapshot.customerDeposit.withdrawal)}`,
-  ];
-
-  if (BigInt(snapshot.customerDeposit.adjustmentIn) !== BIGINT_ZERO) {
-    depositLines.push(
-      `Adjustment masuk: ${formatRupiah(snapshot.customerDeposit.adjustmentIn)}`,
-    );
+  const bankLines = summary.banks.length
+    ? summary.banks.slice(0, 6).map(
+        (bank) => `${escapeTelegramHtml(bank.provider)}: ${formatTelegramRupiah(bank.netReceived)}`,
+      )
+    : ["Tidak ada pemasukan bank"];
+  if (summary.banks.length > 6) {
+    const remainder = summary.banks
+      .slice(6)
+      .reduce((total, bank) => total + BigInt(bank.netReceived), BigInt(0));
+    bankLines.push(`Lainnya: ${formatTelegramRupiah(remainder.toString())}`);
   }
-  if (BigInt(snapshot.customerDeposit.adjustmentOut) !== BIGINT_ZERO) {
-    depositLines.push(
-      `Adjustment keluar: ${formatRupiah(snapshot.customerDeposit.adjustmentOut)}`,
-    );
-  }
-  depositLines.push(
-    `Saldo akhir: ${formatRupiah(snapshot.customerDeposit.closingBalance)}`,
+  const bankNet = summary.banks.reduce(
+    (total, bank) => total + BigInt(bank.netReceived),
+    BigInt(0),
   );
 
-  const hasVariance = BigInt(snapshot.cash.variance) !== BIGINT_ZERO;
-  const status =
-    snapshot.revision > 1
-      ? hasVariance
-        ? "Final setelah reopen · Perlu review variance kas"
-        : "Final setelah reopen"
-      : hasVariance
-        ? "Perlu review variance kas"
-        : "Closing sesuai";
-  const title =
-    snapshot.revision > 1
-      ? `🔴 OUTLET DITUTUP — DAILY FINANCE REPORT (REVISI ${snapshot.revision})`
-      : "🔴 OUTLET DITUTUP — DAILY FINANCE REPORT";
+  const marginLines = snapshot.sales.costSnapshotComplete
+    ? [
+        `Laba kotor: ${telegramBold(formatTelegramRupiah(snapshot.sales.grossMargin!))}`,
+        `Margin: ${formatTelegramRate(snapshot.sales.grossMarginRate!)}`,
+      ]
+    : ["Belum tersedia — cost snapshot belum lengkap"];
 
-  return [
-    title,
+  const buybackLines =
+    summary.buyback.transactionCount > 0
+      ? [
+          `${summary.buyback.transactionCount} transaksi · ${summary.buyback.itemCount} item · ${telegramBold(formatTelegramRupiah(summary.buyback.totalAmount))}`,
+          `Cash ${formatTelegramRupiah(summary.buyback.cashTotal)} · Transfer ${formatTelegramRupiah(summary.buyback.bankTransferTotal)} · Dana Titip ${formatTelegramRupiah(summary.buyback.customerDepositTotal)}`,
+        ]
+      : ["Tidak ada transaksi Buyback"];
+
+  const lines = [
+    `🔴 ${telegramBold(`LAPORAN HARIAN${revisionLabel}`)}`,
+    telegramBold(snapshot.outlet.name),
+    formatBusinessDate(snapshot.businessDate),
     "",
-    `Outlet: ${snapshot.outlet.name}`,
-    `Tanggal operasional: ${formatBusinessDate(snapshot.businessDate)}`,
-    `Kasir utama: ${snapshot.cashier.name}`,
-    `Buka: ${formatTime(snapshot.openedAt, timeZone)}`,
-    `Tutup: ${formatTime(snapshot.closedAt, timeZone)}`,
+    `👤 Kasir: ${escapeTelegramHtml(snapshot.cashier.name)}`,
+    `🕘 ${formatTime(snapshot.openedAt, timeZone)} – ${formatTime(snapshot.closedAt, timeZone)}`,
     "",
-    "PENJUALAN",
-    `Gross sales: ${formatRupiah(snapshot.sales.grossSales)}`,
-    `Diskon: ${formatRupiah(snapshot.sales.discountTotal)}`,
-    `Net sales: ${formatRupiah(snapshot.sales.netSales)}`,
+    `💰 ${telegramBold("PENJUALAN")}`,
+    `Penjualan kotor: ${formatTelegramRupiah(summary.sales.grossSales)}`,
+    `Refund: ${formatTelegramRupiah(summary.sales.refundTotal)}`,
+    `Penjualan bersih: ${telegramBold(formatTelegramRupiah(summary.sales.netSales))}`,
     "",
-    "MARGIN",
+    `🧾 ${telegramBold("OPERASIONAL")}`,
+    `${summary.sales.transactionCount} transaksi · ${summary.sales.itemsSoldCount} produk terjual`,
+    ...(snapshot.operations.heldTransactionCount > 0
+      ? [`Hold cart tersisa: ${snapshot.operations.heldTransactionCount}`]
+      : []),
+    "",
+    `🏦 ${telegramBold("PEMASUKAN BANK")}`,
+    ...bankLines,
+    `Bank bersih: ${telegramBold(formatTelegramRupiah(bankNet.toString()))}`,
+    "",
+    `💵 ${telegramBold("KAS")}`,
+    `Cash bersih: ${telegramBold(formatTelegramRupiah(summary.cash.netReceived))}`,
+    `Selisih kas: ${formatTelegramRupiah(snapshot.cash.variance)}`,
+    "",
+    `💳 ${telegramBold("DANA TITIP")}`,
+    `Masuk: ${formatTelegramRupiah(snapshot.customerDeposit.depositIn)}`,
+    `Digunakan: ${formatTelegramRupiah(snapshot.customerDeposit.depositUsed)}`,
+    `Saldo akhir: ${telegramBold(formatTelegramRupiah(snapshot.customerDeposit.closingBalance))}`,
+    "",
+    `📈 ${telegramBold("MARGIN")}`,
     ...marginLines,
     "",
-    "TENDER DITERIMA",
-    `Cash: ${formatRupiah(snapshot.payments.cashTotal)}`,
-    `Bank Transfer: ${formatRupiah(snapshot.payments.bankTransferTotal)}`,
-    `EDC Debit: ${formatRupiah(snapshot.payments.debitCardTotal)}`,
-    `EDC Credit: ${formatRupiah(snapshot.payments.creditCardTotal)}`,
-    "",
-    "DANA TITIP",
-    ...depositLines,
-    "",
-    "KAS",
-    `Expected cash: ${formatRupiah(snapshot.cash.expectedCash)}`,
-    `Actual cash: ${formatRupiah(snapshot.cash.actualCash)}`,
-    `Variance: ${formatRupiah(snapshot.cash.variance)}`,
-    "",
-    "OPERASIONAL",
-    `Transaksi: ${snapshot.operations.transactionCount}`,
-    `Produk terjual: ${snapshot.operations.itemsSoldCount}`,
-    `Hold cart tersisa: ${snapshot.operations.heldTransactionCount}`,
-    "",
-    `Status: ${status}`,
-  ].join("\n");
+    `♻️ ${telegramBold("BUYBACK")}`,
+    ...buybackLines,
+  ];
+
+  if (hasVariance) {
+    lines.push("", `⚠️ ${telegramBold("Selisih kas perlu diperiksa")}`);
+  } else if (snapshot.revision > 1) {
+    lines.push("", `✅ ${telegramBold("Laporan final setelah reopen")}`);
+  }
+
+  return lines.join("\n");
 }

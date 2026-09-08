@@ -108,6 +108,7 @@ const snapshot = buildTelegramOpeningSnapshot({
 assert.deepEqual(snapshot, {
   schemaVersion: 1,
   reportType: "opening",
+  messageFormat: "html",
   shiftId,
   outlet: {
     id: outletId,
@@ -126,14 +127,14 @@ assert.deepEqual(snapshot, {
 
 const message = formatTelegramOpeningMessage(snapshot);
 for (const expected of [
-  "🟢 OUTLET DIBUKA",
-  "Outlet: Pasar Bantar Gebang",
-  "Tanggal operasional: 7 Agustus 2026",
-  "Kasir utama: Rosalia Manda",
-  "Waktu buka: 08:02 WIB",
-  "Kas awal: Rp2.000.000",
-  `Shift: ${shiftId}`,
-  "Status: Operasional dimulai",
+  "OUTLET DIBUKA",
+  "Pasar Bantar Gebang",
+  "7 Agustus 2026",
+  "Kasir: Rosalia Manda",
+  "Dibuka: 08:02 WIB",
+  "Kas awal:",
+  "Rp2.000.000",
+  "Operasional dimulai",
 ]) {
   assert.ok(message.includes(expected), `Opening message kurang field: ${expected}`);
 }

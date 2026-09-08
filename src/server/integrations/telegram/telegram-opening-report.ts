@@ -3,10 +3,16 @@ import {
   normalizeBusinessTimeZone,
 } from "@/lib/time/business-time";
 import { assertIsoBusinessDate } from "@/server/integrations/telegram/telegram-outbox-contract";
+import {
+  TELEGRAM_MESSAGE_FORMAT_HTML,
+  escapeTelegramHtml,
+  telegramBold,
+} from "@/server/integrations/telegram/telegram-message-format";
 
 export type TelegramOpeningSnapshot = {
   schemaVersion: 1;
   reportType: "opening";
+  messageFormat: typeof TELEGRAM_MESSAGE_FORMAT_HTML;
   shiftId: string;
   outlet: {
     id: string;
@@ -120,6 +126,7 @@ export function buildTelegramOpeningSnapshot(
   return {
     schemaVersion: 1,
     reportType: "opening",
+    messageFormat: TELEGRAM_MESSAGE_FORMAT_HTML,
     shiftId: assertNonBlank(input.shiftId, "TELEGRAM_SHIFT_ID_REQUIRED"),
     outlet: {
       id: assertNonBlank(input.outletId, "TELEGRAM_OUTLET_ID_REQUIRED"),
@@ -143,15 +150,14 @@ export function formatTelegramOpeningMessage(
   const timeZone = normalizeBusinessTimeZone(snapshot.timezone);
 
   return [
-    "🟢 OUTLET DIBUKA",
+    `🟢 ${telegramBold("OUTLET DIBUKA")}`,
+    telegramBold(snapshot.outlet.name),
+    formatBusinessDate(snapshot.businessDate),
     "",
-    `Outlet: ${snapshot.outlet.name}`,
-    `Tanggal operasional: ${formatBusinessDate(snapshot.businessDate)}`,
-    `Kasir utama: ${snapshot.cashier.name}`,
-    `Waktu buka: ${formatOpeningTime(snapshot.openedAt, timeZone)}`,
-    `Kas awal: ${formatRupiahInteger(snapshot.openingCash)}`,
+    `👤 Kasir: ${escapeTelegramHtml(snapshot.cashier.name)}`,
+    `💵 Kas awal: ${telegramBold(formatRupiahInteger(snapshot.openingCash))}`,
+    `🕘 Dibuka: ${formatOpeningTime(snapshot.openedAt, timeZone)}`,
     "",
-    `Shift: ${snapshot.shiftId}`,
-    "Status: Operasional dimulai",
+    `✅ ${telegramBold("Operasional dimulai")}`,
   ].join("\n");
 }

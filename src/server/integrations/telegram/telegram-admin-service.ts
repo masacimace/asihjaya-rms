@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import { TelegramClient } from "@/server/integrations/telegram/telegram-client";
 import { isTelegramClientError } from "@/server/integrations/telegram/telegram-errors";
+import { TELEGRAM_MESSAGE_FORMAT_HTML, telegramBold } from "@/server/integrations/telegram/telegram-message-format";
 import {
   beginTelegramDeliveryAttempt,
   completeTelegramDeliveryAttempt,
@@ -107,10 +108,10 @@ export async function sendTelegramAdminTestMessage(input: {
 
   const now = new Date();
   const messageText = [
-    "✅ ASIHJAYA RMS Telegram Integration",
+    `✅ ${telegramBold("TEST TELEGRAM ASIHJAYA RMS")}`,
+    telegramBold(destination.outletName),
     "",
-    "Test message berhasil dikirim dari halaman admin.",
-    `Outlet: ${destination.outletName}`,
+    "Koneksi bot dan destination berhasil diverifikasi.",
     `Waktu: ${formatAdminTimestamp(now, input.timezone)}`,
   ].join("\n");
   const eventKey = `test:${destination.id}:${randomUUID()}`;
@@ -126,6 +127,7 @@ export async function sendTelegramAdminTestMessage(input: {
       payloadSnapshot: {
         schemaVersion: 1,
         reportType: "test",
+        messageFormat: TELEGRAM_MESSAGE_FORMAT_HTML,
         outlet: {
           id: destination.outletId,
           code: destination.outletCode,
@@ -168,6 +170,7 @@ export async function sendTelegramAdminTestMessage(input: {
     const sent = await client.sendMessage({
       chatId: destination.chatId,
       text: messageText,
+      parseMode: "HTML",
     });
     telegramAccepted = true;
     const completedAt = new Date();

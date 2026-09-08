@@ -151,27 +151,36 @@ const snapshot = buildTelegramWeeklyFinanceSnapshot({
     previousNetSales: "25000000",
     netSalesChangeRate: "20.0",
   },
+  summary: {
+    sales: { grossSales: "31300000", refundTotal: "1300000", netSales: "30000000", transactionCount: 24, itemsSoldCount: 31 },
+    cash: { grossReceived: "12000000", refundTotal: "500000", netReceived: "11500000" },
+    banks: [
+      { provider: "BCA", grossReceived: "9000000", refundTotal: "0", netReceived: "9000000" },
+      { provider: "MANDIRI", grossReceived: "5000000", refundTotal: "0", netReceived: "5000000" },
+    ],
+    buyback: { transactionCount: 3, itemCount: 4, totalAmount: "4500000", cashTotal: "1500000", bankTransferTotal: "2000000", customerDepositTotal: "1000000" },
+  },
 });
 
 const message = formatTelegramWeeklyFinanceMessage(snapshot);
 for (const expected of [
-  "📊 WEEKLY FINANCE REPORT",
-  "Periode: 3–9 Agustus 2026",
-  "Gross sales: Rp31.300.000",
-  "Net sales: Rp30.000.000",
-  "Cost of goods: Rp20.000.000",
-  "Gross margin: Rp10.000.000",
-  "Gross margin rate: 33,33%",
-  "DANA TITIP",
-  "Saldo awal: Rp1.000.000",
-  "Masuk: Rp700.000",
-  "Digunakan: Rp300.000",
-  "Dicairkan: Rp100.000",
-  "Saldo akhir: Rp1.300.000",
-  "Total variance kas: -Rp75.000",
-  "Transaksi: 24",
-  "Produk terjual: 31",
-  "Vs minggu sebelumnya (Net sales): +20,0%",
+  "LAPORAN MINGGUAN",
+  "3–9 Agustus 2026",
+  "Penjualan kotor: Rp31.300.000",
+  "Refund: Rp1.300.000",
+  "Rp30.000.000",
+  "Vs minggu lalu:",
+  "+20,0%",
+  "24 transaksi · 31 produk terjual",
+  "BCA: Rp9.000.000",
+  "MANDIRI: Rp5.000.000",
+  "Cash bersih: Rp11.500.000",
+  "Selisih kas: -Rp75.000",
+  "Dana Titip masuk: Rp700.000",
+  "Saldo Dana Titip: Rp1.300.000",
+  "Laba kotor:",
+  "Margin: 33,33%",
+  "3 transaksi · 4 item",
 ]) {
   assert.ok(message.includes(expected), `Weekly message kurang field: ${expected}`);
 }
@@ -189,7 +198,7 @@ const incomplete = buildTelegramWeeklyFinanceSnapshot({
 });
 assert.ok(
   formatTelegramWeeklyFinanceMessage(incomplete).includes(
-    "Cost snapshot: Tidak lengkap",
+    "cost snapshot belum lengkap",
   ),
 );
 
@@ -475,13 +484,13 @@ async function checkDatabase() {
   assert.equal(weeklyRows[0]?.businessDate, null);
   assert.equal(weeklyRows[0]?.periodStart, "2026-08-03");
   assert.equal(weeklyRows[0]?.periodEnd, "2026-08-09");
-  assert.ok(weeklyRows[0]?.messageText.includes("Net sales: Rp30.000.000"));
+  assert.ok(weeklyRows[0]?.messageText.includes("Penjualan bersih:"));
   assert.ok(
     weeklyRows[0]?.messageText.includes(
-      "Vs minggu sebelumnya (Net sales): +20,0%",
+      "Vs minggu lalu:",
     ),
   );
-  assert.ok(weeklyRows[0]?.messageText.includes("Saldo akhir: Rp1.300.000"));
+  assert.ok(weeklyRows[0]?.messageText.includes("Saldo Dana Titip: Rp1.300.000"));
 
   // Delayed report: outlet tidak buka Minggu 16 Agustus; report dibuat setelah
   // closing berikutnya pada Senin 17 Agustus dan tetap mengunci period 10–16.
@@ -540,7 +549,7 @@ async function checkDatabase() {
     );
   assert.ok(delayedRow, "Delayed weekly event harus dibuat.");
   assert.ok(
-    delayedRow.messageText.includes("Cost snapshot: Tidak lengkap"),
+    delayedRow.messageText.includes("cost snapshot belum lengkap"),
     "Satu daily snapshot incomplete harus membuat margin weekly unavailable.",
   );
 

@@ -279,6 +279,7 @@ export type ClaimedTelegramDelivery = {
   outletId: string;
   reportType: TelegramReportType;
   messageText: string;
+  payloadSnapshot: Record<string, unknown>;
   attemptCount: number;
   maxAttempts: number;
   chatId: string;
@@ -532,6 +533,7 @@ export async function claimTelegramDeliveryBatch(input: {
         outletId: telegramDeliveryOutbox.outletId,
         reportType: telegramDeliveryOutbox.reportType,
         messageText: telegramDeliveryOutbox.messageText,
+        payloadSnapshot: telegramDeliveryOutbox.payloadSnapshotJson,
         attemptCount: telegramDeliveryOutbox.attemptCount,
         maxAttempts: telegramDeliveryOutbox.maxAttempts,
         chatId: telegramDestinations.chatId,

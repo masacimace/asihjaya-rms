@@ -2,6 +2,7 @@ import { hostname } from "node:os";
 
 import { db } from "@/db";
 import type { TelegramClient } from "@/server/integrations/telegram/telegram-client";
+import { isTelegramHtmlPayload } from "@/server/integrations/telegram/telegram-message-format";
 import {
   TELEGRAM_DELIVERY_BATCH_SIZE,
   TELEGRAM_STALE_PROCESSING_MS,
@@ -121,6 +122,9 @@ async function processClaimedDelivery(
     const sent = await input.client.sendMessage({
       chatId: delivery.chatId,
       text: delivery.messageText,
+      ...(isTelegramHtmlPayload(delivery.payloadSnapshot)
+        ? { parseMode: "HTML" as const }
+        : {}),
     });
     const completedAt = input.now();
 

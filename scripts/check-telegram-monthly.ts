@@ -161,29 +161,37 @@ const snapshot = buildTelegramMonthlyFinanceSnapshot({
     previousNetSales: "20000000",
     netSalesChangeRate: "5.0",
   },
+  summary: {
+    sales: { grossSales: "22000000", refundTotal: "1000000", netSales: "21000000", transactionCount: 120, itemsSoldCount: 155 },
+    cash: { grossReceived: "8500000", refundTotal: "500000", netReceived: "8000000" },
+    banks: [
+      { provider: "BCA", grossReceived: "6500000", refundTotal: "0", netReceived: "6500000" },
+      { provider: "MANDIRI", grossReceived: "3500000", refundTotal: "0", netReceived: "3500000" },
+    ],
+    buyback: { transactionCount: 8, itemCount: 10, totalAmount: "12000000", cashTotal: "4000000", bankTransferTotal: "5000000", customerDepositTotal: "3000000" },
+  },
 });
 
 const message = formatTelegramMonthlyFinanceMessage(snapshot);
 for (const expected of [
-  "📈 MONTHLY FINANCE REPORT",
-  "Periode: Agustus 2026",
-  "Hari operasional tersnapshot: 26",
-  "Gross sales: Rp22.000.000",
-  "Net sales: Rp21.000.000",
-  "Cost of goods: Rp14.500.000",
-  "Gross margin: Rp6.500.000",
-  "Gross margin rate: 30,95%",
-  "DANA TITIP",
-  "Saldo awal: Rp1.000.000",
-  "Masuk: Rp900.000",
-  "Digunakan: Rp400.000",
-  "Dicairkan: Rp200.000",
-  "Adjustment masuk: Rp100.000",
-  "Saldo akhir: Rp1.400.000",
-  "Total variance kas: -Rp125.000",
-  "Transaksi: 120",
-  "Produk terjual: 155",
-  "Vs bulan sebelumnya (Net sales): +5,0%",
+  "LAPORAN BULANAN",
+  "Agustus 2026",
+  "26 hari operasional tersnapshot",
+  "Penjualan kotor: Rp22.000.000",
+  "Refund: Rp1.000.000",
+  "Rp21.000.000",
+  "Vs bulan lalu:",
+  "+5,0%",
+  "120 transaksi · 155 produk terjual",
+  "BCA: Rp6.500.000",
+  "MANDIRI: Rp3.500.000",
+  "Cash bersih: Rp8.000.000",
+  "Selisih kas: -Rp125.000",
+  "Dana Titip masuk: Rp900.000",
+  "Saldo Dana Titip: Rp1.400.000",
+  "Laba kotor:",
+  "Margin: 30,95%",
+  "8 transaksi · 10 item",
 ]) {
   assert.ok(message.includes(expected), `Monthly message kurang field: ${expected}`);
 }
@@ -201,7 +209,7 @@ const incomplete = buildTelegramMonthlyFinanceSnapshot({
 });
 assert.ok(
   formatTelegramMonthlyFinanceMessage(incomplete).includes(
-    "Cost snapshot: Tidak lengkap",
+    "cost snapshot belum lengkap",
   ),
 );
 
@@ -489,13 +497,13 @@ async function checkDatabase() {
   assert.equal(monthlyRows[0]?.businessDate, null);
   assert.equal(monthlyRows[0]?.periodStart, "2026-08-01");
   assert.equal(monthlyRows[0]?.periodEnd, "2026-08-31");
-  assert.ok(monthlyRows[0]?.messageText.includes("Net sales: Rp21.000.000"));
+  assert.ok(monthlyRows[0]?.messageText.includes("Penjualan bersih:"));
   assert.ok(
     monthlyRows[0]?.messageText.includes(
-      "Vs bulan sebelumnya (Net sales): +5,0%",
+      "Vs bulan lalu:",
     ),
   );
-  assert.ok(monthlyRows[0]?.messageText.includes("Saldo akhir: Rp1.200.000"));
+  assert.ok(monthlyRows[0]?.messageText.includes("Saldo Dana Titip:"));
 
   // Delayed September: outlet tidak buka 30 September. Closing 1 Oktober harus
   // tetap mengunci 1–30 September, dan satu incomplete day membuat margin unavailable.
@@ -554,7 +562,7 @@ async function checkDatabase() {
     );
   assert.ok(delayedRow, "Delayed monthly event harus dibuat.");
   assert.ok(
-    delayedRow.messageText.includes("Cost snapshot: Tidak lengkap"),
+    delayedRow.messageText.includes("cost snapshot belum lengkap"),
     "Satu daily snapshot incomplete harus membuat margin monthly unavailable.",
   );
 

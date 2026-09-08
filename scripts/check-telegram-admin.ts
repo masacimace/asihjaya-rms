@@ -47,6 +47,11 @@ assert(
   "Admin test message harus menjadi report_type=test yang dikirim langsung server-side dan diaudit.",
 );
 assert(
+  serviceSource.includes("TELEGRAM_MESSAGE_FORMAT_HTML") &&
+    serviceSource.includes('parseMode: "HTML"'),
+  "Admin test message harus memakai visual format HTML Telegram yang sama dengan report baru.",
+);
+assert(
   serviceSource.includes("getTelegramAdminBotStatus") &&
     serviceSource.includes("client.getMe()"),
   "Admin integration status harus dapat menampilkan bot identity tanpa mengekspos token.",

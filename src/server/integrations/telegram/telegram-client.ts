@@ -169,6 +169,7 @@ export class TelegramClient {
       payload: {
         chat_id: chatId,
         text,
+        ...(input.parseMode ? { parse_mode: input.parseMode } : {}),
       },
       parseResult: (result, errorContext) => {
         const resultChatId = chatIdString(result.chat?.id);

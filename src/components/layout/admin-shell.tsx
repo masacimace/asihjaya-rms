@@ -87,11 +87,18 @@ const navigation: NavigationItem[] = [
     label: "Riwayat Penjualan",
     icon: ReceiptText,
     children: [
-      { label: "Riwayat Penjualan", href: "/admin/penjualan" },
       {
-        label: "Riwayat Buyback",
-        href: "/admin/buyback",
+        label: "Riwayat Penjualan",
+        href: "/admin/penjualan?q=&range=thisMonth&outletId=&status=&paymentMethod=",
+      },
+      {
+        label: "Buyback Pembelian",
+        href: "/admin/buyback?q=&range=thisMonth&process=all&payout=all",
         access: "buybacks",
+      },
+      {
+        label: "Pemasukan Bank",
+        href: "/admin/operasional/pemasukan-bank",
       },
     ],
   },
@@ -107,7 +114,6 @@ const navigation: NavigationItem[] = [
       /* Sidebar mobile label: "Shift Kasir", href: "/admin/operasional/shift" */
       { label: "Laporan Outlet", href: "/admin/laporan" },
       { label: "Pergerakan Kas", href: "/admin/operasional/kas" },
-      { label: "Pemasukan Bank", href: "/admin/operasional/pemasukan-bank" },
       {
         label: "Migrasi Produk",
         href: "/admin/migrasi-produk",

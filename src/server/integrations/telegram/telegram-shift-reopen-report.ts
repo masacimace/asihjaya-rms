@@ -3,6 +3,11 @@ import {
   normalizeBusinessTimeZone,
 } from "@/lib/time/business-time";
 import { assertIsoBusinessDate } from "@/server/integrations/telegram/telegram-outbox-contract";
+import {
+  TELEGRAM_MESSAGE_FORMAT_HTML,
+  escapeTelegramHtml,
+  telegramBold,
+} from "@/server/integrations/telegram/telegram-message-format";
 
 export type SupersededTelegramReportType =
   | "closing_daily"
@@ -12,6 +17,7 @@ export type SupersededTelegramReportType =
 export type TelegramShiftReopenedSnapshot = {
   schemaVersion: 1;
   reportType: "shift_reopened";
+  messageFormat: typeof TELEGRAM_MESSAGE_FORMAT_HTML;
   shiftId: string;
   closingRevision: number;
   outlet: {
@@ -118,6 +124,7 @@ export function buildTelegramShiftReopenedSnapshot(input: {
   return {
     schemaVersion: 1,
     reportType: "shift_reopened",
+    messageFormat: TELEGRAM_MESSAGE_FORMAT_HTML,
     shiftId: assertNonBlank(input.shiftId, "TELEGRAM_SHIFT_ID_REQUIRED"),
     closingRevision: assertPositiveInteger(
       input.closingRevision,
@@ -149,19 +156,17 @@ export function formatTelegramShiftReopenedMessage(
     : "Laporan penutupan sebelumnya";
 
   return [
-    "🟠 SHIFT DIBUKA KEMBALI",
+    `⚠️ ${telegramBold("SHIFT DIBUKA KEMBALI")}`,
+    telegramBold(snapshot.outlet.name),
+    formatBusinessDate(snapshot.businessDate),
     "",
-    `Outlet: ${snapshot.outlet.name}`,
-    `Tanggal operasional: ${formatBusinessDate(snapshot.businessDate)}`,
     `Penutupan sebelumnya: ${formatTime(snapshot.previousClosedAt, snapshot.timezone)}`,
     `Dibuka kembali: ${formatTime(snapshot.reopenedAt, snapshot.timezone)}`,
-    `Oleh: ${snapshot.reopenedBy.name}`,
-    `Alasan: ${snapshot.reason}`,
+    `Oleh: ${escapeTelegramHtml(snapshot.reopenedBy.name)}`,
+    `Alasan: ${escapeTelegramHtml(snapshot.reason)}`,
     "",
-    `Laporan terdampak: ${affectedReports}`,
-    "Laporan yang sudah terkirim sebelumnya tidak lagi dianggap sebagai laporan akhir.",
-    "Laporan final terbaru akan dikirim setelah shift ini ditutup kembali.",
-    "",
-    "Status: Outlet kembali beroperasi pada shift yang sama.",
+    `Laporan terdampak: ${escapeTelegramHtml(affectedReports)}`,
+    telegramBold("Laporan sebelumnya tidak lagi dianggap final."),
+    "Laporan final terbaru akan dikirim setelah shift ditutup kembali.",
   ].join("\n");
 }

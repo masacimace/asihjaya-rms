@@ -149,33 +149,56 @@ const snapshot = buildTelegramDailyFinanceSnapshot({
     itemsSoldCount: 22,
     heldTransactionCount: 0,
   },
+  summary: {
+    sales: {
+      grossSales: "25450000",
+      refundTotal: "450000",
+      netSales: "25000000",
+      transactionCount: 18,
+      itemsSoldCount: 22,
+    },
+    cash: {
+      grossReceived: "10500000",
+      refundTotal: "500000",
+      netReceived: "10000000",
+    },
+    banks: [
+      { provider: "BCA", grossReceived: "6750000", refundTotal: "0", netReceived: "6750000" },
+      { provider: "MANDIRI", grossReceived: "4000000", refundTotal: "0", netReceived: "4000000" },
+    ],
+    buyback: {
+      transactionCount: 2,
+      itemCount: 2,
+      totalAmount: "3000000",
+      cashTotal: "1000000",
+      bankTransferTotal: "1000000",
+      customerDepositTotal: "1000000",
+    },
+  },
 });
 
 const message = formatTelegramDailyFinanceMessage(snapshot);
 for (const expected of [
-  "🔴 OUTLET DITUTUP — DAILY FINANCE REPORT",
-  "Tanggal operasional: 7 Agustus 2026",
-  "Kasir utama: Rosalia Manda",
-  "Buka: 08:02 WIB",
-  "Tutup: 18:11 WIB",
-  "Gross sales: Rp25.450.000",
-  "Diskon: Rp350.000",
-  "Net sales: Rp25.100.000",
-  "Cost of goods: Rp18.250.000",
-  "Gross margin: Rp6.850.000",
-  "Gross margin rate: 27,29%",
-  "Cash: Rp10.500.000",
-  "Bank Transfer: Rp7.100.000",
-  "EDC Debit: Rp4.000.000",
-  "EDC Credit: Rp2.000.000",
-  "Masuk: Rp500.000",
-  "Digunakan: Rp1.000.000",
-  "Expected cash: Rp12.500.000",
-  "Actual cash: Rp12.450.000",
-  "Variance: -Rp50.000",
-  "Transaksi: 18",
-  "Produk terjual: 22",
-  "Status: Perlu review variance kas",
+  "LAPORAN HARIAN",
+  "Pasar Bantar Gebang",
+  "7 Agustus 2026",
+  "Kasir: Rosalia Manda",
+  "08:02 WIB – 18:11 WIB",
+  "Penjualan kotor: Rp25.450.000",
+  "Refund: Rp450.000",
+  "Penjualan bersih:",
+  "Rp25.000.000",
+  "18 transaksi · 22 produk terjual",
+  "BCA: Rp6.750.000",
+  "MANDIRI: Rp4.000.000",
+  "Cash bersih:",
+  "Rp10.000.000",
+  "Selisih kas: -Rp50.000",
+  "Laba kotor:",
+  "Margin: 27,29%",
+  "2 transaksi · 2 item",
+  "Rp3.000.000",
+  "Selisih kas perlu diperiksa",
 ]) {
   assert.ok(message.includes(expected), `Daily message kurang field: ${expected}`);
 }
@@ -194,7 +217,7 @@ const incompleteCost = buildTelegramDailyFinanceSnapshot({
   },
 });
 const incompleteMessage = formatTelegramDailyFinanceMessage(incompleteCost);
-assert.ok(incompleteMessage.includes("Cost snapshot: Tidak lengkap"));
+assert.ok(incompleteMessage.includes("cost snapshot belum lengkap"));
 assert.equal(
   incompleteMessage.includes("Cost of goods: Rp0"),
   false,

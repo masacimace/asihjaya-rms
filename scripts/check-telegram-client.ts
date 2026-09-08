@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { TelegramClient } from "../src/server/integrations/telegram/telegram-client";
 import {
@@ -12,6 +14,15 @@ import {
   type TelegramMockScenario,
 } from "./telegram-mock-server";
 
+
+const clientSource = readFileSync(
+  path.join(process.cwd(), "src/server/integrations/telegram/telegram-client.ts"),
+  "utf8",
+);
+assert.ok(
+  clientSource.includes("parse_mode") && clientSource.includes("input.parseMode"),
+  "Telegram client harus meneruskan optional parse_mode untuk HTML report.",
+);
 const SAMPLE_TOKEN = ["123456789", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"].join(":");
 const CHAT_ID = "-1001234567890";
 

@@ -19,6 +19,10 @@ import {
   formatTelegramDailyFinanceMessage,
   type TelegramDailyFinanceSnapshot,
 } from "@/server/integrations/telegram/telegram-daily-report";
+import {
+  loadTelegramReportSummary,
+  type TelegramReportSummary,
+} from "@/server/integrations/telegram/telegram-report-summary";
 
 export type FinalizeTelegramDailyFinanceInput = {
   integrationEnabled: boolean;
@@ -298,6 +302,7 @@ function buildPayloadFromPersistedSnapshot(
   snapshot: Awaited<ReturnType<typeof persistFinanceSnapshot>>["snapshot"],
   input: FinalizeTelegramDailyFinanceInput,
   timezone: string,
+  summary: TelegramReportSummary,
 ): TelegramDailyFinanceSnapshot {
   return buildTelegramDailyFinanceSnapshot({
     shiftId: snapshot.shiftId,
@@ -349,6 +354,7 @@ function buildPayloadFromPersistedSnapshot(
       itemsSoldCount: snapshot.itemsSoldCount,
       heldTransactionCount: snapshot.heldTransactionCount,
     },
+    summary,
   });
 }
 
@@ -380,10 +386,21 @@ export async function finalizeTelegramDailyFinanceInTransaction(
     };
   }
 
+  const summary = await loadTelegramReportSummary(transaction, {
+    organizationId: input.organizationId,
+    outletId: input.outletId,
+    scope: {
+      kind: "shift",
+      shiftId: input.shiftId,
+      openedAt: input.openedAt,
+      closedAt: input.closedAt,
+    },
+  });
   const payload = buildPayloadFromPersistedSnapshot(
     persisted.snapshot,
     input,
     destination.timezone,
+    summary,
   );
   const delivery = await enqueueTelegramDelivery(transaction, {
     organizationId: input.organizationId,

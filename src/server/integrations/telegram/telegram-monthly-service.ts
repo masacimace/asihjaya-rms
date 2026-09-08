@@ -6,6 +6,7 @@ import {
   findEnabledTelegramDestinationForOutlet,
   type TelegramRepositoryTransaction,
 } from "@/server/integrations/telegram/telegram-outbox-repository";
+import { loadTelegramReportSummary } from "@/server/integrations/telegram/telegram-report-summary";
 import {
   buildTelegramMonthlyFinanceEventKey,
   buildTelegramMonthlyFinanceSnapshot,
@@ -192,7 +193,7 @@ export async function enqueueTelegramMonthlyPeriodInTransaction(
 
   const period = input.period;
   const previousPeriod = getPreviousMonthlyPeriod(period);
-  const [current, previous, depositBoundary] = await Promise.all([
+  const [current, previous, depositBoundary, currentSummary, previousSummary] = await Promise.all([
     aggregateMonthlyPeriod(transaction, {
       organizationId: input.organizationId,
       outletId: input.outletId,
@@ -208,6 +209,26 @@ export async function enqueueTelegramMonthlyPeriodInTransaction(
       outletId: input.outletId,
       period,
     }),
+    loadTelegramReportSummary(transaction, {
+      organizationId: input.organizationId,
+      outletId: input.outletId,
+      scope: {
+        kind: "period",
+        periodStart: period.start,
+        periodEnd: period.end,
+        timezone: destination.timezone,
+      },
+    }),
+    loadTelegramReportSummary(transaction, {
+      organizationId: input.organizationId,
+      outletId: input.outletId,
+      scope: {
+        kind: "period",
+        periodStart: previousPeriod.start,
+        periodEnd: previousPeriod.end,
+        timezone: destination.timezone,
+      },
+    }),
   ]);
 
   if (current.snapshotDays === 0 || !depositBoundary) {
@@ -215,9 +236,10 @@ export async function enqueueTelegramMonthlyPeriodInTransaction(
   }
 
   const costSnapshotComplete = current.incompleteCostDays === 0;
-  const previousNetSales = previous.snapshotDays === 0 ? null : previous.netSales;
+  const previousNetSales =
+    previous.snapshotDays === 0 ? null : previousSummary.sales.netSales;
   const comparisonRate = calculateMonthlyNetSalesChangeRate(
-    current.netSales,
+    currentSummary.sales.netSales,
     previousNetSales,
   );
   const snapshot = buildTelegramMonthlyFinanceSnapshot({
@@ -265,6 +287,7 @@ export async function enqueueTelegramMonthlyPeriodInTransaction(
       previousNetSales,
       netSalesChangeRate: comparisonRate,
     },
+    summary: currentSummary,
   });
 
   const baseEventKey = buildTelegramMonthlyFinanceEventKey(input.outletId, period.start);

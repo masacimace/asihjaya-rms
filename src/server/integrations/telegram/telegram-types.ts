@@ -10,6 +10,7 @@ export type TelegramBotIdentity = {
 export type TelegramSendMessageInput = {
   chatId: string;
   text: string;
+  parseMode?: "HTML";
 };
 
 export type TelegramSentMessage = {
