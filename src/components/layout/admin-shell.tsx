@@ -84,7 +84,7 @@ const navigation: NavigationItem[] = [
     access: "inventory",
   },
   {
-    label: "Laporan Transaksi",
+    label: "Riwayat Penjualan",
     icon: ReceiptText,
     children: [
       { label: "Riwayat Penjualan", href: "/admin/penjualan" },
@@ -101,12 +101,13 @@ const navigation: NavigationItem[] = [
     icon: UsersRound,
   },
   {
-    label: "Operasionals",
+    label: "Operasional",
     icon: Store,
     children: [
       /* Sidebar mobile label: "Shift Kasir", href: "/admin/operasional/shift" */
       { label: "Laporan Outlet", href: "/admin/laporan" },
       { label: "Pergerakan Kas", href: "/admin/operasional/kas" },
+      { label: "Pemasukan Bank", href: "/admin/operasional/pemasukan-bank" },
       {
         label: "Migrasi Produk",
         href: "/admin/migrasi-produk",

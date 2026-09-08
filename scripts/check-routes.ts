@@ -65,6 +65,8 @@ const expectedRouteFiles = [
   "app/(admin)/admin/operasional/hardware/setup-guide/page.tsx",
   "app/(admin)/admin/operasional/kas/export/xlsx/route.ts",
   "app/(admin)/admin/operasional/kas/page.tsx",
+  "app/(admin)/admin/operasional/pemasukan-bank/export/xlsx/route.ts",
+  "app/(admin)/admin/operasional/pemasukan-bank/page.tsx",
   "app/(admin)/admin/operasional/shift/page.tsx",
   "app/(admin)/admin/page.tsx",
   "app/(admin)/admin/pelanggan/[customerId]/edit/page.tsx",
