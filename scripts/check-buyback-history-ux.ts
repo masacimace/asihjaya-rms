@@ -18,6 +18,9 @@ const queries = read("src/features/buybacks/queries.ts");
 const panel = read("src/components/buybacks/buyback-history-panel.tsx");
 const mainPage = read("src/app/(pos)/pos/buyback/page.tsx");
 const historyPage = read("src/app/(pos)/pos/buyback/riwayat/page.tsx");
+const adminHistoryPage = read("src/app/(admin)/admin/buyback/page.tsx");
+const adminShell = read("src/components/layout/admin-shell.tsx");
+const historyFilters = read("src/features/buybacks/history-filters.ts");
 
 assert(
   contracts.includes(
@@ -26,6 +29,8 @@ assert(
     contracts.includes(
       'BuybackHistoryPayoutFilter = "all" | BuybackPayoutMethod',
     ) &&
+    contracts.includes("buybackHistoryDateRanges") &&
+    contracts.includes("BuybackHistoryDateRange") &&
     contracts.includes("totalCount: number;"),
   "Contract history pagination/filter belum lengkap.",
 );
@@ -35,7 +40,8 @@ assert(
     queries.includes('processingFilter = "all"') &&
     queries.includes('payoutFilter = "all"') &&
     queries.includes(".offset(safeOffset)") &&
-    queries.includes("totalCount"),
+    queries.includes("totalCount") &&
+    queries.includes("createBuybackHistoryPeriod(dateRange, timeZone)"),
   "Query history belum mendukung count/filter/pagination.",
 );
 
@@ -49,8 +55,22 @@ assert(
     historyPage.includes("PAGE_SIZE = 10") &&
     historyPage.includes('action="/pos/buyback/riwayat"') &&
     historyPage.includes("processingFilter") &&
-    historyPage.includes("payoutFilter"),
+    historyPage.includes("payoutFilter") &&
+    historyPage.includes('name="range"') &&
+    historyPage.includes("buybackHistoryDateRanges.map"),
   "Dedicated history page belum lengkap.",
+);
+
+assert(
+  adminHistoryPage.includes('title: "Riwayat Buyback"') &&
+    adminHistoryPage.includes('action="/admin/buyback"') &&
+    adminHistoryPage.includes('historyBaseHref="/admin/buyback"') &&
+    adminHistoryPage.includes("Export XLSX") &&
+    adminShell.includes('label: "Riwayat Buyback"') &&
+    adminShell.includes('href: "/admin/buyback"') &&
+    historyFilters.includes('today: "Hari ini"') &&
+    historyFilters.includes('last30: "30 hari terakhir"'),
+  "Admin Buyback history/date filter belum lengkap.",
 );
 
 const responsiveChecks = {
@@ -84,5 +104,5 @@ assert(
 );
 
 console.log(
-  "OK: Buyback history UX V2 valid — 5 preview, total count, 10/page history, filters, mobile cards.",
+  "OK: Buyback history UX V3 valid — date filter, Admin history, 10/page, XLSX, mobile cards.",
 );

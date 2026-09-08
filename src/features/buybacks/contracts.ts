@@ -189,6 +189,24 @@ export type BuybackDetail = BuybackHistoryRow & {
   receiptJob: BuybackReceiptJobSummary;
 };
 
+export const buybackHistoryDateRanges = [
+  "today",
+  "yesterday",
+  "last7",
+  "last30",
+  "thisMonth",
+  "all",
+] as const;
+
+export type BuybackHistoryDateRange = (typeof buybackHistoryDateRanges)[number];
+
+export type BuybackHistoryPeriod = {
+  range: BuybackHistoryDateRange;
+  label: string;
+  start: Date | null;
+  end: Date | null;
+};
+
 export type BuybackHistoryProcessingFilter = "all" | "pending" | "clear";
 
 export type BuybackHistoryPayoutFilter = "all" | BuybackPayoutMethod;

@@ -146,6 +146,7 @@ const workbook = buildBuybackWorkbook({
   rows,
   filters: {
     search: "",
+    dateRange: "all",
     processingFilter: "all",
     payoutFilter: "all",
   },
@@ -232,6 +233,22 @@ const exportRoute = fs.readFileSync(
   "src/app/(pos)/pos/buyback/riwayat/export/xlsx/route.ts",
   "utf8",
 );
+const adminHistoryPage = fs.readFileSync(
+  "src/app/(admin)/admin/buyback/page.tsx",
+  "utf8",
+);
+const adminExportRoute = fs.readFileSync(
+  "src/app/(admin)/admin/buyback/export/xlsx/route.ts",
+  "utf8",
+);
+const adminShell = fs.readFileSync(
+  "src/components/layout/admin-shell.tsx",
+  "utf8",
+);
+const historyFilters = fs.readFileSync(
+  "src/features/buybacks/history-filters.ts",
+  "utf8",
+);
 const reportQuery = fs.readFileSync(
   "src/features/buybacks/report-queries.ts",
   "utf8",
@@ -243,5 +260,20 @@ assert.match(exportRoute, /hasPermission\(auth, "pos\.access"\)/);
 assert.match(exportRoute, /getBuybackReportRows/);
 assert.match(reportQuery, /processingFilter === "pending"/);
 assert.match(reportQuery, /filters\.payoutFilter !== "all"/);
+assert.match(reportQuery, /createBuybackHistoryPeriod\(filters\.dateRange, timeZone\)/);
+assert.match(historyPage, /name="range"/);
+assert.match(historyPage, /buybackHistoryDateRanges\.map/);
+assert.match(exportRoute, /normalizeBuybackHistoryDateRange/);
+assert.match(adminHistoryPage, /title: "Riwayat Buyback"/);
+assert.match(adminHistoryPage, /action="\/admin\/buyback"/);
+assert.match(adminHistoryPage, /historyBaseHref="\/admin\/buyback"/);
+assert.match(adminHistoryPage, /admin\/buyback\/export\/xlsx/);
+assert.match(adminExportRoute, /hasPermission\(auth, "admin\.access"\)/);
+assert.match(adminExportRoute, /hasPermission\(auth, "buybacks\.view"\)/);
+assert.match(adminShell, /label: "Riwayat Buyback"/);
+assert.match(adminShell, /href: "\/admin\/buyback"/);
+assert.match(historyFilters, /today: "Hari ini"/);
+assert.match(historyFilters, /last7: "7 hari terakhir"/);
+assert.match(historyFilters, /thisMonth: "Bulan ini"/);
 
 console.log("Buyback XLSX report contracts: OK");

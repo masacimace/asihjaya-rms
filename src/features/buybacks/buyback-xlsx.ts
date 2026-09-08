@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 
+import { buybackHistoryDateRangeLabels } from "@/features/buybacks/history-filters";
 import type {
   BuybackHistoryPayoutFilter,
   BuybackHistoryProcessingFilter,
@@ -227,7 +228,7 @@ function getFilterDescription(
   filters: BuybackReportFilters,
 ) {
   const parts = [
-    "Periode: Semua waktu",
+    `Periode: ${buybackHistoryDateRangeLabels[filters.dateRange]}`,
     `Outlet: ${auth.outlet.code} — ${auth.outlet.name}`,
     `Status proses: ${processingFilterLabels[filters.processingFilter]}`,
     `Payout: ${payoutFilterLabels[filters.payoutFilter]}`,
@@ -276,7 +277,7 @@ function buildSummaryWorksheet({
   const payoutDataStartRowIndex = 29;
   const data: unknown[][] = [
     ["LAPORAN BUYBACK ASIHJAYA", "", ""],
-    ["Periode", "Semua waktu"],
+    ["Periode", buybackHistoryDateRangeLabels[filters.dateRange]],
     ["Outlet", `${auth.outlet.code} — ${auth.outlet.name}`],
     ["Status proses", processingFilterLabels[filters.processingFilter]],
     ["Payout filter", payoutFilterLabels[filters.payoutFilter]],

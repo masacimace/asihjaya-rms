@@ -1,4 +1,5 @@
 import type {
+  BuybackHistoryDateRange,
   BuybackHistoryPayoutFilter,
   BuybackHistoryProcessingFilter,
   BuybackItemSource,
@@ -9,6 +10,7 @@ import type {
 
 export type BuybackReportFilters = {
   search: string;
+  dateRange: BuybackHistoryDateRange;
   processingFilter: BuybackHistoryProcessingFilter;
   payoutFilter: BuybackHistoryPayoutFilter;
 };

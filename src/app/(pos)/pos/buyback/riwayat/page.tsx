@@ -4,10 +4,18 @@ import { redirect } from "next/navigation";
 
 import { BuybackHistoryPanel } from "@/components/buybacks/buyback-history-panel";
 import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
-import type {
-  BuybackHistoryPayoutFilter,
-  BuybackHistoryProcessingFilter,
+import {
+  buybackHistoryDateRanges,
+  type BuybackHistoryDateRange,
+  type BuybackHistoryPayoutFilter,
+  type BuybackHistoryProcessingFilter,
 } from "@/features/buybacks/contracts";
+import {
+  buybackHistoryDateRangeLabels,
+  normalizeBuybackHistoryDateRange,
+  normalizeBuybackHistoryPayoutFilter,
+  normalizeBuybackHistoryProcessingFilter,
+} from "@/features/buybacks/history-filters";
 import { getBuybackHistoryData } from "@/features/buybacks/queries";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 
@@ -27,6 +35,7 @@ type PageProps = {
     q?: string;
     process?: string;
     payout?: string;
+    range?: string;
     detail?: string;
   }>;
 };
@@ -36,32 +45,18 @@ function normalizePage(value: string | undefined) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
-function normalizeProcessingFilter(
-  value: string | undefined,
-): BuybackHistoryProcessingFilter {
-  return value === "pending" || value === "clear" ? value : "all";
-}
-
-function normalizePayoutFilter(
-  value: string | undefined,
-): BuybackHistoryPayoutFilter {
-  return value === "cash" ||
-    value === "bank_transfer" ||
-    value === "customer_deposit"
-    ? value
-    : "all";
-}
-
 function buildListHref({
   page,
   q,
   process,
   payout,
+  range,
 }: {
   page: number;
   q: string;
   process: BuybackHistoryProcessingFilter;
   payout: BuybackHistoryPayoutFilter;
+  range: BuybackHistoryDateRange;
 }) {
   const params = new URLSearchParams();
 
@@ -69,6 +64,7 @@ function buildListHref({
   if (q) params.set("q", q);
   if (process !== "all") params.set("process", process);
   if (payout !== "all") params.set("payout", payout);
+  if (range !== "today") params.set("range", range);
 
   const query = params.toString();
   return query ? `/pos/buyback/riwayat?${query}` : "/pos/buyback/riwayat";
@@ -78,15 +74,18 @@ function buildExportHref({
   q,
   process,
   payout,
+  range,
 }: {
   q: string;
   process: BuybackHistoryProcessingFilter;
   payout: BuybackHistoryPayoutFilter;
+  range: BuybackHistoryDateRange;
 }) {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (process !== "all") params.set("process", process);
   if (payout !== "all") params.set("payout", payout);
+  if (range !== "today") params.set("range", range);
 
   const query = params.toString();
   return query
@@ -115,8 +114,9 @@ export default async function BuybackHistoryPage({
 
   const page = normalizePage(query.page);
   const search = String(query.q ?? "").trim().slice(0, 160);
-  const processingFilter = normalizeProcessingFilter(query.process);
-  const payoutFilter = normalizePayoutFilter(query.payout);
+  const processingFilter = normalizeBuybackHistoryProcessingFilter(query.process);
+  const payoutFilter = normalizeBuybackHistoryPayoutFilter(query.payout);
+  const dateRange = normalizeBuybackHistoryDateRange(query.range);
   const detailId =
     query.detail && UUID_PATTERN.test(query.detail) ? query.detail : null;
 
@@ -129,6 +129,8 @@ export default async function BuybackHistoryPage({
     search,
     processingFilter,
     payoutFilter,
+    dateRange,
+    timeZone: auth.organization.timezone,
   });
 
   const totalPages = Math.max(
@@ -143,6 +145,7 @@ export default async function BuybackHistoryPage({
         q: search,
         process: processingFilter,
         payout: payoutFilter,
+        range: dateRange,
       }),
     );
   }
@@ -152,11 +155,13 @@ export default async function BuybackHistoryPage({
     q: search,
     process: processingFilter,
     payout: payoutFilter,
+    range: dateRange,
   });
   const exportHref = buildExportHref({
     q: search,
     process: processingFilter,
     payout: payoutFilter,
+    range: dateRange,
   });
 
   return (
@@ -211,6 +216,7 @@ export default async function BuybackHistoryPage({
             q: search,
             process: processingFilter,
             payout: payoutFilter,
+            range: dateRange,
           }}
           detailBackHref={listHref}
         />
@@ -230,7 +236,7 @@ export default async function BuybackHistoryPage({
             <form
               action="/pos/buyback/riwayat"
               method="get"
-              className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_190px_190px_auto]"
+              className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_170px_190px_190px_auto]"
             >
               <label className="block min-w-0">
                 <span className="mb-1.5 block text-xs font-medium text-neutral-700">
@@ -242,6 +248,23 @@ export default async function BuybackHistoryPage({
                   placeholder="No. Buyback atau customer..."
                   className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
                 />
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-neutral-700">
+                  Tanggal
+                </span>
+                <select
+                  name="range"
+                  defaultValue={dateRange}
+                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none"
+                >
+                  {buybackHistoryDateRanges.map((range) => (
+                    <option key={range} value={range}>
+                      {buybackHistoryDateRangeLabels[range]}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label className="block">
@@ -302,6 +325,7 @@ export default async function BuybackHistoryPage({
               q: search,
               process: processingFilter,
               payout: payoutFilter,
+              range: dateRange,
             }}
             detailBackHref={listHref}
           />

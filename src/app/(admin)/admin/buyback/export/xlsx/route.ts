@@ -19,12 +19,17 @@ export async function GET(request: NextRequest) {
   const auth = await getCurrentAuth();
 
   if (!auth) return new Response("Unauthorized", { status: 401 });
-  if (!hasPermission(auth, "buybacks.view") || !hasPermission(auth, "pos.access")) {
+  if (
+    !hasPermission(auth, "admin.access") ||
+    !hasPermission(auth, "buybacks.view")
+  ) {
     return new Response("Forbidden", { status: 403 });
   }
 
   const outlet =
-    auth.outlets.find((candidate) => candidate.isPrimary) ?? auth.outlets[0] ?? null;
+    auth.outlets.find((candidate) => candidate.isPrimary) ??
+    auth.outlets[0] ??
+    null;
   if (!outlet) return new Response("Outlet tidak tersedia", { status: 400 });
 
   const filters = {

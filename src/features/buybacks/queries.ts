@@ -23,12 +23,14 @@ import {
 import type {
   BuybackExistingItemOption,
   BuybackHistoryData,
+  BuybackHistoryDateRange,
   BuybackHistoryPayoutFilter,
   BuybackHistoryProcessingFilter,
   BuybackHistoryPayoutSummary,
   BuybackHistoryRow,
   BuybackInitialData,
 } from "@/features/buybacks/contracts";
+import { createBuybackHistoryPeriod } from "@/features/buybacks/history-filters";
 import { getDefaultPosRegisterCondition } from "@/features/pos/context";
 
 function parseMoney(value: string | null | undefined) {
@@ -285,6 +287,8 @@ export async function getBuybackHistoryData({
   search = "",
   processingFilter = "all",
   payoutFilter = "all",
+  dateRange = "all",
+  timeZone = "Asia/Jakarta",
 }: {
   organizationId: string;
   outletId: string;
@@ -294,12 +298,26 @@ export async function getBuybackHistoryData({
   search?: string;
   processingFilter?: BuybackHistoryProcessingFilter;
   payoutFilter?: BuybackHistoryPayoutFilter;
+  dateRange?: BuybackHistoryDateRange;
+  timeZone?: string;
 }): Promise<BuybackHistoryData> {
   const normalizedSearch = search.trim().slice(0, 160);
+  const period = createBuybackHistoryPeriod(dateRange, timeZone);
   const historyConditions = [
     eq(buybacks.organizationId, organizationId),
     eq(buybacks.outletId, outletId),
   ];
+
+  if (period.start) {
+    historyConditions.push(
+      sql`coalesce(${buybacks.completedAt}, ${buybacks.createdAt}) >= ${period.start}`,
+    );
+  }
+  if (period.end) {
+    historyConditions.push(
+      sql`coalesce(${buybacks.completedAt}, ${buybacks.createdAt}) < ${period.end}`,
+    );
+  }
 
   if (normalizedSearch) {
     const pattern = `%${normalizedSearch}%`;

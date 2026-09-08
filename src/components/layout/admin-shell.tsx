@@ -44,6 +44,7 @@ type AdminShellUser = {
   canAccessProducts: boolean;
   canAccessInventory: boolean;
   canAccessMigration: boolean;
+  canAccessBuybacks: boolean;
   canAccessSettings: boolean;
 };
 
@@ -57,7 +58,11 @@ type NavigationItem = {
     | "inventory"
     | "migration"
     | "settings";
-  children?: { label: string; href: string; access?: "migration" }[];
+  children?: {
+    label: string;
+    href: string;
+    access?: "migration" | "buybacks";
+  }[];
 };
 
 const navigation: NavigationItem[] = [
@@ -79,9 +84,16 @@ const navigation: NavigationItem[] = [
     access: "inventory",
   },
   {
-    label: "Riwayat Penjualan",
-    href: "/admin/penjualan",
+    label: "Laporan Transaksi",
     icon: ReceiptText,
+    children: [
+      { label: "Riwayat Penjualan", href: "/admin/penjualan" },
+      {
+        label: "Riwayat Buyback",
+        href: "/admin/buyback",
+        access: "buybacks",
+      },
+    ],
   },
   {
     label: "Daftar Customer",
@@ -89,7 +101,7 @@ const navigation: NavigationItem[] = [
     icon: UsersRound,
   },
   {
-    label: "Operasional",
+    label: "Operasionals",
     icon: Store,
     children: [
       /* Sidebar mobile label: "Shift Kasir", href: "/admin/operasional/shift" */
@@ -202,6 +214,7 @@ type SidebarContentProps = {
   canAccessProducts: boolean;
   canAccessInventory: boolean;
   canAccessMigration: boolean;
+  canAccessBuybacks: boolean;
   canAccessSettings: boolean;
   onNavigate?: () => void;
   showBrand?: boolean;
@@ -221,6 +234,7 @@ function SidebarContent({
   canAccessProducts,
   canAccessInventory,
   canAccessMigration,
+  canAccessBuybacks,
   canAccessSettings,
   onNavigate,
   showBrand = true,
@@ -256,9 +270,11 @@ function SidebarContent({
       <nav className="space-y-1">
         {visibleNavigation.map(({ label, href, icon: Icon, children }) => {
           if (children) {
-            const visibleChildren = children.filter(
-              (child) => child.access !== "migration" || canAccessMigration,
-            );
+            const visibleChildren = children.filter((child) => {
+              if (child.access === "migration") return canAccessMigration;
+              if (child.access === "buybacks") return canAccessBuybacks;
+              return true;
+            });
             const isChildActive = visibleChildren.some((child) =>
               isNavigationActive(pathname, child.href),
             );
@@ -413,6 +429,7 @@ export function AdminShell({
           canAccessProducts={user.canAccessProducts}
           canAccessInventory={user.canAccessInventory}
           canAccessMigration={user.canAccessMigration}
+          canAccessBuybacks={user.canAccessBuybacks}
           canAccessSettings={user.canAccessSettings}
         />
       </aside>
@@ -452,6 +469,7 @@ export function AdminShell({
                 canAccessProducts={user.canAccessProducts}
                 canAccessInventory={user.canAccessInventory}
                 canAccessMigration={user.canAccessMigration}
+                canAccessBuybacks={user.canAccessBuybacks}
                 canAccessSettings={user.canAccessSettings}
                 onNavigate={() => setIsMobileMenuOpen(false)}
                 showBrand={false}

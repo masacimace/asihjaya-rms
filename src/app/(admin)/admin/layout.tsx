@@ -24,6 +24,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         canAccessMigration:
           hasPermission(auth, "migration.view") ||
           hasPermission(auth, "migration.import"),
+        canAccessBuybacks: hasPermission(auth, "buybacks.view"),
         canAccessSettings: hasPermission(auth, "settings.manage"),
       }}
       notificationDrawerData={notificationDrawerData}

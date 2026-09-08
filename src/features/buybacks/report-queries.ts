@@ -11,6 +11,7 @@ import {
   registers,
   users,
 } from "@/db/schema";
+import { createBuybackHistoryPeriod } from "@/features/buybacks/history-filters";
 import type {
   BuybackReportFilters,
   BuybackReportPayout,
@@ -21,15 +22,29 @@ function buildBuybackReportConditions({
   organizationId,
   outletId,
   filters,
+  timeZone,
 }: {
   organizationId: string;
   outletId: string;
   filters: BuybackReportFilters;
+  timeZone: string;
 }) {
   const conditions = [
     eq(buybacks.organizationId, organizationId),
     eq(buybacks.outletId, outletId),
   ];
+  const period = createBuybackHistoryPeriod(filters.dateRange, timeZone);
+
+  if (period.start) {
+    conditions.push(
+      sql`coalesce(${buybacks.completedAt}, ${buybacks.createdAt}) >= ${period.start}`,
+    );
+  }
+  if (period.end) {
+    conditions.push(
+      sql`coalesce(${buybacks.completedAt}, ${buybacks.createdAt}) < ${period.end}`,
+    );
+  }
 
   const normalizedSearch = filters.search.trim().slice(0, 160);
   if (normalizedSearch) {
@@ -79,15 +94,18 @@ export async function getBuybackReportRows({
   organizationId,
   outletId,
   filters,
+  timeZone,
 }: {
   organizationId: string;
   outletId: string;
   filters: BuybackReportFilters;
+  timeZone: string;
 }): Promise<BuybackReportRow[]> {
   const conditions = buildBuybackReportConditions({
     organizationId,
     outletId,
     filters,
+    timeZone,
   });
 
   const rows = await db

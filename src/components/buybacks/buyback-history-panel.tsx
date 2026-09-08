@@ -85,6 +85,7 @@ export function BuybackHistoryPanel({
   pageSize = 10,
   filters,
   detailBackHref,
+  historyBaseHref = "/pos/buyback/riwayat",
 }: {
   data: BuybackHistoryData;
   timeZone: string;
@@ -99,8 +100,10 @@ export function BuybackHistoryPanel({
     q?: string;
     process?: string;
     payout?: string;
+    range?: string;
   };
   detailBackHref?: string;
+  historyBaseHref?: string;
 }) {
   function buildHistoryHref({
     targetPage,
@@ -121,12 +124,13 @@ export function BuybackHistoryPanel({
     if (filters?.payout && filters.payout !== "all") {
       params.set("payout", filters.payout);
     }
+    if (filters?.range && filters.range !== "today") {
+      params.set("range", filters.range);
+    }
     if (detailId) params.set("detail", detailId);
 
     const query = params.toString();
-    return query
-      ? `/pos/buyback/riwayat?${query}`
-      : "/pos/buyback/riwayat";
+    return query ? `${historyBaseHref}?${query}` : historyBaseHref;
   }
 
   if (data.detail) {

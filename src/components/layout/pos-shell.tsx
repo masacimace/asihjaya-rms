@@ -119,7 +119,7 @@ const navigation = [
     requiresBuybackAccess: true,
   },
   {
-    label: "Riwayat Transaksi",
+    label: "Transaksi Penjualan",
     href: "/pos/transaksi",
     icon: ReceiptText,
     children: [
@@ -127,14 +127,14 @@ const navigation = [
       { label: "Transaksi Ditahan", href: "/pos/ditahan", icon: Pause },
     ],
   },
-  { label: "Pelanggan", href: "/pos/pelanggan", icon: UsersRound },
+  { label: "Daftar Customer", href: "/pos/pelanggan", icon: UsersRound },
   { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
 ] as const;
 
 const mobilePrimaryNavigation = [
   { label: "Kasir", href: "/pos", icon: ShoppingBag },
   { label: "Transaksi", href: "/pos/transaksi", icon: ReceiptText },
-  { label: "Pelanggan", href: "/pos/pelanggan", icon: UsersRound },
+  { label: "Customer", href: "/pos/pelanggan", icon: UsersRound },
 ] as const;
 
 const mobileMoreNavigation = [
@@ -151,7 +151,7 @@ const mobileMoreNavigation = [
     requiresBuybackAccess: true,
   },
   { label: "Transaksi Ditahan", href: "/pos/ditahan", icon: Pause },
-  { label: "Shift Kasir", href: "/pos/shift", icon: Clock3 },
+  { label: "Operasional Kasir", href: "/pos/shift", icon: Clock3 },
 ] as const;
 
 const mobileBottomNavigationItemClassName =
