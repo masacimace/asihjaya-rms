@@ -75,6 +75,42 @@ function weightDifference(before: string, after: string | null) {
   return `${sign}${difference.toFixed(3)} gr`;
 }
 
+function ProcessingProductImage({
+  src,
+  alt,
+  label,
+  className,
+}: {
+  src: string | null;
+  alt: string;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-xl border border-[var(--border)] bg-neutral-50",
+        className,
+      )}
+    >
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={alt} className="size-full object-cover" />
+      ) : (
+        <div className="grid size-full place-items-center px-2 text-center text-neutral-400">
+          <div>
+            <Camera className="mx-auto size-5" />
+            <p className="mt-1 text-[9px] font-medium">Belum ada foto</p>
+          </div>
+        </div>
+      )}
+      <span className="absolute bottom-1.5 left-1.5 rounded-md bg-neutral-950/75 px-1.5 py-0.5 text-[9px] font-semibold text-white backdrop-blur-sm">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 function ResultImageInput({ error }: { error?: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -845,126 +881,287 @@ export function BuybackProcessingWorkspace({
               Tidak ada item yang cocok dengan filter ini.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1050px] text-left text-sm">
-                <thead className="bg-neutral-50 text-xs uppercase text-[var(--muted)]">
-                  <tr>
-                    <th className="px-4 py-3 sm:px-5">No. Buyback</th>
-                    <th className="px-4 py-3">Customer</th>
-                    <th className="px-4 py-3">Produk</th>
-                    <th className="px-4 py-3">Proses</th>
-                    <th className="whitespace-nowrap px-4 py-3">Berat</th>
-                    <th className="whitespace-nowrap px-4 py-3">Status</th>
-                    <th className="whitespace-nowrap px-4 py-3 sm:px-5">
-                      Aksi
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {rows.map((row) => (
-                    <tr
+            <>
+              <div className="space-y-3 p-3 sm:p-4 md:hidden">
+                {rows.map((row) => {
+                  const difference = weightDifference(
+                    row.sourceWeightGram,
+                    row.resultWeightGram,
+                  );
+
+                  return (
+                    <article
                       key={row.id}
-                      className="align-top hover:bg-neutral-50/60"
+                      className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white"
                     >
-                      <td className="px-4 py-4 sm:px-5">
-                        <p className="font-semibold text-neutral-950">
-                          {row.buybackNumber}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {formatDate(row.buybackCompletedAt)}
-                        </p>
-                      </td>
-                      <td className="px-4 py-4">
-                        <p className="font-medium text-neutral-900">
-                          {row.customerName}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {row.customerCode ?? "-"}
-                        </p>
-                      </td>
-                      <td className="px-4 py-4">
-                        <p className="max-w-[260px] truncate font-medium text-neutral-900">
-                          {row.sourceDisplayName}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {row.sourceCategoryName} · Kadar{" "}
-                          {row.sourcePurityPercent}%
-                        </p>
+                      <div className="p-3.5">
+                        <div className="flex items-start gap-3">
+                          <ProcessingProductImage
+                            src={row.beforeImageUrl}
+                            alt={`Foto ${row.sourceDisplayName} saat Buyback diterima`}
+                            label="Foto masuk"
+                            className="size-24 shrink-0 sm:size-28"
+                          />
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-1 text-[10px] font-semibold",
+                                  row.processingType === "cleaning"
+                                    ? "bg-blue-50 text-blue-700"
+                                    : "bg-amber-50 text-amber-800",
+                                )}
+                              >
+                                {processingLabel(row.processingType)}
+                              </span>
+                              {row.status === "pending" ? (
+                                <span className="rounded-full bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700">
+                                  Belum Diproses
+                                </span>
+                              ) : (
+                                <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
+                                  Selesai
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="mt-2 truncate text-sm font-bold text-neutral-950">
+                              {row.sourceDisplayName}
+                            </p>
+                            <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+                              {row.sourceCategoryName} · Kadar {row.sourcePurityPercent}% · {row.sourceColor}
+                            </p>
+                            {row.sourceSku ? (
+                              <p className="mt-1 truncate text-[11px] font-medium text-neutral-500">
+                                SKU {row.sourceSku}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-neutral-50 p-3">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                              Buyback
+                            </p>
+                            <p className="mt-1 truncate text-xs font-semibold text-neutral-900">
+                              {row.buybackNumber}
+                            </p>
+                            <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+                              {formatDate(row.buybackCompletedAt)}
+                            </p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                              Customer
+                            </p>
+                            <p className="mt-1 truncate text-xs font-semibold text-neutral-900">
+                              {row.customerName}
+                            </p>
+                            <p className="mt-0.5 truncate text-[10px] text-[var(--muted)]">
+                              {row.customerCode ?? "-"}
+                            </p>
+                          </div>
+                          <div className="col-span-2 border-t border-[var(--border)] pt-2.5">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                                  Berat
+                                </p>
+                                <p className="mt-1 text-xs font-semibold text-neutral-900">
+                                  {row.sourceWeightGram} gr
+                                  {row.resultWeightGram
+                                    ? ` → ${row.resultWeightGram} gr`
+                                    : ""}
+                                </p>
+                              </div>
+                              {difference ? (
+                                <span className="shrink-0 rounded-lg bg-white px-2 py-1 text-[10px] font-semibold text-neutral-600">
+                                  Selisih {difference}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+
                         {row.status === "completed" && row.resultDisplayName ? (
-                          <p className="mt-1 text-xs font-medium text-emerald-700">
-                            Hasil: {row.resultDisplayName}
-                          </p>
+                          <div className="mt-3 flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-2.5">
+                            <ProcessingProductImage
+                              src={row.resultImageUrl}
+                              alt={`Foto hasil pemrosesan ${row.resultDisplayName}`}
+                              label="Foto hasil"
+                              className="size-16 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                                Hasil Pemrosesan
+                              </p>
+                              <p className="mt-1 truncate text-xs font-semibold text-neutral-900">
+                                {row.resultDisplayName}
+                              </p>
+                              <p className="mt-0.5 text-[10px] text-neutral-500">
+                                Selesai {formatDate(row.processedAt)}
+                              </p>
+                            </div>
+                          </div>
                         ) : null}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span
-                          className={cn(
-                            "rounded-full px-2.5 py-1 text-xs font-semibold",
-                            row.processingType === "cleaning"
-                              ? "bg-blue-50 text-blue-700"
-                              : "bg-amber-50 text-amber-800",
-                          )}
-                        >
-                          {processingLabel(row.processingType)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <p className="whitespace-nowrap font-medium">
-                          {row.sourceWeightGram} gr
-                          {row.resultWeightGram
-                            ? ` → ${row.resultWeightGram} gr`
-                            : ""}
-                        </p>
-                        {weightDifference(
-                          row.sourceWeightGram,
-                          row.resultWeightGram,
-                        ) ? (
-                          <p className="mt-1 text-xs text-[var(--muted)]">
-                            Selisih{" "}
-                            {weightDifference(
-                              row.sourceWeightGram,
-                              row.resultWeightGram,
-                            )}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-4">
-                        {row.status === "pending" ? (
-                          <span className="inline-flex whitespace-nowrap rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
-                            Belum Diproses
-                          </span>
-                        ) : (
-                          <span className="inline-flex whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                            Selesai
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 sm:px-5">
-                        {row.status === "pending" ? (
+                      </div>
+
+                      {row.status === "pending" ? (
+                        <div className="border-t border-[var(--border)] bg-neutral-50 p-3">
                           <button
                             type="button"
                             disabled={!canProcess}
                             onClick={() => setSelected(row)}
-                            className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-neutral-950 px-3 text-xs font-semibold text-white disabled:opacity-40"
+                            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white disabled:opacity-40"
                           >
                             {row.processingType === "cleaning" ? (
-                              <Sparkles className="size-3.5" />
+                              <Sparkles className="size-4" />
                             ) : (
-                              <Wrench className="size-3.5" />
+                              <Wrench className="size-4" />
                             )}
                             Proses {processingLabel(row.processingType)}
                           </button>
-                        ) : (
-                          <span className="text-xs text-[var(--muted)]">
-                            {formatDate(row.processedAt)}
-                          </span>
-                        )}
-                      </td>
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[1050px] text-left text-sm">
+                  <thead className="bg-neutral-50 text-xs uppercase text-[var(--muted)]">
+                    <tr>
+                      <th className="px-4 py-3 sm:px-5">No. Buyback</th>
+                      <th className="px-4 py-3">Customer</th>
+                      <th className="px-4 py-3">Produk</th>
+                      <th className="px-4 py-3">Proses</th>
+                      <th className="whitespace-nowrap px-4 py-3">Berat</th>
+                      <th className="whitespace-nowrap px-4 py-3">Status</th>
+                      <th className="whitespace-nowrap px-4 py-3 sm:px-5">
+                        Aksi
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {rows.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="align-top hover:bg-neutral-50/60"
+                      >
+                        <td className="px-4 py-4 sm:px-5">
+                          <p className="font-semibold text-neutral-950">
+                            {row.buybackNumber}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">
+                            {formatDate(row.buybackCompletedAt)}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <p className="font-medium text-neutral-900">
+                            {row.customerName}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">
+                            {row.customerCode ?? "-"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex min-w-[280px] items-start gap-3">
+                            <ProcessingProductImage
+                              src={row.beforeImageUrl}
+                              alt={`Foto ${row.sourceDisplayName} saat Buyback diterima`}
+                              label="Masuk"
+                              className="size-14 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="max-w-[220px] truncate font-medium text-neutral-900">
+                                {row.sourceDisplayName}
+                              </p>
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                {row.sourceCategoryName} · Kadar{" "}
+                                {row.sourcePurityPercent}%
+                              </p>
+                              {row.status === "completed" &&
+                              row.resultDisplayName ? (
+                                <p className="mt-1 text-xs font-medium text-emerald-700">
+                                  Hasil: {row.resultDisplayName}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span
+                            className={cn(
+                              "rounded-full px-2.5 py-1 text-xs font-semibold",
+                              row.processingType === "cleaning"
+                                ? "bg-blue-50 text-blue-700"
+                                : "bg-amber-50 text-amber-800",
+                            )}
+                          >
+                            {processingLabel(row.processingType)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <p className="whitespace-nowrap font-medium">
+                            {row.sourceWeightGram} gr
+                            {row.resultWeightGram
+                              ? ` → ${row.resultWeightGram} gr`
+                              : ""}
+                          </p>
+                          {weightDifference(
+                            row.sourceWeightGram,
+                            row.resultWeightGram,
+                          ) ? (
+                            <p className="mt-1 text-xs text-[var(--muted)]">
+                              Selisih{" "}
+                              {weightDifference(
+                                row.sourceWeightGram,
+                                row.resultWeightGram,
+                              )}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-4">
+                          {row.status === "pending" ? (
+                            <span className="inline-flex whitespace-nowrap rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                              Belum Diproses
+                            </span>
+                          ) : (
+                            <span className="inline-flex whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                              Selesai
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 sm:px-5">
+                          {row.status === "pending" ? (
+                            <button
+                              type="button"
+                              disabled={!canProcess}
+                              onClick={() => setSelected(row)}
+                              className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-neutral-950 px-3 text-xs font-semibold text-white disabled:opacity-40"
+                            >
+                              {row.processingType === "cleaning" ? (
+                                <Sparkles className="size-3.5" />
+                              ) : (
+                                <Wrench className="size-3.5" />
+                              )}
+                              Proses {processingLabel(row.processingType)}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-[var(--muted)]">
+                              {formatDate(row.processedAt)}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
           {!canProcess ? (
