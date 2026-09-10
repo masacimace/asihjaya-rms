@@ -318,37 +318,61 @@ function TransactionProductImage({
 
 function TransactionImagesPreview({
   transaction,
+  variant = "desktop",
 }: {
   transaction: PosTransactionListItem;
+  variant?: "mobile" | "desktop";
 }) {
   const previewItems = transaction.items.slice(0, 3);
   const hiddenCount = Math.max(
     transaction.items.length - previewItems.length,
     0,
   );
+  const isMobile = variant === "mobile";
+  const imageSizeClass = isMobile
+    ? previewItems.length <= 1
+      ? "size-28"
+      : previewItems.length === 2
+        ? "size-24"
+        : "size-20"
+    : "size-16";
 
   if (previewItems.length === 0) {
     return (
       <TransactionProductImage
         imageKey={null}
         alt="Foto produk belum tersedia"
-        className="size-12"
+        className={isMobile ? "size-28" : "size-16"}
       />
     );
   }
 
   return (
-    <div className="flex min-w-[76px] items-center gap-1.5">
+    <div
+      className={cn(
+        "flex items-center",
+        isMobile
+          ? "w-full justify-center gap-2"
+          : "min-w-[104px] justify-start gap-2",
+      )}
+    >
       {previewItems.map((item) => (
         <TransactionProductImage
           key={item.productItemId}
           imageKey={item.imageKey}
           alt={`Foto ${item.productName}`}
-          className="size-12"
+          className={imageSizeClass}
         />
       ))}
       {hiddenCount > 0 ? (
-        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-[10px] font-semibold text-neutral-600">
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center bg-neutral-100 font-semibold text-neutral-600",
+            isMobile
+              ? "size-10 rounded-xl text-xs"
+              : "size-9 rounded-lg text-[10px]",
+          )}
+        >
           +{hiddenCount}
         </span>
       ) : null}
@@ -444,6 +468,21 @@ function TransactionCard({
           </p>
         </div>
         <PaymentStatusPill transaction={transaction} />
+      </div>
+
+      <div className="mt-4 rounded-2xl bg-neutral-50 p-4">
+        <div className="text-center">
+          <p className="text-xs font-medium text-[var(--muted)]">Foto Produk</p>
+          <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">
+            Foto item pada transaksi ini.
+          </p>
+        </div>
+        <div className="mt-3 flex justify-center">
+          <TransactionImagesPreview
+            transaction={transaction}
+            variant="mobile"
+          />
+        </div>
       </div>
 
       <div className="mt-4 space-y-2 text-sm">
