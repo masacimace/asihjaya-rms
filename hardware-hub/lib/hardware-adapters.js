@@ -606,7 +606,7 @@ function createHardwareAdapterFactory(config) {
           category: "configuration",
         });
       }
-      validatePrinterShareName(config.documentPrinterName);
+      validatePrinterName(config.documentPrinterName);
       downloaded = await downloadFile(config, pdfUrl, tmpFile, {
         contentType: download.contentType || "application/pdf",
         maxBytes: download.maxBytes,
