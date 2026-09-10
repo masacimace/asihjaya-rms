@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   Clock3,
   FileText,
+  ImageIcon,
   Package,
   Printer,
   ReceiptText,
@@ -23,6 +24,7 @@ import type {
 import { reprintPosReceiptCertificateAction } from "@/app/actions/pos";
 import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
 import { PrintJobAutoRefresh } from "@/components/pos/print-job-auto-refresh";
+import { getPosMediaUrl } from "@/features/pos/catalog-state";
 import {
   getPosTransactionDetailData,
   getPosTransactionListData,
@@ -283,6 +285,74 @@ function HardwareJobStatusPill({ status }: { status: string }) {
     >
       {hardwareJobStatusLabels[status] ?? status}
     </span>
+  );
+}
+
+function TransactionProductImage({
+  imageKey,
+  alt,
+  className,
+}: {
+  imageKey: string | null;
+  alt: string;
+  className?: string;
+}) {
+  const imageUrl = getPosMediaUrl(imageKey);
+
+  return (
+    <div
+      className={cn(
+        "grid shrink-0 place-items-center overflow-hidden rounded-xl border border-[var(--border)] bg-neutral-50",
+        className,
+      )}
+    >
+      {imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imageUrl} alt={alt} className="size-full object-cover" />
+      ) : (
+        <ImageIcon className="size-5 text-neutral-300" />
+      )}
+    </div>
+  );
+}
+
+function TransactionImagesPreview({
+  transaction,
+}: {
+  transaction: PosTransactionListItem;
+}) {
+  const previewItems = transaction.items.slice(0, 3);
+  const hiddenCount = Math.max(
+    transaction.items.length - previewItems.length,
+    0,
+  );
+
+  if (previewItems.length === 0) {
+    return (
+      <TransactionProductImage
+        imageKey={null}
+        alt="Foto produk belum tersedia"
+        className="size-12"
+      />
+    );
+  }
+
+  return (
+    <div className="flex min-w-[76px] items-center gap-1.5">
+      {previewItems.map((item) => (
+        <TransactionProductImage
+          key={item.productItemId}
+          imageKey={item.imageKey}
+          alt={`Foto ${item.productName}`}
+          className="size-12"
+        />
+      ))}
+      {hiddenCount > 0 ? (
+        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-[10px] font-semibold text-neutral-600">
+          +{hiddenCount}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -553,28 +623,35 @@ function TransactionDetailPanel({
                     className="rounded-2xl border border-[var(--border)] p-3"
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-neutral-950">
-                          {item.productName}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {item.sku} · {item.barcode}
-                          {item.serialNumber
-                            ? ` · SN ${item.serialNumber}`
-                            : ""}
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-semibold text-[var(--accent)]">
-                            {item.categoryName}
-                          </span>
-                          {specs.map((spec) => (
-                            <span
-                              key={spec}
-                              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-[10px] font-medium text-neutral-700"
-                            >
-                              {spec}
+                      <div className="flex min-w-0 items-start gap-3">
+                        <TransactionProductImage
+                          imageKey={item.imageKey}
+                          alt={`Foto ${item.productName}`}
+                          className="size-20 sm:size-24"
+                        />
+                        <div className="min-w-0">
+                          <p className="font-semibold text-neutral-950">
+                            {item.productName}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">
+                            {item.sku} · {item.barcode}
+                            {item.serialNumber
+                              ? ` · SN ${item.serialNumber}`
+                              : ""}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-semibold text-[var(--accent)]">
+                              {item.categoryName}
                             </span>
-                          ))}
+                            {specs.map((spec) => (
+                              <span
+                                key={spec}
+                                className="rounded-full border border-[var(--border)] px-2.5 py-1 text-[10px] font-medium text-neutral-700"
+                              >
+                                {spec}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       </div>
                       <div className="text-left sm:text-right">
@@ -1049,6 +1126,7 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
                 <thead className="bg-neutral-50 text-left text-xs uppercase text-[var(--muted)]">
                   <tr>
                     <th className="px-4 py-3 !font-medium">Invoice</th>
+                    <th className="px-4 py-3 !font-medium">Foto</th>
                     <th className="px-4 py-3 !font-medium">Customer</th>
                     <th className="px-4 py-3 !font-medium">Item</th>
                     <th className="px-4 py-3 !font-medium">Payment</th>
@@ -1081,6 +1159,9 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
                             {transaction.registerName} ·{" "}
                             {transaction.cashierName}
                           </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <TransactionImagesPreview transaction={transaction} />
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex items-start gap-2">

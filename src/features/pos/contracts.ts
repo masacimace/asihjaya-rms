@@ -414,6 +414,7 @@ export type PosTransactionItem = {
   sku: string;
   productName: string;
   categoryName: string;
+  imageKey: string | null;
   finalPriceAmount: string;
 };
 

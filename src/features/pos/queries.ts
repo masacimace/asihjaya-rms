@@ -2682,6 +2682,7 @@ export async function getPosTransactionListData({
               sku: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'sku', ''), ${productItems.sku})`,
               productName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'itemDisplayName', ''), nullif(${saleItems.snapshot}->>'productName', ''), ${productItems.displayName}, ${productMasters.name})`,
               categoryName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'categoryName', ''), ${productCategories.name})`,
+              imageKey: sql<string | null>`coalesce(nullif(${saleItems.snapshot}->>'imageKey', ''), nullif(${saleItems.snapshot}->>'productImageKey', ''), ${productItems.imageKey}, ${productMasters.imageKey})`,
               finalPriceAmount: saleItems.finalPriceAmount,
             })
             .from(saleItems)
@@ -2787,6 +2788,7 @@ export async function getPosTransactionListData({
           sku: item.sku,
           productName: item.productName,
           categoryName: item.categoryName,
+          imageKey: item.imageKey,
           finalPriceAmount: item.finalPriceAmount,
         })),
         payments: transactionPayments.map((payment) => ({
@@ -2946,6 +2948,7 @@ export async function getPosTransactionDetailData({
         serialNumber: sql<string | null>`coalesce(nullif(${saleItems.snapshot}->>'serialNumber', ''), ${productItems.serialNumber})`,
         productName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'itemDisplayName', ''), nullif(${saleItems.snapshot}->>'productName', ''), ${productItems.displayName}, ${productMasters.name})`,
         categoryName: sql<string>`coalesce(nullif(${saleItems.snapshot}->>'categoryName', ''), ${productCategories.name})`,
+        imageKey: sql<string | null>`coalesce(nullif(${saleItems.snapshot}->>'imageKey', ''), nullif(${saleItems.snapshot}->>'productImageKey', ''), ${productItems.imageKey}, ${productMasters.imageKey})`,
         weightGram: sql<string | null>`coalesce(nullif(${saleItems.snapshot}->>'weightGram', ''), nullif(${saleItems.snapshot}->>'storedWeightGram', ''))`,
         purityPercent: sql<string | null>`nullif(${saleItems.snapshot}->>'purityPercent', '')`,
         exchangePurityPercent: sql<string | null>`nullif(${saleItems.snapshot}->>'exchangePurityPercent', '')`,
@@ -3065,6 +3068,7 @@ export async function getPosTransactionDetailData({
       serialNumber: item.serialNumber,
       productName: item.productName,
       categoryName: item.categoryName,
+      imageKey: item.imageKey,
       weightGram: item.weightGram,
       purityPercent: item.purityPercent,
       exchangePurityPercent: item.exchangePurityPercent,

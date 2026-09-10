@@ -1035,6 +1035,7 @@ export function BuybackProcessingWorkspace({
                   <thead className="bg-neutral-50 text-xs uppercase text-[var(--muted)]">
                     <tr>
                       <th className="px-4 py-3 sm:px-5">No. Buyback</th>
+                      <th className="px-4 py-3">Foto</th>
                       <th className="px-4 py-3">Customer</th>
                       <th className="px-4 py-3">Produk</th>
                       <th className="px-4 py-3">Proses</th>
@@ -1060,6 +1061,14 @@ export function BuybackProcessingWorkspace({
                           </p>
                         </td>
                         <td className="px-4 py-4">
+                          <ProcessingProductImage
+                            src={row.beforeImageUrl}
+                            alt={`Foto ${row.sourceDisplayName} saat Buyback diterima`}
+                            label="Masuk"
+                            className="size-14 shrink-0"
+                          />
+                        </td>
+                        <td className="px-4 py-4">
                           <p className="font-medium text-neutral-900">
                             {row.customerName}
                           </p>
@@ -1068,28 +1077,20 @@ export function BuybackProcessingWorkspace({
                           </p>
                         </td>
                         <td className="px-4 py-4">
-                          <div className="flex min-w-[280px] items-start gap-3">
-                            <ProcessingProductImage
-                              src={row.beforeImageUrl}
-                              alt={`Foto ${row.sourceDisplayName} saat Buyback diterima`}
-                              label="Masuk"
-                              className="size-14 shrink-0"
-                            />
-                            <div className="min-w-0">
-                              <p className="max-w-[220px] truncate font-medium text-neutral-900">
-                                {row.sourceDisplayName}
+                          <div className="min-w-[220px]">
+                            <p className="max-w-[220px] truncate font-medium text-neutral-900">
+                              {row.sourceDisplayName}
+                            </p>
+                            <p className="mt-1 text-xs text-[var(--muted)]">
+                              {row.sourceCategoryName} · Kadar{" "}
+                              {row.sourcePurityPercent}%
+                            </p>
+                            {row.status === "completed" &&
+                            row.resultDisplayName ? (
+                              <p className="mt-1 text-xs font-medium text-emerald-700">
+                                Hasil: {row.resultDisplayName}
                               </p>
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {row.sourceCategoryName} · Kadar{" "}
-                                {row.sourcePurityPercent}%
-                              </p>
-                              {row.status === "completed" &&
-                              row.resultDisplayName ? (
-                                <p className="mt-1 text-xs font-medium text-emerald-700">
-                                  Hasil: {row.resultDisplayName}
-                                </p>
-                              ) : null}
-                            </div>
+                            ) : null}
                           </div>
                         </td>
                         <td className="px-4 py-4">
