@@ -12,6 +12,7 @@ import {
   type ProductItemActionState,
 } from "@/features/inventory/product-item-contracts";
 import type { ProductItemOutletOption } from "@/features/inventory/product-item-queries";
+import type { ProductColorPresetOption } from "@/features/settings/product-color-presets";
 import type { ProductItemPriceRateOption } from "./product-item-form";
 
 const inputClassName =
@@ -136,10 +137,12 @@ type EditableItem = {
 export function ProductItemEditForm({
   item,
   outlets,
+  colorPresets,
   priceRates,
 }: {
   item: EditableItem;
   outlets: ProductItemOutletOption[];
+  colorPresets: ProductColorPresetOption[];
   priceRates: ProductItemPriceRateOption[];
 }) {
   const router = useRouter();
@@ -183,6 +186,17 @@ export function ProductItemEditForm({
 
   const isDraft = item.availability === "draft";
   const canEdit = item.isActive;
+  const normalizedCurrentColor = (item.color ?? "")
+    .trim()
+    .toLocaleLowerCase("id-ID");
+  const activeCurrentColor = normalizedCurrentColor
+    ? colorPresets.find(
+        (preset) =>
+          preset.name.trim().toLocaleLowerCase("id-ID") ===
+          normalizedCurrentColor,
+      )?.name ?? null
+    : null;
+  const currentColorIsActive = Boolean(activeCurrentColor);
 
   return (
     <form action={formAction} className="space-y-5">
@@ -342,15 +356,31 @@ export function ProductItemEditForm({
             <span className="mb-2 block font-medium text-neutral-800">
               Warna <span className="text-red-500">*</span>
             </span>
-            <input
+            <select
               name="color"
               required
-              maxLength={64}
-              defaultValue={item.color ?? ""}
+              defaultValue={activeCurrentColor ?? item.color ?? ""}
               disabled={!canEdit}
               className={inputClassName}
-              placeholder="Contoh: Poles, Kombinasi, Kuning"
-            />
+            >
+              <option value="">Pilih warna</option>
+              {item.color && !currentColorIsActive ? (
+                <option value={item.color}>
+                  {item.color} (nilai saat ini)
+                </option>
+              ) : null}
+              {colorPresets.map((preset) => (
+                <option key={preset.id} value={preset.name}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+            {item.color && !currentColorIsActive ? (
+              <p className="mt-1.5 text-xs leading-5 text-amber-700">
+                Warna item saat ini berasal dari data lama atau preset nonaktif.
+                Nilai ini boleh dipertahankan, atau pilih preset aktif baru.
+              </p>
+            ) : null}
             <FieldError message={state.fieldErrors?.color} />
           </label>
 

@@ -10,6 +10,7 @@ import {
   getActiveProductMasterOptions,
   getProductMasterCategoryOptions,
 } from "@/features/products/product-master-queries";
+import { getActiveProductColorPresetOptions } from "@/features/settings/product-color-presets";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 
 export const metadata = {
@@ -31,7 +32,7 @@ export default async function BuybackProcessingPage() {
     redirect("/akses-ditolak");
   }
 
-  const [data, categories, productMasters, activeRates] = await Promise.all([
+  const [data, categories, productMasters, activeRates, colorPresets] = await Promise.all([
     getBuybackProcessingData({
       organizationId: auth.organization.id,
       outletId: primaryOutlet.id,
@@ -39,6 +40,7 @@ export default async function BuybackProcessingPage() {
     getProductMasterCategoryOptions(auth.organization.id),
     getActiveProductMasterOptions(auth.organization.id),
     getActiveGoldPriceRates({ organizationId: auth.organization.id }),
+    getActiveProductColorPresetOptions(auth.organization.id),
   ]);
 
   return (
@@ -93,6 +95,7 @@ export default async function BuybackProcessingPage() {
         data={data}
         categories={categories}
         productMasters={productMasters}
+        colorPresets={colorPresets}
         priceRates={activeRates.map((rate) => ({
           purityKey: rate.purityKey,
           purityPercent: rate.purityPercent,

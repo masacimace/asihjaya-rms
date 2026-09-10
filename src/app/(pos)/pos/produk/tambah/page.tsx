@@ -9,6 +9,7 @@ import {
   getActiveProductMasterOptions,
   getProductMasterCategoryOptions,
 } from "@/features/products/product-master-queries";
+import { getActiveProductColorPresetOptions } from "@/features/settings/product-color-presets";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 
 export const metadata = {
@@ -27,7 +28,7 @@ export default async function PosCreateProductPage() {
   const primaryOutlet =
     auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0] ?? null;
 
-  const [categories, productMasters, outlets, priceRates] = await Promise.all([
+  const [categories, productMasters, outlets, priceRates, colorPresets] = await Promise.all([
     getProductMasterCategoryOptions(auth.organization.id),
     getActiveProductMasterOptions(auth.organization.id),
     getProductItemCreateOutletOptions({
@@ -35,6 +36,7 @@ export default async function PosCreateProductPage() {
       allowedOutletIds: primaryOutlet ? [primaryOutlet.id] : [],
     }),
     getActiveGoldPriceRates({ organizationId: auth.organization.id }),
+    getActiveProductColorPresetOptions(auth.organization.id),
   ]);
 
   return (
@@ -77,6 +79,7 @@ export default async function PosCreateProductPage() {
           purityKey: rate.purityKey,
           ratePerGram: rate.ratePerGram,
         }))}
+        colorPresets={colorPresets}
         canCreateProductMaster
         creationSource="pos"
       />

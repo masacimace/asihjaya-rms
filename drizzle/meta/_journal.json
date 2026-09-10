@@ -169,6 +169,13 @@
       "when": 1788343245624,
       "tag": "0023_buyback_simplified_acquisition",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789066796505,
+      "tag": "0024_product_color_presets",
+      "breakpoints": true
     }
   ]
 }

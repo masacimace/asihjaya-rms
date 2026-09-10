@@ -19,6 +19,7 @@ import {
   BuybackProcessingValidationError,
   completeBuybackProcessingTransaction,
 } from "@/features/buybacks/processing-service";
+import { resolveActiveProductColorPresetName } from "@/features/settings/product-color-presets";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
 import { deleteImageFile, storeImageFile } from "@/lib/storage/image-storage";
@@ -149,6 +150,17 @@ export async function completeBuybackProcessingAction(
     return failure(normalized.message, normalized.fieldErrors);
   }
 
+  const presetColor = await resolveActiveProductColorPresetName({
+    organizationId: auth.organization.id,
+    value: normalized.value.color,
+  });
+  if (!presetColor) {
+    return failure("Periksa kembali hasil pemrosesan.", {
+      color: "Pilih warna hasil dari preset aktif di Pengaturan.",
+    });
+  }
+  const payload = { ...normalized.value, color: presetColor };
+
   const resultImageValue = formData.get("resultImage");
   const resultImage =
     resultImageValue instanceof File && resultImageValue.size > 0
@@ -183,7 +195,7 @@ export async function completeBuybackProcessingAction(
     const requestMetadata = await getRequestMetadata();
     const result = await completeBuybackProcessingTransaction({
       auth,
-      payload: normalized.value,
+      payload,
       resultImageKey,
       newProductItemId,
       requestMetadata,

@@ -76,6 +76,7 @@ function FieldError({ message }: { message?: string }) {
 
 export function ProductMasterForm(props: ProductMasterFormProps) {
   const router = useRouter();
+  const { onSuccess } = props;
   const [status, setStatus] = useState<ProductStatus>(
     props.mode === "edit" ? props.product.status : "active",
   );
@@ -94,8 +95,8 @@ export function ProductMasterForm(props: ProductMasterFormProps) {
     if (state.status !== "success") return;
 
     router.refresh();
-    props.onSuccess?.();
-  }, [props.onSuccess, router, state.status]);
+    onSuccess?.();
+  }, [onSuccess, router, state.status]);
 
   const statusOptions: ProductStatus[] =
     props.mode === "create"

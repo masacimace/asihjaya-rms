@@ -51,6 +51,7 @@ import {
   type BuybackSubmitPayload,
 } from "@/features/buybacks/contracts";
 import type { ProductMasterCategoryOption } from "@/features/products/product-master-queries";
+import type { ProductColorPresetOption } from "@/features/settings/product-color-presets";
 import {
   formatCurrency,
   formatRupiahInput,
@@ -72,6 +73,10 @@ const processingLabels: Record<BuybackProcessingType, string> = {
   cleaning: "Cuci",
   recondition: "Rongsok",
 };
+
+function normalizeColorKey(value: string | null | undefined) {
+  return String(value ?? "").trim().toLocaleLowerCase("id-ID");
+}
 
 type DraftItem = {
   clientKey: string;
@@ -301,7 +306,14 @@ function createExternalDraft(): DraftItem {
   };
 }
 
-function mapExistingItem(item: BuybackExistingItemOption): DraftItem {
+function mapExistingItem(
+  item: BuybackExistingItemOption,
+  colorPresets: ProductColorPresetOption[],
+): DraftItem {
+  const activeColor = colorPresets.find(
+    (preset) => normalizeColorKey(preset.name) === normalizeColorKey(item.color),
+  )?.name;
+
   return {
     clientKey: createClientKey("existing"),
     source: "asihjaya",
@@ -312,7 +324,7 @@ function mapExistingItem(item: BuybackExistingItemOption): DraftItem {
     sku: item.sku,
     weightGram: item.weightGram ?? "",
     purityPercent: item.purityPercent ?? "",
-    color: item.color ?? "",
+    color: activeColor ?? item.color ?? "",
     totalAmount: "",
     imageSelected: false,
   };
@@ -342,11 +354,13 @@ function isDraftItemComplete(item: DraftItem) {
 export function BuybackWorkspace({
   initialData,
   categories,
+  colorPresets,
   initialIdempotencyKey,
   canCreate,
 }: {
   initialData: BuybackInitialData;
   categories: ProductMasterCategoryOption[];
+  colorPresets: ProductColorPresetOption[];
   initialIdempotencyKey: string;
   canCreate: boolean;
 }) {
@@ -504,7 +518,7 @@ export function BuybackWorkspace({
       setFeedback(`${item.sku} sudah ada di daftar Buyback.`);
       return;
     }
-    setItems((current) => [...current, mapExistingItem(item)]);
+    setItems((current) => [...current, mapExistingItem(item, colorPresets)]);
     setFeedback(
       `${item.sku} ditambahkan. Pilih Cuci/Rongsok, cek data fisik, isi Total Harga, lalu ambil foto kondisi barang.`,
     );
@@ -921,17 +935,42 @@ export function BuybackWorkspace({
                     <span className="mb-2 block font-medium text-neutral-800">
                       Warna *
                     </span>
-                    <input
+                    <select
                       value={item.color}
                       onChange={(event) =>
                         updateItem(item.clientKey, {
                           color: event.target.value,
                         })
                       }
-                      maxLength={64}
                       className={inputClassName}
-                      placeholder="Kuning"
-                    />
+                    >
+                      <option value="">
+                        {colorPresets.length > 0
+                          ? "Pilih warna"
+                          : "Belum ada preset warna aktif"}
+                      </option>
+                      {item.source === "asihjaya" &&
+                      item.color &&
+                      !colorPresets.some(
+                        (preset) =>
+                          normalizeColorKey(preset.name) ===
+                          normalizeColorKey(item.color),
+                      ) ? (
+                        <option value={item.color}>
+                          {item.color} (warna item saat ini)
+                        </option>
+                      ) : null}
+                      {colorPresets.map((preset) => (
+                        <option key={preset.id} value={preset.name}>
+                          {preset.name}
+                        </option>
+                      ))}
+                    </select>
+                    {colorPresets.length === 0 && item.source === "external" ? (
+                      <p className="mt-1.5 text-xs leading-5 text-amber-700">
+                        Minta admin menambahkan preset warna di Pengaturan.
+                      </p>
+                    ) : null}
                   </label>
 
                   <label className="block text-sm">

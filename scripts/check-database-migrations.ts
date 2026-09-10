@@ -154,6 +154,7 @@ async function checkLiveDatabase(): Promise<void> {
       "buybacks",
       "buyback_items",
       "buyback_payouts",
+      "product_color_presets",
     ];
 
     const tableResult = await pool.query<{ table_name: string }>(
@@ -324,6 +325,10 @@ async function checkLiveDatabase(): Promise<void> {
         ],
       ],
       ["buyback_payouts", ["buyback_id", "method", "amount", "reference", "metadata"]],
+      [
+        "product_color_presets",
+        ["organization_id", "name", "description", "is_active", "created_at", "updated_at"],
+      ],
       ["hardware_agents", ["secret_hash"]],
       ["customer_history_credentials", ["pin_hash", "credential_version", "must_change_pin"]],
       ["customer_history_sessions", ["token_hash", "absolute_expires_at", "idle_expires_at"]],
@@ -538,6 +543,8 @@ async function checkLiveDatabase(): Promise<void> {
     }
 
     const requiredIndexes = [
+      "product_color_presets_org_name_ci_uq",
+      "product_color_presets_org_active_name_idx",
       "product_batch_import_sessions_org_hash_active_uq",
       "product_batch_import_sessions_org_status_created_idx",
       "product_batch_import_sessions_expires_idx",

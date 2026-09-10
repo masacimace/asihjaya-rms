@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { ProductItemEditForm } from "@/components/inventory/product-item-edit-form";
 import { getProductItemEditContext } from "@/features/inventory/product-item-queries";
 import { getActiveGoldPriceRates } from "@/features/pricing/metal-price-rates";
+import { getActiveProductColorPresetOptions } from "@/features/settings/product-color-presets";
 import { requireAnyPermission } from "@/lib/auth/session";
 import { getImageUrl } from "@/lib/storage/image-storage";
 
@@ -44,13 +45,14 @@ export default async function EditProductItemPage({
   ]);
   const { itemId } = await params;
 
-  const [context, priceRates] = await Promise.all([
+  const [context, priceRates, colorPresets] = await Promise.all([
     getProductItemEditContext({
       organizationId: auth.organization.id,
       itemId,
       allowedOutletIds: auth.outlets.map((outlet) => outlet.id),
     }),
     getActiveGoldPriceRates({ organizationId: auth.organization.id }),
+    getActiveProductColorPresetOptions(auth.organization.id),
   ]);
 
   if (!context) {
@@ -137,6 +139,7 @@ export default async function EditProductItemPage({
           isActive: context.item.isActive,
         }}
         outlets={context.outlets}
+        colorPresets={colorPresets}
         priceRates={priceRates.map((rate) => ({
           purityKey: rate.purityKey,
           ratePerGram: rate.ratePerGram,

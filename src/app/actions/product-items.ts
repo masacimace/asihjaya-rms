@@ -23,6 +23,10 @@ import {
 } from "@/features/inventory/product-item-contracts";
 import { getNextProductItemIdentifiers } from "@/features/inventory/product-item-identifiers";
 import {
+  normalizeProductColorKey,
+  resolveActiveProductColorPresetName,
+} from "@/features/settings/product-color-presets";
+import {
   calculateJewelryBasePrice,
   getActiveGoldPriceRateMap,
   normalizePurityKey,
@@ -329,11 +333,22 @@ export async function createProductItemAction(
     fieldErrors.deductionPerGram = "Potongan per gram wajib diisi. Gunakan 0 jika tidak ada.";
   }
 
+  let validatedItemColor = itemColor;
   if (itemColor.length > 64) {
     fieldErrors.color = "Warna maksimal 64 karakter.";
   }
   if (!itemColor && targetAvailability === "available") {
     fieldErrors.color = "Warna wajib diisi.";
+  } else if (itemColor) {
+    const presetName = await resolveActiveProductColorPresetName({
+      organizationId: auth.organization.id,
+      value: itemColor,
+    });
+    if (!presetName) {
+      fieldErrors.color = "Pilih warna dari preset aktif di Pengaturan.";
+    } else {
+      validatedItemColor = presetName;
+    }
   }
 
   if (
@@ -453,7 +468,7 @@ export async function createProductItemAction(
         purityPercent: purityPercent.value,
         exchangePurityPercent: exchangePurity.value,
         size: null,
-        color: itemColor,
+        color: validatedItemColor,
         gemstone: null,
         costAmount: null,
         sellingAmount:
@@ -522,7 +537,7 @@ export async function createProductItemAction(
           weightGram: weight.value,
           purityPercent: purityPercent.value,
           exchangePurityPercent: exchangePurity.value,
-          color: itemColor,
+          color: validatedItemColor,
           condition: conditionRaw,
           pricePerGram,
           priceRatePurityKey: purityKey,
@@ -690,10 +705,25 @@ export async function updateProductItemAction(
       "Potongan per gram wajib diisi. Gunakan 0 jika tidak ada.";
   }
 
+  let validatedItemColor = itemColor;
   if (!itemColor) {
     fieldErrors.color = "Warna wajib diisi.";
   } else if (itemColor.length > 64) {
     fieldErrors.color = "Warna maksimal 64 karakter.";
+  } else {
+    const presetName = await resolveActiveProductColorPresetName({
+      organizationId: auth.organization.id,
+      value: itemColor,
+    });
+    const keepsCurrentLegacyColor =
+      normalizeProductColorKey(itemColor) ===
+      normalizeProductColorKey(existing.color);
+
+    if (presetName) {
+      validatedItemColor = presetName;
+    } else if (!keepsCurrentLegacyColor) {
+      fieldErrors.color = "Pilih warna dari preset aktif di Pengaturan.";
+    }
   }
 
   if (
@@ -823,7 +853,7 @@ export async function updateProductItemAction(
           weightGram: weight.value,
           purityPercent: purityPercent.value,
           exchangePurityPercent: exchangePurity.value,
-          color: itemColor,
+          color: validatedItemColor,
           // Kolom lama ini masih dipertahankan sementara sampai schema cleanup R4.
           // Harga transaksi final tidak lagi diedit dari Product Item.
           costAmount: existing.costAmount,
@@ -895,7 +925,7 @@ export async function updateProductItemAction(
           weightGram: weight.value,
           purityPercent: purityPercent.value,
           exchangePurityPercent: exchangePurity.value,
-          color: itemColor,
+          color: validatedItemColor,
           pricePerGram,
           priceRatePurityKey: purityKey,
           activePriceRateFound: Boolean(activeRate),

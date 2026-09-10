@@ -65,14 +65,14 @@ const quickActions = [
   },
   {
     label: "Riwayat Buyback",
-    description: "Tinjau transaksi Buyback",
+    description: "Riwayat transaksi Buyback",
     href: "/admin/buyback?q=&range=thisMonth&process=all&payout=all",
     icon: History,
   },
   {
     label: "Pemasukan Bank",
-    description: "Tinjau transaksi Buyback",
-    href: "/admin/buyback?q=&range=thisMonth&process=all&payout=all",
+    description: "transaksi pemasukan bank",
+    href: "/admin/operasional/pemasukan-bank",
     icon: Banknote,
   },
 ] as const;

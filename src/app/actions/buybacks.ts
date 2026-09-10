@@ -2,13 +2,13 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { db } from "@/db";
-import { buybacks } from "@/db/schema";
+import { buybacks, productItems } from "@/db/schema";
 import {
   normalizeBuybackDecimal,
   normalizeBuybackMoney,
@@ -33,6 +33,10 @@ import {
   type BuybackItemArtifact,
 } from "@/features/buybacks/service";
 import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
+import {
+  getActiveProductColorPresetMap,
+  normalizeProductColorKey,
+} from "@/features/settings/product-color-presets";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 import { buildBuybackReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
@@ -335,7 +339,7 @@ export async function completeBuybackAction(
   if (!normalized.ok) {
     return failure(normalized.message, normalized.fieldErrors);
   }
-  const payload = normalized.value;
+  let payload = normalized.value;
 
   try {
     const existingReplay = await getExistingBuybackReplayResult({
@@ -356,6 +360,68 @@ export async function completeBuybackAction(
     console.error("Gagal memeriksa replay Buyback:", error);
     return failure(
       "Buyback belum bisa diproses karena terjadi kendala sistem. Coba ulang.",
+    );
+  }
+
+  try {
+    const activeColorMap = await getActiveProductColorPresetMap(
+      auth.organization.id,
+    );
+    const existingProductItemIds = payload.items
+      .filter((item) => item.source === "asihjaya" && item.productItemId)
+      .map((item) => item.productItemId!)
+      .filter((value, index, values) => values.indexOf(value) === index);
+
+    const existingColorRows =
+      existingProductItemIds.length > 0
+        ? await db
+            .select({ id: productItems.id, color: productItems.color })
+            .from(productItems)
+            .where(
+              and(
+                eq(productItems.organizationId, auth.organization.id),
+                inArray(productItems.id, existingProductItemIds),
+              ),
+            )
+        : [];
+    const existingColorMap = new Map(
+      existingColorRows.map((row) => [row.id, row.color]),
+    );
+    const colorFieldErrors: Record<string, string> = {};
+
+    const items = payload.items.map((item, index) => {
+      const activePreset = activeColorMap.get(normalizeProductColorKey(item.color));
+      if (activePreset) {
+        return { ...item, color: activePreset.name };
+      }
+
+      const existingColor = item.productItemId
+        ? existingColorMap.get(item.productItemId)
+        : null;
+      const keepsExistingLegacyColor =
+        item.source === "asihjaya" &&
+        Boolean(existingColor) &&
+        normalizeProductColorKey(existingColor) ===
+          normalizeProductColorKey(item.color);
+
+      if (keepsExistingLegacyColor) {
+        return item;
+      }
+
+      colorFieldErrors[`items.${index}.color`] =
+        "Pilih warna dari preset aktif di Pengaturan.";
+      return item;
+    });
+
+    if (Object.keys(colorFieldErrors).length > 0) {
+      return failure("Periksa kembali warna item Buyback.", colorFieldErrors);
+    }
+
+    payload = { ...payload, items };
+  } catch (error) {
+    console.error("Gagal memvalidasi preset warna Buyback:", error);
+    return failure(
+      "Preset warna belum bisa divalidasi karena terjadi kendala sistem. Coba ulang.",
     );
   }
 

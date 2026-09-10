@@ -17,6 +17,7 @@ import {
   getBuybackInitialData,
 } from "@/features/buybacks/queries";
 import { getProductMasterCategoryOptions } from "@/features/products/product-master-queries";
+import { getActiveProductColorPresetOptions } from "@/features/settings/product-color-presets";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +57,7 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
   const detailId =
     query.detail && UUID_PATTERN.test(query.detail) ? query.detail : null;
 
-  const [initialData, categories, historyData] = await Promise.all([
+  const [initialData, categories, historyData, colorPresets] = await Promise.all([
     getBuybackInitialData({
       organizationId: auth.organization.id,
       outletId: primaryOutlet.id,
@@ -68,6 +69,7 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
       detailId,
       limit: 5,
     }),
+    getActiveProductColorPresetOptions(auth.organization.id),
   ]);
 
   const canCreate = hasPermission(auth, "buybacks.create");
@@ -161,6 +163,7 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
           <BuybackWorkspace
             initialData={initialData}
             categories={categories}
+            colorPresets={colorPresets}
             initialIdempotencyKey={randomUUID()}
             canCreate={canCreate}
           />

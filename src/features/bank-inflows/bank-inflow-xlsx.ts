@@ -3,7 +3,6 @@ import * as XLSX from "xlsx";
 import type {
   BankInflowFilters,
   BankInflowMovement,
-  BankInflowPeriod,
   BankInflowReportData,
 } from "@/features/bank-inflows/contracts";
 import { styleBankInflowWorkbookBuffer } from "@/features/bank-inflows/bank-inflow-xlsx-styles";
@@ -79,7 +78,6 @@ function buildSummaryWorksheet({
 }) {
   const summaryStartRow = 10;
   const bankSectionRow = 16;
-  const bankHeaderRow = 17;
   const bankDataStartRow = 18;
 
   const rows: unknown[][] = [

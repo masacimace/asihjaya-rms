@@ -2,6 +2,7 @@ import {
   ArrowRight,
   BadgeDollarSign,
   CreditCard,
+  Palette,
   Send,
   Settings2,
   SlidersHorizontal,
@@ -27,6 +28,21 @@ const settingsGroups = [
         href: "/admin/pengaturan/pembayaran/manual-edc",
         icon: CreditCard,
         badge: "Pembayaran",
+      },
+    ],
+  },
+  {
+    title: "Master Produk",
+    description:
+      "Kelola pilihan master yang digunakan ulang pada form produk dan Buyback.",
+    items: [
+      {
+        title: "Varian Warna Produk",
+        description:
+          "Kelola preset warna aktif agar input warna konsisten pada produk, Buyback, dan pemrosesan.",
+        href: "/admin/pengaturan/warna-produk",
+        icon: Palette,
+        badge: "Preset Warna",
       },
     ],
   },

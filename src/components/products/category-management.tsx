@@ -2,7 +2,6 @@
 
 import {
   ChevronRight,
-  CircleDot,
   FolderPen,
   Plus,
   Shapes,

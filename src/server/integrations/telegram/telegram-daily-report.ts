@@ -152,22 +152,6 @@ function formatTime(value: string, timeZone: string): string {
 
 const BIGINT_ZERO = BigInt(0);
 
-function formatRupiah(value: string): string {
-  const amount = BigInt(value);
-  const absolute = amount < BIGINT_ZERO ? -amount : amount;
-  const formatted = new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 0,
-  }).format(absolute);
-  return amount < BIGINT_ZERO ? `-Rp${formatted}` : `Rp${formatted}`;
-}
-
-function formatRate(value: string): string {
-  return `${new Intl.NumberFormat("id-ID", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(value))}%`;
-}
-
 export function buildTelegramDailyFinanceEventKey(
   outletId: string,
   businessDate: string,

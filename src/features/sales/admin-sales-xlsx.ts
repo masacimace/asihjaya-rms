@@ -400,7 +400,6 @@ function createDetailWorksheet({
     [],
     headers,
   ];
-  const headerRowIndex = topRows.length - 1;
   const firstDataRowIndex = topRows.length;
   const worksheet = XLSX.utils.aoa_to_sheet([...topRows, ...rows]);
 

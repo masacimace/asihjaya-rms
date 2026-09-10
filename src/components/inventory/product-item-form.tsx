@@ -12,6 +12,7 @@ import {
   type ProductItemActionState,
 } from "@/features/inventory/product-item-contracts";
 import type { ProductItemOutletOption } from "@/features/inventory/product-item-queries";
+import type { ProductColorPresetOption } from "@/features/settings/product-color-presets";
 import type {
   ProductMasterCategoryOption,
   ProductMasterOption,
@@ -98,6 +99,7 @@ export function ProductItemForm({
   productMasters: initialProductMasters,
   outlets,
   priceRates,
+  colorPresets,
   initialProductMasterId,
   canCreateProductMaster,
   creationSource = "admin",
@@ -106,6 +108,7 @@ export function ProductItemForm({
   productMasters: ProductMasterOption[];
   outlets: ProductItemOutletOption[];
   priceRates: ProductItemPriceRateOption[];
+  colorPresets: ProductColorPresetOption[];
   initialProductMasterId?: string;
   canCreateProductMaster: boolean;
   creationSource?: "admin" | "pos";
@@ -365,13 +368,28 @@ export function ProductItemForm({
               <span className="mb-2 block font-medium text-neutral-800">
                 Warna <span className="text-red-500">*</span>
               </span>
-              <input
+              <select
                 name="color"
                 required
-                maxLength={64}
+                defaultValue=""
                 className={inputClassName}
-                placeholder="Contoh: Poles, Kombinasi, Kuning"
-              />
+              >
+                <option value="">
+                  {colorPresets.length > 0
+                    ? "Pilih warna"
+                    : "Belum ada preset warna aktif"}
+                </option>
+                {colorPresets.map((preset) => (
+                  <option key={preset.id} value={preset.name}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+              {colorPresets.length === 0 ? (
+                <p className="mt-1.5 text-xs leading-5 text-amber-700">
+                  Tambahkan preset dari Admin → Pengaturan → Varian Warna Produk.
+                </p>
+              ) : null}
               <FieldError message={state.fieldErrors?.color} />
             </label>
 

@@ -31,6 +31,7 @@ import type {
   ProductMasterCategoryOption,
   ProductMasterOption,
 } from "@/features/products/product-master-queries";
+import type { ProductColorPresetOption } from "@/features/settings/product-color-presets";
 import {
   formatCurrency,
   formatRupiahInput,
@@ -43,6 +44,10 @@ const inputClassName =
 
 function processingLabel(type: BuybackProcessingQueueRow["processingType"]) {
   return type === "cleaning" ? "Cuci" : "Rongsok";
+}
+
+function normalizeColorKey(value: string | null | undefined) {
+  return String(value ?? "").trim().toLocaleLowerCase("id-ID");
 }
 
 function normalizePurityKey(value: string) {
@@ -224,6 +229,7 @@ function ProcessingDrawer({
   row,
   categories,
   productMasters,
+  colorPresets,
   priceRates,
   onClose,
   onCompleted,
@@ -231,6 +237,7 @@ function ProcessingDrawer({
   row: BuybackProcessingQueueRow;
   categories: ProductMasterCategoryOption[];
   productMasters: ProductMasterOption[];
+  colorPresets: ProductColorPresetOption[];
   priceRates: BuybackProcessingRateOption[];
   onClose: () => void;
   onCompleted: (message: string) => void;
@@ -259,9 +266,11 @@ function ProcessingDrawer({
   const [displayName, setDisplayName] = useState(row.sourceDisplayName);
   const [weightGram, setWeightGram] = useState(row.sourceWeightGram);
   const [purityPercent, setPurityPercent] = useState(row.sourcePurityPercent);
-  const [color, setColor] = useState(
-    row.sourceColor === "-" ? "" : row.sourceColor,
-  );
+  const initialColor = colorPresets.find(
+    (preset) =>
+      normalizeColorKey(preset.name) === normalizeColorKey(row.sourceColor),
+  )?.name;
+  const [color, setColor] = useState(initialColor ?? "");
   const [pricePerGramInput, setPricePerGramInput] = useState("");
   const [priceTouched, setPriceTouched] = useState(false);
   const [quickMasterOpen, setQuickMasterOpen] = useState(false);
@@ -531,13 +540,27 @@ function ProcessingDrawer({
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Warna *
                 </span>
-                <input
+                <select
                   value={color}
                   onChange={(event) => setColor(event.target.value)}
-                  maxLength={64}
                   className={inputClassName}
-                  placeholder="Kuning"
-                />
+                >
+                  <option value="">
+                    {colorPresets.length > 0
+                      ? "Pilih warna hasil"
+                      : "Belum ada preset warna aktif"}
+                  </option>
+                  {colorPresets.map((preset) => (
+                    <option key={preset.id} value={preset.name}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+                {colorPresets.length === 0 ? (
+                  <p className="mt-1.5 text-xs leading-5 text-amber-700">
+                    Minta admin menambahkan preset warna di Pengaturan.
+                  </p>
+                ) : null}
                 {state.fieldErrors?.color ? (
                   <p className="mt-1.5 text-xs text-red-600">
                     {state.fieldErrors.color}
@@ -653,12 +676,14 @@ export function BuybackProcessingWorkspace({
   data,
   categories,
   productMasters,
+  colorPresets,
   priceRates,
   canProcess,
 }: {
   data: BuybackProcessingData;
   categories: ProductMasterCategoryOption[];
   productMasters: ProductMasterOption[];
+  colorPresets: ProductColorPresetOption[];
   priceRates: BuybackProcessingRateOption[];
   canProcess: boolean;
 }) {
@@ -957,6 +982,7 @@ export function BuybackProcessingWorkspace({
           row={selected}
           categories={categories}
           productMasters={productMasters}
+          colorPresets={colorPresets}
           priceRates={priceRates}
           onClose={() => setSelected(null)}
           onCompleted={(message) => {

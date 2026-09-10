@@ -14,7 +14,6 @@ import {
 import { useRouter } from "next/navigation";
 import {
   useActionState,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -88,7 +87,16 @@ export function MetalPriceRateForm({
   );
   const [isRetiring, startRetireTransition] = useTransition();
   const [state, formAction] = useActionState(
-    saveMetalPriceRatesAction,
+    async (previousState: MetalPriceRateActionState, formData: FormData) => {
+      const result = await saveMetalPriceRatesAction(previousState, formData);
+
+      if (result.status === "success") {
+        setShowAddRate(false);
+        router.refresh();
+      }
+
+      return result;
+    },
     initialMetalPriceRateActionState,
   );
 
@@ -115,13 +123,6 @@ export function MetalPriceRateForm({
       ),
     [missingRows, normalizedQuery],
   );
-
-  useEffect(() => {
-    if (state.status === "success") {
-      setShowAddRate(false);
-      router.refresh();
-    }
-  }, [router, state.status]);
 
   function handleRetire(row: MetalPriceRateSettingRow) {
     if (row.itemCount > 0 || !row.ratePerGram || isRetiring) return;

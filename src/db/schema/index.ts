@@ -570,6 +570,35 @@ export const productCategories = pgTable(
   ],
 );
 
+export const productColorPresets = pgTable(
+  "product_color_presets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    name: varchar("name", { length: 64 }).notNull(),
+    description: text("description"),
+    isActive: boolean("is_active").default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("product_color_presets_org_name_ci_uq").on(
+      table.organizationId,
+      sql`lower(btrim(${table.name}))`,
+    ),
+    index("product_color_presets_org_active_name_idx").on(
+      table.organizationId,
+      table.isActive,
+      table.name,
+    ),
+    check(
+      "product_color_presets_name_not_blank_ck",
+      sql`length(btrim(${table.name})) > 0 and ${table.name} = btrim(${table.name})`,
+    ),
+  ],
+);
+
 export const metals = pgTable(
   "metals",
   {

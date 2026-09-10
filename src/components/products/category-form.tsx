@@ -81,6 +81,7 @@ function FieldError({ message }: { message?: string }) {
 
 export function CategoryForm(props: CategoryFormProps) {
   const router = useRouter();
+  const { onSuccess } = props;
   const [status, setStatus] = useState<"active" | "inactive">(
     props.mode === "edit" && !props.category.isActive ? "inactive" : "active",
   );
@@ -99,8 +100,8 @@ export function CategoryForm(props: CategoryFormProps) {
     if (state.status !== "success") return;
 
     router.refresh();
-    props.onSuccess?.();
-  }, [props.onSuccess, router, state.status]);
+    onSuccess?.();
+  }, [onSuccess, router, state.status]);
 
   const activeProductCount =
     props.mode === "edit" ? (props.category.activeProductCount ?? 0) : 0;

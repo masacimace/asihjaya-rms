@@ -12,6 +12,7 @@ import {
   getActiveProductMasterOptions,
   getProductMasterCategoryOptions,
 } from "@/features/products/product-master-queries";
+import { getActiveProductColorPresetOptions } from "@/features/settings/product-color-presets";
 import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
 
 export const metadata = {
@@ -39,7 +40,7 @@ export default async function CreatePhysicalItemPage({
 
   if (!existingContext || existingContext.product.status !== "active") notFound();
 
-  const [categories, productMasters, outlets, priceRates] = await Promise.all([
+  const [categories, productMasters, outlets, priceRates, colorPresets] = await Promise.all([
     getProductMasterCategoryOptions(auth.organization.id),
     getActiveProductMasterOptions(auth.organization.id),
     getProductItemCreateOutletOptions({
@@ -47,6 +48,7 @@ export default async function CreatePhysicalItemPage({
       allowedOutletIds: auth.outlets.map((outlet) => outlet.id),
     }),
     getActiveGoldPriceRates({ organizationId: auth.organization.id }),
+    getActiveProductColorPresetOptions(auth.organization.id),
   ]);
 
   return (
@@ -82,6 +84,7 @@ export default async function CreatePhysicalItemPage({
           purityKey: rate.purityKey,
           ratePerGram: rate.ratePerGram,
         }))}
+        colorPresets={colorPresets}
         initialProductMasterId={existingContext.product.id}
         canCreateProductMaster={hasPermission(auth, "products.manage")}
       />
