@@ -223,6 +223,7 @@ export type AdminSaleDetailPayment = AdminSaleListPayment & {
 
 export type AdminSaleDetailItem = AdminSaleListItemPreview & {
   id: string;
+  imageKey: string | null;
   lineNumber: number;
   serialNumber: string | null;
   weightGram: string | null;

@@ -38,8 +38,10 @@ import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documen
 import { getAdminSaleDetailData } from "@/features/sales/admin-queries";
 import { getSaleCorrectionEligibility } from "@/features/sales/correction-eligibility";
 import { requirePermission } from "@/lib/auth/session";
+import { getImageUrl } from "@/lib/storage/image-storage";
 import { cn } from "@/lib/utils";
 
+import { ProductImage } from "@/components/media/product-image";
 import { SaleSensitiveActionsCard } from "@/components/sales/sale-sensitive-actions-card";
 
 import { ReprintSubmitButton } from "./reprint-button";
@@ -458,7 +460,7 @@ export default async function SaleDetailPage({
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] min-w-0 space-y-5 overflow-x-hidden sm:space-y-6">
+    <div className="w-full min-w-0 space-y-5 overflow-x-hidden sm:space-y-6">
       <nav className="flex min-w-0 flex-col gap-4 rounded-2xl border border-[var(--border)] bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
         <Link
           href="/admin/penjualan"
@@ -544,11 +546,113 @@ export default async function SaleDetailPage({
             description="Detail item fisik jewelry yang tercatat pada transaksi ini."
             icon={<ShoppingBag className="size-5" />}
           >
-            <div className="w-full max-w-full overflow-x-auto rounded-2xl border border-[var(--border)]">
-              <table className="w-full min-w-[760px] text-left text-sm text-neutral-600">
+            <div className="space-y-3 lg:hidden">
+              {sale.items.map((item) => {
+                const imageUrl = getImageUrl(item.imageKey);
+                const specs = [
+                  item.weightGram
+                    ? `Berat ${formatDecimal(item.weightGram, "g")}`
+                    : null,
+                  item.purityPercent
+                    ? `Kadar ${formatDecimal(item.purityPercent, "%")}`
+                    : null,
+                  item.size ? `Uk. ${item.size}` : null,
+                  item.color ? `Warna ${item.color}` : null,
+                  item.gemstone ? item.gemstone : null,
+                ].filter((value): value is string => Boolean(value));
+
+                return (
+                  <article
+                    key={item.id}
+                    className="min-w-0 rounded-2xl border border-[var(--border)] bg-neutral-50/40 p-4"
+                  >
+                    <div className="flex justify-center">
+                      <ProductImage
+                        src={imageUrl}
+                        alt={`Foto ${item.productName}`}
+                        className="size-28 rounded-2xl border border-[var(--border)] sm:size-32"
+                      />
+                    </div>
+
+                    <div className="mt-4 min-w-0 text-center">
+                      <p className="break-words text-base font-semibold text-neutral-950">
+                        {item.productName}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {item.categoryName}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 grid min-w-0 gap-3 rounded-2xl border border-[var(--border)] bg-white p-3 sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">
+                          SKU
+                        </p>
+                        <p className="mt-1 break-all font-mono text-sm font-medium text-neutral-950">
+                          {item.sku}
+                        </p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">
+                          Barcode
+                        </p>
+                        <p className="mt-1 break-all font-mono text-sm text-neutral-700">
+                          {item.barcode}
+                        </p>
+                      </div>
+                    </div>
+
+                    {specs.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                        {specs.map((spec) => (
+                          <span
+                            key={spec}
+                            className="rounded-full border border-[var(--border)] bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-700"
+                          >
+                            {spec}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4 text-sm">
+                      <div className="flex min-w-0 items-start justify-between gap-4">
+                        <span className="shrink-0 text-[var(--muted)]">Harga list</span>
+                        <span className="min-w-0 break-words text-right font-medium text-neutral-950">
+                          {formatMoney(item.listPriceAmount)}
+                        </span>
+                      </div>
+                      <div className="flex min-w-0 items-start justify-between gap-4">
+                        <span className="shrink-0 text-[var(--muted)]">Diskon</span>
+                        <span className={cn(
+                          "min-w-0 break-words text-right font-medium",
+                          Number(item.discountAmount) > 0
+                            ? "text-red-600"
+                            : "text-neutral-500",
+                        )}>
+                          {Number(item.discountAmount) > 0
+                            ? formatMoney(item.discountAmount)
+                            : "-"}
+                        </span>
+                      </div>
+                      <div className="flex min-w-0 items-start justify-between gap-4 border-t border-dashed border-[var(--border)] pt-3">
+                        <span className="shrink-0 font-semibold text-neutral-950">Subtotal</span>
+                        <span className="min-w-0 break-words text-right text-base font-semibold text-neutral-950">
+                          {formatMoney(item.finalPriceAmount)}
+                        </span>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="hidden w-full max-w-full overflow-x-auto rounded-2xl border border-[var(--border)] lg:block">
+              <table className="w-full min-w-[900px] text-left text-sm text-neutral-600">
                 <thead className="bg-neutral-50/80 text-xs text-neutral-500">
                   <tr>
                     <th className="whitespace-nowrap px-4 py-3 font-medium">Item</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-center font-medium">Foto</th>
                     <th className="whitespace-nowrap px-4 py-3 font-medium">SKU / Barcode</th>
                     <th className="whitespace-nowrap px-4 py-3 text-center font-medium">Berat</th>
                     <th className="whitespace-nowrap px-4 py-3 text-center font-medium">Kadar</th>
@@ -567,8 +671,18 @@ export default async function SaleDetailPage({
                         <p className="mt-1 text-xs text-neutral-500">
                           {item.categoryName}
                           {item.size ? ` • Size ${item.size}` : ""}
+                          {item.color ? ` • ${item.color}` : ""}
                           {item.gemstone ? ` • ${item.gemstone}` : ""}
                         </p>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <div className="flex justify-center">
+                          <ProductImage
+                            src={getImageUrl(item.imageKey)}
+                            alt={`Foto ${item.productName}`}
+                            className="size-16 rounded-xl border border-[var(--border)]"
+                          />
+                        </div>
                       </td>
                       <td className="px-4 py-4 align-top">
                         <p className="font-mono font-medium text-neutral-950">
