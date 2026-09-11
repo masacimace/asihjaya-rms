@@ -153,6 +153,7 @@ export type BuybackHistoryRow = {
   outletCode: string;
   outletName: string;
   itemCount: number;
+  processingCount: number;
   pendingProcessingCount: number;
   imagePreviews: BuybackHistoryImagePreview[];
   payouts: BuybackHistoryPayoutSummary[];

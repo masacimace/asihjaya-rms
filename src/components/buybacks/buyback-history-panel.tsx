@@ -78,6 +78,45 @@ function receiptStatusLabel(status: string) {
   return labels[status] ?? status;
 }
 
+function getProcessingSummary({
+  processingCount,
+  pendingProcessingCount,
+}: Pick<BuybackHistoryRow, "processingCount" | "pendingProcessingCount">) {
+  if (pendingProcessingCount > 0) {
+    return {
+      badgeLabel: `${pendingProcessingCount} menunggu proses`,
+      badgeClassName: "bg-amber-50 text-amber-700",
+      detailLabel: `${pendingProcessingCount} menunggu Cuci/Rongsok`,
+    };
+  }
+
+  if (processingCount > 0) {
+    return {
+      badgeLabel: "Selesai Diproses",
+      badgeClassName: "bg-emerald-50 text-emerald-700",
+      detailLabel: "Semua Cuci/Rongsok selesai",
+    };
+  }
+
+  return {
+    badgeLabel: "Tidak Perlu Proses",
+    badgeClassName: "bg-neutral-100 text-neutral-700",
+    detailLabel: "Tidak perlu Cuci/Rongsok",
+  };
+}
+
+function ProcessingSummaryBadge({ row }: { row: BuybackHistoryRow }) {
+  const summary = getProcessingSummary(row);
+
+  return (
+    <span
+      className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${summary.badgeClassName}`}
+    >
+      {summary.badgeLabel}
+    </span>
+  );
+}
+
 function BuybackImagesPreview({
   row,
   variant = "desktop",
@@ -298,15 +337,7 @@ export function BuybackHistoryPanel({
                     <PackageCheck className="size-3.5" />
                     {row.itemCount} Item
                   </span>
-                  {row.pendingProcessingCount > 0 ? (
-                    <span className="whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                      {row.pendingProcessingCount} menunggu proses
-                    </span>
-                  ) : (
-                    <span className="whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                      Tidak ada antrean
-                    </span>
-                  )}
+                  <ProcessingSummaryBadge row={row} />
                 </div>
 
                 {row.payouts.length > 0 ? (
@@ -335,21 +366,24 @@ export function BuybackHistoryPanel({
 
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[1060px] text-left text-sm">
-              <thead className="bg-neutral-50 text-xs text-[var(--muted)]">
+              <thead className="bg-neutral-50 text-xs uppercase text-[var(--muted)]">
                 <tr>
-                  <th className="px-4 py-3 font-medium sm:px-5">No. Buyback</th>
-                  <th className="px-4 py-3 font-medium">Foto</th>
-                  <th className="px-4 py-3 font-medium">Customer</th>
-                  <th className="px-4 py-3 font-medium">Item</th>
-                  <th className="px-4 py-3 font-medium">Proses</th>
-                  <th className="px-4 py-3 font-medium">Payout</th>
-                  <th className="px-4 py-3 text-right font-medium">Total</th>
-                  <th className="px-4 py-3 sm:px-5 font-medium">Aksi</th>
+                  <th className="px-4 py-3 sm:px-5">No. Buyback</th>
+                  <th className="px-4 py-3">Foto</th>
+                  <th className="px-4 py-3">Customer</th>
+                  <th className="px-4 py-3">Item</th>
+                  <th className="px-4 py-3">Proses</th>
+                  <th className="px-4 py-3">Payout</th>
+                  <th className="px-4 py-3 text-right">Total</th>
+                  <th className="px-4 py-3 sm:px-5">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {data.rows.map((row) => (
-                  <tr key={row.id} className="align-top hover:bg-neutral-50/60">
+                  <tr
+                    key={row.id}
+                    className="align-top hover:bg-neutral-50/60"
+                  >
                     <td className="px-4 py-4 sm:px-5">
                       <p className="font-semibold text-neutral-950">
                         {row.buybackNumber}
@@ -379,15 +413,7 @@ export function BuybackHistoryPanel({
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      {row.pendingProcessingCount > 0 ? (
-                        <span className="whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                          {row.pendingProcessingCount} menunggu proses
-                        </span>
-                      ) : (
-                        <span className="whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                          Tidak ada antrean
-                        </span>
-                      )}
+                      <ProcessingSummaryBadge row={row} />
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-1.5">
@@ -557,11 +583,7 @@ function BuybackDetailPanel({
             icon={<PackageCheck className="size-4" />}
             label="Jumlah item"
             value={`${detail.itemCount} item`}
-            helper={
-              detail.pendingProcessingCount > 0
-                ? `${detail.pendingProcessingCount} menunggu Cuci/Rongsok`
-                : "Tidak ada antrean proses"
-            }
+            helper={getProcessingSummary(detail).detailLabel}
           />
           <InfoCard
             icon={<CircleDollarSign className="size-4" />}

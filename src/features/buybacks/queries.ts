@@ -439,6 +439,7 @@ export async function getBuybackHistoryData({
             .select({
               buybackId: buybackItems.buybackId,
               itemCount: sql<number>`count(${buybackItems.id})::int`,
+              processingCount: sql<number>`count(${buybackItemProcessings.id})::int`,
               pendingProcessingCount: sql<number>`coalesce(sum(case when ${buybackItemProcessings.status} = 'pending' then 1 else 0 end), 0)::int`,
             })
             .from(buybackItems)
@@ -476,6 +477,7 @@ export async function getBuybackHistoryData({
       row.buybackId,
       {
         itemCount: Number(row.itemCount ?? 0),
+        processingCount: Number(row.processingCount ?? 0),
         pendingProcessingCount: Number(row.pendingProcessingCount ?? 0),
       },
     ]),
@@ -509,6 +511,7 @@ export async function getBuybackHistoryData({
   const historyRows: BuybackHistoryRow[] = rows.map((row) => ({
     ...row,
     itemCount: countByBuyback.get(row.id)?.itemCount ?? 0,
+    processingCount: countByBuyback.get(row.id)?.processingCount ?? 0,
     pendingProcessingCount:
       countByBuyback.get(row.id)?.pendingProcessingCount ?? 0,
     imagePreviews: imagePreviewsByBuyback.get(row.id) ?? [],
@@ -559,6 +562,7 @@ export async function getBuybackHistoryData({
       db
         .select({
           itemCount: sql<number>`count(${buybackItems.id})::int`,
+          processingCount: sql<number>`count(${buybackItemProcessings.id})::int`,
           pendingProcessingCount: sql<number>`coalesce(sum(case when ${buybackItemProcessings.status} = 'pending' then 1 else 0 end), 0)::int`,
         })
         .from(buybackItems)
@@ -590,6 +594,7 @@ export async function getBuybackHistoryData({
     detailBase = {
       ...olderDetail,
       itemCount: Number(olderCount[0]?.itemCount ?? 0),
+      processingCount: Number(olderCount[0]?.processingCount ?? 0),
       pendingProcessingCount: Number(
         olderCount[0]?.pendingProcessingCount ?? 0,
       ),
