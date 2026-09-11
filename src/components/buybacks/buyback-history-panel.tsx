@@ -335,24 +335,21 @@ export function BuybackHistoryPanel({
 
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[1060px] text-left text-sm">
-              <thead className="bg-neutral-50 text-xs uppercase text-[var(--muted)]">
+              <thead className="bg-neutral-50 text-xs text-[var(--muted)]">
                 <tr>
-                  <th className="px-4 py-3 sm:px-5">No. Buyback</th>
-                  <th className="px-4 py-3">Foto</th>
-                  <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3">Item</th>
-                  <th className="px-4 py-3">Proses</th>
-                  <th className="px-4 py-3">Payout</th>
-                  <th className="px-4 py-3 text-right">Total</th>
-                  <th className="px-4 py-3 sm:px-5">Aksi</th>
+                  <th className="px-4 py-3 font-medium sm:px-5">No. Buyback</th>
+                  <th className="px-4 py-3 font-medium">Foto</th>
+                  <th className="px-4 py-3 font-medium">Customer</th>
+                  <th className="px-4 py-3 font-medium">Item</th>
+                  <th className="px-4 py-3 font-medium">Proses</th>
+                  <th className="px-4 py-3 font-medium">Payout</th>
+                  <th className="px-4 py-3 text-right font-medium">Total</th>
+                  <th className="px-4 py-3 sm:px-5 font-medium">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {data.rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="align-top hover:bg-neutral-50/60"
-                  >
+                  <tr key={row.id} className="align-top hover:bg-neutral-50/60">
                     <td className="px-4 py-4 sm:px-5">
                       <p className="font-semibold text-neutral-950">
                         {row.buybackNumber}

@@ -91,7 +91,9 @@ export default async function EditProductItemPage({
               Edit {itemName}
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Koreksi data fisik produk tanpa mengubah SKU, barcode, Product Master, atau histori inventaris. Harga jual final tetap ditentukan pada transaksi POS.
+              Koreksi data fisik produk tanpa mengubah SKU, barcode, Product
+              Master, atau histori inventaris. Harga jual final tetap ditentukan
+              pada transaksi POS.
             </p>
           </div>
 
@@ -102,7 +104,9 @@ export default async function EditProductItemPage({
             </div>
             <div className="flex items-center gap-2">
               <Box className="size-4 shrink-0 text-[var(--accent)]" />
-              <span>{context.item.productCode} — {context.item.productName}</span>
+              <span>
+                {context.item.productCode} — {context.item.productName}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <Store className="size-4 shrink-0 text-[var(--accent)]" />

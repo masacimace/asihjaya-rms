@@ -1051,7 +1051,7 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
         {dashboard.recentJobs.length > 0 ? (
           <>
             <div className="hidden lg:block">
-              <div className="grid min-w-[1120px] grid-cols-[1.45fr_0.85fr_1fr_1fr_1fr_1.25fr_0.8fr] border-b border-[var(--border)] bg-[var(--surface-muted)] px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              <div className="grid min-w-[1120px] grid-cols-[1.45fr_0.85fr_1fr_1fr_1fr_1.25fr_0.8fr] border-b border-[var(--border)] bg-[var(--surface-muted)] px-5 py-3 text-xs font-medium text-[var(--muted)]">
                 <div>Job</div>
                 <div>Status</div>
                 <div>Agent</div>

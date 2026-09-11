@@ -441,18 +441,16 @@ export default async function BankInflowPage({ searchParams }: PageProps) {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-[820px] w-full text-sm">
-              <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
+              <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
                 <tr>
-                  <th className="px-5 py-3 font-semibold">Bank</th>
-                  <th className="px-5 py-3 text-right font-semibold">EDC</th>
-                  <th className="px-5 py-3 text-right font-semibold">
-                    Transfer
-                  </th>
-                  <th className="px-5 py-3 text-right font-semibold">
+                  <th className="px-5 py-3 font-medium">Bank</th>
+                  <th className="px-5 py-3 text-right font-medium">EDC</th>
+                  <th className="px-5 py-3 text-right font-medium">Transfer</th>
+                  <th className="px-5 py-3 text-right font-medium">
                     Penerimaan
                   </th>
-                  <th className="px-5 py-3 text-right font-semibold">Refund</th>
-                  <th className="px-5 py-3 text-right font-semibold">Bersih</th>
+                  <th className="px-5 py-3 text-right font-medium">Refund</th>
+                  <th className="px-5 py-3 text-right font-medium">Bersih</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
@@ -519,27 +517,25 @@ export default async function BankInflowPage({ searchParams }: PageProps) {
           <>
             <div className="hidden overflow-x-auto lg:block">
               <table className="min-w-[1220px] w-full text-sm">
-                <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
+                <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
                   <tr>
-                    <th className="px-4 py-3 font-semibold">Tanggal</th>
-                    <th className="px-4 py-3 font-semibold">Invoice</th>
-                    <th className="px-4 py-3 font-semibold">Customer</th>
-                    <th className="px-4 py-3 font-semibold">Outlet</th>
-                    <th className="px-4 py-3 font-semibold">Bank</th>
-                    <th className="px-4 py-3 font-semibold">Metode</th>
-                    <th className="px-4 py-3 text-center font-semibold">
-                      Jenis
-                    </th>
-                    <th className="px-4 py-3 text-center font-semibold">
+                    <th className="px-4 py-3 font-medium">Tanggal</th>
+                    <th className="px-4 py-3 font-medium">Invoice</th>
+                    <th className="px-4 py-3 font-medium">Customer</th>
+                    <th className="px-4 py-3 font-medium">Outlet</th>
+                    <th className="px-4 py-3 font-medium">Bank</th>
+                    <th className="px-4 py-3 font-medium">Metode</th>
+                    <th className="px-4 py-3 text-center font-medium">Jenis</th>
+                    <th className="px-4 py-3 text-center font-medium">
                       Penerimaan
                     </th>
-                    <th className="px-4 py-3 text-center font-semibold">
+                    <th className="px-4 py-3 text-center font-medium">
                       Refund
                     </th>
-                    <th className="px-4 py-3 text-center font-semibold">
+                    <th className="px-4 py-3 text-center font-medium">
                       Bersih
                     </th>
-                    <th className="px-4 py-3 font-semibold">
+                    <th className="px-4 py-3 font-medium">
                       Referensi / Profil
                     </th>
                   </tr>

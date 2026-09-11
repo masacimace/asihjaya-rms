@@ -493,13 +493,13 @@ export default async function CustomerListPage({
       <section className="hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-white lg:block">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="border-b border-[var(--border)] bg-neutral-50/70 text-xs uppercase text-[var(--muted)]">
+            <thead className="border-b border-[var(--border)] bg-neutral-50/70 text-xs text-[var(--muted)]">
               <tr>
-                <th className="px-5 py-4 font-semibold">Pelanggan</th>
-                <th className="px-5 py-4 font-semibold">Kontak</th>
-                <th className="px-5 py-4 font-semibold">Metrik Belanja</th>
-                <th className="px-5 py-4 font-semibold">Transaksi Terakhir</th>
-                <th className="px-5 py-4 text-right font-semibold">Aksi</th>
+                <th className="px-5 py-4 font-medium">Pelanggan</th>
+                <th className="px-5 py-4 font-medium">Kontak</th>
+                <th className="px-5 py-4 font-medium">Metrik Belanja</th>
+                <th className="px-5 py-4 font-medium">Transaksi Terakhir</th>
+                <th className="px-5 py-4 text-right font-medium">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">

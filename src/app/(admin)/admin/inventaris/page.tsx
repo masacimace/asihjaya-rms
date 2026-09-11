@@ -511,7 +511,7 @@ export default async function InventoryPage({
             <div className="hidden xl:block">
               <div className="overflow-x-auto">
                 <div className="min-w-[1520px]">
-                  <div className="grid grid-cols-[minmax(300px,1.55fr)_180px_190px_110px_175px_150px_165px_130px] gap-4 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-xs font-semibold text-neutral-500">
+                  <div className="grid grid-cols-[minmax(300px,1.55fr)_180px_190px_110px_175px_150px_165px_130px] gap-4 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-xs font-medium text-neutral-500">
                     <div>Item</div>
                     <div className="min-w-0 self-center pl-5">
                       SKU / Barcode
@@ -558,7 +558,9 @@ export default async function InventoryPage({
                               alt={`${item.productName} ${item.sku}`}
                               className={cn(
                                 "relative z-10 size-14 shrink-0 rounded-xl border border-[var(--border)]",
-                                imageUrl ? "pointer-events-auto" : "pointer-events-none",
+                                imageUrl
+                                  ? "pointer-events-auto"
+                                  : "pointer-events-none",
                               )}
                             />
                             <div className="min-w-0">
@@ -667,7 +669,9 @@ export default async function InventoryPage({
                         alt={`${item.productName} ${item.sku}`}
                         className={cn(
                           "relative z-10 size-20 shrink-0 rounded-2xl border border-[var(--border)]",
-                          imageUrl ? "pointer-events-auto" : "pointer-events-none",
+                          imageUrl
+                            ? "pointer-events-auto"
+                            : "pointer-events-none",
                         )}
                       />
 

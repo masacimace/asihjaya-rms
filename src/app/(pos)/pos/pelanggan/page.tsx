@@ -542,17 +542,15 @@ export default async function PosCustomersPage({ searchParams }: PageProps) {
           <section className="mt-5 hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-white sm:block">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-                <thead className="bg-neutral-50 text-left text-xs uppercase text-[var(--muted)]">
+                <thead className="bg-neutral-50 text-left text-xs text-[var(--muted)]">
                   <tr>
-                    <th className="px-4 py-3 !font-medium">Customer</th>
-                    <th className="px-4 py-3 !font-medium">Kontak</th>
-                    <th className="px-4 py-3 !font-medium">
+                    <th className="px-4 py-3 font-medium">Customer</th>
+                    <th className="px-4 py-3 font-medium">Kontak</th>
+                    <th className="px-4 py-3 font-medium">
                       Transaksi terakhir
                     </th>
-                    <th className="px-4 py-3 text-right !font-medium">Total</th>
-                    <th className="px-4 py-3 text-right !font-medium">
-                      Action
-                    </th>
+                    <th className="px-4 py-3 text-right font-medium">Total</th>
+                    <th className="px-4 py-3 text-right font-medium">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">

@@ -1175,15 +1175,15 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
           <section className="mt-5 hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-white sm:block">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-                <thead className="bg-neutral-50 text-left text-xs uppercase text-[var(--muted)]">
+                <thead className="bg-neutral-50 text-left text-xs text-[var(--muted)]">
                   <tr>
-                    <th className="px-4 py-3 !font-medium">Invoice</th>
-                    <th className="px-4 py-3 !font-medium">Foto</th>
-                    <th className="px-4 py-3 !font-medium">Customer</th>
-                    <th className="px-4 py-3 !font-medium">Item</th>
-                    <th className="px-4 py-3 !font-medium">Payment</th>
-                    <th className="px-4 py-3 text-right !font-medium">Total</th>
-                    <th className="px-4 py-3 text-right font-semibold">Aksi</th>
+                    <th className="px-4 py-3 font-medium">Invoice</th>
+                    <th className="px-4 py-3 font-medium">Foto</th>
+                    <th className="px-4 py-3 font-medium">Customer</th>
+                    <th className="px-4 py-3 font-medium">Item</th>
+                    <th className="px-4 py-3 font-medium">Payment</th>
+                    <th className="px-4 py-3 text-center font-medium">Total</th>
+                    <th className="px-4 py-3 text-center font-medium">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">

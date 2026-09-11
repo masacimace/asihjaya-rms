@@ -780,7 +780,7 @@ function RecentSales({ data }: { data: ReportSummaryData }) {
             <div
               className={cn(
                 tableGridClass,
-                "border-b border-neutral-100 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500",
+                "border-b border-neutral-100 bg-neutral-50 text-xs text-neutral-500",
               )}
             >
               <div className="px-4 py-3 font-semibold">Invoice</div>
