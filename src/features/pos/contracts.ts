@@ -401,6 +401,28 @@ export const initialPosShiftActionState: PosShiftActionState = {
 
 export type PosTransactionRange = "today" | "7d" | "30d" | "all";
 
+export type PosTransactionTrendGranularity = "hour" | "day" | "month";
+
+export type PosTransactionTrendPoint = {
+  dateKey: string;
+  label: string;
+  revenue: number;
+  transactionCount: number;
+  itemSold: number;
+};
+
+export type PosTransactionAnalytics = {
+  totalTransactions: number;
+  totalAmount: number;
+  totalItems: number;
+  averageTransaction: number;
+  trend: PosTransactionTrendPoint[];
+  chartDescription: string;
+  chartBucketLabel: string;
+  chartGranularity: PosTransactionTrendGranularity;
+  bestLabel: string;
+};
+
 export type PosTransactionPayment = {
   method: string;
   provider: string;
@@ -460,6 +482,7 @@ export type PosTransactionListData = {
     paidAmount: number;
     totalItems: number;
   };
+  analytics: PosTransactionAnalytics;
 };
 
 export type PosTransactionDetailPayment = PosTransactionPayment & {

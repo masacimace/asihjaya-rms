@@ -18,11 +18,13 @@ import {
 
 import type {
   PosTransactionDetailData,
+  PosTransactionListData,
   PosTransactionListItem,
   PosTransactionRange,
 } from "@/features/pos/contracts";
 import { reprintPosReceiptCertificateAction } from "@/app/actions/pos";
 import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
+import { SalesTrendChart } from "@/components/admin/dashboard/sales-trend-chart";
 import { ImageLightbox } from "@/components/media/image-lightbox";
 import { PrintJobAutoRefresh } from "@/components/pos/print-job-auto-refresh";
 import { getPosMediaUrl } from "@/features/pos/catalog-state";
@@ -150,6 +152,31 @@ function formatMoney(value: string | number | null) {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(Number.isFinite(parsedValue) ? parsedValue : 0);
+}
+
+function formatInteger(value: number) {
+  return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function getPosSalesChartInsights(
+  analytics: PosTransactionListData["analytics"],
+) {
+  const totalRevenue = analytics.totalAmount;
+  const averageRevenue =
+    analytics.trend.length > 0
+      ? Math.round(
+          analytics.trend.reduce((total, point) => total + point.revenue, 0) /
+            analytics.trend.length,
+        )
+      : 0;
+
+  return {
+    totalRevenue,
+    averageRevenue,
+    hasRevenue: totalRevenue > 0,
+  };
 }
 
 function formatTransactionDate(value: Date | null) {
@@ -991,6 +1018,7 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
     shiftId: data.shiftId,
   });
   const isOutletOnline = data.outlet?.hardwareStatus === "online";
+  const salesChartInsights = getPosSalesChartInsights(data.analytics);
 
   return (
     <PosPageContainer>
@@ -1036,26 +1064,87 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <SummaryCard
-          title="Transaksi"
-          value={String(data.summary.totalTransactions)}
-          helper={`Filter: ${rangeLabels[data.range]}`}
-          icon={<ReceiptText className="size-5" />}
+      <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-semibold text-neutral-950">
+              Ringkasan Penjualan
+            </h2>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {data.analytics.chartDescription}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {data.shiftId ? (
+              <span className="inline-flex h-9 items-center rounded-lg bg-[var(--accent-soft)] px-3 text-xs font-medium text-[var(--accent)]">
+                Filter shift aktif
+              </span>
+            ) : null}
+            <span className="inline-flex h-9 items-center rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-neutral-600">
+              {rangeLabels[data.range]}
+            </span>
+            <span className="inline-flex h-9 items-center rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-neutral-600">
+              {data.analytics.chartBucketLabel}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              label: "Total penjualan",
+              value: formatMoney(data.analytics.totalAmount),
+              description: rangeLabels[data.range],
+            },
+            {
+              label: "Transaksi",
+              value: formatInteger(data.analytics.totalTransactions),
+              description: "Transaksi selesai",
+            },
+            {
+              label: "Item terjual",
+              value: formatInteger(data.analytics.totalItems),
+              description: "Item fisik terjual",
+            },
+            {
+              label: "Rata-rata / transaksi",
+              value: formatMoney(data.analytics.averageTransaction),
+              description: "Nilai rata-rata transaksi selesai",
+            },
+          ].map((insight) => (
+            <div
+              key={insight.label}
+              className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/70 p-3"
+            >
+              <p className="text-[11px] text-[var(--muted)]">
+                {insight.label}
+              </p>
+              <p className="mt-1 truncate text-sm font-semibold text-neutral-950">
+                {insight.value}
+              </p>
+              <p className="mt-0.5 truncate text-[10px] text-[var(--muted)]">
+                {insight.description}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <SalesTrendChart
+          points={data.analytics.trend}
+          averageRevenue={salesChartInsights.averageRevenue}
+          hasRevenue={salesChartInsights.hasRevenue}
+          bestLabel={data.analytics.bestLabel}
         />
-        <SummaryCard
-          title="Total nilai"
-          value={formatMoney(data.summary.totalAmount)}
-          helper="Akumulasi transaksi yang sedang ditampilkan."
-          icon={<WalletCards className="size-5" />}
-        />
-        <SummaryCard
-          title="Item terjual"
-          value={String(data.summary.totalItems)}
-          helper="Jumlah item fisik pada transaksi tampil."
-          icon={<ShoppingBag className="size-5" />}
-        />
-      </div>
+
+        {data.query ? (
+          <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">
+            Ringkasan tetap mengikuti periode
+            {data.shiftId ? " dan shift aktif" : ""}; pencarian hanya memfilter
+            daftar transaksi di bawah.
+          </p>
+        ) : null}
+      </section>
 
       <section className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-4">
         <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
@@ -1175,15 +1264,15 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
           <section className="mt-5 hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-white sm:block">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-                <thead className="bg-neutral-50 text-left text-xs text-[var(--muted)]">
+                <thead className="bg-neutral-50 text-left text-xs uppercase text-[var(--muted)]">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Invoice</th>
-                    <th className="px-4 py-3 font-medium">Foto</th>
-                    <th className="px-4 py-3 font-medium">Customer</th>
-                    <th className="px-4 py-3 font-medium">Item</th>
-                    <th className="px-4 py-3 font-medium">Payment</th>
-                    <th className="px-4 py-3 text-center font-medium">Total</th>
-                    <th className="px-4 py-3 text-center font-medium">Aksi</th>
+                    <th className="px-4 py-3 !font-medium">Invoice</th>
+                    <th className="px-4 py-3 !font-medium">Foto</th>
+                    <th className="px-4 py-3 !font-medium">Customer</th>
+                    <th className="px-4 py-3 !font-medium">Item</th>
+                    <th className="px-4 py-3 !font-medium">Payment</th>
+                    <th className="px-4 py-3 text-right !font-medium">Total</th>
+                    <th className="px-4 py-3 text-right font-semibold">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">

@@ -15,7 +15,13 @@ import {
   ChartTooltip,
   type ChartConfig,
 } from "@/components/ui/chart";
-import type { AdminDashboardTrendPoint } from "@/features/admin/dashboard/contracts";
+export type SalesTrendPoint = {
+  dateKey: string;
+  label: string;
+  revenue: number;
+  transactionCount: number;
+  itemSold: number;
+};
 
 const chartConfig = {
   revenue: {
@@ -76,7 +82,7 @@ export function SalesTrendChart({
   hasRevenue,
   bestLabel,
 }: {
-  points: AdminDashboardTrendPoint[];
+  points: SalesTrendPoint[];
   averageRevenue: number;
   hasRevenue: boolean;
   bestLabel: string;
@@ -119,7 +125,7 @@ export function SalesTrendChart({
         >
           <defs>
             <linearGradient
-              id="adminSalesRevenueGradient"
+              id="salesRevenueGradient"
               x1="0"
               x2="0"
               y1="0"
@@ -190,7 +196,7 @@ export function SalesTrendChart({
             }}
             content={({ active, payload }) => {
               const point = payload?.[0]?.payload as
-                | AdminDashboardTrendPoint
+                | SalesTrendPoint
                 | undefined;
 
               if (!active || !point) {
@@ -243,7 +249,7 @@ export function SalesTrendChart({
             dataKey="revenue"
             stroke="var(--color-revenue)"
             strokeWidth={2.5}
-            fill="url(#adminSalesRevenueGradient)"
+            fill="url(#salesRevenueGradient)"
             activeDot={{
               r: 6,
               fill: "var(--accent)",
@@ -258,7 +264,7 @@ export function SalesTrendChart({
               } = dotProps as {
                 cx?: number;
                 cy?: number;
-                payload?: AdminDashboardTrendPoint;
+                payload?: SalesTrendPoint;
               };
 
               if (

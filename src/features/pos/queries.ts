@@ -37,8 +37,13 @@ import {
   users,
 } from "@/db/schema";
 import {
+  addBusinessDays,
+  addBusinessHours,
   getBusinessDateKey,
+  getBusinessDateTimeParts,
   getStartOfBusinessDay,
+  getStartOfBusinessHour,
+  getStartOfBusinessMonth,
 } from "@/lib/time/business-time";
 import {
   DEFAULT_POS_REGISTER_MISSING_MESSAGE,
@@ -63,9 +68,12 @@ import {
   type PosPriceSource,
   type PosScanLookupResult,
   type PosShiftOverviewData,
+  type PosTransactionAnalytics,
   type PosTransactionDetailData,
   type PosTransactionListData,
   type PosTransactionRange,
+  type PosTransactionTrendGranularity,
+  type PosTransactionTrendPoint,
 } from "@/features/pos/contracts";
 
 type ScannedPosItemRow = Omit<PosAvailableItem, "activePricePerGram"> & {
@@ -1468,6 +1476,308 @@ function getTransactionRangeStart(
   return getStartOfBusinessDay(now, timeZone);
 }
 
+function getTransactionRangeEnd(
+  range: PosTransactionRange,
+  timeZone: string,
+  now = new Date(),
+) {
+  if (range === "all") {
+    return null;
+  }
+
+  return getStartOfBusinessDay(now, timeZone, 1);
+}
+
+function getBusinessHourKey(date: Date, timeZone: string) {
+  const parts = getBusinessDateTimeParts(date, timeZone);
+
+  return [
+    parts.year,
+    String(parts.month).padStart(2, "0"),
+    String(parts.day).padStart(2, "0"),
+    String(parts.hour).padStart(2, "0"),
+  ].join("-");
+}
+
+function getBusinessHourLabel(date: Date, timeZone: string) {
+  const parts = getBusinessDateTimeParts(date, timeZone);
+  return `${String(parts.hour).padStart(2, "0")}.00`;
+}
+
+function getBusinessMonthKey(date: Date, timeZone: string) {
+  const parts = getBusinessDateTimeParts(date, timeZone);
+  return `${String(parts.year).padStart(4, "0")}-${String(parts.month).padStart(2, "0")}`;
+}
+
+function createPosTransactionTrendSkeleton({
+  start,
+  end,
+  granularity,
+  timeZone,
+}: {
+  start: Date;
+  end: Date;
+  granularity: PosTransactionTrendGranularity;
+  timeZone: string;
+}): PosTransactionTrendPoint[] {
+  const points: PosTransactionTrendPoint[] = [];
+  const maxPoints = granularity === "hour" ? 48 : granularity === "day" ? 31 : 240;
+
+  for (let cursor = start; cursor < end && points.length < maxPoints; ) {
+    const dateKey =
+      granularity === "hour"
+        ? getBusinessHourKey(cursor, timeZone)
+        : granularity === "month"
+          ? getBusinessMonthKey(cursor, timeZone)
+          : getBusinessDateKey(cursor, timeZone);
+    const label =
+      granularity === "hour"
+        ? getBusinessHourLabel(cursor, timeZone)
+        : granularity === "month"
+          ? new Intl.DateTimeFormat("id-ID", {
+              month: "short",
+              year: "numeric",
+              timeZone,
+            }).format(cursor)
+          : new Intl.DateTimeFormat("id-ID", {
+              day: "numeric",
+              month: "short",
+              timeZone,
+            }).format(cursor);
+
+    points.push({
+      dateKey,
+      label,
+      revenue: 0,
+      transactionCount: 0,
+      itemSold: 0,
+    });
+
+    cursor =
+      granularity === "hour"
+        ? addBusinessHours(cursor, 1, timeZone)
+        : granularity === "month"
+          ? getStartOfBusinessMonth(cursor, timeZone, 1)
+          : addBusinessDays(cursor, 1, timeZone);
+  }
+
+  return points;
+}
+
+async function getPosTransactionAnalyticsData({
+  organizationId,
+  outletId,
+  range,
+  shiftId,
+  timeZone,
+}: {
+  organizationId: string;
+  outletId: string;
+  range: PosTransactionRange;
+  shiftId: string | null;
+  timeZone: string;
+}): Promise<PosTransactionAnalytics> {
+  const now = new Date();
+  const baseFilters: SQL[] = [
+    eq(sales.organizationId, organizationId),
+    eq(sales.outletId, outletId),
+    eq(sales.status, "completed"),
+  ];
+
+  if (shiftId) {
+    baseFilters.push(eq(sales.shiftId, shiftId));
+  }
+
+  const earliestCompletedAt =
+    range === "all"
+      ? (
+          await db
+            .select({ completedAt: sales.completedAt })
+            .from(sales)
+            .where(and(...baseFilters))
+            .orderBy(asc(sales.completedAt))
+            .limit(1)
+        )[0]?.completedAt ?? null
+      : null;
+
+  const rangeStart = getTransactionRangeStart(range, timeZone, now);
+  const rangeEnd = getTransactionRangeEnd(range, timeZone, now);
+  const currentHourEnd = addBusinessHours(
+    getStartOfBusinessHour(now, timeZone),
+    1,
+    timeZone,
+  );
+  const tomorrowStart = getStartOfBusinessDay(now, timeZone, 1);
+  const chartGranularity: PosTransactionTrendGranularity =
+    range === "today" ? "hour" : range === "all" ? "month" : "day";
+  const trendStart =
+    range === "all"
+      ? getStartOfBusinessMonth(earliestCompletedAt ?? now, timeZone)
+      : (rangeStart ?? getStartOfBusinessDay(now, timeZone));
+  const trendEnd =
+    range === "today"
+      ? currentHourEnd > tomorrowStart
+        ? tomorrowStart
+        : currentHourEnd
+      : range === "all"
+        ? getStartOfBusinessMonth(now, timeZone, 1)
+        : (rangeEnd ?? tomorrowStart);
+
+  const summaryFilters = [...baseFilters];
+
+  if (rangeStart) {
+    summaryFilters.push(gte(sales.completedAt, rangeStart));
+  }
+
+  if (rangeEnd) {
+    summaryFilters.push(lt(sales.completedAt, rangeEnd));
+  }
+
+  const trendFilters: SQL[] = [
+    ...baseFilters,
+    gte(sales.completedAt, trendStart),
+    lt(sales.completedAt, trendEnd),
+  ];
+  const trendBucketSql =
+    chartGranularity === "hour"
+      ? sql<string>`to_char(${sales.completedAt} at time zone ${timeZone}, 'YYYY-MM-DD-HH24')`
+      : chartGranularity === "month"
+        ? sql<string>`to_char(${sales.completedAt} at time zone ${timeZone}, 'YYYY-MM')`
+        : sql<string>`to_char(${sales.completedAt} at time zone ${timeZone}, 'YYYY-MM-DD')`;
+
+  const [summaryRows, itemRows, trendRows, trendItemRows] = await Promise.all([
+    db
+      .select({
+        totalAmount: sql<number>`coalesce(sum(${sales.totalAmount}), 0)`.mapWith(Number),
+        totalTransactions: count(),
+      })
+      .from(sales)
+      .where(and(...summaryFilters)),
+    db
+      .select({ totalItems: count() })
+      .from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .where(and(...summaryFilters)),
+    db
+      .select({
+        bucket: trendBucketSql,
+        revenue: sql<number>`coalesce(sum(${sales.totalAmount}), 0)`.mapWith(Number),
+        transactionCount: count(),
+      })
+      .from(sales)
+      .where(and(...trendFilters))
+      .groupBy(sql`1`)
+      .orderBy(sql`1`),
+    db
+      .select({
+        bucket: trendBucketSql,
+        itemSold: count(),
+      })
+      .from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .where(and(...trendFilters))
+      .groupBy(sql`1`)
+      .orderBy(sql`1`),
+  ]);
+
+  const totalAmount = parseTransactionAmount(summaryRows[0]?.totalAmount ?? 0);
+  const totalTransactions = Number(summaryRows[0]?.totalTransactions ?? 0);
+  const totalItems = Number(itemRows[0]?.totalItems ?? 0);
+  const trendSalesByBucket = new Map(
+    trendRows.map((row) => [
+      row.bucket,
+      {
+        revenue: parseTransactionAmount(row.revenue),
+        transactionCount: Number(row.transactionCount ?? 0),
+      },
+    ]),
+  );
+  const trendItemsByBucket = new Map(
+    trendItemRows.map((row) => [row.bucket, Number(row.itemSold ?? 0)]),
+  );
+  const trend = createPosTransactionTrendSkeleton({
+    start: trendStart,
+    end: trendEnd,
+    granularity: chartGranularity,
+    timeZone,
+  }).map((point) => {
+    const salesBucket = trendSalesByBucket.get(point.dateKey);
+
+    return {
+      ...point,
+      revenue: salesBucket?.revenue ?? 0,
+      transactionCount: salesBucket?.transactionCount ?? 0,
+      itemSold: trendItemsByBucket.get(point.dateKey) ?? 0,
+    };
+  });
+
+  return {
+    totalTransactions,
+    totalAmount,
+    totalItems,
+    averageTransaction:
+      totalTransactions > 0 ? Math.round(totalAmount / totalTransactions) : 0,
+    trend,
+    chartDescription:
+      range === "today"
+        ? "Penjualan bersih per jam hari ini."
+        : range === "7d"
+          ? "Penjualan bersih per hari selama tujuh hari terakhir."
+          : range === "30d"
+            ? "Penjualan bersih per hari selama tiga puluh hari terakhir."
+            : "Penjualan bersih per bulan untuk seluruh riwayat transaksi.",
+    chartBucketLabel:
+      chartGranularity === "hour"
+        ? "Per jam"
+        : chartGranularity === "month"
+          ? "Per bulan"
+          : "Per hari",
+    chartGranularity,
+    bestLabel:
+      chartGranularity === "hour"
+        ? "Jam terbaik"
+        : chartGranularity === "month"
+          ? "Bulan terbaik"
+          : "Hari terbaik",
+  };
+}
+
+function createEmptyPosTransactionAnalytics(
+  range: PosTransactionRange,
+): PosTransactionAnalytics {
+  const chartGranularity: PosTransactionTrendGranularity =
+    range === "today" ? "hour" : range === "all" ? "month" : "day";
+
+  return {
+    totalTransactions: 0,
+    totalAmount: 0,
+    totalItems: 0,
+    averageTransaction: 0,
+    trend: [],
+    chartDescription:
+      range === "today"
+        ? "Penjualan bersih per jam hari ini."
+        : range === "7d"
+          ? "Penjualan bersih per hari selama tujuh hari terakhir."
+          : range === "30d"
+            ? "Penjualan bersih per hari selama tiga puluh hari terakhir."
+            : "Penjualan bersih per bulan untuk seluruh riwayat transaksi.",
+    chartBucketLabel:
+      chartGranularity === "hour"
+        ? "Per jam"
+        : chartGranularity === "month"
+          ? "Per bulan"
+          : "Per hari",
+    chartGranularity,
+    bestLabel:
+      chartGranularity === "hour"
+        ? "Jam terbaik"
+        : chartGranularity === "month"
+          ? "Bulan terbaik"
+          : "Hari terbaik",
+  };
+}
+
 function createEmptyPosShiftOverview(): PosShiftOverviewData {
   return {
     outlet: null,
@@ -1972,7 +2282,6 @@ export async function getPosCustomerListData({
       new Date(),
     ),
   };
-
   const filters: SQL[] = [
     eq(customers.organizationId, organizationId),
     eq(customers.isActive, true),
@@ -2502,6 +2811,7 @@ export async function getPosTransactionListData({
         paidAmount: 0,
         totalItems: 0,
       },
+      analytics: createEmptyPosTransactionAnalytics(normalizedRange),
     };
   }
 
@@ -2536,6 +2846,7 @@ export async function getPosTransactionListData({
         paidAmount: 0,
         totalItems: 0,
       },
+      analytics: createEmptyPosTransactionAnalytics(normalizedRange),
     };
   }
 
@@ -2563,6 +2874,13 @@ export async function getPosTransactionListData({
       new Date(),
     ),
   };
+  const analyticsPromise = getPosTransactionAnalyticsData({
+    organizationId,
+    outletId: outlet.id,
+    range: normalizedRange,
+    shiftId: normalizedShiftId,
+    timeZone,
+  });
 
   const filters: SQL[] = [
     eq(sales.organizationId, organizationId),
@@ -2571,9 +2889,14 @@ export async function getPosTransactionListData({
   ];
 
   const rangeStart = getTransactionRangeStart(normalizedRange, timeZone);
+  const rangeEnd = getTransactionRangeEnd(normalizedRange, timeZone);
 
   if (rangeStart) {
-    filters.push(gte(sales.createdAt, rangeStart));
+    filters.push(gte(sales.completedAt, rangeStart));
+  }
+
+  if (rangeEnd) {
+    filters.push(lt(sales.completedAt, rangeEnd));
   }
 
   if (normalizedShiftId) {
@@ -2808,6 +3131,8 @@ export async function getPosTransactionListData({
     },
   );
 
+  const analytics = await analyticsPromise;
+
   return {
     outlet: outletWithHardwareStatus,
     query: normalizedQuery,
@@ -2830,6 +3155,7 @@ export async function getPosTransactionListData({
         0,
       ),
     },
+    analytics,
   } satisfies PosTransactionListData;
 }
 

@@ -475,6 +475,7 @@ export async function getAdminDashboardData(
     offlineAgentRows,
     itemsWithoutPriceRows,
     trendRows,
+    trendItemRows,
     topProductRows,
     recentTransactionRows,
     auditRows,
@@ -654,6 +655,25 @@ export async function getAdminDashboardData(
 
     db
       .select({
+        bucket: trendBucketSql,
+        itemSold: count(),
+      })
+      .from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .where(
+        and(
+          eq(sales.organizationId, auth.organization.id),
+          inArray(sales.outletId, outletIds),
+          eq(sales.status, "completed"),
+          gte(sales.completedAt, trendStart),
+          lt(sales.completedAt, trendEnd),
+        ),
+      )
+      .groupBy(sql`1`)
+      .orderBy(sql`1`),
+
+    db
+      .select({
         productId: productMasters.id,
         productName: productMasters.name,
         itemSold: count(),
@@ -742,6 +762,9 @@ export async function getAdminDashboardData(
       },
     ]),
   );
+  const trendItemsByDate = new Map<string, number>(
+    trendItemRows.map((row) => [row.bucket, Number(row.itemSold ?? 0)]),
+  );
 
   const trend = createTrendSkeleton({
     start: trendStart,
@@ -755,6 +778,7 @@ export async function getAdminDashboardData(
       ...point,
       revenue: row?.revenue ?? 0,
       transactionCount: row?.transactionCount ?? 0,
+      itemSold: trendItemsByDate.get(point.dateKey) ?? 0,
     };
   });
 
