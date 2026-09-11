@@ -285,11 +285,11 @@ function PaymentAmountCard({ sale }: { sale: AdminSaleListRow }) {
   const paymentDisplay = getPaymentDisplay(sale);
 
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
+    <div className="min-w-0 rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
       <p className="text-xs font-medium text-neutral-500">
         {paymentDisplay.amountLabel}
       </p>
-      <p className="mt-1 text-sm font-semibold text-neutral-950">
+      <p className="mt-1 break-words text-sm font-semibold text-neutral-950">
         {formatMoney(paymentDisplay.amount)}
       </p>
     </div>
@@ -773,16 +773,16 @@ export default async function PenjualanListPage({
               </div>
             </div>
 
-            <div className="grid gap-3 p-4 lg:hidden">
+            <div className="grid min-w-0 gap-3 p-3 sm:p-4 lg:hidden">
               {data.rows.map((sale) => (
                 <Link
                   key={sale.id}
                   href={`/admin/penjualan/${sale.id}`}
-                  className="rounded-2xl border border-[var(--border)] bg-white p-4 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"
+                  className="block w-full min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40"
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
                     <div className="min-w-0">
-                      <p className="truncate font-mono text-sm font-semibold text-neutral-950">
+                      <p className="break-all font-mono text-sm font-semibold leading-5 text-neutral-950 sm:break-normal sm:truncate">
                         {sale.invoiceNumber}
                       </p>
                       <p className="mt-1 text-xs text-neutral-500">
@@ -791,7 +791,7 @@ export default async function PenjualanListPage({
                     </div>
                     <span
                       className={cn(
-                        "shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium",
+                        "w-fit max-w-full rounded-full border px-2.5 py-1 text-xs font-medium",
                         getSaleStatusClass(sale.status),
                       )}
                     >
@@ -799,70 +799,66 @@ export default async function PenjualanListPage({
                     </span>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
+                  <div className="mt-4 grid min-w-0 grid-cols-2 gap-2">
+                    <div className="min-w-0 rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
                       <p className="text-xs font-medium text-neutral-500">
                         Total
                       </p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-950">
+                      <p className="mt-1 break-words text-sm font-semibold text-neutral-950">
                         {formatMoney(sale.totalAmount)}
                       </p>
                     </div>
                     <PaymentAmountCard sale={sale} />
                   </div>
 
-                  <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4 text-xs text-neutral-600">
-                    <div className="flex justify-between gap-3">
-                      <span className="text-neutral-500">Customer</span>
-                      <span className="min-w-0 truncate text-right font-medium text-neutral-800">
-                        {sale.customerName ?? "Walk-in Customer"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <span className="text-neutral-500">Outlet</span>
-                      <span className="min-w-0 truncate text-right font-medium text-neutral-800">
-                        {sale.outletName}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <span className="text-neutral-500">Kasir</span>
-                      <span className="min-w-0 truncate text-right font-medium text-neutral-800">
-                        {sale.cashierName}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <span className="text-neutral-500">Item</span>
-                      <span className="min-w-0 truncate text-right font-medium text-neutral-800">
-                        {sale.totalItems} item ·{" "}
-                        {sale.items[0]?.productName ?? "Item belum tercatat"}
-                      </span>
-                    </div>
-                  </div>
+                  <dl className="mt-4 grid min-w-0 gap-x-3 gap-y-2.5 border-t border-[var(--border)] pt-4 text-xs text-neutral-600 [grid-template-columns:78px_minmax(0,1fr)] sm:[grid-template-columns:92px_minmax(0,1fr)]">
+                    <dt className="text-neutral-500">Customer</dt>
+                    <dd className="min-w-0 break-words text-right font-medium leading-5 text-neutral-800">
+                      {sale.customerName ?? "Walk-in Customer"}
+                    </dd>
+                    <dt className="text-neutral-500">Outlet</dt>
+                    <dd className="min-w-0 break-words text-right font-medium leading-5 text-neutral-800">
+                      {sale.outletName}
+                    </dd>
+                    <dt className="text-neutral-500">Kasir</dt>
+                    <dd className="min-w-0 break-words text-right font-medium leading-5 text-neutral-800">
+                      {sale.cashierName}
+                    </dd>
+                    <dt className="text-neutral-500">Item</dt>
+                    <dd className="min-w-0 break-words text-right font-medium leading-5 text-neutral-800">
+                      {sale.totalItems} item ·{" "}
+                      {sale.items[0]?.productName ?? "Item belum tercatat"}
+                    </dd>
+                  </dl>
 
-                  <div className="mt-4 flex flex-col gap-3">
+                  <div className="mt-4 min-w-0 border-t border-[var(--border)] pt-4">
                     <PaymentStatusSummary sale={sale} />
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      {sale.paymentMethods.length > 0 ||
-                      sale.customerDepositUsedAmount > 0 ? (
-                        <PaymentBadges
-                          customerDepositUsedAmount={
-                            sale.customerDepositUsedAmount
-                          }
-                          methods={sale.paymentMethods}
-                        />
-                      ) : (
-                        <span className="text-xs text-neutral-500">
-                          Tanpa metode pembayaran
-                        </span>
-                      )}
+                    <div className="mt-3 grid min-w-0 gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                      <div className="min-w-0">
+                        {sale.paymentMethods.length > 0 ||
+                        sale.customerDepositUsedAmount > 0 ? (
+                          <PaymentBadges
+                            customerDepositUsedAmount={
+                              sale.customerDepositUsedAmount
+                            }
+                            methods={sale.paymentMethods}
+                          />
+                        ) : (
+                          <span className="text-xs text-neutral-500">
+                            Tanpa metode pembayaran
+                          </span>
+                        )}
+                      </div>
                       <span
                         className={cn(
-                          "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
+                          "inline-flex w-fit max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-medium",
                           getPrintStatusClass(sale.printStatus),
                         )}
                       >
-                        <Printer className="mr-1 size-3" />
-                        {printStatusLabels[sale.printStatus]}
+                        <Printer className="mr-1 size-3 shrink-0" />
+                        <span className="min-w-0 break-words">
+                          {printStatusLabels[sale.printStatus]}
+                        </span>
                       </span>
                     </div>
                   </div>
