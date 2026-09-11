@@ -24,6 +24,7 @@ import type {
   BuybackExistingItemOption,
   BuybackHistoryData,
   BuybackHistoryDateRange,
+  BuybackHistoryImagePreview,
   BuybackHistoryPayoutFilter,
   BuybackHistoryProcessingFilter,
   BuybackHistoryPayoutSummary,
@@ -32,10 +33,42 @@ import type {
 } from "@/features/buybacks/contracts";
 import { createBuybackHistoryPeriod } from "@/features/buybacks/history-filters";
 import { getDefaultPosRegisterCondition } from "@/features/pos/context";
+import { getImageUrl } from "@/lib/storage/image-storage";
 
 function parseMoney(value: string | null | undefined) {
   const amount = Number(value ?? 0);
   return Number.isSafeInteger(amount) && amount >= 0 ? amount : 0;
+}
+
+function readSnapshotText(
+  snapshot: Record<string, unknown> | null | undefined,
+  key: string,
+) {
+  const value = snapshot?.[key];
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
+function getBuybackSnapshotImageUrl(
+  snapshot: Record<string, unknown> | null | undefined,
+) {
+  return getImageUrl(
+    readSnapshotText(snapshot, "imageKey") ??
+      readSnapshotText(snapshot, "previousImageKey"),
+  );
+}
+
+function getBuybackSnapshotDisplayName(
+  snapshot: Record<string, unknown> | null | undefined,
+) {
+  return (
+    readSnapshotText(snapshot, "displayName") ??
+    readSnapshotText(snapshot, "productMasterName") ??
+    readSnapshotText(snapshot, "originalDisplayName") ??
+    readSnapshotText(snapshot, "originalProductMasterName") ??
+    "Produk Buyback"
+  );
 }
 
 export async function getBuybackInitialData({
@@ -399,7 +432,7 @@ export async function getBuybackHistoryData({
     .offset(safeOffset);
 
   const ids = rows.map((row) => row.id);
-  const [itemCounts, payoutRows] =
+  const [itemCounts, payoutRows, imagePreviewRows] =
     ids.length > 0
       ? await Promise.all([
           db
@@ -425,8 +458,18 @@ export async function getBuybackHistoryData({
             .from(buybackPayouts)
             .where(inArray(buybackPayouts.buybackId, ids))
             .orderBy(asc(buybackPayouts.createdAt)),
+          db
+            .select({
+              id: buybackItems.id,
+              buybackId: buybackItems.buybackId,
+              lineNumber: buybackItems.lineNumber,
+              snapshot: buybackItems.snapshot,
+            })
+            .from(buybackItems)
+            .where(inArray(buybackItems.buybackId, ids))
+            .orderBy(asc(buybackItems.lineNumber)),
         ])
-      : [[], []];
+      : [[], [], []];
 
   const countByBuyback = new Map(
     itemCounts.map((row) => [
@@ -448,11 +491,27 @@ export async function getBuybackHistoryData({
     payoutsByBuyback.set(payout.buybackId, current);
   }
 
+  const imagePreviewsByBuyback = new Map<
+    string,
+    BuybackHistoryImagePreview[]
+  >();
+  for (const item of imagePreviewRows) {
+    const current = imagePreviewsByBuyback.get(item.buybackId) ?? [];
+    if (current.length >= 3) continue;
+    current.push({
+      buybackItemId: item.id,
+      displayName: getBuybackSnapshotDisplayName(item.snapshot),
+      imageUrl: getBuybackSnapshotImageUrl(item.snapshot),
+    });
+    imagePreviewsByBuyback.set(item.buybackId, current);
+  }
+
   const historyRows: BuybackHistoryRow[] = rows.map((row) => ({
     ...row,
     itemCount: countByBuyback.get(row.id)?.itemCount ?? 0,
     pendingProcessingCount:
       countByBuyback.get(row.id)?.pendingProcessingCount ?? 0,
+    imagePreviews: imagePreviewsByBuyback.get(row.id) ?? [],
     payouts: payoutsByBuyback.get(row.id) ?? [],
   }));
 
@@ -496,7 +555,7 @@ export async function getBuybackHistoryData({
       return { rows: historyRows, detail: null, totalCount };
     }
 
-    const [olderCount, olderPayouts] = await Promise.all([
+    const [olderCount, olderPayouts, olderImagePreviewRows] = await Promise.all([
       db
         .select({
           itemCount: sql<number>`count(${buybackItems.id})::int`,
@@ -517,6 +576,15 @@ export async function getBuybackHistoryData({
         .from(buybackPayouts)
         .where(eq(buybackPayouts.buybackId, detailId))
         .orderBy(asc(buybackPayouts.createdAt)),
+      db
+        .select({
+          id: buybackItems.id,
+          snapshot: buybackItems.snapshot,
+        })
+        .from(buybackItems)
+        .where(eq(buybackItems.buybackId, detailId))
+        .orderBy(asc(buybackItems.lineNumber))
+        .limit(3),
     ]);
 
     detailBase = {
@@ -525,6 +593,11 @@ export async function getBuybackHistoryData({
       pendingProcessingCount: Number(
         olderCount[0]?.pendingProcessingCount ?? 0,
       ),
+      imagePreviews: olderImagePreviewRows.map((item) => ({
+        buybackItemId: item.id,
+        displayName: getBuybackSnapshotDisplayName(item.snapshot),
+        imageUrl: getBuybackSnapshotImageUrl(item.snapshot),
+      })),
       payouts: olderPayouts,
     };
   }
@@ -614,7 +687,10 @@ export async function getBuybackHistoryData({
       registerCode: register.code,
       registerName: register.name,
       notes: register.notes,
-      items: detailItems,
+      items: detailItems.map((item) => ({
+        ...item,
+        imageUrl: getBuybackSnapshotImageUrl(item.snapshot),
+      })),
       receiptJob: receiptJobs[0] ?? null,
     },
   };

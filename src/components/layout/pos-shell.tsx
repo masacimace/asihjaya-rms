@@ -730,18 +730,6 @@ export function PosShell({
                     </Link>
                   );
                 })}
-
-              <Link
-                href="/pos/shift"
-                onClick={() => setIsMoreOpen(false)}
-                className="flex items-center gap-3 rounded-2xl border border-[var(--border)] p-4"
-              >
-                <Printer className="size-5 text-[var(--accent)]" />
-                <span className="text-sm font-medium">
-                  Pemeriksaan Perangkat
-                </span>
-              </Link>
-
               {user.canAccessAdmin ? (
                 <Link
                   href="/admin"
@@ -749,9 +737,7 @@ export function PosShell({
                   className="flex items-center gap-3 rounded-2xl border border-[var(--border)] p-4"
                 >
                   <LayoutDashboard className="size-5 text-[var(--accent)]" />
-                  <span className="text-sm font-medium">
-                    Kembali ke Dashboard Admin
-                  </span>
+                  <span className="text-sm font-medium">Dashboard Admin</span>
                 </Link>
               ) : null}
             </div>

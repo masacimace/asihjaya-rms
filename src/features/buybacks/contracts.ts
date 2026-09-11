@@ -131,6 +131,12 @@ export type BuybackHistoryPayoutSummary = {
   reference: string | null;
 };
 
+export type BuybackHistoryImagePreview = {
+  buybackItemId: string;
+  displayName: string;
+  imageUrl: string | null;
+};
+
 export type BuybackHistoryRow = {
   id: string;
   buybackNumber: string;
@@ -148,6 +154,7 @@ export type BuybackHistoryRow = {
   outletName: string;
   itemCount: number;
   pendingProcessingCount: number;
+  imagePreviews: BuybackHistoryImagePreview[];
   payouts: BuybackHistoryPayoutSummary[];
 };
 
@@ -167,6 +174,7 @@ export type BuybackDetailItem = {
   snapshot: Record<string, unknown>;
   processingType: BuybackProcessingType | null;
   processingStatus: BuybackProcessingStatus | null;
+  imageUrl: string | null;
   currentSku: string | null;
   currentBarcode: string | null;
   currentDisplayName: string | null;

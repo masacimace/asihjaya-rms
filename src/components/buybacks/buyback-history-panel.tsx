@@ -15,9 +15,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { reprintBuybackReceiptAction } from "@/app/actions/buybacks";
+import { ProductImage } from "@/components/media/product-image";
 import type {
   BuybackDetail,
   BuybackHistoryData,
+  BuybackHistoryRow,
   BuybackPayoutMethod,
   BuybackProcessingType,
 } from "@/features/buybacks/contracts";
@@ -74,6 +76,65 @@ function receiptStatusLabel(status: string) {
     cancelled: "Dibatalkan",
   };
   return labels[status] ?? status;
+}
+
+function BuybackImagesPreview({
+  row,
+  variant = "desktop",
+}: {
+  row: BuybackHistoryRow;
+  variant?: "mobile" | "desktop";
+}) {
+  const previewItems = row.imagePreviews.slice(0, 3);
+  const hiddenCount = Math.max(row.itemCount - previewItems.length, 0);
+  const isMobile = variant === "mobile";
+  const imageSizeClass = isMobile
+    ? previewItems.length <= 1
+      ? "size-28"
+      : previewItems.length === 2
+        ? "size-24"
+        : "size-20"
+    : "size-16";
+
+  if (previewItems.length === 0) {
+    return (
+      <ProductImage
+        src={null}
+        alt="Foto Buyback belum tersedia"
+        className={`${isMobile ? "size-28" : "size-16"} shrink-0 rounded-xl border border-[var(--border)]`}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={
+        isMobile
+          ? "flex w-full items-center justify-center gap-2"
+          : "flex min-w-[104px] items-center justify-start gap-2"
+      }
+    >
+      {previewItems.map((item) => (
+        <ProductImage
+          key={item.buybackItemId}
+          src={item.imageUrl}
+          alt={`Foto saat diterima ${item.displayName}`}
+          className={`${imageSizeClass} shrink-0 rounded-xl border border-[var(--border)]`}
+        />
+      ))}
+      {hiddenCount > 0 ? (
+        <span
+          className={
+            isMobile
+              ? "inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-neutral-100 text-xs font-semibold text-neutral-600"
+              : "inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-[10px] font-semibold text-neutral-600"
+          }
+        >
+          +{hiddenCount}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 export function BuybackHistoryPanel({
@@ -216,6 +277,13 @@ export function BuybackHistoryPanel({
                   </p>
                 </div>
 
+                <div className="mt-4 rounded-2xl border border-[var(--border)] bg-neutral-50/60 p-3">
+                  <p className="mb-3 text-center text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    Foto Produk
+                  </p>
+                  <BuybackImagesPreview row={row} variant="mobile" />
+                </div>
+
                 <div className="mt-3 rounded-xl bg-neutral-50 p-3">
                   <p className="text-sm font-medium text-neutral-900">
                     {row.customerName}
@@ -266,10 +334,11 @@ export function BuybackHistoryPanel({
           </div>
 
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[940px] text-left text-sm">
+            <table className="w-full min-w-[1060px] text-left text-sm">
               <thead className="bg-neutral-50 text-xs uppercase text-[var(--muted)]">
                 <tr>
                   <th className="px-4 py-3 sm:px-5">No. Buyback</th>
+                  <th className="px-4 py-3">Foto</th>
                   <th className="px-4 py-3">Customer</th>
                   <th className="px-4 py-3">Item</th>
                   <th className="px-4 py-3">Proses</th>
@@ -294,6 +363,9 @@ export function BuybackHistoryPanel({
                           timeZone,
                         )}
                       </p>
+                    </td>
+                    <td className="px-4 py-4">
+                      <BuybackImagesPreview row={row} />
                     </td>
                     <td className="px-4 py-4">
                       <p className="font-medium text-neutral-900">
@@ -544,8 +616,20 @@ function BuybackDetailPanel({
             return (
               <div
                 key={item.id}
-                className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_auto]"
+                className="grid gap-4 p-4 sm:grid-cols-[128px_minmax(0,1fr)] sm:p-5 lg:grid-cols-[144px_minmax(0,1fr)_auto]"
               >
+                <div className="flex flex-col items-center sm:items-start">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    Foto saat diterima
+                  </p>
+                  <ProductImage
+                    src={item.imageUrl}
+                    alt={`Foto saat diterima ${getItemName(item)}`}
+                    className="size-32 rounded-2xl border border-[var(--border)] lg:size-36"
+                    fallbackClassName="text-neutral-300"
+                  />
+                </div>
+
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-neutral-950">
@@ -601,7 +685,7 @@ function BuybackDetailPanel({
                   </div>
                 </div>
 
-                <div className="text-left lg:text-right">
+                <div className="text-left sm:col-start-2 lg:col-start-auto lg:text-right">
                   <p className="text-xs text-[var(--muted)]">Total Harga</p>
                   <p className="mt-1 text-lg font-semibold text-neutral-950">
                     {formatCurrency(Number(item.finalAmount))}
