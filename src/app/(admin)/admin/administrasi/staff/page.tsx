@@ -93,7 +93,7 @@ export default async function StaffPage() {
               <ArrowLeft className="size-4" />
               Kembali ke Dashboard
             </Link>
-            <h1 className="mt-4 text-3xl font-semibold text-neutral-950 sm:text-4xl">
+            <h1 className="mt-4 text-2xl font-semibold text-neutral-950 sm:text-3xl">
               Management User
             </h1>
 

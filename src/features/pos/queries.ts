@@ -1792,8 +1792,14 @@ export async function getPosHeldCartListData({
             basePriceAmount: posHeldCartItems.listPriceAmount,
             laborAmount: sql<string>`coalesce(${posHeldCartItems.snapshot}->>'laborAmount', '0')`,
             adjustmentAmount: sql<string>`coalesce(${posHeldCartItems.snapshot}->>'adjustmentAmount', '0')`,
-            imageKey: productItems.imageKey,
-            productImageKey: productMasters.imageKey,
+            imageKey: sql<string | null>`coalesce(
+              nullif(${posHeldCartItems.snapshot}->>'imageKey', ''),
+              ${productItems.imageKey}
+            )`,
+            productImageKey: sql<string | null>`coalesce(
+              nullif(${posHeldCartItems.snapshot}->>'productImageKey', ''),
+              ${productMasters.imageKey}
+            )`,
             productId: productMasters.id,
             productCode: productMasters.code,
             productName: sql<string>`coalesce(${productItems.displayName}, ${productMasters.name})`,

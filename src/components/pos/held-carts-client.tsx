@@ -16,6 +16,7 @@ import {
   cancelPosHeldCartAction,
   resumePosHeldCartAction,
 } from "@/app/actions/pos";
+import { PosItemImage } from "@/components/pos/workspace/pos-item-image";
 import type {
   PosHeldCartListData,
   PosHeldCartListItem,
@@ -194,6 +195,59 @@ function Feedback({
   );
 }
 
+function HeldCartImagesPreview({
+  heldCart,
+}: {
+  heldCart: PosHeldCartListItem;
+}) {
+  const previewItems = heldCart.items.slice(0, 3);
+  const remainingCount = Math.max(
+    heldCart.items.length - previewItems.length,
+    0,
+  );
+  const previewSizeClass =
+    previewItems.length <= 1
+      ? "size-28 sm:size-32"
+      : previewItems.length === 2
+        ? "size-24 sm:size-28"
+        : "size-20 sm:size-24";
+
+  if (previewItems.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-neutral-100 bg-neutral-50/70 p-3 sm:p-4">
+      <p className="text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+        Foto Produk
+      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
+        {previewItems.map((item) => (
+          <PosItemImage
+            key={item.id}
+            item={item}
+            alt={`${item.productName} · ${item.sku}`}
+            className={cn(
+              previewSizeClass,
+              "rounded-2xl border border-white shadow-sm",
+            )}
+            iconClassName="size-7 sm:size-8"
+          />
+        ))}
+
+        {remainingCount > 0 ? (
+          <div className="grid size-14 shrink-0 place-items-center rounded-2xl border border-dashed border-neutral-300 bg-white text-sm font-semibold text-neutral-600 sm:size-16">
+            +{remainingCount}
+          </div>
+        ) : null}
+      </div>
+      <p className="mt-2 text-center text-[11px] leading-5 text-[var(--muted)]">
+        Klik foto untuk memperbesar dan mencocokkan item fisik yang sedang ditahan.
+      </p>
+    </div>
+  );
+}
+
 function HeldCartCard({
   heldCart,
   pendingActionId,
@@ -246,6 +300,8 @@ function HeldCartCard({
             </p>
           </div>
         </div>
+
+        <HeldCartImagesPreview heldCart={heldCart} />
 
         <div className="mt-4 grid gap-2 text-xs leading-5 text-[var(--muted)] sm:grid-cols-3">
           <div className="rounded-2xl bg-neutral-50 px-3 py-2">
