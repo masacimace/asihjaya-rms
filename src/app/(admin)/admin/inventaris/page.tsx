@@ -539,17 +539,27 @@ export default async function InventoryPage({
                         : null;
 
                       return (
-                        <Link
+                        <div
                           key={item.id}
-                          href={`/admin/inventaris/item/${item.id}`}
-                          aria-label={`Buka detail item ${item.productName} ${item.sku}`}
-                          className="group grid grid-cols-[minmax(300px,1.55fr)_180px_190px_110px_175px_150px_165px_130px] gap-4 px-5 py-4 text-inherit no-underline transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+                          className="group pointer-events-none relative grid grid-cols-[minmax(300px,1.55fr)_180px_190px_110px_175px_150px_165px_130px] gap-4 px-5 py-4 text-inherit no-underline transition hover:bg-neutral-50"
                         >
+                          <Link
+                            href={`/admin/inventaris/item/${item.id}`}
+                            aria-label={`Buka detail item ${item.productName} ${item.sku}`}
+                            className="pointer-events-auto absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+                          >
+                            <span className="sr-only">
+                              Buka detail item {item.productName} {item.sku}
+                            </span>
+                          </Link>
                           <div className="flex min-w-0 items-center gap-3">
                             <ProductImage
                               src={imageUrl}
                               alt={`${item.productName} ${item.sku}`}
-                              className="size-14 shrink-0 rounded-xl border border-[var(--border)]"
+                              className={cn(
+                                "relative z-10 size-14 shrink-0 rounded-xl border border-[var(--border)]",
+                                imageUrl ? "pointer-events-auto" : "pointer-events-none",
+                              )}
                             />
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold text-neutral-950 transition group-hover:text-[var(--accent)]">
@@ -621,7 +631,7 @@ export default async function InventoryPage({
                               {availabilityLabels[item.availability]}
                             </span>
                           </div>
-                        </Link>
+                        </div>
                       );
                     })}
                   </div>
@@ -638,17 +648,27 @@ export default async function InventoryPage({
                   : null;
 
                 return (
-                  <Link
+                  <div
                     key={item.id}
-                    href={`/admin/inventaris/item/${item.id}`}
-                    aria-label={`Buka detail item ${item.productName} ${item.sku}`}
-                    className="group block p-4 text-inherit no-underline transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+                    className="group pointer-events-none relative block p-4 text-inherit no-underline transition hover:bg-neutral-50"
                   >
+                    <Link
+                      href={`/admin/inventaris/item/${item.id}`}
+                      aria-label={`Buka detail item ${item.productName} ${item.sku}`}
+                      className="pointer-events-auto absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+                    >
+                      <span className="sr-only">
+                        Buka detail item {item.productName} {item.sku}
+                      </span>
+                    </Link>
                     <div className="flex gap-3">
                       <ProductImage
                         src={imageUrl}
                         alt={`${item.productName} ${item.sku}`}
-                        className="size-20 shrink-0 rounded-2xl border border-[var(--border)]"
+                        className={cn(
+                          "relative z-10 size-20 shrink-0 rounded-2xl border border-[var(--border)]",
+                          imageUrl ? "pointer-events-auto" : "pointer-events-none",
+                        )}
                       />
 
                       <div className="min-w-0 flex-1">
@@ -731,7 +751,7 @@ export default async function InventoryPage({
                         </div>
                       </div>
                     </div>
-                  </Link>
+                  </div>
                 );
               })}
             </div>

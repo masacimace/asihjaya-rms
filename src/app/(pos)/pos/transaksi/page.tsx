@@ -23,6 +23,7 @@ import type {
 } from "@/features/pos/contracts";
 import { reprintPosReceiptCertificateAction } from "@/app/actions/pos";
 import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
+import { ImageLightbox } from "@/components/media/image-lightbox";
 import { PrintJobAutoRefresh } from "@/components/pos/print-job-auto-refresh";
 import { getPosMediaUrl } from "@/features/pos/catalog-state";
 import {
@@ -299,20 +300,32 @@ function TransactionProductImage({
 }) {
   const imageUrl = getPosMediaUrl(imageKey);
 
+  if (!imageUrl) {
+    return (
+      <div
+        className={cn(
+          "grid shrink-0 place-items-center overflow-hidden rounded-xl border border-[var(--border)] bg-neutral-50",
+          className,
+        )}
+      >
+        <ImageIcon className="size-5 text-neutral-300" />
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={cn(
+    <ImageLightbox
+      src={imageUrl}
+      alt={alt}
+      caption={alt}
+      triggerClassName={cn(
         "grid shrink-0 place-items-center overflow-hidden rounded-xl border border-[var(--border)] bg-neutral-50",
         className,
       )}
     >
-      {imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={imageUrl} alt={alt} className="size-full object-cover" />
-      ) : (
-        <ImageIcon className="size-5 text-neutral-300" />
-      )}
-    </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={imageUrl} alt={alt} className="size-full object-cover" />
+    </ImageLightbox>
   );
 }
 

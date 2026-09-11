@@ -299,16 +299,27 @@ export default async function ProductDetailPage({
                   const itemImageUrl = getImageUrl(item.imageKey);
 
                   return (
-                    <Link
+                    <div
                       key={item.id}
-                      href={`/admin/inventaris/item/${item.id}`}
-                      className="group grid grid-cols-[minmax(0,2.1fr)_0.75fr_1fr_0.4fr_10px] items-center gap-5 px-5 py-4 transition hover:bg-[var(--surface-muted)]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+                      className="group pointer-events-none relative grid grid-cols-[minmax(0,2.1fr)_0.75fr_1fr_0.4fr_10px] items-center gap-5 px-5 py-4 transition hover:bg-[var(--surface-muted)]/70"
                     >
+                      <Link
+                        href={`/admin/inventaris/item/${item.id}`}
+                        aria-label={`Buka detail item ${item.displayName ?? product.name} ${item.sku}`}
+                        className="pointer-events-auto absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+                      >
+                        <span className="sr-only">
+                          Buka detail item {item.displayName ?? product.name} {item.sku}
+                        </span>
+                      </Link>
                       <div className="flex min-w-0 items-center gap-3">
                         <ProductImage
                           src={itemImageUrl}
                           alt={`${product.name} ${item.sku}`}
-                          className="size-14 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]"
+                          className={cn(
+                            "relative z-10 size-14 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]",
+                            itemImageUrl ? "pointer-events-auto" : "pointer-events-none",
+                          )}
                         />
 
                         <div className="min-w-0">
@@ -357,7 +368,7 @@ export default async function ProductDetailPage({
                       </div>
 
                       <ChevronRight className="size-4 justify-self-end text-neutral-400 transition group-hover:translate-x-0.5 group-hover:text-neutral-700" />
-                    </Link>
+                    </div>
                   );
                 })}
               </div>
@@ -367,16 +378,27 @@ export default async function ProductDetailPage({
                   const itemImageUrl = getImageUrl(item.imageKey);
 
                   return (
-                    <Link
+                    <div
                       key={item.id}
-                      href={`/admin/inventaris/item/${item.id}`}
-                      className="group block px-4 py-4 transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+                      className="group pointer-events-none relative block px-4 py-4 transition hover:bg-[var(--surface-muted)]"
                     >
+                      <Link
+                        href={`/admin/inventaris/item/${item.id}`}
+                        aria-label={`Buka detail item ${item.displayName ?? product.name} ${item.sku}`}
+                        className="pointer-events-auto absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+                      >
+                        <span className="sr-only">
+                          Buka detail item {item.displayName ?? product.name} {item.sku}
+                        </span>
+                      </Link>
                       <div className="flex min-w-0 items-start gap-3">
                         <ProductImage
                           src={itemImageUrl}
                           alt={`${product.name} ${item.sku}`}
-                          className="size-14 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]"
+                          className={cn(
+                            "relative z-10 size-14 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]",
+                            itemImageUrl ? "pointer-events-auto" : "pointer-events-none",
+                          )}
                         />
 
                         <div className="min-w-0 flex-1">
@@ -430,7 +452,7 @@ export default async function ProductDetailPage({
                           </div>
                         </div>
                       </div>
-                    </Link>
+                    </div>
                   );
                 })}
               </div>

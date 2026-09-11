@@ -17,6 +17,7 @@ import {
 import Image from "next/image";
 
 import { logoutPublicCustomerHistoryAction } from "@/app/actions/customer-history";
+import { ImageLightbox } from "@/components/media/image-lightbox";
 import {
   PublicHistoryInitialPinChangeForm,
   PublicHistoryPinVerificationForm,
@@ -386,14 +387,21 @@ function TransactionItemList({
           >
             <div className="grid aspect-square w-full place-items-center overflow-hidden rounded-xl border-neutral-200 bg-[#faf8f2] text-[#9a681d]">
               {imageUrl ? (
-                <Image
+                <ImageLightbox
                   src={imageUrl}
-                  alt={item.productName}
-                  width={120}
-                  height={120}
-                  className="size-full object-cover"
-                  unoptimized
-                />
+                  alt={`Foto ${item.productName}`}
+                  caption={item.productName}
+                  triggerClassName="size-full overflow-hidden rounded-xl"
+                >
+                  <Image
+                    src={imageUrl}
+                    alt={item.productName}
+                    width={120}
+                    height={120}
+                    className="size-full object-cover"
+                    unoptimized
+                  />
+                </ImageLightbox>
               ) : (
                 <Gem className="size-7" />
               )}

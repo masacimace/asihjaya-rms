@@ -490,32 +490,26 @@ export function PosCatalogPanel({
                     : "border-[var(--border)] hover:border-neutral-300",
                 )}
               >
-                <button
-                  type="button"
-                  onClick={() => onAddItem(item)}
-                  className="block w-full text-left"
-                >
-                  <div className="relative">
-                    <PosItemImage
-                      item={item}
-                      alt={`${item.productName} ${item.sku}`}
-                      className="aspect-[5/4] sm:aspect-[4/3]"
-                      iconClassName="size-14 sm:size-16"
-                      showCatalogBadge
-                    />
+                <div className="relative">
+                  <PosItemImage
+                    item={item}
+                    alt={`${item.productName} ${item.sku}`}
+                    className="aspect-[5/4] w-full sm:aspect-[4/3]"
+                    iconClassName="size-14 sm:size-16"
+                    showCatalogBadge
+                  />
 
-                    <span
-                      className={cn(
-                        "absolute left-3 top-3 rounded-full bg-white/30 px-2 py-1 text-[10px] font-medium backdrop-blur",
-                        isInCart
-                          ? "text-[var(--accent)]"
-                          : "text-neutral-600",
-                      )}
-                    >
-                      {isInCart ? "Di Keranjang" : "Tersedia"}
-                    </span>
-                  </div>
-                </button>
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute left-3 top-3 rounded-full bg-white/30 px-2 py-1 text-[10px] font-medium backdrop-blur",
+                      isInCart
+                        ? "text-[var(--accent)]"
+                        : "text-neutral-600",
+                    )}
+                  >
+                    {isInCart ? "Di Keranjang" : "Tersedia"}
+                  </span>
+                </div>
 
                 <div className="space-y-2.5 p-2.5 sm:space-y-3 sm:p-4">
                   <div className="space-y-2">

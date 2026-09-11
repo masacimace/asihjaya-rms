@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   CheckCircle2,
   ClipboardCheck,
-  ExternalLink,
   PackageCheck,
   ScanLine,
   ShieldCheck,
@@ -13,6 +12,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ImageLightbox } from "@/components/media/image-lightbox";
 import {
   inspectSaleReturnItemAction,
   receiveSaleReturnItemAction,
@@ -337,15 +337,24 @@ export default async function SaleReturnWorkflowPage({
                         </p>
                       ) : null}
                       {photoUrl ? (
-                        <a
-                          href={photoUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-3 inline-flex items-center gap-1 text-xs font-semibold underline"
-                        >
-                          Lihat foto pemeriksaan
-                          <ExternalLink className="size-3" />
-                        </a>
+                        <div className="mt-3">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+                            Foto Pemeriksaan
+                          </p>
+                          <ImageLightbox
+                            src={photoUrl}
+                            alt={`Foto pemeriksaan ${item.productName}`}
+                            caption={`Foto pemeriksaan · ${item.productName}`}
+                            triggerClassName="size-24 overflow-hidden rounded-xl border border-emerald-200 bg-white"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={photoUrl}
+                              alt={`Foto pemeriksaan ${item.productName}`}
+                              className="size-full object-cover"
+                            />
+                          </ImageLightbox>
+                        </div>
                       ) : null}
                     </div>
                   ) : null}

@@ -15,6 +15,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ImageLightbox } from "@/components/media/image-lightbox";
 import { ProductBatchImportLabels } from "@/components/products/product-batch-import-labels";
 import { ProductBatchImportSessionActions } from "@/components/products/product-batch-import-session-actions";
 import { ProductBatchImportV2Session } from "@/components/products/product-batch-import-v2-session";
@@ -149,10 +150,12 @@ function MediaThumbnail({
   sessionId,
   media,
   label,
+  enableLightbox = true,
 }: {
   sessionId: string;
   media: ProductBatchPreviewMedia | null;
   label: string;
+  enableLightbox?: boolean;
 }) {
   if (!media || media.status === "deleted") {
     return (
@@ -161,17 +164,35 @@ function MediaThumbnail({
       </div>
     );
   }
+  const imageUrl = `/admin/produk/import/${sessionId}/media/${media.id}`;
+  const thumbnail = (
+    <Image
+      src={imageUrl}
+      alt={label}
+      fill
+      sizes="80px"
+      unoptimized
+      className="object-cover"
+    />
+  );
+
+  if (!enableLightbox) {
+    return (
+      <div className="relative aspect-square w-20 shrink-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
+        {thumbnail}
+      </div>
+    );
+  }
+
   return (
-    <div className="relative aspect-square w-20 shrink-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
-      <Image
-        src={`/admin/produk/import/${sessionId}/media/${media.id}`}
-        alt={label}
-        fill
-        sizes="80px"
-        unoptimized
-        className="object-cover"
-      />
-    </div>
+    <ImageLightbox
+      src={imageUrl}
+      alt={label}
+      caption={label}
+      triggerClassName="relative aspect-square w-20 shrink-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50"
+    >
+      {thumbnail}
+    </ImageLightbox>
   );
 }
 
@@ -741,6 +762,7 @@ export default async function ProductBatchImportPreviewPage({
                         sessionId={sessionId}
                         media={row.media}
                         label={asText(row.normalizedPayload.name)}
+                        enableLightbox={false}
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -783,6 +805,24 @@ export default async function ProductBatchImportPreviewPage({
                       </div>
                     </summary>
                     <div className="mt-5 border-t border-neutral-100 pt-5">
+                      {row.media && row.media.status !== "deleted" ? (
+                        <div className="mb-4 flex items-center gap-3 rounded-2xl bg-neutral-50 p-3">
+                          <MediaThumbnail
+                            sessionId={sessionId}
+                            media={row.media}
+                            label={asText(row.normalizedPayload.name)}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-neutral-900">
+                              Preview foto Product Master
+                            </p>
+                            <p className="mt-1 text-[11px] text-[var(--muted)]">
+                              Klik foto untuk melihat ukuran besar.
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
+
                       <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                         <div>
                           <dt className="text-xs text-[var(--muted)]">Brand</dt>
@@ -870,7 +910,12 @@ export default async function ProductBatchImportPreviewPage({
                     key={media.id}
                     className="min-w-0 rounded-2xl border border-[var(--border)] bg-white p-4"
                   >
-                    <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-neutral-50">
+                    <ImageLightbox
+                      src={`/admin/produk/import/${sessionId}/media/${media.id}`}
+                      alt={media.archivePath}
+                      caption={media.archivePath}
+                      triggerClassName="relative aspect-square w-full overflow-hidden rounded-xl bg-neutral-50"
+                    >
                       <Image
                         src={`/admin/produk/import/${sessionId}/media/${media.id}`}
                         alt={media.archivePath}
@@ -879,7 +924,7 @@ export default async function ProductBatchImportPreviewPage({
                         unoptimized
                         className="object-contain"
                       />
-                    </div>
+                    </ImageLightbox>
                     <p className="mt-3 break-all text-sm font-semibold text-neutral-900">
                       {media.archivePath}
                     </p>

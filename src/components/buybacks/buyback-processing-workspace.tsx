@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 
 import { completeBuybackProcessingAction } from "@/app/actions/buyback-processing";
 import { CameraCaptureModal } from "@/components/media/camera-capture-modal";
+import { ImageLightbox } from "@/components/media/image-lightbox";
 import { QuickProductMasterDialog } from "@/components/products/quick-product-master-dialog";
 import {
   initialBuybackProcessingActionState,
@@ -86,28 +87,43 @@ function ProcessingProductImage({
   label: string;
   className?: string;
 }) {
-  return (
-    <div
-      className={cn(
-        "relative overflow-hidden rounded-xl border border-[var(--border)] bg-neutral-50",
-        className,
-      )}
-    >
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={alt} className="size-full object-cover" />
-      ) : (
+  if (!src) {
+    return (
+      <div
+        className={cn(
+          "relative overflow-hidden rounded-xl border border-[var(--border)] bg-neutral-50",
+          className,
+        )}
+      >
         <div className="grid size-full place-items-center px-2 text-center text-neutral-400">
           <div>
             <Camera className="mx-auto size-5" />
             <p className="mt-1 text-[9px] font-medium">Belum ada foto</p>
           </div>
         </div>
+        <span className="absolute bottom-1.5 left-1.5 rounded-md bg-neutral-950/75 px-1.5 py-0.5 text-[9px] font-semibold text-white backdrop-blur-sm">
+          {label}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <ImageLightbox
+      src={src}
+      alt={alt}
+      caption={alt}
+      triggerClassName={cn(
+        "overflow-hidden rounded-xl border border-[var(--border)] bg-neutral-50",
+        className,
       )}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={alt} className="size-full object-cover" />
       <span className="absolute bottom-1.5 left-1.5 rounded-md bg-neutral-950/75 px-1.5 py-0.5 text-[9px] font-semibold text-white backdrop-blur-sm">
         {label}
       </span>
-    </div>
+    </ImageLightbox>
   );
 }
 
@@ -418,20 +434,25 @@ function ProcessingDrawer({
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)]">
-              <div className="aspect-square overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-                {row.beforeImageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+              {row.beforeImageUrl ? (
+                <ImageLightbox
+                  src={row.beforeImageUrl}
+                  alt={`Foto sebelum ${row.sourceDisplayName}`}
+                  caption={`Foto saat Buyback diterima · ${row.sourceDisplayName}`}
+                  triggerClassName="aspect-square overflow-hidden rounded-2xl border border-[var(--border)] bg-white"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={row.beforeImageUrl}
                     alt={`Foto sebelum ${row.sourceDisplayName}`}
                     className="size-full object-cover"
                   />
-                ) : (
-                  <div className="grid size-full place-items-center text-xs text-[var(--muted)]">
-                    Foto tidak tersedia
-                  </div>
-                )}
-              </div>
+                </ImageLightbox>
+              ) : (
+                <div className="grid aspect-square place-items-center overflow-hidden rounded-2xl border border-[var(--border)] bg-white text-xs text-[var(--muted)]">
+                  Foto tidak tersedia
+                </div>
+              )}
               <div>
                 <h3 className="font-semibold text-neutral-950">
                   {row.sourceDisplayName}
