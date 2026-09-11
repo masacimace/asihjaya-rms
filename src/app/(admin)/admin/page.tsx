@@ -73,7 +73,7 @@ const quickActions = [
   {
     label: "Pemasukan Bank",
     description: "Tinjau transaksi Buyback",
-    href: "/admin/buyback?q=&range=thisMonth&process=all&payout=all",
+    href: "/admin/operasional/pemasukan-bank",
     icon: Banknote,
   },
 ] as const;
@@ -183,7 +183,6 @@ function getComparison(
     label: comparisonLabel,
   };
 }
-
 
 type SalesChartInsight = {
   label: string;
