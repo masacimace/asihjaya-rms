@@ -6,6 +6,7 @@ import {
   BadgeCheck,
   CheckCircle2,
   ClipboardCheck,
+  ChevronDown,
   Download,
   ExternalLink,
   Eye,
@@ -394,6 +395,56 @@ function DetailSection({
       </div>
       {children}
     </section>
+  );
+}
+
+function CollapsibleDetailSection({
+  title,
+  description,
+  icon,
+  summary,
+  children,
+}: {
+  title: string;
+  description?: string;
+  icon: ReactNode;
+  summary?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <details className="group min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+      <summary className="flex min-w-0 cursor-pointer list-none items-start gap-3 p-4 transition hover:bg-neutral-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] sm:p-5 [&::-webkit-details-marker]:hidden">
+        <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-semibold text-neutral-950">{title}</h2>
+          {description ? (
+            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+              {description}
+            </p>
+          ) : null}
+          {summary ? (
+            <span className="mt-2 inline-flex max-w-full truncate rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-600 sm:hidden">
+              {summary}
+            </span>
+          ) : null}
+        </div>
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2 pl-2">
+          {summary ? (
+            <span className="hidden max-w-64 truncate rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-600 sm:inline-flex">
+              {summary}
+            </span>
+          ) : null}
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-white text-neutral-500 transition group-open:bg-[var(--accent-soft)] group-open:text-[var(--accent)]">
+            <ChevronDown className="size-4 transition-transform duration-200 group-open:rotate-180" />
+          </span>
+        </div>
+      </summary>
+      <div className="border-t border-[var(--border)] px-4 pb-4 pt-5 sm:px-5 sm:pb-5">
+        {children}
+      </div>
+    </details>
   );
 }
 
@@ -799,10 +850,11 @@ export default async function SaleDetailPage({
             </div>
           </DetailSection>
 
-          <DetailSection
+          <CollapsibleDetailSection
             title="Customer"
             description="Data customer yang terhubung ke transaksi."
             icon={<UserRound className="size-5" />}
+            summary={sale.customer ? sale.customer.name : "Walk-in customer"}
           >
             {sale.customer ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -828,12 +880,13 @@ export default async function SaleDetailPage({
                 Transaksi ini tercatat sebagai walk-in customer.
               </p>
             )}
-          </DetailSection>
+          </CollapsibleDetailSection>
 
-          <DetailSection
+          <CollapsibleDetailSection
             title="Receipt / Certificate"
             description="Preview dan download memakai full design, sedangkan reprint memakai overlay kertas custom."
             icon={<FileText className="size-5" />}
+            summary={`${sale.receiptCertificate.isReady ? "Ready" : "Belum ready"} · ${printStatusLabels[printStatus]}`}
           >
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
               <KeyValue
@@ -916,7 +969,7 @@ export default async function SaleDetailPage({
                 </p>
               </div>
             </div>
-          </DetailSection>
+          </CollapsibleDetailSection>
 
           <DetailSection
             title="Audit Timeline"
