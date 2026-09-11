@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { SalesTrendChart } from "@/components/admin/dashboard/sales-trend-chart";
 import type {
   AdminDashboardActivityKind,
   AdminDashboardAlertTone,
@@ -65,14 +66,14 @@ const quickActions = [
   },
   {
     label: "Riwayat Buyback",
-    description: "Riwayat transaksi Buyback",
+    description: "Tinjau transaksi Buyback",
     href: "/admin/buyback?q=&range=thisMonth&process=all&payout=all",
     icon: History,
   },
   {
     label: "Pemasukan Bank",
-    description: "transaksi pemasukan bank",
-    href: "/admin/operasional/pemasukan-bank",
+    description: "Tinjau transaksi Buyback",
+    href: "/admin/buyback?q=&range=thisMonth&process=all&payout=all",
     icon: Banknote,
   },
 ] as const;
@@ -129,30 +130,6 @@ function formatInteger(value: number) {
   }).format(value);
 }
 
-function formatCompactMoney(value: number) {
-  if (value <= 0) return "0";
-
-  if (value >= 1_000_000_000) {
-    return `${new Intl.NumberFormat("id-ID", {
-      maximumFractionDigits: value >= 10_000_000_000 ? 0 : 1,
-    }).format(value / 1_000_000_000)}M`;
-  }
-
-  if (value >= 1_000_000) {
-    return `${new Intl.NumberFormat("id-ID", {
-      maximumFractionDigits: value >= 10_000_000 ? 0 : 1,
-    }).format(value / 1_000_000)}Jt`;
-  }
-
-  if (value >= 1_000) {
-    return `${new Intl.NumberFormat("id-ID", {
-      maximumFractionDigits: 0,
-    }).format(value / 1_000)}Rb`;
-  }
-
-  return formatInteger(value);
-}
-
 function formatDateTime(value: Date | null) {
   if (!value) return "-";
 
@@ -207,13 +184,6 @@ function getComparison(
   };
 }
 
-function getRoundedChartMax(value: number) {
-  if (value <= 0) return 5_000_000;
-
-  const step = value >= 50_000_000 ? 10_000_000 : 5_000_000;
-
-  return Math.ceil(value / step) * step;
-}
 
 type SalesChartInsight = {
   label: string;
@@ -282,196 +252,6 @@ function getSalesChartInsights({
       period.chartGranularity === "hour" ? "Jam terbaik" : "Hari terbaik",
     insights,
   };
-}
-
-function SalesChart({
-  points,
-  averageRevenue,
-  hasRevenue,
-  bestLabel,
-}: {
-  points: AdminDashboardTrendPoint[];
-  averageRevenue: number;
-  hasRevenue: boolean;
-  bestLabel: string;
-}) {
-  const width = 760;
-  const left = 50;
-  const right = 750;
-  const top = 35;
-  const bottom = 235;
-  const chartWidth = right - left;
-  const maxRevenue = Math.max(
-    ...points.map((point) => point.revenue),
-    averageRevenue,
-    0,
-  );
-  const maxAxisValue = getRoundedChartMax(maxRevenue);
-  const chartPoints = points.map((point, index) => {
-    const x =
-      points.length === 1
-        ? left
-        : left + (chartWidth / Math.max(points.length - 1, 1)) * index;
-    const y = bottom - (point.revenue / maxAxisValue) * (bottom - top);
-
-    return { ...point, x, y };
-  });
-  const linePath = chartPoints
-    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
-    .join(" ");
-  const areaPath = chartPoints.length
-    ? `${linePath} L${chartPoints[chartPoints.length - 1]?.x ?? right} ${bottom} L${chartPoints[0]?.x ?? left} ${bottom} Z`
-    : "";
-  const highlightedPoint = chartPoints.reduce(
-    (selected, point) => (point.revenue > selected.revenue ? point : selected),
-    chartPoints[0] ?? {
-      dateKey: "",
-      label: "",
-      revenue: 0,
-      transactionCount: 0,
-      itemSold: 0,
-      x: left,
-      y: bottom,
-    },
-  );
-  const averageY = bottom - (averageRevenue / maxAxisValue) * (bottom - top);
-  const gridValues = [
-    maxAxisValue,
-    maxAxisValue * 0.75,
-    maxAxisValue * 0.5,
-    maxAxisValue * 0.25,
-    0,
-  ];
-
-  return (
-    <div className="scrollbar-clean mt-5 min-w-0 overflow-x-auto overflow-y-hidden overscroll-x-contain">
-      <div className="relative h-[220px] min-w-[640px] sm:h-[250px] lg:min-w-0">
-        {hasRevenue ? (
-          <div
-            className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs"
-            style={{
-              left: `${(highlightedPoint.x / width) * 100}%`,
-              top: `${Math.max(highlightedPoint.y - 58, 0)}px`,
-            }}
-          >
-            <p className="text-[10px] font-medium uppercase text-[var(--accent)]">
-              {bestLabel}
-            </p>
-            <p className="mt-1 text-[var(--muted)]">{highlightedPoint.label}</p>
-            <p className="mt-0.5 font-semibold text-neutral-950">
-              {formatMoney(highlightedPoint.revenue)}
-            </p>
-          </div>
-        ) : null}
-
-        {averageRevenue > 0 ? (
-          <div
-            className="pointer-events-none absolute right-0 z-10 -translate-y-1/2 rounded-full border border-[var(--border)] bg-white/90 px-2.5 py-1 text-[10px] font-medium text-[var(--muted)]"
-            style={{ top: `${(averageY / 260) * 100}%` }}
-          >
-            Rata-rata {formatCompactMoney(averageRevenue)}
-          </div>
-        ) : null}
-
-        {!hasRevenue ? (
-          <div className="pointer-events-none absolute inset-x-10 top-1/2 z-10 -translate-y-1/2 rounded-2xl border border-dashed border-[var(--border)] bg-white/85 px-4 py-5 text-center">
-            <p className="text-sm font-medium text-neutral-900">
-              Belum ada penjualan pada periode ini.
-            </p>
-            <p className="mt-1 text-xs text-[var(--muted)]">
-              Transaksi completed akan otomatis muncul di grafik.
-            </p>
-          </div>
-        ) : null}
-
-        <svg
-          viewBox="0 0 760 260"
-          preserveAspectRatio="none"
-          className="h-full w-full overflow-visible"
-          role="img"
-          aria-label="Grafik ringkasan penjualan"
-        >
-          <defs>
-            <linearGradient id="salesAreaGradient" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.24" />
-              <stop
-                offset="100%"
-                stopColor="var(--accent)"
-                stopOpacity="0.02"
-              />
-            </linearGradient>
-          </defs>
-
-          {[top, top + 50, top + 100, top + 150, bottom].map((y) => (
-            <line
-              key={y}
-              x1={left}
-              x2={right}
-              y1={y}
-              y2={y}
-              stroke="var(--border)"
-              strokeWidth="1"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-
-          {averageRevenue > 0 ? (
-            <line
-              x1={left}
-              x2={right}
-              y1={averageY}
-              y2={averageY}
-              stroke="var(--accent)"
-              strokeDasharray="5 6"
-              strokeOpacity="0.45"
-              strokeWidth="1.5"
-              vectorEffect="non-scaling-stroke"
-            />
-          ) : null}
-
-          {areaPath ? (
-            <path d={areaPath} fill="url(#salesAreaGradient)" />
-          ) : null}
-
-          {linePath ? (
-            <path
-              d={linePath}
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-            />
-          ) : null}
-
-          {chartPoints.map((point) => {
-            const isHighlighted =
-              hasRevenue && point.dateKey === highlightedPoint.dateKey;
-
-            return (
-              <circle
-                key={point.dateKey}
-                cx={point.x}
-                cy={point.y}
-                r={isHighlighted ? "5.5" : "4"}
-                fill={isHighlighted ? "var(--accent)" : "white"}
-                stroke="var(--accent)"
-                strokeWidth={isHighlighted ? "2.5" : "2"}
-                vectorEffect="non-scaling-stroke"
-              />
-            );
-          })}
-        </svg>
-
-        <div className="pointer-events-none absolute inset-y-0 left-0 flex w-10 flex-col justify-between pb-5 pt-7 text-[10px] text-[var(--muted)]">
-          {gridValues.map((value) => (
-            <span key={value}>{formatCompactMoney(value)}</span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function getAlertToneClass(tone: AdminDashboardAlertTone) {
@@ -796,7 +576,7 @@ export default async function AdminDashboardPage({
               ))}
             </div>
 
-            <SalesChart
+            <SalesTrendChart
               points={dashboard.trend}
               averageRevenue={salesChartInsights.averageRevenue}
               hasRevenue={salesChartInsights.hasRevenue}
