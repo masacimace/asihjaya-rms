@@ -19,7 +19,6 @@ import {
   TrendingUp,
   UsersRound,
   WalletCards,
-  WifiOff,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -75,7 +74,7 @@ const quickActions = [
   {
     label: "Pemasukan Bank",
     description: "Tinjau transaksi Buyback",
-    href: "/admin/buyback?q=&range=thisMonth&process=all&payout=all",
+    href: "/admin/operasional/pemasukan-bank",
     icon: Banknote,
   },
 ] as const;
@@ -185,7 +184,6 @@ function getComparison(
     label: comparisonLabel,
   };
 }
-
 
 type SalesChartInsight = {
   label: string;
@@ -337,39 +335,6 @@ export default async function AdminDashboardPage({
       iconClassName: "bg-emerald-50 text-emerald-700",
     },
   ];
-  const operationalStatusCards = [
-    {
-      label: "Stok Tersedia",
-      value: formatInteger(dashboard.summary.availableStock),
-      description: "Item aktif siap jual",
-      icon: Boxes,
-      iconClassName: "bg-blue-50 text-blue-700",
-    },
-    {
-      label: "Transaksi Hold",
-      value: formatInteger(dashboard.summary.activeHeldCarts),
-      description: "Hold cart aktif",
-      icon: ClipboardCheck,
-      iconClassName: "bg-amber-50 text-amber-700",
-    },
-    {
-      label: "Shift Aktif",
-      value: formatInteger(dashboard.summary.activeShifts),
-      description: "Shift kasir berjalan",
-      icon: Store,
-      iconClassName: "bg-neutral-100 text-neutral-700",
-    },
-    {
-      label: "Print Job Gagal",
-      value: formatInteger(dashboard.summary.failedHardwareJobsToday),
-      description: "Pada periode ini",
-      icon: WifiOff,
-      iconClassName:
-        dashboard.summary.failedHardwareJobsToday > 0
-          ? "bg-red-50 text-red-600"
-          : "bg-emerald-50 text-emerald-700",
-    },
-  ];
   const salesChartInsights = getSalesChartInsights({
     points: dashboard.trend,
     period: dashboard.period,
@@ -482,7 +447,7 @@ export default async function AdminDashboardPage({
                       </div>
 
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+                        <p className="text-[11px] font-semibold uppercase text-[var(--muted)]">
                           {label}
                         </p>
                         <p className="mt-1 truncate text-sm font-semibold text-neutral-950 sm:text-xl">
@@ -505,36 +470,6 @@ export default async function AdminDashboardPage({
               },
             )}
           </section>
-
-          <section className="grid min-w-0 grid-cols-2 gap-3 2xl:grid-cols-4">
-            {operationalStatusCards.map(
-              ({ label, value, description, icon: Icon, iconClassName }) => (
-                <article
-                  key={label}
-                  className="flex min-w-0 items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-3 sm:p-4"
-                >
-                  <div
-                    className={`grid size-10 shrink-0 place-items-center rounded-xl ${iconClassName}`}
-                  >
-                    <Icon className="size-5" />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-                      {label}
-                    </p>
-                    <p className="mt-0.5 text-lg font-semibold text-neutral-950">
-                      {value}
-                    </p>
-                    <p className="truncate text-[11px] text-[var(--muted)]">
-                      {description}
-                    </p>
-                  </div>
-                </article>
-              ),
-            )}
-          </section>
-
           <GoldReferenceCard result={goldReference} />
 
           <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">

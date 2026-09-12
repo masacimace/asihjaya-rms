@@ -213,8 +213,8 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
                 </span>
               </div>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Referensi eksternal 1 gram via Emas API ID. Referensi ini tidak
-                mengubah Harga / Gram ASIHJAYA.
+                Referensi eksternal 1 gram. Referensi ini hanya sebagai acuan
+                harga pasar dari berbagai sumber.
               </p>
             </div>
           </div>
@@ -268,20 +268,17 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
               {selectedReference.brand} · sumber {selectedReference.resource} ·{" "}
               {selectedReference.weightGrams} gram via {data.provider}. Hanya
-              sebagai referensi pasar dan tidak mengubah Harga / Gram ASIHJAYA.
+              sebagai referensi acuan harga pasar dari berbagai sumber.
             </p>
           </div>
         </div>
 
         <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end lg:max-w-[52%] lg:justify-end">
           <label className="min-w-0 flex-1 sm:min-w-[220px] sm:flex-none">
-            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Referensi aktif
-            </span>
             <span className="relative block">
               <select
                 aria-label="Pilih referensi harga emas"
-                className="h-9 w-full appearance-none rounded-lg border border-[var(--border)] bg-white py-1.5 pl-3 pr-9 text-xs font-semibold text-neutral-800 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] sm:w-auto sm:min-w-[220px]"
+                className="h-9 w-full appearance-none rounded-lg border border-[var(--border)] bg-white py-1.5 pl-3 pr-9 !text-sm font-semibold text-neutral-800 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] sm:w-auto sm:min-w-[220px]"
                 value={selectedReference.referenceKey}
                 onChange={(event: ChangeEvent<HTMLSelectElement>) =>
                   persistReferenceKey(event.target.value)
