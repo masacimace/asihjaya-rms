@@ -120,6 +120,7 @@ const expectedRouteFiles = [
   "app/api/hardware-agents/heartbeat/route.ts",
   "app/api/hardware-jobs/[jobId]/route.ts",
   "app/api/hardware-jobs/claim/route.ts",
+  "app/(admin)/admin/pengaturan/warna-produk/page.tsx",
   "app/api/hardware/v2/jobs/[jobId]/attempts/[attemptId]/lease/route.ts",
   "app/api/hardware/v2/jobs/[jobId]/attempts/[attemptId]/route.ts",
   "app/api/hardware/v2/jobs/claim/route.ts",
@@ -238,7 +239,9 @@ async function main() {
 
     try {
       await access(absolutePath);
-      problems.push(`Route file harus dihapus karena sudah tidak dipakai: ${retiredFile}`);
+      problems.push(
+        `Route file harus dihapus karena sudah tidak dipakai: ${retiredFile}`,
+      );
     } catch {
       // File memang sudah tidak ada, sesuai yang diharapkan.
     }
