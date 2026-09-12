@@ -92,7 +92,7 @@ assert.notEqual(
       ),
     },
   }),
-  "Harga/Gram khusus transaksi wajib mengubah fingerprint checkout.",
+  "Harga / Gram khusus transaksi wajib mengubah fingerprint checkout.",
 );
 
 assert.notEqual(
@@ -112,7 +112,7 @@ assert.notEqual(
       ),
     },
   }),
-  "Harga Dasar khusus transaksi wajib mengubah fingerprint checkout.",
+  "Harga Jual khusus transaksi wajib mengubah fingerprint checkout.",
 );
 
 assert.notEqual(

@@ -36,7 +36,7 @@ export function getPosCartAddIssue({
   if (itemIds.has(item.id)) {
     return {
       type: "duplicate",
-      message: `${item.sku} sudah ada di keranjang. Gunakan Edit Item jika ingin mengubah Berat, Harga/Gram, Harga Dasar, Diskon, Ongkos, atau Round.`,
+      message: `${item.sku} sudah ada di keranjang. Gunakan Edit Item jika ingin mengubah Berat (Gram), Harga / Gram, Harga Jual, Diskon, Ongkos, atau Round.`,
     };
   }
 

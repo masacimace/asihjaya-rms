@@ -103,7 +103,7 @@ export function normalizePosCartPricingInputs(
 
     if (!/^\d+$/.test(pricePerGram) || Number(pricePerGram) <= 0) {
       throw new PosTransactionPricingError(
-        "Harga/Gram transaksi tidak valid. Kembali ke cart lalu atur harga item.",
+        "Harga / Gram tidak valid. Kembali ke cart lalu atur harga item.",
       );
     }
 
@@ -122,7 +122,7 @@ export function normalizePosCartPricingInputs(
       (!isSafeMoney(basePriceAmount) || Number(basePriceAmount) <= 0)
     ) {
       throw new PosTransactionPricingError(
-        "Harga Dasar Transaksi khusus tidak valid. Gunakan nominal lebih dari Rp0.",
+        "Harga Jual khusus tidak valid. Gunakan nominal lebih dari Rp0.",
       );
     }
 
@@ -249,7 +249,7 @@ export async function resolvePosTransactionPricing({
     } else {
       if (!activePricePerGram) {
         throw new PosTransactionPricingError(
-          `Harga standar untuk kadar ${item.purityPercent}% belum tersedia. Edit Harga/Gram transaksi pada item ini agar penjualan tetap bisa dilanjutkan.`,
+          `Harga standar untuk kadar ${item.purityPercent}% belum tersedia. Edit Harga / Gram pada item ini agar penjualan tetap bisa dilanjutkan.`,
         );
       }
 
@@ -264,7 +264,7 @@ export async function resolvePosTransactionPricing({
 
     if (!calculatedBasePriceAmount) {
       throw new PosTransactionPricingError(
-        `${item.sku} belum bisa dihitung karena Berat atau Harga/Gram transaksi tidak valid.`,
+        `${item.sku} belum bisa dihitung karena Berat (Gram) atau Harga / Gram tidak valid.`,
       );
     }
 
@@ -276,7 +276,7 @@ export async function resolvePosTransactionPricing({
 
     if (!Number.isSafeInteger(basePriceAmount) || basePriceAmount <= 0) {
       throw new PosTransactionPricingError(
-        `Harga Dasar Transaksi ${item.sku} tidak valid. Kembali ke cart lalu atur item.`,
+        `Harga Jual ${item.sku} tidak valid. Kembali ke cart lalu atur item.`,
       );
     }
 
@@ -290,8 +290,8 @@ export async function resolvePosTransactionPricing({
     if (!finalPriceAmount) {
       throw new PosTransactionPricingError(
         input.discountAmount > basePriceAmount
-          ? `Diskon ${item.sku} tidak boleh lebih besar dari Harga Dasar.`
-          : `Perhitungan harga ${item.sku} tidak valid. Periksa Berat, Harga/Gram, Harga Dasar, Diskon, Ongkos, dan Round.`,
+          ? `Diskon ${item.sku} tidak boleh lebih besar dari Harga Jual.`
+          : `Perhitungan harga ${item.sku} tidak valid. Periksa Berat (Gram), Harga / Gram, Harga Jual, Diskon, Ongkos, dan Round.`,
       );
     }
 

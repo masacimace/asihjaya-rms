@@ -216,7 +216,7 @@ export function buildPosCartItem(
   if (!pricePerGram || Number(pricePerGram) <= 0) {
     return {
       status: "error",
-      message: "Harga/Gram transaksi harus lebih dari Rp0.",
+      message: "Harga / Gram harus lebih dari Rp0.",
     };
   }
 
@@ -228,7 +228,7 @@ export function buildPosCartItem(
   if (!calculatedBasePriceAmount) {
     return {
       status: "error",
-      message: `${item.sku} belum bisa dihitung karena Berat atau Harga/Gram transaksi tidak valid.`,
+      message: `${item.sku} belum bisa dihitung karena Berat (Gram) atau Harga / Gram tidak valid.`,
     };
   }
 
@@ -244,7 +244,7 @@ export function buildPosCartItem(
   ) {
     return {
       status: "error",
-      message: "Harga Dasar Transaksi khusus harus lebih dari Rp0.",
+      message: "Harga Jual khusus harus lebih dari Rp0.",
     };
   }
 
@@ -265,8 +265,8 @@ export function buildPosCartItem(
       status: "error",
       message:
         values.discountAmount > basePriceAmount
-          ? "Diskon item tidak boleh lebih besar dari Harga Dasar."
-          : "Perhitungan harga item tidak valid. Periksa Berat, Harga/Gram, Harga Dasar, Diskon, Ongkos, dan Round.",
+          ? "Diskon item tidak boleh lebih besar dari Harga Jual."
+          : "Perhitungan harga item tidak valid. Periksa Berat (Gram), Harga / Gram, Harga Jual, Diskon, Ongkos, dan Round.",
     };
   }
 

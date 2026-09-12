@@ -5,6 +5,7 @@ import {
   BadgePercent,
   CircleDollarSign,
   Hammer,
+  PencilLine,
   RotateCcw,
   Scale,
   X,
@@ -34,9 +35,7 @@ export type PosItemPricingDialogProps = {
   onConfirm: (item: PosCartItem) => void;
 };
 
-export function PosItemPricingDialog(
-  props: PosItemPricingDialogProps,
-) {
+export function PosItemPricingDialog(props: PosItemPricingDialogProps) {
   const existingItem = props.existingItem ?? null;
   const resetKey = [
     props.item.id,
@@ -97,7 +96,9 @@ function PosItemPricingDialogContent({
   );
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const transactionWeightGram = normalizePosTransactionWeight(transactionWeightInput);
+  const transactionWeightGram = normalizePosTransactionWeight(
+    transactionWeightInput,
+  );
   const transactionPricePerGram = parsePaymentAmountInput(pricePerGramInput);
   const transactionPricePerGramText =
     transactionPricePerGram > 0 ? String(transactionPricePerGram) : null;
@@ -120,15 +121,18 @@ function PosItemPricingDialogContent({
   const basePriceAmount = isBasePriceOverride
     ? manualBasePriceAmount
     : (calculatedBasePriceAmount ?? 0);
-  const projectedFinalAmount = basePriceAmount > 0
-    ? basePriceAmount - discountAmount + laborAmount + adjustmentAmount
-    : 0;
-  const hasItemPricingData = Boolean(transactionWeightGram && item.purityPercent);
+  const projectedFinalAmount =
+    basePriceAmount > 0
+      ? basePriceAmount - discountAmount + laborAmount + adjustmentAmount
+      : 0;
+  const hasItemPricingData = Boolean(
+    transactionWeightGram && item.purityPercent,
+  );
   const hasValidTransactionPrice = Boolean(
     hasItemPricingData &&
-      transactionPricePerGramText &&
-      calculatedBasePriceAmount &&
-      basePriceAmount > 0,
+    transactionPricePerGramText &&
+    calculatedBasePriceAmount &&
+    basePriceAmount > 0,
   );
   const activePricePerGram = Number(item.activePricePerGram ?? 0);
   const rateDifference =
@@ -192,9 +196,6 @@ function PosItemPricingDialogContent({
         <header className="shrink-0 border-b border-[var(--border)] px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase text-[var(--accent)]">
-                Pricing Item
-              </p>
               <h2
                 id="pos-item-pricing-title"
                 className="mt-1 text-base font-semibold text-neutral-950 sm:text-lg"
@@ -202,7 +203,8 @@ function PosItemPricingDialogContent({
                 {existingItem ? "Edit item transaksi" : "Tambahkan produk"}
               </h2>
               <p className="mt-2 text-xs leading-5 text-[var(--muted)] sm:text-sm sm:leading-6">
-                Timbang ulang bila diperlukan, lalu atur Harga/Gram transaksi. Perubahan berat baru disimpan ke item setelah checkout berhasil.
+                Timbang ulang bila diperlukan, lalu atur Harga / Gram. Perubahan
+                berat baru disimpan ke item setelah checkout berhasil.
               </p>
             </div>
 
@@ -246,7 +248,6 @@ function PosItemPricingDialogContent({
             </div>
           </div>
 
-
           <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -255,10 +256,11 @@ function PosItemPricingDialogContent({
                   className="flex items-center gap-2 text-sm font-semibold text-neutral-900"
                 >
                   <Scale className="size-4 text-[var(--accent)]" />
-                  Berat Transaksi
+                  Berat (Gram)
                 </label>
                 <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
-                  Timbang ulang item sebelum dijual bila berat tersimpan perlu dikoreksi.
+                  Timbang ulang item sebelum dijual bila berat tersimpan perlu
+                  dikoreksi.
                 </p>
               </div>
               <div className="text-right text-[11px] text-[var(--muted)]">
@@ -274,7 +276,9 @@ function PosItemPricingDialogContent({
                 id="pos-transaction-weight"
                 value={transactionWeightInput}
                 onChange={(event) => {
-                  setTransactionWeightInput(formatPosWeightInput(event.target.value));
+                  setTransactionWeightInput(
+                    formatPosWeightInput(event.target.value),
+                  );
                   setFeedback(null);
                 }}
                 inputMode="decimal"
@@ -299,89 +303,13 @@ function PosItemPricingDialogContent({
                   </span>
                 )
               ) : null}
-              {weightSource === "reweighed" && item.weightGram && transactionWeightGram ? (
+              {weightSource === "reweighed" &&
+              item.weightGram &&
+              transactionWeightGram ? (
                 <span className="text-[var(--muted)]">
                   Sebelumnya {item.weightGram} gr
                 </span>
               ) : null}
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-[var(--border)] bg-white p-3">
-              <p className="text-xs text-[var(--muted)]">
-                Harga Standar Kadar {item.purityPercent ?? "-"}%
-              </p>
-              <p className="mt-1 text-base font-semibold text-neutral-950">
-                {item.activePricePerGram
-                  ? `${formatCurrency(item.activePricePerGram)} / gr`
-                  : "Belum diatur"}
-              </p>
-              <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
-                Default dari Pengaturan Harga / Gram.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-white p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-[var(--muted)]">Harga Dasar Transaksi</p>
-                {isBasePriceOverride ? (
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                    Harga khusus
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={enableBasePriceOverride}
-                    disabled={!calculatedBasePriceAmount}
-                    className="text-[11px] font-semibold text-[var(--accent)] transition hover:underline disabled:cursor-not-allowed disabled:text-neutral-300"
-                  >
-                    Ubah harga dasar
-                  </button>
-                )}
-              </div>
-
-              {isBasePriceOverride ? (
-                <>
-                  <input
-                    aria-label="Harga Dasar Transaksi khusus"
-                    value={basePriceInput}
-                    onChange={(event) => {
-                      setBasePriceInput(formatRupiahInput(event.target.value));
-                      setFeedback(null);
-                    }}
-                    inputMode="numeric"
-                    autoComplete="off"
-                    placeholder="0"
-                    className="mt-2 h-10 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-semibold text-neutral-950 outline-none transition placeholder:font-normal placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                  />
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] leading-4">
-                    <span className="text-[var(--muted)]">
-                      Terhitung {calculatedBasePriceAmount
-                        ? formatCurrency(calculatedBasePriceAmount)
-                        : "belum tersedia"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={resetBasePriceOverride}
-                      className="inline-flex items-center gap-1 font-semibold text-neutral-600 transition hover:text-[var(--accent)]"
-                    >
-                      <RotateCcw className="size-3" />
-                      Reset
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="mt-1 text-base font-semibold text-neutral-950">
-                    {calculatedBasePriceAmount
-                      ? formatCurrency(calculatedBasePriceAmount)
-                      : "Belum tersedia"}
-                  </p>
-                  <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
-                    Berat × Harga/Gram transaksi.
-                  </p>
-                </>
-              )}
             </div>
           </div>
 
@@ -393,10 +321,11 @@ function PosItemPricingDialogContent({
                   className="flex items-center gap-2 text-sm font-semibold text-neutral-900"
                 >
                   <CircleDollarSign className="size-4 text-[var(--accent)]" />
-                  Harga / Gram Transaksi
+                  Harga / Gram
                 </label>
                 <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
-                  Nilai ini hanya digunakan untuk item pada transaksi ini.
+                  Nilai ini digunakan untuk menghitung harga jual item pada
+                  transaksi ini.
                 </p>
               </div>
 
@@ -445,20 +374,106 @@ function PosItemPricingDialogContent({
 
             {!item.activePricePerGram ? (
               <p className="mt-2 text-xs leading-5 text-amber-700">
-                Harga standar kadar ini belum diatur. Isi Harga/Gram transaksi di atas untuk melanjutkan penjualan; rate global tidak akan berubah.
+                Harga standar kadar ini belum diatur. Isi Harga / Gram di atas
+                untuk melanjutkan penjualan; rate global tidak akan berubah.
               </p>
             ) : null}
           </div>
 
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-[var(--border)] bg-white p-3">
+              <p className="text-xs text-[var(--muted)]">
+                Harga Standar Kadar {item.purityPercent ?? "-"}%
+              </p>
+              <p className="mt-1 text-base font-semibold text-neutral-950">
+                {item.activePricePerGram
+                  ? `${formatCurrency(item.activePricePerGram)} / gr`
+                  : "Belum diatur"}
+              </p>
+              <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+                Default dari Pengaturan Harga / Gram.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] bg-white p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-[var(--muted)]">Harga Jual</p>
+                {isBasePriceOverride ? (
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                    Harga khusus
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={enableBasePriceOverride}
+                    disabled={!calculatedBasePriceAmount}
+                    className="inline-flex items-center gap-1.5 !text-[12px] !font-semibold text-[var(--accent)] transition hover:text-[var(--accent)]/80 disabled:cursor-not-allowed disabled:text-neutral-300"
+                  >
+                    <PencilLine className="size-3.5" />
+                    Edit Harga
+                  </button>
+                )}
+              </div>
+
+              {isBasePriceOverride ? (
+                <>
+                  <input
+                    aria-label="Harga Jual khusus"
+                    value={basePriceInput}
+                    onChange={(event) => {
+                      setBasePriceInput(formatRupiahInput(event.target.value));
+                      setFeedback(null);
+                    }}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="0"
+                    className="mt-2 h-10 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-semibold text-neutral-950 outline-none transition placeholder:font-normal placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                  />
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] leading-4">
+                    <span className="text-[var(--muted)]">
+                      Terhitung{" "}
+                      {calculatedBasePriceAmount
+                        ? formatCurrency(calculatedBasePriceAmount)
+                        : "belum tersedia"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={resetBasePriceOverride}
+                      className="inline-flex items-center gap-1 font-semibold text-neutral-600 transition hover:text-[var(--accent)]"
+                    >
+                      <RotateCcw className="size-3" />
+                      Reset
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-base font-semibold text-neutral-950">
+                    {calculatedBasePriceAmount
+                      ? formatCurrency(calculatedBasePriceAmount)
+                      : "Belum tersedia"}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+                    Berat × Harga / Gram.
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+
           <div className="mt-3 rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-3 text-xs leading-5 text-[var(--muted)]">
-            Potongan/Gram: <span className="font-semibold text-neutral-800">{formatCurrency(item.deductionPerGram ?? 0)}</span>. Nilai ini tetap disimpan sebagai data item dan tidak masuk perhitungan harga jual.
+            Potongan/Gram:{" "}
+            <span className="font-semibold text-neutral-800">
+              {formatCurrency(item.deductionPerGram ?? 0)}
+            </span>
+            . Nilai ini tetap disimpan sebagai data item dan tidak masuk
+            perhitungan harga jual.
           </div>
 
           {!hasItemPricingData ? (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
               {!item.purityPercent
                 ? "Kadar Persen item belum diisi. Lengkapi data produk sebelum transaksi."
-                : "Isi Berat Transaksi hasil timbang sebelum melanjutkan."}
+                : "Isi Berat (Gram) hasil timbang sebelum melanjutkan."}
             </div>
           ) : null}
 
@@ -495,7 +510,9 @@ function PosItemPricingDialogContent({
               <span
                 className={cn(
                   "text-xl font-semibold",
-                  projectedFinalAmount > 0 ? "text-neutral-950" : "text-red-600",
+                  projectedFinalAmount > 0
+                    ? "text-neutral-950"
+                    : "text-red-600",
                 )}
               >
                 {formatCurrency(Math.max(projectedFinalAmount, 0))}
@@ -503,7 +520,7 @@ function PosItemPricingDialogContent({
             </div>
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-[var(--muted)]">
               <span className="flex items-center gap-1.5">
-                Harga Dasar
+                Harga Jual
                 {isBasePriceOverride ? (
                   <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">
                     khusus
@@ -588,7 +605,9 @@ function MoneyField({
         placeholder="0"
         className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-semibold text-neutral-950 outline-none transition placeholder:font-normal placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
       />
-      <p className="mt-1.5 text-[11px] leading-4 text-[var(--muted)]">{helper}</p>
+      <p className="mt-1.5 text-[11px] leading-4 text-[var(--muted)]">
+        {helper}
+      </p>
     </label>
   );
 }

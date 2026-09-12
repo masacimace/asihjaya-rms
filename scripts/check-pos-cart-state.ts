@@ -171,7 +171,7 @@ const invalidManualBaseExample = buildPosCartItem(
 );
 assert.deepEqual(invalidManualBaseExample, {
   status: "error",
-  message: "Harga Dasar Transaksi khusus harus lebih dari Rp0.",
+  message: "Harga Jual khusus harus lebih dari Rp0.",
 });
 
 const manualThenResetToGlobalExample = buildPosCartItem(
@@ -299,7 +299,7 @@ assert.deepEqual(getPosCartSummary([firstItem, secondItem]), {
 assert.deepEqual(getPosCartAddIssue({ item: firstItem, itemIds }), {
   type: "duplicate",
   message:
-    "SKU-001 sudah ada di keranjang. Gunakan Edit Item jika ingin mengubah Berat, Harga/Gram, Harga Dasar, Diskon, Ongkos, atau Round.",
+    "SKU-001 sudah ada di keranjang. Gunakan Edit Item jika ingin mengubah Berat (Gram), Harga / Gram, Harga Jual, Diskon, Ongkos, atau Round.",
 });
 assert.equal(
   getPosCartAddIssue({

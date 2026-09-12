@@ -146,10 +146,10 @@ const [dialogSource, actionSource, heldQuerySource] = await Promise.all([
   readFile("src/features/pos/queries.ts", "utf8"),
 ]);
 
-assert.ok(dialogSource.includes("Berat Transaksi"));
+assert.ok(dialogSource.includes("Berat (Gram)"));
 assert.ok(dialogSource.includes("Ditimbang ulang"));
 assert.ok(dialogSource.includes("transactionWeightGram"));
-assert.ok(dialogSource.includes("Ubah harga dasar"));
+assert.ok(dialogSource.includes("Edit Harga"));
 assert.ok(dialogSource.includes("Harga khusus"));
 assert.ok(actionSource.includes('action: "product_item.weight_reweighed_at_sale"'));
 assert.ok(actionSource.includes("basePriceOverrides"));
