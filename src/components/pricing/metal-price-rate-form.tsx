@@ -278,7 +278,7 @@ export function MetalPriceRateForm({
         </div>
 
         {filteredActiveRows.length > 0 ? (
-          <div className="scrollbar-clean max-h-[500px] divide-y divide-[var(--border)] overflow-y-auto overscroll-contain">
+          <div className="min-w-0 divide-y divide-[var(--border)]">
             {activeRows.map((row) => {
               const fieldName = `ratePerGram:${row.purityKey}`;
               const canRetire = row.itemCount === 0;

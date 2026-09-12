@@ -24,6 +24,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -200,7 +201,7 @@ function PosAccessCard({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold text-neutral-950">
+        <p className="text-sm font-semibold text-neutral-950">
           Buka Sistem POS
         </p>
 
@@ -380,6 +381,8 @@ export function AdminShell({
   const pathname = usePathname();
   const router = useRouter();
   const refreshTimerRef = useRef<number | null>(null);
+  const mainScrollRef = useRef<HTMLElement>(null);
+  const previousPathnameRef = useRef(pathname);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -406,6 +409,13 @@ export function AdminShell({
       refreshTimerRef.current = null;
     }, 100);
   }, [router]);
+
+  useLayoutEffect(() => {
+    if (previousPathnameRef.current === pathname) return;
+
+    previousPathnameRef.current = pathname;
+    mainScrollRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname]);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -574,7 +584,10 @@ export function AdminShell({
           </div>
         </header>
 
-        <main className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-6 lg:p-8">
+        <main
+          ref={mainScrollRef}
+          className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-6 lg:p-8"
+        >
           {children}
         </main>
       </div>
