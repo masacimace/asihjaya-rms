@@ -1,6 +1,10 @@
+"use client";
+
+import { useSyncExternalStore, type ChangeEvent } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  ChevronDown,
   Clock3,
   Coins,
   Minus,
@@ -8,7 +12,14 @@ import {
   WifiOff,
 } from "lucide-react";
 
-import type { GoldReferenceResult } from "@/server/integrations/gold-reference/emas-api";
+import type {
+  GoldReferenceResult,
+  GoldReferenceSnapshot,
+} from "@/server/integrations/gold-reference/emas-api";
+
+const STORAGE_KEY = "asihjaya.gold-reference.selection.v1";
+const STORAGE_EVENT = "asihjaya:gold-reference-selection";
+let memoryReferenceKey: string | null = null;
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -116,7 +127,72 @@ function ChangeBadge({
   );
 }
 
+function readStoredReferenceKey() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored !== null) memoryReferenceKey = stored;
+    return stored ?? memoryReferenceKey;
+  } catch {
+    return memoryReferenceKey;
+  }
+}
+
+function subscribeStoredReferenceKey(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => undefined;
+
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== STORAGE_KEY) return;
+    memoryReferenceKey = event.newValue;
+    onStoreChange();
+  };
+  const onLocalChange = () => onStoreChange();
+
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(STORAGE_EVENT, onLocalChange);
+
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(STORAGE_EVENT, onLocalChange);
+  };
+}
+
+function persistReferenceKey(referenceKey: string) {
+  memoryReferenceKey = referenceKey;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, referenceKey);
+  } catch {
+    // Browser storage is optional. Keep the in-memory selection as fallback.
+  }
+
+  window.dispatchEvent(new Event(STORAGE_EVENT));
+}
+
+function findSelectedReference(
+  references: GoldReferenceSnapshot[],
+  storedReferenceKey: string | null,
+  defaultReferenceKey: string,
+) {
+  return (
+    references.find(
+      (reference) => reference.referenceKey === storedReferenceKey,
+    ) ??
+    references.find(
+      (reference) => reference.referenceKey === defaultReferenceKey,
+    ) ??
+    references[0]
+  );
+}
+
 export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
+  const storedReferenceKey = useSyncExternalStore(
+    subscribeStoredReferenceKey,
+    readStoredReferenceKey,
+    () => null,
+  );
+
   if (result.status !== "ready") {
     const isNotConfigured = result.status === "not_configured";
 
@@ -137,8 +213,8 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
                 </span>
               </div>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                ANTAM 1 gram · source resmi ANTAM via Emas API ID. Referensi ini
-                tidak mengubah Harga / Gram ASIHJAYA.
+                Referensi eksternal 1 gram via Emas API ID. Referensi ini tidak
+                mengubah Harga / Gram ASIHJAYA.
               </p>
             </div>
           </div>
@@ -155,9 +231,19 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
   }
 
   const { data } = result;
-  const freshness = getFreshness(data.updatedAt);
+  const selectedReference = findSelectedReference(
+    data.references,
+    storedReferenceKey,
+    data.defaultReferenceKey,
+  );
+
+  if (!selectedReference) return null;
+
+  const freshness = getFreshness(selectedReference.updatedAt);
   const spread =
-    data.buybackPrice !== null ? data.sellPrice - data.buybackPrice : null;
+    selectedReference.buybackPrice !== null
+      ? selectedReference.sellPrice - selectedReference.buybackPrice
+      : null;
 
   return (
     <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
@@ -172,9 +258,6 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
               <h2 className="font-semibold text-neutral-950">
                 Referensi Harga Emas
               </h2>
-              <span className="rounded-full bg-[var(--accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--accent)]">
-                ANTAM {data.weightGrams} gram
-              </span>
               <span
                 className={`rounded-full px-2 py-1 text-[10px] font-semibold ${freshness.className}`}
               >
@@ -183,21 +266,50 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
             </div>
 
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Source resmi ANTAM ({data.resource}) via {data.provider}. Hanya
+              {selectedReference.brand} · sumber {selectedReference.resource} ·{" "}
+              {selectedReference.weightGrams} gram via {data.provider}. Hanya
               sebagai referensi pasar dan tidak mengubah Harga / Gram ASIHJAYA.
             </p>
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5">
-            <Clock3 className="size-3.5" />
-            {formatDateTime(data.updatedAt)}
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5">
-            <ShieldCheck className="size-3.5 text-emerald-600" />
-            Read-only
-          </span>
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end lg:max-w-[52%] lg:justify-end">
+          <label className="min-w-0 flex-1 sm:min-w-[220px] sm:flex-none">
+            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Referensi aktif
+            </span>
+            <span className="relative block">
+              <select
+                aria-label="Pilih referensi harga emas"
+                className="h-9 w-full appearance-none rounded-lg border border-[var(--border)] bg-white py-1.5 pl-3 pr-9 text-xs font-semibold text-neutral-800 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] sm:w-auto sm:min-w-[220px]"
+                value={selectedReference.referenceKey}
+                onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                  persistReferenceKey(event.target.value)
+                }
+              >
+                {data.references.map((reference) => (
+                  <option
+                    key={reference.referenceKey}
+                    value={reference.referenceKey}
+                  >
+                    {reference.brand} · {reference.resource}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[var(--muted)]" />
+            </span>
+          </label>
+
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5">
+              <Clock3 className="size-3.5" />
+              {formatDateTime(selectedReference.updatedAt)}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5">
+              <ShieldCheck className="size-3.5 text-emerald-600" />
+              Read-only
+            </span>
+          </div>
         </div>
       </div>
 
@@ -207,12 +319,12 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
             Harga Jual Referensi
           </p>
           <p className="mt-2 text-xl font-semibold tracking-tight text-neutral-950 sm:text-2xl">
-            {formatMoney(data.sellPrice)}
+            {formatMoney(selectedReference.sellPrice)}
           </p>
           <div className="mt-2">
             <ChangeBadge
-              value={data.sellPriceChange}
-              comparisonUpdatedAt={data.comparisonUpdatedAt}
+              value={selectedReference.sellPriceChange}
+              comparisonUpdatedAt={selectedReference.comparisonUpdatedAt}
             />
           </div>
         </div>
@@ -222,12 +334,14 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
             Harga Buyback Referensi
           </p>
           <p className="mt-2 text-xl font-semibold tracking-tight text-neutral-950 sm:text-2xl">
-            {data.buybackPrice !== null ? formatMoney(data.buybackPrice) : "-"}
+            {selectedReference.buybackPrice !== null
+              ? formatMoney(selectedReference.buybackPrice)
+              : "-"}
           </p>
           <div className="mt-2">
             <ChangeBadge
-              value={data.buybackPriceChange}
-              comparisonUpdatedAt={data.comparisonUpdatedAt}
+              value={selectedReference.buybackPriceChange}
+              comparisonUpdatedAt={selectedReference.comparisonUpdatedAt}
             />
           </div>
         </div>
@@ -240,7 +354,9 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
             {spread !== null ? formatMoney(spread) : "-"}
           </p>
           <p className="mt-2 text-[10px] leading-4 text-[var(--muted)]">
-            Selisih harga jual dan buyback ANTAM 1 gram pada data referensi.
+            Selisih harga jual dan buyback {selectedReference.brand}{" "}
+            {selectedReference.weightGrams} gram dari sumber{" "}
+            {selectedReference.resource}.
           </p>
         </div>
       </div>

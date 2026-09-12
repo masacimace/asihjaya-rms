@@ -1,18 +1,27 @@
 const DEFAULT_BASE_URL = "https://emas.maulanar.my.id";
 const DEFAULT_CACHE_SECONDS = 60 * 60;
 const DEFAULT_TIMEOUT_MS = 8_000;
-const HISTORY_LIMIT = 10;
+const COLLECTION_LIMIT = 100;
+const TARGET_WEIGHT_GRAMS = 1;
 
-const TARGET_REFERENCE = {
+const DEFAULT_REFERENCE = {
   brand: "ANTAM",
   resource: "antam",
-  weightGrams: 1,
 } as const;
+
+const EXCLUDED_BRANDS = new Set([
+  "ANTAM MULIA RETRO",
+  "ANTAM NON PEGADAIAN",
+  "LOTUS ARCHI",
+  "SENTRA BUYBACK",
+]);
 
 type UnknownRecord = Record<string, unknown>;
 
 type NormalizedPriceRecord = {
+  referenceKey: string;
   brand: string;
+  canonicalBrand: string;
   resource: string;
   weightGrams: number;
   sellPrice: number;
@@ -24,7 +33,7 @@ type NormalizedPriceRecord = {
 };
 
 export type GoldReferenceSnapshot = {
-  provider: "Emas API ID";
+  referenceKey: string;
   brand: string;
   resource: string;
   weightGrams: number;
@@ -34,13 +43,19 @@ export type GoldReferenceSnapshot = {
   buybackPriceChange: number | null;
   updatedAt: string | null;
   comparisonUpdatedAt: string | null;
+};
+
+export type GoldReferenceCollection = {
+  provider: "Emas API ID";
+  references: GoldReferenceSnapshot[];
+  defaultReferenceKey: string;
   fetchedAt: string;
 };
 
 export type GoldReferenceResult =
   | {
       status: "ready";
-      data: GoldReferenceSnapshot;
+      data: GoldReferenceCollection;
     }
   | {
       status: "not_configured";
@@ -67,7 +82,7 @@ function toFiniteNumber(value: unknown): number | null {
 }
 
 function toOptionalString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() !== "" ? value : null;
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
 
 function normalizeCandidates(payload: unknown): UnknownRecord[] {
@@ -99,23 +114,25 @@ function toDateKey(value: string | null): string | null {
   return parsed.toISOString().slice(0, 10);
 }
 
+function createReferenceKey(brand: string, resource: string) {
+  return `${brand.trim().toUpperCase()}::${resource.trim().toLowerCase()}`;
+}
+
 function normalizePriceRecord(
   candidate: UnknownRecord,
   originalIndex: number,
 ): NormalizedPriceRecord | null {
-  const brand = toOptionalString(candidate.brand)?.toUpperCase();
+  const brand = toOptionalString(candidate.brand);
   const resource = toOptionalString(candidate.resource)?.toLowerCase();
   const weightGrams =
     toFiniteNumber(candidate.weight) ?? toFiniteNumber(candidate.gramasi);
 
-  if (
-    brand !== TARGET_REFERENCE.brand ||
-    resource !== TARGET_REFERENCE.resource ||
-    weightGrams === null ||
-    Math.abs(weightGrams - TARGET_REFERENCE.weightGrams) >= 0.0001
-  ) {
-    return null;
-  }
+  if (!brand || !resource || weightGrams === null) return null;
+
+  const canonicalBrand = brand.toUpperCase();
+  if (EXCLUDED_BRANDS.has(canonicalBrand)) return null;
+
+  if (Math.abs(weightGrams - TARGET_WEIGHT_GRAMS) >= 0.0001) return null;
 
   const sellPrice = toFiniteNumber(candidate.sell_price);
   if (sellPrice === null || sellPrice <= 0) return null;
@@ -125,8 +142,10 @@ function normalizePriceRecord(
     toOptionalString(candidate.updated_at) ?? toOptionalString(candidate.date);
 
   return {
-    brand: toOptionalString(candidate.brand) ?? TARGET_REFERENCE.brand,
-    resource: toOptionalString(candidate.resource) ?? TARGET_REFERENCE.resource,
+    referenceKey: createReferenceKey(canonicalBrand, resource),
+    brand,
+    canonicalBrand,
+    resource,
     weightGrams,
     sellPrice,
     buybackPrice:
@@ -138,26 +157,27 @@ function normalizePriceRecord(
   };
 }
 
-export function parseEmasApiPricesPayload(
-  payload: unknown,
-): Omit<GoldReferenceSnapshot, "provider" | "fetchedAt"> | null {
-  const records = normalizeCandidates(payload)
-    .map(normalizePriceRecord)
-    .filter((record): record is NormalizedPriceRecord => record !== null)
-    .sort((left, right) => {
-      if (left.sortTimestamp !== null && right.sortTimestamp !== null) {
-        return right.sortTimestamp - left.sortTimestamp;
-      }
+function sortPriceRecords(
+  left: NormalizedPriceRecord,
+  right: NormalizedPriceRecord,
+) {
+  if (left.sortTimestamp !== null && right.sortTimestamp !== null) {
+    return right.sortTimestamp - left.sortTimestamp;
+  }
 
-      if (left.sortTimestamp !== null) return -1;
-      if (right.sortTimestamp !== null) return 1;
-      return left.originalIndex - right.originalIndex;
-    });
+  if (left.sortTimestamp !== null) return -1;
+  if (right.sortTimestamp !== null) return 1;
+  return left.originalIndex - right.originalIndex;
+}
 
-  const latest = records[0];
+function toReferenceSnapshot(
+  records: NormalizedPriceRecord[],
+): GoldReferenceSnapshot | null {
+  const sorted = [...records].sort(sortPriceRecords);
+  const latest = sorted[0];
   if (!latest) return null;
 
-  const previous = records.find((record, index) => {
+  const previous = sorted.find((record, index) => {
     if (index === 0) return false;
 
     if (latest.dateKey && record.dateKey) {
@@ -168,6 +188,7 @@ export function parseEmasApiPricesPayload(
   });
 
   return {
+    referenceKey: latest.referenceKey,
     brand: latest.brand,
     resource: latest.resource,
     weightGrams: latest.weightGrams,
@@ -182,6 +203,57 @@ export function parseEmasApiPricesPayload(
         : null,
     updatedAt: latest.updatedAt,
     comparisonUpdatedAt: previous?.updatedAt ?? null,
+  };
+}
+
+export function parseEmasApiPricesPayload(
+  payload: unknown,
+): Omit<GoldReferenceCollection, "provider" | "fetchedAt"> | null {
+  const groupedRecords = new Map<string, NormalizedPriceRecord[]>();
+
+  normalizeCandidates(payload)
+    .map(normalizePriceRecord)
+    .filter((record): record is NormalizedPriceRecord => record !== null)
+    .forEach((record) => {
+      const existing = groupedRecords.get(record.referenceKey);
+      if (existing) {
+        existing.push(record);
+      } else {
+        groupedRecords.set(record.referenceKey, [record]);
+      }
+    });
+
+  const defaultReferenceKey = createReferenceKey(
+    DEFAULT_REFERENCE.brand,
+    DEFAULT_REFERENCE.resource,
+  );
+
+  const references = Array.from(groupedRecords.values())
+    .map(toReferenceSnapshot)
+    .filter((reference): reference is GoldReferenceSnapshot => reference !== null)
+    .sort((left, right) => {
+      if (left.referenceKey === defaultReferenceKey) return -1;
+      if (right.referenceKey === defaultReferenceKey) return 1;
+
+      const brandOrder = left.brand.localeCompare(right.brand, "id", {
+        sensitivity: "base",
+      });
+      if (brandOrder !== 0) return brandOrder;
+      return left.resource.localeCompare(right.resource, "id", {
+        sensitivity: "base",
+      });
+    });
+
+  const firstReference = references[0];
+  if (!firstReference) return null;
+
+  return {
+    references,
+    defaultReferenceKey: references.some(
+      (reference) => reference.referenceKey === defaultReferenceKey,
+    )
+      ? defaultReferenceKey
+      : firstReference.referenceKey,
   };
 }
 
@@ -219,12 +291,10 @@ function getConfig() {
 
 function buildPricesUrl(baseUrl: string) {
   const url = new URL("/api/prices", baseUrl);
-  url.searchParams.set("brand[eq]", TARGET_REFERENCE.brand);
-  url.searchParams.set("resource[eq]", TARGET_REFERENCE.resource);
-  url.searchParams.set("weight[eq]", String(TARGET_REFERENCE.weightGrams));
+  url.searchParams.set("weight[eq]", String(TARGET_WEIGHT_GRAMS));
   url.searchParams.set("sort_by", "updated_at");
   url.searchParams.set("order", "desc");
-  url.searchParams.set("limit", String(HISTORY_LIMIT));
+  url.searchParams.set("limit", String(COLLECTION_LIMIT));
   return url;
 }
 
@@ -259,7 +329,7 @@ export async function getGoldReference(): Promise<GoldReferenceResult> {
 
     if (!parsed) {
       console.warn(
-        "[gold-reference] Emas API ID response did not contain ANTAM 1g from resource antam.",
+        "[gold-reference] Emas API ID response did not contain an allowed 1 gram reference.",
       );
       return { status: "unavailable" };
     }
