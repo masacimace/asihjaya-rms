@@ -1,9 +1,11 @@
 import { ArrowLeft, BadgeDollarSign, Scale } from "lucide-react";
 import Link from "next/link";
 
+import { GoldReferenceRatePanel } from "@/components/pricing/gold-reference-rate-panel";
 import { MetalPriceRateForm } from "@/components/pricing/metal-price-rate-form";
 import { getMetalPriceRateSettingsData } from "@/features/pricing/metal-price-rates";
 import { requirePermission } from "@/lib/auth/session";
+import { getGoldReference } from "@/server/integrations/gold-reference/emas-api";
 
 export const metadata = {
   title: "Harga / Gram Global",
@@ -13,7 +15,10 @@ export const runtime = "nodejs";
 
 export default async function MetalPriceSettingsPage() {
   const auth = await requirePermission("pricing.manage");
-  const rows = await getMetalPriceRateSettingsData(auth.organization.id);
+  const [rows, goldReference] = await Promise.all([
+    getMetalPriceRateSettingsData(auth.organization.id),
+    getGoldReference(),
+  ]);
 
   return (
     <div className="w-full min-w-0 space-y-6 overflow-x-clip pb-6">
@@ -45,6 +50,7 @@ export default async function MetalPriceSettingsPage() {
         </div>
       </section>
 
+      <GoldReferenceRatePanel result={goldReference} />
       <MetalPriceRateForm rows={rows} />
     </div>
   );

@@ -136,7 +136,7 @@ assert.ok(
   parsedCollection.references.every(
     (reference) => Math.abs(reference.weightGrams - 1) < 0.0001,
   ),
-  "Dashboard hanya boleh membawa referensi 1 gram.",
+  "Dashboard dan Harga/Gram hanya boleh membawa referensi 1 gram.",
 );
 
 const fallbackDefault = parseEmasApiPricesPayload({
@@ -158,8 +158,16 @@ const dashboardSource = readFileSync(
   "src/app/(admin)/admin/page.tsx",
   "utf8",
 );
+const pricingPageSource = readFileSync(
+  "src/app/(admin)/admin/pengaturan/harga-gram/page.tsx",
+  "utf8",
+);
 const cardSource = readFileSync(
   "src/components/admin/dashboard/gold-reference-card.tsx",
+  "utf8",
+);
+const pricingPanelSource = readFileSync(
+  "src/components/pricing/gold-reference-rate-panel.tsx",
   "utf8",
 );
 const integrationSource = readFileSync(
@@ -169,12 +177,23 @@ const integrationSource = readFileSync(
 
 assert.ok(dashboardSource.includes("getGoldReference()"));
 assert.ok(dashboardSource.includes("<GoldReferenceCard result={goldReference} />"));
+assert.ok(pricingPageSource.includes("getGoldReference()"));
+assert.ok(
+  pricingPageSource.includes(
+    "<GoldReferenceRatePanel result={goldReference} />",
+  ),
+);
 assert.ok(cardSource.includes('"use client"'));
-assert.ok(cardSource.includes("Referensi aktif"));
 assert.ok(cardSource.includes("Pilih referensi harga emas"));
 assert.ok(cardSource.includes("asihjaya.gold-reference.selection.v1"));
 assert.ok(cardSource.includes("useSyncExternalStore"));
-assert.ok(cardSource.includes("tidak mengubah Harga / Gram ASIHJAYA"));
+assert.ok(cardSource.includes("referensi acuan harga pasar"));
+assert.ok(pricingPanelSource.includes('"use client"'));
+assert.ok(pricingPanelSource.includes("Referensi aktif"));
+assert.ok(pricingPanelSource.includes("asihjaya.gold-reference.selection.v1"));
+assert.ok(pricingPanelSource.includes("useSyncExternalStore"));
+assert.ok(pricingPanelSource.includes("Rate Global"));
+assert.ok(pricingPanelSource.includes("Read-only"));
 assert.ok(integrationSource.includes('new URL("/api/prices", baseUrl)'));
 assert.ok(integrationSource.includes('url.searchParams.set("weight[eq]"'));
 assert.ok(!integrationSource.includes('url.searchParams.set("brand[eq]"'));
@@ -183,3 +202,7 @@ assert.ok(integrationSource.includes('"ANTAM MULIA RETRO"'));
 assert.ok(integrationSource.includes('"ANTAM NON PEGADAIAN"'));
 assert.ok(integrationSource.includes('"LOTUS ARCHI"'));
 assert.ok(integrationSource.includes('"SENTRA BUYBACK"'));
+
+console.log(
+  "Gold reference contracts: OK — multi-source 1g selector, exclusions, dashboard + Harga/Gram read-only integration.",
+);

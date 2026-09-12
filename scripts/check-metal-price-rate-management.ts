@@ -12,6 +12,9 @@ const manager = read("src/components/pricing/metal-price-rate-form.tsx");
 const drawer = read("src/components/pricing/metal-price-rate-drawer.tsx");
 const dashboard = read("src/app/(admin)/admin/page.tsx");
 const page = read("src/app/(admin)/admin/pengaturan/harga-gram/page.tsx");
+const goldReferencePanel = read(
+  "src/components/pricing/gold-reference-rate-panel.tsx",
+);
 
 assert.match(query, /ne\(productItems\.availability, "sold"\)/);
 assert.match(actions, /export async function retireMetalPriceRateAction/);
@@ -25,7 +28,7 @@ assert.match(actions, /revalidatePath\("\/admin\/pengaturan\/harga-gram"\)/);
 assert.match(manager, /Rate Global Aktif/);
 assert.match(manager, /Tambah Rate Global/);
 assert.match(manager, /Kadar Belum Memiliki Rate/);
-assert.match(manager, /max-h-\[500px\]/);
+assert.doesNotMatch(manager, /max-h-\[500px\]\s+overflow-y-auto/);
 assert.match(manager, /retireMetalPriceRateAction/);
 assert.match(manager, /row\.itemCount === 0/);
 assert.match(manager, /Histori harga tetap disimpan/);
@@ -38,7 +41,13 @@ assert.match(dashboard, /hasPermission\(auth, "pricing\.manage"\)/);
 assert.match(dashboard, /getMetalPriceRateSettingsData/);
 assert.match(dashboard, /<MetalPriceRateDrawer rows=\{metalPriceRows\} \/>/);
 assert.match(page, /Harga \/ Gram Global/);
+assert.match(page, /getGoldReference\(\)/);
+assert.match(page, /<GoldReferenceRatePanel result=\{goldReference\} \/>/);
+assert.match(goldReferencePanel, /Referensi Harga Emas/);
+assert.match(goldReferencePanel, /Referensi aktif/);
+assert.match(goldReferencePanel, /Rate Global/);
+assert.match(goldReferencePanel, /Read-only/);
 
 console.log(
-  "Metal Price Rate management contracts: OK — compact manager, safe retire, unsold usage, dashboard drawer.",
+  "Metal Price Rate management contracts: OK — compact manager, safe retire, unsold usage, dashboard drawer, external gold reference.",
 );
