@@ -57,6 +57,13 @@ function isStoredCheckoutPayload(value: unknown): value is PosCheckoutPayload {
           item.priceSource === "global" ||
           item.priceSource === "manual_override") &&
         typeof item.pricePerGram === "string" &&
+        (item.basePriceSource === undefined ||
+          item.basePriceSource === "calculated" ||
+          item.basePriceSource === "manual_override") &&
+        (item.basePriceAmount === undefined ||
+          typeof item.basePriceAmount === "number") &&
+        (item.basePriceSource !== "manual_override" ||
+          typeof item.basePriceAmount === "number") &&
         typeof item.discountAmount === "number" &&
         typeof item.laborAmount === "number" &&
         typeof item.adjustmentAmount === "number",

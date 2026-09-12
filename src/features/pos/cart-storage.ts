@@ -2,7 +2,10 @@ import type {
   PosCartItem,
   PosCustomerOption,
 } from "@/features/pos/contracts";
-import { normalizePosTransactionWeight } from "@/features/pos/transaction-pricing";
+import {
+  calculatePosBasePrice,
+  normalizePosTransactionWeight,
+} from "@/features/pos/transaction-pricing";
 
 export const POS_ACTIVE_CART_STORAGE_KEY =
   "asihjaya:pos-workspace-active-cart";
@@ -35,6 +38,11 @@ export function isStoredPosCartItem(value: unknown): value is PosCartItem {
       value.priceSource === "global" ||
       value.priceSource === "manual_override") &&
     typeof value.pricePerGram === "string" &&
+    (value.basePriceSource === undefined ||
+      value.basePriceSource === "calculated" ||
+      value.basePriceSource === "manual_override") &&
+    (value.calculatedBasePriceAmount === undefined ||
+      typeof value.calculatedBasePriceAmount === "string") &&
     typeof value.basePriceAmount === "string" &&
     typeof value.discountAmount === "string" &&
     typeof value.laborAmount === "string" &&
@@ -72,18 +80,35 @@ export function parseStoredPosCartStateValue(
     return null;
   }
 
-  const items = parsedItems.map((item) => ({
-    ...item,
-    transactionWeightGram:
+  const items = parsedItems.map((item) => {
+    const transactionWeightGram =
       normalizePosTransactionWeight(item.transactionWeightGram) ??
       normalizePosTransactionWeight(item.weightGram) ??
-      undefined,
-    priceSource:
-      item.priceSource === "manual_override" ||
-      (!item.activePricePerGram || item.activePricePerGram !== item.pricePerGram)
-        ? ("manual_override" as const)
-        : ("global" as const),
-  }));
+      undefined;
+    const calculatedBasePriceAmount = calculatePosBasePrice({
+      weightGram: transactionWeightGram,
+      pricePerGram: item.pricePerGram,
+    });
+
+    return {
+      ...item,
+      transactionWeightGram,
+      priceSource:
+        item.priceSource === "manual_override" ||
+        (!item.activePricePerGram || item.activePricePerGram !== item.pricePerGram)
+          ? ("manual_override" as const)
+          : ("global" as const),
+      basePriceSource:
+        item.basePriceSource === "manual_override"
+          ? ("manual_override" as const)
+          : ("calculated" as const),
+      calculatedBasePriceAmount:
+        item.calculatedBasePriceAmount ??
+        (calculatedBasePriceAmount
+          ? String(calculatedBasePriceAmount)
+          : item.basePriceAmount),
+    };
+  });
 
   if (items.length === 0 && !customer) {
     return null;

@@ -104,6 +104,8 @@ const payload: PosCheckoutPayload = {
       transactionWeightGram: "2.120",
       priceSource: "global",
       pricePerGram: "1000000",
+      basePriceSource: "calculated",
+      basePriceAmount: 2_120_000,
       discountAmount: 0,
       laborAmount: 0,
       adjustmentAmount: 0,
@@ -125,6 +127,19 @@ const changedFingerprint = createPosCheckoutRequestFingerprint({
 });
 assert.notEqual(originalFingerprint, changedFingerprint);
 
+const manualBaseFingerprint = createPosCheckoutRequestFingerprint({
+  context,
+  payload: {
+    ...payload,
+    itemPricing: payload.itemPricing.map((item) => ({
+      ...item,
+      basePriceSource: "manual_override",
+      basePriceAmount: 2_250_000,
+    })),
+  },
+});
+assert.notEqual(originalFingerprint, manualBaseFingerprint);
+
 const [dialogSource, actionSource, heldQuerySource] = await Promise.all([
   readFile("src/components/pos/workspace/pos-item-pricing-dialog.tsx", "utf8"),
   readFile("src/app/actions/pos.ts", "utf8"),
@@ -134,12 +149,18 @@ const [dialogSource, actionSource, heldQuerySource] = await Promise.all([
 assert.ok(dialogSource.includes("Berat Transaksi"));
 assert.ok(dialogSource.includes("Ditimbang ulang"));
 assert.ok(dialogSource.includes("transactionWeightGram"));
+assert.ok(dialogSource.includes("Ubah harga dasar"));
+assert.ok(dialogSource.includes("Harga khusus"));
 assert.ok(actionSource.includes('action: "product_item.weight_reweighed_at_sale"'));
+assert.ok(actionSource.includes("basePriceOverrides"));
+assert.ok(actionSource.includes("manualBasePriceOverrideCount"));
 assert.ok(actionSource.includes("weightGram: pricing.transactionWeightGram"));
 assert.ok(actionSource.includes("storedWeightGram: pricing.storedWeightGram"));
 assert.ok(actionSource.includes("transactionWeightGram: pricing.transactionWeightGram"));
 assert.ok(actionSource.includes("const totalWeightGram = resolvedPricing.reduce"));
 assert.ok(heldQuerySource.includes("posHeldCartItems.snapshot}->>'weightGram'"));
+assert.ok(heldQuerySource.includes("posHeldCartItems.snapshot}->>'basePriceSource'"));
+assert.ok(heldQuerySource.includes("calculatedBasePriceAmount"));
 assert.ok(
   heldQuerySource.includes("cast(${productItems.weightGram} as text)"),
   "Held Cart query must cast numeric stored weight to text before COALESCE with JSON text.",

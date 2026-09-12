@@ -103,6 +103,26 @@ assert.notEqual(
       ...basePayload,
       itemPricing: basePayload.itemPricing.map((item, index) =>
         index === 0
+          ? {
+              ...item,
+              basePriceSource: "manual_override",
+              basePriceAmount: 2_150_000,
+            }
+          : item,
+      ),
+    },
+  }),
+  "Harga Dasar khusus transaksi wajib mengubah fingerprint checkout.",
+);
+
+assert.notEqual(
+  baseFingerprint,
+  createPosCheckoutRequestFingerprint({
+    context,
+    payload: {
+      ...basePayload,
+      itemPricing: basePayload.itemPricing.map((item, index) =>
+        index === 0
           ? { ...item, transactionWeightGram: "2.125" }
           : item,
       ),

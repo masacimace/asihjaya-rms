@@ -46,6 +46,8 @@ function createItem(overrides: Partial<PosCartItem> = {}): PosCartItem {
     outletName: "Asihjaya Utama",
     priceSource: "global",
     pricePerGram: "1000000",
+    basePriceSource: "calculated",
+    calculatedBasePriceAmount: "2500000",
     basePriceAmount: "2500000",
     discountAmount: "100000",
     laborAmount: "50000",
@@ -98,8 +100,79 @@ assert.equal(manualOverrideExample.status, "success");
 if (manualOverrideExample.status === "success") {
   assert.equal(manualOverrideExample.item.priceSource, "manual_override");
   assert.equal(manualOverrideExample.item.pricePerGram, "1100000");
+  assert.equal(manualOverrideExample.item.basePriceSource, "calculated");
+  assert.equal(manualOverrideExample.item.calculatedBasePriceAmount, "2200000");
   assert.equal(manualOverrideExample.item.basePriceAmount, "2200000");
 }
+
+const manualBasePriceOverrideExample = buildPosCartItem(
+  createItem({
+    weightGram: "2",
+    purityPercent: "30",
+    activePricePerGram: "1000000",
+  }),
+  {
+    pricePerGram: "1000000",
+    basePriceSource: "manual_override",
+    basePriceAmount: 2_250_000,
+    discountAmount: 50_000,
+    laborAmount: 25_000,
+    adjustmentAmount: 5_000,
+  },
+);
+assert.equal(manualBasePriceOverrideExample.status, "success");
+if (manualBasePriceOverrideExample.status === "success") {
+  assert.equal(manualBasePriceOverrideExample.item.priceSource, "global");
+  assert.equal(manualBasePriceOverrideExample.item.basePriceSource, "manual_override");
+  assert.equal(manualBasePriceOverrideExample.item.calculatedBasePriceAmount, "2000000");
+  assert.equal(manualBasePriceOverrideExample.item.basePriceAmount, "2250000");
+  assert.equal(manualBasePriceOverrideExample.item.finalPriceAmount, "2230000");
+}
+
+const manualBaseAfterReweighExample = buildPosCartItem(
+  createItem({
+    weightGram: "2",
+    purityPercent: "30",
+    activePricePerGram: "1000000",
+  }),
+  {
+    transactionWeightGram: "2.125",
+    pricePerGram: "1000000",
+    basePriceSource: "manual_override",
+    basePriceAmount: 2_250_000,
+    discountAmount: 0,
+    laborAmount: 0,
+    adjustmentAmount: 0,
+  },
+);
+assert.equal(manualBaseAfterReweighExample.status, "success");
+if (manualBaseAfterReweighExample.status === "success") {
+  assert.equal(
+    manualBaseAfterReweighExample.item.calculatedBasePriceAmount,
+    "2125000",
+  );
+  assert.equal(manualBaseAfterReweighExample.item.basePriceAmount, "2250000");
+}
+
+const invalidManualBaseExample = buildPosCartItem(
+  createItem({
+    weightGram: "2",
+    purityPercent: "30",
+    activePricePerGram: "1000000",
+  }),
+  {
+    pricePerGram: "1000000",
+    basePriceSource: "manual_override",
+    basePriceAmount: 0,
+    discountAmount: 0,
+    laborAmount: 0,
+    adjustmentAmount: 0,
+  },
+);
+assert.deepEqual(invalidManualBaseExample, {
+  status: "error",
+  message: "Harga Dasar Transaksi khusus harus lebih dari Rp0.",
+});
 
 const manualThenResetToGlobalExample = buildPosCartItem(
   createItem({
@@ -199,6 +272,8 @@ assert.equal(isStoredPosCartItem({ id: "incomplete" }), false);
 const legacyStoredItem: Partial<PosCartItem> = { ...firstItem };
 delete legacyStoredItem.priceSource;
 delete legacyStoredItem.transactionWeightGram;
+delete legacyStoredItem.basePriceSource;
+delete legacyStoredItem.calculatedBasePriceAmount;
 const legacyStoredState = parseStoredPosCartStateValue({
   version: 2,
   items: [legacyStoredItem],
@@ -207,6 +282,8 @@ const legacyStoredState = parseStoredPosCartStateValue({
 });
 assert.equal(legacyStoredState?.items[0]?.priceSource, "global");
 assert.equal(legacyStoredState?.items[0]?.transactionWeightGram, "2.500");
+assert.equal(legacyStoredState?.items[0]?.basePriceSource, "calculated");
+assert.equal(legacyStoredState?.items[0]?.calculatedBasePriceAmount, "2500000");
 
 const itemIds = getPosCartItemIds([firstItem, secondItem]);
 assert.equal(itemIds.has("item-1"), true);
@@ -222,7 +299,7 @@ assert.deepEqual(getPosCartSummary([firstItem, secondItem]), {
 assert.deepEqual(getPosCartAddIssue({ item: firstItem, itemIds }), {
   type: "duplicate",
   message:
-    "SKU-001 sudah ada di keranjang. Gunakan Edit Item jika ingin mengubah Berat, Harga/Gram, Diskon, Ongkos, atau Round.",
+    "SKU-001 sudah ada di keranjang. Gunakan Edit Item jika ingin mengubah Berat, Harga/Gram, Harga Dasar, Diskon, Ongkos, atau Round.",
 });
 assert.equal(
   getPosCartAddIssue({

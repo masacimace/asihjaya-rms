@@ -42,6 +42,8 @@ export function PosItemPricingDialog(
     props.item.id,
     existingItem?.transactionWeightGram ?? props.item.weightGram ?? "",
     existingItem?.pricePerGram ?? props.item.activePricePerGram ?? "",
+    existingItem?.basePriceSource ?? "calculated",
+    existingItem?.basePriceAmount ?? "",
     existingItem?.discountAmount ?? "",
     existingItem?.laborAmount ?? "",
     existingItem?.adjustmentAmount ?? "",
@@ -67,6 +69,15 @@ function PosItemPricingDialogContent({
   const [pricePerGramInput, setPricePerGramInput] = useState(() =>
     Number(initialPricePerGram) > 0
       ? formatRupiahInput(initialPricePerGram)
+      : "",
+  );
+  const [isBasePriceOverride, setIsBasePriceOverride] = useState(
+    () => existingItem?.basePriceSource === "manual_override",
+  );
+  const [basePriceInput, setBasePriceInput] = useState(() =>
+    existingItem?.basePriceSource === "manual_override" &&
+    Number(existingItem.basePriceAmount) > 0
+      ? formatRupiahInput(existingItem.basePriceAmount)
       : "",
   );
   const [discountInput, setDiscountInput] = useState(() =>
@@ -101,16 +112,23 @@ function PosItemPricingDialogContent({
     activePricePerGram: item.activePricePerGram,
     transactionPricePerGram: transactionPricePerGramText,
   });
-  const basePriceAmount = calculatePosBasePrice({
+  const calculatedBasePriceAmount = calculatePosBasePrice({
     weightGram: transactionWeightGram,
     pricePerGram: transactionPricePerGramText,
   });
-  const projectedFinalAmount = basePriceAmount
+  const manualBasePriceAmount = parsePaymentAmountInput(basePriceInput);
+  const basePriceAmount = isBasePriceOverride
+    ? manualBasePriceAmount
+    : (calculatedBasePriceAmount ?? 0);
+  const projectedFinalAmount = basePriceAmount > 0
     ? basePriceAmount - discountAmount + laborAmount + adjustmentAmount
     : 0;
   const hasItemPricingData = Boolean(transactionWeightGram && item.purityPercent);
   const hasValidTransactionPrice = Boolean(
-    hasItemPricingData && transactionPricePerGramText && basePriceAmount,
+    hasItemPricingData &&
+      transactionPricePerGramText &&
+      calculatedBasePriceAmount &&
+      basePriceAmount > 0,
   );
   const activePricePerGram = Number(item.activePricePerGram ?? 0);
   const rateDifference =
@@ -127,11 +145,29 @@ function PosItemPricingDialogContent({
     setFeedback(null);
   }
 
+  function enableBasePriceOverride() {
+    const suggestedBasePrice = basePriceAmount || calculatedBasePriceAmount;
+
+    setIsBasePriceOverride(true);
+    setBasePriceInput(
+      suggestedBasePrice ? formatRupiahInput(suggestedBasePrice) : "",
+    );
+    setFeedback(null);
+  }
+
+  function resetBasePriceOverride() {
+    setIsBasePriceOverride(false);
+    setBasePriceInput("");
+    setFeedback(null);
+  }
+
   function submit() {
     const result = buildPosCartItem(item, {
       transactionWeightGram,
       priceSource,
       pricePerGram: transactionPricePerGramText,
+      basePriceSource: isBasePriceOverride ? "manual_override" : "calculated",
+      basePriceAmount: isBasePriceOverride ? manualBasePriceAmount : null,
       discountAmount,
       laborAmount,
       adjustmentAmount,
@@ -286,13 +322,66 @@ function PosItemPricingDialogContent({
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-white p-3">
-              <p className="text-xs text-[var(--muted)]">Harga Dasar Transaksi</p>
-              <p className="mt-1 text-base font-semibold text-neutral-950">
-                {basePriceAmount ? formatCurrency(basePriceAmount) : "Belum tersedia"}
-              </p>
-              <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
-                Berat × Harga/Gram transaksi.
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-[var(--muted)]">Harga Dasar Transaksi</p>
+                {isBasePriceOverride ? (
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                    Harga khusus
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={enableBasePriceOverride}
+                    disabled={!calculatedBasePriceAmount}
+                    className="text-[11px] font-semibold text-[var(--accent)] transition hover:underline disabled:cursor-not-allowed disabled:text-neutral-300"
+                  >
+                    Ubah harga dasar
+                  </button>
+                )}
+              </div>
+
+              {isBasePriceOverride ? (
+                <>
+                  <input
+                    aria-label="Harga Dasar Transaksi khusus"
+                    value={basePriceInput}
+                    onChange={(event) => {
+                      setBasePriceInput(formatRupiahInput(event.target.value));
+                      setFeedback(null);
+                    }}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="0"
+                    className="mt-2 h-10 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-semibold text-neutral-950 outline-none transition placeholder:font-normal placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                  />
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] leading-4">
+                    <span className="text-[var(--muted)]">
+                      Terhitung {calculatedBasePriceAmount
+                        ? formatCurrency(calculatedBasePriceAmount)
+                        : "belum tersedia"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={resetBasePriceOverride}
+                      className="inline-flex items-center gap-1 font-semibold text-neutral-600 transition hover:text-[var(--accent)]"
+                    >
+                      <RotateCcw className="size-3" />
+                      Reset
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-base font-semibold text-neutral-950">
+                    {calculatedBasePriceAmount
+                      ? formatCurrency(calculatedBasePriceAmount)
+                      : "Belum tersedia"}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+                    Berat × Harga/Gram transaksi.
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -413,10 +502,25 @@ function PosItemPricingDialogContent({
               </span>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-[var(--muted)]">
-              <span>Harga Dasar</span>
-              <span className="text-right font-medium text-neutral-800">
-                {formatCurrency(basePriceAmount ?? 0)}
+              <span className="flex items-center gap-1.5">
+                Harga Dasar
+                {isBasePriceOverride ? (
+                  <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">
+                    khusus
+                  </span>
+                ) : null}
               </span>
+              <span className="text-right font-medium text-neutral-800">
+                {formatCurrency(basePriceAmount)}
+              </span>
+              {isBasePriceOverride && calculatedBasePriceAmount ? (
+                <>
+                  <span>Harga terhitung</span>
+                  <span className="text-right font-medium text-neutral-500">
+                    {formatCurrency(calculatedBasePriceAmount)}
+                  </span>
+                </>
+              ) : null}
               <span>Diskon</span>
               <span className="text-right font-medium text-red-600">
                 -{formatCurrency(discountAmount)}

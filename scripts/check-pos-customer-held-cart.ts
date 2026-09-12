@@ -69,6 +69,8 @@ function createItem(
     outletName: "Asihjaya Utama",
     priceSource: "global",
     pricePerGram: "1000000",
+    basePriceSource: "calculated",
+    calculatedBasePriceAmount: "2500000",
     basePriceAmount: "2500000",
     discountAmount: "0",
     laborAmount: "0",

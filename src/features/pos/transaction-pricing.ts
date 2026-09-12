@@ -1,5 +1,6 @@
 import type {
   PosAvailableItem,
+  PosBasePriceSource,
   PosCartItem,
   PosCartPricingInput,
   PosPriceSource,
@@ -171,6 +172,8 @@ export type PosPricingDraftValues = {
   transactionWeightGram?: string | number | null;
   priceSource?: PosPriceSource;
   pricePerGram?: string | number | null;
+  basePriceSource?: PosBasePriceSource;
+  basePriceAmount?: string | number | null;
   discountAmount: number;
   laborAmount: number;
   adjustmentAmount: number;
@@ -217,17 +220,38 @@ export function buildPosCartItem(
     };
   }
 
-  const basePriceAmount = calculatePosBasePrice({
+  const calculatedBasePriceAmount = calculatePosBasePrice({
     weightGram: transactionWeightGram,
     pricePerGram,
   });
 
-  if (!basePriceAmount) {
+  if (!calculatedBasePriceAmount) {
     return {
       status: "error",
       message: `${item.sku} belum bisa dihitung karena Berat atau Harga/Gram transaksi tidak valid.`,
     };
   }
+
+  const basePriceSource: PosBasePriceSource =
+    values.basePriceSource === "manual_override"
+      ? "manual_override"
+      : "calculated";
+  const manualBasePriceAmount = toSafeMoney(values.basePriceAmount);
+
+  if (
+    basePriceSource === "manual_override" &&
+    (!manualBasePriceAmount || manualBasePriceAmount <= 0)
+  ) {
+    return {
+      status: "error",
+      message: "Harga Dasar Transaksi khusus harus lebih dari Rp0.",
+    };
+  }
+
+  const basePriceAmount =
+    basePriceSource === "manual_override"
+      ? manualBasePriceAmount!
+      : calculatedBasePriceAmount;
 
   const finalPriceAmount = calculatePosFinalPrice({
     basePriceAmount,
@@ -242,7 +266,7 @@ export function buildPosCartItem(
       message:
         values.discountAmount > basePriceAmount
           ? "Diskon item tidak boleh lebih besar dari Harga Dasar."
-          : "Perhitungan harga item tidak valid. Periksa Berat, Harga/Gram, Diskon, Ongkos, dan Round.",
+          : "Perhitungan harga item tidak valid. Periksa Berat, Harga/Gram, Harga Dasar, Diskon, Ongkos, dan Round.",
     };
   }
 
@@ -256,6 +280,8 @@ export function buildPosCartItem(
         transactionPricePerGram: pricePerGram,
       }),
       pricePerGram,
+      basePriceSource,
+      calculatedBasePriceAmount: String(calculatedBasePriceAmount),
       basePriceAmount: String(basePriceAmount),
       discountAmount: String(values.discountAmount),
       laborAmount: String(values.laborAmount),
@@ -279,6 +305,11 @@ export function getPosCartPricingInput(item: PosCartItem): PosCartPricingInput {
         transactionPricePerGram: item.pricePerGram,
       }),
     pricePerGram: item.pricePerGram,
+    basePriceSource:
+      item.basePriceSource === "manual_override"
+        ? "manual_override"
+        : "calculated",
+    basePriceAmount: toSafeMoney(item.basePriceAmount) ?? undefined,
     discountAmount: toSafeMoney(item.discountAmount) ?? 0,
     laborAmount: toSafeMoney(item.laborAmount) ?? 0,
     adjustmentAmount: toSafeMoney(item.adjustmentAmount) ?? 0,

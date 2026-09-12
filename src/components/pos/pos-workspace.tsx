@@ -477,6 +477,8 @@ export function PosWorkspace({
               transactionWeightGram: refreshed.transactionWeightGram,
               priceSource: refreshed.priceSource,
               pricePerGram: refreshed.pricePerGram,
+              basePriceSource: refreshed.basePriceSource,
+              calculatedBasePriceAmount: refreshed.calculatedBasePriceAmount,
               basePriceAmount: refreshed.basePriceAmount,
               finalPriceAmount: refreshed.finalPriceAmount,
             }

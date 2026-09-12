@@ -3,6 +3,7 @@ import { and, desc, eq, gt, isNull, lte, or } from "drizzle-orm";
 import { db } from "@/db";
 import { metalPriceRates, metalPurities, metals } from "@/db/schema";
 import type {
+  PosBasePriceSource,
   PosCartPricingInput,
   PosPriceSource,
   PosWeightSource,
@@ -32,6 +33,8 @@ export type ResolvedPosTransactionPricing = {
   priceSource: PosPriceSource;
   activePricePerGram: string | null;
   pricePerGram: string;
+  basePriceSource: PosBasePriceSource;
+  calculatedBasePriceAmount: number;
   basePriceAmount: number;
   discountAmount: number;
   laborAmount: number;
@@ -53,6 +56,10 @@ function isSafeMoney(value: unknown): value is number {
 
 function normalizePriceSource(value: unknown): PosPriceSource {
   return value === "manual_override" ? "manual_override" : "global";
+}
+
+function normalizeBasePriceSource(value: unknown): PosBasePriceSource {
+  return value === "manual_override" ? "manual_override" : "calculated";
 }
 
 export function normalizePosCartPricingInputs(
@@ -79,6 +86,8 @@ export function normalizePosCartPricingInputs(
         : (normalizePosTransactionWeight(rawTransactionWeight) ?? undefined);
     const pricePerGram = String(value?.pricePerGram ?? "").trim();
     const priceSource = normalizePriceSource(value?.priceSource);
+    const basePriceSource = normalizeBasePriceSource(value?.basePriceSource);
+    const basePriceAmount = value?.basePriceAmount;
 
     if (!itemId || seenItemIds.has(itemId)) {
       throw new PosTransactionPricingError(
@@ -108,6 +117,15 @@ export function normalizePosCartPricingInputs(
       );
     }
 
+    if (
+      basePriceSource === "manual_override" &&
+      (!isSafeMoney(basePriceAmount) || Number(basePriceAmount) <= 0)
+    ) {
+      throw new PosTransactionPricingError(
+        "Harga Dasar Transaksi khusus tidak valid. Gunakan nominal lebih dari Rp0.",
+      );
+    }
+
     seenItemIds.add(itemId);
 
     return {
@@ -115,6 +133,9 @@ export function normalizePosCartPricingInputs(
       transactionWeightGram,
       priceSource,
       pricePerGram,
+      basePriceSource,
+      basePriceAmount:
+        basePriceSource === "manual_override" ? Number(basePriceAmount) : undefined,
       discountAmount: value.discountAmount,
       laborAmount: value.laborAmount,
       adjustmentAmount: value.adjustmentAmount,
@@ -236,14 +257,26 @@ export async function resolvePosTransactionPricing({
       rateChanged = input.pricePerGram !== activePricePerGram;
     }
 
-    const basePriceAmount = calculatePosBasePrice({
+    const calculatedBasePriceAmount = calculatePosBasePrice({
       weightGram: transactionWeightGram,
       pricePerGram,
     });
 
-    if (!basePriceAmount) {
+    if (!calculatedBasePriceAmount) {
       throw new PosTransactionPricingError(
         `${item.sku} belum bisa dihitung karena Berat atau Harga/Gram transaksi tidak valid.`,
+      );
+    }
+
+    const basePriceSource = normalizeBasePriceSource(input.basePriceSource);
+    const basePriceAmount =
+      basePriceSource === "manual_override"
+        ? Number(input.basePriceAmount)
+        : calculatedBasePriceAmount;
+
+    if (!Number.isSafeInteger(basePriceAmount) || basePriceAmount <= 0) {
+      throw new PosTransactionPricingError(
+        `Harga Dasar Transaksi ${item.sku} tidak valid. Kembali ke cart lalu atur item.`,
       );
     }
 
@@ -258,7 +291,7 @@ export async function resolvePosTransactionPricing({
       throw new PosTransactionPricingError(
         input.discountAmount > basePriceAmount
           ? `Diskon ${item.sku} tidak boleh lebih besar dari Harga Dasar.`
-          : `Perhitungan harga ${item.sku} tidak valid. Periksa Berat, Harga/Gram, Diskon, Ongkos, dan Round.`,
+          : `Perhitungan harga ${item.sku} tidak valid. Periksa Berat, Harga/Gram, Harga Dasar, Diskon, Ongkos, dan Round.`,
       );
     }
 
@@ -270,6 +303,8 @@ export async function resolvePosTransactionPricing({
       priceSource,
       activePricePerGram,
       pricePerGram,
+      basePriceSource,
+      calculatedBasePriceAmount,
       basePriceAmount,
       discountAmount: input.discountAmount,
       laborAmount: input.laborAmount,

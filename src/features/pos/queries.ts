@@ -56,6 +56,7 @@ import {
 import {
   POS_CATALOG_PAGE_SIZE,
   type PosAvailableItem,
+  type PosBasePriceSource,
   type PosCatalogCursor,
   type PosCatalogPage,
   type PosCustomerOption,
@@ -189,6 +190,8 @@ function mapHeldCartItemRow(row: HeldCartItemRow): PosHeldCartItem {
     activePricePerGram: row.activePricePerGram,
     transactionWeightGram: row.transactionWeightGram || row.weightGram || undefined,
     priceSource: row.priceSource,
+    basePriceSource: row.basePriceSource,
+    calculatedBasePriceAmount: row.calculatedBasePriceAmount,
     imageKey: row.imageKey,
     productImageKey: row.productImageKey,
     outletId: row.outletId,
@@ -2099,6 +2102,11 @@ export async function getPosHeldCartListData({
             end`,
             priceSource: sql<PosPriceSource>`case when ${posHeldCartItems.snapshot}->>'priceSource' = 'manual_override' then 'manual_override' else 'global' end`,
             pricePerGram: sql<string>`coalesce(${posHeldCartItems.snapshot}->>'pricePerGram', '0')`,
+            basePriceSource: sql<PosBasePriceSource>`case when ${posHeldCartItems.snapshot}->>'basePriceSource' = 'manual_override' then 'manual_override' else 'calculated' end`,
+            calculatedBasePriceAmount: sql<string>`coalesce(
+              nullif(${posHeldCartItems.snapshot}->>'calculatedBasePriceAmount', ''),
+              cast(${posHeldCartItems.listPriceAmount} as text)
+            )`,
             basePriceAmount: posHeldCartItems.listPriceAmount,
             laborAmount: sql<string>`coalesce(${posHeldCartItems.snapshot}->>'laborAmount', '0')`,
             adjustmentAmount: sql<string>`coalesce(${posHeldCartItems.snapshot}->>'adjustmentAmount', '0')`,

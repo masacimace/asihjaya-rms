@@ -46,6 +46,11 @@ function canonicalizeCheckoutPayload(payload: PosCheckoutPayload) {
       transactionWeightGram: normalizeFingerprintText(item.transactionWeightGram),
       priceSource: item.priceSource ?? "global",
       pricePerGram: item.pricePerGram,
+      basePriceSource: item.basePriceSource ?? "calculated",
+      basePriceAmount:
+        item.basePriceSource === "manual_override"
+          ? (item.basePriceAmount ?? null)
+          : null,
       discountAmount: item.discountAmount,
       laborAmount: item.laborAmount,
       adjustmentAmount: item.adjustmentAmount,

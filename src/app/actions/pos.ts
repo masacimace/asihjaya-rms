@@ -40,6 +40,7 @@ import {
 } from "@/db/schema";
 import {
   type PosCheckoutActionResult,
+  type PosBasePriceSource,
   type PosCartPricingInput,
   type PosCartPricingRefreshResult,
   type PosCheckoutPayload,
@@ -397,6 +398,14 @@ function readSnapshotPriceSource(
   return readSnapshotText(snapshot, "priceSource") === "manual_override"
     ? "manual_override"
     : "global";
+}
+
+function readSnapshotBasePriceSource(
+  snapshot: Record<string, unknown> | null | undefined,
+): PosBasePriceSource {
+  return readSnapshotText(snapshot, "basePriceSource") === "manual_override"
+    ? "manual_override"
+    : "calculated";
 }
 
 function normalizeNullableText(value: string | null | undefined, maxLength: number) {
@@ -1142,6 +1151,8 @@ export async function refreshPosCartPricingAction(
           priceSource: item.priceSource,
           activePricePerGram: item.activePricePerGram,
           pricePerGram: item.pricePerGram,
+          basePriceSource: item.basePriceSource,
+          calculatedBasePriceAmount: String(item.calculatedBasePriceAmount),
           basePriceAmount: String(item.basePriceAmount),
           finalPriceAmount: String(item.finalPriceAmount),
         })),
@@ -1206,6 +1217,8 @@ type HeldCartActionItemRow = {
   transactionWeightGram?: string;
   priceSource?: PosPriceSource;
   pricePerGram?: string;
+  basePriceSource?: PosBasePriceSource;
+  calculatedBasePriceAmount?: string;
   basePriceAmount?: string;
   discountAmount?: string;
   laborAmount?: string;
@@ -1239,6 +1252,12 @@ function mapHeldCartActionItem(row: HeldCartActionItemRow): PosHeldCartItem {
     transactionWeightGram: row.transactionWeightGram ?? row.weightGram ?? undefined,
     priceSource: row.priceSource ?? "global",
     pricePerGram: row.pricePerGram ?? row.activePricePerGram ?? "0",
+    basePriceSource: row.basePriceSource ?? "calculated",
+    calculatedBasePriceAmount:
+      row.calculatedBasePriceAmount ??
+      row.basePriceAmount ??
+      row.listPriceAmount ??
+      finalPriceAmount,
     basePriceAmount: row.basePriceAmount ?? row.listPriceAmount ?? finalPriceAmount,
     imageKey: row.imageKey,
     productImageKey: row.productImageKey,
@@ -1625,6 +1644,8 @@ export async function holdPosCartAction(
               priceSource: pricing.priceSource,
               globalPricePerGram: pricing.activePricePerGram,
               pricePerGram: pricing.pricePerGram,
+              basePriceSource: pricing.basePriceSource,
+              calculatedBasePriceAmount: String(pricing.calculatedBasePriceAmount),
               basePriceAmount: String(pricing.basePriceAmount),
               discountAmount: String(pricing.discountAmount),
               laborAmount: String(pricing.laborAmount),
@@ -1661,6 +1682,10 @@ export async function holdPosCartAction(
             priceSource: pricingMap.get(item!.id)?.priceSource ?? null,
             globalPricePerGram: pricingMap.get(item!.id)?.activePricePerGram ?? null,
             pricePerGram: pricingMap.get(item!.id)?.pricePerGram ?? null,
+            basePriceSource: pricingMap.get(item!.id)?.basePriceSource ?? null,
+            calculatedBasePriceAmount:
+              pricingMap.get(item!.id)?.calculatedBasePriceAmount ?? null,
+            basePriceAmount: pricingMap.get(item!.id)?.basePriceAmount ?? null,
             finalPriceAmount: pricingMap.get(item!.id)?.finalPriceAmount ?? null,
           },
           performedBy: auth.user.id,
@@ -1725,6 +1750,8 @@ export async function holdPosCartAction(
             transactionWeightGram: pricing.transactionWeightGram,
             priceSource: pricing.priceSource,
             pricePerGram: pricing.pricePerGram,
+            basePriceSource: pricing.basePriceSource,
+            calculatedBasePriceAmount: String(pricing.calculatedBasePriceAmount),
             basePriceAmount: String(pricing.basePriceAmount),
             discountAmount: String(pricing.discountAmount),
             laborAmount: String(pricing.laborAmount),
@@ -2096,6 +2123,10 @@ export async function resumePosHeldCartAction({
           readSnapshotText(item.snapshot, "weightGram") ?? item.weightGram ?? undefined,
         priceSource: readSnapshotPriceSource(item.snapshot),
         pricePerGram: readSnapshotText(item.snapshot, "pricePerGram") ?? "0",
+        basePriceSource: readSnapshotBasePriceSource(item.snapshot),
+        basePriceAmount:
+          readSnapshotMoney(item.snapshot, "basePriceAmount") ||
+          parseDbAmount(item.listPriceAmount),
         discountAmount: parseDbAmount(item.discountAmount),
         laborAmount: readSnapshotMoney(item.snapshot, "laborAmount"),
         adjustmentAmount: readSnapshotMoney(item.snapshot, "adjustmentAmount"),
@@ -2197,6 +2228,8 @@ export async function resumePosHeldCartAction({
             transactionWeightGram: pricing.transactionWeightGram,
             priceSource: pricing.priceSource,
             pricePerGram: pricing.pricePerGram,
+            basePriceSource: pricing.basePriceSource,
+            calculatedBasePriceAmount: String(pricing.calculatedBasePriceAmount),
             basePriceAmount: String(pricing.basePriceAmount),
             listPriceAmount: String(pricing.basePriceAmount),
             discountAmount: String(pricing.discountAmount),
@@ -2914,6 +2947,25 @@ export async function completePosCheckoutAction(
           },
         ];
       });
+      const basePriceOverrides = orderedItems.flatMap((item) => {
+        const pricing = pricingMap.get(item!.id);
+
+        if (!pricing || pricing.basePriceSource !== "manual_override") {
+          return [];
+        }
+
+        return [
+          {
+            itemId: item!.id,
+            sku: item!.sku,
+            calculatedBasePriceAmount: String(pricing.calculatedBasePriceAmount),
+            basePriceAmount: String(pricing.basePriceAmount),
+            differenceAmount: String(
+              pricing.basePriceAmount - pricing.calculatedBasePriceAmount,
+            ),
+          },
+        ];
+      });
       const weightCorrections = orderedItems.flatMap((item) => {
         const pricing = pricingMap.get(item!.id);
 
@@ -3063,6 +3115,8 @@ export async function completePosCheckoutAction(
               priceSource: pricing.priceSource,
               globalPricePerGram: pricing.activePricePerGram,
               pricePerGram: pricing.pricePerGram,
+              basePriceSource: pricing.basePriceSource,
+              calculatedBasePriceAmount: String(pricing.calculatedBasePriceAmount),
               basePriceAmount: String(pricing.basePriceAmount),
               discountAmount: String(pricing.discountAmount),
               laborAmount: String(pricing.laborAmount),
@@ -3155,6 +3209,10 @@ export async function completePosCheckoutAction(
             priceSource: pricingMap.get(item!.id)?.priceSource ?? null,
             globalPricePerGram: pricingMap.get(item!.id)?.activePricePerGram ?? null,
             pricePerGram: pricingMap.get(item!.id)?.pricePerGram ?? null,
+            basePriceSource: pricingMap.get(item!.id)?.basePriceSource ?? null,
+            calculatedBasePriceAmount:
+              pricingMap.get(item!.id)?.calculatedBasePriceAmount ?? null,
+            basePriceAmount: pricingMap.get(item!.id)?.basePriceAmount ?? null,
             finalPriceAmount: pricingMap.get(item!.id)?.finalPriceAmount ?? null,
           },
           performedBy: auth.user.id,
@@ -3318,6 +3376,8 @@ export async function completePosCheckoutAction(
           itemCount: itemIds.length,
           manualPriceOverrideCount: pricingOverrides.length,
           pricingOverrides,
+          manualBasePriceOverrideCount: basePriceOverrides.length,
+          basePriceOverrides,
           reweighedItemCount: weightCorrections.length,
           weightCorrections,
           subtotalAmount: String(subtotalAmount),
@@ -3343,6 +3403,7 @@ export async function completePosCheckoutAction(
           source: "pos.checkout",
           idempotencyKey,
           manualPriceOverrideCount: pricingOverrides.length,
+          manualBasePriceOverrideCount: basePriceOverrides.length,
           reweighedItemCount: weightCorrections.length,
           customerId: selectedCustomer?.id ?? null,
           discountApprovalId: null,
