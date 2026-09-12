@@ -197,29 +197,24 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
     const isNotConfigured = result.status === "not_configured";
 
     return (
-      <section className="min-w-0 rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
               <Coins className="size-5" />
             </div>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-semibold text-neutral-950">
-                  Referensi Harga Emas
-                </h2>
-                <span className="rounded-full bg-neutral-100 px-2 py-1 text-[10px] font-semibold text-neutral-600">
-                  Eksternal
-                </span>
-              </div>
+              <h2 className="font-semibold text-neutral-950">
+                Referensi Harga Emas
+              </h2>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Referensi eksternal 1 gram. Referensi ini hanya sebagai acuan
-                harga pasar dari berbagai sumber.
+                Referensi eksternal 1 gram sebagai acuan harga pasar dari
+                berbagai brand dan sumber. Harga internal ASIHJAYA tidak berubah.
               </p>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-xs text-[var(--muted)]">
+          <div className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-xs text-[var(--muted)]">
             <WifiOff className="size-4" />
             {isNotConfigured
               ? "Integrasi belum diaktifkan"
@@ -246,13 +241,12 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
       : null;
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+    <section className="min-w-0 overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
       <div className="flex min-w-0 flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
             <Coins className="size-5" />
           </div>
-
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-semibold text-neutral-950">
@@ -264,58 +258,47 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
                 {freshness.label}
               </span>
             </div>
-
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
               {selectedReference.brand} · sumber {selectedReference.resource} ·{" "}
-              {selectedReference.weightGrams} gram via {data.provider}. Hanya
+              {selectedReference.weightGrams} gram via {data.provider}. Gunakan
               sebagai referensi acuan harga pasar dari berbagai sumber.
             </p>
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end lg:max-w-[52%] lg:justify-end">
-          <label className="min-w-0 flex-1 sm:min-w-[220px] sm:flex-none">
-            <span className="relative block">
-              <select
-                aria-label="Pilih referensi harga emas"
-                className="h-9 w-full appearance-none rounded-lg border border-[var(--border)] bg-white py-1.5 pl-3 pr-9 !text-sm font-semibold text-neutral-800 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] sm:w-auto sm:min-w-[220px]"
-                value={selectedReference.referenceKey}
-                onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                  persistReferenceKey(event.target.value)
-                }
-              >
-                {data.references.map((reference) => (
-                  <option
-                    key={reference.referenceKey}
-                    value={reference.referenceKey}
-                  >
-                    {reference.brand} · {reference.resource}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[var(--muted)]" />
-            </span>
-          </label>
-
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5">
-              <Clock3 className="size-3.5" />
-              {formatDateTime(selectedReference.updatedAt)}
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5">
-              <ShieldCheck className="size-3.5 text-emerald-600" />
-              Read-only
-            </span>
-          </div>
-        </div>
+        <label className="min-w-0 lg:min-w-[240px]">
+          <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Sumber referensi
+          </span>
+          <span className="relative block">
+            <select
+              aria-label="Pilih referensi harga emas"
+              className="h-10 w-full appearance-none rounded-xl border border-[var(--border)] bg-white py-2 pl-3 pr-9 text-sm font-semibold text-neutral-800 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+              value={selectedReference.referenceKey}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                persistReferenceKey(event.target.value)
+              }
+            >
+              {data.references.map((reference) => (
+                <option
+                  key={reference.referenceKey}
+                  value={reference.referenceKey}
+                >
+                  {reference.brand} · {reference.resource}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[var(--muted)]" />
+          </span>
+        </label>
       </div>
 
-      <div className="grid border-t border-[var(--border)] sm:grid-cols-3">
-        <div className="min-w-0 border-b border-[var(--border)] p-4 sm:border-b-0 sm:border-r sm:p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+      <div className="grid border-t border-[var(--border)] md:grid-cols-3">
+        <div className="min-w-0 border-b border-[var(--border)] p-4 md:border-b-0 md:border-r sm:p-5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
             Harga Jual Referensi
           </p>
-          <p className="mt-2 text-xl font-semibold tracking-tight text-neutral-950 sm:text-2xl">
+          <p className="mt-1.5 text-xl font-semibold tracking-tight text-neutral-950">
             {formatMoney(selectedReference.sellPrice)}
           </p>
           <div className="mt-2">
@@ -326,11 +309,11 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
           </div>
         </div>
 
-        <div className="min-w-0 border-b border-[var(--border)] p-4 sm:border-b-0 sm:border-r sm:p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+        <div className="min-w-0 border-b border-[var(--border)] p-4 md:border-b-0 md:border-r sm:p-5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
             Harga Buyback Referensi
           </p>
-          <p className="mt-2 text-xl font-semibold tracking-tight text-neutral-950 sm:text-2xl">
+          <p className="mt-1.5 text-xl font-semibold tracking-tight text-neutral-950">
             {selectedReference.buybackPrice !== null
               ? formatMoney(selectedReference.buybackPrice)
               : "-"}
@@ -344,17 +327,32 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
         </div>
 
         <div className="min-w-0 p-4 sm:p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
             Spread Referensi
           </p>
-          <p className="mt-2 text-xl font-semibold tracking-tight text-neutral-950 sm:text-2xl">
+          <p className="mt-1.5 text-xl font-semibold tracking-tight text-neutral-950">
             {spread !== null ? formatMoney(spread) : "-"}
           </p>
           <p className="mt-2 text-[10px] leading-4 text-[var(--muted)]">
-            Selisih harga jual dan buyback {selectedReference.brand}{" "}
-            {selectedReference.weightGrams} gram dari sumber{" "}
-            {selectedReference.resource}.
+            Selisih harga jual dan buyback referensi 1 gram.
           </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-[var(--border)] bg-[var(--surface-muted)]/55 px-4 py-3 text-[11px] text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <p>
+          Referensi ini bersifat read-only dan tidak mengubah Harga / Gram ASIHJAYA.
+          Pricing internal tetap dikendalikan sistem ASIHJAYA.
+        </p>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5">
+            <Clock3 className="size-3.5" />
+            {formatDateTime(selectedReference.updatedAt)}
+          </span>
+          <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
+            <ShieldCheck className="size-3.5" />
+            Read-only
+          </span>
         </div>
       </div>
     </section>
