@@ -24,6 +24,7 @@ import {
 import Link from "next/link";
 
 import { SalesTrendChart } from "@/components/admin/dashboard/sales-trend-chart";
+import { GoldReferenceCard } from "@/components/admin/dashboard/gold-reference-card";
 import type {
   AdminDashboardActivityKind,
   AdminDashboardAlertTone,
@@ -40,6 +41,7 @@ import {
 import { MetalPriceRateDrawer } from "@/components/pricing/metal-price-rate-drawer";
 import { getMetalPriceRateSettingsData } from "@/features/pricing/metal-price-rates";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
+import { getGoldReference } from "@/server/integrations/gold-reference/emas-api";
 
 export const metadata = {
   title: "Dashboard",
@@ -73,7 +75,7 @@ const quickActions = [
   {
     label: "Pemasukan Bank",
     description: "Tinjau transaksi Buyback",
-    href: "/admin/operasional/pemasukan-bank",
+    href: "/admin/buyback?q=&range=thisMonth&process=all&payout=all",
     icon: Banknote,
   },
 ] as const;
@@ -183,6 +185,7 @@ function getComparison(
     label: comparisonLabel,
   };
 }
+
 
 type SalesChartInsight = {
   label: string;
@@ -296,11 +299,12 @@ export default async function AdminDashboardPage({
     resolvedSearchParams.range,
   );
   const canManagePricing = hasPermission(auth, "pricing.manage");
-  const [dashboard, metalPriceRows] = await Promise.all([
+  const [dashboard, metalPriceRows, goldReference] = await Promise.all([
     getAdminDashboardData(auth, selectedRange),
     canManagePricing
       ? getMetalPriceRateSettingsData(auth.organization.id)
       : Promise.resolve([]),
+    getGoldReference(),
   ]);
   const firstName = auth.user.fullName.split(" ")[0] ?? auth.user.fullName;
   const statisticCards = [
@@ -530,6 +534,8 @@ export default async function AdminDashboardPage({
               ),
             )}
           </section>
+
+          <GoldReferenceCard result={goldReference} />
 
           <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">

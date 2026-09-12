@@ -34,6 +34,7 @@
     "check:telegram-admin": "tsx scripts/check-telegram-admin.ts",
     "check:telegram-operations": "tsx scripts/check-telegram-operations.ts",
     "check:settings-hub": "tsx scripts/check-settings-hub.ts",
+    "check:gold-reference": "tsx scripts/check-gold-reference.ts",
     "check:shift-reopen": "tsx scripts/check-shift-reopen.ts",
     "check:pre-r4-shift-ux": "tsx scripts/check-pre-r4-shift-ux.ts",
     "check:r4-2a": "tsx scripts/check-r4-2a-retired-payment-schema.ts",
