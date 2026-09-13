@@ -50,7 +50,9 @@ function processingLabel(type: BuybackProcessingQueueRow["processingType"]) {
 }
 
 function normalizeColorKey(value: string | null | undefined) {
-  return String(value ?? "").trim().toLocaleLowerCase("id-ID");
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("id-ID");
 }
 
 function normalizePurityKey(value: string) {
@@ -322,8 +324,7 @@ function ProcessingDrawer({
     () =>
       localMasters.filter(
         (master) =>
-          master.status === "active" &&
-          master.categoryId === categoryId,
+          master.status === "active" && master.categoryId === categoryId,
       ),
     [categoryId, localMasters],
   );
@@ -360,9 +361,7 @@ function ProcessingDrawer({
   const suggestedPricePerGram = suggestedRate
     ? formatRupiahInput(suggestedRate)
     : "";
-  const pricePerGram = priceTouched
-    ? pricePerGramInput
-    : suggestedPricePerGram;
+  const pricePerGram = priceTouched ? pricePerGramInput : suggestedPricePerGram;
 
   useEffect(() => {
     if (state.status === "success") {
@@ -432,7 +431,10 @@ function ProcessingDrawer({
           </button>
         </div>
 
-        <form action={formAction} className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:p-6">
+        <form
+          action={formAction}
+          className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:p-6"
+        >
           <input type="hidden" name="payload" value={JSON.stringify(payload)} />
 
           {state.status === "error" ? (
@@ -571,11 +573,15 @@ function ProcessingDrawer({
                     type="button"
                     onClick={() => setQuickMasterOpen(true)}
                     disabled={!category}
-                    className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-[var(--accent)] disabled:opacity-40"
-                    title="Buat Product Master baru"
+                    className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
+                    aria-label="Tambah Product Master"
+                    title={
+                      category
+                        ? "Tambah Product Master"
+                        : "Pilih kategori terlebih dahulu"
+                    }
                   >
-                    <Plus className="size-4" />
-                    Buat Baru
+                    <Plus className="size-5" />
                   </button>
                 </div>
                 {state.fieldErrors?.productMasterId ? (
@@ -584,7 +590,8 @@ function ProcessingDrawer({
                   </p>
                 ) : null}
                 <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-                  Hanya Product Master pada kategori {category?.label ?? "yang dipilih"}.
+                  Hanya Product Master pada kategori{" "}
+                  {category?.label ?? "yang dipilih"}.
                 </p>
               </div>
 
@@ -679,7 +686,8 @@ function ProcessingDrawer({
                 </div>
                 {localColorPresets.length === 0 ? (
                   <p className="mt-1.5 text-xs leading-5 text-amber-700">
-                    Gunakan tombol + untuk membuat warna tanpa meninggalkan pemrosesan.
+                    Gunakan tombol + untuk membuat warna tanpa meninggalkan
+                    pemrosesan.
                   </p>
                 ) : null}
                 {state.fieldErrors?.color ? (
@@ -797,7 +805,9 @@ function ProcessingDrawer({
         onClose={() => setQuickCategoryOpen(false)}
         onCreated={(createdCategory) => {
           setLocalCategories((current) => {
-            const next = current.filter((item) => item.id !== createdCategory.id);
+            const next = current.filter(
+              (item) => item.id !== createdCategory.id,
+            );
             return [...next, createdCategory].sort((left, right) =>
               left.label.localeCompare(right.label, "id-ID"),
             );
@@ -1051,7 +1061,8 @@ export function BuybackProcessingWorkspace({
                               {row.sourceDisplayName}
                             </p>
                             <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
-                              {row.sourceCategoryName} · Kadar {row.sourcePurityPercent}% · {row.sourceColor}
+                              {row.sourceCategoryName} · Kadar{" "}
+                              {row.sourcePurityPercent}% · {row.sourceColor}
                             </p>
                             {row.sourceSku ? (
                               <p className="mt-1 truncate text-[11px] font-medium text-neutral-500">
