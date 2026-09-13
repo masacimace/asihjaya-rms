@@ -24,6 +24,7 @@ import Link from "next/link";
 
 import { SalesTrendChart } from "@/components/admin/dashboard/sales-trend-chart";
 import { GoldReferenceCard } from "@/components/admin/dashboard/gold-reference-card";
+import { OnlineUsersCard } from "@/components/admin/dashboard/online-users-card";
 import type {
   AdminDashboardActivityKind,
   AdminDashboardAlertTone,
@@ -184,6 +185,7 @@ function getComparison(
     label: comparisonLabel,
   };
 }
+
 
 type SalesChartInsight = {
   label: string;
@@ -470,6 +472,7 @@ export default async function AdminDashboardPage({
               },
             )}
           </section>
+
           <GoldReferenceCard result={goldReference} />
 
           <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
@@ -759,6 +762,8 @@ export default async function AdminDashboardPage({
               ) : null}
             </div>
           </section>
+
+          <OnlineUsersCard />
 
           <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
             <div className="flex items-center justify-between gap-3">

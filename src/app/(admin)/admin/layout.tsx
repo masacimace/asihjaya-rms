@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { PresenceHeartbeat } from "@/components/auth/presence-heartbeat";
 import { AdminShell } from "@/components/layout/admin-shell";
 import { getAdministrationAccess } from "@/features/administration/access";
 import { getAdminNotificationDrawerData } from "@/features/notifications/queries";
@@ -13,23 +14,26 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const notificationDrawerData = await getAdminNotificationDrawerData(auth);
 
   return (
-    <AdminShell
-      user={{
-        fullName: auth.user.fullName,
-        roleLabel: auth.roles[0]?.name ?? "Pengguna",
-        canAccessPos: hasPermission(auth, "pos.access"),
-        canAccessAdministration: administrationAccess.canAccessAdministration,
-        canAccessProducts: productInventoryAccess.canAccessProducts,
-        canAccessInventory: productInventoryAccess.canAccessInventory,
-        canAccessMigration:
-          hasPermission(auth, "migration.view") ||
-          hasPermission(auth, "migration.import"),
-        canAccessBuybacks: hasPermission(auth, "buybacks.view"),
-        canAccessSettings: hasPermission(auth, "settings.manage"),
-      }}
-      notificationDrawerData={notificationDrawerData}
-    >
-      {children}
-    </AdminShell>
+    <>
+      <PresenceHeartbeat />
+      <AdminShell
+        user={{
+          fullName: auth.user.fullName,
+          roleLabel: auth.roles[0]?.name ?? "Pengguna",
+          canAccessPos: hasPermission(auth, "pos.access"),
+          canAccessAdministration: administrationAccess.canAccessAdministration,
+          canAccessProducts: productInventoryAccess.canAccessProducts,
+          canAccessInventory: productInventoryAccess.canAccessInventory,
+          canAccessMigration:
+            hasPermission(auth, "migration.view") ||
+            hasPermission(auth, "migration.import"),
+          canAccessBuybacks: hasPermission(auth, "buybacks.view"),
+          canAccessSettings: hasPermission(auth, "settings.manage"),
+        }}
+        notificationDrawerData={notificationDrawerData}
+      >
+        {children}
+      </AdminShell>
+    </>
   );
 }

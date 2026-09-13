@@ -120,6 +120,32 @@ export async function createUserSession({
   });
 }
 
+export async function touchCurrentSession(): Promise<boolean> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+
+  if (!token) return false;
+
+  const tokenHash = hashSessionToken(token);
+  const now = new Date();
+
+  const touchedRows = await db
+    .update(userSessions)
+    .set({
+      lastSeenAt: now,
+    })
+    .where(
+      and(
+        eq(userSessions.tokenHash, tokenHash),
+        isNull(userSessions.revokedAt),
+        gt(userSessions.expiresAt, now),
+      ),
+    )
+    .returning({ id: userSessions.id });
+
+  return touchedRows.length > 0;
+}
+
 export async function getCurrentAuth(): Promise<AuthContext | null> {
   const cookieStore = await cookies();
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { PresenceHeartbeat } from "@/components/auth/presence-heartbeat";
 import { PosShell } from "@/components/layout/pos-shell";
 import { getPosShellStatus } from "@/features/pos/queries";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
@@ -16,18 +17,21 @@ export default async function PosLayout({ children }: { children: ReactNode }) {
   });
 
   return (
-    <PosShell
-      user={{
-        fullName: auth.user.fullName,
-        roleLabel: auth.roles[0]?.name ?? "Pengguna",
-        canAccessAdmin: hasPermission(auth, "admin.access"),
-        outletName: primaryOutlet?.name ?? "Outlet belum dipilih",
-        canCreateProducts: hasPermission(auth, "sales.create"),
-        canAccessBuybacks: hasPermission(auth, "buybacks.view"),
-      }}
-      status={posShellStatus}
-    >
-      {children}
-    </PosShell>
+    <>
+      <PresenceHeartbeat />
+      <PosShell
+        user={{
+          fullName: auth.user.fullName,
+          roleLabel: auth.roles[0]?.name ?? "Pengguna",
+          canAccessAdmin: hasPermission(auth, "admin.access"),
+          outletName: primaryOutlet?.name ?? "Outlet belum dipilih",
+          canCreateProducts: hasPermission(auth, "sales.create"),
+          canAccessBuybacks: hasPermission(auth, "buybacks.view"),
+        }}
+        status={posShellStatus}
+      >
+        {children}
+      </PosShell>
+    </>
   );
 }
