@@ -188,6 +188,10 @@ function createOutletLabels(
   return labels;
 }
 
+function getPresenceHistoryFloor() {
+  return new Date(Date.now() - PRESENCE_HISTORY_WINDOW_MS);
+}
+
 export async function getOnlinePresence(
   auth: AuthContext,
 ): Promise<OnlinePresencePayload> {
@@ -202,7 +206,7 @@ export async function getOnlinePresence(
     };
   }
 
-  const historyFloor = new Date(Date.now() - PRESENCE_HISTORY_WINDOW_MS);
+  const historyFloor = getPresenceHistoryFloor();
   const [roleRows, outletRows, activityRows] = await Promise.all([
     db
       .select({
@@ -238,7 +242,6 @@ export async function getOnlinePresence(
     db
       .select({
         actorUserId: auditLogs.actorUserId,
-        createdAt: auditLogs.createdAt,
       })
       .from(auditLogs)
       .where(
@@ -257,8 +260,6 @@ export async function getOnlinePresence(
 
   for (const row of activityRows) {
     if (!row.actorUserId) continue;
-    const sessionState = sessionStates.get(row.actorUserId);
-    if (!sessionState || row.createdAt < sessionState.sessionStartedAt) continue;
 
     activityCounts.set(
       row.actorUserId,
@@ -274,7 +275,7 @@ export async function getOnlinePresence(
       fullName: state.fullName,
       roleLabel: roleLabels.get(state.userId) ?? "Pengguna",
       outletLabel: outletLabels.get(state.userId) ?? "Tanpa outlet",
-      sessionStartedAt: state.sessionStartedAt.toISOString(),
+      sessionStartedAt: historyFloor.toISOString(),
       lastSeenAt: state.lastSeenAt.toISOString(),
       activityCount: activityCounts.get(state.userId) ?? 0,
       isCurrentUser: state.userId === auth.user.id,
@@ -305,6 +306,8 @@ export async function getPresenceActivities(
 
   if (!sessionState) return null;
 
+  const historyFloor = getPresenceHistoryFloor();
+
   const rows = await db
     .select({
       id: auditLogs.id,
@@ -318,7 +321,7 @@ export async function getPresenceActivities(
         eq(auditLogs.organizationId, auth.organization.id),
         eq(auditLogs.actorUserId, userId),
         inArray(auditLogs.action, PRESENCE_ACTIVITY_ACTIONS),
-        gte(auditLogs.createdAt, sessionState.sessionStartedAt),
+        gte(auditLogs.createdAt, historyFloor),
       ),
     )
     .orderBy(desc(auditLogs.createdAt))
@@ -348,7 +351,7 @@ export async function getPresenceActivities(
 
   return {
     userId,
-    sessionStartedAt: sessionState.sessionStartedAt.toISOString(),
+    sessionStartedAt: historyFloor.toISOString(),
     activities,
   };
 }

@@ -6,9 +6,8 @@ import {
   Clock3,
   RefreshCcw,
   ShoppingBag,
-  UsersRound,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   OnlinePresencePayload,
@@ -36,6 +35,18 @@ function formatTime(value: string) {
     minute: "2-digit",
     timeZone: "Asia/Jakarta",
   }).format(date);
+}
+
+function getUserInitials(fullName: string) {
+  const words = fullName
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0);
+
+  if (words.length === 0) return "US";
+  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+
+  return `${words[0]![0] ?? ""}${words[words.length - 1]![0] ?? ""}`.toUpperCase();
 }
 
 function getActivityMeta(kind: PresenceActivity["kind"]) {
@@ -125,6 +136,7 @@ function UserSummary({
   onToggle: () => void;
 }) {
   const canExpand = user.activityCount > 0;
+  const initials = getUserInitials(user.fullName);
 
   return (
     <button
@@ -138,8 +150,8 @@ function UserSummary({
           : "cursor-default"
       }`}
     >
-      <span className="relative grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--surface-muted)] text-neutral-600">
-        <UsersRound className="size-4" />
+      <span className="relative grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent)]">
+        {initials}
         <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-white bg-emerald-500" />
       </span>
 
@@ -159,8 +171,8 @@ function UserSummary({
         </span>
         <span className="mt-1 block text-[10px] text-[var(--muted)]">
           {canExpand
-            ? `${user.activityCount} aktivitas session ini`
-            : "Belum ada aktivitas session ini"}
+            ? `${user.activityCount} aktivitas 12 jam terakhir`
+            : "Belum ada aktivitas"}
         </span>
       </span>
 
@@ -194,6 +206,7 @@ export function OnlineUsersCard() {
   const [activityErrorUserId, setActivityErrorUserId] = useState<string | null>(
     null,
   );
+  const expandedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -212,11 +225,14 @@ export function OnlineUsersCard() {
 
         setPresence(payload);
         setLoadError(false);
-        setExpandedUserId((current) =>
-          current && payload.users.some((user) => user.userId === current)
-            ? current
-            : null,
-        );
+        setExpandedUserId((current) => {
+          const next =
+            current && payload.users.some((user) => user.userId === current)
+              ? current
+              : null;
+          expandedUserIdRef.current = next;
+          return next;
+        });
       } catch {
         if (!disposed) setLoadError(true);
       }
@@ -224,6 +240,11 @@ export function OnlineUsersCard() {
 
     function handleHeartbeat() {
       void loadPresence();
+
+      const currentExpandedUserId = expandedUserIdRef.current;
+      if (currentExpandedUserId) {
+        void loadActivities(currentExpandedUserId);
+      }
     }
 
     void loadPresence();
@@ -231,7 +252,10 @@ export function OnlineUsersCard() {
 
     return () => {
       disposed = true;
-      window.removeEventListener("asihjaya:presence-heartbeat", handleHeartbeat);
+      window.removeEventListener(
+        "asihjaya:presence-heartbeat",
+        handleHeartbeat,
+      );
     };
   }, []);
 
@@ -266,10 +290,12 @@ export function OnlineUsersCard() {
     if (user.activityCount <= 0) return;
 
     if (expandedUserId === user.userId) {
+      expandedUserIdRef.current = null;
       setExpandedUserId(null);
       return;
     }
 
+    expandedUserIdRef.current = user.userId;
     setExpandedUserId(user.userId);
     void loadActivities(user.userId);
   }
@@ -280,7 +306,8 @@ export function OnlineUsersCard() {
         <div className="min-w-0">
           <h2 className="font-semibold text-neutral-950">User Online</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            User yang sedang aktif menggunakan sistem.
+            Aktivitas user yang sedang online. Data ini diperbarui secara
+            real-time.
           </p>
         </div>
 
@@ -320,7 +347,7 @@ export function OnlineUsersCard() {
                 {expanded ? (
                   <div className="border-t border-[var(--border)] bg-[var(--surface-muted)]/60 px-3 py-3">
                     <div className="mb-3 flex items-center justify-between gap-3 text-[10px] text-[var(--muted)]">
-                      <span>Aktivitas session saat ini</span>
+                      <span>Aktivitas terbaru</span>
                       <span>Maks. 10 terbaru</span>
                     </div>
 
@@ -340,7 +367,7 @@ export function OnlineUsersCard() {
                       </div>
                     ) : (
                       <div className="rounded-xl border border-dashed border-[var(--border)] bg-white p-4 text-center text-xs text-[var(--muted)]">
-                        Belum ada aktivitas pada session ini.
+                        Belum ada aktivitas dalam 12 jam terakhir.
                       </div>
                     )}
                   </div>
