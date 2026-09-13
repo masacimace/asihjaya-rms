@@ -23,20 +23,27 @@ export default async function MetalPriceSettingsPage() {
   return (
     <div className="w-full min-w-0 space-y-6 overflow-x-clip pb-6">
       <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
-        <Link href="/admin/pengaturan" className="inline-flex items-center gap-2 text-sm font-medium text-[var(--muted)] transition hover:text-neutral-950">
+        <Link
+          href="/admin/pengaturan"
+          className="inline-flex items-center gap-2 text-sm font-medium text-[var(--muted)] transition hover:text-neutral-950"
+        >
           <ArrowLeft className="size-4" />
           Kembali ke Pengaturan
         </Link>
 
-        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
               <BadgeDollarSign className="size-3.5" />
               Dynamic Pricing
             </div>
-            <h1 className="mt-3 text-2xl font-semibold text-neutral-950 sm:text-3xl">Harga / Gram Global</h1>
+            <h1 className="mt-3 text-2xl font-semibold text-neutral-950 sm:text-3xl">
+              Harga / Gram Global
+            </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Kelola rate global yang menjadi default Harga/Gram POS berdasarkan Kadar Persen. Rate yang salah dan tidak dipakai item belum-terjual dapat dihapus tanpa menghapus histori harga.
+              Kelola rate global yang menjadi default Harga/Gram POS berdasarkan
+              Kadar Persen. Rate yang salah dan tidak dipakai item belum-terjual
+              dapat dihapus tanpa menghapus histori harga.
             </p>
           </div>
 
@@ -44,7 +51,10 @@ export default async function MetalPriceSettingsPage() {
             <Scale className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
             <div>
               <p className="font-semibold text-neutral-950">Formula dasar</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Berat × Harga/Gram transaksi. Secara default mengikuti rate aktif berdasarkan Kadar Persen.</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                Berat × Harga/Gram transaksi. Secara default mengikuti rate
+                aktif berdasarkan Kadar Persen.
+              </p>
             </div>
           </div>
         </div>
