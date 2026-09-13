@@ -338,8 +338,8 @@ export function GoldReferenceRatePanel({
 
       <div className="flex flex-col gap-2 border-t border-[var(--border)] bg-[var(--surface-muted)]/55 px-4 py-3 text-[11px] text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <p>
-          Referensi ini tidak mengubah Rate Global. Harga / Gram ASIHJAYA tetap
-          diatur dan disimpan manual.
+          Referensi ini tidak mengubah Rate Global. Harga / Gram tetap diatur
+          dan disimpan sesuai kebijakan toko.
         </p>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5">

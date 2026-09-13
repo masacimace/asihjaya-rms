@@ -209,7 +209,8 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
               </h2>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
                 Referensi eksternal 1 gram sebagai acuan harga pasar dari
-                berbagai brand dan sumber. Harga internal ASIHJAYA tidak berubah.
+                berbagai brand dan sumber. Harga internal ASIHJAYA tidak
+                berubah.
               </p>
             </div>
           </div>
@@ -341,8 +342,8 @@ export function GoldReferenceCard({ result }: { result: GoldReferenceResult }) {
 
       <div className="flex flex-col gap-2 border-t border-[var(--border)] bg-[var(--surface-muted)]/55 px-4 py-3 text-[11px] text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <p>
-          Referensi ini bersifat read-only dan tidak mengubah Harga / Gram ASIHJAYA.
-          Pricing internal tetap dikendalikan sistem ASIHJAYA.
+          Referensi ini bersifat read-only, pricing internal tetap dikendalikan
+          sistem dan kebijakan ASIHJAYA.
         </p>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5">
