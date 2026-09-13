@@ -6,6 +6,8 @@ import { useFormStatus } from "react-dom";
 
 import { createProductItemAction } from "@/app/actions/product-items";
 import { SingleImageInput } from "@/components/media/single-image-input";
+import { QuickProductCategoryDialog } from "@/components/products/quick-product-category-dialog";
+import { QuickProductColorDialog } from "@/components/products/quick-product-color-dialog";
 import { QuickProductMasterDialog } from "@/components/products/quick-product-master-dialog";
 import {
   initialProductItemActionState,
@@ -95,11 +97,11 @@ export type ProductItemPriceRateOption = {
 };
 
 export function ProductItemForm({
-  categories,
+  categories: initialCategories,
   productMasters: initialProductMasters,
   outlets,
   priceRates,
-  colorPresets,
+  colorPresets: initialColorPresets,
   initialProductMasterId,
   canCreateProductMaster,
   creationSource = "admin",
@@ -117,12 +119,17 @@ export function ProductItemForm({
     ? initialProductMasters.find((master) => master.id === initialProductMasterId)
     : undefined;
 
+  const [categories, setCategories] = useState(initialCategories);
   const [productMasters, setProductMasters] = useState(initialProductMasters);
+  const [colorPresets, setColorPresets] = useState(initialColorPresets);
   const [categoryId, setCategoryId] = useState(initialMaster?.categoryId ?? "");
   const [productMasterId, setProductMasterId] = useState(
     initialMaster?.id ?? "",
   );
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  const [quickCategoryOpen, setQuickCategoryOpen] = useState(false);
+  const [quickColorOpen, setQuickColorOpen] = useState(false);
+  const [color, setColor] = useState("");
   const [purityPercent, setPurityPercent] = useState("");
   const [weightGram, setWeightGram] = useState("");
   const [deductionPerGram, setDeductionPerGram] = useState("0");
@@ -162,6 +169,32 @@ export function ProductItemForm({
     setQuickCreateOpen(false);
   }, []);
 
+  const handleQuickCategoryCreated = useCallback(
+    (category: ProductMasterCategoryOption) => {
+      setCategories((current) => {
+        const next = current.filter((entry) => entry.id !== category.id);
+        return [...next, category].sort((left, right) =>
+          left.label.localeCompare(right.label, "id-ID"),
+        );
+      });
+      setCategoryId(category.id);
+      setProductMasterId("");
+      setQuickCategoryOpen(false);
+    },
+    [],
+  );
+
+  const handleQuickColorCreated = useCallback((preset: ProductColorPresetOption) => {
+    setColorPresets((current) => {
+      const next = current.filter((entry) => entry.id !== preset.id);
+      return [...next, preset].sort((left, right) =>
+        left.name.localeCompare(right.name, "id-ID"),
+      );
+    });
+    setColor(preset.name);
+    setQuickColorOpen(false);
+  }, []);
+
   const defaultOutletId = outlets.length === 1 ? outlets[0]?.id ?? "" : "";
 
   return (
@@ -174,34 +207,47 @@ export function ProductItemForm({
           <div>
             <h2 className="font-semibold text-neutral-950">Identitas Produk</h2>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Pilih kategori dan Product Master. Jika belum tersedia, buat langsung dari tombol + tanpa meninggalkan form.
+              Pilih kategori dan Product Master. Master data yang belum tersedia
+              bisa dibuat dari tombol + tanpa meninggalkan form.
             </p>
           </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm">
+            <div className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
                 Kategori <span className="text-red-500">*</span>
               </span>
-              <select
-                value={categoryId}
-                onChange={(event) => {
-                  setCategoryId(event.target.value);
-                  setProductMasterId("");
-                }}
-                className={inputClassName}
-                required
-              >
-                <option value="">Pilih kategori</option>
-                {categories
-                  .filter((category) => category.isActive)
-                  .map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.label}
-                    </option>
-                  ))}
-              </select>
-            </label>
+              <div className="flex gap-2">
+                <select
+                  value={categoryId}
+                  onChange={(event) => {
+                    setCategoryId(event.target.value);
+                    setProductMasterId("");
+                  }}
+                  className={`${inputClassName} min-w-0 flex-1`}
+                  required
+                >
+                  <option value="">Pilih kategori</option>
+                  {categories
+                    .filter((category) => category.isActive)
+                    .map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.label}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setQuickCategoryOpen(true)}
+                  disabled={!canCreateProductMaster}
+                  className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
+                  aria-label="Tambah Kategori"
+                  title="Tambah Kategori"
+                >
+                  <Plus className="size-5" />
+                </button>
+              </div>
+            </div>
 
             <div className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
@@ -364,34 +410,47 @@ export function ProductItemForm({
               <FieldError message={state.fieldErrors?.weightGram} />
             </label>
 
-            <label className="block text-sm">
+            <div className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
                 Warna <span className="text-red-500">*</span>
               </span>
-              <select
-                name="color"
-                required
-                defaultValue=""
-                className={inputClassName}
-              >
-                <option value="">
-                  {colorPresets.length > 0
-                    ? "Pilih warna"
-                    : "Belum ada preset warna aktif"}
-                </option>
-                {colorPresets.map((preset) => (
-                  <option key={preset.id} value={preset.name}>
-                    {preset.name}
+              <div className="flex gap-2">
+                <select
+                  name="color"
+                  required
+                  value={color}
+                  onChange={(event) => setColor(event.target.value)}
+                  className={`${inputClassName} min-w-0 flex-1`}
+                >
+                  <option value="">
+                    {colorPresets.length > 0
+                      ? "Pilih warna"
+                      : "Belum ada preset warna aktif"}
                   </option>
-                ))}
-              </select>
+                  {colorPresets.map((preset) => (
+                    <option key={preset.id} value={preset.name}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setQuickColorOpen(true)}
+                  disabled={!canCreateProductMaster}
+                  className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
+                  aria-label="Tambah Warna"
+                  title="Tambah Warna"
+                >
+                  <Plus className="size-5" />
+                </button>
+              </div>
               {colorPresets.length === 0 ? (
                 <p className="mt-1.5 text-xs leading-5 text-amber-700">
-                  Tambahkan preset dari Admin → Pengaturan → Varian Warna Produk.
+                  Gunakan tombol + untuk membuat warna tanpa meninggalkan form.
                 </p>
               ) : null}
               <FieldError message={state.fieldErrors?.color} />
-            </label>
+            </div>
 
             <label className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
@@ -473,6 +532,20 @@ export function ProductItemForm({
         categoryLabel={selectedCategory?.label ?? "Kategori belum dipilih"}
         onClose={() => setQuickCreateOpen(false)}
         onCreated={handleQuickCreated}
+        creationSource={creationSource}
+      />
+      <QuickProductCategoryDialog
+        key={`category:${quickCategoryOpen ? "open" : "closed"}`}
+        open={quickCategoryOpen && canCreateProductMaster}
+        onClose={() => setQuickCategoryOpen(false)}
+        onCreated={handleQuickCategoryCreated}
+        creationSource={creationSource}
+      />
+      <QuickProductColorDialog
+        key={`color:${quickColorOpen ? "open" : "closed"}`}
+        open={quickColorOpen && canCreateProductMaster}
+        onClose={() => setQuickColorOpen(false)}
+        onCreated={handleQuickColorCreated}
         creationSource={creationSource}
       />
     </>

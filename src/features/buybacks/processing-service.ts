@@ -192,9 +192,9 @@ export async function completeBuybackProcessingTransaction({
       );
     }
 
-    if (master.categoryId !== sourceCategoryId) {
+    if (master.categoryId !== payload.categoryId) {
       throw new BuybackProcessingValidationError(
-        "Product Master hasil harus berada pada kategori yang sama dengan item Buyback.",
+        "Product Master hasil harus berada pada Kategori hasil yang dipilih.",
       );
     }
 

@@ -16,7 +16,24 @@ export type CategoryActionState = {
   fieldErrors?: Record<string, string>;
 };
 
+export type QuickProductCategoryActionState = {
+  status: "idle" | "success" | "error";
+  message?: string;
+  fieldErrors?: Record<string, string>;
+  createdCategory?: {
+    id: string;
+    code: string;
+    name: string;
+    label: string;
+    isActive: boolean;
+  };
+};
+
 export const initialCategoryActionState: CategoryActionState = {
+  status: "idle",
+};
+
+export const initialQuickProductCategoryActionState: QuickProductCategoryActionState = {
   status: "idle",
 };
 

@@ -67,6 +67,11 @@ function normalizePayload(
       "Item pemrosesan tidak valid. Refresh halaman lalu coba kembali.";
   }
 
+  const categoryId = String(raw.categoryId ?? "").trim();
+  if (!UUID_PATTERN.test(categoryId)) {
+    fieldErrors.categoryId = "Pilih Kategori hasil.";
+  }
+
   const productMasterId = String(raw.productMasterId ?? "").trim();
   if (!UUID_PATTERN.test(productMasterId)) {
     fieldErrors.productMasterId = "Pilih Product Master hasil.";
@@ -111,6 +116,7 @@ function normalizePayload(
     ok: true,
     value: {
       processingId,
+      categoryId,
       productMasterId,
       displayName: displayName!,
       weightGram: weightGram!,

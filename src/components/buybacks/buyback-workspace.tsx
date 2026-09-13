@@ -35,6 +35,8 @@ import {
 } from "@/app/actions/buybacks";
 import { createPosQuickCustomerAction } from "@/app/actions/pos";
 import { CameraCaptureModal } from "@/components/media/camera-capture-modal";
+import { QuickProductCategoryDialog } from "@/components/products/quick-product-category-dialog";
+import { QuickProductColorDialog } from "@/components/products/quick-product-color-dialog";
 import { PosQuickCustomerDialog } from "@/components/pos/workspace/pos-quick-customer-dialog";
 import {
   normalizeBuybackDecimal,
@@ -370,8 +372,12 @@ export function BuybackWorkspace({
   );
   const [idempotencyKey, setIdempotencyKey] = useState(initialIdempotencyKey);
   const [items, setItems] = useState<DraftItem[]>([]);
+  const [localCategories, setLocalCategories] = useState(categories);
+  const [localColorPresets, setLocalColorPresets] = useState(colorPresets);
   const [notes, setNotes] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [quickCategoryItemKey, setQuickCategoryItemKey] = useState<string | null>(null);
+  const [quickColorItemKey, setQuickColorItemKey] = useState<string | null>(null);
   const [existingQuery, setExistingQuery] = useState("");
   const [existingResults, setExistingResults] = useState<
     BuybackExistingItemOption[]
@@ -500,6 +506,34 @@ export function BuybackWorkspace({
     setFeedback(null);
   }
 
+  function handleQuickCategoryCreated(category: ProductMasterCategoryOption) {
+    setLocalCategories((current) => {
+      const next = current.filter((entry) => entry.id !== category.id);
+      return [...next, category].sort((left, right) =>
+        left.label.localeCompare(right.label, "id-ID"),
+      );
+    });
+
+    if (quickCategoryItemKey) {
+      updateItem(quickCategoryItemKey, { categoryId: category.id });
+    }
+    setQuickCategoryItemKey(null);
+  }
+
+  function handleQuickColorCreated(preset: ProductColorPresetOption) {
+    setLocalColorPresets((current) => {
+      const next = current.filter((entry) => entry.id !== preset.id);
+      return [...next, preset].sort((left, right) =>
+        left.name.localeCompare(right.name, "id-ID"),
+      );
+    });
+
+    if (quickColorItemKey) {
+      updateItem(quickColorItemKey, { color: preset.name });
+    }
+    setQuickColorItemKey(null);
+  }
+
   function addExternalItem() {
     if (items.length >= BUYBACK_MAX_ITEMS) {
       setFeedback(`Maksimal ${BUYBACK_MAX_ITEMS} item dalam satu Buyback.`);
@@ -518,7 +552,7 @@ export function BuybackWorkspace({
       setFeedback(`${item.sku} sudah ada di daftar Buyback.`);
       return;
     }
-    setItems((current) => [...current, mapExistingItem(item, colorPresets)]);
+    setItems((current) => [...current, mapExistingItem(item, localColorPresets)]);
     setFeedback(
       `${item.sku} ditambahkan. Pilih Cuci/Rongsok, cek data fisik, isi Total Harga, lalu ambil foto kondisi barang.`,
     );
@@ -909,69 +943,93 @@ export function BuybackWorkspace({
                     </div>
                   </div>
 
-                  <label className="block text-sm">
+                  <div className="block text-sm">
                     <span className="mb-2 block font-medium text-neutral-800">
                       Kategori *
                     </span>
-                    <select
-                      value={item.categoryId}
-                      onChange={(event) =>
-                        updateItem(item.clientKey, {
-                          categoryId: event.target.value,
-                        })
-                      }
-                      className={inputClassName}
-                    >
-                      <option value="">Pilih kategori</option>
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    <div className="flex gap-2">
+                      <select
+                        value={item.categoryId}
+                        onChange={(event) =>
+                          updateItem(item.clientKey, {
+                            categoryId: event.target.value,
+                          })
+                        }
+                        className={cn(inputClassName, "min-w-0 flex-1")}
+                      >
+                        <option value="">Pilih kategori</option>
+                        {localCategories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setQuickCategoryItemKey(item.clientKey)}
+                        disabled={!canCreate}
+                        className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
+                        aria-label="Tambah Kategori"
+                        title="Tambah Kategori"
+                      >
+                        <Plus className="size-5" />
+                      </button>
+                    </div>
+                  </div>
 
-                  <label className="block text-sm">
+                  <div className="block text-sm">
                     <span className="mb-2 block font-medium text-neutral-800">
                       Warna *
                     </span>
-                    <select
-                      value={item.color}
-                      onChange={(event) =>
-                        updateItem(item.clientKey, {
-                          color: event.target.value,
-                        })
-                      }
-                      className={inputClassName}
-                    >
-                      <option value="">
-                        {colorPresets.length > 0
-                          ? "Pilih warna"
-                          : "Belum ada preset warna aktif"}
-                      </option>
-                      {item.source === "asihjaya" &&
-                      item.color &&
-                      !colorPresets.some(
-                        (preset) =>
-                          normalizeColorKey(preset.name) ===
-                          normalizeColorKey(item.color),
-                      ) ? (
-                        <option value={item.color}>
-                          {item.color} (warna item saat ini)
+                    <div className="flex gap-2">
+                      <select
+                        value={item.color}
+                        onChange={(event) =>
+                          updateItem(item.clientKey, {
+                            color: event.target.value,
+                          })
+                        }
+                        className={cn(inputClassName, "min-w-0 flex-1")}
+                      >
+                        <option value="">
+                          {localColorPresets.length > 0
+                            ? "Pilih warna"
+                            : "Belum ada preset warna aktif"}
                         </option>
-                      ) : null}
-                      {colorPresets.map((preset) => (
-                        <option key={preset.id} value={preset.name}>
-                          {preset.name}
-                        </option>
-                      ))}
-                    </select>
-                    {colorPresets.length === 0 && item.source === "external" ? (
+                        {item.source === "asihjaya" &&
+                        item.color &&
+                        !localColorPresets.some(
+                          (preset) =>
+                            normalizeColorKey(preset.name) ===
+                            normalizeColorKey(item.color),
+                        ) ? (
+                          <option value={item.color}>
+                            {item.color} (warna item saat ini)
+                          </option>
+                        ) : null}
+                        {localColorPresets.map((preset) => (
+                          <option key={preset.id} value={preset.name}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setQuickColorItemKey(item.clientKey)}
+                        disabled={!canCreate}
+                        className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
+                        aria-label="Tambah Warna"
+                        title="Tambah Warna"
+                      >
+                        <Plus className="size-5" />
+                      </button>
+                    </div>
+                    {localColorPresets.length === 0 ? (
                       <p className="mt-1.5 text-xs leading-5 text-amber-700">
-                        Minta admin menambahkan preset warna di Pengaturan.
+                        Gunakan tombol + untuk membuat warna tanpa meninggalkan Buyback.
                       </p>
                     ) : null}
-                  </label>
+                  </div>
 
                   <label className="block text-sm">
                     <span className="mb-2 block font-medium text-neutral-800">
@@ -1260,6 +1318,20 @@ export function BuybackWorkspace({
           onUseDuplicate={useExistingQuickCustomer}
         />
       ) : null}
+      <QuickProductCategoryDialog
+        key={`buyback-category:${quickCategoryItemKey ?? "closed"}`}
+        open={Boolean(quickCategoryItemKey) && canCreate}
+        creationSource="buyback"
+        onClose={() => setQuickCategoryItemKey(null)}
+        onCreated={handleQuickCategoryCreated}
+      />
+      <QuickProductColorDialog
+        key={`buyback-color:${quickColorItemKey ?? "closed"}`}
+        open={Boolean(quickColorItemKey) && canCreate}
+        creationSource="buyback"
+        onClose={() => setQuickColorItemKey(null)}
+        onCreated={handleQuickColorCreated}
+      />
     </>
   );
 }

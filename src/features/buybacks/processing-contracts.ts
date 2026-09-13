@@ -58,6 +58,7 @@ export type BuybackProcessingData = {
 
 export type BuybackProcessingSubmitPayload = {
   processingId: string;
+  categoryId: string;
   productMasterId: string;
   displayName: string;
   weightGram: string;
@@ -68,6 +69,7 @@ export type BuybackProcessingSubmitPayload = {
 
 export type NormalizedBuybackProcessingPayload = {
   processingId: string;
+  categoryId: string;
   productMasterId: string;
   displayName: string;
   weightGram: string;

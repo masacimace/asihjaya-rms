@@ -20,6 +20,8 @@ import { useRouter } from "next/navigation";
 import { completeBuybackProcessingAction } from "@/app/actions/buyback-processing";
 import { CameraCaptureModal } from "@/components/media/camera-capture-modal";
 import { ImageLightbox } from "@/components/media/image-lightbox";
+import { QuickProductCategoryDialog } from "@/components/products/quick-product-category-dialog";
+import { QuickProductColorDialog } from "@/components/products/quick-product-color-dialog";
 import { QuickProductMasterDialog } from "@/components/products/quick-product-master-dialog";
 import {
   initialBuybackProcessingActionState,
@@ -298,23 +300,33 @@ function ProcessingDrawer({
     completeBuybackProcessingAction,
     initialBuybackProcessingActionState,
   );
-  const category = categories.find((item) => item.id === row.sourceCategoryId);
-  const availableMasters = useMemo(
-    () =>
-      productMasters.filter(
-        (master) =>
-          master.status === "active" &&
-          master.categoryId === row.sourceCategoryId,
-      ),
-    [productMasters, row.sourceCategoryId],
-  );
+  const router = useRouter();
   const initialMasterId =
     row.sourceProductMasterId &&
-    availableMasters.some((master) => master.id === row.sourceProductMasterId)
+    productMasters.some(
+      (master) =>
+        master.id === row.sourceProductMasterId &&
+        master.status === "active" &&
+        master.categoryId === row.sourceCategoryId,
+    )
       ? row.sourceProductMasterId
       : "";
 
+  const [localCategories, setLocalCategories] = useState(categories);
+  const [localMasters, setLocalMasters] = useState(productMasters);
+  const [localColorPresets, setLocalColorPresets] = useState(colorPresets);
+  const [categoryId, setCategoryId] = useState(row.sourceCategoryId);
   const [masterId, setMasterId] = useState(initialMasterId);
+  const category = localCategories.find((item) => item.id === categoryId);
+  const availableMasters = useMemo(
+    () =>
+      localMasters.filter(
+        (master) =>
+          master.status === "active" &&
+          master.categoryId === categoryId,
+      ),
+    [categoryId, localMasters],
+  );
   const [displayName, setDisplayName] = useState(row.sourceDisplayName);
   const [weightGram, setWeightGram] = useState(row.sourceWeightGram);
   const [purityPercent, setPurityPercent] = useState(row.sourcePurityPercent);
@@ -326,8 +338,8 @@ function ProcessingDrawer({
   const [pricePerGramInput, setPricePerGramInput] = useState("");
   const [priceTouched, setPriceTouched] = useState(false);
   const [quickMasterOpen, setQuickMasterOpen] = useState(false);
-  const [localMasters, setLocalMasters] =
-    useState<ProductMasterOption[]>(availableMasters);
+  const [quickCategoryOpen, setQuickCategoryOpen] = useState(false);
+  const [quickColorOpen, setQuickColorOpen] = useState(false);
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -361,6 +373,7 @@ function ProcessingDrawer({
   const payload = useMemo<BuybackProcessingSubmitPayload>(
     () => ({
       processingId: row.id,
+      categoryId,
       productMasterId: masterId,
       displayName,
       weightGram,
@@ -369,6 +382,7 @@ function ProcessingDrawer({
       pricePerGram,
     }),
     [
+      categoryId,
       color,
       displayName,
       masterId,
@@ -499,6 +513,45 @@ function ProcessingDrawer({
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
+                  Kategori *
+                </span>
+                <div className="flex gap-2">
+                  <select
+                    value={categoryId}
+                    onChange={(event) => {
+                      setCategoryId(event.target.value);
+                      setMasterId("");
+                    }}
+                    className={cn(inputClassName, "min-w-0 flex-1")}
+                  >
+                    <option value="">Pilih kategori hasil</option>
+                    {localCategories
+                      .filter((item) => item.isActive)
+                      .map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setQuickCategoryOpen(true)}
+                    className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)]"
+                    aria-label="Tambah Kategori"
+                    title="Tambah Kategori"
+                  >
+                    <Plus className="size-5" />
+                  </button>
+                </div>
+                {state.fieldErrors?.categoryId ? (
+                  <p className="mt-1.5 text-xs text-red-600">
+                    {state.fieldErrors.categoryId}
+                  </p>
+                ) : null}
+              </div>
+
+              <div>
+                <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Product Master *
                 </span>
                 <div className="flex gap-2">
@@ -508,7 +561,7 @@ function ProcessingDrawer({
                     className={cn(inputClassName, "min-w-0 flex-1")}
                   >
                     <option value="">Pilih Product Master</option>
-                    {localMasters.map((master) => (
+                    {availableMasters.map((master) => (
                       <option key={master.id} value={master.id}>
                         {master.code} · {master.name}
                       </option>
@@ -531,7 +584,7 @@ function ProcessingDrawer({
                   </p>
                 ) : null}
                 <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-                  Hanya Product Master pada kategori {row.sourceCategoryName}.
+                  Hanya Product Master pada kategori {category?.label ?? "yang dipilih"}.
                 </p>
               </div>
 
@@ -593,29 +646,40 @@ function ProcessingDrawer({
                 ) : null}
               </label>
 
-              <label className="block">
+              <div className="block">
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Warna *
                 </span>
-                <select
-                  value={color}
-                  onChange={(event) => setColor(event.target.value)}
-                  className={inputClassName}
-                >
-                  <option value="">
-                    {colorPresets.length > 0
-                      ? "Pilih warna hasil"
-                      : "Belum ada preset warna aktif"}
-                  </option>
-                  {colorPresets.map((preset) => (
-                    <option key={preset.id} value={preset.name}>
-                      {preset.name}
+                <div className="flex gap-2">
+                  <select
+                    value={color}
+                    onChange={(event) => setColor(event.target.value)}
+                    className={cn(inputClassName, "min-w-0 flex-1")}
+                  >
+                    <option value="">
+                      {localColorPresets.length > 0
+                        ? "Pilih warna hasil"
+                        : "Belum ada preset warna aktif"}
                     </option>
-                  ))}
-                </select>
-                {colorPresets.length === 0 ? (
+                    {localColorPresets.map((preset) => (
+                      <option key={preset.id} value={preset.name}>
+                        {preset.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setQuickColorOpen(true)}
+                    className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)]"
+                    aria-label="Tambah Warna"
+                    title="Tambah Warna"
+                  >
+                    <Plus className="size-5" />
+                  </button>
+                </div>
+                {localColorPresets.length === 0 ? (
                   <p className="mt-1.5 text-xs leading-5 text-amber-700">
-                    Minta admin menambahkan preset warna di Pengaturan.
+                    Gunakan tombol + untuk membuat warna tanpa meninggalkan pemrosesan.
                   </p>
                 ) : null}
                 {state.fieldErrors?.color ? (
@@ -623,7 +687,7 @@ function ProcessingDrawer({
                     {state.fieldErrors.color}
                   </p>
                 ) : null}
-              </label>
+              </div>
 
               <label className="block">
                 <span className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-neutral-800">
@@ -684,6 +748,7 @@ function ProcessingDrawer({
               type="submit"
               disabled={
                 isPending ||
+                !categoryId ||
                 !masterId ||
                 !displayName.trim() ||
                 !weightGram ||
@@ -725,6 +790,41 @@ function ProcessingDrawer({
           }}
         />
       ) : null}
+      <QuickProductCategoryDialog
+        key={`processing-category:${quickCategoryOpen ? "open" : "closed"}`}
+        open={quickCategoryOpen}
+        creationSource="buyback"
+        onClose={() => setQuickCategoryOpen(false)}
+        onCreated={(createdCategory) => {
+          setLocalCategories((current) => {
+            const next = current.filter((item) => item.id !== createdCategory.id);
+            return [...next, createdCategory].sort((left, right) =>
+              left.label.localeCompare(right.label, "id-ID"),
+            );
+          });
+          setCategoryId(createdCategory.id);
+          setMasterId("");
+          setQuickCategoryOpen(false);
+          router.refresh();
+        }}
+      />
+      <QuickProductColorDialog
+        key={`processing-color:${quickColorOpen ? "open" : "closed"}`}
+        open={quickColorOpen}
+        creationSource="buyback"
+        onClose={() => setQuickColorOpen(false)}
+        onCreated={(preset) => {
+          setLocalColorPresets((current) => {
+            const next = current.filter((item) => item.id !== preset.id);
+            return [...next, preset].sort((left, right) =>
+              left.name.localeCompare(right.name, "id-ID"),
+            );
+          });
+          setColor(preset.name);
+          setQuickColorOpen(false);
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

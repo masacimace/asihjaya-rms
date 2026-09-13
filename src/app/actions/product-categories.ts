@@ -10,6 +10,7 @@ import { auditLogs, productCategories, productMasters } from "@/db/schema";
 import {
   isUuid,
   type CategoryActionState,
+  type QuickProductCategoryActionState,
 } from "@/features/products/category-contracts";
 import { requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
@@ -94,6 +95,144 @@ function readActiveStatus(formData: FormData): boolean | null {
   if (value === "inactive") return false;
 
   return null;
+}
+
+export async function quickCreateProductCategoryAction(
+  _previousState: QuickProductCategoryActionState,
+  formData: FormData,
+): Promise<QuickProductCategoryActionState> {
+  const rawCreationSource = readText(formData, "creationSource");
+  const creationSource =
+    rawCreationSource === "buyback"
+      ? "buyback"
+      : rawCreationSource === "pos"
+        ? "pos"
+        : "admin";
+  const auth = await requirePermission(
+    creationSource === "buyback"
+      ? "buybacks.create"
+      : creationSource === "pos"
+        ? "sales.create"
+        : "products.manage",
+  );
+
+  if (creationSource !== "admin" && !auth.permissionCodes.includes("pos.access")) {
+    return failure("User ini belum memiliki akses POS.");
+  }
+
+  const code = readText(formData, "code").toUpperCase();
+  const name = readText(formData, "name");
+  const fieldErrors: Record<string, string> = {};
+
+  if (!CATEGORY_CODE_PATTERN.test(code)) {
+    fieldErrors.code =
+      "Gunakan 2–32 karakter: huruf kapital, angka, garis bawah, atau tanda hubung.";
+  }
+
+  if (name.length < 2 || name.length > 120) {
+    fieldErrors.name = "Nama kategori harus terdiri dari 2–120 karakter.";
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return {
+      status: "error",
+      message: "Periksa kembali data kategori.",
+      fieldErrors,
+    };
+  }
+
+  const existingRows = await db
+    .select({ id: productCategories.id })
+    .from(productCategories)
+    .where(
+      and(
+        eq(productCategories.organizationId, auth.organization.id),
+        eq(productCategories.code, code),
+      ),
+    )
+    .limit(1);
+
+  if (existingRows[0]) {
+    return failure("Kode kategori sudah digunakan.", {
+      code: "Gunakan kode kategori yang berbeda.",
+    });
+  }
+
+  const requestMetadata = await getRequestMetadata();
+
+  try {
+    const createdCategory = await db.transaction(async (transaction) => {
+      const [created] = await transaction
+        .insert(productCategories)
+        .values({
+          organizationId: auth.organization.id,
+          parentCategoryId: null,
+          code,
+          name,
+          description: null,
+          displayOrder: 0,
+          isActive: true,
+        })
+        .returning({
+          id: productCategories.id,
+          code: productCategories.code,
+          name: productCategories.name,
+        });
+
+      if (!created) {
+        throw new Error("PRODUCT_CATEGORY_QUICK_CREATE_FAILED");
+      }
+
+      await transaction.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        actorUserId: auth.user.id,
+        action: "product_category.quick_create",
+        entityType: "product_category",
+        entityId: created.id,
+        afterData: {
+          code,
+          name,
+          isActive: true,
+          categoryModel: "flat",
+          source:
+            creationSource === "buyback"
+              ? "pos_buyback"
+              : creationSource === "pos"
+                ? "pos_product_item_form"
+                : "product_item_form",
+        },
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+      });
+
+      return created;
+    });
+
+    revalidateCategoryPages(createdCategory.id);
+    revalidatePath("/admin/produk/tambah");
+    revalidatePath("/pos/produk/tambah");
+    revalidatePath("/pos/buyback");
+    revalidatePath("/pos/buyback/pemrosesan");
+
+    return {
+      status: "success",
+      message: "Kategori berhasil dibuat dan langsung dipilih.",
+      createdCategory: {
+        ...createdCategory,
+        label: createdCategory.name,
+        isActive: true,
+      },
+    };
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return failure("Kode kategori sudah digunakan.", {
+        code: "Gunakan kode kategori yang berbeda.",
+      });
+    }
+
+    console.error("Gagal quick-create kategori produk:", error);
+    return failure("Kategori gagal dibuat. Silakan coba kembali.");
+  }
 }
 
 export async function createProductCategoryAction(

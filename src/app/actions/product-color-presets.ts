@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 
 import { db } from "@/db";
 import { auditLogs, productColorPresets } from "@/db/schema";
+import type { QuickProductColorPresetActionState } from "@/features/settings/product-color-preset-contracts";
 import { requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
 
@@ -63,6 +64,123 @@ function revalidateColorPresetConsumers() {
   revalidatePath("/pos/produk/tambah");
   revalidatePath("/pos/buyback");
   revalidatePath("/pos/buyback/pemrosesan");
+}
+
+export async function quickCreateProductColorPresetAction(
+  _previousState: QuickProductColorPresetActionState,
+  formData: FormData,
+): Promise<QuickProductColorPresetActionState> {
+  const rawCreationSource = String(formData.get("creationSource") ?? "").trim();
+  const creationSource =
+    rawCreationSource === "buyback"
+      ? "buyback"
+      : rawCreationSource === "pos"
+        ? "pos"
+        : "admin";
+  const auth = await requirePermission(
+    creationSource === "buyback"
+      ? "buybacks.create"
+      : creationSource === "pos"
+        ? "sales.create"
+        : "products.manage",
+  );
+
+  if (creationSource !== "admin" && !auth.permissionCodes.includes("pos.access")) {
+    return {
+      status: "error",
+      message: "User ini belum memiliki akses POS.",
+    };
+  }
+
+  const rawName = String(formData.get("name") ?? "").trim();
+  const name = readName(formData);
+  const fieldErrors: Record<string, string> = {};
+
+  if (!name) {
+    fieldErrors.name = "Nama warna wajib diisi.";
+  } else if (rawName.length > 64) {
+    fieldErrors.name = "Nama warna maksimal 64 karakter.";
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return {
+      status: "error",
+      message: "Periksa kembali data warna.",
+      fieldErrors,
+    };
+  }
+
+  const requestMetadata = await getRequestMetadata();
+  const now = new Date();
+
+  try {
+    const createdPreset = await db.transaction(async (transaction) => {
+      const [created] = await transaction
+        .insert(productColorPresets)
+        .values({
+          organizationId: auth.organization.id,
+          name,
+          description: null,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning({
+          id: productColorPresets.id,
+          name: productColorPresets.name,
+          description: productColorPresets.description,
+        });
+
+      if (!created) {
+        throw new Error("PRODUCT_COLOR_PRESET_QUICK_CREATE_FAILED");
+      }
+
+      await transaction.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        actorUserId: auth.user.id,
+        action: "settings.product_color_preset.quick_create",
+        entityType: "product_color_preset",
+        entityId: created.id,
+        afterData: {
+          name,
+          description: null,
+          isActive: true,
+          source:
+            creationSource === "buyback"
+              ? "pos_buyback"
+              : creationSource === "pos"
+                ? "pos_product_item_form"
+                : "product_item_form",
+        },
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+      });
+
+      return created;
+    });
+
+    revalidateColorPresetConsumers();
+
+    return {
+      status: "success",
+      message: `Warna "${createdPreset.name}" berhasil dibuat dan langsung dipilih.`,
+      createdPreset,
+    };
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return {
+        status: "error",
+        message: `Preset warna "${name}" sudah tersedia.`,
+        fieldErrors: { name: "Gunakan nama warna yang berbeda." },
+      };
+    }
+
+    console.error("Gagal quick-create preset warna produk:", error);
+    return {
+      status: "error",
+      message: "Warna gagal dibuat. Silakan coba kembali.",
+    };
+  }
 }
 
 export async function saveProductColorPresetAction(formData: FormData) {
