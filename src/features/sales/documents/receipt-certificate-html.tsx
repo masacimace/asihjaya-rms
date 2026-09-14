@@ -1392,9 +1392,13 @@ export function ReceiptCertificateHtmlDocument({
   overlayCalibration?: ReceiptOverlayCalibration;
   renderMode?: ReceiptCertificateRenderMode;
 }) {
-  const isBuyback = data.documentKind === "buyback";
+  // Receipt Buyback sengaja memakai presentation yang sama persis dengan
+  // receipt pembelian. documentKind tetap dipertahankan pada data/backend,
+  // tetapi tidak boleh mengubah layout maupun wording dokumen.
+  const isBuyback = false;
   const customerName =
-    data.customer?.fullName ?? (isBuyback ? "Penjual tidak tercatat" : "Pelanggan Umum");
+    data.customer?.fullName ??
+    (isBuyback ? "Penjual tidak tercatat" : "Pelanggan Umum");
   const customerPhone = data.customer?.phone ?? "-";
   const completedDate = formatDate(
     data.sale.completedAt,
@@ -1510,7 +1514,9 @@ export function ReceiptCertificateHtmlDocument({
                       <div className="aj-summary-lines">
                         <div className="aj-summary-row">
                           <span className="aj-static-artwork">
-                            {useBuybackAdjustedLabels ? "No. Buyback :" : "No. Order :"}
+                            {useBuybackAdjustedLabels
+                              ? "No. Buyback :"
+                              : "No. Order :"}
                           </span>
                           <span className="aj-summary-value aj-dynamic-print">
                             {data.sale.invoiceNumber}
@@ -1601,7 +1607,10 @@ export function ReceiptCertificateHtmlDocument({
                             {isBuyback && isPreprintedOverlay ? (
                               <>
                                 {buildProductMeta(item) ? " · " : ""}
-                                BB/Gr {formatAmount(item.snapshot.buybackPricePerGram)}
+                                BB/Gr{" "}
+                                {formatAmount(
+                                  item.snapshot.buybackPricePerGram,
+                                )}
                               </>
                             ) : null}
                           </div>
@@ -1650,11 +1659,14 @@ export function ReceiptCertificateHtmlDocument({
                   <footer className="aj-footer">
                     <section className="aj-payment-support">
                       <div className="aj-payment-support-title aj-static-artwork">
-                        {useBuybackAdjustedLabels ? "Payout Buyback" : "Support Payment"}
+                        {useBuybackAdjustedLabels
+                          ? "Payout Buyback"
+                          : "Support Payment"}
                       </div>
                       {useBuybackAdjustedLabels ? (
                         <div className="aj-payment-support-note aj-dynamic-print">
-                          {payoutSummary || "Payout tercatat pada transaksi Buyback."}
+                          {payoutSummary ||
+                            "Payout tercatat pada transaksi Buyback."}
                         </div>
                       ) : (
                         <>
@@ -1706,7 +1718,9 @@ export function ReceiptCertificateHtmlDocument({
                       </div>
                       <div className="aj-total-detail-row aj-total-row-deposit-used">
                         <span className="aj-static-artwork">
-                          {useBuybackAdjustedLabels ? "Cash / Transfer" : "Gunakan Saldo"}
+                          {useBuybackAdjustedLabels
+                            ? "Cash / Transfer"
+                            : "Gunakan Saldo"}
                         </span>
                         <strong className="aj-dynamic-print">
                           {useBuybackAdjustedLabels
@@ -1720,7 +1734,9 @@ export function ReceiptCertificateHtmlDocument({
                       >
                         <div className="aj-total-detail-row">
                           <span className="aj-static-artwork">
-                            {useBuybackAdjustedLabels ? "Nilai Dasar" : "Harga Item"}
+                            {useBuybackAdjustedLabels
+                              ? "Nilai Dasar"
+                              : "Harga Item"}
                           </span>
                           <strong className="aj-dynamic-print">
                             {formatAmount(itemSubtotalAmount)}
@@ -1729,7 +1745,9 @@ export function ReceiptCertificateHtmlDocument({
                         {itemDiscountAmount > 0 ? (
                           <div className="aj-total-detail-row aj-total-row-discount">
                             <span className="aj-static-artwork">
-                              {useBuybackAdjustedLabels ? "Potongan Item" : "Diskon Item"}
+                              {useBuybackAdjustedLabels
+                                ? "Potongan Item"
+                                : "Diskon Item"}
                             </span>
                             <strong className="aj-dynamic-print">
                               {formatNegativeAmount(itemDiscountAmount)}
@@ -1739,7 +1757,9 @@ export function ReceiptCertificateHtmlDocument({
                         {pageCount > 1 ? (
                           <div className="aj-total-detail-row">
                             <span className="aj-static-artwork">
-                              {useBuybackAdjustedLabels ? "Total Buyback" : "Total Order"}
+                              {useBuybackAdjustedLabels
+                                ? "Total Buyback"
+                                : "Total Order"}
                             </span>
                             <strong className="aj-dynamic-print">
                               {formatAmount(data.sale.totalAmount)}
@@ -1748,7 +1768,9 @@ export function ReceiptCertificateHtmlDocument({
                         ) : null}
                         <div className="aj-total-detail-row aj-total-row-external">
                           <span className="aj-static-artwork">
-                            {useBuybackAdjustedLabels ? "Total Payout" : "Total Pembayaran"}
+                            {useBuybackAdjustedLabels
+                              ? "Total Payout"
+                              : "Total Pembayaran"}
                           </span>
                           <strong className="aj-dynamic-print">
                             {formatAmount(
@@ -1761,7 +1783,9 @@ export function ReceiptCertificateHtmlDocument({
                       </div>
                       <div className="aj-total-box">
                         <span className="aj-total-label aj-static-artwork">
-                          {useBuybackAdjustedLabels ? "Nilai Item" : "Total Item"}
+                          {useBuybackAdjustedLabels
+                            ? "Nilai Item"
+                            : "Total Item"}
                         </span>
                         <strong className="aj-total-amount aj-dynamic-print">
                           {formatAmount(itemTotalAmount)}
@@ -1785,7 +1809,9 @@ export function ReceiptCertificateHtmlDocument({
                         </div>
                       )}
                       <div className="aj-qr-label aj-static-artwork">
-                        {useBuybackAdjustedLabels ? "Detail Buyback" : "Riwayat Transaksi"}
+                        {useBuybackAdjustedLabels
+                          ? "Detail Buyback"
+                          : "Riwayat Transaksi"}
                       </div>
                       <div className="aj-qr-note aj-static-artwork">
                         {useBuybackAdjustedLabels
@@ -1857,121 +1883,131 @@ export function ReceiptCertificateHtmlDocument({
                     {isBuyback ? (
                       <ol className="aj-back-policy-list">
                         <li>
-                          1. Nota Buyback ini adalah bukti resmi barang yang diterima Asih Jaya beserta nilai payout yang telah disepakati.
+                          1. Nota Buyback ini adalah bukti resmi barang yang
+                          diterima Asih Jaya beserta nilai payout yang telah
+                          disepakati.
                         </li>
                         <br />
                         <li>
-                          2. Berat, kadar, kondisi, Harga Buyback/Gram, dan potongan pada nota merupakan snapshot penilaian saat transaksi diselesaikan.
+                          2. Berat, kadar, kondisi, Harga Buyback/Gram, dan
+                          potongan pada nota merupakan snapshot penilaian saat
+                          transaksi diselesaikan.
                         </li>
                         <br />
                         <li>
-                          3. Payout melalui Dana Titip menambah saldo customer dan dapat digunakan pada transaksi berikutnya sesuai ketentuan toko.
+                          3. Payout melalui Dana Titip menambah saldo customer
+                          dan dapat digunakan pada transaksi berikutnya sesuai
+                          ketentuan toko.
                         </li>
                         <br />
                         <li>
-                          4. Produk ASIHJAYA maupun produk eksternal yang diterima melalui Buyback menjadi inventory toko setelah transaksi selesai.
+                          4. Produk ASIHJAYA maupun produk eksternal yang
+                          diterima melalui Buyback menjadi inventory toko
+                          setelah transaksi selesai.
                         </li>
                         <br />
                         <li>
-                          5. Simpan nota ini untuk referensi apabila diperlukan pemeriksaan histori Buyback di kemudian hari.
+                          5. Simpan nota ini untuk referensi apabila diperlukan
+                          pemeriksaan histori Buyback di kemudian hari.
                         </li>
                       </ol>
                     ) : (
-                    <ol className="aj-back-policy-list">
-                      <li>
-                        1. Setiap permintaan untuk layanan lebih lanjut
-                        (Penukaran, Pembelian kembali produk, dan Keluhan) harus
-                        disertal invoice/kuitansi dan sertifikat asli.
-                      </li>
-                      <br />
-                      <li>
-                        2. Asih Jaya Bantar Gebang dapat menarik atau mengubah
-                        kebijakan penukaran/pembelian kembali produk Asih Jaya
-                        Bantar Gebang tanpa pemberitahuan sebelumnya pada waktu
-                        tertentu dan keputusan Asih Jaya Bantar Gebang bersifat
-                        mutlak
-                      </li>{" "}
-                      <br />
-                      <li>
-                        3. Perhiasan yang dijual oleh Asih Jaya Bantar Gebang
-                        dapat ditukar pada toko Asih Jaya Bantar Gebang untuk
-                        produk dengan nilai yang sama, jika perhiasan yang
-                        ditukar memenuhi kondisi berikut:
-                        <ol className="aj-back-policy-sublist" type="a">
-                          <li>Perhiasan belum pernah digunakan.</li>
-                          <li>
-                            Perhiasan dalam kondisi yang sama pada saat
-                            perhiasan dijual.
-                          </li>
-                          <li>
-                            Perhiasan dikembalikan dalam waktu maksimal 2 hari
-                            dari waktu pembelian.
-                          </li>
-                          <li>Produk tidak dirusak atau diubah.</li>
-                          <li>
-                            Jika pelanggan menukar produk dengan produk bernilai
-                            lebih rendah, tidak ada pengembalian uang atas
-                            jumlah perbedaan yang akan diberikan. Namun jika
-                            pelanggan menukar produk dengan produk bernilai
-                            lebih tinggi, maka selisih jumlah tersebut harus
-                            dibayar oleh pelanggan.
-                          </li>
-                        </ol>
-                      </li>
-                      <li>
-                        {" "}
+                      <ol className="aj-back-policy-list">
+                        <li>
+                          1. Setiap permintaan untuk layanan lebih lanjut
+                          (Penukaran, Pembelian kembali produk, dan Keluhan)
+                          harus disertal invoice/kuitansi dan sertifikat asli.
+                        </li>
                         <br />
-                        Kebijakan penukaran/pembelian kembali:
-                        <ol className="aj-back-policy-sublist" type="a">
-                          <li>
-                            Kami akan menerima produk Asih Jaya Bantar Gebang
-                            yang dijual melalui cabang kami sesuai dengan syarat
-                            dan ketentuan yang berlaku, dan kebijakan
-                            Exchange/Buyback kami, yang merupakan kebijakan Asih
-                            Jaya Bantar Gebang.
-                          </li>
-                          <li>
-                            Asih Jaya Bantar Gebang akan menerima perhiasan
-                            dibawah kebijakan penukaran/pembelian kembali
-                            setelah memeriksa dengan cermat bobot produk dan
-                            keasliannya sebagai produk Asih Jaya. Dengan
-                            melakukan identifikasi kerusakan atau cacat batu
-                            (Retakan, Penggantian dan Perubahan).
-                          </li>
-                          <li>
-                            Pada saat penukaran/pembelian kembali perhiasan yang
-                            dibeli dari toko kami, kami akan menghargai bagian
-                            dari syarat dan ketentuan Asih Jaya Bantar Gebang.
-                          </li>
-                          <li>
-                            Batu berwarna/mutiara/cincin
-                            pernikahan/hadiah/perhiasan yang dibuat khusus tidak
-                            dapat dibeli kembali atau ditukar.
-                          </li>
-                          <li>
-                            Berat emas akan menjadi bersih di luar berat
-                            mutiara, batu, lac, debu, kotoran dan bahan asing
-                            lainnya.
-                          </li>
-                          <li>
-                            Semua penilaian dan pembelian kembali tidak termasuk
-                            PPN/Pajak Penjualan/Ongko Pembuatan.
-                          </li>
-                          <li>
-                            Pengumpulan/desain khusus tidak tunduk pada
-                            kebijakan pertukaran dan pembelian kembali di atas,
-                            hal tersebut adalah kebijakan Asih Jaya Bantar
-                            Gebang.
-                          </li>
-                          <li>
-                            Simpan invoice pembelian/sertifikat asli sebagai
-                            bukti transaksi yang sah Asih Jaya Bantar Gebang
-                            berhak menolak pembelian kembali atau penukaran
-                            tanpa disertai invoice pembelian asli.
-                          </li>
-                        </ol>
-                      </li>
-                    </ol>
+                        <li>
+                          2. Asih Jaya Bantar Gebang dapat menarik atau mengubah
+                          kebijakan penukaran/pembelian kembali produk Asih Jaya
+                          Bantar Gebang tanpa pemberitahuan sebelumnya pada
+                          waktu tertentu dan keputusan Asih Jaya Bantar Gebang
+                          bersifat mutlak
+                        </li>{" "}
+                        <br />
+                        <li>
+                          3. Perhiasan yang dijual oleh Asih Jaya Bantar Gebang
+                          dapat ditukar pada toko Asih Jaya Bantar Gebang untuk
+                          produk dengan nilai yang sama, jika perhiasan yang
+                          ditukar memenuhi kondisi berikut:
+                          <ol className="aj-back-policy-sublist" type="a">
+                            <li>Perhiasan belum pernah digunakan.</li>
+                            <li>
+                              Perhiasan dalam kondisi yang sama pada saat
+                              perhiasan dijual.
+                            </li>
+                            <li>
+                              Perhiasan dikembalikan dalam waktu maksimal 2 hari
+                              dari waktu pembelian.
+                            </li>
+                            <li>Produk tidak dirusak atau diubah.</li>
+                            <li>
+                              Jika pelanggan menukar produk dengan produk
+                              bernilai lebih rendah, tidak ada pengembalian uang
+                              atas jumlah perbedaan yang akan diberikan. Namun
+                              jika pelanggan menukar produk dengan produk
+                              bernilai lebih tinggi, maka selisih jumlah
+                              tersebut harus dibayar oleh pelanggan.
+                            </li>
+                          </ol>
+                        </li>
+                        <li>
+                          {" "}
+                          <br />
+                          Kebijakan penukaran/pembelian kembali:
+                          <ol className="aj-back-policy-sublist" type="a">
+                            <li>
+                              Kami akan menerima produk Asih Jaya Bantar Gebang
+                              yang dijual melalui cabang kami sesuai dengan
+                              syarat dan ketentuan yang berlaku, dan kebijakan
+                              Exchange/Buyback kami, yang merupakan kebijakan
+                              Asih Jaya Bantar Gebang.
+                            </li>
+                            <li>
+                              Asih Jaya Bantar Gebang akan menerima perhiasan
+                              dibawah kebijakan penukaran/pembelian kembali
+                              setelah memeriksa dengan cermat bobot produk dan
+                              keasliannya sebagai produk Asih Jaya. Dengan
+                              melakukan identifikasi kerusakan atau cacat batu
+                              (Retakan, Penggantian dan Perubahan).
+                            </li>
+                            <li>
+                              Pada saat penukaran/pembelian kembali perhiasan
+                              yang dibeli dari toko kami, kami akan menghargai
+                              bagian dari syarat dan ketentuan Asih Jaya Bantar
+                              Gebang.
+                            </li>
+                            <li>
+                              Batu berwarna/mutiara/cincin
+                              pernikahan/hadiah/perhiasan yang dibuat khusus
+                              tidak dapat dibeli kembali atau ditukar.
+                            </li>
+                            <li>
+                              Berat emas akan menjadi bersih di luar berat
+                              mutiara, batu, lac, debu, kotoran dan bahan asing
+                              lainnya.
+                            </li>
+                            <li>
+                              Semua penilaian dan pembelian kembali tidak
+                              termasuk PPN/Pajak Penjualan/Ongko Pembuatan.
+                            </li>
+                            <li>
+                              Pengumpulan/desain khusus tidak tunduk pada
+                              kebijakan pertukaran dan pembelian kembali di
+                              atas, hal tersebut adalah kebijakan Asih Jaya
+                              Bantar Gebang.
+                            </li>
+                            <li>
+                              Simpan invoice pembelian/sertifikat asli sebagai
+                              bukti transaksi yang sah Asih Jaya Bantar Gebang
+                              berhak menolak pembelian kembali atau penukaran
+                              tanpa disertai invoice pembelian asli.
+                            </li>
+                          </ol>
+                        </li>
+                      </ol>
                     )}
                   </article>
 

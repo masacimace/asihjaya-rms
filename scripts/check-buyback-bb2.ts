@@ -15,9 +15,13 @@ const actions = read("src/app/actions/buybacks.ts");
 const service = read("src/features/buybacks/service.ts");
 const receiptData = read("src/features/buybacks/documents/buyback-receipt.ts");
 const receiptType = read("src/features/sales/documents/receipt-certificate.ts");
-const receiptHtml = read("src/features/sales/documents/receipt-certificate-html.tsx");
+const receiptHtml = read(
+  "src/features/sales/documents/receipt-certificate-html.tsx",
+);
 const pdfAccess = read("src/features/sales/documents/pdf-render-access.ts");
-const pdfRenderer = read("src/features/sales/documents/receipt-certificate-pdf.tsx");
+const pdfRenderer = read(
+  "src/features/sales/documents/receipt-certificate-pdf.tsx",
+);
 const htmlRoute = read(
   "src/app/documents/buybacks/[buybackId]/receipt-certificate-html/page.tsx",
 );
@@ -34,7 +38,10 @@ assert.match(contracts, /receiptJobId\?: string \| null/);
 
 assert.match(queries, /export async function getBuybackHistoryData/);
 assert.match(queries, /eq\(hardwareJobs\.sourceType, "buyback"\)/);
-assert.match(queries, /eq\(hardwareJobs\.jobType, "print_receipt_certificate"\)/);
+assert.match(
+  queries,
+  /eq\(hardwareJobs\.jobType, "print_receipt_certificate"\)/,
+);
 assert.match(queries, /buybackItems\.snapshot/);
 assert.match(queries, /olderDetail/);
 
@@ -46,12 +53,21 @@ assert.match(historyPanel, /export function BuybackHistoryPanel/);
 assert.match(historyPanel, /data\.rows\.map\(\(row\) =>/);
 assert.match(
   historyPanel,
-  /href=\{`\/pos\/buyback\?detail=\$\{row\.id\}`\}/,
+  /function detailHref\(id: string\)/,
+  "Buyback history wajib memiliki helper detailHref.",
+);
+assert.match(
+  historyPanel,
+  /: `\/pos\/buyback\?detail=\$\{id\}`;/,
+  "Preview Buyback wajib tetap mengarah ke detail transaksi.",
+);
+assert.match(
+  historyPanel,
+  /href=\{detailHref\(row\.id\)\}/,
+  "Link detail Buyback wajib menggunakan helper detailHref.",
 );
 assert.match(historyPanel, /Cetak Ulang Nota/);
 assert.match(historyPanel, /Buka Nota PDF/);
-assert.match(historyPanel, /snapshot transaksi Buyback/);
-
 assert.match(receiptData, /documentKind: "buyback"/);
 assert.match(receiptData, /buybackPricePerGram/);
 assert.match(receiptData, /referenceType, "buyback"/);
@@ -59,8 +75,20 @@ assert.match(receiptData, /customer_deposit/);
 assert.match(receiptType, /documentKind\?: "sale" \| "buyback"/);
 assert.match(receiptType, /buybackPricePerGram\?: string \| null/);
 
-assert.match(receiptHtml, /const isBuyback = data\.documentKind === "buyback"/);
-assert.match(receiptHtml, /const useBuybackAdjustedLabels = isBuyback && !isPreprintedOverlay/);
+assert.match(
+  receiptHtml,
+  /const isBuyback = false/,
+  "Buyback receipt wajib memakai presentation receipt pembelian.",
+);
+assert.match(
+  receiptData,
+  /invoiceNumber: row\.buybackNumber/,
+  "No. Order receipt Buyback wajib tetap menggunakan buybackNumber.",
+);
+assert.match(
+  receiptHtml,
+  /const useBuybackAdjustedLabels = isBuyback && !isPreprintedOverlay/,
+);
 assert.match(receiptHtml, /BB\/Gr/);
 assert.match(receiptHtml, /No\. Buyback/);
 assert.match(receiptHtml, /Payout Buyback/);
@@ -72,7 +100,10 @@ assert.match(receiptHtml, /No\. Order/);
 
 assert.match(pdfAccess, /"receipt-buyback"/);
 assert.match(pdfAccess, /buybackId: string \| null/);
-assert.match(pdfRenderer, /\/documents\/buybacks\/\$\{access\.buybackId\}\/receipt-certificate-html/);
+assert.match(
+  pdfRenderer,
+  /\/documents\/buybacks\/\$\{access\.buybackId\}\/receipt-certificate-html/,
+);
 assert.match(htmlRoute, /scope: "receipt-buyback"/);
 assert.match(htmlRoute, /requirePermission\("buybacks\.view"\)/);
 assert.match(apiRoute, /getBuybackReceiptData/);
@@ -85,15 +116,15 @@ assert.match(
   hardwareContracts,
   /\/api\/buybacks\/\$\{input\.buybackId\}\/receipt-certificate/,
 );
-assert.match(
-  hardwareAdapter,
-  /\^\\\/api\\\/buybacks\\\/\[0-9a-f\]/i,
-);
+assert.match(hardwareAdapter, /\^\\\/api\\\/buybacks\\\/\[0-9a-f\]/i);
 assert.match(hardwareCheck, /buildBuybackReceiptDocumentPayloadV2/);
 
 assert.match(service, /buildBuybackReceiptDocumentPayloadV2/);
 assert.match(service, /createHardwareJobV2InTransaction/);
-assert.match(service, /idempotencyKey: `buyback-receipt:\$\{buyback\.id\}:initial`/);
+assert.match(
+  service,
+  /idempotencyKey: `buyback-receipt:\$\{buyback\.id\}:initial`/,
+);
 assert.match(service, /sourceType: "buyback"/);
 assert.match(workspace, /Nota Buyback sudah masuk antrean Document Printer/);
 
@@ -101,9 +132,14 @@ assert.match(actions, /export async function reprintBuybackReceiptAction/);
 assert.match(actions, /mode: "manual"/);
 assert.match(actions, /buildBuybackReceiptDocumentPayloadV2/);
 assert.match(actions, /buyback-receipt:\$\{buyback\.id\}:reprint:/);
-const reprintTryIndex = actions.indexOf("try {", actions.indexOf("reprintBuybackReceiptAction"));
+const reprintTryIndex = actions.indexOf(
+  "try {",
+  actions.indexOf("reprintBuybackReceiptAction"),
+);
 const reprintCatchIndex = actions.indexOf("} catch", reprintTryIndex);
-const successRedirectIndex = actions.lastIndexOf("redirectBuybackDetailWithFeedback({");
+const successRedirectIndex = actions.lastIndexOf(
+  "redirectBuybackDetailWithFeedback({",
+);
 assert.ok(
   reprintTryIndex >= 0 &&
     reprintCatchIndex > reprintTryIndex &&
