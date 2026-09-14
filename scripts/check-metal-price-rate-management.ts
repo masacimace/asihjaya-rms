@@ -40,6 +40,8 @@ assert.doesNotMatch(manager, /max-h-\[500px\]\s+overflow-y-auto/);
 assert.match(manager, /retireMetalPriceRateAction/);
 assert.match(manager, /row\.itemCount === 0/);
 assert.match(manager, /Histori harga tetap disimpan/);
+assert.match(manager, /function handleMoneyInput/);
+assert.match(manager, /onInput=\{handleMoneyInput\}/);
 
 assert.match(drawer, /Harga \/ Gram Global/);
 assert.match(drawer, /h-\[100dvh\]/);
@@ -78,6 +80,8 @@ assert.match(buybackManager, /Rate Buyback Aktif/);
 assert.match(buybackManager, /Harga Buyback \/ Gram/);
 assert.match(buybackManager, /Tambah Rate Buyback/);
 assert.match(buybackManager, /Histori Rate Buyback sebelumnya tetap tersimpan/);
+assert.match(buybackManager, /function handleMoneyInput/);
+assert.match(buybackManager, /onInput=\{handleMoneyInput\}/);
 assert.match(settingsTabs, /Rate Jual/);
 assert.match(settingsTabs, /Rate Buyback/);
 assert.match(page, /getBuybackPriceRateSettingsData/);

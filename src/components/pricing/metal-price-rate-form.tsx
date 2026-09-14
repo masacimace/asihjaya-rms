@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
+  type FormEvent,
   useActionState,
   useMemo,
   useRef,
@@ -35,11 +36,17 @@ const inputClassName =
   "h-10 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]";
 
 function formatMoneyInput(value: string | null) {
-  if (!value) return "";
-  const numeric = Number(value);
-  return Number.isFinite(numeric)
-    ? new Intl.NumberFormat("id-ID").format(numeric)
-    : value;
+  const digits = String(value ?? "")
+    .replace(/\D/g, "")
+    .replace(/^0+(?=\d)/, "")
+    .slice(0, 18);
+
+  if (!digits) return "";
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function handleMoneyInput(event: FormEvent<HTMLInputElement>) {
+  event.currentTarget.value = formatMoneyInput(event.currentTarget.value);
 }
 
 function formatDate(value: Date | null) {
@@ -255,6 +262,7 @@ export function MetalPriceRateForm({
                   <input
                     name="newRatePerGram"
                     inputMode="numeric"
+                    onInput={handleMoneyInput}
                     className={`${inputClassName} pl-10`}
                     placeholder="Contoh: 1010000"
                   />
@@ -317,6 +325,7 @@ export function MetalPriceRateForm({
                       <input
                         name={fieldName}
                         inputMode="numeric"
+                        onInput={handleMoneyInput}
                         defaultValue={formatMoneyInput(row.ratePerGram)}
                         className={`${inputClassName} pl-10`}
                         placeholder="0"
