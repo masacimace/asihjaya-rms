@@ -17,6 +17,7 @@ import {
 } from "@/db/schema";
 import { getCustomerDepositBalancesForCustomer } from "@/features/customer-deposits/queries";
 import {
+  createPublicHistoryVerificationUrl,
   verifyPublicHistoryVerificationToken,
   type PublicHistoryTokenVersion,
   type PublicHistoryTransactionKind,
@@ -474,6 +475,104 @@ export async function getPublicCustomerHistoryAccessContext(
       completedAt: baseTransaction.completedAt,
       createdAt: baseTransaction.createdAt,
     },
+  };
+}
+
+export type PublicCustomerPortalEntry = {
+  kind: PublicHistoryTransactionKind;
+  transactionId: string;
+  transactionNumber: string;
+  completedAt: Date | null;
+  createdAt: Date;
+  token: string;
+  url: string;
+};
+
+export async function getPublicCustomerPortalEntry({
+  organizationId,
+  customerId,
+}: {
+  organizationId: string;
+  customerId: string;
+}): Promise<PublicCustomerPortalEntry | null> {
+  const [saleRows, buybackRows] = await Promise.all([
+    db
+      .select({
+        id: sales.id,
+        transactionNumber: sales.invoiceNumber,
+        completedAt: sales.completedAt,
+        createdAt: sales.createdAt,
+      })
+      .from(sales)
+      .where(
+        and(
+          eq(sales.organizationId, organizationId),
+          eq(sales.customerId, customerId),
+          inArray(sales.status, [...PUBLIC_HISTORY_SALE_STATUSES]),
+        ),
+      )
+      .orderBy(desc(sales.completedAt), desc(sales.createdAt))
+      .limit(1),
+    db
+      .select({
+        id: buybacks.id,
+        transactionNumber: buybacks.buybackNumber,
+        completedAt: buybacks.completedAt,
+        createdAt: buybacks.createdAt,
+      })
+      .from(buybacks)
+      .where(
+        and(
+          eq(buybacks.organizationId, organizationId),
+          eq(buybacks.customerId, customerId),
+          eq(buybacks.status, "completed"),
+        ),
+      )
+      .orderBy(desc(buybacks.completedAt), desc(buybacks.createdAt))
+      .limit(1),
+  ]);
+  const latestSale = saleRows[0] ?? null;
+  const latestBuyback = buybackRows[0] ?? null;
+
+  const candidates: Array<{
+    kind: PublicHistoryTransactionKind;
+    id: string;
+    transactionNumber: string;
+    completedAt: Date | null;
+    createdAt: Date;
+  }> = [];
+
+  if (latestSale) {
+    candidates.push({ kind: "sale", ...latestSale });
+  }
+
+  if (latestBuyback) {
+    candidates.push({ kind: "buyback", ...latestBuyback });
+  }
+
+  candidates.sort(
+    (left, right) =>
+      getTransactionTime(right).getTime() - getTransactionTime(left).getTime(),
+  );
+
+  const latestTransaction = candidates[0] ?? null;
+
+  if (!latestTransaction) {
+    return null;
+  }
+
+  const verification = createPublicHistoryVerificationUrl({
+    transactionKind: latestTransaction.kind,
+    transactionId: latestTransaction.id,
+  });
+
+  return {
+    kind: latestTransaction.kind,
+    transactionId: latestTransaction.id,
+    transactionNumber: latestTransaction.transactionNumber,
+    completedAt: latestTransaction.completedAt,
+    createdAt: latestTransaction.createdAt,
+    ...verification,
   };
 }
 

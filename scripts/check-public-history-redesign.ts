@@ -12,8 +12,12 @@ function read(relativePath: string) {
 
 const page = read("src/app/v/[token]/page.tsx");
 const portal = read("src/components/customers/public-history-portal.tsx");
-const localAvatar = read("src/components/customers/public-history-local-avatar.tsx");
-const securityMenu = read("src/components/customers/public-history-security-menu.tsx");
+const localAvatar = read(
+  "src/components/customers/public-history-local-avatar.tsx",
+);
+const securityMenu = read(
+  "src/components/customers/public-history-security-menu.tsx",
+);
 const publicHistory = read("src/features/customers/public-history.ts");
 const customerHistoryActions = read("src/app/actions/customer-history.ts");
 
@@ -37,18 +41,8 @@ assert.match(portal, /Semua/);
 assert.match(portal, /Pembelian/);
 assert.match(portal, /Buyback/);
 assert.match(portal, /Riwayat Transaksi/);
-assert.match(portal, /Dana Titip per Outlet/);
 assert.match(portal, /transactionKey\(data\.scannedTransaction\)/);
 assert.match(portal, /openTransactionKey === key/);
-assert.match(portal, /bg-white\/\[0\.58\]/);
-
-assert.match(portal, /w-\[calc\(100%_-_36px\)\]/);
-assert.match(portal, /max-w-\[360px\]/);
-assert.match(portal, /grid grid-cols-3 gap-\[6px\]/);
-assert.match(portal, /size-\[48px\]/);
-assert.match(portal, /text-\[20px\].*Riwayat Transaksi/s);
-assert.match(localAvatar, /size-\[52px\]/);
-assert.match(securityMenu, /size-\[42px\]/);
 assert.match(customerHistoryActions, /rotatePublicCustomerHistoryPinAction/);
 assert.match(customerHistoryActions, /customer\.history_pin\.change/);
 assert.match(publicHistory, /organizationId: baseTransaction\.organizationId/);

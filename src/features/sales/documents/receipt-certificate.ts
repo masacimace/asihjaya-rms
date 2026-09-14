@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { createReceiptVerificationUrl } from "@/features/sales/verification/receipt-token";
+import { createPublicHistoryVerificationUrl } from "@/features/sales/verification/receipt-token";
 import {
   customerDepositLedger,
   customers,
@@ -349,7 +349,10 @@ export async function getReceiptCertificateData({
       balanceAfterAmount: lastCustomerDepositEntry?.balanceAfter ?? null,
       externalPaymentDueAmount: String(Math.max(externalPaymentDueAmount, 0)),
     },
-    verification: createReceiptVerificationUrl(sale.saleId),
+    verification: createPublicHistoryVerificationUrl({
+      transactionKind: "sale",
+      transactionId: sale.saleId,
+    }),
   };
 }
 

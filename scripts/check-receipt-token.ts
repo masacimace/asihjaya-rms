@@ -28,7 +28,7 @@ async function main() {
   const saleId = "8ad038f7-d346-4bd4-8f96-f3fd5c01af70";
   const buybackId = "0a2f2f98-6f7f-4c87-9975-74d7024b1e1a";
 
-  // Existing Sale receipt token remains v2 until the explicit receipt QR cutover.
+  // Legacy Sale receipt helper stays v2 so existing QR compatibility can be regression-tested.
   const token = createReceiptVerificationToken(saleId);
   const parsedToken = verifyReceiptVerificationToken(token);
 
@@ -65,6 +65,16 @@ async function main() {
   });
   const parsedSaleHistoryToken =
     verifyPublicHistoryVerificationToken(saleHistoryToken);
+
+  const saleHistoryUrl = createPublicHistoryVerificationUrl({
+    transactionKind: "sale",
+    transactionId: saleId,
+  });
+  assert(
+    saleHistoryUrl.token.startsWith("v3.sale.") &&
+      saleHistoryUrl.url === `${process.env.APP_URL}/v/${saleHistoryUrl.token}`,
+    "QR Sale baru harus menggunakan Public History v3 pada route /v/[token].",
+  );
 
   assert(
     saleHistoryToken.startsWith("v3.sale."),

@@ -15,6 +15,7 @@ import {
   users,
 } from "@/db/schema";
 import type { ReceiptCertificateData } from "@/features/sales/documents/receipt-certificate";
+import { createPublicHistoryVerificationUrl } from "@/features/sales/verification/receipt-token";
 
 function readSnapshotString(
   snapshot: Record<string, unknown>,
@@ -24,18 +25,6 @@ function readSnapshotString(
   if (value === null || value === undefined) return null;
   const normalized = String(value).trim();
   return normalized || null;
-}
-
-function getBuybackDetailQrValue({
-  buybackId,
-  buybackNumber,
-}: {
-  buybackId: string;
-  buybackNumber: string;
-}) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
-  if (!baseUrl) return `BUYBACK:${buybackNumber}`;
-  return `${baseUrl}/pos/buyback?detail=${encodeURIComponent(buybackId)}`;
 }
 
 export async function getBuybackReceiptData({
@@ -254,12 +243,9 @@ export async function getBuybackReceiptData({
       balanceAfterAmount: depositRows.at(-1)?.balanceAfter ?? null,
       externalPaymentDueAmount: String(externalPayoutAmount),
     },
-    verification: {
-      token: `buyback:${row.id}`,
-      url: getBuybackDetailQrValue({
-        buybackId: row.id,
-        buybackNumber: row.buybackNumber,
-      }),
-    },
+    verification: createPublicHistoryVerificationUrl({
+      transactionKind: "buyback",
+      transactionId: row.id,
+    }),
   };
 }

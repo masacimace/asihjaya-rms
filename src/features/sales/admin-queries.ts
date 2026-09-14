@@ -41,7 +41,7 @@ import {
   type AdminSalesListData,
   type AdminSalesPeriod,
 } from "@/features/sales/admin-contracts";
-import { createReceiptVerificationUrl } from "@/features/sales/verification/receipt-token";
+import { createPublicHistoryVerificationUrl } from "@/features/sales/verification/receipt-token";
 import type { AuthContext } from "@/lib/auth/session";
 import {
   getStartOfBusinessDay,
@@ -1217,7 +1217,12 @@ export async function getAdminSaleDetailData({
     externalPaidAmount + customerDepositUsedAmount - customerDepositInAmount,
   );
   const receiptUrl =
-    sale.status === "completed" ? createReceiptVerificationUrl(sale.id).url : null;
+    sale.status === "completed"
+      ? createPublicHistoryVerificationUrl({
+          transactionKind: "sale",
+          transactionId: sale.id,
+        }).url
+      : null;
   const paymentStatus = getPaymentStatusFromAmounts(totalAmount, paidAmount);
   const timeline = [
     {

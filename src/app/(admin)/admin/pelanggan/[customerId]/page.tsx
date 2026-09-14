@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   Clock3,
   Edit2,
+  ExternalLink,
   Mail,
   MapPin,
   MessageCircle,
@@ -31,6 +32,7 @@ import {
   type AdminCustomerTransactionRow,
   isUuid,
 } from "@/features/customers/contracts";
+import { getPublicCustomerPortalEntry } from "@/features/customers/public-history";
 import { getAdminCustomerDetailData } from "@/features/customers/queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
@@ -327,7 +329,13 @@ function ProfileMetaItem({
   );
 }
 
-function CustomerProfileHeader({ data }: { data: AdminCustomerDetailData }) {
+function CustomerProfileHeader({
+  data,
+  customerPortalUrl,
+}: {
+  data: AdminCustomerDetailData;
+  customerPortalUrl: string | null;
+}) {
   const { customer, summary, transactions } = data;
   const whatsappHref = buildWhatsAppHref(customer.phone);
   const latestTransaction = transactions[0] ?? null;
@@ -411,6 +419,26 @@ function CustomerProfileHeader({ data }: { data: AdminCustomerDetailData }) {
               <Edit2 className="size-4" />
               Edit Profil
             </Link>
+            {customerPortalUrl ? (
+              <a
+                href={customerPortalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100"
+              >
+                <ExternalLink className="size-4" />
+                Buka Customer Portal
+              </a>
+            ) : (
+              <span
+                aria-disabled="true"
+                title="Customer belum memiliki transaksi selesai yang dapat digunakan untuk membuka portal."
+                className="inline-flex h-11 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-neutral-100 px-4 text-sm font-semibold text-neutral-400"
+              >
+                <ExternalLink className="size-4" />
+                Customer Portal Belum Tersedia
+              </span>
+            )}
           </div>
         </div>
 
@@ -1121,6 +1149,11 @@ export default async function CustomerDetailPage({
     );
   }
 
+  const customerPortalEntry = await getPublicCustomerPortalEntry({
+    organizationId: auth.organization.id,
+    customerId: data.customer.id,
+  });
+
   const noticeType =
     query.created === "1"
       ? "created"
@@ -1144,7 +1177,10 @@ export default async function CustomerDetailPage({
         type={noticeType}
       />
 
-      <CustomerProfileHeader data={data} />
+      <CustomerProfileHeader
+        data={data}
+        customerPortalUrl={customerPortalEntry?.url ?? null}
+      />
 
       {auth.permissionCodes.includes("customers.history_pin.manage") ? (
         <CustomerHistoryAccessCard
