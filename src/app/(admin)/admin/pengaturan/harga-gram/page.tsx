@@ -2,7 +2,8 @@ import { ArrowLeft, BadgeDollarSign, Scale } from "lucide-react";
 import Link from "next/link";
 
 import { GoldReferenceRatePanel } from "@/components/pricing/gold-reference-rate-panel";
-import { MetalPriceRateForm } from "@/components/pricing/metal-price-rate-form";
+import { MetalPriceRateSettingsTabs } from "@/components/pricing/metal-price-rate-settings-tabs";
+import { getBuybackPriceRateSettingsData } from "@/features/pricing/buyback-price-rates";
 import { getMetalPriceRateSettingsData } from "@/features/pricing/metal-price-rates";
 import { requirePermission } from "@/lib/auth/session";
 import { getGoldReference } from "@/server/integrations/gold-reference/emas-api";
@@ -15,8 +16,9 @@ export const runtime = "nodejs";
 
 export default async function MetalPriceSettingsPage() {
   const auth = await requirePermission("pricing.manage");
-  const [rows, goldReference] = await Promise.all([
+  const [saleRows, buybackRows, goldReference] = await Promise.all([
     getMetalPriceRateSettingsData(auth.organization.id),
+    getBuybackPriceRateSettingsData(auth.organization.id),
     getGoldReference(),
   ]);
 
@@ -41,9 +43,9 @@ export default async function MetalPriceSettingsPage() {
               Harga / Gram Global
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Kelola rate global yang menjadi default Harga/Gram POS berdasarkan
-              Kadar Persen. Rate yang salah dan tidak dipakai item belum-terjual
-              dapat dihapus tanpa menghapus histori harga.
+              Kelola Rate Jual dan Rate Buyback per Kadar Persen dalam satu
+              pusat pricing. Kedua rate memiliki histori terpisah agar harga
+              jual tidak tercampur dengan nilai akuisisi kembali.
             </p>
           </div>
 
@@ -52,8 +54,8 @@ export default async function MetalPriceSettingsPage() {
             <div>
               <p className="font-semibold text-neutral-950">Formula dasar</p>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Berat × Harga/Gram transaksi. Secara default mengikuti rate
-                aktif berdasarkan Kadar Persen.
+                Berat × Rate/Gram sesuai jenis transaksi. Rate Jual dan Rate
+                Buyback dipilih terpisah berdasarkan Kadar Persen.
               </p>
             </div>
           </div>
@@ -61,7 +63,10 @@ export default async function MetalPriceSettingsPage() {
       </section>
 
       <GoldReferenceRatePanel result={goldReference} />
-      <MetalPriceRateForm rows={rows} />
+      <MetalPriceRateSettingsTabs
+        saleRows={saleRows}
+        buybackRows={buybackRows}
+      />
     </div>
   );
 }

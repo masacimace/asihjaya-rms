@@ -49,12 +49,12 @@ const settingsGroups = [
   {
     title: "Harga Jewelry",
     description:
-      "Kelola Harga/Gram aktif yang menjadi sumber harga jual berdasarkan Kadar Persen.",
+      "Kelola Rate Jual dan Rate Buyback aktif berdasarkan Kadar Persen.",
     items: [
       {
         title: "Harga / Gram Aktif",
         description:
-          "Satu rate berlaku untuk seluruh item dengan Kadar Persen yang sama dan histori harga tetap tersimpan.",
+          "Pisahkan Rate Jual dan Rate Buyback per kadar dengan histori harga yang tetap tersimpan.",
         href: "/admin/pengaturan/harga-gram",
         icon: BadgeDollarSign,
         badge: "Dynamic Pricing",

@@ -155,6 +155,7 @@ async function checkLiveDatabase(): Promise<void> {
       "buyback_items",
       "buyback_payouts",
       "product_color_presets",
+      "metal_buyback_price_rates",
     ];
 
     const tableResult = await pool.query<{ table_name: string }>(
@@ -328,6 +329,18 @@ async function checkLiveDatabase(): Promise<void> {
       [
         "product_color_presets",
         ["organization_id", "name", "description", "is_active", "created_at", "updated_at"],
+      ],
+      [
+        "metal_buyback_price_rates",
+        [
+          "metal_purity_id",
+          "rate_per_gram",
+          "effective_from",
+          "effective_until",
+          "notes",
+          "created_by_user_id",
+          "created_at",
+        ],
       ],
       ["hardware_agents", ["secret_hash"]],
       ["customer_history_credentials", ["pin_hash", "credential_version", "must_change_pin"]],

@@ -8,10 +8,18 @@ const read = (relativePath: string) =>
 
 const query = read("src/features/pricing/metal-price-rates.ts");
 const actions = read("src/app/actions/metal-price-rates.ts");
+const buybackQuery = read("src/features/pricing/buyback-price-rates.ts");
+const buybackActions = read("src/app/actions/buyback-price-rates.ts");
+const buybackManager = read("src/components/pricing/buyback-price-rate-form.tsx");
+const settingsTabs = read("src/components/pricing/metal-price-rate-settings-tabs.tsx");
+const schema = read("src/db/schema/index.ts");
+const buybackMigration = read("drizzle/0025_buyback_price_rates.sql");
+const migrationJournal = read("drizzle/meta/_journal.json");
 const manager = read("src/components/pricing/metal-price-rate-form.tsx");
 const drawer = read("src/components/pricing/metal-price-rate-drawer.tsx");
 const dashboard = read("src/app/(admin)/admin/page.tsx");
 const page = read("src/app/(admin)/admin/pengaturan/harga-gram/page.tsx");
+const settingsHub = read("src/app/(admin)/admin/pengaturan/page.tsx");
 const goldReferencePanel = read(
   "src/components/pricing/gold-reference-rate-panel.tsx",
 );
@@ -48,6 +56,35 @@ assert.match(goldReferencePanel, /Referensi aktif/);
 assert.match(goldReferencePanel, /Rate Global/);
 assert.match(goldReferencePanel, /Read-only/);
 
+
+assert.match(schema, /export const metalBuybackPriceRates = pgTable/);
+assert.match(schema, /"metal_buyback_price_rates"/);
+assert.match(schema, /metal_buyback_price_rates_purity_active_uq/);
+assert.match(buybackMigration, /CREATE TABLE "metal_buyback_price_rates"/);
+assert.match(buybackMigration, /metal_buyback_price_rates_purity_active_uq/);
+assert.match(migrationJournal, /0025_buyback_price_rates/);
+
+assert.match(buybackQuery, /getActiveGoldBuybackPriceRates/);
+assert.match(buybackQuery, /getBuybackPriceRateSettingsData/);
+assert.match(buybackQuery, /metalBuybackPriceRates\.effectiveUntil/);
+assert.match(buybackActions, /export async function saveBuybackPriceRatesAction/);
+assert.match(buybackActions, /export async function retireBuybackPriceRateAction/);
+assert.match(buybackActions, /pricing\.buyback_rate\.update/);
+assert.match(buybackActions, /pricing\.buyback_rate\.retire/);
+assert.doesNotMatch(buybackActions, /delete\(metalBuybackPriceRates\)/);
+assert.match(buybackActions, /revalidatePath\("\/pos\/buyback"\)/);
+
+assert.match(buybackManager, /Rate Buyback Aktif/);
+assert.match(buybackManager, /Harga Buyback \/ Gram/);
+assert.match(buybackManager, /Tambah Rate Buyback/);
+assert.match(buybackManager, /Histori Rate Buyback sebelumnya tetap tersimpan/);
+assert.match(settingsTabs, /Rate Jual/);
+assert.match(settingsTabs, /Rate Buyback/);
+assert.match(page, /getBuybackPriceRateSettingsData/);
+assert.match(page, /saleRows=\{saleRows\}/);
+assert.match(page, /buybackRows=\{buybackRows\}/);
+assert.match(settingsHub, /Rate Jual dan Rate Buyback/);
+
 console.log(
-  "Metal Price Rate management contracts: OK — compact manager, safe retire, unsold usage, dashboard drawer, external gold reference.",
+  "Metal Price Rate management contracts: OK — sale and buyback rate domains are separated, historical, and auditable.",
 );

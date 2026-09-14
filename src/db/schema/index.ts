@@ -677,6 +677,46 @@ export const metalPriceRates = pgTable(
   ],
 );
 
+export const metalBuybackPriceRates = pgTable(
+  "metal_buyback_price_rates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    metalPurityId: uuid("metal_purity_id")
+      .notNull()
+      .references(() => metalPurities.id),
+    ratePerGram: numeric("rate_per_gram", {
+      precision: 18,
+      scale: 0,
+    }).notNull(),
+    effectiveFrom: timestamp("effective_from", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    effectiveUntil: timestamp("effective_until", { withTimezone: true }),
+    notes: text("notes"),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("metal_buyback_price_rates_purity_effective_uq").on(
+      table.metalPurityId,
+      table.effectiveFrom,
+    ),
+    uniqueIndex("metal_buyback_price_rates_purity_active_uq")
+      .on(table.metalPurityId)
+      .where(sql`${table.effectiveUntil} is null`),
+    check(
+      "metal_buyback_price_rates_positive_ck",
+      sql`${table.ratePerGram} > 0`,
+    ),
+    check(
+      "metal_buyback_price_rates_range_ck",
+      sql`${table.effectiveUntil} is null or ${table.effectiveUntil} > ${table.effectiveFrom}`,
+    ),
+  ],
+);
+
 export const productMasters = pgTable(
   "product_masters",
   {

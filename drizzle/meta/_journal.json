@@ -176,6 +176,13 @@
       "when": 1789066796505,
       "tag": "0024_product_color_presets",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789381214885,
+      "tag": "0025_buyback_price_rates",
+      "breakpoints": true
     }
   ]
 }
