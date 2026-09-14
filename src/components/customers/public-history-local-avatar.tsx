@@ -260,7 +260,7 @@ export function PublicHistoryLocalAvatar({
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="group relative grid size-[76px] shrink-0 place-items-center overflow-hidden rounded-full border border-white/80 bg-white/[0.45] text-xl font-black text-[#6d4a1d] shadow-[0_14px_35px_rgba(79,49,18,0.18)] backdrop-blur-xl transition hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9863b] sm:size-[88px]"
+        className="group relative grid size-[52px] shrink-0 place-items-center overflow-hidden rounded-full border border-white/80 bg-white/[0.45] text-[16px] font-black text-[#6d4a1d] shadow-[0_10px_28px_rgba(79,49,18,0.16)] backdrop-blur-xl transition hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9863b] sm:size-[88px] sm:text-[20px]"
         aria-label="Ganti foto profil lokal"
       >
         {avatarUrl ? (
@@ -275,7 +275,7 @@ export function PublicHistoryLocalAvatar({
             {initials}
           </span>
         )}
-        <span className="absolute inset-x-0 bottom-0 bg-black/[0.45] py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-white opacity-0 backdrop-blur-sm transition group-hover:opacity-100">
+        <span className="absolute inset-x-0 bottom-0 bg-black/[0.45] py-[2px] text-[7px] font-bold uppercase tracking-[0.1em] text-white opacity-0 backdrop-blur-sm transition group-hover:opacity-100 sm:py-1 sm:text-[9px] sm:tracking-[0.14em]">
           Ubah
         </span>
       </button>
@@ -291,10 +291,10 @@ export function PublicHistoryLocalAvatar({
           <div className="relative z-10 w-full max-w-sm rounded-[28px] border border-white/60 bg-white/[0.55] p-5 shadow-[0_24px_80px_rgba(74,48,24,0.14)] backdrop-blur-2xl sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#95651e]">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#95651e]">
                   Foto Profil
                 </p>
-                <h2 className="mt-1 text-xl font-black text-neutral-950">
+                <h2 className="mt-1 text-[18px] font-black text-neutral-950">
                   Personalisasi perangkat ini
                 </h2>
               </div>
@@ -308,7 +308,7 @@ export function PublicHistoryLocalAvatar({
               </button>
             </div>
 
-            <div className="mx-auto mt-6 grid size-28 place-items-center overflow-hidden rounded-full border border-white/90 bg-white/[0.55] text-2xl font-black text-[#6d4a1d] shadow-lg">
+            <div className="mx-auto mt-6 grid size-28 place-items-center overflow-hidden rounded-full border border-white/90 bg-white/[0.55] text-[22px] font-black text-[#6d4a1d] shadow-lg">
               {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -321,12 +321,12 @@ export function PublicHistoryLocalAvatar({
               )}
             </div>
 
-            <p className="mt-5 text-center text-xs leading-5 text-neutral-600">
+            <p className="mt-5 text-center text-[10px] leading-[15px] text-neutral-600">
               Foto disimpan hanya di browser perangkat ini. Foto tidak diunggah ke server ASIHJAYA.
             </p>
 
             {error ? (
-              <p className="mt-4 rounded-2xl border border-red-200/80 bg-red-50/80 px-4 py-3 text-sm font-medium text-red-700">
+              <p className="mt-4 rounded-2xl border border-red-200/80 bg-red-50/80 px-4 py-3 text-[12px] font-medium text-red-700">
                 {error}
               </p>
             ) : null}
@@ -344,7 +344,7 @@ export function PublicHistoryLocalAvatar({
                 type="button"
                 disabled={busy}
                 onClick={() => inputRef.current?.click()}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-sm font-bold text-white transition hover:bg-neutral-800 disabled:cursor-wait disabled:opacity-60"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 text-[12px] font-bold text-white transition hover:bg-neutral-800 disabled:cursor-wait disabled:opacity-60"
               >
                 <ImagePlus className="size-4" />
                 {busy ? "Memproses foto..." : avatarUrl ? "Ganti Foto" : "Pilih Foto"}
@@ -354,7 +354,7 @@ export function PublicHistoryLocalAvatar({
                   type="button"
                   disabled={busy}
                   onClick={handleRemove}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-red-200/80 bg-white/[0.55] px-4 text-sm font-semibold text-red-700 transition hover:bg-red-50/80 disabled:cursor-wait disabled:opacity-60"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-red-200/80 bg-white/[0.55] px-4 text-[12px] font-semibold text-red-700 transition hover:bg-red-50/80 disabled:cursor-wait disabled:opacity-60"
                 >
                   <Trash2 className="size-4" />
                   Hapus Foto

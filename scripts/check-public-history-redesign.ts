@@ -41,6 +41,14 @@ assert.match(portal, /Dana Titip per Outlet/);
 assert.match(portal, /transactionKey\(data\.scannedTransaction\)/);
 assert.match(portal, /openTransactionKey === key/);
 assert.match(portal, /bg-white\/\[0\.58\]/);
+
+assert.match(portal, /w-\[calc\(100%_-_36px\)\]/);
+assert.match(portal, /max-w-\[360px\]/);
+assert.match(portal, /grid grid-cols-3 gap-\[6px\]/);
+assert.match(portal, /size-\[48px\]/);
+assert.match(portal, /text-\[20px\].*Riwayat Transaksi/s);
+assert.match(localAvatar, /size-\[52px\]/);
+assert.match(securityMenu, /size-\[42px\]/);
 assert.match(customerHistoryActions, /rotatePublicCustomerHistoryPinAction/);
 assert.match(customerHistoryActions, /customer\.history_pin\.change/);
 assert.match(publicHistory, /organizationId: baseTransaction\.organizationId/);
@@ -48,5 +56,5 @@ assert.match(publicHistory, /itemSummary: items\.map\(\(item\) => \(\{/);
 assert.doesNotMatch(publicHistory, /itemSummary: items\.slice\(0, 4\)/);
 
 console.log(
-  "Public History redesign contracts: OK — glass portal, local avatar, accordion history, PIN security, and responsive backgrounds are wired.",
+  "Public History redesign contracts: OK — glass portal, compact mobile density, local avatar, accordion history, PIN security, and responsive backgrounds are wired.",
 );
