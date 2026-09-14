@@ -166,6 +166,7 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
             colorPresets={colorPresets}
             initialIdempotencyKey={randomUUID()}
             canCreate={canCreate}
+            timeZone={auth.organization.timezone}
           />
           <div id="riwayat-buyback">
             <BuybackHistoryPanel

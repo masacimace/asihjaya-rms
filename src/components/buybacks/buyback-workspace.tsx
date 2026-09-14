@@ -80,6 +80,19 @@ function normalizeColorKey(value: string | null | undefined) {
   return String(value ?? "").trim().toLocaleLowerCase("id-ID");
 }
 
+function formatPreviousSaleDate(value: Date | null, timeZone: string) {
+  if (!value) return null;
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone,
+  })
+    .format(value)
+    .replace(".", "");
+}
+
 type DraftItem = {
   clientKey: string;
   source: BuybackItemSource;
@@ -88,6 +101,9 @@ type DraftItem = {
   categoryId: string;
   processingType: BuybackProcessingType;
   sku: string | null;
+  soldAt: Date | null;
+  lastInvoiceNumber: string | null;
+  lastSaleFinalPriceAmount: string | null;
   weightGram: string;
   purityPercent: string;
   color: string;
@@ -300,6 +316,9 @@ function createExternalDraft(): DraftItem {
     categoryId: "",
     processingType: "cleaning",
     sku: null,
+    soldAt: null,
+    lastInvoiceNumber: null,
+    lastSaleFinalPriceAmount: null,
     weightGram: "",
     purityPercent: "",
     color: "",
@@ -324,6 +343,9 @@ function mapExistingItem(
     categoryId: item.categoryId,
     processingType: "cleaning",
     sku: item.sku,
+    soldAt: item.soldAt,
+    lastInvoiceNumber: item.lastInvoiceNumber,
+    lastSaleFinalPriceAmount: item.lastSaleFinalPriceAmount,
     weightGram: item.weightGram ?? "",
     purityPercent: item.purityPercent ?? "",
     color: activeColor ?? item.color ?? "",
@@ -359,12 +381,14 @@ export function BuybackWorkspace({
   colorPresets,
   initialIdempotencyKey,
   canCreate,
+  timeZone,
 }: {
   initialData: BuybackInitialData;
   categories: ProductMasterCategoryOption[];
   colorPresets: ProductColorPresetOption[];
   initialIdempotencyKey: string;
   canCreate: boolean;
+  timeZone: string;
 }) {
   const [state, formAction, isSubmitting] = useActionState(
     completeBuybackAction,
@@ -1067,7 +1091,46 @@ export function BuybackWorkspace({
                     />
                   </label>
 
-                  <label className="block text-sm lg:col-span-2">
+                  {item.source === "asihjaya" ? (
+                    <label className="block text-sm">
+                      <span className="mb-2 block font-medium text-neutral-800">
+                        Harga Jual Sebelumnya
+                      </span>
+                      <input
+                        value={
+                          item.lastSaleFinalPriceAmount
+                            ? formatCurrency(
+                                Number(item.lastSaleFinalPriceAmount),
+                              )
+                            : "Tidak tersedia"
+                        }
+                        readOnly
+                        className={cn(
+                          inputClassName,
+                          "cursor-default bg-neutral-50 font-semibold text-neutral-700",
+                        )}
+                        aria-label="Harga jual sebelumnya"
+                      />
+                      <p className="mt-1 text-[11px] text-[var(--muted)]">
+                        {[
+                          item.lastInvoiceNumber
+                            ? `Invoice ${item.lastInvoiceNumber}`
+                            : null,
+                          formatPreviousSaleDate(item.soldAt, timeZone),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") ||
+                          "Riwayat penjualan terakhir belum tersedia."}
+                      </p>
+                    </label>
+                  ) : null}
+
+                  <label
+                    className={cn(
+                      "block text-sm",
+                      item.source === "external" && "lg:col-span-2",
+                    )}
+                  >
                     <span className="mb-2 block font-medium text-neutral-800">
                       Total Harga Buyback *
                     </span>

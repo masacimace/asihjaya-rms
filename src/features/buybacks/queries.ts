@@ -279,6 +279,7 @@ export async function searchBuybackExistingItems({
           .select({
             productItemId: saleItems.productItemId,
             invoiceNumber: sales.invoiceNumber,
+            finalPriceAmount: saleItems.finalPriceAmount,
             completedAt: sales.completedAt,
             createdAt: sales.createdAt,
           })
@@ -307,6 +308,7 @@ export async function searchBuybackExistingItems({
       ...row,
       soldAt: latestSale?.completedAt ?? latestSale?.createdAt ?? null,
       lastInvoiceNumber: latestSale?.invoiceNumber ?? null,
+      lastSaleFinalPriceAmount: latestSale?.finalPriceAmount ?? null,
     };
   });
 }

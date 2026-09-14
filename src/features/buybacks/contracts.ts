@@ -22,6 +22,7 @@ export type BuybackExistingItemOption = {
   imageKey: string | null;
   soldAt: Date | null;
   lastInvoiceNumber: string | null;
+  lastSaleFinalPriceAmount: string | null;
 };
 
 export type BuybackCustomerOption = {
