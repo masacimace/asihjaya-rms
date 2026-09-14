@@ -20,6 +20,7 @@ const posLayout = read("src/app/(pos)/pos/layout.tsx");
 const seed = read("src/db/seed.ts");
 const productMastersAction = read("src/app/actions/product-masters.ts");
 const inventoryItemPage = read("src/app/(admin)/admin/inventaris/item/[itemId]/page.tsx");
+const buybackPriceRates = read("src/features/pricing/buyback-price-rates.ts");
 
 assert.match(schema, /export const buybacks = pgTable\(/);
 assert.match(schema, /export const buybackItems = pgTable\(/);
@@ -110,6 +111,17 @@ assert.match(workspace, /Harga Jual Sebelumnya/);
 assert.match(workspace, /item\.lastSaleFinalPriceAmount/);
 assert.match(workspace, /formatPreviousSaleDate\(item\.soldAt, timeZone\)/);
 assert.match(page, /timeZone=\{auth\.organization\.timezone\}/);
+assert.match(page, /getActiveGoldBuybackPriceRates/);
+assert.match(page, /buybackPriceRates=\{activeBuybackPriceRates\.map/);
+assert.match(buybackPriceRates, /metalBuybackPriceRates/);
+assert.match(workspace, /Harga Rekomendasi Buyback/);
+assert.match(workspace, /calculateRecommendedBuybackAmount/);
+assert.match(
+  workspace,
+  /priceRates\.find\(\(rate\) => rate\.purityKey === purityKey\)/,
+);
+assert.match(workspace, /Rate Buyback \$\{purityKey\}% belum diatur/);
+assert.match(workspace, /Nominal final ditentukan manual oleh staff/);
 assert.match(workspace, /Dana Titip/);
 assert.match(workspace, /Selesaikan Buyback/);
 assert.match(workspace, /imageSelected: boolean/);

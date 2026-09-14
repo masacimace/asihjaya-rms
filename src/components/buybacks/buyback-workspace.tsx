@@ -93,6 +93,118 @@ function formatPreviousSaleDate(value: Date | null, timeZone: string) {
     .replace(".", "");
 }
 
+type BuybackPriceRateOption = {
+  purityKey: string;
+  ratePerGram: string;
+};
+
+function normalizePurityKey(value: string | null | undefined) {
+  if (!value) return null;
+
+  const numeric = Number(value.trim().replace(",", "."));
+  if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 100) {
+    return null;
+  }
+
+  return numeric
+    .toFixed(3)
+    .replace(/\.0+$/, "")
+    .replace(/(\.\d*?)0+$/, "$1");
+}
+
+function calculateRecommendedBuybackAmount({
+  weightGram,
+  ratePerGram,
+}: {
+  weightGram: string;
+  ratePerGram: string;
+}) {
+  const normalizedWeight = weightGram.trim().replace(",", ".");
+
+  if (
+    !/^\d+(?:\.\d{1,3})?$/.test(normalizedWeight) ||
+    !/^\d+$/.test(ratePerGram)
+  ) {
+    return null;
+  }
+
+  const [wholeWeight = "0", decimalWeight = ""] = normalizedWeight.split(".");
+  const weightMilli =
+    BigInt(wholeWeight) * BigInt(1000) +
+    BigInt(decimalWeight.padEnd(3, "0"));
+  const rate = BigInt(ratePerGram);
+
+  if (weightMilli <= BigInt(0) || rate <= BigInt(0)) {
+    return null;
+  }
+
+  const roundedAmount = (weightMilli * rate + BigInt(500)) / BigInt(1000);
+  if (roundedAmount > BigInt(Number.MAX_SAFE_INTEGER)) {
+    return null;
+  }
+
+  return Number(roundedAmount);
+}
+
+function ExternalBuybackRecommendation({
+  purityPercent,
+  weightGram,
+  priceRates,
+}: {
+  purityPercent: string;
+  weightGram: string;
+  priceRates: BuybackPriceRateOption[];
+}) {
+  const purityKey = normalizePurityKey(purityPercent);
+  const activeRate = purityKey
+    ? priceRates.find((rate) => rate.purityKey === purityKey) ?? null
+    : null;
+  const recommendedAmount = activeRate
+    ? calculateRecommendedBuybackAmount({
+        weightGram,
+        ratePerGram: activeRate.ratePerGram,
+      })
+    : null;
+
+  let helper = "Isi Kadar % untuk melihat rekomendasi.";
+  let helperClassName = "mt-1 text-[11px] text-[var(--muted)]";
+
+  if (purityKey && !activeRate) {
+    helper = `Rate Buyback ${purityKey}% belum diatur di Pengaturan Harga / Gram.`;
+    helperClassName = "mt-1 text-[11px] text-amber-700";
+  } else if (activeRate && recommendedAmount === null) {
+    helper = `Rate Buyback ${purityKey}% · ${formatCurrency(
+      Number(activeRate.ratePerGram),
+    )}/gr · isi berat untuk menghitung.`;
+  } else if (activeRate && recommendedAmount !== null) {
+    helper = `Rate Buyback ${purityKey}% · ${formatCurrency(
+      Number(activeRate.ratePerGram),
+    )}/gr`;
+  }
+
+  return (
+    <label className="block text-sm">
+      <span className="mb-2 block font-medium text-neutral-800">
+        Harga Rekomendasi Buyback
+      </span>
+      <input
+        value={
+          recommendedAmount !== null
+            ? formatCurrency(recommendedAmount)
+            : "Tidak tersedia"
+        }
+        readOnly
+        className={cn(
+          inputClassName,
+          "cursor-default bg-neutral-50 font-semibold text-neutral-700",
+        )}
+        aria-label="Harga rekomendasi Buyback"
+      />
+      <p className={helperClassName}>{helper}</p>
+    </label>
+  );
+}
+
 type DraftItem = {
   clientKey: string;
   source: BuybackItemSource;
@@ -379,6 +491,7 @@ export function BuybackWorkspace({
   initialData,
   categories,
   colorPresets,
+  buybackPriceRates,
   initialIdempotencyKey,
   canCreate,
   timeZone,
@@ -386,6 +499,7 @@ export function BuybackWorkspace({
   initialData: BuybackInitialData;
   categories: ProductMasterCategoryOption[];
   colorPresets: ProductColorPresetOption[];
+  buybackPriceRates: BuybackPriceRateOption[];
   initialIdempotencyKey: string;
   canCreate: boolean;
   timeZone: string;
@@ -1123,14 +1237,15 @@ export function BuybackWorkspace({
                           "Riwayat penjualan terakhir belum tersedia."}
                       </p>
                     </label>
-                  ) : null}
+                  ) : (
+                    <ExternalBuybackRecommendation
+                      purityPercent={item.purityPercent}
+                      weightGram={item.weightGram}
+                      priceRates={buybackPriceRates}
+                    />
+                  )}
 
-                  <label
-                    className={cn(
-                      "block text-sm",
-                      item.source === "external" && "lg:col-span-2",
-                    )}
-                  >
+                  <label className="block text-sm">
                     <span className="mb-2 block font-medium text-neutral-800">
                       Total Harga Buyback *
                     </span>

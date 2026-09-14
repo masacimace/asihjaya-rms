@@ -16,6 +16,7 @@ import {
   getBuybackHistoryData,
   getBuybackInitialData,
 } from "@/features/buybacks/queries";
+import { getActiveGoldBuybackPriceRates } from "@/features/pricing/buyback-price-rates";
 import { getProductMasterCategoryOptions } from "@/features/products/product-master-queries";
 import { getActiveProductColorPresetOptions } from "@/features/settings/product-color-presets";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
@@ -57,7 +58,13 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
   const detailId =
     query.detail && UUID_PATTERN.test(query.detail) ? query.detail : null;
 
-  const [initialData, categories, historyData, colorPresets] = await Promise.all([
+  const [
+    initialData,
+    categories,
+    historyData,
+    colorPresets,
+    activeBuybackPriceRates,
+  ] = await Promise.all([
     getBuybackInitialData({
       organizationId: auth.organization.id,
       outletId: primaryOutlet.id,
@@ -70,6 +77,9 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
       limit: 5,
     }),
     getActiveProductColorPresetOptions(auth.organization.id),
+    getActiveGoldBuybackPriceRates({
+      organizationId: auth.organization.id,
+    }),
   ]);
 
   const canCreate = hasPermission(auth, "buybacks.create");
@@ -164,6 +174,10 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
             initialData={initialData}
             categories={categories}
             colorPresets={colorPresets}
+            buybackPriceRates={activeBuybackPriceRates.map((rate) => ({
+              purityKey: rate.purityKey,
+              ratePerGram: rate.ratePerGram,
+            }))}
             initialIdempotencyKey={randomUUID()}
             canCreate={canCreate}
             timeZone={auth.organization.timezone}
