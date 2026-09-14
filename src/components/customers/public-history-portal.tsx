@@ -359,7 +359,7 @@ function TransactionAccordion({
           <div className="flex flex-wrap items-center gap-[4px] sm:gap-1.5">
             {transaction.isScannedTransaction ? (
               <span className="rounded-full bg-[#f9e9c6]/90 px-[6px] py-[2px] text-[8px] font-bold uppercase tracking-[0.08em] text-[#8a5b19] sm:px-2 sm:py-0.5 sm:text-[9px]">
-                Dipindai
+                Sedang Dilihat
               </span>
             ) : null}
             <span className="truncate text-[13px] font-black leading-[16px] text-slate-950 sm:text-[16px] sm:leading-[22px]">
