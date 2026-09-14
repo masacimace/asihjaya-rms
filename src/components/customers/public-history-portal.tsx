@@ -27,9 +27,11 @@ import type {
   PublicCustomerHistoryTransaction,
 } from "@/features/customers/public-history";
 
-type ValidPublicHistoryData = Extract<PublicCustomerHistoryData, { status: "valid" }>;
+type ValidPublicHistoryData = Extract<
+  PublicCustomerHistoryData,
+  { status: "valid" }
+>;
 type HistoryFilter = "all" | "sale" | "buyback";
-
 
 function getPublicCustomerHistoryImageUrl({
   imageKey,
@@ -60,9 +62,7 @@ function formatAmount(value: string | number | null | undefined) {
   }).format(amount);
 }
 
-function formatSignedAmount(
-  transaction: PublicCustomerHistoryTransaction,
-) {
+function formatSignedAmount(transaction: PublicCustomerHistoryTransaction) {
   return transaction.kind === "buyback"
     ? `+ ${formatAmount(transaction.totalAmount)}`
     : `- ${formatAmount(transaction.totalAmount)}`;
@@ -135,7 +135,7 @@ function GlassPanel({
 }) {
   return (
     <div
-      className={`border border-white/60 bg-white/[0.45] shadow-[0_24px_80px_rgba(74,48,24,0.14)] backdrop-blur-2xl ${className}`}
+      className={`border border-white/60 bg-white/[0.45] shadow-[0_24px_80px_rgba(74,48,24,0.14)] backdrop-blur-xl ${className}`}
     >
       {children}
     </div>
@@ -161,25 +161,39 @@ function FinancialCard({
         <div className="grid size-[30px] place-items-center rounded-[11px] border border-white/60 bg-white/50 shadow-sm sm:size-11 sm:rounded-2xl">
           {icon}
         </div>
-        {onClick ? <ChevronRight className="mt-[4px] size-[14px] text-neutral-500 sm:mt-2 sm:size-5" /> : null}
+        {onClick ? (
+          <ChevronRight className="mt-[4px] size-[14px] text-neutral-500 sm:mt-2 sm:size-5" />
+        ) : null}
       </div>
-      <p className="mt-[10px] text-[10px] font-semibold leading-[13px] text-slate-600 sm:mt-4 sm:text-[14px] sm:leading-[20px]">{label}</p>
-      <p className="mt-[3px] whitespace-nowrap text-[12px] font-black leading-[15px] tracking-[-0.025em] text-slate-950 sm:mt-1 sm:text-[24px] sm:leading-[32px]">
+      <p className="mt-[10px] text-[10px] font-semibold leading-[13px] text-slate-600 sm:mt-4 sm:text-[14px] sm:leading-[20px]">
+        {label}
+      </p>
+      <p className="mt-[3px] whitespace-nowrap text-[11px] font-black leading-[15px] tracking-[-0.025em] text-slate-950 sm:mt-1 sm:text-[24px] sm:leading-[32px]">
         {value}
       </p>
-      <p className="mt-1 hidden text-[11px] leading-5 text-slate-500 sm:block">{hint}</p>
+      <p className="mt-1 hidden text-[11px] leading-5 text-slate-500 sm:block">
+        {hint}
+      </p>
     </>
   );
 
   const className =
-    "min-h-[108px] rounded-[20px] border border-white/[0.65] bg-white/[0.43] p-[10px] text-left shadow-[0_18px_55px_rgba(75,52,29,.12)] backdrop-blur-2xl transition sm:min-h-[170px] sm:rounded-[26px] sm:p-5";
+    "relative h-full min-h-[108px] w-full self-stretch rounded-[20px] border border-white/[0.65] bg-white/[0.43] p-[10px] text-left shadow-[0_18px_55px_rgba(75,52,29,.12)] backdrop-blur-2xl transition sm:min-h-[170px] sm:rounded-[26px] sm:p-5";
 
-  return onClick ? (
-    <button type="button" onClick={onClick} className={`${className} hover:bg-white/[0.55]`}>
+  return (
+    <article
+      className={`${className} ${onClick ? "hover:bg-white/[0.55]" : ""}`}
+    >
       {content}
-    </button>
-  ) : (
-    <article className={className}>{content}</article>
+      {onClick ? (
+        <button
+          type="button"
+          onClick={onClick}
+          aria-label={`Lihat rincian ${label}`}
+          className="absolute inset-0 z-10 m-0 appearance-none rounded-[20px] border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-[#a87324] focus-visible:ring-offset-2 sm:rounded-[26px]"
+        />
+      ) : null}
+    </article>
   );
 }
 
@@ -270,7 +284,7 @@ function TransactionDetailItems({
                   <p className="truncate text-[11px] font-bold leading-[14px] text-neutral-950 sm:text-[14px] sm:leading-[20px]">
                     {item.productName}
                   </p>
-                  <p className="mt-[1px] truncate font-mono text-[8px] leading-[11px] text-neutral-500 sm:mt-0.5 sm:text-[11px] sm:leading-[16px]">
+                  <p className="mt-[1px] truncate font-mono text-[9px] leading-[11px] text-neutral-500 sm:mt-0.5 sm:text-[11px] sm:leading-[16px]">
                     {item.productCode}
                   </p>
                 </div>
@@ -278,18 +292,23 @@ function TransactionDetailItems({
                   {formatAmount(item.finalAmount)}
                 </span>
               </div>
-              <div className="mt-[4px] flex flex-wrap gap-x-[8px] gap-y-[2px] text-[8px] font-medium leading-[11px] text-neutral-600 sm:mt-2 sm:gap-x-3 sm:gap-y-1 sm:text-[11px] sm:leading-[16px]">
+              <div className="mt-[4px] flex flex-wrap gap-x-[8px] gap-y-[2px] text-[9px] font-medium leading-[11px] text-neutral-600 sm:mt-2 sm:gap-x-3 sm:gap-y-1 sm:text-[11px] sm:leading-[16px]">
                 <span>{item.categoryName ?? "Perhiasan"}</span>
                 <span>{formatGram(item.weightGram)}</span>
                 <span>
-                  Kadar {formatPercent(
+                  Kadar{" "}
+                  {formatPercent(
                     transaction.kind === "sale"
-                      ? item.exchangePurityPercent ?? item.purityPercent
+                      ? (item.exchangePurityPercent ?? item.purityPercent)
                       : item.purityPercent,
                   )}
                 </span>
                 {item.source ? (
-                  <span>{item.source === "asihjaya" ? "Barang ASIHJAYA" : "Barang Luar"}</span>
+                  <span>
+                    {item.source === "asihjaya"
+                      ? "Barang ASIHJAYA"
+                      : "Barang Luar"}
+                  </span>
                 ) : null}
               </div>
             </div>
@@ -390,7 +409,7 @@ function TransactionAccordion({
                   <p className="text-[8px] font-bold uppercase tracking-[0.1em] text-neutral-500 sm:text-[10px]">
                     No. Transaksi
                   </p>
-                  <p className="mt-[2px] break-all font-mono text-[9px] font-bold leading-[12px] text-neutral-950 sm:mt-1 sm:text-[12px] sm:leading-[16px]">
+                  <p className="mt-[2px] break-all font-mono text-[12px] font-bold leading-[12px] text-neutral-950 sm:mt-1 sm:text-[12px] sm:leading-[16px]">
                     {transaction.transactionNumber}
                   </p>
                 </div>
@@ -398,7 +417,7 @@ function TransactionAccordion({
                   <p className="text-[8px] font-bold uppercase tracking-[0.1em] text-neutral-500 sm:text-[10px]">
                     Tanggal
                   </p>
-                  <p className="mt-[2px] text-[9px] font-bold leading-[12px] text-neutral-950 sm:mt-1 sm:text-[12px] sm:leading-[16px]">
+                  <p className="mt-[2px] text-[11px] font-bold leading-[12px] text-neutral-950 sm:mt-1 sm:text-[12px] sm:leading-[16px]">
                     {formatDateTime(transactionTime(transaction))}
                   </p>
                 </div>
@@ -406,7 +425,7 @@ function TransactionAccordion({
                   <p className="text-[8px] font-bold uppercase tracking-[0.1em] text-neutral-500 sm:text-[10px]">
                     Outlet
                   </p>
-                  <p className="mt-[2px] text-[9px] font-bold leading-[12px] text-neutral-950 sm:mt-1 sm:text-[12px] sm:leading-[16px]">
+                  <p className="mt-[2px] text-[11px] font-bold leading-[12px] text-neutral-950 sm:mt-1 sm:text-[12px] sm:leading-[16px]">
                     {transaction.outlet.name}
                   </p>
                 </div>
@@ -414,7 +433,7 @@ function TransactionAccordion({
                   <p className="text-[8px] font-bold uppercase tracking-[0.1em] text-neutral-500 sm:text-[10px]">
                     Status
                   </p>
-                  <p className="mt-[2px] text-[9px] font-bold leading-[12px] text-neutral-950 sm:mt-1 sm:text-[12px] sm:leading-[16px]">
+                  <p className="mt-[2px] text-[11px] font-bold leading-[12px] text-neutral-950 sm:mt-1 sm:text-[12px] sm:leading-[16px]">
                     {transaction.status === "partially_refunded"
                       ? "Retur Sebagian"
                       : transaction.status === "refunded"
@@ -433,45 +452,72 @@ function TransactionAccordion({
                     {transaction.totalItems} item
                   </span>
                 </div>
-                <TransactionDetailItems token={token} transaction={transaction} />
+                <TransactionDetailItems
+                  token={token}
+                  transaction={transaction}
+                />
               </div>
             </div>
 
             <div className="h-fit rounded-[14px] border border-white/70 bg-white/[0.45] p-[10px] backdrop-blur-lg sm:rounded-2xl sm:p-4">
               <dl className="grid gap-[8px] text-[10px] leading-[14px] sm:gap-3 sm:text-[14px] sm:leading-[20px]">
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-neutral-600">{isBuyback ? "Nilai dasar" : "Subtotal"}</dt>
+                  <dt className="text-neutral-600">
+                    {isBuyback ? "Nilai dasar" : "Subtotal"}
+                  </dt>
                   <dd className="font-bold text-neutral-950">
-                    {formatAmount(isBuyback ? transaction.baseAmount : transaction.subtotalAmount)}
+                    {formatAmount(
+                      isBuyback
+                        ? transaction.baseAmount
+                        : transaction.subtotalAmount,
+                    )}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-neutral-600">{isBuyback ? "Potongan" : "Diskon"}</dt>
+                  <dt className="text-neutral-600">
+                    {isBuyback ? "Potongan" : "Diskon"}
+                  </dt>
                   <dd className="font-bold text-neutral-950">
-                    {formatAmount(isBuyback ? transaction.deductionAmount : transaction.discountAmount)}
+                    {formatAmount(
+                      isBuyback
+                        ? transaction.deductionAmount
+                        : transaction.discountAmount,
+                    )}
                   </dd>
                 </div>
                 {depositUsed > 0 ? (
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-neutral-600">Dana Titip digunakan</dt>
-                    <dd className="font-bold text-[#9a681d]">-{formatAmount(depositUsed)}</dd>
+                    <dd className="font-bold text-[#9a681d]">
+                      -{formatAmount(depositUsed)}
+                    </dd>
                   </div>
                 ) : null}
                 {depositIn > 0 ? (
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-neutral-600">Masuk Dana Titip</dt>
-                    <dd className="font-bold text-emerald-700">+{formatAmount(depositIn)}</dd>
+                    <dd className="font-bold text-emerald-700">
+                      +{formatAmount(depositIn)}
+                    </dd>
                   </div>
                 ) : null}
                 <div className="flex items-start justify-between gap-3 border-t border-white/70 pt-3">
-                  <dt className="text-neutral-600">{isBuyback ? "Pencairan" : "Pembayaran"}</dt>
+                  <dt className="text-neutral-600">
+                    {isBuyback ? "Pencairan" : "Pembayaran"}
+                  </dt>
                   <dd className="max-w-[160px] text-right font-bold text-neutral-950">
-                    {settlementMethods.length > 0 ? settlementMethods.join(" + ") : "Tercatat"}
+                    {settlementMethods.length > 0
+                      ? settlementMethods.join(" + ")
+                      : "Tercatat"}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3 border-t border-white/70 pt-3">
-                  <dt className="font-bold text-neutral-950">{isBuyback ? "Total Buyback" : "Total Pembelian"}</dt>
-                  <dd className={`text-[13px] font-black leading-[16px] sm:text-[18px] sm:leading-[24px] ${isBuyback ? "text-emerald-700" : "text-neutral-950"}`}>
+                  <dt className="font-bold text-neutral-950">
+                    {isBuyback ? "Total Buyback" : "Total Pembelian"}
+                  </dt>
+                  <dd
+                    className={`text-[13px] font-black leading-[16px] sm:text-[18px] sm:leading-[24px] ${isBuyback ? "text-emerald-700" : "text-neutral-950"}`}
+                  >
                     {formatAmount(transaction.totalAmount)}
                   </dd>
                 </div>
@@ -484,7 +530,10 @@ function TransactionAccordion({
   );
 }
 
-function matchesSearch(transaction: PublicCustomerHistoryTransaction, rawSearch: string) {
+function matchesSearch(
+  transaction: PublicCustomerHistoryTransaction,
+  rawSearch: string,
+) {
   const search = rawSearch.trim().toLocaleLowerCase("id-ID");
   if (!search) return true;
 
@@ -505,7 +554,11 @@ function matchesSearch(transaction: PublicCustomerHistoryTransaction, rawSearch:
   return searchable.includes(search);
 }
 
-export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) {
+export function PublicHistoryPortal({
+  data,
+}: {
+  data: ValidPublicHistoryData;
+}) {
   const [filter, setFilter] = useState<HistoryFilter>("all");
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -525,14 +578,17 @@ export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) 
         name: transaction.outlet.name,
       });
     }
-    return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name, "id-ID"));
+    return Array.from(unique.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, "id-ID"),
+    );
   }, [data.transactions]);
 
   const visibleTransactions = useMemo(
     () =>
       data.transactions.filter((transaction) => {
         if (filter !== "all" && transaction.kind !== filter) return false;
-        if (outletId !== "all" && transaction.outlet.id !== outletId) return false;
+        if (outletId !== "all" && transaction.outlet.id !== outletId)
+          return false;
         return matchesSearch(transaction, search);
       }),
     [data.transactions, filter, outletId, search],
@@ -585,7 +641,10 @@ export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) 
           aria-hidden="true"
           className="fixed inset-0 -z-20 bg-[linear-gradient(180deg,rgba(255,250,242,.13),rgba(245,235,220,.28)_42%,rgba(232,219,198,.44))] lg:bg-[linear-gradient(90deg,rgba(255,252,247,.14),rgba(255,248,238,.22)_48%,rgba(229,211,188,.18))]"
         />
-        <div aria-hidden="true" className="fixed inset-0 -z-10 bg-white/5 backdrop-saturate-150" />
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 -z-10 bg-white/5 backdrop-saturate-150"
+        />
 
         <div className="mx-auto w-[calc(100%_-_36px)] max-w-[360px] pb-6 pt-4 sm:w-full sm:max-w-6xl sm:px-5 sm:pb-10 sm:pt-7 lg:px-6 lg:pt-9">
           <header className="flex items-center justify-between gap-[10px] px-0 sm:gap-4 sm:px-2">
@@ -595,7 +654,9 @@ export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) 
                 storageKey={avatarStorageKey}
               />
               <div className="min-w-0 ">
-                <p className="text-[12px] font-medium leading-[15px] text-slate-800 sm:text-[16px] sm:leading-[22px]">Halo,</p>
+                <p className="text-[12px] font-medium leading-[15px] text-slate-800 sm:text-[16px] sm:leading-[22px]">
+                  Halo,
+                </p>
                 <h1 className="truncate text-[19px] font-black leading-[22px] tracking-[-0.025em] text-slate-950 sm:text-[30px] sm:leading-[36px]">
                   {data.customer.name}
                 </h1>
@@ -620,40 +681,46 @@ export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) 
                   className="h-[22px] w-auto object-contain sm:h-7"
                   priority
                 />
-                <p className="mt-[14px] text-[9px] font-bold uppercase tracking-[0.32em] text-[#8f6427] sm:mt-5 sm:text-[10px]">
-                  Jewelry
-                </p>
                 <h2 className="mt-[5px] max-w-sm font-serif text-[29px] leading-[31px] text-slate-950 sm:mt-2 sm:text-[42px] sm:leading-[45px]">
-                  Keindahan<br />Selalu Bernilai
+                  Keindahan
+                  <br />
+                  Selalu Bernilai
                 </h2>
                 <div className="mt-[10px] h-px w-[42px] bg-[#b88943] sm:mt-4 sm:w-14" />
                 <p className="mt-[9px] max-w-xs text-[11px] leading-[15px] text-slate-600 sm:mt-3 sm:text-[14px] sm:leading-[20px]">
-                  Setiap transaksi, bagian dari cerita berharga Anda.
+                  Lebih dari sekedar perhiasan, ini bagian dari ceritamu.
                 </p>
               </div>
               <div className="absolute bottom-5 right-5 hidden text-right text-[12px] font-medium tracking-wide text-white/90 drop-shadow-md sm:block lg:bottom-8 lg:right-8">
                 <Sparkles className="ml-auto mb-2 size-4" />
-                More Than Value<br />A Part of Your Story
+                More Than Value
+                <br />A Part of Your Story
               </div>
             </div>
           </GlassPanel>
 
-          <section className="mt-3 grid grid-cols-3 gap-[6px] sm:mt-4 sm:gap-4">
+          <section className="mt-3 grid grid-cols-3 items-stretch gap-[6px] sm:mt-4 sm:gap-4">
             <FinancialCard
-              icon={<WalletCards className="size-[15px] text-[#8b5b18] sm:size-5" />}
+              icon={
+                <WalletCards className="size-[15px] text-[#8b5b18] sm:size-5" />
+              }
               label="Saldo Dana Titip"
               value={formatAmount(data.customerDeposit.totalBalanceAmount)}
               hint="Total saldo di seluruh outlet"
               onClick={() => setDepositOpen((value) => !value)}
             />
             <FinancialCard
-              icon={<ArrowUpRight className="size-[15px] text-rose-600 sm:size-5" />}
+              icon={
+                <ArrowUpRight className="size-[15px] text-rose-600 sm:size-5" />
+              }
               label="Uang Keluar"
               value={formatAmount(data.summary.totalPurchases)}
               hint={`${data.summary.totalSaleTransactions} transaksi pembelian`}
             />
             <FinancialCard
-              icon={<ArrowDownLeft className="size-[15px] text-emerald-700 sm:size-5" />}
+              icon={
+                <ArrowDownLeft className="size-[15px] text-emerald-700 sm:size-5" />
+              }
               label="Uang Masuk"
               value={formatAmount(data.summary.totalBuybacks)}
               hint={`${data.summary.totalBuybackTransactions} transaksi Buyback`}
@@ -668,7 +735,8 @@ export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) 
                     Dana Titip per Outlet
                   </p>
                   <p className="mt-1 text-[11px] leading-[16px] text-slate-600 sm:text-[14px] sm:leading-6">
-                    Saldo hanya dapat digunakan atau dicairkan di outlet tempat saldo tersebut tersimpan.
+                    Saldo hanya dapat digunakan atau dicairkan di outlet tempat
+                    saldo tersebut tersimpan.
                   </p>
                 </div>
                 <button
@@ -695,7 +763,9 @@ export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) 
                       <p className="mt-1.5 text-[15px] font-black leading-[19px] text-slate-950 sm:mt-2 sm:text-[18px] sm:leading-[24px]">
                         {formatAmount(balance.balanceAmount)}
                       </p>
-                      <p className="mt-1 text-[9px] leading-[13px] text-slate-500 sm:text-[11px]">Dapat dicairkan di outlet ini</p>
+                      <p className="mt-1 text-[9px] leading-[13px] text-slate-500 sm:text-[11px]">
+                        Dapat dicairkan di outlet ini
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -710,7 +780,7 @@ export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) 
           <GlassPanel className="mt-3 rounded-[24px] p-3 sm:mt-6 sm:rounded-[30px] sm:p-6 lg:p-7">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-[20px] font-black leading-[24px] tracking-[-0.025em] text-slate-950 sm:text-[30px] sm:leading-[36px]">
+                <h2 className="text-[16px] font-semibold leading-[24px] tracking-[-0.025em] text-slate-950 sm:text-[30px] sm:leading-[36px]">
                   Riwayat Transaksi
                 </h2>
                 <p className="mt-[2px] text-[11px] leading-[15px] text-slate-600 sm:mt-1 sm:text-[14px] sm:leading-[20px]">
@@ -795,16 +865,18 @@ export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) 
             ) : null}
 
             <div className="mt-3 grid grid-cols-3 rounded-full border border-white/70 bg-white/30 p-[3px] backdrop-blur-lg sm:mt-4 sm:p-1">
-              {([
-                ["all", "Semua"],
-                ["sale", "Pembelian"],
-                ["buyback", "Buyback"],
-              ] as const).map(([value, label]) => (
+              {(
+                [
+                  ["all", "Semua"],
+                  ["sale", "Pembelian"],
+                  ["buyback", "Buyback"],
+                ] as const
+              ).map(([value, label]) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => chooseFilter(value)}
-                  className={`rounded-full px-2 py-[7px] text-[11px] font-bold leading-[14px] transition sm:py-2.5 sm:text-[14px] sm:leading-[20px] ${
+                  className={`rounded-full px-2 py-[7px] !text-[12px] font-bold leading-[14px] transition sm:py-2.5 sm:text-[14px] sm:leading-[20px] ${
                     filter === value
                       ? "bg-neutral-950 text-white shadow-lg"
                       : "text-slate-600 hover:bg-white/[0.35]"
@@ -846,8 +918,12 @@ export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) 
               ) : (
                 <div className="rounded-[18px] border border-white/70 bg-white/[0.42] p-5 text-center backdrop-blur-xl sm:rounded-[24px] sm:p-7">
                   <ReceiptText className="mx-auto size-7 text-[#9b6a27]" />
-                  <p className="mt-2 text-[12px] font-bold leading-[15px] text-slate-950 sm:mt-3 sm:text-[16px] sm:leading-[22px]">Transaksi tidak ditemukan</p>
-                  <p className="mt-[2px] text-[11px] leading-[15px] text-slate-600 sm:mt-1 sm:text-[14px] sm:leading-[20px]">Coba ubah pencarian atau filter transaksi.</p>
+                  <p className="mt-2 text-[12px] font-bold leading-[15px] text-slate-950 sm:mt-3 sm:text-[16px] sm:leading-[22px]">
+                    Transaksi tidak ditemukan
+                  </p>
+                  <p className="mt-[2px] text-[11px] leading-[15px] text-slate-600 sm:mt-1 sm:text-[14px] sm:leading-[20px]">
+                    Coba ubah pencarian atau filter transaksi.
+                  </p>
                 </div>
               )}
             </div>
@@ -864,18 +940,15 @@ export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) 
                     Riwayat resmi & terlindungi PIN
                   </p>
                   <p className="mt-[2px] text-[9px] leading-[13px] text-slate-600 sm:mt-0.5 sm:text-[12px] sm:leading-5">
-                    Dana Titip tetap tersimpan dan dapat dicairkan hanya pada outlet pemilik saldo.
+                    Dana Titip tetap tersimpan dan dapat dicairkan hanya pada
+                    outlet pemilik saldo.
                   </p>
                 </div>
-              </div>
-              <div className="text-left font-serif text-[11px] italic leading-[15px] tracking-wide text-slate-600 sm:text-right sm:text-[14px] sm:leading-[20px]">
-                Precious Today,<br />Brighter Tomorrow
               </div>
             </div>
           </GlassPanel>
         </div>
       </main>
-
     </>
   );
 }
