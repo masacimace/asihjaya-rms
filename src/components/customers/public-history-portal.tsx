@@ -661,7 +661,7 @@ export function PublicHistoryPortal({
                   {data.customer.name}
                 </h1>
                 <p className="mt-[2px] text-[12px] leading-[15px] text-slate-600 sm:text-[16px] sm:leading-[22px]">
-                  Selamat datang kembali <span aria-hidden="true">◆</span>
+                  Selamat datang kembali <span aria-hidden="true">✨</span>
                 </p>
               </div>
             </div>
@@ -732,11 +732,11 @@ export function PublicHistoryPortal({
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#93651f] sm:text-[12px]">
-                    Dana Titip per Outlet
+                    Dana Titip
                   </p>
                   <p className="mt-1 text-[11px] leading-[16px] text-slate-600 sm:text-[14px] sm:leading-6">
-                    Saldo hanya dapat digunakan atau dicairkan di outlet tempat
-                    saldo tersebut tersimpan.
+                    Saldo hanya dapat digunakan di outlet tempat saldo tersebut
+                    tersimpan.
                   </p>
                 </div>
                 <button
@@ -764,7 +764,7 @@ export function PublicHistoryPortal({
                         {formatAmount(balance.balanceAmount)}
                       </p>
                       <p className="mt-1 text-[9px] leading-[13px] text-slate-500 sm:text-[11px]">
-                        Dapat dicairkan di outlet ini
+                        Tersedia di outlet ini
                       </p>
                     </div>
                   ))}
