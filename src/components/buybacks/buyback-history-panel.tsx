@@ -15,6 +15,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { reprintBuybackReceiptAction } from "@/app/actions/buybacks";
+import { BuybackProcessingQuickActions } from "@/components/buybacks/buyback-processing-quick-actions";
 import { ProductImage } from "@/components/media/product-image";
 import type {
   BuybackDetail,
@@ -23,6 +24,15 @@ import type {
   BuybackPayoutMethod,
   BuybackProcessingType,
 } from "@/features/buybacks/contracts";
+import type {
+  BuybackProcessingQueueRow,
+  BuybackProcessingRateOption,
+} from "@/features/buybacks/processing-contracts";
+import type {
+  ProductMasterCategoryOption,
+  ProductMasterOption,
+} from "@/features/products/product-master-queries";
+import type { ProductColorPresetOption } from "@/features/settings/product-color-presets";
 import { formatCurrency } from "@/features/pos/payment-draft";
 
 const payoutLabels: Record<BuybackPayoutMethod, string> = {
@@ -34,6 +44,15 @@ const payoutLabels: Record<BuybackPayoutMethod, string> = {
 const processingLabels: Record<BuybackProcessingType, string> = {
   cleaning: "Cuci",
   recondition: "Rongsok",
+};
+
+export type BuybackProcessingQuickActionData = {
+  rows: BuybackProcessingQueueRow[];
+  categories: ProductMasterCategoryOption[];
+  productMasters: ProductMasterOption[];
+  colorPresets: ProductColorPresetOption[];
+  priceRates: BuybackProcessingRateOption[];
+  canProcess: boolean;
 };
 
 function formatDateTime(value: Date | null, timeZone: string) {
@@ -186,6 +205,7 @@ export function BuybackHistoryPanel({
   filters,
   detailBackHref,
   historyBaseHref = "/pos/buyback/riwayat",
+  processingQuickActions,
 }: {
   data: BuybackHistoryData;
   timeZone: string;
@@ -204,6 +224,7 @@ export function BuybackHistoryPanel({
   };
   detailBackHref?: string;
   historyBaseHref?: string;
+  processingQuickActions?: BuybackProcessingQuickActionData;
 }) {
   function buildHistoryHref({
     targetPage,
@@ -353,6 +374,20 @@ export function BuybackHistoryPanel({
                   </div>
                 ) : null}
 
+                {mode === "preview" && processingQuickActions ? (
+                  <BuybackProcessingQuickActions
+                    rows={processingQuickActions.rows.filter(
+                      (processingRow) => processingRow.buybackId === row.id,
+                    )}
+                    categories={processingQuickActions.categories}
+                    productMasters={processingQuickActions.productMasters}
+                    colorPresets={processingQuickActions.colorPresets}
+                    priceRates={processingQuickActions.priceRates}
+                    canProcess={processingQuickActions.canProcess}
+                    variant="mobile"
+                  />
+                ) : null}
+
                 <Link
                   href={detailHref(row.id)}
                   className="mt-4 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-800"
@@ -431,13 +466,28 @@ export function BuybackHistoryPanel({
                       {formatCurrency(Number(row.totalAmount))}
                     </td>
                     <td className="px-4 py-4 sm:px-5">
-                      <Link
-                        href={detailHref(row.id)}
-                        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold text-neutral-800 transition hover:bg-neutral-50"
-                      >
-                        <FileText className="size-3.5" />
-                        Detail
-                      </Link>
+                      <div className="flex min-w-[142px] flex-col gap-2">
+                        {mode === "preview" && processingQuickActions ? (
+                          <BuybackProcessingQuickActions
+                            rows={processingQuickActions.rows.filter(
+                              (processingRow) =>
+                                processingRow.buybackId === row.id,
+                            )}
+                            categories={processingQuickActions.categories}
+                            productMasters={processingQuickActions.productMasters}
+                            colorPresets={processingQuickActions.colorPresets}
+                            priceRates={processingQuickActions.priceRates}
+                            canProcess={processingQuickActions.canProcess}
+                          />
+                        ) : null}
+                        <Link
+                          href={detailHref(row.id)}
+                          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold text-neutral-800 transition hover:bg-neutral-50"
+                        >
+                          <FileText className="size-3.5" />
+                          Detail
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

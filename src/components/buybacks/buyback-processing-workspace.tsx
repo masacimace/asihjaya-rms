@@ -281,7 +281,7 @@ function ResultImageInput({ error }: { error?: string }) {
   );
 }
 
-function ProcessingDrawer({
+export function ProcessingDrawer({
   row,
   categories,
   productMasters,

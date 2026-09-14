@@ -9,15 +9,23 @@ import {
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { BuybackHistoryPanel } from "@/components/buybacks/buyback-history-panel";
+import {
+  BuybackHistoryPanel,
+  type BuybackProcessingQuickActionData,
+} from "@/components/buybacks/buyback-history-panel";
 import { BuybackWorkspace } from "@/components/buybacks/buyback-workspace";
 import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
 import {
   getBuybackHistoryData,
   getBuybackInitialData,
 } from "@/features/buybacks/queries";
+import { getBuybackProcessingData } from "@/features/buybacks/processing-queries";
 import { getActiveGoldBuybackPriceRates } from "@/features/pricing/buyback-price-rates";
-import { getProductMasterCategoryOptions } from "@/features/products/product-master-queries";
+import { getActiveGoldPriceRates } from "@/features/pricing/metal-price-rates";
+import {
+  getActiveProductMasterOptions,
+  getProductMasterCategoryOptions,
+} from "@/features/products/product-master-queries";
 import { getActiveProductColorPresetOptions } from "@/features/settings/product-color-presets";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
@@ -83,6 +91,39 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
   ]);
 
   const canCreate = hasPermission(auth, "buybacks.create");
+
+  let processingQuickActions: BuybackProcessingQuickActionData | undefined;
+
+  if (
+    !historyData.detail &&
+    historyData.rows.some((row) => row.pendingProcessingCount > 0)
+  ) {
+    const [processingData, productMasters, activeSaleRates] = await Promise.all([
+      getBuybackProcessingData({
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet.id,
+      }),
+      getActiveProductMasterOptions(auth.organization.id),
+      getActiveGoldPriceRates({ organizationId: auth.organization.id }),
+    ]);
+    const recentBuybackIds = new Set(historyData.rows.map((row) => row.id));
+
+    processingQuickActions = {
+      rows: processingData.rows.filter(
+        (row) => row.status === "pending" && recentBuybackIds.has(row.buybackId),
+      ),
+      categories,
+      productMasters,
+      colorPresets,
+      priceRates: activeSaleRates.map((rate) => ({
+        purityKey: rate.purityKey,
+        purityPercent: rate.purityPercent,
+        ratePerGram: rate.ratePerGram,
+      })),
+      canProcess: canCreate,
+    };
+  }
+
   const context = initialData.context;
   const expectedCashAmount = Number(context.activeShift?.expectedCash ?? 0);
   const formattedExpectedCash = new Intl.NumberFormat("id-ID", {
@@ -187,6 +228,7 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
               data={historyData}
               timeZone={auth.organization.timezone}
               feedback={feedback}
+              processingQuickActions={processingQuickActions}
             />
           </div>
         </div>

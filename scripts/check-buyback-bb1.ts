@@ -16,6 +16,12 @@ const queries = read("src/features/buybacks/queries.ts");
 const page = read("src/app/(pos)/pos/buyback/page.tsx");
 const workspace = read("src/components/buybacks/buyback-workspace.tsx");
 const historyPanel = read("src/components/buybacks/buyback-history-panel.tsx");
+const processingWorkspace = read(
+  "src/components/buybacks/buyback-processing-workspace.tsx",
+);
+const processingQuickActions = read(
+  "src/components/buybacks/buyback-processing-quick-actions.tsx",
+);
 const posShell = read("src/components/layout/pos-shell.tsx");
 const posLayout = read("src/app/(pos)/pos/layout.tsx");
 const seed = read("src/db/seed.ts");
@@ -146,6 +152,17 @@ assert.match(historyPanel, /Rate saat transaksi/);
 assert.match(historyPanel, /Rekomendasi/);
 assert.match(historyPanel, /buybackRecommendationSource/);
 assert.match(historyPanel, /server_active_buyback_rate/);
+assert.match(page, /getBuybackProcessingData/);
+assert.match(page, /getActiveProductMasterOptions/);
+assert.match(page, /getActiveGoldPriceRates/);
+assert.match(page, /processingQuickActions=\{processingQuickActions\}/);
+assert.match(historyPanel, /BuybackProcessingQuickActions/);
+assert.match(processingQuickActions, /Proses Cuci/);
+assert.match(processingQuickActions, /Proses Rongsok/);
+assert.match(processingQuickActions, /pendingByType\.cleaning\.length > 1/);
+assert.match(processingQuickActions, /pendingByType\.recondition\.length > 1/);
+assert.match(processingQuickActions, /ProcessingDrawer/);
+assert.match(processingWorkspace, /export function ProcessingDrawer\(/);
 
 const buybackNavOccurrences = posShell.match(/href: "\/pos\/buyback"/g)?.length ?? 0;
 assert.ok(buybackNavOccurrences >= 2, "Buyback harus tersedia pada desktop dan Menu Lainnya mobile.");
