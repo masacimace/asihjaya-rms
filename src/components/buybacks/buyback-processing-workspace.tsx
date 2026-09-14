@@ -1146,7 +1146,12 @@ export function BuybackProcessingWorkspace({
                             type="button"
                             disabled={!canProcess}
                             onClick={() => setSelected(row)}
-                            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white disabled:opacity-40"
+                            className={cn(
+                              "inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40",
+                              row.processingType === "cleaning"
+                                ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                                : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
+                            )}
                           >
                             {row.processingType === "cleaning" ? (
                               <Sparkles className="size-4" />
@@ -1274,7 +1279,12 @@ export function BuybackProcessingWorkspace({
                               type="button"
                               disabled={!canProcess}
                               onClick={() => setSelected(row)}
-                              className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-neutral-950 px-3 text-xs font-semibold text-white disabled:opacity-40"
+                              className={cn(
+                                "inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40",
+                                row.processingType === "cleaning"
+                                  ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                                  : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
+                              )}
                             >
                               {row.processingType === "cleaning" ? (
                                 <Sparkles className="size-3.5" />
