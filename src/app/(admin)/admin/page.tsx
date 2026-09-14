@@ -39,6 +39,7 @@ import {
   parseAdminDashboardPeriodRange,
 } from "@/features/admin/dashboard/queries";
 import { MetalPriceRateDrawer } from "@/components/pricing/metal-price-rate-drawer";
+import { getBuybackPriceRateSettingsData } from "@/features/pricing/buyback-price-rates";
 import { getMetalPriceRateSettingsData } from "@/features/pricing/metal-price-rates";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 import { getGoldReference } from "@/server/integrations/gold-reference/emas-api";
@@ -299,13 +300,17 @@ export default async function AdminDashboardPage({
     resolvedSearchParams.range,
   );
   const canManagePricing = hasPermission(auth, "pricing.manage");
-  const [dashboard, metalPriceRows, goldReference] = await Promise.all([
-    getAdminDashboardData(auth, selectedRange),
-    canManagePricing
-      ? getMetalPriceRateSettingsData(auth.organization.id)
-      : Promise.resolve([]),
-    getGoldReference(),
-  ]);
+  const [dashboard, metalPriceRows, buybackPriceRows, goldReference] =
+    await Promise.all([
+      getAdminDashboardData(auth, selectedRange),
+      canManagePricing
+        ? getMetalPriceRateSettingsData(auth.organization.id)
+        : Promise.resolve([]),
+      canManagePricing
+        ? getBuybackPriceRateSettingsData(auth.organization.id)
+        : Promise.resolve([]),
+      getGoldReference(),
+    ]);
   const firstName = auth.user.fullName.split(" ")[0] ?? auth.user.fullName;
   const statisticCards = [
     {
@@ -758,7 +763,10 @@ export default async function AdminDashboardPage({
               ))}
 
               {canManagePricing ? (
-                <MetalPriceRateDrawer rows={metalPriceRows} />
+                <MetalPriceRateDrawer
+                  saleRows={metalPriceRows}
+                  buybackRows={buybackPriceRows}
+                />
               ) : null}
             </div>
           </section>

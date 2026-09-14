@@ -3,13 +3,16 @@
 import { BadgeDollarSign, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { MetalPriceRateForm } from "@/components/pricing/metal-price-rate-form";
+import { MetalPriceRateSettingsTabs } from "@/components/pricing/metal-price-rate-settings-tabs";
+import type { BuybackPriceRateSettingRow } from "@/features/pricing/buyback-price-rates";
 import type { MetalPriceRateSettingRow } from "@/features/pricing/metal-price-rates";
 
 export function MetalPriceRateDrawer({
-  rows,
+  saleRows,
+  buybackRows,
 }: {
-  rows: MetalPriceRateSettingRow[];
+  saleRows: MetalPriceRateSettingRow[];
+  buybackRows: BuybackPriceRateSettingRow[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -43,7 +46,7 @@ export function MetalPriceRateDrawer({
           Harga / Gram
         </p>
         <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-[var(--muted)]">
-          Update rate global harian
+          Update Rate Jual & Buyback
         </p>
       </button>
 
@@ -76,7 +79,8 @@ export function MetalPriceRateDrawer({
                       Harga / Gram Global
                     </h2>
                     <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                      Update rate standar POS langsung dari Dashboard Admin.
+                      Kelola Rate Jual dan Rate Buyback langsung dari Dashboard
+                      Admin.
                     </p>
                   </div>
                 </div>
@@ -93,7 +97,10 @@ export function MetalPriceRateDrawer({
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-neutral-50/60 p-4 sm:p-5 md:p-6">
-              <MetalPriceRateForm rows={rows} />
+              <MetalPriceRateSettingsTabs
+                saleRows={saleRows}
+                buybackRows={buybackRows}
+              />
             </div>
           </aside>
         </div>

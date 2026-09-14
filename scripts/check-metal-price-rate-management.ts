@@ -45,11 +45,16 @@ assert.match(manager, /onInput=\{handleMoneyInput\}/);
 
 assert.match(drawer, /Harga \/ Gram Global/);
 assert.match(drawer, /h-\[100dvh\]/);
-assert.match(drawer, /MetalPriceRateForm rows=\{rows\}/);
+assert.match(drawer, /MetalPriceRateSettingsTabs/);
+assert.match(drawer, /saleRows=\{saleRows\}/);
+assert.match(drawer, /buybackRows=\{buybackRows\}/);
+assert.match(drawer, /Update Rate Jual & Buyback/);
 
 assert.match(dashboard, /hasPermission\(auth, "pricing\.manage"\)/);
 assert.match(dashboard, /getMetalPriceRateSettingsData/);
-assert.match(dashboard, /<MetalPriceRateDrawer rows=\{metalPriceRows\} \/>/);
+assert.match(dashboard, /getBuybackPriceRateSettingsData/);
+assert.match(dashboard, /saleRows=\{metalPriceRows\}/);
+assert.match(dashboard, /buybackRows=\{buybackPriceRows\}/);
 assert.match(page, /Harga \/ Gram Global/);
 assert.match(page, /getGoldReference\(\)/);
 assert.match(page, /<GoldReferenceRatePanel result=\{goldReference\} \/>/);
