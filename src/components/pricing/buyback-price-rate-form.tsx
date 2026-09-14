@@ -1,6 +1,15 @@
 "use client";
 
-import { CircleDollarSign, Plus, Save, Search, Trash2, X } from "lucide-react";
+import {
+  BadgeDollarSign,
+  ChevronDown,
+  CircleDollarSign,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   type FormEvent,
@@ -101,6 +110,13 @@ export function BuybackPriceRateForm({ rows }: { rows: BuybackPriceRateSettingRo
         `${row.purityKey}%`.toLowerCase().includes(normalizedQuery),
       ),
     [activeRows, normalizedQuery],
+  );
+  const filteredMissingRows = useMemo(
+    () =>
+      missingRows.filter((row) =>
+        `${row.purityKey}%`.toLowerCase().includes(normalizedQuery),
+      ),
+    [missingRows, normalizedQuery],
   );
 
   function handleRetire(row: BuybackPriceRateSettingRow) {
@@ -311,23 +327,72 @@ export function BuybackPriceRateForm({ rows }: { rows: BuybackPriceRateSettingRo
 
       {missingRows.length > 0 ? (
         <details className="group overflow-hidden rounded-3xl border border-amber-200 bg-white">
-          <summary className="cursor-pointer list-none p-4 marker:content-none sm:p-5 [&::-webkit-details-marker]:hidden">
-            <p className="text-sm font-semibold text-neutral-950">
-              Kadar Belum Memiliki Rate Buyback ({missingRows.length})
-            </p>
-            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Kadar ini sudah ada pada master emas tetapi belum mempunyai Rate Buyback aktif.
-            </p>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 marker:content-none sm:p-5 [&::-webkit-details-marker]:hidden">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-700">
+                <BadgeDollarSign className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-neutral-950">
+                  Kadar Belum Memiliki Rate Buyback ({missingRows.length})
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Berasal dari master Kadar Emas aktif yang belum memiliki Rate
+                  Buyback.
+                </p>
+              </div>
+            </div>
+            <ChevronDown className="size-4 shrink-0 text-neutral-400 transition-transform group-open:rotate-180" />
           </summary>
-          <div className="flex flex-wrap gap-2 border-t border-amber-100 bg-amber-50/40 p-4 sm:p-5">
-            {missingRows.map((row) => (
-              <span
-                key={row.purityKey}
-                className="rounded-full border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800"
-              >
-                {row.purityKey}%
-              </span>
-            ))}
+
+          <div className="border-t border-amber-100 bg-amber-50/35 p-4 sm:p-5">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+              Pilih kadar di bawah untuk langsung mengisi Kadar Persen pada
+              form Tambah Rate Buyback. Rate Buyback tetap dikelola terpisah
+              dari Rate Jual.
+            </div>
+
+            {filteredMissingRows.length > 0 ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredMissingRows.map((row) => (
+                  <button
+                    key={row.purityKey}
+                    type="button"
+                    onClick={() => {
+                      setShowAddRate(true);
+                      setQuery("");
+                      window.setTimeout(() => {
+                        const purityInput =
+                          formRef.current?.elements.namedItem(
+                            "newBuybackPurityPercent",
+                          );
+                        if (purityInput instanceof HTMLInputElement) {
+                          purityInput.value = row.purityKey;
+                          purityInput.focus();
+                        }
+                      }, 0);
+                    }}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white px-3 py-3 text-left transition hover:border-amber-300 hover:bg-amber-50"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-950">
+                        {row.purityKey}%
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                        Master kadar emas aktif
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-[11px] font-semibold text-amber-700">
+                      Atur Rate
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-center text-xs text-[var(--muted)]">
+                Tidak ada kadar belum diatur yang cocok dengan pencarian.
+              </p>
+            )}
           </div>
         </details>
       ) : null}
