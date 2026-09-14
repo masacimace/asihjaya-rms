@@ -101,6 +101,7 @@ export type PublicCustomerHistoryData =
   | {
       status: "valid";
       token: string;
+      organizationId: string;
       outlet: {
         id: string;
         name: string;
@@ -859,7 +860,7 @@ export async function getPublicCustomerHistoryData(
           name: sale.outletName,
         },
         totalItems: items.length,
-        itemSummary: items.slice(0, 4).map((item) => ({
+        itemSummary: items.map((item) => ({
           lineNumber: item.lineNumber,
           source: null,
           productName: item.productName,
@@ -936,7 +937,7 @@ export async function getPublicCustomerHistoryData(
           name: buyback.outletName,
         },
         totalItems: items.length,
-        itemSummary: items.slice(0, 4).map((item) => ({
+        itemSummary: items.map((item) => ({
           lineNumber: item.lineNumber,
           source: item.source,
           productName: item.productName,
@@ -1048,6 +1049,7 @@ export async function getPublicCustomerHistoryData(
   return {
     status: "valid",
     token,
+    organizationId: baseTransaction.organizationId,
     outlet: {
       id: baseTransaction.outletId,
       name: baseTransaction.outletName,

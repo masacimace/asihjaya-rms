@@ -645,6 +645,260 @@ export async function changePublicCustomerHistoryPinAction(
   redirect(`/v/${token}`);
 }
 
+export async function rotatePublicCustomerHistoryPinAction(
+  token: string,
+  _previousState: PublicCustomerHistoryPinActionState,
+  formData: FormData,
+): Promise<PublicCustomerHistoryPinActionState> {
+  void _previousState;
+
+  const currentPin = readText(formData, "currentPin");
+  const newPin = readText(formData, "newPin");
+  const confirmPin = readText(formData, "confirmPin");
+  const fieldErrors: Record<string, string> = {};
+
+  if (!/^\d{6}$/.test(currentPin)) {
+    fieldErrors.currentPin = "Masukkan tepat 6 angka.";
+  }
+  if (!/^\d{6}$/.test(newPin)) {
+    fieldErrors.newPin = "Masukkan tepat 6 angka.";
+  }
+  if (newPin !== confirmPin) {
+    fieldErrors.confirmPin = "Konfirmasi PIN belum sama.";
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return {
+      status: "error",
+      message: "Periksa PIN yang dimasukkan.",
+      fieldErrors,
+    };
+  }
+
+  const context = await getPublicCustomerHistoryAccessContext(token);
+
+  if (context.status !== "valid") {
+    return {
+      status: "error",
+      message: "Sesi keamanan PIN tidak valid atau sudah berakhir.",
+    };
+  }
+
+  const session = await getCurrentCustomerHistorySession({
+    organizationId: context.organizationId,
+    customerId: context.customer.id,
+  });
+
+  if (!session || session.requiresPinChange) {
+    return {
+      status: "error",
+      message: "Sesi keamanan PIN tidak valid atau sudah berakhir.",
+    };
+  }
+
+  const requestMetadata = await getRequestMetadata();
+  const accessState = await getCustomerHistoryPinAccessState({
+    organizationId: context.organizationId,
+    customerId: context.customer.id,
+    ipAddress: requestMetadata.ipAddress,
+  });
+
+  if (
+    !accessState.credential?.isActive ||
+    accessState.blocked ||
+    accessState.credential.credentialVersion !== session.credentialVersion
+  ) {
+    await delay(300);
+    return {
+      status: "error",
+      message: "PIN saat ini tidak valid atau akses sementara dibatasi.",
+    };
+  }
+
+  const currentPinIsValid = await verifyCustomerHistoryPinHash(
+    currentPin,
+    accessState.credential.pinHash,
+  );
+
+  if (!currentPinIsValid) {
+    const failure = await recordCustomerHistoryPinFailure({
+      organizationId: context.organizationId,
+      customerId: context.customer.id,
+      ipAddress: requestMetadata.ipAddress,
+    });
+    const failureCount = Math.max(
+      failure.customerFailureCount,
+      failure.ipFailureCount,
+    );
+
+    if (
+      failure.customerLockedUntil ||
+      failure.ipLockedUntil ||
+      failureCount >= 3
+    ) {
+      await writePublicAuditLog({
+        organizationId: context.organizationId,
+        outletId: context.outlet.id,
+        customerId: context.customer.id,
+        action: "customer.history_pin.change_failed",
+        requestMetadata,
+        metadata: {
+          failureCount,
+          cooldownApplied: Boolean(
+            failure.customerLockedUntil || failure.ipLockedUntil,
+          ),
+        },
+      });
+    }
+
+    await delay(failureCount >= 4 ? 1_500 : failureCount >= 3 ? 600 : 250);
+
+    return {
+      status: "error",
+      message: "PIN saat ini tidak valid atau akses sementara dibatasi.",
+      fieldErrors: {
+        currentPin: "PIN saat ini belum benar.",
+      },
+    };
+  }
+
+  const validation = validateCustomerHistoryPin({
+    pin: newPin,
+    phone: accessState.credential.customerPhone ?? null,
+  });
+
+  if (!validation.valid) {
+    fieldErrors.newPin = validation.message;
+  } else if (
+    await verifyCustomerHistoryPinHash(newPin, accessState.credential.pinHash)
+  ) {
+    fieldErrors.newPin = "PIN baru harus berbeda dari PIN saat ini.";
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return {
+      status: "error",
+      message: "Periksa PIN baru yang dimasukkan.",
+      fieldErrors,
+    };
+  }
+
+  const pinHash = await hashCustomerHistoryPin(newPin);
+  const now = new Date();
+  let nextCredentialVersion = session.credentialVersion + 1;
+
+  try {
+    await db.transaction(async (transaction) => {
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`customer-history:${context.customer.id}`}, 0))`,
+      );
+
+      const [credential] = await transaction
+        .select({
+          id: customerHistoryCredentials.id,
+          credentialVersion: customerHistoryCredentials.credentialVersion,
+          mustChangePin: customerHistoryCredentials.mustChangePin,
+          isActive: customerHistoryCredentials.isActive,
+        })
+        .from(customerHistoryCredentials)
+        .where(
+          and(
+            eq(
+              customerHistoryCredentials.organizationId,
+              context.organizationId,
+            ),
+            eq(customerHistoryCredentials.customerId, context.customer.id),
+          ),
+        )
+        .limit(1);
+
+      if (
+        !credential?.isActive ||
+        credential.mustChangePin ||
+        credential.credentialVersion !== session.credentialVersion
+      ) {
+        throw new Error("CUSTOMER_HISTORY_PIN_ROTATION_SESSION_STALE");
+      }
+
+      nextCredentialVersion = credential.credentialVersion + 1;
+
+      await transaction
+        .update(customerHistoryCredentials)
+        .set({
+          pinHash,
+          credentialVersion: nextCredentialVersion,
+          failedAttemptCount: 0,
+          failedWindowStartedAt: null,
+          lockedUntil: null,
+          pinResetAt: now,
+          updatedAt: now,
+        })
+        .where(eq(customerHistoryCredentials.id, credential.id));
+
+      await transaction
+        .update(customerHistorySessions)
+        .set({
+          revokedAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(
+              customerHistorySessions.organizationId,
+              context.organizationId,
+            ),
+            eq(customerHistorySessions.customerId, context.customer.id),
+            isNull(customerHistorySessions.revokedAt),
+          ),
+        );
+
+      await transaction.insert(auditLogs).values({
+        organizationId: context.organizationId,
+        outletId: context.outlet.id,
+        actorUserId: null,
+        action: "customer.history_pin.change",
+        entityType: "customer",
+        entityId: context.customer.id,
+        beforeData: {
+          credentialVersion: credential.credentialVersion,
+        },
+        afterData: {
+          credentialVersion: nextCredentialVersion,
+          sessionsRevoked: true,
+        },
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+        metadata: {
+          source: "public.customer-history.security-menu",
+          receiptTokenVersion: context.tokenVersion,
+          transactionKind: context.transaction.kind,
+        },
+      });
+    });
+  } catch (error) {
+    console.error("Failed to rotate customer history PIN", error);
+
+    return {
+      status: "error",
+      message: "PIN belum berhasil diganti. Muat ulang halaman lalu coba kembali.",
+    };
+  }
+
+  await recordCustomerHistoryPinSuccess({
+    organizationId: context.organizationId,
+    customerId: context.customer.id,
+  });
+  await createCustomerHistorySession({
+    organizationId: context.organizationId,
+    customerId: context.customer.id,
+    credentialVersion: nextCredentialVersion,
+    requiresPinChange: false,
+    requestMetadata,
+  });
+
+  redirect(`/v/${token}`);
+}
+
 export async function logoutPublicCustomerHistoryAction(token: string) {
   await revokeCurrentCustomerHistorySession();
   redirect(`/v/${token}`);

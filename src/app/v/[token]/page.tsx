@@ -1,27 +1,13 @@
 import type { ReactNode } from "react";
 
-import {
-  BadgeCheck,
-  CalendarDays,
-  CreditCard,
-  Gem,
-  History,
-  LockKeyhole,
-  LogOut,
-  MapPin,
-  PackageCheck,
-  ReceiptText,
-  ShieldX,
-  UserRound,
-} from "lucide-react";
+import { LockKeyhole, ShieldX, UserRound } from "lucide-react";
 import Image from "next/image";
 
-import { logoutPublicCustomerHistoryAction } from "@/app/actions/customer-history";
-import { ImageLightbox } from "@/components/media/image-lightbox";
 import {
   PublicHistoryInitialPinChangeForm,
   PublicHistoryPinVerificationForm,
 } from "@/components/customers/public-history-access-form";
+import { PublicHistoryPortal } from "@/components/customers/public-history-portal";
 import {
   CUSTOMER_HISTORY_ABSOLUTE_TIMEOUT_HOURS,
   CUSTOMER_HISTORY_IDLE_TIMEOUT_MINUTES,
@@ -31,8 +17,6 @@ import {
 import {
   getPublicCustomerHistoryAccessContext,
   getPublicCustomerHistoryData,
-  getPublicCustomerHistoryImageUrl,
-  type PublicCustomerHistoryTransaction,
 } from "@/features/customers/public-history";
 
 export const metadata = {
@@ -52,38 +36,8 @@ type PageProps = {
   }>;
 };
 
-function formatAmount(value: string | number | null | undefined) {
-  const amount = Number(value ?? 0);
-
-  if (!Number.isFinite(amount)) {
-    return "Rp 0";
-  }
-
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function isPositiveAmount(value: string | number | null | undefined) {
-  const amount = Number(value ?? 0);
-
-  return Number.isFinite(amount) && amount > 0;
-}
-
-function formatPositiveAmount(value: string | number | null | undefined) {
-  return `+${formatAmount(value)}`;
-}
-
-function formatNegativeAmount(value: string | number | null | undefined) {
-  return `-${formatAmount(value)}`;
-}
-
 function formatDateTime(value: Date | null | undefined) {
-  if (!value) {
-    return "-";
-  }
+  if (!value) return "-";
 
   return new Intl.DateTimeFormat("id-ID", {
     dateStyle: "long",
@@ -92,184 +46,158 @@ function formatDateTime(value: Date | null | undefined) {
   }).format(value);
 }
 
-function formatGram(value: string | null) {
-  const amount = Number(value ?? 0);
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return "-";
-  }
-
-  return `${amount.toLocaleString("id-ID", { maximumFractionDigits: 2 })} g`;
-}
-
-function formatPercent(value: string | null) {
-  const amount = Number(value ?? 0);
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return "-";
-  }
-
-  return `${amount.toLocaleString("id-ID", { maximumFractionDigits: 2 })}%`;
-}
-
-function getStatusLabel(status: PublicCustomerHistoryTransaction["status"]) {
-  const labels: Record<PublicCustomerHistoryTransaction["status"], string> = {
-    completed: "Selesai",
-    partially_refunded: "Retur Sebagian",
-    refunded: "Diretur",
-  };
-
-  return labels[status];
+function BackgroundLayers() {
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 -z-30 bg-[url('/customer-history/background-mobile.webp')] bg-cover bg-center bg-no-repeat lg:bg-[url('/customer-history/background-desktop.webp')]"
+      />
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 -z-20 bg-[linear-gradient(180deg,rgba(255,252,247,.18),rgba(242,229,211,.38))] lg:bg-[linear-gradient(90deg,rgba(255,252,247,.16),rgba(236,221,199,.25))]"
+      />
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 -z-10 bg-white/5 backdrop-saturate-150"
+      />
+    </>
+  );
 }
 
 function BrandHeader() {
   return (
-    <header className="flex flex-col gap-4 border-b border-neutral-200/80 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-      <div className="flex items-center gap-3">
-        <div className="grid size-14 shrink-0 place-items-center overflow-hidden">
-          <Image
-            src="/logo/asihjaya-brand-icon.png"
-            alt="Asihjaya"
-            width={72}
-            height={72}
-            className="h-14 w-auto object-contain"
-            priority
-          />
-        </div>
-
-        <div className="min-w-0">
-          <Image
-            src="/logo/asihjaya-brand-text.png"
-            alt="Asihjaya"
-            width={124}
-            height={28}
-            className="h-6 w-auto object-contain"
-            priority
-          />
-          <p className="mt-1 text-[11px] font-semibold uppercase text-neutral-500">
-            Riwayat transaksi pelanggan
-          </p>
-        </div>
+    <header className="flex items-center gap-3 border-b border-white/[0.55] px-5 py-5 sm:px-7">
+      <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/[0.65] bg-white/[0.35] backdrop-blur-lg">
+        <Image
+          src="/logo/asihjaya-brand-icon.png"
+          alt="ASIHJAYA"
+          width={60}
+          height={60}
+          className="h-11 w-auto object-contain"
+          priority
+        />
+      </div>
+      <div className="min-w-0">
+        <Image
+          src="/logo/asihjaya-brand-text.png"
+          alt="ASIHJAYA"
+          width={132}
+          height={30}
+          className="h-6 w-auto object-contain"
+          priority
+        />
+        <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.15em] text-neutral-600">
+          Customer Portal
+        </p>
       </div>
     </header>
   );
 }
 
-function InvalidState({ message }: { message: string }) {
+function GlassPageShell({
+  children,
+  maxWidth = "max-w-xl",
+}: {
+  children: ReactNode;
+  maxWidth?: string;
+}) {
   return (
-    <main className="min-h-screen bg-[#f7f6f2] px-4 py-6 text-neutral-950 sm:px-6 sm:py-10">
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top,_rgba(211,164,77,0.14),_transparent_68%)]" />
-
-      <section className="relative mx-auto max-w-3xl overflow-hidden rounded-[28px] border border-neutral-200 bg-white ">
+    <main className="relative min-h-screen overflow-x-hidden px-3 py-6 text-neutral-950 sm:px-6 sm:py-10">
+      <BackgroundLayers />
+      <section
+        className={`relative mx-auto ${maxWidth} overflow-hidden rounded-[30px] border border-white/[0.65] bg-white/[0.46] shadow-[0_28px_90px_rgba(73,49,24,.18)] backdrop-blur-2xl`}
+      >
         <BrandHeader />
-
-        <div className="px-5 py-10 sm:px-10 sm:py-14">
-          <div className="mx-auto max-w-xl text-center">
-            <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100">
-              <ShieldX className="size-8" />
-            </div>
-
-            <p className="mt-6 text-xs font-bold uppercase text-red-600">
-              Data tidak tersedia
-            </p>
-            <h1 className="mt-3 text-3xl font-bold sm:text-4xl">
-              Riwayat transaksi tidak dapat ditampilkan
-            </h1>
-            <p className="mt-4 text-sm leading-7 text-neutral-600 sm:text-base">
-              {message}
-            </p>
-          </div>
-
-          <div className="mx-auto mt-9 max-w-xl rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
-            <p className="text-sm font-semibold text-neutral-900">
-              Yang dapat kamu lakukan
-            </p>
-            <ol className="mt-4 grid gap-3 text-sm leading-6 text-neutral-600">
-              <li className="flex gap-3">
-                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white text-xs font-bold text-neutral-700 ring-1 ring-neutral-200">
-                  1
-                </span>
-                Scan ulang QR pada nota fisik.
-              </li>
-              <li className="flex gap-3">
-                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white text-xs font-bold text-neutral-700 ring-1 ring-neutral-200">
-                  2
-                </span>
-                Pastikan alamat situs berasal dari domain resmi Asihjaya.
-              </li>
-              <li className="flex gap-3">
-                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white text-xs font-bold text-neutral-700 ring-1 ring-neutral-200">
-                  3
-                </span>
-                Hubungi outlet penerbit nota jika informasi tetap tidak
-                tersedia.
-              </li>
-            </ol>
-          </div>
-        </div>
+        {children}
       </section>
     </main>
+  );
+}
+
+function InvalidState({ message }: { message: string }) {
+  return (
+    <GlassPageShell maxWidth="max-w-2xl">
+      <div className="px-5 py-10 sm:px-10 sm:py-14">
+        <div className="mx-auto max-w-xl text-center">
+          <div className="mx-auto grid size-16 place-items-center rounded-2xl border border-red-200/70 bg-red-50/75 text-red-600 shadow-sm">
+            <ShieldX className="size-8" />
+          </div>
+          <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-red-600">
+            Data tidak tersedia
+          </p>
+          <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+            Riwayat transaksi tidak dapat ditampilkan
+          </h1>
+          <p className="mt-4 text-sm leading-7 text-neutral-600 sm:text-base">
+            {message}
+          </p>
+        </div>
+
+        <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-white/70 bg-white/[0.45] p-5 backdrop-blur-lg">
+          <p className="text-sm font-bold text-neutral-900">Yang dapat kamu lakukan</p>
+          <ol className="mt-4 grid gap-3 text-sm leading-6 text-neutral-600">
+            <li>1. Scan ulang QR pada nota fisik.</li>
+            <li>2. Pastikan alamat situs berasal dari domain resmi ASIHJAYA.</li>
+            <li>3. Hubungi outlet penerbit nota jika informasi tetap tidak tersedia.</li>
+          </ol>
+        </div>
+      </div>
+    </GlassPageShell>
   );
 }
 
 function NoCustomerState({
   message,
   outletName,
-  saleDate,
-  invoiceNumber,
+  transactionDate,
+  transactionNumber,
 }: {
   message: string;
   outletName: string;
-  saleDate: Date | null;
-  invoiceNumber: string;
+  transactionDate: Date | null;
+  transactionNumber: string;
 }) {
   return (
-    <main className="min-h-screen bg-[#f7f6f2] px-4 py-6 text-neutral-950 sm:px-6 sm:py-10">
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top,_rgba(211,164,77,0.14),_transparent_68%)]" />
-
-      <section className="relative mx-auto max-w-3xl overflow-hidden rounded-[28px] border border-neutral-200 bg-white ">
-        <BrandHeader />
-
-        <div className="px-5 py-10 sm:px-10 sm:py-14">
-          <div className="mx-auto max-w-xl text-center">
-            <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[#fff6df] text-[#9a681d] ring-1 ring-[#ead7ad]">
-              <UserRound className="size-8" />
-            </div>
-
-            <p className="mt-6 text-xs font-bold uppercase text-[#9a681d]">
-              Customer tidak terdaftar
-            </p>
-            <h1 className="mt-3 text-3xl font-bold sm:text-4xl">
-              Riwayat pelanggan belum tersedia
-            </h1>
-            <p className="mt-4 text-sm leading-7 text-neutral-600 sm:text-base">
-              {message}
-            </p>
+    <GlassPageShell maxWidth="max-w-2xl">
+      <div className="px-5 py-10 sm:px-10 sm:py-14">
+        <div className="mx-auto max-w-xl text-center">
+          <div className="mx-auto grid size-16 place-items-center rounded-2xl border border-[#ead7ad]/80 bg-[#fff6df]/80 text-[#9a681d] shadow-sm">
+            <UserRound className="size-8" />
           </div>
-
-          <dl className="mx-auto mt-9 divide-y divide-neutral-100 rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
-            <div className="grid gap-1 py-3 first:pt-0 sm:grid-cols-[150px_1fr] sm:items-center">
-              <dt className="text-sm text-neutral-500">Nomor nota</dt>
-              <dd className="font-mono text-sm font-bold text-neutral-950 sm:text-right">
-                {invoiceNumber}
-              </dd>
-            </div>
-            <div className="grid gap-1 py-3 sm:grid-cols-[150px_1fr] sm:items-center">
-              <dt className="text-sm text-neutral-500">Tanggal</dt>
-              <dd className="text-sm font-semibold text-neutral-900 sm:text-right">
-                {formatDateTime(saleDate)}
-              </dd>
-            </div>
-            <div className="grid gap-1 py-3 last:pb-0 sm:grid-cols-[150px_1fr] sm:items-center">
-              <dt className="text-sm text-neutral-500">Outlet</dt>
-              <dd className="text-sm font-semibold text-neutral-900 sm:text-right">
-                {outletName}
-              </dd>
-            </div>
-          </dl>
+          <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-[#9a681d]">
+            Customer tidak terdaftar
+          </p>
+          <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+            Riwayat pelanggan belum tersedia
+          </h1>
+          <p className="mt-4 text-sm leading-7 text-neutral-600 sm:text-base">
+            {message}
+          </p>
         </div>
-      </section>
-    </main>
+
+        <dl className="mx-auto mt-8 max-w-xl divide-y divide-white/70 rounded-2xl border border-white/70 bg-white/[0.45] p-5 backdrop-blur-lg">
+          <div className="grid gap-1 py-3 first:pt-0 sm:grid-cols-[150px_1fr] sm:items-center">
+            <dt className="text-sm text-neutral-500">Nomor nota</dt>
+            <dd className="font-mono text-sm font-bold text-neutral-950 sm:text-right">
+              {transactionNumber}
+            </dd>
+          </div>
+          <div className="grid gap-1 py-3 sm:grid-cols-[150px_1fr] sm:items-center">
+            <dt className="text-sm text-neutral-500">Tanggal</dt>
+            <dd className="text-sm font-semibold text-neutral-900 sm:text-right">
+              {formatDateTime(transactionDate)}
+            </dd>
+          </div>
+          <div className="grid gap-1 py-3 last:pb-0 sm:grid-cols-[150px_1fr] sm:items-center">
+            <dt className="text-sm text-neutral-500">Outlet</dt>
+            <dd className="text-sm font-semibold text-neutral-900 sm:text-right">
+              {outletName}
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </GlassPageShell>
   );
 }
 
@@ -285,27 +213,21 @@ function PinAccessShell({
   children: ReactNode;
 }) {
   return (
-    <main className="min-h-screen bg-[#f7f6f2] px-4 py-6 text-neutral-950 sm:px-6 sm:py-10">
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top,_rgba(211,164,77,0.14),_transparent_68%)]" />
-      <section className="relative mx-auto max-w-xl overflow-hidden rounded-[28px] border border-neutral-200 bg-white">
-        <BrandHeader />
-        <div className="px-5 py-8 sm:px-8 sm:py-10">
-          <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[#fff6df] text-[#9a681d] ring-1 ring-[#ead7ad]">
-            <LockKeyhole className="size-8" />
-          </div>
-          <div className="mt-6 text-center">
-            <p className="text-xs font-bold uppercase tracking-wide text-[#9a681d]">
-              {eyebrow}
-            </p>
-            <h1 className="mt-3 text-3xl font-bold">{title}</h1>
-            <p className="mt-3 text-sm leading-7 text-neutral-600">
-              {description}
-            </p>
-          </div>
-          {children}
+    <GlassPageShell>
+      <div className="px-5 py-8 sm:px-8 sm:py-10">
+        <div className="mx-auto grid size-16 place-items-center rounded-2xl border border-[#ead7ad]/80 bg-[#fff6df]/80 text-[#9a681d] shadow-sm">
+          <LockKeyhole className="size-8" />
         </div>
-      </section>
-    </main>
+        <div className="mt-6 text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#9a681d]">
+            {eyebrow}
+          </p>
+          <h1 className="mt-3 text-3xl font-black tracking-tight">{title}</h1>
+          <p className="mt-3 text-sm leading-7 text-neutral-600">{description}</p>
+        </div>
+        {children}
+      </div>
+    </GlassPageShell>
   );
 }
 
@@ -322,8 +244,8 @@ function PinSetupRequiredState({
       title="Aktifkan akses riwayat pelanggan"
       description="PIN riwayat untuk pelanggan pada nota ini belum dibuat. Hubungi outlet agar petugas membuat PIN sementara secara aman."
     >
-      <div className="mt-7 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm leading-6 text-neutral-700">
-        <p className="font-semibold text-neutral-950">{outletName}</p>
+      <div className="mt-7 rounded-2xl border border-white/70 bg-white/[0.45] p-4 text-sm leading-6 text-neutral-700 backdrop-blur-lg">
+        <p className="font-bold text-neutral-950">{outletName}</p>
         <p className="mt-1">{outletPhone ?? "Nomor outlet tidak tersedia"}</p>
       </div>
     </PinAccessShell>
@@ -357,248 +279,6 @@ function InitialPinChangeState({ token }: { token: string }) {
   );
 }
 
-function TransactionItemList({
-  token,
-  transaction,
-}: {
-  token: string;
-  transaction: PublicCustomerHistoryTransaction;
-}) {
-  if (transaction.itemSummary.length === 0) {
-    return (
-      <p className="rounded-2xl bg-neutral-50 p-4 text-sm text-neutral-500">
-        Detail item transaksi tidak tersedia.
-      </p>
-    );
-  }
-
-  return (
-    <div className="grid gap-3">
-      {transaction.itemSummary.map((item) => {
-        const imageUrl = getPublicCustomerHistoryImageUrl({
-          imageKey: item.imageKey,
-          token,
-        });
-
-        return (
-          <article
-            key={`${transaction.id}-${item.lineNumber}-${item.productCode}`}
-            className="grid gap-4 rounded-2xl border border-neutral-200 bg-white p-3  "
-          >
-            <div className="grid aspect-square w-full place-items-center overflow-hidden rounded-xl border-neutral-200 bg-[#faf8f2] text-[#9a681d]">
-              {imageUrl ? (
-                <ImageLightbox
-                  src={imageUrl}
-                  alt={`Foto ${item.productName}`}
-                  caption={item.productName}
-                  triggerClassName="size-full overflow-hidden rounded-xl"
-                >
-                  <Image
-                    src={imageUrl}
-                    alt={item.productName}
-                    width={120}
-                    height={120}
-                    className="size-full object-cover"
-                    unoptimized
-                  />
-                </ImageLightbox>
-              ) : (
-                <Gem className="size-7" />
-              )}
-            </div>
-
-            <div className="min-w-0">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <h3 className="font-bold leading-snug text-neutral-950">
-                    {item.productName}
-                  </h3>
-                  <p className="mt-1 break-all font-mono text-xs font-medium text-neutral-500">
-                    {item.productCode}
-                  </p>
-                </div>
-                <span className="w-fit shrink-0 rounded-full border border-[#ead7ad] bg-[#fff8e8] px-3 py-1 text-xs font-semibold text-[#815618]">
-                  {item.categoryName ?? "Perhiasan"}
-                </span>
-              </div>
-
-              <dl className="mt-3 grid grid-cols-3 divide-x divide-neutral-200 rounded-2xl bg-neutral-50 px-2 py-3">
-                <div className="px-2">
-                  <dt className="text-[10px] font-medium uppercase text-neutral-500">
-                    Berat
-                  </dt>
-                  <dd className="mt-1 text-xs font-bold text-neutral-950">
-                    {formatGram(item.weightGram)}
-                  </dd>
-                </div>
-                <div className="px-2">
-                  <dt className="text-[10px] font-medium uppercase text-neutral-500">
-                    Kadar
-                  </dt>
-                  <dd className="mt-1 text-xs font-bold text-neutral-950">
-                    {formatPercent(item.purityPercent)}
-                  </dd>
-                </div>
-                <div className="px-2">
-                  <dt className="text-[10px] font-medium uppercase text-neutral-500">
-                    Tukar
-                  </dt>
-                  <dd className="mt-1 text-xs font-bold text-neutral-950">
-                    {formatPercent(item.exchangePurityPercent)}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          </article>
-        );
-      })}
-    </div>
-  );
-}
-
-function TransactionCard({
-  token,
-  transaction,
-}: {
-  token: string;
-  transaction: PublicCustomerHistoryTransaction;
-}) {
-  const isBuyback = transaction.kind === "buyback";
-  const hasDepositSaldo = isPositiveAmount(
-    transaction.customerDeposit.inAmount,
-  );
-  const hasUsedSaldo = isPositiveAmount(transaction.customerDeposit.usedAmount);
-  const hasDepositActivity = hasDepositSaldo || hasUsedSaldo;
-  const settlementMethods = isBuyback
-    ? transaction.payoutMethods
-    : transaction.paymentMethods;
-
-  return (
-    <article
-      className={`overflow-hidden rounded-3xl border bg-white ${
-        transaction.isScannedTransaction
-          ? "border-[#d4a64a]"
-          : "border-neutral-200"
-      }`}
-    >
-      <div className="grid gap-4 border-b border-neutral-100 p-5 sm:grid-cols-[1fr_auto] sm:items-start">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            {transaction.isScannedTransaction ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fff1cd] px-3 py-1 text-xs font-semibold text-[#815618]">
-                <BadgeCheck className="size-3.5" />
-                Nota yang discan
-              </span>
-            ) : null}
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                isBuyback
-                  ? "bg-amber-50 text-amber-800"
-                  : "bg-blue-50 text-blue-700"
-              }`}
-            >
-              {isBuyback ? "Buyback" : "Pembelian"}
-            </span>
-            <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-600">
-              {getStatusLabel(transaction.status)}
-            </span>
-          </div>
-          <h2 className="mt-3 break-all font-mono text-md font-bold text-neutral-950">
-            {transaction.transactionNumber}
-          </h2>
-          <p className="mt-1 text-sm text-neutral-500">
-            {formatDateTime(transaction.completedAt ?? transaction.createdAt)} ·{" "}
-            {transaction.outlet.name}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-4 p-5 lg:grid-cols-[1fr_220px]">
-        <TransactionItemList token={token} transaction={transaction} />
-
-        <dl className="h-fit divide-y divide-neutral-100 rounded-2xl bg-neutral-50 p-4">
-          <div className="grid gap-1 py-3 first:pt-0">
-            <dt className="text-xs font-semibold uppercase text-neutral-500">
-              {isBuyback ? "Nilai dasar" : "Subtotal"}
-            </dt>
-            <dd className="text-sm font-bold text-neutral-950">
-              {formatAmount(
-                isBuyback
-                  ? transaction.baseAmount
-                  : transaction.subtotalAmount,
-              )}
-            </dd>
-          </div>
-          <div className="grid gap-1 py-3">
-            <dt className="text-xs font-semibold uppercase text-neutral-500">
-              {isBuyback ? "Potongan" : "Diskon"}
-            </dt>
-            <dd className="text-sm font-bold text-neutral-950">
-              {formatAmount(
-                isBuyback
-                  ? transaction.deductionAmount
-                  : transaction.discountAmount,
-              )}
-            </dd>
-          </div>
-          {hasDepositSaldo ? (
-            <div className="grid gap-1 py-3">
-              <dt className="text-xs font-semibold uppercase text-neutral-500">
-                {isBuyback ? "Masuk Dana Titip" : "Deposit Saldo"}
-              </dt>
-              <dd className="text-sm font-bold text-emerald-700">
-                {formatPositiveAmount(transaction.customerDeposit.inAmount)}
-              </dd>
-            </div>
-          ) : null}
-          {hasUsedSaldo ? (
-            <div className="grid gap-1 py-3">
-              <dt className="text-xs font-semibold uppercase text-neutral-500">
-                Gunakan saldo
-              </dt>
-              <dd className="text-sm font-bold text-[#9a681d]">
-                {formatNegativeAmount(transaction.customerDeposit.usedAmount)}
-              </dd>
-            </div>
-          ) : null}
-          {isBuyback || hasDepositActivity ? (
-            <div className="grid gap-1 py-3">
-              <dt className="text-xs font-semibold uppercase text-neutral-500">
-                {isBuyback ? "Payout eksternal" : "Total dibayar"}
-              </dt>
-              <dd className="text-sm font-bold text-neutral-950">
-                {formatAmount(
-                  transaction.customerDeposit.externalPaymentDueAmount,
-                )}
-              </dd>
-            </div>
-          ) : null}
-          <div className="grid gap-1 py-3">
-            <dt className="text-xs font-semibold uppercase text-neutral-500">
-              {isBuyback ? "Payout" : "Pembayaran"}
-            </dt>
-            <dd className="text-sm font-bold text-neutral-950">
-              {settlementMethods.length > 0
-                ? settlementMethods.join(" + ")
-                : isBuyback
-                  ? "Payout tercatat"
-                  : "Pembayaran tercatat"}
-            </dd>
-          </div>
-          <div className="grid gap-1 py-3 last:pb-0">
-            <dt className="text-xs font-semibold uppercase text-neutral-500">
-              Jumlah item
-            </dt>
-            <dd className="text-sm font-bold text-neutral-950">
-              {transaction.totalItems} item
-            </dd>
-          </div>
-        </dl>
-      </div>
-    </article>
-  );
-}
-
 export default async function PublicCustomerHistoryPage({ params }: PageProps) {
   const { token } = await params;
   const context = await getPublicCustomerHistoryAccessContext(token);
@@ -612,10 +292,10 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
       <NoCustomerState
         message={context.message}
         outletName={context.outlet.name}
-        saleDate={
+        transactionDate={
           context.transaction.completedAt ?? context.transaction.createdAt
         }
-        invoiceNumber={context.transaction.transactionNumber}
+        transactionNumber={context.transaction.transactionNumber}
       />
     );
   }
@@ -654,331 +334,5 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
     return <InvalidState message="Riwayat transaksi tidak tersedia." />;
   }
 
-  const logoutAction = logoutPublicCustomerHistoryAction.bind(null, token);
-
-  return (
-    <main className="min-h-screen bg-white px-2 py-2 text-neutral-950 sm:px-2 sm:py-2">
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-80" />
-
-      <section className="relative mx-auto max-w-6xl overflow-hidden border border-neutral-200 bg-white ">
-        <BrandHeader />
-
-        <div className="px-2 py-6 sm:px-8 sm:py-8">
-          <section className="overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-[#fffaf0]">
-            <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
-                    <BadgeCheck className="size-3.5" />
-                    Riwayat resmi Asihjaya
-                  </div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold text-neutral-600">
-                    <LockKeyhole className="size-3.5" />
-                    Read only
-                  </div>
-                </div>
-                <h1 className="mt-3 text-2xl font-bold sm:text-3xl">
-                  Riwayat transaksi pelanggan ASIHJAYA
-                </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-neutral-600 sm:text-base">
-                  Halaman ini menampilkan gabungan transaksi Pembelian dan Buyback
-                  customer terdaftar dari seluruh outlet dalam organisasi ASIHJAYA
-                  dalam mode baca saja.
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-[#ead7ad] bg-white/90 p-4 lg:min-w-80">
-                <div className="inline-flex items-center gap-2 rounded-full bg-[#fff6df] px-3 py-1 text-xs font-semibold text-emerald-800">
-                  <UserRound className="size-3.5" />
-                  Customer
-                </div>
-                <p className="mt-2 text-lg font-bold text-neutral-950">
-                  {data.customer.name}
-                </p>
-                <p className="mt-1 text-xs font-medium text-neutral-500">
-                  {data.customer.customerCode ?? "Kode customer tidak tersedia"}
-                  {data.customer.phone ? ` · ${data.customer.phone}` : ""}
-                </p>
-                <div className="mt-4 rounded-2xl border border-[#ead7ad] bg-[#fffaf0] p-3">
-                  <p className="text-[11px] font-semibold uppercase text-neutral-500">
-                    Total Dana Titip
-                  </p>
-                  <p className="mt-1 text-lg font-bold text-[#9a681d]">
-                    {formatAmount(data.customerDeposit.totalBalanceAmount)}
-                  </p>
-                  <p className="mt-1 text-[11px] leading-5 text-neutral-500">
-                    Saldo tersimpan per outlet dan hanya dapat dicairkan di
-                    outlet terkait.
-                  </p>
-                  {data.customerDeposit.balances.length > 0 ? (
-                    <div className="mt-3 grid gap-1.5">
-                      {data.customerDeposit.balances.map((balance) => (
-                        <div
-                          key={balance.outletId}
-                          className="flex items-center justify-between gap-3 text-xs"
-                        >
-                          <span className="min-w-0 truncate text-neutral-600">
-                            {balance.outletName}
-                          </span>
-                          <span className="shrink-0 font-semibold text-neutral-900">
-                            {formatAmount(balance.balanceAmount)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <article className="rounded-3xl border border-neutral-200 bg-white p-5">
-              <div className="flex items-center gap-3">
-                <div className="grid size-10 place-items-center rounded-xl bg-[#fff6df] text-[#9a681d]">
-                  <History className="size-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase text-neutral-500">
-                    Total transaksi
-                  </p>
-                  <p className="mt-1 text-md font-bold text-neutral-950">
-                    {data.summary.totalTransactions}
-                  </p>
-                  <p className="mt-1 text-[11px] text-neutral-500">
-                    {data.summary.totalSaleTransactions} pembelian ·{" "}
-                    {data.summary.totalBuybackTransactions} buyback
-                  </p>
-                </div>
-              </div>
-            </article>
-
-            <article className="rounded-3xl border border-neutral-200 bg-white p-5">
-              <div className="flex items-center gap-3">
-                <div className="grid size-10 place-items-center rounded-xl bg-blue-50 text-blue-700">
-                  <CreditCard className="size-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase text-neutral-500">
-                    Total pembelian
-                  </p>
-                  <p className="mt-1 text-md font-bold text-neutral-950">
-                    {formatAmount(data.summary.totalPurchases)}
-                  </p>
-                </div>
-              </div>
-            </article>
-
-            <article className="rounded-3xl border border-neutral-200 bg-white p-5">
-              <div className="flex items-center gap-3">
-                <div className="grid size-10 place-items-center rounded-xl bg-amber-50 text-amber-800">
-                  <ReceiptText className="size-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase text-neutral-500">
-                    Total Buyback
-                  </p>
-                  <p className="mt-1 text-md font-bold text-neutral-950">
-                    {formatAmount(data.summary.totalBuybacks)}
-                  </p>
-                </div>
-              </div>
-            </article>
-
-            <article className="rounded-3xl border border-neutral-200 bg-white p-5">
-              <div className="flex items-center gap-3">
-                <div className="grid size-10 place-items-center rounded-xl bg-[#fff6df] text-[#9a681d]">
-                  <PackageCheck className="size-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase text-neutral-500">
-                    Total item
-                  </p>
-                  <p className="mt-1 text-md font-bold text-neutral-950">
-                    {data.summary.totalItems}
-                  </p>
-                </div>
-              </div>
-            </article>
-
-            <article className="rounded-3xl border border-neutral-200 bg-white p-5">
-              <div className="flex items-center gap-3">
-                <div className="grid size-10 place-items-center rounded-xl bg-[#fff6df] text-[#9a681d]">
-                  <CalendarDays className="size-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase text-neutral-500">
-                    Transaksi terakhir
-                  </p>
-                  <p className="mt-1 text-sm font-bold text-neutral-950">
-                    {formatDateTime(data.summary.lastTransactionAt)}
-                  </p>
-                </div>
-              </div>
-            </article>
-          </section>
-
-          <section className="mt-8 grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
-            <aside className="h-fit rounded-3xl border border-neutral-200 bg-white p-5 sm:p-6">
-              <div className="flex items-center gap-3">
-                <div className="grid size-10 place-items-center rounded-xl bg-neutral-950 text-[#f1ce80]">
-                  <ReceiptText className="size-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase text-neutral-500">
-                    Nota yang discan
-                  </p>
-                  <h2 className="mt-0.5 text-lg font-bold">Ringkasan nota</h2>
-                </div>
-              </div>
-
-              <dl className="mt-6 divide-y divide-neutral-100">
-                <div className="grid gap-1 py-3 first:pt-0">
-                  <dt className="text-sm text-neutral-500">Nomor nota</dt>
-                  <dd className="break-all font-mono text-sm font-bold text-neutral-950">
-                    {data.scannedTransaction.transactionNumber}
-                  </dd>
-                </div>
-                <div className="grid gap-1 py-3">
-                  <dt className="flex items-center gap-2 text-sm text-neutral-500">
-                    <CalendarDays className="size-4" />
-                    Tanggal
-                  </dt>
-                  <dd className="text-sm font-semibold text-neutral-900">
-                    {formatDateTime(
-                      data.scannedTransaction.completedAt ??
-                        data.scannedTransaction.createdAt,
-                    )}
-                  </dd>
-                </div>
-                <div className="grid gap-1 py-3">
-                  <dt className="flex items-center gap-2 text-sm text-neutral-500">
-                    <MapPin className="size-4" />
-                    Outlet
-                  </dt>
-                  <dd className="text-sm font-semibold text-neutral-900">
-                    {data.scannedTransaction.outlet.name}
-                  </dd>
-                </div>
-                <div className="grid gap-1 py-3">
-                  <dt className="text-sm text-neutral-500">
-                    {data.scannedTransaction.kind === "buyback"
-                      ? "Total Buyback"
-                      : "Total pembelian"}
-                  </dt>
-                  <dd className="text-xl font-bold text-[#9a681d]">
-                    {formatAmount(data.scannedTransaction.totalAmount)}
-                  </dd>
-                </div>
-                {isPositiveAmount(
-                  data.scannedTransaction.customerDeposit.inAmount,
-                ) ? (
-                  <div className="grid gap-1 py-3">
-                    <dt className="text-sm text-neutral-500">
-                      {data.scannedTransaction.kind === "buyback"
-                        ? "Masuk Dana Titip"
-                        : "Deposit Saldo"}
-                    </dt>
-                    <dd className="text-sm font-bold text-emerald-700">
-                      {formatPositiveAmount(
-                        data.scannedTransaction.customerDeposit.inAmount,
-                      )}
-                    </dd>
-                  </div>
-                ) : null}
-                {isPositiveAmount(
-                  data.scannedTransaction.customerDeposit.usedAmount,
-                ) ? (
-                  <div className="grid gap-1 py-3">
-                    <dt className="text-sm text-neutral-500">Gunakan saldo</dt>
-                    <dd className="text-sm font-bold text-[#9a681d]">
-                      {formatNegativeAmount(
-                        data.scannedTransaction.customerDeposit.usedAmount,
-                      )}
-                    </dd>
-                  </div>
-                ) : null}
-                <div className="grid gap-1 py-3 last:pb-0">
-                  <dt className="text-sm text-neutral-500">
-                    {data.scannedTransaction.kind === "buyback"
-                      ? "Payout eksternal"
-                      : "Total dibayar"}
-                  </dt>
-                  <dd className="text-lg font-bold text-neutral-950">
-                    {formatAmount(
-                      data.scannedTransaction.customerDeposit.externalPaymentDueAmount,
-                    )}
-                  </dd>
-                </div>
-              </dl>
-            </aside>
-
-            <section className="rounded-3xl border border-neutral-200 bg-white p-5 sm:p-6">
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
-                  <History className="size-3.5" />
-                  Detail transaksi
-                </div>
-                <h2 className="mt-1 text-2xl font-bold">
-                  {data.transactions.length} transaksi terakhir
-                </h2>
-              </div>
-
-              <div className="mt-5 max-h-[75vh] space-y-4 overflow-y-auto pr-1">
-                {data.transactions.map((transaction) => (
-                  <TransactionCard
-                    key={transaction.id}
-                    token={data.token}
-                    transaction={transaction}
-                  />
-                ))}
-              </div>
-            </section>
-          </section>
-
-          <footer className="mt-8 rounded-3xl border border-neutral-200 bg-neutral-50 p-5 sm:p-6">
-            <div className="flex gap-4">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-neutral-700 ring-1 ring-neutral-200">
-                <LockKeyhole className="size-5" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-neutral-950">
-                  Tentang halaman ini
-                </h2>
-                <p className="mt-2 text-xs leading-6 text-neutral-600 sm:text-sm">
-                  Riwayat ini hanya tersedia melalui QR nota resmi dan PIN
-                  customer. Transaksi ditampilkan lintas outlet dalam organisasi
-                  ASIHJAYA, sedangkan saldo Dana Titip tetap terpisah per outlet.
-                  Halaman ini bersifat baca saja dan tidak dapat mengubah data
-                  transaksi.
-                </p>
-                <ul className="mt-3 grid gap-1.5 text-xs leading-5 text-neutral-500 sm:text-sm">
-                  <li>
-                    • Pastikan alamat situs berasal dari domain resmi Asihjaya.
-                  </li>
-                  <li>
-                    • Gunakan halaman ini hanya untuk melihat riwayat transaksi
-                    resmi pelanggan.
-                  </li>
-                  <li>
-                    • Dana Titip hanya dapat digunakan atau dicairkan di outlet
-                    pemilik saldo tersebut.
-                  </li>
-                </ul>
-                <form action={logoutAction} className="mt-4">
-                  <button
-                    type="submit"
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
-                  >
-                    <LogOut className="size-4" />
-                    Akhiri sesi riwayat
-                  </button>
-                </form>
-              </div>
-            </div>
-          </footer>
-        </div>
-      </section>
-    </main>
-  );
+  return <PublicHistoryPortal data={data} />;
 }
