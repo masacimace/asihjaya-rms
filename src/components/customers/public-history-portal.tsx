@@ -384,7 +384,7 @@ function TransactionAccordion({
         <div className="flex shrink-0 items-center gap-[5px] sm:gap-2">
           <div className="text-right">
             <p
-              className={`whitespace-nowrap text-[12px] font-black leading-[15px] sm:text-[16px] sm:leading-[22px] ${
+              className={`whitespace-nowrap text-[11px] font-black leading-[15px] sm:text-[16px] sm:leading-[22px] ${
                 isBuyback ? "text-emerald-700" : "text-slate-950"
               }`}
             >
@@ -784,7 +784,7 @@ export function PublicHistoryPortal({
                   Riwayat Transaksi
                 </h2>
                 <p className="mt-[2px] text-[11px] leading-[15px] text-slate-600 sm:mt-1 sm:text-[14px] sm:leading-[20px]">
-                  Semua pembelian dan Buyback jewelry Anda.
+                  Semua history pembelian dan buyback.
                 </p>
               </div>
               <div className="flex gap-2">
@@ -936,12 +936,12 @@ export function PublicHistoryPortal({
                   <ShieldCheck className="size-5" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold leading-[15px] text-slate-950 sm:text-[14px] sm:leading-[20px]">
+                  <p className="text-[12px] font-bold leading-[15px] text-slate-950 sm:text-[14px] sm:leading-[20px]">
                     Riwayat resmi & terlindungi PIN
                   </p>
                   <p className="mt-[2px] text-[9px] leading-[13px] text-slate-600 sm:mt-0.5 sm:text-[12px] sm:leading-5">
-                    Dana Titip tetap tersimpan dan dapat dicairkan hanya pada
-                    outlet pemilik saldo.
+                    Data transaksi Anda tersimpan di server resmi ASIHJAYA dan
+                    dapat diakses dengan aman.
                   </p>
                 </div>
               </div>
