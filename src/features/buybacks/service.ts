@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -11,6 +11,9 @@ import {
   customerDepositLedger,
   customers,
   inventoryMovements,
+  metalBuybackPriceRates,
+  metalPurities,
+  metals,
   productCategories,
   productItems,
   productMasters,
@@ -21,6 +24,10 @@ import type { NormalizedBuybackPayload } from "@/features/buybacks/contracts";
 import { generateBuybackNumber } from "@/features/buybacks/numbering";
 import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
 import { getDefaultPosRegisterCondition } from "@/features/pos/context";
+import {
+  calculateJewelryBasePrice,
+  normalizePurityKey,
+} from "@/features/pricing/metal-price-rates";
 import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { buildBuybackReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2InTransaction } from "@/lib/hardware/job-producer-v2";
@@ -433,6 +440,70 @@ export async function completeBuybackTransaction({
       }
     }
 
+    // Recommendation yang tampil di browser bukan source of truth. Untuk item
+    // external, server membaca ulang Rate Buyback aktif pada timestamp transaksi
+    // dan membuat snapshot recommendation secara independen dari payload client.
+    const externalPurityKeys = new Set<string>();
+    for (const item of payload.items) {
+      if (item.source !== "external") continue;
+      const purityKey = normalizePurityKey(item.purityPercent);
+      if (!purityKey) {
+        throw new BuybackValidationError(
+          `Kadar ${item.purityPercent}% tidak valid untuk kalkulasi Rate Buyback.`,
+        );
+      }
+      externalPurityKeys.add(purityKey);
+    }
+
+    const activeBuybackRateRows =
+      externalPurityKeys.size > 0
+        ? await transaction
+            .select({
+              purityPercent: metalPurities.purityPercentage,
+              ratePerGram: metalBuybackPriceRates.ratePerGram,
+              effectiveFrom: metalBuybackPriceRates.effectiveFrom,
+            })
+            .from(metalBuybackPriceRates)
+            .innerJoin(
+              metalPurities,
+              eq(metalBuybackPriceRates.metalPurityId, metalPurities.id),
+            )
+            .innerJoin(metals, eq(metalPurities.metalId, metals.id))
+            .where(
+              and(
+                eq(metals.organizationId, auth.organization.id),
+                eq(metals.code, "GOLD"),
+                eq(metals.isActive, true),
+                eq(metalPurities.isActive, true),
+                lte(metalBuybackPriceRates.effectiveFrom, now),
+                or(
+                  isNull(metalBuybackPriceRates.effectiveUntil),
+                  gt(metalBuybackPriceRates.effectiveUntil, now),
+                ),
+              ),
+            )
+            .orderBy(desc(metalBuybackPriceRates.effectiveFrom))
+        : [];
+
+    const activeBuybackRateByPurity = new Map<
+      string,
+      { ratePerGram: string; effectiveFrom: Date }
+    >();
+    for (const rate of activeBuybackRateRows) {
+      const purityKey = normalizePurityKey(rate.purityPercent);
+      if (
+        !purityKey ||
+        !externalPurityKeys.has(purityKey) ||
+        activeBuybackRateByPurity.has(purityKey)
+      ) {
+        continue;
+      }
+      activeBuybackRateByPurity.set(purityKey, {
+        ratePerGram: rate.ratePerGram,
+        effectiveFrom: rate.effectiveFrom,
+      });
+    }
+
     const buybackNumber = generateBuybackNumber({
       outletCode: primaryOutlet.code,
       date: now,
@@ -488,6 +559,37 @@ export async function completeBuybackTransaction({
 
       let productItemId: string | null = null;
       let snapshot: Record<string, unknown>;
+      let buybackPricePerGram: string | null = null;
+      let recommendedBuybackAmount: number | null = null;
+      let buybackRateEffectiveFrom: Date | null = null;
+      let buybackPurityKey: string | null = null;
+
+      if (item.source === "external") {
+        buybackPurityKey = normalizePurityKey(item.purityPercent);
+        if (!buybackPurityKey) {
+          throw new BuybackValidationError(
+            `Kadar ${item.purityPercent}% tidak valid untuk kalkulasi Rate Buyback.`,
+          );
+        }
+
+        const activeRate =
+          activeBuybackRateByPurity.get(buybackPurityKey) ?? null;
+        if (activeRate) {
+          const recommendation = calculateJewelryBasePrice({
+            weightGram: item.weightGram,
+            ratePerGram: activeRate.ratePerGram,
+          });
+          if (recommendation === null) {
+            throw new BuybackValidationError(
+              `Rekomendasi Buyback untuk kadar ${buybackPurityKey}% tidak dapat dihitung. Periksa kembali berat item.`,
+            );
+          }
+
+          buybackPricePerGram = activeRate.ratePerGram;
+          recommendedBuybackAmount = recommendation;
+          buybackRateEffectiveFrom = activeRate.effectiveFrom;
+        }
+      }
 
       if (item.source === "asihjaya") {
         const existing = existingById.get(item.productItemId!);
@@ -607,6 +709,17 @@ export async function completeBuybackTransaction({
           totalAmount: String(item.finalAmount),
           baseAmount: String(item.finalAmount),
           deductionAmount: "0",
+          buybackPurityKey,
+          buybackRateStatus: buybackPricePerGram ? "available" : "missing",
+          buybackRatePerGram: buybackPricePerGram,
+          buybackRateEffectiveFrom:
+            buybackRateEffectiveFrom?.toISOString() ?? null,
+          recommendedBuybackAmount:
+            recommendedBuybackAmount === null
+              ? null
+              : String(recommendedBuybackAmount),
+          buybackRecommendationSource: "server_active_buyback_rate",
+          buybackRecommendationCalculatedAt: now.toISOString(),
           imageKey: artifact.imageKey,
           processingType: item.processingType,
         };
@@ -621,7 +734,7 @@ export async function completeBuybackTransaction({
         weightGram: item.weightGram,
         purityPercent: item.purityPercent,
         exchangePurityPercent: null,
-        buybackPricePerGram: null,
+        buybackPricePerGram,
         deductionPerGram: "0",
         baseAmount: String(item.finalAmount),
         deductionAmount: "0",

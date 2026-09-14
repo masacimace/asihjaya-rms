@@ -15,6 +15,7 @@ const calculations = read("src/features/buybacks/calculations.ts");
 const queries = read("src/features/buybacks/queries.ts");
 const page = read("src/app/(pos)/pos/buyback/page.tsx");
 const workspace = read("src/components/buybacks/buyback-workspace.tsx");
+const historyPanel = read("src/components/buybacks/buyback-history-panel.tsx");
 const posShell = read("src/components/layout/pos-shell.tsx");
 const posLayout = read("src/app/(pos)/pos/layout.tsx");
 const seed = read("src/db/seed.ts");
@@ -58,6 +59,11 @@ assert.match(queries, /lastInvoiceNumber/);
 assert.match(queries, /finalPriceAmount: saleItems\.finalPriceAmount/);
 assert.match(queries, /lastSaleFinalPriceAmount: latestSale\?\.finalPriceAmount \?\? null/);
 assert.match(contracts, /lastSaleFinalPriceAmount: string \| null/);
+assert.doesNotMatch(
+  contracts,
+  /recommendedBuybackAmount/,
+  "Recommendation Buyback tidak boleh dipercaya dari payload client.",
+);
 
 assert.match(action, /requirePermission\("buybacks\.create"\)/);
 assert.match(action, /Total payout harus sama persis dengan Total Buyback/);
@@ -99,6 +105,15 @@ assert.match(service, /transaction\.insert\(buybackItemProcessings\)/);
 assert.match(service, /status: "pending"/);
 assert.match(service, /action: "buyback\.completed"/);
 assert.match(service, /expectedCash: sql`coalesce\(\$\{shifts\.expectedCash\}, 0\) - \$\{cashPayout\}`/);
+assert.match(service, /metalBuybackPriceRates/);
+assert.match(service, /normalizePurityKey\(item\.purityPercent\)/);
+assert.match(service, /calculateJewelryBasePrice\(\{/);
+assert.match(service, /lte\(metalBuybackPriceRates\.effectiveFrom, now\)/);
+assert.match(service, /gt\(metalBuybackPriceRates\.effectiveUntil, now\)/);
+assert.match(service, /buybackPricePerGram,/);
+assert.match(service, /recommendedBuybackAmount/);
+assert.match(service, /buybackRecommendationSource: "server_active_buyback_rate"/);
+assert.match(service, /buybackRateStatus: buybackPricePerGram \? "available" : "missing"/);
 assert.match(inventoryItemPage, /buyback: "Buyback"/);
 
 assert.match(page, /title="Buyback Pembelian"/);
@@ -126,6 +141,11 @@ assert.match(workspace, /Dana Titip/);
 assert.match(workspace, /Selesaikan Buyback/);
 assert.match(workspace, /imageSelected: boolean/);
 assert.match(workspace, /name={`itemImage:\$\{clientKey\}`}/);
+assert.match(historyPanel, /Snapshot Rate Buyback/);
+assert.match(historyPanel, /Rate saat transaksi/);
+assert.match(historyPanel, /Rekomendasi/);
+assert.match(historyPanel, /buybackRecommendationSource/);
+assert.match(historyPanel, /server_active_buyback_rate/);
 
 const buybackNavOccurrences = posShell.match(/href: "\/pos\/buyback"/g)?.length ?? 0;
 assert.ok(buybackNavOccurrences >= 2, "Buyback harus tersedia pada desktop dan Menu Lainnya mobile.");

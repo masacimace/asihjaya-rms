@@ -631,6 +631,14 @@ function BuybackDetailPanel({
             const color = readSnapshot(item.snapshot, "color");
             const snapshotSku = readSnapshot(item.snapshot, "sku");
             const snapshotBarcode = readSnapshot(item.snapshot, "barcode");
+            const recommendationSource = readSnapshot(
+              item.snapshot,
+              "buybackRecommendationSource",
+            );
+            const recommendedBuybackAmount = readSnapshot(
+              item.snapshot,
+              "recommendedBuybackAmount",
+            );
 
             return (
               <div
@@ -702,6 +710,46 @@ function BuybackDetailPanel({
                       </span>
                     ) : null}
                   </div>
+
+                  {item.source === "external" &&
+                  recommendationSource === "server_active_buyback_rate" ? (
+                    <div className="mt-3 rounded-xl border border-[var(--border)] bg-neutral-50/70 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                        Snapshot Rate Buyback
+                      </p>
+                      {item.buybackPricePerGram && recommendedBuybackAmount ? (
+                        <div className="mt-2 grid gap-1 text-xs text-neutral-700 sm:grid-cols-2">
+                          <p>
+                            Rate saat transaksi {" "}
+                            <span className="font-semibold text-neutral-950">
+                              {formatCurrency(
+                                Number(item.buybackPricePerGram),
+                              )}
+                              /gr
+                            </span>
+                          </p>
+                          <p>
+                            Rekomendasi {" "}
+                            <span className="font-semibold text-neutral-950">
+                              {formatCurrency(
+                                Number(recommendedBuybackAmount),
+                              )}
+                            </span>
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs leading-5 text-amber-700">
+                          Rate Buyback {item.purityPercent}% tidak tersedia saat
+                          transaksi. Total final tetap ditentukan manual oleh
+                          staff.
+                        </p>
+                      )}
+                      <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+                        Snapshot dihitung ulang oleh server saat transaksi
+                        diselesaikan.
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="text-left sm:col-start-2 lg:col-start-auto lg:text-right">
