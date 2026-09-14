@@ -18,22 +18,28 @@ async function main() {
     "customer-history-pin-pepper-for-static-check-minimum-32-characters";
 
   const {
+    createPublicHistoryVerificationToken,
+    createPublicHistoryVerificationUrl,
     createReceiptVerificationToken,
+    verifyPublicHistoryVerificationToken,
     verifyReceiptVerificationToken,
   } = await import("../src/features/sales/verification/receipt-token");
 
   const saleId = "8ad038f7-d346-4bd4-8f96-f3fd5c01af70";
+  const buybackId = "0a2f2f98-6f7f-4c87-9975-74d7024b1e1a";
+
+  // Existing Sale receipt token remains v2 until the explicit receipt QR cutover.
   const token = createReceiptVerificationToken(saleId);
   const parsedToken = verifyReceiptVerificationToken(token);
 
-  assert(token.startsWith("v2."), "Token nota baru harus memakai format v2.");
+  assert(token.startsWith("v2."), "Token nota Sale existing harus tetap memakai v2.");
   assert(parsedToken?.saleId === saleId, "Token v2 harus mengembalikan sale id.");
-  assert(parsedToken?.version === "v2", "Token baru harus terdeteksi sebagai v2.");
+  assert(parsedToken?.version === "v2", "Token Sale existing harus terdeteksi sebagai v2.");
 
   const tamperedToken = `${token.slice(0, -1)}${token.endsWith("A") ? "B" : "A"}`;
   assert(
     verifyReceiptVerificationToken(tamperedToken) === null,
-    "Token yang diubah harus ditolak.",
+    "Token Sale yang diubah harus ditolak.",
   );
 
   const [, encodedSaleId, signature] = token.split(".");
@@ -52,6 +58,70 @@ async function main() {
     "Encoding Base64URL sale id yang tidak kanonik harus ditolak.",
   );
 
+  // V3 is transaction-aware and supports both Sale and Buyback.
+  const saleHistoryToken = createPublicHistoryVerificationToken({
+    transactionKind: "sale",
+    transactionId: saleId,
+  });
+  const parsedSaleHistoryToken =
+    verifyPublicHistoryVerificationToken(saleHistoryToken);
+
+  assert(
+    saleHistoryToken.startsWith("v3.sale."),
+    "Public History Sale token harus memakai format v3.sale.",
+  );
+  assert(
+    parsedSaleHistoryToken?.transactionKind === "sale" &&
+      parsedSaleHistoryToken.transactionId === saleId &&
+      parsedSaleHistoryToken.version === "v3",
+    "Public History Sale v3 harus resolve ke Sale yang sama.",
+  );
+
+  const buybackHistoryToken = createPublicHistoryVerificationToken({
+    transactionKind: "buyback",
+    transactionId: buybackId,
+  });
+  const parsedBuybackHistoryToken =
+    verifyPublicHistoryVerificationToken(buybackHistoryToken);
+
+  assert(
+    buybackHistoryToken.startsWith("v3.buyback."),
+    "Public History Buyback token harus memakai format v3.buyback.",
+  );
+  assert(
+    parsedBuybackHistoryToken?.transactionKind === "buyback" &&
+      parsedBuybackHistoryToken.transactionId === buybackId &&
+      parsedBuybackHistoryToken.version === "v3",
+    "Public History Buyback v3 harus resolve ke Buyback yang sama.",
+  );
+
+  const buybackHistoryUrl = createPublicHistoryVerificationUrl({
+    transactionKind: "buyback",
+    transactionId: buybackId,
+  });
+  assert(
+    buybackHistoryUrl.url ===
+      `${process.env.APP_URL}/v/${buybackHistoryUrl.token}`,
+    "Public History URL harus memakai route /v/[token].",
+  );
+
+  const tamperedBuybackHistoryToken = `${buybackHistoryToken.slice(0, -1)}${
+    buybackHistoryToken.endsWith("A") ? "B" : "A"
+  }`;
+  assert(
+    verifyPublicHistoryVerificationToken(tamperedBuybackHistoryToken) === null,
+    "Public History v3 yang diubah harus ditolak.",
+  );
+
+  // Backward compatibility: old Sale v2/legacy tokens resolve as Sale history.
+  const parsedV2AsHistory = verifyPublicHistoryVerificationToken(token);
+  assert(
+    parsedV2AsHistory?.transactionKind === "sale" &&
+      parsedV2AsHistory.transactionId === saleId &&
+      parsedV2AsHistory.version === "v2",
+    "QR Sale v2 harus tetap dapat membuka Public History.",
+  );
+
   const saleToken = Buffer.from(saleId.replaceAll("-", ""), "hex").toString(
     "base64url",
   );
@@ -62,6 +132,7 @@ async function main() {
     .toString("base64url");
   const legacyToken = `${saleToken}.${legacySignature}`;
   const parsedLegacyToken = verifyReceiptVerificationToken(legacyToken);
+  const parsedLegacyAsHistory = verifyPublicHistoryVerificationToken(legacyToken);
 
   assert(
     parsedLegacyToken?.saleId === saleId,
@@ -71,8 +142,16 @@ async function main() {
     parsedLegacyToken?.version === "legacy",
     "QR nota lama harus ditandai sebagai legacy.",
   );
+  assert(
+    parsedLegacyAsHistory?.transactionKind === "sale" &&
+      parsedLegacyAsHistory.transactionId === saleId &&
+      parsedLegacyAsHistory.version === "legacy",
+    "QR Sale legacy harus tetap dapat membuka Public History.",
+  );
 
-  console.log("Receipt verification token check passed.");
+  console.log(
+    "Receipt/Public History token check passed — legacy/v2 Sale compatible, v3 Sale + Buyback verified.",
+  );
 }
 
 main().catch((error: unknown) => {

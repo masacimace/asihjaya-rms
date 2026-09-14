@@ -463,36 +463,52 @@ function TransactionCard({
   token: string;
   transaction: PublicCustomerHistoryTransaction;
 }) {
+  const isBuyback = transaction.kind === "buyback";
   const hasDepositSaldo = isPositiveAmount(
     transaction.customerDeposit.inAmount,
   );
   const hasUsedSaldo = isPositiveAmount(transaction.customerDeposit.usedAmount);
   const hasDepositActivity = hasDepositSaldo || hasUsedSaldo;
+  const settlementMethods = isBuyback
+    ? transaction.payoutMethods
+    : transaction.paymentMethods;
 
   return (
     <article
       className={`overflow-hidden rounded-3xl border bg-white ${
-        transaction.isScannedSale ? "border-[#d4a64a]" : "border-neutral-200"
+        transaction.isScannedTransaction
+          ? "border-[#d4a64a]"
+          : "border-neutral-200"
       }`}
     >
       <div className="grid gap-4 border-b border-neutral-100 p-5 sm:grid-cols-[1fr_auto] sm:items-start">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            {transaction.isScannedSale ? (
+            {transaction.isScannedTransaction ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fff1cd] px-3 py-1 text-xs font-semibold text-[#815618]">
                 <BadgeCheck className="size-3.5" />
                 Nota yang discan
               </span>
             ) : null}
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                isBuyback
+                  ? "bg-amber-50 text-amber-800"
+                  : "bg-blue-50 text-blue-700"
+              }`}
+            >
+              {isBuyback ? "Buyback" : "Pembelian"}
+            </span>
             <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-600">
               {getStatusLabel(transaction.status)}
             </span>
           </div>
           <h2 className="mt-3 break-all font-mono text-md font-bold text-neutral-950">
-            {transaction.invoiceNumber}
+            {transaction.transactionNumber}
           </h2>
           <p className="mt-1 text-sm text-neutral-500">
-            {formatDateTime(transaction.completedAt ?? transaction.createdAt)}
+            {formatDateTime(transaction.completedAt ?? transaction.createdAt)} ·{" "}
+            {transaction.outlet.name}
           </p>
         </div>
       </div>
@@ -503,24 +519,32 @@ function TransactionCard({
         <dl className="h-fit divide-y divide-neutral-100 rounded-2xl bg-neutral-50 p-4">
           <div className="grid gap-1 py-3 first:pt-0">
             <dt className="text-xs font-semibold uppercase text-neutral-500">
-              Subtotal
+              {isBuyback ? "Nilai dasar" : "Subtotal"}
             </dt>
             <dd className="text-sm font-bold text-neutral-950">
-              {formatAmount(transaction.subtotalAmount)}
+              {formatAmount(
+                isBuyback
+                  ? transaction.baseAmount
+                  : transaction.subtotalAmount,
+              )}
             </dd>
           </div>
           <div className="grid gap-1 py-3">
             <dt className="text-xs font-semibold uppercase text-neutral-500">
-              Diskon
+              {isBuyback ? "Potongan" : "Diskon"}
             </dt>
             <dd className="text-sm font-bold text-neutral-950">
-              {formatAmount(transaction.discountAmount)}
+              {formatAmount(
+                isBuyback
+                  ? transaction.deductionAmount
+                  : transaction.discountAmount,
+              )}
             </dd>
           </div>
           {hasDepositSaldo ? (
             <div className="grid gap-1 py-3">
               <dt className="text-xs font-semibold uppercase text-neutral-500">
-                Deposit Saldo
+                {isBuyback ? "Masuk Dana Titip" : "Deposit Saldo"}
               </dt>
               <dd className="text-sm font-bold text-emerald-700">
                 {formatPositiveAmount(transaction.customerDeposit.inAmount)}
@@ -537,10 +561,10 @@ function TransactionCard({
               </dd>
             </div>
           ) : null}
-          {hasDepositActivity ? (
+          {isBuyback || hasDepositActivity ? (
             <div className="grid gap-1 py-3">
               <dt className="text-xs font-semibold uppercase text-neutral-500">
-                Total dibayar
+                {isBuyback ? "Payout eksternal" : "Total dibayar"}
               </dt>
               <dd className="text-sm font-bold text-neutral-950">
                 {formatAmount(
@@ -551,12 +575,14 @@ function TransactionCard({
           ) : null}
           <div className="grid gap-1 py-3">
             <dt className="text-xs font-semibold uppercase text-neutral-500">
-              Pembayaran
+              {isBuyback ? "Payout" : "Pembayaran"}
             </dt>
             <dd className="text-sm font-bold text-neutral-950">
-              {transaction.paymentMethods.length > 0
-                ? transaction.paymentMethods.join(" + ")
-                : "Pembayaran tercatat"}
+              {settlementMethods.length > 0
+                ? settlementMethods.join(" + ")
+                : isBuyback
+                  ? "Payout tercatat"
+                  : "Pembayaran tercatat"}
             </dd>
           </div>
           <div className="grid gap-1 py-3 last:pb-0">
@@ -586,8 +612,10 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
       <NoCustomerState
         message={context.message}
         outletName={context.outlet.name}
-        saleDate={context.sale.completedAt ?? context.sale.createdAt}
-        invoiceNumber={context.sale.invoiceNumber}
+        saleDate={
+          context.transaction.completedAt ?? context.transaction.createdAt
+        }
+        invoiceNumber={context.transaction.transactionNumber}
       />
     );
   }
@@ -650,12 +678,12 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                   </div>
                 </div>
                 <h1 className="mt-3 text-2xl font-bold sm:text-3xl">
-                  Riwayat transaksi pelanggan di {data.outlet.name}
+                  Riwayat transaksi pelanggan ASIHJAYA
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-neutral-600 sm:text-base">
-                  Halaman ini menampilkan riwayat transaksi customer terdaftar
-                  pada outlet yang sama dengan nota yang kamu scan dalam mode
-                  baca saja.
+                  Halaman ini menampilkan gabungan transaksi Pembelian dan Buyback
+                  customer terdaftar dari seluruh outlet dalam organisasi ASIHJAYA
+                  dalam mode baca saja.
                 </p>
               </div>
 
@@ -673,17 +701,38 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                 </p>
                 <div className="mt-4 rounded-2xl border border-[#ead7ad] bg-[#fffaf0] p-3">
                   <p className="text-[11px] font-semibold uppercase text-neutral-500">
-                    Sisa Dana Titip
+                    Total Dana Titip
                   </p>
                   <p className="mt-1 text-lg font-bold text-[#9a681d]">
-                    {formatAmount(data.summary.customerDepositBalanceAmount)}
+                    {formatAmount(data.customerDeposit.totalBalanceAmount)}
                   </p>
+                  <p className="mt-1 text-[11px] leading-5 text-neutral-500">
+                    Saldo tersimpan per outlet dan hanya dapat dicairkan di
+                    outlet terkait.
+                  </p>
+                  {data.customerDeposit.balances.length > 0 ? (
+                    <div className="mt-3 grid gap-1.5">
+                      {data.customerDeposit.balances.map((balance) => (
+                        <div
+                          key={balance.outletId}
+                          className="flex items-center justify-between gap-3 text-xs"
+                        >
+                          <span className="min-w-0 truncate text-neutral-600">
+                            {balance.outletName}
+                          </span>
+                          <span className="shrink-0 font-semibold text-neutral-900">
+                            {formatAmount(balance.balanceAmount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <article className="rounded-3xl border border-neutral-200 bg-white p-5">
               <div className="flex items-center gap-3">
                 <div className="grid size-10 place-items-center rounded-xl bg-[#fff6df] text-[#9a681d]">
@@ -696,21 +745,41 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                   <p className="mt-1 text-md font-bold text-neutral-950">
                     {data.summary.totalTransactions}
                   </p>
+                  <p className="mt-1 text-[11px] text-neutral-500">
+                    {data.summary.totalSaleTransactions} pembelian ·{" "}
+                    {data.summary.totalBuybackTransactions} buyback
+                  </p>
                 </div>
               </div>
             </article>
 
             <article className="rounded-3xl border border-neutral-200 bg-white p-5">
               <div className="flex items-center gap-3">
-                <div className="grid size-10 place-items-center rounded-xl bg-[#fff6df] text-[#9a681d]">
+                <div className="grid size-10 place-items-center rounded-xl bg-blue-50 text-blue-700">
                   <CreditCard className="size-5" />
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase text-neutral-500">
-                    Total belanja
+                    Total pembelian
                   </p>
                   <p className="mt-1 text-md font-bold text-neutral-950">
-                    {formatAmount(data.summary.totalSpent)}
+                    {formatAmount(data.summary.totalPurchases)}
+                  </p>
+                </div>
+              </div>
+            </article>
+
+            <article className="rounded-3xl border border-neutral-200 bg-white p-5">
+              <div className="flex items-center gap-3">
+                <div className="grid size-10 place-items-center rounded-xl bg-amber-50 text-amber-800">
+                  <ReceiptText className="size-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-neutral-500">
+                    Total Buyback
+                  </p>
+                  <p className="mt-1 text-md font-bold text-neutral-950">
+                    {formatAmount(data.summary.totalBuybacks)}
                   </p>
                 </div>
               </div>
@@ -767,7 +836,7 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                 <div className="grid gap-1 py-3 first:pt-0">
                   <dt className="text-sm text-neutral-500">Nomor nota</dt>
                   <dd className="break-all font-mono text-sm font-bold text-neutral-950">
-                    {data.scannedSale.invoiceNumber}
+                    {data.scannedTransaction.transactionNumber}
                   </dd>
                 </div>
                 <div className="grid gap-1 py-3">
@@ -777,8 +846,8 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                   </dt>
                   <dd className="text-sm font-semibold text-neutral-900">
                     {formatDateTime(
-                      data.scannedSale.completedAt ??
-                        data.scannedSale.createdAt,
+                      data.scannedTransaction.completedAt ??
+                        data.scannedTransaction.createdAt,
                     )}
                   </dd>
                 </div>
@@ -788,42 +857,56 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                     Outlet
                   </dt>
                   <dd className="text-sm font-semibold text-neutral-900">
-                    {data.outlet.name}
+                    {data.scannedTransaction.outlet.name}
                   </dd>
                 </div>
                 <div className="grid gap-1 py-3">
-                  <dt className="text-sm text-neutral-500">Total nota</dt>
+                  <dt className="text-sm text-neutral-500">
+                    {data.scannedTransaction.kind === "buyback"
+                      ? "Total Buyback"
+                      : "Total pembelian"}
+                  </dt>
                   <dd className="text-xl font-bold text-[#9a681d]">
-                    {formatAmount(data.scannedSale.totalAmount)}
+                    {formatAmount(data.scannedTransaction.totalAmount)}
                   </dd>
                 </div>
-                {isPositiveAmount(data.scannedSale.customerDeposit.inAmount) ? (
+                {isPositiveAmount(
+                  data.scannedTransaction.customerDeposit.inAmount,
+                ) ? (
                   <div className="grid gap-1 py-3">
-                    <dt className="text-sm text-neutral-500">Deposit Saldo</dt>
+                    <dt className="text-sm text-neutral-500">
+                      {data.scannedTransaction.kind === "buyback"
+                        ? "Masuk Dana Titip"
+                        : "Deposit Saldo"}
+                    </dt>
                     <dd className="text-sm font-bold text-emerald-700">
                       {formatPositiveAmount(
-                        data.scannedSale.customerDeposit.inAmount,
+                        data.scannedTransaction.customerDeposit.inAmount,
                       )}
                     </dd>
                   </div>
                 ) : null}
                 {isPositiveAmount(
-                  data.scannedSale.customerDeposit.usedAmount,
+                  data.scannedTransaction.customerDeposit.usedAmount,
                 ) ? (
                   <div className="grid gap-1 py-3">
                     <dt className="text-sm text-neutral-500">Gunakan saldo</dt>
                     <dd className="text-sm font-bold text-[#9a681d]">
                       {formatNegativeAmount(
-                        data.scannedSale.customerDeposit.usedAmount,
+                        data.scannedTransaction.customerDeposit.usedAmount,
                       )}
                     </dd>
                   </div>
                 ) : null}
                 <div className="grid gap-1 py-3 last:pb-0">
-                  <dt className="text-sm text-neutral-500">Total dibayar</dt>
+                  <dt className="text-sm text-neutral-500">
+                    {data.scannedTransaction.kind === "buyback"
+                      ? "Payout eksternal"
+                      : "Total dibayar"}
+                  </dt>
                   <dd className="text-lg font-bold text-neutral-950">
                     {formatAmount(
-                      data.scannedSale.customerDeposit.externalPaymentDueAmount,
+                      data.scannedTransaction.customerDeposit.externalPaymentDueAmount,
                     )}
                   </dd>
                 </div>
@@ -863,9 +946,11 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                   Tentang halaman ini
                 </h2>
                 <p className="mt-2 text-xs leading-6 text-neutral-600 sm:text-sm">
-                  Riwayat ini hanya tersedia melalui QR nota resmi dan dibatasi
-                  untuk customer serta outlet yang sama. Halaman ini bersifat
-                  baca saja dan tidak dapat mengubah data transaksi.
+                  Riwayat ini hanya tersedia melalui QR nota resmi dan PIN
+                  customer. Transaksi ditampilkan lintas outlet dalam organisasi
+                  ASIHJAYA, sedangkan saldo Dana Titip tetap terpisah per outlet.
+                  Halaman ini bersifat baca saja dan tidak dapat mengubah data
+                  transaksi.
                 </p>
                 <ul className="mt-3 grid gap-1.5 text-xs leading-5 text-neutral-500 sm:text-sm">
                   <li>
@@ -876,7 +961,8 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
                     resmi pelanggan.
                   </li>
                   <li>
-                    • Hubungi outlet penerbit jika rincian riwayat tidak sesuai.
+                    • Dana Titip hanya dapat digunakan atau dicairkan di outlet
+                    pemilik saldo tersebut.
                   </li>
                 </ul>
                 <form action={logoutAction} className="mt-4">

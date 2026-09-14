@@ -18,6 +18,9 @@ const posQueries = read("src/features/pos/queries.ts");
 const adminSales = read("src/features/sales/admin-queries.ts");
 const customers = read("src/features/customers/queries.ts");
 const publicHistory = read("src/features/customers/public-history.ts");
+const publicHistoryImageRoute = read(
+  "src/app/v/[token]/image/[...key]/route.ts",
+);
 const buybackQueries = read("src/features/buybacks/queries.ts");
 const buybackHistoryPanel = read(
   "src/components/buybacks/buyback-history-panel.tsx",
@@ -132,6 +135,24 @@ assert(
       "coalesce(nullif(${saleItems.snapshot}->>'itemDisplayName', ''), nullif(${saleItems.snapshot}->>'productName', '')",
     ),
   "Public customer Sale history belum snapshot-first.",
+);
+
+assert(
+  publicHistory.includes("buybackItems") &&
+    publicHistory.includes("buybackPayouts") &&
+    publicHistory.includes('kind: "buyback"') &&
+    publicHistory.includes("totalBuybacks") &&
+    publicHistory.includes("getCustomerDepositBalancesForCustomer") &&
+    !publicHistory.includes("eq(sales.outletId, baseSale.outletId)"),
+  "Public customer history belum unified Sale + Buyback organization-wide.",
+);
+
+assert(
+  publicHistoryImageRoute.includes("buybackItems") &&
+    publicHistoryImageRoute.includes("buybacks") &&
+    publicHistoryImageRoute.includes("getPublicCustomerHistoryAccessContext") &&
+    publicHistoryImageRoute.includes('eq(buybacks.status, "completed")'),
+  "Protected Public History image route belum mengotorisasi Sale + Buyback.",
 );
 
 // 5. Buyback history is acquisition snapshot-first; current inventory is fallback only.

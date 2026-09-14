@@ -456,7 +456,8 @@ export async function verifyPublicCustomerHistoryPinAction(
     requestMetadata,
     metadata: {
       requiresPinChange: accessState.credential.mustChangePin,
-      receiptTokenVersion: token.startsWith("v2.") ? "v2" : "legacy",
+      receiptTokenVersion: context.tokenVersion,
+      transactionKind: context.transaction.kind,
     },
   });
 

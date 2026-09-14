@@ -1,9 +1,16 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { saleItems, sales } from "@/db/schema";
+import {
+  buybackItems,
+  buybacks,
+  productItems,
+  productMasters,
+  saleItems,
+  sales,
+} from "@/db/schema";
 import { getCurrentCustomerHistorySession } from "@/features/customers/history-access";
-import { verifyReceiptVerificationToken } from "@/features/sales/verification/receipt-token";
+import { getPublicCustomerHistoryAccessContext } from "@/features/customers/public-history";
 import {
   imageKeyBelongsToOrganization,
   readImageFile,
@@ -17,11 +24,6 @@ type RouteContext = {
     token: string;
     key: string[];
   }>;
-};
-
-type SaleItemSnapshot = {
-  imageKey?: unknown;
-  productImageKey?: unknown;
 };
 
 const PUBLIC_HISTORY_SALE_STATUSES = [
@@ -54,40 +56,17 @@ function readImageKeyFromSegments(segments: string[]) {
   }
 }
 
-function saleItemAllowsImageKey(snapshot: unknown, imageKey: string) {
-  const value = snapshot as SaleItemSnapshot | null;
-
-  return (
-    normalizeImageKey(value?.imageKey) === imageKey ||
-    normalizeImageKey(value?.productImageKey) === imageKey
-  );
-}
-
 export async function GET(_request: Request, context: RouteContext) {
   const { token, key } = await context.params;
-  const parsedToken = verifyReceiptVerificationToken(token);
+  const accessContext = await getPublicCustomerHistoryAccessContext(token);
 
-  if (!parsedToken) {
-    return new Response("Not found", { status: 404 });
-  }
-
-  const [saleRow] = await db
-    .select({
-      organizationId: sales.organizationId,
-      outletId: sales.outletId,
-      customerId: sales.customerId,
-    })
-    .from(sales)
-    .where(eq(sales.id, parsedToken.saleId))
-    .limit(1);
-
-  if (!saleRow?.customerId) {
+  if (accessContext.status !== "valid") {
     return new Response("Not found", { status: 404 });
   }
 
   const session = await getCurrentCustomerHistorySession({
-    organizationId: saleRow.organizationId,
-    customerId: saleRow.customerId,
+    organizationId: accessContext.organizationId,
+    customerId: accessContext.customer.id,
   });
 
   if (!session || session.requiresPinChange) {
@@ -98,29 +77,64 @@ export async function GET(_request: Request, context: RouteContext) {
 
   if (
     !imageKey ||
-    !imageKeyBelongsToOrganization(imageKey, saleRow.organizationId)
+    !imageKeyBelongsToOrganization(imageKey, accessContext.organizationId)
   ) {
     return new Response("Not found", { status: 404 });
   }
 
-  const saleItemRows = await db
-    .select({
-      snapshot: saleItems.snapshot,
-    })
-    .from(saleItems)
-    .innerJoin(sales, eq(saleItems.saleId, sales.id))
-    .where(
-      and(
-        eq(sales.organizationId, saleRow.organizationId),
-        eq(sales.outletId, saleRow.outletId),
-        eq(sales.customerId, saleRow.customerId),
-        inArray(sales.status, [...PUBLIC_HISTORY_SALE_STATUSES]),
-      ),
-    );
+  const [saleImageRow, buybackImageRow] = await Promise.all([
+    db
+      .select({ id: saleItems.id })
+      .from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .innerJoin(productItems, eq(saleItems.productItemId, productItems.id))
+      .innerJoin(
+        productMasters,
+        eq(productItems.productMasterId, productMasters.id),
+      )
+      .where(
+        and(
+          eq(sales.organizationId, accessContext.organizationId),
+          eq(sales.customerId, accessContext.customer.id),
+          inArray(sales.status, [...PUBLIC_HISTORY_SALE_STATUSES]),
+          or(
+            sql`${saleItems.snapshot}->>'imageKey' = ${imageKey}`,
+            sql`${saleItems.snapshot}->>'productImageKey' = ${imageKey}`,
+            eq(productItems.imageKey, imageKey),
+            eq(productMasters.imageKey, imageKey),
+          ),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
 
-  if (
-    !saleItemRows.some((item) => saleItemAllowsImageKey(item.snapshot, imageKey))
-  ) {
+    db
+      .select({ id: buybackItems.id })
+      .from(buybackItems)
+      .innerJoin(buybacks, eq(buybackItems.buybackId, buybacks.id))
+      .leftJoin(productItems, eq(buybackItems.productItemId, productItems.id))
+      .leftJoin(
+        productMasters,
+        eq(productItems.productMasterId, productMasters.id),
+      )
+      .where(
+        and(
+          eq(buybacks.organizationId, accessContext.organizationId),
+          eq(buybacks.customerId, accessContext.customer.id),
+          eq(buybacks.status, "completed"),
+          or(
+            sql`${buybackItems.snapshot}->>'imageKey' = ${imageKey}`,
+            sql`${buybackItems.snapshot}->>'productImageKey' = ${imageKey}`,
+            eq(productItems.imageKey, imageKey),
+            eq(productMasters.imageKey, imageKey),
+          ),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+  ]);
+
+  if (!saleImageRow && !buybackImageRow) {
     return new Response("Not found", { status: 404 });
   }
 
