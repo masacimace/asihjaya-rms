@@ -77,26 +77,40 @@ assert.match(receiptType, /buybackPricePerGram\?: string \| null/);
 
 assert.match(
   receiptHtml,
-  /const isBuyback = false/,
-  "Buyback receipt wajib memakai presentation receipt pembelian.",
+  /const isBuybackDocument = data\.documentKind === "buyback"/,
+  "Buyback receipt wajib mempertahankan document semantics untuk mapping data.",
+);
+assert.match(
+  receiptHtml,
+  /isBuybackDocument\s+\? item\.snapshot\.purityPercent\s+: item\.snapshot\.exchangePurityPercent/,
+  "Kadar Buyback wajib membaca purityPercent tanpa mengubah presentation receipt.",
 );
 assert.match(
   receiptData,
   /invoiceNumber: row\.buybackNumber/,
   "No. Order receipt Buyback wajib tetap menggunakan buybackNumber.",
 );
-assert.match(
-  receiptHtml,
-  /const useBuybackAdjustedLabels = isBuyback && !isPreprintedOverlay/,
-);
-assert.match(receiptHtml, /BB\/Gr/);
-assert.match(receiptHtml, /No\. Buyback/);
-assert.match(receiptHtml, /Payout Buyback/);
-assert.match(receiptHtml, /HARGA\/GR/);
-assert.match(receiptHtml, /Detail Buyback/);
-assert.match(receiptHtml, /Terima kasih telah melakukan Buyback di Asih Jaya/);
-assert.match(receiptHtml, /Support Payment/);
 assert.match(receiptHtml, /No\. Order/);
+assert.match(receiptHtml, /Sales :/);
+assert.match(receiptHtml, /Konsumen/);
+assert.match(receiptHtml, />DISKON</);
+assert.match(receiptHtml, />HARGA</);
+assert.match(receiptHtml, /Support Payment/);
+assert.match(receiptHtml, /Harga Item/);
+assert.match(receiptHtml, /Diskon Item/);
+assert.match(receiptHtml, /Total Pembayaran/);
+assert.match(receiptHtml, /Total Item/);
+assert.match(receiptHtml, /Riwayat Transaksi/);
+assert.match(receiptHtml, /Terima kasih telah memilih Asih Jaya/);
+assert.doesNotMatch(receiptHtml, /No\. Buyback/);
+assert.doesNotMatch(receiptHtml, /Payout Buyback/);
+assert.doesNotMatch(receiptHtml, /BB\/Gr/);
+assert.doesNotMatch(receiptHtml, /HARGA\/GR/);
+assert.doesNotMatch(receiptHtml, /Detail Buyback/);
+assert.doesNotMatch(
+  receiptHtml,
+  /Terima kasih telah melakukan Buyback di Asih Jaya/,
+);
 
 assert.match(pdfAccess, /"receipt-buyback"/);
 assert.match(pdfAccess, /buybackId: string \| null/);
