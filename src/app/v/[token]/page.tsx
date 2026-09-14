@@ -103,7 +103,7 @@ function GlassPageShell({
   maxWidth?: string;
 }) {
   return (
-    <main className="relative min-h-screen overflow-x-hidden px-3 py-6 text-neutral-950 sm:px-6 sm:py-10">
+    <main className="relative isolate min-h-screen overflow-x-hidden px-3 py-6 text-neutral-950 sm:px-6 sm:py-10">
       <BackgroundLayers />
       <section
         className={`relative mx-auto ${maxWidth} overflow-hidden rounded-[30px] border border-white/[0.65] bg-white/[0.46] shadow-[0_28px_90px_rgba(73,49,24,.18)] backdrop-blur-2xl`}

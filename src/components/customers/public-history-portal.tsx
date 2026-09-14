@@ -576,7 +576,7 @@ export function PublicHistoryPortal({ data }: { data: ValidPublicHistoryData }) 
 
   return (
     <>
-      <main className="relative min-h-screen overflow-x-hidden text-slate-950">
+      <main className="relative isolate min-h-screen overflow-x-hidden text-slate-950">
         <div
           aria-hidden="true"
           className="fixed inset-0 -z-30 bg-[url('/customer-history/background-mobile.webp')] bg-cover bg-center bg-no-repeat lg:bg-[url('/customer-history/background-desktop.webp')]"
