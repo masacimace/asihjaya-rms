@@ -4,75 +4,81 @@ import path from "node:path";
 const root = process.cwd();
 
 function assert(condition: unknown, message: string): asserts condition {
-  if (!condition) {
-    throw new Error(message);
-  }
+  if (!condition) throw new Error(message);
 }
 
 function read(relativePath: string) {
   const file = path.join(root, relativePath);
-
   assert(existsSync(file), `${relativePath} tidak ditemukan.`);
-
   return readFileSync(file, "utf8");
 }
 
 const page = read("src/app/(admin)/admin/operasional/hardware/page.tsx");
-
-const component = read(
-  "src/components/hardware/hardware-agent-provisioning-dialog.tsx",
+const setupDialog = read(
+  "src/components/hardware/hardware-hub-setup-dialog.tsx",
 );
-
-const queries = read("src/features/hardware/queries.ts");
+const manageDialog = read(
+  "src/components/hardware/hardware-hub-manage-dialog.tsx",
+);
+const provisioningOptions = read(
+  "src/features/hardware/provisioning-options.ts",
+);
+const provisioningAction = read(
+  "src/app/actions/hardware-hub-provisioning.ts",
+);
 
 assert(
-  page.includes("HardwareAgentProvisioningDialog"),
-  "Hardware Hub page wajib menampilkan provisioning dialog.",
+  page.includes("HardwareHubSetupDialog"),
+  "Hardware Hub page wajib memakai setup flow sederhana.",
 );
-
 assert(
   page.includes('"hardware.agents.manage"'),
-  "Provisioning UI wajib dibatasi permission hardware.agents.manage.",
+  "Setup Hardware Hub wajib dibatasi permission hardware.agents.manage.",
 );
-
 assert(
-  queries.includes("getHardwareAgentProvisioningOptions"),
-  "Provisioning options query wajib tersedia.",
+  page.includes("Diagnostik Lanjutan"),
+  "Informasi teknis wajib dipindahkan ke area Diagnostik Lanjutan.",
 );
-
 assert(
-  queries.includes("eq(hardwareAgents.isActive, true)"),
-  "Provisioning options wajib mendeteksi active agent per register.",
+  page.includes("Sistem hardware berjalan normal") &&
+    page.includes("indikator perlu diperiksa"),
+  "Halaman utama wajib memprioritaskan ringkasan kesehatan yang mudah dipahami.",
 );
-
 assert(
-  component.includes("provisionHardwareAgentAction"),
-  "Provisioning dialog wajib memakai server action.",
+  !page.includes("HardwareAgentProvisioningDialog"),
+  "Halaman utama tidak boleh lagi memakai provisioning dialog developer-oriented lama.",
 );
-
 assert(
-  component.includes("Download hardware-hub.env"),
-  "Provisioning dialog wajib menyediakan download konfigurasi.",
+  provisioningOptions.includes("eq(registers.isHardwareHub, true)"),
+  "Provisioning options wajib dibatasi ke dedicated Hardware Hub register.",
 );
-
 assert(
-  component.includes("HARDWARE_ADAPTER_MODE=fake"),
-  "Credential download wajib menggunakan safe-first fake adapter.",
+  setupDialog.includes("Siapkan Hardware Hub"),
+  "CTA utama wajib menggunakan istilah user-facing Siapkan Hardware Hub.",
 );
-
 assert(
-  component.includes("HARDWARE_AGENT_REQUEST_AUTH_MODE=signed"),
-  "Credential download wajib menggunakan signed authentication.",
+  !setupDialog.includes("Kode Agent") &&
+    setupDialog.includes('type="hidden"') &&
+    setupDialog.includes('name="code"'),
+  "Kode agent wajib dibuat otomatis dan tidak diminta dari staff.",
 );
-
 assert(
-  component.includes("window.location.assign"),
-  "One-time credential harus dibersihkan dari client state setelah selesai.",
+  !setupDialog.includes("Nama perangkat") && setupDialog.includes('name="name"'),
+  "Nama agent wajib dibuat otomatis dan tidak menjadi field setup staff.",
 );
-
+assert(
+  provisioningAction.includes("provisionDedicatedHardwareHub"),
+  "Setup UI wajib melewati server-side dedicated register guard.",
+);
+assert(
+  manageDialog.includes("Ganti Mini PC") &&
+    manageDialog.includes("Perbarui Akses") &&
+    manageDialog.includes("Nonaktifkan Hardware Hub"),
+  "Lifecycle controls wajib tetap tersedia pada UI Kelola terpisah.",
+);
 assert(
   !page.includes("npm run hardware:agent:create"),
-  "Dashboard tidak boleh lagi mengarahkan provisioning normal ke CLI.",
+  "Dashboard tidak boleh mengarahkan normal onboarding ke CLI.",
 );
 
-console.log("OK: Hardware Agent provisioning UI contract siap digunakan.");
+console.log("OK: Hardware Hub Stage 1 UI simplification contract siap digunakan.");
