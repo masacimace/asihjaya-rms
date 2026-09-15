@@ -116,6 +116,12 @@ assert(
   "Retry claim hanya boleh idempotent untuk persistent instance ID yang sama.",
 );
 assert(
+  enrollmentClaimSource.includes("HARDWARE_ENROLLMENT_IDEMPOTENT_REPLAY_MINUTES = 10") &&
+    enrollmentClaimSource.includes('enrollment.status === "completed"') &&
+    enrollmentClaimSource.includes("credentialReplayUntil <= now"),
+  "Pemulihan credential via Installation Code wajib dibatasi replay window dan berhenti setelah completed.",
+);
+assert(
   enrollmentClaimSource.includes('const secret = randomBytes(48).toString("base64url")') &&
     enrollmentClaimSource.includes("encryptHardwareAgentSecret(agentId, secret)"),
   "Claim pertama wajib membuat signed credential kuat dan menyimpannya terenkripsi.",
@@ -136,6 +142,11 @@ assert(
   enrollmentClaimRouteSource.includes('"Cache-Control": "no-store, max-age=0"') &&
     !enrollmentClaimRouteSource.includes("authenticateHardwareAgent"),
   "Bootstrap claim response wajib no-store dan tidak boleh membutuhkan agent auth sebelum agent dibuat.",
+);
+assert(
+  enrollmentClaimRouteSource.includes("INSTALLATION_CODE_REPLAY_WINDOW_EXPIRED") &&
+    enrollmentClaimRouteSource.includes("credentialReplayUntil"),
+  "Claim API wajib mengekspos bounded retry window tanpa menjadikan Installation Code credential jangka panjang.",
 );
 
 const journal = JSON.parse(journalSource) as {
