@@ -18,15 +18,13 @@ function read(relativePath: string) {
 
 const service = read("src/features/hardware/agent-lifecycle.ts");
 const actions = read("src/app/actions/hardware-agent-lifecycle.ts");
-const dialog = read(
-  "src/components/hardware/hardware-agent-provisioning-dialog.tsx",
+const manageDialog = read(
+  "src/components/hardware/hardware-hub-manage-dialog.tsx",
 );
 const reactivate = read(
   "src/components/hardware/hardware-agent-reactivate-button.tsx",
 );
-const page = read(
-  "src/app/(admin)/admin/operasional/hardware/page.tsx",
-);
+const page = read("src/app/(admin)/admin/operasional/hardware/page.tsx");
 const schema = read("src/db/schema/index.ts");
 
 assert(
@@ -81,22 +79,27 @@ assert(
 );
 assert(
   reactivate.includes("Aktifkan Ulang"),
-  "Disabled agent UI wajib menyediakan Aktifkan Ulang.",
-);
-assert(
-  reactivate.includes("HARDWARE_ADAPTER_MODE=fake") &&
-    reactivate.includes("HARDWARE_AGENT_REQUEST_AUTH_MODE=signed"),
-  "Reactivation download wajib safe-first dan signed.",
+  "Disabled Hardware Hub UI wajib menyediakan Aktifkan Ulang.",
 );
 assert(
   page.includes("HardwareAgentReactivateButton"),
-  "Hardware Hub page wajib merender reactivation UI.",
+  "Riwayat perangkat wajib tetap menyediakan reactivation UI.",
 );
 assert(
-  dialog.includes("Rotate Credential") &&
-    dialog.includes("Ganti Mini PC") &&
-    dialog.includes("Nonaktifkan"),
-  "Active lifecycle controls wajib tetap tersedia.",
+  page.includes("HardwareHubManageDialog"),
+  "Active Hardware Hub wajib menyediakan UI Kelola yang terpisah dari onboarding.",
+);
+assert(
+  manageDialog.includes("Perbarui Akses") &&
+    manageDialog.includes("Ganti Mini PC") &&
+    manageDialog.includes("Nonaktifkan Hardware Hub"),
+  "Lifecycle controls wajib tetap tersedia di dialog Kelola.",
+);
+assert(
+  manageDialog.includes("rotateHardwareAgentCredentialAction") &&
+    manageDialog.includes("replaceHardwareAgentDeviceAction") &&
+    manageDialog.includes("disableHardwareAgentAction"),
+  "UI Kelola wajib tetap memakai lifecycle server actions existing.",
 );
 assert(
   schema.includes("hardware_agents_one_active_per_register_uq"),
@@ -104,5 +107,5 @@ assert(
 );
 
 console.log(
-  "OK: Hardware Agent lifecycle + reactivation contract siap digunakan.",
+  "OK: Hardware Hub lifecycle + simplified management contract siap digunakan.",
 );
