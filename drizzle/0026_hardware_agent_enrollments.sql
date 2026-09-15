@@ -65,7 +65,7 @@ ALTER TABLE "hardware_agent_enrollments" ADD CONSTRAINT "hardware_agent_enrollme
 --> statement-breakpoint
 ALTER TABLE "hardware_agent_enrollments" ADD CONSTRAINT "hardware_agent_enrollments_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "hardware_agent_enrollments" ADD CONSTRAINT "hardware_agent_enrollments_agent_id_hardware_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."hardware_agents"("id") ON DELETE set null ON UPDATE no action;
+ALTER TABLE "hardware_agent_enrollments" ADD CONSTRAINT "hardware_agent_enrollments_agent_id_hardware_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."hardware_agents"("id") ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
 CREATE UNIQUE INDEX "hardware_agent_enrollments_code_hash_uq" ON "hardware_agent_enrollments" USING btree ("code_hash");
 --> statement-breakpoint
