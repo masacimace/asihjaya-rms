@@ -8,7 +8,10 @@ if (!process.env.DATABASE_URL) {
 const migrationsDirectory = process.env.DRIZZLE_MIGRATIONS_DIR?.trim() || "./drizzle";
 
 export default defineConfig({
-  schema: "./src/db/schema/index.ts",
+  schema: [
+    "./src/db/schema/index.ts",
+    "./src/db/schema/hardware-enrollment.ts",
+  ],
   out: migrationsDirectory,
   dialect: "postgresql",
   dbCredentials: {
