@@ -48,7 +48,11 @@ export function HardwareHubSetupDialog({
   options: HardwareHubProvisioningOption[];
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const firstAvailable = options.find((option) => !option.activeAgent) ?? null;
+  const availableOptions = useMemo(
+    () => options.filter((option) => !option.activeAgent),
+    [options],
+  );
+  const firstAvailable = availableOptions[0] ?? null;
   const [selectedOutletId, setSelectedOutletId] = useState(
     firstAvailable?.outlet.id ?? "",
   );
@@ -60,28 +64,29 @@ export function HardwareHubSetupDialog({
 
   const outlets = useMemo(() => {
     const values = new Map<string, HardwareHubProvisioningOption["outlet"]>();
-    for (const option of options) values.set(option.outlet.id, option.outlet);
+    for (const option of availableOptions) {
+      values.set(option.outlet.id, option.outlet);
+    }
     return [...values.values()];
-  }, [options]);
+  }, [availableOptions]);
 
   const registers = useMemo(
     () =>
-      options.filter(
-        (option) =>
-          option.outlet.id === selectedOutletId && !option.activeAgent,
+      availableOptions.filter(
+        (option) => option.outlet.id === selectedOutletId,
       ),
-    [options, selectedOutletId],
+    [availableOptions, selectedOutletId],
   );
 
   const selected =
-    options.find(
+    availableOptions.find(
       (option) =>
         option.outlet.id === selectedOutletId &&
         option.register.id === selectedRegisterId,
     ) ?? firstAvailable;
 
   function open() {
-    const available = options.find((option) => !option.activeAgent) ?? null;
+    const available = availableOptions[0] ?? null;
     if (available) {
       setSelectedOutletId(available.outlet.id);
       setSelectedRegisterId(available.register.id);
@@ -105,7 +110,7 @@ export function HardwareHubSetupDialog({
     URL.revokeObjectURL(url);
   }
 
-  const hasAvailable = options.some((option) => !option.activeAgent);
+  const hasAvailable = availableOptions.length > 0;
 
   return (
     <>
@@ -197,9 +202,8 @@ export function HardwareHubSetupDialog({
                     value={selectedOutletId}
                     onChange={(event) => {
                       const outletId = event.target.value;
-                      const next = options.find(
-                        (option) =>
-                          option.outlet.id === outletId && !option.activeAgent,
+                      const next = availableOptions.find(
+                        (option) => option.outlet.id === outletId,
                       );
                       setSelectedOutletId(outletId);
                       setSelectedRegisterId(next?.register.id ?? "");
