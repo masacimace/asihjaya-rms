@@ -1,6 +1,13 @@
 /* eslint-disable */
 const path = require("path");
 
+try {
+  require("dotenv").config({
+    path: path.resolve(__dirname, "..", ".env"),
+    quiet: true,
+  });
+} catch {}
+
 const {
   enrollHardwareHubInstaller,
   resumeHardwareHubEnrollment,
