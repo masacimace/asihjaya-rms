@@ -16,6 +16,7 @@ import {
   claimHardwareAgentEnrollment,
   HardwareAgentEnrollmentClaimError,
 } from "@/features/hardware/agent-enrollment-claim";
+import { completeHardwareAgentEnrollment } from "@/features/hardware/agent-enrollment-completion";
 import { hashHardwareEnrollmentCode } from "@/lib/hardware/enrollment-code";
 
 const INSTALLATION_CODE_A = "AJ-7K4P-9Q2M-X6TR";
@@ -70,7 +71,9 @@ async function createTarget(input: {
 
   return {
     outletId: outlet.id,
+    outletCode: input.outletCode,
     registerId: register.id,
+    registerCode: input.registerCode,
     enrollmentId: enrollment.id,
   };
 }
@@ -81,8 +84,8 @@ async function main() {
   const [organization] = await db
     .insert(organizations)
     .values({
-      name: `Stage 3 Enrollment ${suffix}`,
-      slug: `stage3-enrollment-${suffix}`,
+      name: `Stage 4 Enrollment ${suffix}`,
+      slug: `stage4-enrollment-${suffix}`,
       timezone: "Asia/Jakarta",
       currency: "IDR",
       isActive: true,
@@ -94,9 +97,9 @@ async function main() {
     .insert(users)
     .values({
       organizationId: organization.id,
-      email: `stage3-${suffix}@example.test`,
-      username: `stage3_${suffix}`,
-      fullName: "Stage 3 Enrollment Test",
+      email: `stage4-${suffix}@example.test`,
+      username: `stage4_${suffix}`,
+      fullName: "Stage 4 Enrollment Test",
       status: "active",
     })
     .returning({ id: users.id });
@@ -114,10 +117,10 @@ async function main() {
   const first = await claimHardwareAgentEnrollment({
     installationCode: INSTALLATION_CODE_A,
     instanceId: instanceA,
-    machineName: "STAGE3-PC-A",
-    installerVersion: "stage3-test",
+    machineName: "STAGE4-PC-A",
+    installerVersion: "stage4-test",
     ipAddress: "127.0.0.1",
-    userAgent: "stage3-integration-test",
+    userAgent: "stage4-integration-test",
   });
 
   assert.equal(first.idempotent, false);
@@ -132,8 +135,8 @@ async function main() {
   const retry = await claimHardwareAgentEnrollment({
     installationCode: INSTALLATION_CODE_A,
     instanceId: instanceA,
-    machineName: "STAGE3-PC-A",
-    installerVersion: "stage3-test",
+    machineName: "STAGE4-PC-A",
+    installerVersion: "stage4-test",
   });
 
   assert.equal(retry.idempotent, true);
@@ -152,6 +155,76 @@ async function main() {
       return true;
     },
   );
+
+  const completionAuth = {
+    authScheme: "signed-v2" as const,
+    agent: {
+      id: first.agent.id,
+      code: first.agent.code,
+      name: first.agent.name,
+      organizationId: first.agent.organizationId,
+      outletId: first.agent.outletId,
+      registerId: first.agent.registerId,
+      capabilities: {},
+    },
+    outlet: {
+      id: first.agent.outletId,
+      code: first.agent.outletCode,
+      name: first.agent.outletName,
+    },
+    register: {
+      id: first.agent.registerId,
+      code: first.agent.registerCode,
+      name: first.agent.registerName,
+    },
+  };
+
+  const completed = await completeHardwareAgentEnrollment({
+    enrollmentId: targetA.enrollmentId,
+    instanceId: instanceA,
+    auth: completionAuth,
+    installerVersion: "stage4-test",
+    credentialStoreKind: "windows-dpapi-current-user",
+    ipAddress: "127.0.0.1",
+    userAgent: "stage4-integration-test",
+  });
+  assert.equal(completed.idempotent, false);
+  assert.equal(completed.enrollment.status, "completed");
+
+  const completedRetry = await completeHardwareAgentEnrollment({
+    enrollmentId: targetA.enrollmentId,
+    instanceId: instanceA,
+    auth: completionAuth,
+  });
+  assert.equal(completedRetry.idempotent, true);
+  assert.equal(
+    completedRetry.enrollment.completedAt.getTime(),
+    completed.enrollment.completedAt.getTime(),
+  );
+
+  await assert.rejects(
+    () =>
+      claimHardwareAgentEnrollment({
+        installationCode: INSTALLATION_CODE_A,
+        instanceId: instanceA,
+      }),
+    (error) => {
+      assert.ok(error instanceof HardwareAgentEnrollmentClaimError);
+      assert.equal(error.code, "ENROLLMENT_REPLAY_WINDOW_EXPIRED");
+      return true;
+    },
+  );
+
+  const [completedRow] = await db
+    .select({
+      status: hardwareAgentEnrollments.status,
+      completedAt: hardwareAgentEnrollments.completedAt,
+    })
+    .from(hardwareAgentEnrollments)
+    .where(eq(hardwareAgentEnrollments.id, targetA.enrollmentId))
+    .limit(1);
+  assert.equal(completedRow?.status, "completed");
+  assert.ok(completedRow?.completedAt);
 
   const agentsForTargetA = await db
     .select({ id: hardwareAgents.id })
@@ -178,12 +251,12 @@ async function main() {
     claimHardwareAgentEnrollment({
       installationCode: INSTALLATION_CODE_B,
       instanceId: competingInstanceA,
-      machineName: "STAGE3-RACE-A",
+      machineName: "STAGE4-RACE-A",
     }),
     claimHardwareAgentEnrollment({
       installationCode: INSTALLATION_CODE_B,
       instanceId: competingInstanceB,
-      machineName: "STAGE3-RACE-B",
+      machineName: "STAGE4-RACE-B",
     }),
   ]);
 
@@ -217,7 +290,7 @@ async function main() {
   assert.equal(agentsForTargetB.length, 1);
 
   console.log(
-    "Hardware enrollment claim DB integration passed: first claim, same-instance retry, cross-instance rejection, and concurrent single-winner invariant.",
+    "Hardware enrollment DB integration passed: claim idempotency, secure completion, completion idempotency, replay shutdown, and concurrent single-winner invariant.",
   );
 }
 

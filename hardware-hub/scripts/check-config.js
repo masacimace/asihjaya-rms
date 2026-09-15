@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { SUPPORTED_FAKE_SCENARIOS, normalizeScenario } = require("../lib/failure-injection");
 const { createSecretProtector } = require("../lib/secret-protector");
+const { loadHardwareCredential } = require("../lib/credential-store");
 const { DOCUMENT_PRINT_PROFILES } = require("../lib/document-print-profiles");
 const {
   loadSatoJewelryLabelConfig,
@@ -40,6 +41,26 @@ const errors = [];
 const warnings = [];
 const root = path.resolve(__dirname, "..");
 const envPath = path.join(root, ".env");
+const credentialPath = resolveLocalPath(
+  "HARDWARE_CREDENTIAL_STORE_PATH",
+  "data/agent-credential.json",
+);
+const credentialKeyPath = resolveLocalPath(
+  "HARDWARE_CREDENTIAL_KEY_PATH",
+  "data/credential-store.key",
+);
+const credentialPowerShell = getEnv("HARDWARE_POWERSHELL_EXECUTABLE") || "powershell.exe";
+let secureCredential = null;
+try {
+  secureCredential = loadHardwareCredential({
+    credentialPath,
+    credentialKeyPath,
+    powershellExecutable: credentialPowerShell,
+  });
+} catch (error) {
+  errors.push(`Secure Hardware Hub credential tidak valid: ${error.message}`);
+}
+
 const nodeVersion = process.versions.node.split(".").map(Number);
 const nodeSupportsSqlite =
   nodeVersion[0] > 22 || (nodeVersion[0] === 22 && nodeVersion[1] >= 5);
@@ -55,12 +76,16 @@ if (!nodeSupportsSqlite) {
 }
 
 if (!fs.existsSync(envPath)) {
-  errors.push("File hardware-hub/.env belum ada. Copy dari .env.example lalu isi konfigurasi agent.");
+  if (secureCredential) {
+    warnings.push("File hardware-hub/.env belum ada; runtime credential aman tetap tersedia, tetapi konfigurasi printer/default non-secret belum diatur.");
+  } else {
+    errors.push("File hardware-hub/.env belum ada dan secure credential belum tersedia.");
+  }
 }
 
-const apiUrl = getEnv("ASIHJAYA_API_URL");
+const apiUrl = secureCredential?.apiUrl || getEnv("ASIHJAYA_API_URL");
 if (!apiUrl) {
-  errors.push("ASIHJAYA_API_URL wajib diisi.");
+  errors.push("ASIHJAYA_API_URL wajib tersedia dari secure credential atau environment.");
 } else {
   try {
     const parsed = new URL(apiUrl);
@@ -78,14 +103,19 @@ if (!apiUrl) {
   }
 }
 
-if (!getEnv("HARDWARE_AGENT_ID")) {
-  errors.push("HARDWARE_AGENT_ID wajib diisi dari output npm run hardware:agent:create.");
+const agentId = secureCredential?.agentId || getEnv("HARDWARE_AGENT_ID");
+if (!agentId) {
+  errors.push("Hardware Agent ID belum tersedia dari secure credential atau environment.");
 }
-const secret = getEnv("HARDWARE_AGENT_SECRET");
-if (!secret) errors.push("HARDWARE_AGENT_SECRET wajib diisi.");
+const secret = secureCredential?.secret || getEnv("HARDWARE_AGENT_SECRET");
+if (!secret) errors.push("Hardware Agent secret belum tersedia dari secure credential atau environment.");
 else if (secret.length < 32) errors.push("HARDWARE_AGENT_SECRET minimal 32 karakter.");
 
-const requestAuthMode = (getEnv("HARDWARE_AGENT_REQUEST_AUTH_MODE") || "signed").toLowerCase();
+const requestAuthMode = (
+  secureCredential?.authMode ||
+  getEnv("HARDWARE_AGENT_REQUEST_AUTH_MODE") ||
+  "signed"
+).toLowerCase();
 if (!["signed", "dual", "legacy"].includes(requestAuthMode)) {
   errors.push("HARDWARE_AGENT_REQUEST_AUTH_MODE harus signed, dual, atau legacy.");
 }
@@ -95,7 +125,8 @@ if (requestAuthMode !== "signed") {
   );
 }
 
-const protocolMode = getEnv("HARDWARE_PROTOCOL_MODE") || "v2-preferred";
+const protocolMode =
+  secureCredential?.protocolMode || getEnv("HARDWARE_PROTOCOL_MODE") || "v2-preferred";
 if (!["v2-preferred", "v2-only", "v1-only"].includes(protocolMode)) {
   errors.push("HARDWARE_PROTOCOL_MODE harus v2-preferred, v2-only, atau v1-only.");
 }
@@ -295,7 +326,9 @@ console.log("Asihjaya Hardware Hub config check");
 console.log("===================================");
 console.log(`Node.js               : ${process.version}`);
 console.log(`Working directory     : ${root}`);
-console.log(`ENV file              : ${envPath}`);
+console.log(`ENV file              : ${fs.existsSync(envPath) ? envPath : "-"}`);
+console.log(`Credential source     : ${secureCredential ? secureCredential.protectorKind : "legacy environment"}`);
+console.log(`Credential store      : ${secureCredential ? credentialPath : "-"}`);
 console.log(`API URL               : ${apiUrl || "-"}`);
 console.log(`Protocol mode         : ${protocolMode}`);
 console.log(`Journal path          : ${protocolMode === "v1-only" ? "disabled" : journalPath}`);
