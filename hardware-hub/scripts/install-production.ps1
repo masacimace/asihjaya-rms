@@ -2,6 +2,7 @@ param(
   [string]$TaskName = "Asihjaya Hardware Hub Agent",
   [string]$InstallationCode = "",
   [string]$ApiUrl = "",
+  [string]$StateDir = "",
   [string]$InstallerVersion = "stage4-production-setup",
   [switch]$RunNow,
   [switch]$SkipNpmInstall
@@ -21,17 +22,24 @@ if ($Parts[0] -lt 22 -or ($Parts[0] -eq 22 -and $Parts[1] -lt 5) -or $Parts[0] -
   throw "Node.js $VersionText tidak didukung. Gunakan Node.js >=22.5 dan <25."
 }
 
-New-Item -ItemType Directory -Force -Path (Join-Path $HubRoot "data") | Out-Null
+$ResolvedStateDir = if ($StateDir) {
+  [System.IO.Path]::GetFullPath($StateDir)
+} else {
+  Join-Path $HubRoot "data"
+}
+
+New-Item -ItemType Directory -Force -Path $ResolvedStateDir | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $HubRoot "logs") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $HubRoot "support-bundles") | Out-Null
 
 npm run check:dpapi
 
-$CredentialPath = Join-Path $HubRoot "data\agent-credential.json"
+$CredentialPath = Join-Path $ResolvedStateDir "agent-credential.json"
 if ($InstallationCode) {
   $EnrollArgs = @(
     "scripts/enroll-installer.js",
     "--installation-code", $InstallationCode,
+    "--state-dir", $ResolvedStateDir,
     "--installer-version", $InstallerVersion
   )
   if ($ApiUrl) {
@@ -61,6 +69,7 @@ if ($RunNow) { $Arguments += "-RunNow" }
 & powershell.exe @Arguments
 
 Write-Host "Production setup complete."
+Write-Host "State dir  : $ResolvedStateDir"
 Write-Host "Credential : DPAPI secure store (preferred) / legacy env fallback"
 Write-Host "Status     : npm run status"
 Write-Host "Health     : npm run health"
