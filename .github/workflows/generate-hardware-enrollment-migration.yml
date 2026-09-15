@@ -1,0 +1,48 @@
+name: Generate Hardware Enrollment Migration
+
+on:
+  push:
+    branches:
+      - feat/hardware-hub-enrollment-stage2
+
+permissions:
+  contents: write
+
+env:
+  DATABASE_URL: postgresql://unused:unused@127.0.0.1:5432/unused
+
+jobs:
+  generate:
+    if: ${{ !contains(github.event.head_commit.message, '[skip enrollment generate]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Stage 2 branch
+        uses: actions/checkout@v6
+        with:
+          ref: feat/hardware-hub-enrollment-stage2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          package-manager-cache: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate migration and snapshot from schema
+        run: npx drizzle-kit generate --name hardware_agent_enrollments
+
+      - name: Commit canonical migration metadata
+        run: |
+          if git diff --quiet -- drizzle; then
+            echo "No migration changes generated."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add drizzle
+          git commit -m "chore: generate hardware enrollment migration [skip enrollment generate]"
+          git push origin HEAD:feat/hardware-hub-enrollment-stage2
