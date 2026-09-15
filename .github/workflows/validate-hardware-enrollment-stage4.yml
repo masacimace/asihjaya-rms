@@ -59,8 +59,8 @@ jobs:
       - name: Route registry diagnostic
         continue-on-error: true
         run: npm run routes:check
-      - name: Apply migrations directly to disposable PostgreSQL
-        run: npx drizzle-kit migrate
+      - name: Push current schema to disposable PostgreSQL
+        run: npx drizzle-kit push --force
       - name: Enrollment claim and completion database integration
         run: npx tsx scripts/run-hardware-enrollment-claim-integration.ts
       - name: Hardware Hub JavaScript syntax
