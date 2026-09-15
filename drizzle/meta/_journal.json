@@ -2,32 +2,187 @@
   "version": "7",
   "dialect": "postgresql",
   "entries": [
-    {"idx":0,"version":"7","when":1784705890013,"tag":"0000_asihjaya_rms_baseline","breakpoints":true},
-    {"idx":1,"version":"7","when":1784791496019,"tag":"0001_customer_deposit_ledger","breakpoints":true},
-    {"idx":2,"version":"7","when":1785126743803,"tag":"0002_customer_history_pin","breakpoints":true},
-    {"idx":3,"version":"7","when":1785187936647,"tag":"0003_security_rate_limits","breakpoints":true},
-    {"idx":4,"version":"7","when":1785303000000,"tag":"0004_legacy_product_migration_foundation","breakpoints":true},
-    {"idx":5,"version":"7","when":1785315238132,"tag":"0005_legacy_master_mapping_sessions","breakpoints":true},
-    {"idx":6,"version":"7","when":1785319545463,"tag":"0006_legacy_physical_verification","breakpoints":true},
-    {"idx":7,"version":"7","when":1785324000000,"tag":"0007_legacy_manager_review_inventory_hold","breakpoints":true},
-    {"idx":8,"version":"7","when":1785380400000,"tag":"0008_legacy_sold_during_migration","breakpoints":true},
-    {"idx":9,"version":"7","when":1785466800000,"tag":"0009_legacy_transactional_cutover","breakpoints":true},
-    {"idx":10,"version":"7","when":1785553200000,"tag":"0010_legacy_session_readiness","breakpoints":true},
-    {"idx":11,"version":"7","when":1785583800000,"tag":"0011_legacy_cutover_hardening","breakpoints":true},
-    {"idx":12,"version":"7","when":1785594600000,"tag":"0012_legacy_barcode_pos","breakpoints":true},
-    {"idx":13,"version":"7","when":1786095300000,"tag":"0013_telegram_reporting_foundation","breakpoints":true},
-    {"idx":14,"version":"7","when":1786133445721,"tag":"0014_controlled_shift_reopen","breakpoints":true},
-    {"idx":15,"version":"7","when":1786250248498,"tag":"0015_grey_gorgon","breakpoints":true},
-    {"idx":16,"version":"7","when":1786372360863,"tag":"0016_product_batch_import_staging","breakpoints":true},
-    {"idx":17,"version":"7","when":1786995035673,"tag":"0017_pos_simple_payments","breakpoints":true},
-    {"idx":18,"version":"7","when":1787119740000,"tag":"0018_product_used_condition","breakpoints":true},
-    {"idx":19,"version":"7","when":1787154600000,"tag":"0019_pos_transaction_pricing_formula","breakpoints":true},
-    {"idx":20,"version":"7","when":1787595180000,"tag":"0020_buyback_core_transaction","breakpoints":true},
-    {"idx":21,"version":"7","when":1787985010688,"tag":"0021_r4_final_schema_cleanup","breakpoints":true},
-    {"idx":22,"version":"7","when":1788264086437,"tag":"0022_buyback_processing_lifecycle","breakpoints":true},
-    {"idx":23,"version":"7","when":1788343245624,"tag":"0023_buyback_simplified_acquisition","breakpoints":true},
-    {"idx":24,"version":"7","when":1789066796505,"tag":"0024_product_color_presets","breakpoints":true},
-    {"idx":25,"version":"7","when":1789381214885,"tag":"0025_buyback_price_rates","breakpoints":true},
-    {"idx":26,"version":"7","when":1789506000000,"tag":"0026_hardware_agent_enrollments","breakpoints":true}
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1784705890013,
+      "tag": "0000_asihjaya_rms_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784791496019,
+      "tag": "0001_customer_deposit_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785126743803,
+      "tag": "0002_customer_history_pin",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785187936647,
+      "tag": "0003_security_rate_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785303000000,
+      "tag": "0004_legacy_product_migration_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785315238132,
+      "tag": "0005_legacy_master_mapping_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785319545463,
+      "tag": "0006_legacy_physical_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785324000000,
+      "tag": "0007_legacy_manager_review_inventory_hold",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785380400000,
+      "tag": "0008_legacy_sold_during_migration",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785466800000,
+      "tag": "0009_legacy_transactional_cutover",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785553200000,
+      "tag": "0010_legacy_session_readiness",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785583800000,
+      "tag": "0011_legacy_cutover_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785594600000,
+      "tag": "0012_legacy_barcode_pos",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786095300000,
+      "tag": "0013_telegram_reporting_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786133445721,
+      "tag": "0014_controlled_shift_reopen",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786250248498,
+      "tag": "0015_grey_gorgon",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786372360863,
+      "tag": "0016_product_batch_import_staging",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786995035673,
+      "tag": "0017_pos_simple_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787119740000,
+      "tag": "0018_product_used_condition",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787154600000,
+      "tag": "0019_pos_transaction_pricing_formula",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787595180000,
+      "tag": "0020_buyback_core_transaction",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787985010688,
+      "tag": "0021_r4_final_schema_cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788264086437,
+      "tag": "0022_buyback_processing_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788343245624,
+      "tag": "0023_buyback_simplified_acquisition",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789066796505,
+      "tag": "0024_product_color_presets",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789381214885,
+      "tag": "0025_buyback_price_rates",
+      "breakpoints": true
+    }
   ]
 }
