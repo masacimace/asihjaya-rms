@@ -1,12 +1,14 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 import {
-  HardwareAgentProvisioningError,
-} from "@/features/hardware/agent-provisioning";
-import { provisionDedicatedHardwareHub } from "@/features/hardware/hardware-hub-provisioning";
+  createHardwareAgentEnrollment,
+  HardwareAgentEnrollmentError,
+  revokeHardwareAgentEnrollment,
+} from "@/features/hardware/agent-enrollment";
 import { requirePermission } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/http/client-ip";
 
@@ -22,18 +24,13 @@ export type HardwareHubSetupActionState =
     }
   | {
       status: "success";
-      agent: {
+      enrollment: {
         id: string;
-        code: string;
-        name: string;
         outletName: string;
         registerName: string;
+        expiresAt: string;
       };
-      credential: {
-        secret: string;
-        authMode: "signed";
-        protocolMode: "v2-preferred";
-      };
+      installationCode: string;
     };
 
 export async function setupHardwareHubAction(
@@ -44,19 +41,15 @@ export async function setupHardwareHubAction(
   const outletId = String(formData.get("outletId") ?? "").trim();
   const registerId = String(formData.get("registerId") ?? "").trim();
   const requestId = String(formData.get("requestId") ?? "").trim();
-  const code = String(formData.get("code") ?? "").trim();
-  const name = String(formData.get("name") ?? "").trim();
   const headerStore = await headers();
 
   try {
-    const result = await provisionDedicatedHardwareHub({
+    const result = await createHardwareAgentEnrollment({
       organizationId: auth.organization.id,
       accessibleOutletIds: auth.outlets.map((outlet) => outlet.id),
       actorUserId: auth.user.id,
       outletId,
       registerId,
-      code,
-      name,
       requestId: UUID_PATTERN.test(requestId) ? requestId : null,
       ipAddress: getClientIp(headerStore),
       userAgent: headerStore.get("user-agent")?.slice(0, 500) ?? null,
@@ -66,24 +59,60 @@ export async function setupHardwareHubAction(
 
     return {
       status: "success",
-      agent: {
-        id: result.agent.id,
-        code: result.agent.code,
-        name: result.agent.name,
-        outletName: result.agent.outletName,
-        registerName: result.agent.registerName,
+      enrollment: {
+        id: result.enrollment.id,
+        outletName: result.enrollment.outletName,
+        registerName: result.enrollment.registerName,
+        expiresAt: result.enrollment.expiresAt.toISOString(),
       },
-      credential: result.credential,
+      installationCode: result.installationCode,
     };
   } catch (error) {
-    if (error instanceof HardwareAgentProvisioningError) {
+    if (error instanceof HardwareAgentEnrollmentError) {
       return { status: "error", message: error.message };
     }
 
-    console.error("[hardware] simplified Hardware Hub setup failed", error);
+    console.error("[hardware] Hardware Hub enrollment creation failed", error);
     return {
       status: "error",
-      message: "Hardware Hub gagal disiapkan.",
+      message: "Installation Code gagal dibuat.",
     };
   }
+}
+
+export async function revokeHardwareHubEnrollmentAction(
+  formData: FormData,
+): Promise<void> {
+  const auth = await requirePermission("hardware.agents.manage");
+  const enrollmentId = String(formData.get("enrollmentId") ?? "").trim();
+  const requestId = String(formData.get("requestId") ?? "").trim();
+  const headerStore = await headers();
+
+  try {
+    await revokeHardwareAgentEnrollment({
+      organizationId: auth.organization.id,
+      accessibleOutletIds: auth.outlets.map((outlet) => outlet.id),
+      actorUserId: auth.user.id,
+      enrollmentId,
+      requestId: UUID_PATTERN.test(requestId) ? requestId : null,
+      ipAddress: getClientIp(headerStore),
+      userAgent: headerStore.get("user-agent")?.slice(0, 500) ?? null,
+    });
+  } catch (error) {
+    if (error instanceof HardwareAgentEnrollmentError) {
+      redirect(
+        `${HARDWARE_DASHBOARD_PATH}?type=error&message=${encodeURIComponent(error.message)}`,
+      );
+    }
+
+    console.error("[hardware] Hardware Hub enrollment revoke failed", error);
+    redirect(
+      `${HARDWARE_DASHBOARD_PATH}?type=error&message=${encodeURIComponent("Installation Code gagal dibatalkan.")}`,
+    );
+  }
+
+  revalidatePath(HARDWARE_DASHBOARD_PATH);
+  redirect(
+    `${HARDWARE_DASHBOARD_PATH}?type=success&message=${encodeURIComponent("Installation Code dibatalkan.")}`,
+  );
 }
