@@ -241,8 +241,7 @@ begin
   if LabelPrinterCombo.Items.Count = 0 then
     PrinterStatusLabel.Caption := 'Tidak ada printer Windows yang ditemukan.'
   else
-    PrinterStatusLabel.Caption := Format('%d printer ditemukan. SATO/EPSON dipilih otomatis bila tersedia.',
-      [LabelPrinterCombo.Items.Count]);
+    PrinterStatusLabel.Caption := Format('%d printer ditemukan. SATO/EPSON dipilih otomatis bila tersedia.', [LabelPrinterCombo.Items.Count]);
 end;
 
 procedure RefreshPrintersClick(Sender: TObject);
@@ -376,8 +375,7 @@ begin
   if ResultCode = 0 then
     MsgBox('Test print berhasil dikirim ke ' + PrinterName + '.', mbInformation, MB_OK)
   else
-    MsgBox(Format('Test print gagal (exit code %d). Periksa printer dan driver Windows.',
-      [ResultCode]), mbError, MB_OK);
+    MsgBox(Format('Test print gagal (exit code %d). Periksa printer dan driver Windows.', [ResultCode]), mbError, MB_OK);
 end;
 
 procedure TestLabelClick(Sender: TObject);
