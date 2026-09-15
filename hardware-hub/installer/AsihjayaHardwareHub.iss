@@ -195,40 +195,54 @@ end;
 procedure LoadPrinters;
 var
   ResultCode: Integer;
-  Output: TExecOutput;
   Params: String;
   I: Integer;
   PrinterName: String;
+  PrinterListPath: String;
+  PrinterLines: TArrayOfString;
 begin
   LabelPrinterCombo.Items.Clear;
   DocumentPrinterCombo.Items.Clear;
   PrinterStatusLabel.Caption := 'Mendeteksi printer Windows...';
 
+  PrinterListPath := ExpandConstant('{commondocs}\ASIHJAYA-Hardware-Hub-printers.txt');
+  DeleteFile(PrinterListPath);
   Params := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ' +
-    Q('$ErrorActionPreference=''Stop''; Get-Printer | Sort-Object Name | ForEach-Object { $_.Name }');
+    Q('$ErrorActionPreference=''Stop''; Get-Printer | Sort-Object Name | ForEach-Object { $_.Name } | Set-Content -LiteralPath ''' + PrinterListPath + ''' -Encoding UTF8');
 
   try
-    if not ExecAndCaptureOutput(PowerShellExecutable, Params, '', SW_SHOWNORMAL,
-      ewWaitUntilTerminated, ResultCode, Output) then
-      RaiseException('PowerShell printer detection tidak dapat dijalankan.');
+    if not ExecAsOriginalUser(PowerShellExecutable, Params, '', SW_SHOWNORMAL,
+      ewWaitUntilTerminated, ResultCode) then
+      RaiseException('PowerShell printer detection tidak dapat dijalankan pada user Windows outlet.');
   except
     PrinterStatusLabel.Caption := 'Printer Windows gagal dideteksi.';
     MsgBox('Printer Windows tidak dapat dideteksi: ' + GetExceptionMessage,
       mbError, MB_OK);
+    DeleteFile(PrinterListPath);
     Exit;
   end;
 
-  if (ResultCode <> 0) or Output.Error then
+  if (ResultCode <> 0) or (not FileExists(PrinterListPath)) then
   begin
     PrinterStatusLabel.Caption := 'Printer Windows gagal dideteksi.';
-    MsgBox('Get-Printer gagal. Pastikan driver SATO dan EPSON sudah terpasang.',
+    MsgBox('Get-Printer gagal pada user Windows outlet. Pastikan driver SATO dan EPSON sudah terpasang.',
       mbError, MB_OK);
+    DeleteFile(PrinterListPath);
     Exit;
   end;
 
-  for I := 0 to GetArrayLength(Output.StdOut) - 1 do
+  if not LoadStringsFromFile(PrinterListPath, PrinterLines) then
   begin
-    PrinterName := Trim(Output.StdOut[I]);
+    PrinterStatusLabel.Caption := 'Daftar printer tidak dapat dibaca.';
+    MsgBox('Hasil deteksi printer tidak dapat dibaca.', mbError, MB_OK);
+    DeleteFile(PrinterListPath);
+    Exit;
+  end;
+  DeleteFile(PrinterListPath);
+
+  for I := 0 to GetArrayLength(PrinterLines) - 1 do
+  begin
+    PrinterName := Trim(PrinterLines[I]);
     if PrinterName <> '' then
     begin
       LabelPrinterCombo.Items.Add(PrinterName);
@@ -241,7 +255,7 @@ begin
   if LabelPrinterCombo.Items.Count = 0 then
     PrinterStatusLabel.Caption := 'Tidak ada printer Windows yang ditemukan.'
   else
-    PrinterStatusLabel.Caption := Format('%d printer ditemukan. SATO/EPSON dipilih otomatis bila tersedia.', [LabelPrinterCombo.Items.Count]);
+    PrinterStatusLabel.Caption := Format('%d printer ditemukan dari user Windows outlet. SATO/EPSON dipilih otomatis bila tersedia.', [LabelPrinterCombo.Items.Count]);
 end;
 
 procedure RefreshPrintersClick(Sender: TObject);
