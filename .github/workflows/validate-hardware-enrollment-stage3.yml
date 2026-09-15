@@ -32,6 +32,20 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: asihjaya_ci
+          POSTGRES_PASSWORD: asihjaya_ci
+          POSTGRES_DB: asihjaya_rms_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U asihjaya_ci -d asihjaya_rms_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -44,6 +58,10 @@ jobs:
         run: npm run check:hardware-app
       - name: TypeScript
         run: npm run typecheck
+      - name: Apply migrations directly to disposable PostgreSQL
+        run: npm run db:migrate
+      - name: Enrollment claim database integration
+        run: npx tsx scripts/run-hardware-enrollment-claim-integration.ts
       - name: Hardware Hub dependencies
         run: npm --prefix hardware-hub ci
       - name: Hardware Hub CI
