@@ -43,9 +43,7 @@ export const hardwareAgentEnrollments = pgTable(
     claimedByInstanceId: varchar("claimed_by_instance_id", { length: 120 }),
     claimedIpAddress: varchar("claimed_ip_address", { length: 64 }),
     claimedUserAgent: text("claimed_user_agent"),
-    agentId: uuid("agent_id").references(() => hardwareAgents.id, {
-      onDelete: "set null",
-    }),
+    agentId: uuid("agent_id").references(() => hardwareAgents.id),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
