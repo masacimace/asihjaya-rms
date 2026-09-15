@@ -69,7 +69,7 @@ export async function GET(_request: Request, context: RouteContext) {
     customerId: accessContext.customer.id,
   });
 
-  if (!session || session.requiresPinChange) {
+  if (!session) {
     return new Response("Not found", { status: 404 });
   }
 
