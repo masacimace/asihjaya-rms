@@ -1,9 +1,17 @@
 "use client";
 
-import { CheckCircle2, Download, MonitorCog, X } from "lucide-react";
+import {
+  Check,
+  CheckCircle2,
+  Clipboard,
+  KeyRound,
+  MonitorCog,
+  X,
+} from "lucide-react";
 import { useActionState, useMemo, useRef, useState } from "react";
 
 import {
+  revokeHardwareHubEnrollmentAction,
   setupHardwareHubAction,
   type HardwareHubSetupActionState,
 } from "@/app/actions/hardware-hub-provisioning";
@@ -12,34 +20,11 @@ import type { HardwareHubProvisioningOption } from "@/features/hardware/provisio
 
 const initialState: HardwareHubSetupActionState = { status: "idle" };
 
-function buildSuggestedCode(registerCode: string) {
-  const normalized = registerCode
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return `${normalized}-HH`.slice(0, 80);
-}
-
-function buildEnvironmentFile(
-  state: Extract<HardwareHubSetupActionState, { status: "success" }>,
-) {
-  return [
-    `ASIHJAYA_API_URL=${window.location.origin}`,
-    "",
-    `HARDWARE_AGENT_ID=${state.agent.id}`,
-    `HARDWARE_AGENT_SECRET=${state.credential.secret}`,
-    "HARDWARE_AGENT_REQUEST_AUTH_MODE=signed",
-    "HARDWARE_PROTOCOL_MODE=v2-preferred",
-    "",
-    "# Temporary Stage 1 onboarding. Installer enrollment akan menggantikan file ini pada Stage 2.",
-    "HARDWARE_ADAPTER_MODE=fake",
-    "LABEL_PRINTER_ADAPTER=fake",
-    "DOCUMENT_PRINTER_ADAPTER=fake",
-    "CASH_DRAWER_ADAPTER=fake",
-    "",
-  ].join("\r\n");
+function formatExpiry(value: string | Date) {
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 export function HardwareHubSetupDialog({
@@ -48,11 +33,7 @@ export function HardwareHubSetupDialog({
   options: HardwareHubProvisioningOption[];
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const availableOptions = useMemo(
-    () => options.filter((option) => !option.activeAgent),
-    [options],
-  );
-  const firstAvailable = availableOptions[0] ?? null;
+  const firstAvailable = options.find((option) => !option.activeAgent) ?? null;
   const [selectedOutletId, setSelectedOutletId] = useState(
     firstAvailable?.outlet.id ?? "",
   );
@@ -60,7 +41,13 @@ export function HardwareHubSetupDialog({
     firstAvailable?.register.id ?? "",
   );
   const [requestId, setRequestId] = useState("");
+  const [copied, setCopied] = useState(false);
   const [state, action] = useActionState(setupHardwareHubAction, initialState);
+
+  const availableOptions = useMemo(
+    () => options.filter((option) => !option.activeAgent),
+    [options],
+  );
 
   const outlets = useMemo(() => {
     const values = new Map<string, HardwareHubProvisioningOption["outlet"]>();
@@ -78,12 +65,12 @@ export function HardwareHubSetupDialog({
     [availableOptions, selectedOutletId],
   );
 
-  const selected =
+  const selectedOption =
     availableOptions.find(
       (option) =>
         option.outlet.id === selectedOutletId &&
         option.register.id === selectedRegisterId,
-    ) ?? firstAvailable;
+    ) ?? null;
 
   function open() {
     const available = availableOptions[0] ?? null;
@@ -92,22 +79,13 @@ export function HardwareHubSetupDialog({
       setSelectedRegisterId(available.register.id);
     }
     setRequestId(window.crypto.randomUUID());
+    setCopied(false);
     dialogRef.current?.showModal();
   }
 
-  function downloadTemporaryConfig() {
-    if (state.status !== "success") return;
-    const blob = new Blob([buildEnvironmentFile(state)], {
-      type: "text/plain;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `hardware-hub-${state.agent.code.toLowerCase()}.env`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+  async function copyInstallationCode(code: string) {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
   }
 
   const hasAvailable = availableOptions.length > 0;
@@ -136,36 +114,65 @@ export function HardwareHubSetupDialog({
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-neutral-950">
-                  Hardware Hub siap dilanjutkan
+                  Hardware Hub siap dipasang
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                  {state.agent.outletName} · {state.agent.registerName}
+                  {state.enrollment.outletName} · {state.enrollment.registerName}
                 </p>
               </div>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-              Tahap ini masih memakai konfigurasi manual sementara. Pada Stage 2,
-              langkah download file konfigurasi akan diganti Installation Code
-              untuk installer Windows.
+            <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-neutral-800">
+                <KeyRound className="size-4 text-[var(--accent)]" />
+                Installation Code
+              </div>
+              <div className="mt-3 rounded-xl border border-dashed border-neutral-300 bg-white px-4 py-4 text-center font-mono text-xl font-bold tracking-[0.14em] text-neutral-950 sm:text-2xl">
+                {state.installationCode}
+              </div>
+              <button
+                type="button"
+                onClick={() => copyInstallationCode(state.installationCode)}
+                className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:border-[var(--accent)] hover:text-[var(--accent)]"
+              >
+                {copied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
+                {copied ? "Kode disalin" : "Salin Kode"}
+              </button>
+              <p className="mt-3 text-center text-xs leading-5 text-[var(--muted)]">
+                Berlaku sampai {formatExpiry(state.enrollment.expiresAt)}. Kode hanya
+                digunakan untuk menghubungkan satu Mini PC ke register ini.
+              </p>
             </div>
 
-            <button
-              type="button"
-              onClick={downloadTemporaryConfig}
-              className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 hover:border-[var(--accent)] hover:text-[var(--accent)]"
-            >
-              <Download className="size-4" />
-              Download Konfigurasi Sementara
-            </button>
+            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+              Jalankan ASIHJAYA Hardware Hub Setup pada Mini PC outlet, lalu masukkan
+              Installation Code di atas. Credential teknis akan dikirim langsung ke
+              installer dan tidak perlu disalin oleh staff.
+            </div>
 
-            <button
-              type="button"
-              onClick={() => window.location.assign("/admin/operasional/hardware")}
-              className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white"
-            >
-              Selesai
-            </button>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <form action={revokeHardwareHubEnrollmentAction}>
+                <input
+                  type="hidden"
+                  name="enrollmentId"
+                  value={state.enrollment.id}
+                />
+                <FormSubmitButton
+                  className="w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50"
+                  pendingText="Membatalkan..."
+                >
+                  Batalkan Kode
+                </FormSubmitButton>
+              </form>
+
+              <button
+                type="button"
+                onClick={() => window.location.assign("/admin/operasional/hardware")}
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white"
+              >
+                Selesai
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
@@ -237,26 +244,31 @@ export function HardwareHubSetupDialog({
               <input type="hidden" name="outletId" value={selectedOutletId} />
               <input type="hidden" name="registerId" value={selectedRegisterId} />
               <input type="hidden" name="requestId" value={requestId} />
-              <input
-                type="hidden"
-                name="code"
-                value={selected ? buildSuggestedCode(selected.register.code) : ""}
-              />
-              <input
-                type="hidden"
-                name="name"
-                value={selected ? `Hardware Hub ${selected.outlet.name}` : ""}
-              />
 
-              <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm leading-6 text-[var(--muted)]">
-                Nama perangkat dan kode agent dibuat otomatis agar staff tidak perlu memahami konfigurasi teknis.
-              </div>
+              {selectedOption?.pendingEnrollment ? (
+                <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+                  <p className="font-semibold">Installation Code masih aktif.</p>
+                  <p className="mt-1">
+                    Berlaku sampai {formatExpiry(selectedOption.pendingEnrollment.expiresAt)}.
+                    Demi keamanan, kode plaintext tidak dapat ditampilkan ulang setelah halaman
+                    ditutup atau direfresh. Membuat kode baru akan otomatis membatalkan kode lama.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm leading-6 text-[var(--muted)]">
+                  RMS akan membuat Installation Code sementara. Staff cukup memasukkan
+                  kode tersebut ke installer Hardware Hub pada Mini PC; tidak ada Agent ID,
+                  secret, atau file konfigurasi yang perlu dipindahkan manual.
+                </div>
+              )}
 
               <FormSubmitButton
                 className="mt-5 w-full rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white"
-                pendingText="Menyiapkan..."
+                pendingText="Membuat kode..."
               >
-                Siapkan Hardware Hub
+                {selectedOption?.pendingEnrollment
+                  ? "Buat Installation Code Baru"
+                  : "Buat Installation Code"}
               </FormSubmitButton>
             </form>
           </div>
