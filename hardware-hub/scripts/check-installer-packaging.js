@@ -44,9 +44,11 @@ async function main() {
     "Wizard wajib mendeteksi printer dan menyediakan test print SATO/EPSON.",
   );
   assert.ok(
-    builder.includes("node-v$NodeVersion-win-x64.zip") &&
+    builder.includes('[string]$NodeVersion = "24.14.0"') &&
+      builder.includes("node-v$NodeVersion-win-x64.zip") &&
       builder.includes("313fa40c0d7b18575821de8cb17483031fe07d95de5994f6f435f3b345f85c66") &&
-      builder.includes("SumatraPDF-3.6.1-64.zip") &&
+      builder.includes('$SumatraVersion = "3.6.1"') &&
+      builder.includes('"SumatraPDF-$SumatraVersion-64.zip"') &&
       builder.includes("98b33a518d42986856d225064b0cd2d3643ecf78cbf84ab873d26cc51877a544"),
     "Builder wajib pin + verify Node 24.14.0 dan SumatraPDF 3.6.1 artifacts.",
   );
