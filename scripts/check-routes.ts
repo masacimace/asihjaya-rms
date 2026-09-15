@@ -121,6 +121,7 @@ const expectedRouteFiles = [
   "app/api/hardware-jobs/[jobId]/route.ts",
   "app/api/hardware-jobs/claim/route.ts",
   "app/(admin)/admin/pengaturan/warna-produk/page.tsx",
+  "app/api/hardware/installer/download/route.ts",
   "app/api/hardware/v2/enrollments/claim/route.ts",
   "app/api/hardware/v2/enrollments/complete/route.ts",
   "app/api/hardware/v2/jobs/[jobId]/attempts/[attemptId]/lease/route.ts",
