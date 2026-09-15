@@ -136,6 +136,8 @@ export async function POST(req: NextRequest) {
         id: result.enrollment.id,
         status: result.enrollment.status,
         claimedAt: result.enrollment.claimedAt.toISOString(),
+        credentialReplayUntil:
+          result.enrollment.credentialReplayUntil.toISOString(),
       },
       agent: result.agent,
       credential: result.credential,
@@ -168,6 +170,13 @@ export async function POST(req: NextRequest) {
         return jsonNoStore(
           { success: false, error: "INSTALLATION_CODE_ALREADY_CLAIMED" },
           { status: 409 },
+        );
+      }
+
+      if (error.code === "ENROLLMENT_REPLAY_WINDOW_EXPIRED") {
+        return jsonNoStore(
+          { success: false, error: "INSTALLATION_CODE_REPLAY_WINDOW_EXPIRED" },
+          { status: 410 },
         );
       }
 
