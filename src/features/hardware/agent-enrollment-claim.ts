@@ -14,12 +14,15 @@ import { hashHardwareEnrollmentCode } from "@/lib/hardware/enrollment-code";
 const INSTANCE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export const HARDWARE_ENROLLMENT_IDEMPOTENT_REPLAY_MINUTES = 10;
+
 export type HardwareAgentEnrollmentClaimErrorCode =
   | "INVALID_INPUT"
   | "ENROLLMENT_NOT_FOUND"
   | "ENROLLMENT_EXPIRED"
   | "ENROLLMENT_REVOKED"
   | "ENROLLMENT_CLAIMED_BY_OTHER_INSTANCE"
+  | "ENROLLMENT_REPLAY_WINDOW_EXPIRED"
   | "REGISTER_UNAVAILABLE"
   | "ACTIVE_AGENT_EXISTS"
   | "AGENT_UNAVAILABLE"
@@ -50,6 +53,7 @@ export type ClaimHardwareAgentEnrollmentResult = {
     id: string;
     status: "claimed" | "completed";
     claimedAt: Date;
+    credentialReplayUntil: Date;
   };
   agent: {
     id: string;
@@ -105,6 +109,13 @@ function buildAgentName(input: {
   return label.slice(0, 160);
 }
 
+function replayUntil(claimedAt: Date): Date {
+  return new Date(
+    claimedAt.getTime() +
+      HARDWARE_ENROLLMENT_IDEMPOTENT_REPLAY_MINUTES * 60 * 1000,
+  );
+}
+
 function isPostgresUniqueViolation(
   error: unknown,
   constraint: string,
@@ -145,7 +156,7 @@ export async function claimHardwareAgentEnrollment(
   const now = new Date();
 
   try {
-    const result = await db.transaction<TransactionResult>(async (tx) => {
+    const result: TransactionResult = await db.transaction(async (tx) => {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`hardware-enrollment:${codeHash}`}, 0))`,
       );
@@ -185,7 +196,11 @@ export async function claimHardwareAgentEnrollment(
         };
       }
 
-      if (!enrollment.outletIsActive || !enrollment.registerIsActive || !enrollment.registerIsHardwareHub) {
+      if (
+        !enrollment.outletIsActive ||
+        !enrollment.registerIsActive ||
+        !enrollment.registerIsHardwareHub
+      ) {
         return {
           ok: false,
           error: new HardwareAgentEnrollmentClaimError(
@@ -232,6 +247,20 @@ export async function claimHardwareAgentEnrollment(
             error: new HardwareAgentEnrollmentClaimError(
               "AGENT_UNAVAILABLE",
               "Hardware Agent hasil enrollment tidak tersedia.",
+            ),
+          };
+        }
+
+        const credentialReplayUntil = replayUntil(enrollment.claimedAt);
+        if (
+          enrollment.status === "completed" ||
+          credentialReplayUntil <= now
+        ) {
+          return {
+            ok: false,
+            error: new HardwareAgentEnrollmentClaimError(
+              "ENROLLMENT_REPLAY_WINDOW_EXPIRED",
+              "Jendela retry credential Installation Code sudah berakhir.",
             ),
           };
         }
@@ -287,6 +316,7 @@ export async function claimHardwareAgentEnrollment(
               id: enrollment.id,
               status: enrollment.status,
               claimedAt: enrollment.claimedAt,
+              credentialReplayUntil,
             },
             agent: {
               id: agent.id,
@@ -473,6 +503,8 @@ export async function claimHardwareAgentEnrollment(
             instanceId,
             machineName,
             installerVersion,
+            credentialReplayMinutes:
+              HARDWARE_ENROLLMENT_IDEMPOTENT_REPLAY_MINUTES,
           },
           createdAt: now,
         },
@@ -486,6 +518,7 @@ export async function claimHardwareAgentEnrollment(
             id: enrollment.id,
             status: "claimed",
             claimedAt: now,
+            credentialReplayUntil: replayUntil(now),
           },
           agent: {
             id: agent.id,
