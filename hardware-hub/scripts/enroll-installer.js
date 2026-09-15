@@ -1,9 +1,10 @@
 /* eslint-disable */
 const path = require("path");
 
+const hubRoot = path.resolve(__dirname, "..");
 try {
   require("dotenv").config({
-    path: path.resolve(__dirname, "..", ".env"),
+    path: path.join(hubRoot, ".env"),
     quiet: true,
   });
 } catch {}
@@ -39,6 +40,26 @@ function required(value, label) {
   return normalized;
 }
 
+function resolveHubPath(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return null;
+  return path.isAbsolute(normalized)
+    ? path.normalize(normalized)
+    : path.resolve(hubRoot, normalized);
+}
+
+function resolveInstallerStateDir(args) {
+  const explicitStateDir = resolveHubPath(
+    args["state-dir"] || process.env.HARDWARE_INSTALLER_STATE_DIR,
+  );
+  if (explicitStateDir) return explicitStateDir;
+
+  const credentialPath = resolveHubPath(process.env.HARDWARE_CREDENTIAL_STORE_PATH);
+  if (credentialPath) return path.dirname(credentialPath);
+
+  return path.join(hubRoot, "data");
+}
+
 function safeResult(result) {
   return {
     success: true,
@@ -59,9 +80,7 @@ function safeResult(result) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const stateDir = path.resolve(
-    String(args["state-dir"] || process.env.HARDWARE_INSTALLER_STATE_DIR || "data"),
-  );
+  const stateDir = resolveInstallerStateDir(args);
   const installerVersion =
     args["installer-version"] || process.env.HARDWARE_INSTALLER_VERSION || null;
 
