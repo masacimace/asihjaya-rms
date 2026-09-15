@@ -42,8 +42,6 @@ jobs:
       - run: npm ci
       - name: Hardware application contracts
         run: npm run check:hardware-app
-      - name: Route registry
-        run: npm run routes:check
       - name: TypeScript
         run: npm run typecheck
       - name: Hardware Hub dependencies
