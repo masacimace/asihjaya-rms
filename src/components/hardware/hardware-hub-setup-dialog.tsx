@@ -4,6 +4,7 @@ import {
   Check,
   CheckCircle2,
   Clipboard,
+  Download,
   KeyRound,
   MonitorCog,
   X,
@@ -107,7 +108,7 @@ export function HardwareHubSetupDialog({
         className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl overflow-hidden rounded-3xl border border-[var(--border)] bg-white p-0 shadow-2xl backdrop:bg-black/40"
       >
         {state.status === "success" ? (
-          <div className="p-5 sm:p-6">
+          <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6">
             <div className="flex items-start gap-3">
               <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
                 <CheckCircle2 className="size-5" />
@@ -122,10 +123,30 @@ export function HardwareHubSetupDialog({
               </div>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+            <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">
+                1. Download installer
+              </p>
+              <p className="mt-1 text-sm leading-6 text-sky-950">
+                Download installer resmi, lalu jalankan dengan double-click pada Mini PC outlet.
+              </p>
+              <a
+                href="/api/hardware/installer/download"
+                className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-800"
+              >
+                <Download className="size-4" />
+                Download ASIHJAYA Hardware Hub Setup
+              </a>
+              <p className="mt-2 text-xs leading-5 text-sky-800">
+                Jalankan Setup secara normal dan setujui UAC ketika diminta. Jangan gunakan menu
+                Run as administrator agar credential DPAPI tetap terikat ke user Windows outlet.
+              </p>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-neutral-800">
                 <KeyRound className="size-4 text-[var(--accent)]" />
-                Installation Code
+                2. Installation Code
               </div>
               <div className="mt-3 rounded-xl border border-dashed border-neutral-300 bg-white px-4 py-4 text-center font-mono text-xl font-bold tracking-[0.14em] text-neutral-950 sm:text-2xl">
                 {state.installationCode}
@@ -144,10 +165,13 @@ export function HardwareHubSetupDialog({
               </p>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-              Jalankan ASIHJAYA Hardware Hub Setup pada Mini PC outlet, lalu masukkan
-              Installation Code di atas. Credential teknis akan dikirim langsung ke
-              installer dan tidak perlu disalin oleh staff.
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-950">
+              <p className="font-semibold">3. Selesaikan wizard di Mini PC</p>
+              <p className="mt-1">
+                Masukkan Installation Code, pilih printer SATO untuk label dan EPSON untuk nota,
+                lalu biarkan Setup menyimpan credential secara aman dan mengaktifkan Hardware Hub.
+                Agent ID, secret, Node.js, dan konfigurasi teknis tidak perlu diisi staff.
+              </p>
             </div>
 
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
