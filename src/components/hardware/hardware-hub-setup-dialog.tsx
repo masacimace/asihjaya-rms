@@ -20,7 +20,7 @@ import type { HardwareHubProvisioningOption } from "@/features/hardware/provisio
 
 const initialState: HardwareHubSetupActionState = { status: "idle" };
 
-function formatExpiry(value: string) {
+function formatExpiry(value: string | Date) {
   return new Intl.DateTimeFormat("id-ID", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -64,6 +64,13 @@ export function HardwareHubSetupDialog({
       ),
     [availableOptions, selectedOutletId],
   );
+
+  const selectedOption =
+    availableOptions.find(
+      (option) =>
+        option.outlet.id === selectedOutletId &&
+        option.register.id === selectedRegisterId,
+    ) ?? null;
 
   function open() {
     const available = availableOptions[0] ?? null;
@@ -238,17 +245,30 @@ export function HardwareHubSetupDialog({
               <input type="hidden" name="registerId" value={selectedRegisterId} />
               <input type="hidden" name="requestId" value={requestId} />
 
-              <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm leading-6 text-[var(--muted)]">
-                RMS akan membuat Installation Code sementara. Staff cukup memasukkan
-                kode tersebut ke installer Hardware Hub pada Mini PC; tidak ada Agent ID,
-                secret, atau file konfigurasi yang perlu dipindahkan manual.
-              </div>
+              {selectedOption?.pendingEnrollment ? (
+                <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+                  <p className="font-semibold">Installation Code masih aktif.</p>
+                  <p className="mt-1">
+                    Berlaku sampai {formatExpiry(selectedOption.pendingEnrollment.expiresAt)}.
+                    Demi keamanan, kode plaintext tidak dapat ditampilkan ulang setelah halaman
+                    ditutup atau direfresh. Membuat kode baru akan otomatis membatalkan kode lama.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm leading-6 text-[var(--muted)]">
+                  RMS akan membuat Installation Code sementara. Staff cukup memasukkan
+                  kode tersebut ke installer Hardware Hub pada Mini PC; tidak ada Agent ID,
+                  secret, atau file konfigurasi yang perlu dipindahkan manual.
+                </div>
+              )}
 
               <FormSubmitButton
                 className="mt-5 w-full rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white"
                 pendingText="Membuat kode..."
               >
-                Buat Installation Code
+                {selectedOption?.pendingEnrollment
+                  ? "Buat Installation Code Baru"
+                  : "Buat Installation Code"}
               </FormSubmitButton>
             </form>
           </div>
