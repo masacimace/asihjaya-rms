@@ -26,6 +26,12 @@ const enrollmentClaimSource = read(
 const enrollmentClaimRouteSource = read(
   "src/app/api/hardware/v2/enrollments/claim/route.ts",
 );
+const enrollmentCompletionSource = read(
+  "src/features/hardware/agent-enrollment-completion.ts",
+);
+const enrollmentCompletionRouteSource = read(
+  "src/app/api/hardware/v2/enrollments/complete/route.ts",
+);
 const actionSource = read("src/app/actions/hardware-hub-provisioning.ts");
 const optionsSource = read("src/features/hardware/provisioning-options.ts");
 const journalSource = read("drizzle/meta/_journal.json");
@@ -149,6 +155,37 @@ assert(
   "Claim API wajib mengekspos bounded retry window tanpa menjadikan Installation Code credential jangka panjang.",
 );
 
+assert(
+  enrollmentCompletionSource.includes("pg_advisory_xact_lock") &&
+    enrollmentCompletionSource.includes("hardware-enrollment-complete:${enrollmentId}"),
+  "Enrollment completion wajib serialized per enrollment.",
+);
+assert(
+  enrollmentCompletionSource.includes("enrollment.agentId !== input.auth.agent.id") &&
+    enrollmentCompletionSource.includes("enrollment.claimedByInstanceId !== instanceId"),
+  "Completion wajib terikat ke agent dan persistent installer instance yang memenangkan claim.",
+);
+assert(
+  enrollmentCompletionSource.includes('status: "completed"') &&
+    enrollmentCompletionSource.includes('action: "hardware.enrollment.complete"') &&
+    enrollmentCompletionSource.includes("completedAt: now"),
+  "Completion wajib mengubah claimed menjadi completed dan menulis audit trail.",
+);
+assert(
+  enrollmentCompletionSource.includes('enrollment.status === "completed"') &&
+    enrollmentCompletionSource.includes("idempotent: true"),
+  "Completion retry dari credential yang sama wajib idempotent.",
+);
+assert(
+  enrollmentCompletionRouteSource.includes("authenticateHardwareAgent(req)") &&
+    enrollmentCompletionRouteSource.includes('auth.authScheme !== "signed-v2"'),
+  "Completion endpoint wajib memerlukan signed Hardware Agent auth.",
+);
+assert(
+  enrollmentCompletionRouteSource.includes('"Cache-Control": "no-store, max-age=0"'),
+  "Completion response wajib no-store.",
+);
+
 const journal = JSON.parse(journalSource) as {
   entries?: Array<{ tag?: string }>;
 };
@@ -164,5 +201,5 @@ assert(
 );
 
 console.log(
-  "OK: Hardware Hub provisioning + enrollment + installer claim contract siap digunakan.",
+  "OK: Hardware Hub provisioning + claim + secure completion contract siap digunakan.",
 );
