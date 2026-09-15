@@ -14,10 +14,17 @@ function read(relativePath: string): string {
 }
 
 const schemaSource = read("src/db/schema/index.ts");
+const enrollmentSchemaSource = read("src/db/schema/hardware-enrollment.ts");
 const seedSource = read("src/db/seed.ts");
 const coreServiceSource = read("src/features/hardware/agent-provisioning.ts");
 const guardedServiceSource = read(
   "src/features/hardware/hardware-hub-provisioning.ts",
+);
+const enrollmentClaimSource = read(
+  "src/features/hardware/agent-enrollment-claim.ts",
+);
+const enrollmentClaimRouteSource = read(
+  "src/app/api/hardware/v2/enrollments/claim/route.ts",
 );
 const actionSource = read("src/app/actions/hardware-hub-provisioning.ts");
 const optionsSource = read("src/features/hardware/provisioning-options.ts");
@@ -83,7 +90,52 @@ assert(
 assert(
   actionSource.includes("createHardwareAgentEnrollment") &&
     !actionSource.includes("provisionDedicatedHardwareHub"),
-  "Normal Stage 2 setup wajib membuat enrollment; agent baru dibuat oleh claim flow Stage 3.",
+  "Normal setup wajib membuat enrollment; agent baru dibuat oleh installer claim flow.",
+);
+
+assert(
+  enrollmentSchemaSource.includes('claimedByInstanceId: varchar("claimed_by_instance_id"') &&
+    enrollmentSchemaSource.includes('status} = \'claimed\'') &&
+    enrollmentSchemaSource.includes("agentId} is not null"),
+  "Enrollment schema wajib bind claimed state ke instance ID dan Hardware Agent.",
+);
+assert(
+  enrollmentClaimSource.includes("pg_advisory_xact_lock") &&
+    enrollmentClaimSource.includes("hardware-enrollment:${codeHash}"),
+  "Installer claim wajib memakai transactional advisory lock per Installation Code.",
+);
+assert(
+  enrollmentClaimSource.includes("hashHardwareEnrollmentCode") &&
+    !enrollmentClaimSource.includes("eq(hardwareAgentEnrollments.codeHash, input.installationCode)"),
+  "Installer claim wajib lookup Installation Code melalui keyed hash, bukan plaintext.",
+);
+assert(
+  enrollmentClaimSource.includes("enrollment.claimedByInstanceId !== instanceId") &&
+    enrollmentClaimSource.includes("idempotent: true") &&
+    enrollmentClaimSource.includes("decryptHardwareAgentSecret"),
+  "Retry claim hanya boleh idempotent untuk persistent instance ID yang sama.",
+);
+assert(
+  enrollmentClaimSource.includes('const secret = randomBytes(48).toString("base64url")') &&
+    enrollmentClaimSource.includes("encryptHardwareAgentSecret(agentId, secret)"),
+  "Claim pertama wajib membuat signed credential kuat dan menyimpannya terenkripsi.",
+);
+assert(
+  enrollmentClaimSource.includes('status: "claimed"') &&
+    enrollmentClaimSource.includes('action: "hardware.enrollment.claim"') &&
+    enrollmentClaimSource.includes('source: "hardware_hub_installer"'),
+  "Claim pertama wajib mengubah lifecycle menjadi claimed dan menulis audit trail installer.",
+);
+assert(
+  enrollmentClaimRouteSource.includes("consumeSecurityRateLimit") &&
+    enrollmentClaimRouteSource.includes('scope: "hardware.enrollment.claim.ip"') &&
+    enrollmentClaimRouteSource.includes('scope: "hardware.enrollment.claim.code"'),
+  "Public installer claim endpoint wajib memiliki persistent rate limit per client dan per code.",
+);
+assert(
+  enrollmentClaimRouteSource.includes('"Cache-Control": "no-store, max-age=0"') &&
+    !enrollmentClaimRouteSource.includes("authenticateHardwareAgent"),
+  "Bootstrap claim response wajib no-store dan tidak boleh membutuhkan agent auth sebelum agent dibuat.",
 );
 
 const journal = JSON.parse(journalSource) as {
@@ -100,4 +152,6 @@ assert(
   "Migration Hardware Agent enrollment wajib tercatat di Drizzle journal.",
 );
 
-console.log("OK: Hardware Hub provisioning + enrollment boundary contract siap digunakan.");
+console.log(
+  "OK: Hardware Hub provisioning + enrollment + installer claim contract siap digunakan.",
+);
