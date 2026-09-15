@@ -18,6 +18,9 @@ const localAvatar = read(
 const securityMenu = read(
   "src/components/customers/public-history-security-menu.tsx",
 );
+const accessCard = read(
+  "src/components/customers/customer-history-access-card.tsx",
+);
 const publicHistory = read("src/features/customers/public-history.ts");
 const customerHistoryActions = read("src/app/actions/customer-history.ts");
 
@@ -45,6 +48,15 @@ assert.match(portal, /transactionKey\(data\.scannedTransaction\)/);
 assert.match(portal, /openTransactionKey === key/);
 assert.match(customerHistoryActions, /rotatePublicCustomerHistoryPinAction/);
 assert.match(customerHistoryActions, /customer\.history_pin\.change/);
+assert.match(accessCard, /name="pin"/);
+assert.match(accessCard, /Buat Acak/);
+assert.match(accessCard, /Kombinasi bebas/);
+assert.match(customerHistoryActions, /mustChangePin: false/);
+assert.doesNotMatch(
+  customerHistoryActions,
+  /changePublicCustomerHistoryPinAction/,
+);
+assert.doesNotMatch(page, /InitialPinChangeState/);
 assert.match(publicHistory, /organizationId: baseTransaction\.organizationId/);
 assert.match(publicHistory, /itemSummary: items\.map\(\(item\) => \(\{/);
 assert.doesNotMatch(publicHistory, /itemSummary: items\.slice\(0, 4\)/);

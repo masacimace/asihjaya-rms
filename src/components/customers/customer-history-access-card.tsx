@@ -1,6 +1,12 @@
 "use client";
 
-import { Copy, KeyRound, RotateCcw, ShieldCheck, ShieldX } from "lucide-react";
+import {
+  KeyRound,
+  RefreshCw,
+  Save,
+  ShieldCheck,
+  ShieldX,
+} from "lucide-react";
 import { useActionState, useState } from "react";
 
 import {
@@ -24,6 +30,12 @@ function formatDateTime(value: Date | null) {
   }).format(value);
 }
 
+function createRandomPin() {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return String((values[0] ?? 0) % 1_000_000).padStart(6, "0");
+}
+
 export function CustomerHistoryAccessCard({
   customerId,
   historyAccess,
@@ -31,7 +43,7 @@ export function CustomerHistoryAccessCard({
   customerId: string;
   historyAccess: AdminCustomerDetailData["historyAccess"];
 }) {
-  const generateAction = generateOrResetCustomerHistoryPinAction.bind(
+  const savePinAction = generateOrResetCustomerHistoryPinAction.bind(
     null,
     customerId,
   );
@@ -39,37 +51,21 @@ export function CustomerHistoryAccessCard({
     null,
     customerId,
   );
-  const [generateState, generateFormAction, generatePending] = useActionState(
-    generateAction,
+  const [saveState, saveFormAction, savePending] = useActionState(
+    savePinAction,
     initialAdminCustomerHistoryPinActionState,
   );
   const [revokeState, revokeFormAction, revokePending] = useActionState(
     revokeAction,
     initialAdminCustomerHistoryPinActionState,
   );
-  const [copied, setCopied] = useState(false);
-
-  async function copyTemporaryPin() {
-    if (!generateState.temporaryPin) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(generateState.temporaryPin);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-    }
-  }
+  const [pin, setPin] = useState("");
 
   const statusLabel = !historyAccess.exists
     ? "Belum dibuat"
     : !historyAccess.isActive
       ? "Nonaktif"
-      : historyAccess.mustChangePin
-        ? "PIN sementara"
-        : "Aktif";
+      : "Aktif";
 
   return (
     <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
@@ -81,10 +77,11 @@ export function CustomerHistoryAccessCard({
             </div>
             <div>
               <h2 className="text-lg font-semibold text-neutral-950">
-                PIN Riwayat Pelanggan
+                PIN Customer Portal
               </h2>
               <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                PIN digunakan pelanggan setelah memindai QR pada nota.
+                Tentukan langsung 6 angka yang akan digunakan pelanggan untuk
+                membuka riwayat transaksi.
               </p>
             </div>
           </div>
@@ -102,9 +99,9 @@ export function CustomerHistoryAccessCard({
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-4">
-          <p className="text-xs font-medium text-[var(--muted)]">Dibuat</p>
+          <p className="text-xs font-medium text-[var(--muted)]">Dibuat / diubah</p>
           <p className="mt-2 text-sm font-semibold text-neutral-900">
-            {formatDateTime(historyAccess.pinCreatedAt)}
+            {formatDateTime(historyAccess.pinResetAt ?? historyAccess.pinCreatedAt)}
           </p>
         </div>
         <div className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-4">
@@ -123,41 +120,82 @@ export function CustomerHistoryAccessCard({
         </div>
       </div>
 
-      {generateState.status === "success" && generateState.temporaryPin ? (
-        <div className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 sm:p-5">
-          <p className="text-xs font-bold uppercase tracking-wide text-amber-800">
-            PIN sementara — tampil sekali
-          </p>
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <code className="flex-1 rounded-2xl border border-amber-300 bg-white px-5 py-3 text-center text-3xl font-bold tracking-[0.35em] text-neutral-950">
-              {generateState.temporaryPin}
-            </code>
-            <button
-              type="button"
-              onClick={copyTemporaryPin}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-900 hover:bg-amber-100"
-            >
-              <Copy className="size-4" />
-              {copied ? "Tersalin" : "Salin PIN"}
-            </button>
-          </div>
-          <p className="mt-3 text-xs leading-5 text-amber-800">
-            Berikan PIN secara privat. Pelanggan wajib menggantinya saat akses
-            pertama. PIN ini tidak dapat dilihat kembali setelah halaman dimuat
-            ulang.
-          </p>
-        </div>
-      ) : null}
+      <form
+        action={saveFormAction}
+        className="mt-5 rounded-2xl border border-[var(--border)] bg-neutral-50/60 p-4 sm:p-5"
+        onSubmit={(event) => {
+          if (
+            historyAccess.exists &&
+            !window.confirm(
+              "Mengganti PIN akan mencabut seluruh sesi Customer Portal yang sedang aktif. Lanjutkan?",
+            )
+          ) {
+            event.preventDefault();
+          }
+        }}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="min-w-0 flex-1">
+            <span className="text-sm font-semibold text-neutral-800">
+              PIN pelanggan
+            </span>
+            <input
+              name="pin"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              pattern="[0-9]{6}"
+              minLength={6}
+              maxLength={6}
+              required
+              value={pin}
+              onChange={(event) =>
+                setPin(event.currentTarget.value.replace(/\D/g, "").slice(0, 6))
+              }
+              placeholder="123456"
+              className="mt-2 h-12 w-full rounded-xl border border-[var(--border)] bg-white px-4 text-center font-mono text-xl font-bold tracking-[0.28em] text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+            />
+          </label>
 
-      {generateState.message ? (
+          <button
+            type="button"
+            onClick={() => setPin(createRandomPin())}
+            className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
+          >
+            <RefreshCw className="size-4" />
+            Buat Acak
+          </button>
+
+          <button
+            type="submit"
+            disabled={savePending}
+            className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
+          >
+            <Save className="size-4" />
+            {savePending
+              ? "Menyimpan..."
+              : historyAccess.exists
+                ? "Ganti PIN"
+                : "Simpan PIN"}
+          </button>
+        </div>
+
+        <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
+          PIN harus tepat 6 angka. Kombinasi bebas, termasuk PIN sederhana
+          seperti 123456. Setelah disimpan, PIN dapat langsung digunakan tanpa
+          wajib diganti saat login pertama.
+        </p>
+      </form>
+
+      {saveState.message ? (
         <p
           className={`mt-4 rounded-2xl border px-4 py-3 text-sm font-medium ${
-            generateState.status === "error"
+            saveState.status === "error"
               ? "border-red-200 bg-red-50 text-red-700"
               : "border-emerald-200 bg-emerald-50 text-emerald-700"
           }`}
         >
-          {generateState.message}
+          {saveState.message}
         </p>
       ) : null}
 
@@ -173,41 +211,14 @@ export function CustomerHistoryAccessCard({
         </p>
       ) : null}
 
-      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-        <form
-          action={generateFormAction}
-          onSubmit={(event) => {
-            if (
-              historyAccess.exists &&
-              !window.confirm(
-                "Reset PIN akan mencabut seluruh sesi histori pelanggan. Lanjutkan?",
-              )
-            ) {
-              event.preventDefault();
-            }
-          }}
-        >
-          <button
-            type="submit"
-            disabled={generatePending}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
-          >
-            <RotateCcw className="size-4" />
-            {generatePending
-              ? "Membuat PIN..."
-              : historyAccess.exists
-                ? "Reset dan Buat PIN Baru"
-                : "Buat PIN Sementara"}
-          </button>
-        </form>
-
-        {historyAccess.exists ? (
+      {historyAccess.exists ? (
+        <div className="mt-5">
           <form
             action={revokeFormAction}
             onSubmit={(event) => {
               if (
                 !window.confirm(
-                  "Cabut seluruh sesi histori yang sedang aktif untuk pelanggan ini?",
+                  "Cabut seluruh sesi Customer Portal yang sedang aktif untuk pelanggan ini?",
                 )
               ) {
                 event.preventDefault();
@@ -223,8 +234,8 @@ export function CustomerHistoryAccessCard({
               {revokePending ? "Mencabut sesi..." : "Cabut Semua Sesi"}
             </button>
           </form>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </section>
   );
 }

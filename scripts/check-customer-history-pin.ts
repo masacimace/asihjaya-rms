@@ -34,32 +34,33 @@ async function main() {
     "123123",
   ]) {
     assert(
-      !validateCustomerHistoryPin({ pin, phone: null }).valid,
-      `PIN umum seharusnya ditolak: ${pin}`,
+      validateCustomerHistoryPin({ pin, phone: null }).valid,
+      `PIN 6 digit seharusnya diterima: ${pin}`,
     );
   }
 
   assert(
-    !validateCustomerHistoryPin({
+    validateCustomerHistoryPin({
       pin: "456789",
       phone: "+62 812-3456-789",
     }).valid,
-    "Enam digit terakhir nomor telepon seharusnya ditolak.",
+    "PIN boleh sama dengan 6 angka terakhir nomor telepon.",
   );
 
-  assert(
-    validateCustomerHistoryPin({ pin: "583104", phone: "+62 812-3456-789" })
-      .valid,
-    "PIN acak yang valid seharusnya diterima.",
-  );
+  for (const pin of ["12345", "1234567", "12A456", "", " 123456"]) {
+    assert(
+      !validateCustomerHistoryPin({ pin, phone: null }).valid,
+      `PIN non-6-digit seharusnya ditolak: ${JSON.stringify(pin)}`,
+    );
+  }
 
-  const encodedHash = await hashCustomerHistoryPin("583104");
+  const encodedHash = await hashCustomerHistoryPin("123456");
   assert(
-    await verifyCustomerHistoryPinHash("583104", encodedHash),
+    await verifyCustomerHistoryPinHash("123456", encodedHash),
     "PIN yang benar harus cocok dengan hash.",
   );
   assert(
-    !(await verifyCustomerHistoryPinHash("583105", encodedHash)),
+    !(await verifyCustomerHistoryPinHash("123457", encodedHash)),
     "PIN yang salah harus ditolak.",
   );
 
@@ -67,12 +68,14 @@ async function main() {
   process.env.CUSTOMER_HISTORY_PIN_PEPPER =
     "different-customer-history-pin-pepper-minimum-32-characters";
   assert(
-    !(await verifyCustomerHistoryPinHash("583104", encodedHash)),
+    !(await verifyCustomerHistoryPinHash("123456", encodedHash)),
     "Hash PIN harus terikat pada pepper server.",
   );
   process.env.CUSTOMER_HISTORY_PIN_PEPPER = originalPepper;
 
-  console.log("Customer history PIN policy and hashing check passed.");
+  console.log(
+    "Customer history PIN policy and hashing check passed — any exact 6-digit PIN is accepted while hashing remains protected.",
+  );
 }
 
 main().catch((error: unknown) => {

@@ -3,10 +3,7 @@ import type { ReactNode } from "react";
 import { LockKeyhole, ShieldX, UserRound } from "lucide-react";
 import Image from "next/image";
 
-import {
-  PublicHistoryInitialPinChangeForm,
-  PublicHistoryPinVerificationForm,
-} from "@/components/customers/public-history-access-form";
+import { PublicHistoryPinVerificationForm } from "@/components/customers/public-history-access-form";
 import { PublicHistoryPortal } from "@/components/customers/public-history-portal";
 import {
   CUSTOMER_HISTORY_ABSOLUTE_TIMEOUT_HOURS,
@@ -242,7 +239,7 @@ function PinSetupRequiredState({
     <PinAccessShell
       eyebrow="PIN belum tersedia"
       title="Aktifkan akses riwayat pelanggan"
-      description="PIN riwayat untuk pelanggan pada nota ini belum dibuat. Hubungi outlet agar petugas membuat PIN sementara secara aman."
+      description="PIN Customer Portal untuk pelanggan pada nota ini belum dibuat. Hubungi outlet agar petugas menetapkan PIN 6 digit."
     >
       <div className="mt-7 rounded-2xl border border-white/70 bg-white/[0.45] p-4 text-sm leading-6 text-neutral-700 backdrop-blur-lg">
         <p className="font-bold text-neutral-950">{outletName}</p>
@@ -263,18 +260,6 @@ function PinRequiredState({ token }: { token: string }) {
       <p className="mt-5 text-center text-xs leading-5 text-neutral-500">
         Setelah 5 percobaan gagal, akses akan dibatasi sementara.
       </p>
-    </PinAccessShell>
-  );
-}
-
-function InitialPinChangeState({ token }: { token: string }) {
-  return (
-    <PinAccessShell
-      eyebrow="Akses pertama"
-      title="Buat PIN pribadi"
-      description="PIN sementara sudah benar. Ganti dengan 6 angka yang hanya diketahui pelanggan sebelum membuka riwayat transaksi."
-    >
-      <PublicHistoryInitialPinChangeForm token={token} />
     </PinAccessShell>
   );
 }
@@ -324,9 +309,6 @@ export default async function PublicCustomerHistoryPage({ params }: PageProps) {
     return <PinRequiredState token={token} />;
   }
 
-  if (session.requiresPinChange) {
-    return <InitialPinChangeState token={token} />;
-  }
 
   const data = await getPublicCustomerHistoryData(token, session.customerId);
 

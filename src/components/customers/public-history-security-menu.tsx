@@ -122,7 +122,7 @@ function PinSecurityModal({
           </label>
 
           <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-[10px] leading-[15px] text-amber-900">
-            Hindari angka berurutan, angka berulang, atau 6 angka terakhir nomor telepon.
+            PIN harus tepat 6 angka. Kombinasi bebas dan dapat disesuaikan dengan yang paling mudah diingat.
           </div>
 
           {state.status === "error" && state.message ? (
