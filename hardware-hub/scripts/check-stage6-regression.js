@@ -168,8 +168,8 @@ function main() {
     assert.equal(env.STAGE6_PRESERVE_SENTINEL, "keep-me");
     assert.equal(env.HARDWARE_AGENT_ID, "");
     assert.equal(env.HARDWARE_AGENT_SECRET, "");
-    assert.equal(env.SATO_LABEL_FONT_PATH, bundledFontPath);
-    assert.equal(second.satoLabelFontPath, bundledFontPath);
+    assert.equal(path.normalize(env.SATO_LABEL_FONT_PATH), path.normalize(bundledFontPath));
+    assert.equal(path.normalize(second.satoLabelFontPath), path.normalize(bundledFontPath));
     assert.ok(second.backupPath, "Repair configure wajib membuat backup config existing.");
     assert.ok(fs.existsSync(second.backupPath), "Backup config repair wajib benar-benar ada.");
   } finally {
