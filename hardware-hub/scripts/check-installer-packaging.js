@@ -53,11 +53,13 @@ async function main() {
     "Builder wajib pin + verify Node 24.14.0 dan SumatraPDF 3.6.1 artifacts.",
   );
   assert.ok(
-    builder.includes('$InterVersion = "3.19.0"') &&
+    builder.includes('$InterVersion = "3.19"') &&
+      builder.includes("150ab6230d1762a57bebf35dfc04d606ff91598a31d785f7f100356ecdcc0032") &&
       builder.includes("a645f55492d1c8cdace43c72be8cbec08e680b5a86d8b4c2d1c50d6e41e9cc96") &&
-      builder.includes("https://registry.npmjs.org/inter-font/-/$InterPackageName") &&
-      builder.includes("Inter-Medium.ttf"),
-    "Builder wajib pin inter-font 3.19.0 dan byte-exact Inter Medium yang sudah physical-approved untuk SATO V3.",
+      builder.includes("https://github.com/rsms/inter/releases/download/v$InterVersion/$InterZipName") &&
+      builder.includes("Inter Hinted for Windows\\Desktop\\Inter-Medium.ttf") &&
+      !builder.includes("registry.npmjs.org/inter-font"),
+    "Builder wajib pin official Inter v3.19 release dan byte-exact hinted Inter Medium yang sudah physical-approved untuk SATO V3.",
   );
   assert.ok(
     builder.includes("$IsLoopbackHttp") &&
