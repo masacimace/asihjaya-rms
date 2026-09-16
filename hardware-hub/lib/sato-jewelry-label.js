@@ -2,6 +2,10 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const {
+  SATO_LAYOUT_FINGERPRINT_ALGORITHM,
+  computeSatoLayoutSha256,
+} = require("./sato-label-freeze");
 
 const SATO_JEWELRY_LABEL_TEMPLATE_ID = "jewelry_barbell_inter_v3";
 const SATO_JEWELRY_RENDERER = "host_inter_bmp_v3";
@@ -86,7 +90,7 @@ function validateTextLayer(item, name, { allowMaxChars = false } = {}) {
   validateInteger(item[heightKey], `${name}.${heightKey}`, 8, 9999);
   validateInteger(item.fontPx, `${name}.fontPx`, 4, 200);
   validateInteger(item.minFontPx, `${name}.minFontPx`, 4, item.fontPx);
-  if (!['left', 'center', 'right'].includes(item.textAlign)) {
+  if (!["left", "center", "right"].includes(item.textAlign)) {
     throw new SatoJewelryLabelError(`${name}.textAlign tidak valid.`, "SATO_LABEL_CONFIG_INVALID", "configuration");
   }
   if (allowMaxChars) validateInteger(item.maxChars, `${name}.maxChars`, 1, 220);
@@ -178,11 +182,9 @@ function validateHostBoldConfig(config) {
 
 function loadSatoJewelryLabelConfig(configPath = DEFAULT_SATO_LABEL_CONFIG_PATH) {
   const resolved = path.resolve(configPath || DEFAULT_SATO_LABEL_CONFIG_PATH);
-  let bytes;
   let parsed;
   try {
-    bytes = fs.readFileSync(resolved);
-    parsed = JSON.parse(bytes.toString("utf8"));
+    parsed = JSON.parse(fs.readFileSync(resolved, "utf8"));
   } catch (error) {
     throw new SatoJewelryLabelError(
       `SATO label config tidak dapat dibaca (${resolved}): ${error.message}`,
@@ -204,17 +206,18 @@ function loadSatoJewelryLabelConfig(configPath = DEFAULT_SATO_LABEL_CONFIG_PATH)
     );
   }
 
-  const actualHash = crypto.createHash("sha256").update(bytes).digest("hex");
-  if (lock.schemaVersion !== 1 ||
+  const actualLayoutHash = computeSatoLayoutSha256(parsed);
+  if (lock.schemaVersion !== 2 ||
       lock.templateId !== SATO_JEWELRY_LABEL_TEMPLATE_ID ||
       lock.templateVersion !== 3 ||
       lock.printerProfileId !== SATO_JEWELRY_LABEL_PROFILE_ID ||
       lock.renderer !== SATO_JEWELRY_RENDERER ||
       lock.physicalValidation !== "accepted" ||
       lock.configFile !== path.basename(resolved) ||
-      lock.configSha256 !== actualHash) {
+      lock.layoutFingerprintAlgorithm !== SATO_LAYOUT_FINGERPRINT_ALGORITHM ||
+      lock.layoutSha256 !== actualLayoutHash) {
     throw new SatoJewelryLabelError(
-      "SATO Label V3 freeze lock tidak cocok dengan config aktif. Layout final tidak boleh berubah tanpa acceptance/freeze baru.",
+      "SATO Label V3 freeze lock tidak cocok dengan layout semantik aktif. Perubahan whitespace/line-ending diabaikan, tetapi perubahan layout tetap membutuhkan acceptance/freeze baru.",
       "SATO_LABEL_FREEZE_LOCK_MISMATCH",
       "configuration",
     );
