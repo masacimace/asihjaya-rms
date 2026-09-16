@@ -127,8 +127,9 @@ $SumatraExe = Get-ChildItem $SumatraExtract -Filter "SumatraPDF*.exe" -Recurse |
 if (-not $SumatraExe) { throw "SumatraPDF executable tidak ditemukan di archive." }
 Copy-Item $SumatraExe.FullName (Join-Path $ToolsPayload "SumatraPDF.exe") -Force
 
-# Pin the official Inter v3.19 release archive and then verify the exact hinted Windows
-# Inter-Medium.ttf that was physically approved for the SATO V3 label.
+# Pin the official Inter v3.19 release archive, then locate the exact Inter-Medium.ttf
+# bytes that were physically approved for the SATO V3 label. Do not silently accept
+# another Inter Medium build with different hinting/metrics.
 $InterZipName = "Inter-$InterVersion.zip"
 $InterZip = Join-Path $DownloadRoot $InterZipName
 $InterUrl = "https://github.com/rsms/inter/releases/download/v$InterVersion/$InterZipName"
@@ -136,11 +137,21 @@ Download-Verified -Uri $InterUrl -Destination $InterZip -Sha256 $InterZipHash
 $InterExtract = Join-Path $DownloadRoot "inter-$InterVersion"
 Remove-Item $InterExtract -Recurse -Force -ErrorAction SilentlyContinue
 Expand-Archive -Path $InterZip -DestinationPath $InterExtract -Force
-$InterMediumPath = Join-Path $InterExtract "Inter Hinted for Windows\Desktop\Inter-Medium.ttf"
-$InterLicensePath = Join-Path $InterExtract "LICENSE.txt"
-if (-not (Test-Path $InterMediumPath)) {
-  throw "Inter-Medium.ttf tidak ditemukan di official Inter v$InterVersion release."
+$InterMediumCandidates = @(Get-ChildItem -Path $InterExtract -Filter "Inter-Medium.ttf" -File -Recurse)
+$InterMediumPath = $null
+foreach ($Candidate in $InterMediumCandidates) {
+  $CandidateHash = (Get-FileHash -Algorithm SHA256 -Path $Candidate.FullName).Hash.ToLowerInvariant()
+  $RelativeCandidate = $Candidate.FullName.Substring($InterExtract.Length).TrimStart('\')
+  Write-Host "Inter Medium candidate  : $RelativeCandidate [$CandidateHash]"
+  if ($CandidateHash -eq $InterMediumHash.ToLowerInvariant()) {
+    $InterMediumPath = $Candidate.FullName
+    break
+  }
 }
+if (-not $InterMediumPath) {
+  throw "Inter-Medium.ttf exact physical-approved SHA-256 tidak ditemukan di official Inter v$InterVersion release. expected=$InterMediumHash"
+}
+$InterLicensePath = Join-Path $InterExtract "LICENSE.txt"
 if (-not (Test-Path $InterLicensePath)) {
   throw "LICENSE.txt tidak ditemukan di official Inter v$InterVersion release."
 }
@@ -163,7 +174,7 @@ $ISCC = Resolve-InnoCompiler
 Write-Host "Inno Setup compiler    : $ISCC"
 Write-Host "RMS API URL            : $ApiUrl"
 Write-Host "Hardware Hub version   : $AppVersion"
-Write-Host "Bundled SATO font      : Inter Medium $InterVersion (official hinted Windows release)"
+Write-Host "Bundled SATO font      : Inter Medium $InterVersion (byte-exact approved official release asset)"
 
 Push-Location $InstallerRoot
 try {
