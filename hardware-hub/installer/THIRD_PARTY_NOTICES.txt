@@ -1,7 +1,7 @@
 ASIHJAYA Hardware Hub - Third-Party Notices
 ==========================================
 
-This installer packages standalone third-party programs used by the Hardware Hub runtime.
+This installer packages standalone third-party programs and font assets used by the Hardware Hub runtime.
 They remain governed by their own licenses.
 
 Node.js 24.14.0
@@ -20,3 +20,14 @@ Bundled artifact: official standalone 64-bit portable executable.
 
 ASIHJAYA Hardware Hub invokes SumatraPDF as a separate process for silent PDF printing.
 No SumatraPDF source code is incorporated into the Hardware Hub application.
+
+Inter 3.19 - Inter Medium
+-------------------------
+Project: https://rsms.me/inter/
+Source: https://github.com/rsms/inter/releases/tag/v3.19
+License: SIL Open Font License 1.1.
+Bundled artifact: Inter-Medium.ttf from the official Inter 3.19 release.
+The complete Inter license text is installed beside the font as assets/fonts/Inter-OFL-1.1.txt.
+
+ASIHJAYA Hardware Hub uses this bundled font only for deterministic SATO label rendering.
+The font does not need to be installed into the Windows system font directory.
