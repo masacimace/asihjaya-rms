@@ -28,9 +28,7 @@ function main() {
   );
   assert.ok(
     iss.includes("procedure ResumeExistingHub") &&
-      iss.includes("if ExistingInstallation then") &&
-      iss.includes("ResumeExistingHub") &&
-      iss.includes("else\n      EnrollInstalledHub"),
+      /if\s+ExistingInstallation\s+then\s+ResumeExistingHub\s+else\s+EnrollInstalledHub;/i.test(iss),
     "Repair/upgrade wajib resume credential existing, bukan membuat agent/enrollment baru.",
   );
   assert.ok(
