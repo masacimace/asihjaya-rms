@@ -24,9 +24,11 @@ No SumatraPDF source code is incorporated into the Hardware Hub application.
 Inter 3.19 - Inter Medium
 -------------------------
 Project: https://rsms.me/inter/
-Source: https://github.com/rsms/inter/releases/tag/v3.19
+Package source: inter-font@3.19.0 from the npm registry.
+Upstream font project: https://github.com/rsms/inter
 License: SIL Open Font License 1.1.
-Bundled artifact: Inter-Medium.ttf from the official Inter 3.19 release.
+Bundled artifact: Inter-Medium.ttf from the pinned inter-font@3.19.0 package.
+The installer builder verifies the exact physical-approved Inter-Medium.ttf SHA-256 before packaging it.
 The complete Inter license text is installed beside the font as assets/fonts/Inter-OFL-1.1.txt.
 
 ASIHJAYA Hardware Hub uses this bundled font only for deterministic SATO label rendering.
