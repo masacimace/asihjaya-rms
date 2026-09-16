@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/hardware-hub-native-installer-stage5
+      - feat/hardware-hub-polishing-regression-stage6
     paths:
       - "hardware-hub/**"
       - ".github/workflows/build-hardware-hub-installer.yml"
@@ -34,8 +35,10 @@ jobs:
       - name: Install Hardware Hub dependencies
         run: npm ci --prefix hardware-hub --omit=dev
 
-      - name: Validate Stage 5 packaging contracts
-        run: npm --prefix hardware-hub run check:installer
+      - name: Validate installer regression contracts
+        run: |
+          npm --prefix hardware-hub run check:installer
+          npm --prefix hardware-hub run check:stage6
 
       - name: Install Inno Setup 7
         shell: pwsh
