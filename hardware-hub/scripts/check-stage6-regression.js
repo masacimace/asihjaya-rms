@@ -27,6 +27,14 @@ function main() {
     "Repair/upgrade wajib mendeteksi secure credential existing dan melewati Installation Code page.",
   );
   assert.ok(
+    iss.includes("function ExistingEnvPath") &&
+      iss.includes("ExpandConstant('{autopf}\\ASIHJAYA\\Hardware Hub\\app\\.env')") &&
+      iss.includes("FileExists(ExistingEnvPath)") &&
+      iss.includes("LoadStringsFromFile(ExistingEnvPath, Lines)") &&
+      !iss.includes("function EnvPath"),
+    "Startup repair detection tidak boleh mengembangkan {app} sebelum Inno menginisialisasi install directory.",
+  );
+  assert.ok(
     iss.includes("procedure ResumeExistingHub") &&
       /if\s+ExistingInstallation\s+then\s+ResumeExistingHub\s+else\s+EnrollInstalledHub;/i.test(iss),
     "Repair/upgrade wajib resume credential existing, bukan membuat agent/enrollment baru.",
