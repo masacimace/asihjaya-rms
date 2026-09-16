@@ -108,9 +108,9 @@ begin
   Result := StateDir + '\agent-credential.json';
 end;
 
-function EnvPath: String;
+function ExistingEnvPath: String;
 begin
-  Result := AppRoot + '\.env';
+  Result := ExpandConstant('{autopf}\ASIHJAYA\Hardware Hub\app\.env');
 end;
 
 function PdfExecutable: String;
@@ -131,9 +131,9 @@ var
   Prefix: String;
 begin
   Result := '';
-  if not FileExists(EnvPath) then
+  if not FileExists(ExistingEnvPath) then
     Exit;
-  if not LoadStringsFromFile(EnvPath, Lines) then
+  if not LoadStringsFromFile(ExistingEnvPath, Lines) then
     Exit;
 
   Prefix := Key + '=';
