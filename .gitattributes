@@ -2,11 +2,14 @@
 vendor/*.tgz binary
 vendor/*.sha512 text eol=lf
 
-# Generated patches and lock/config files must not receive platform line-ending rewrites.
+# Generated patches and lock/config files should stay normalized for clean diffs
+# and reproducible installer payloads. SATO freeze validation itself is semantic
+# and no longer depends on raw line endings or whitespace bytes.
 *.patch -text
 package-lock.json text eol=lf
 .npmrc text eol=lf
 .nvmrc text eol=lf
+hardware-hub/config/*.json text eol=lf
 
 # Migration hashes must remain identical on Windows, CI, and Linux production.
 drizzle/*.sql text eol=lf

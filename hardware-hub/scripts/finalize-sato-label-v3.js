@@ -1,7 +1,10 @@
 /* eslint-disable */
-const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const {
+  SATO_LAYOUT_FINGERPRINT_ALGORITHM,
+  computeSatoLayoutSha256,
+} = require("../lib/sato-label-freeze");
 const root = path.resolve(__dirname, "..");
 
 function readLocalEnvValue(name) {
@@ -38,10 +41,6 @@ function resolveConfigPath() {
   const configured = String(process.env.SATO_LABEL_CONFIG_PATH || readLocalEnvValue("SATO_LABEL_CONFIG_PATH") || "").trim();
   if (!configured) return DEFAULT_CONFIG;
   return path.isAbsolute(configured) ? configured : path.resolve(root, configured);
-}
-
-function sha256(bytes) {
-  return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
 function assertFinalStructure(config) {
@@ -82,18 +81,29 @@ if (config.physicalValidation === "accepted" && fs.existsSync(lockPath)) {
   } catch (error) {
     fail(`Freeze lock existing tidak valid: ${error.message}`);
   }
-  const currentHash = sha256(Buffer.from(originalText, "utf8"));
-  if (existingLock.configSha256 === currentHash) {
-    console.log("SATO Label V3 already frozen; config hash is unchanged.");
+
+  const currentLayoutHash = computeSatoLayoutSha256(config);
+  const currentLockMatches =
+    existingLock.schemaVersion === 2 &&
+    existingLock.layoutFingerprintAlgorithm === SATO_LAYOUT_FINGERPRINT_ALGORITHM &&
+    existingLock.layoutSha256 === currentLayoutHash;
+
+  if (currentLockMatches) {
+    console.log("SATO Label V3 already frozen; semantic layout fingerprint is unchanged.");
     console.log(`Config : ${configPath}`);
     console.log(`Lock   : ${lockPath}`);
-    console.log(`SHA256 : ${currentHash}`);
+    console.log(`Layout SHA256 : ${currentLayoutHash}`);
     process.exit(0);
   }
+
   if (!allowRefreeze) {
+    const legacyHint = existingLock.schemaVersion === 1 || Boolean(existingLock.configSha256)
+      ? " Freeze lock lama memakai raw-byte hash; migrasikan sekali dengan --refreeze."
+      : "";
     fail(
-      "Config SATO sudah pernah di-freeze tetapi bytes/layout sekarang berubah. " +
-        "Jangan mengubah lock secara tidak sengaja. Jika perubahan visual memang sudah di-approve ulang, jalankan label:freeze-v3 dengan -- --refreeze.",
+      "Config SATO sudah pernah di-freeze tetapi semantic layout fingerprint berubah atau lock belum memakai schema v2." +
+        legacyHint +
+        " Jika perubahan visual memang sudah di-approve ulang, jalankan label:freeze-v3 dengan -- --refreeze.",
     );
   }
 }
@@ -104,9 +114,9 @@ config.physicalValidation = "accepted";
 const finalText = `${JSON.stringify(config, null, 2)}\n`;
 fs.writeFileSync(configPath, finalText, "utf8");
 
-const finalBytes = fs.readFileSync(configPath);
+const layoutSha256 = computeSatoLayoutSha256(config);
 const lock = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   templateId: TEMPLATE_ID,
   templateVersion: 3,
   printerProfileId: PROFILE_ID,
@@ -117,15 +127,16 @@ const lock = {
   frontContent: ["productMasterName", "barcode", "barcodeNumber"],
   backContent: ["weight", "itemDisplayName"],
   configFile: path.basename(configPath),
-  configSha256: sha256(finalBytes),
+  layoutFingerprintAlgorithm: SATO_LAYOUT_FINGERPRINT_ALGORITHM,
+  layoutSha256,
   frozenAt: new Date().toISOString(),
-  note: "Client-approved physical SATO label v3. Any layout change requires an explicit new acceptance/freeze.",
+  note: "Client-approved physical SATO label v3. Semantic layout changes require an explicit new acceptance/freeze; whitespace and line endings do not.",
 };
 fs.writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`, "utf8");
 
 console.log("SATO Label V3 finalized and frozen.");
 console.log(`Config : ${configPath}`);
 console.log(`Lock   : ${lockPath}`);
-console.log(`SHA256 : ${lock.configSha256}`);
-console.log("Visual/layout values were preserved; only physicalValidation was changed to accepted.");
-console.log("Future layout changes require explicit: npm run label:freeze-v3 -- --refreeze");
+console.log(`Layout SHA256 : ${lock.layoutSha256}`);
+console.log("Visual/layout values were preserved; whitespace and line endings are not part of the fingerprint.");
+console.log("Future semantic layout changes require explicit: npm run label:freeze-v3 -- --refreeze");

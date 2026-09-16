@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "templateId": "jewelry_barbell_inter_v3",
   "templateVersion": 3,
   "printerProfileId": "sato_cg408_jewelry_barbell_inter_v3",
@@ -23,7 +23,8 @@
     "itemDisplayName"
   ],
   "configFile": "sato-jewelry-barbell-host-bold.json",
-  "configSha256": "145f1f2272aa314c2f68690c574b30d3caae7294061d93150393905f6d920237",
+  "layoutFingerprintAlgorithm": "canonical-layout-sha256-v1",
+  "layoutSha256": "b4204bb06b16a8bdac0de6f4c2c27a4d02d34f753395769c963a28d315072711",
   "frozenAt": "2026-08-29T05:28:17.901Z",
-  "note": "Client-approved physical SATO label v3. Any layout change requires an explicit new acceptance/freeze."
+  "note": "Client-approved physical SATO label v3. Semantic layout changes require an explicit new acceptance/freeze; whitespace and line endings do not."
 }
