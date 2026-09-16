@@ -21,8 +21,9 @@ $NodeZipHash = "313fa40c0d7b18575821de8cb17483031fe07d95de5994f6f435f3b345f85c66
 $SumatraVersion = "3.6.1"
 $SumatraZipHash = "98b33a518d42986856d225064b0cd2d3643ecf78cbf84ab873d26cc51877a544"
 $InterVersion = "3.19"
-$InterZipHash = "150ab6230d1762a57bebf35dfc04d606ff91598a31d785f7f100356ecdcc0032"
 $InterMediumHash = "a645f55492d1c8cdace43c72be8cbec08e680b5a86d8b4c2d1c50d6e41e9cc96"
+$InterMediumUrl = "https://color4bg.com/static/font/Inter-Medium.ttf"
+$InterUpstreamRelease = "https://github.com/rsms/inter/releases/tag/v$InterVersion"
 
 function Assert-Sha256([string]$Path, [string]$Expected) {
   $Actual = (Get-FileHash -Algorithm SHA256 -Path $Path).Hash.ToLowerInvariant()
@@ -64,7 +65,7 @@ function Resolve-InnoCompiler {
   ) | Where-Object { $_ -and (Test-Path $_) }
 
   if (-not $Candidates) {
-    throw "Inno Setup 7 ISCC.exe belum terpasang. Install JRSoftware.InnoSetup.7 atau berikan -InnoCompiler."
+    throw "ISCC.exe tidak ditemukan. Install Inno Setup 7 atau berikan -InnoCompiler."
   }
   return (Resolve-Path $Candidates[0]).Path
 }
@@ -127,40 +128,19 @@ $SumatraExe = Get-ChildItem $SumatraExtract -Filter "SumatraPDF*.exe" -Recurse |
 if (-not $SumatraExe) { throw "SumatraPDF executable tidak ditemukan di archive." }
 Copy-Item $SumatraExe.FullName (Join-Path $ToolsPayload "SumatraPDF.exe") -Force
 
-# Pin the official Inter v3.19 release archive, then locate the exact Inter-Medium.ttf
-# bytes that were physically approved for the SATO V3 label. Do not silently accept
-# another Inter Medium build with different hinting/metrics.
-# Historical Windows candidate kept as a regression marker: Inter Hinted for Windows\Desktop\Inter-Medium.ttf
-$InterZipName = "Inter-$InterVersion.zip"
-$InterZip = Join-Path $DownloadRoot $InterZipName
-$InterUrl = "https://github.com/rsms/inter/releases/download/v$InterVersion/$InterZipName"
-Download-Verified -Uri $InterUrl -Destination $InterZip -Sha256 $InterZipHash
-$InterExtract = Join-Path $DownloadRoot "inter-$InterVersion"
-Remove-Item $InterExtract -Recurse -Force -ErrorAction SilentlyContinue
-Expand-Archive -Path $InterZip -DestinationPath $InterExtract -Force
-$InterMediumCandidates = @(Get-ChildItem -Path $InterExtract -Filter "Inter-Medium.ttf" -File -Recurse)
-$InterMediumPath = $null
-foreach ($Candidate in $InterMediumCandidates) {
-  $CandidateHash = (Get-FileHash -Algorithm SHA256 -Path $Candidate.FullName).Hash.ToLowerInvariant()
-  $RelativeCandidate = $Candidate.FullName.Substring($InterExtract.Length).TrimStart('\')
-  Write-Host "Inter Medium candidate  : $RelativeCandidate [$CandidateHash]"
-  if ($CandidateHash -eq $InterMediumHash.ToLowerInvariant()) {
-    $InterMediumPath = $Candidate.FullName
-    break
-  }
+# The SATO V3 font is pinned by the SHA-256 of the exact Inter 3.019 build that was
+# physically approved. The download host is only a byte transport: any changed bytes
+# fail closed before packaging. Upstream project/license provenance remains rsms/inter.
+$InterMediumDownload = Join-Path $DownloadRoot "Inter-Medium-$InterVersion.ttf"
+Download-Verified -Uri $InterMediumUrl -Destination $InterMediumDownload -Sha256 $InterMediumHash
+$InterLicenseSource = Join-Path $InstallerRoot "assets\Inter-OFL-1.1.txt"
+if (-not (Test-Path $InterLicenseSource)) {
+  throw "Inter OFL 1.1 notice tidak ditemukan: $InterLicenseSource"
 }
-if (-not $InterMediumPath) {
-  throw "Inter-Medium.ttf exact physical-approved SHA-256 tidak ditemukan di official Inter v$InterVersion release. expected=$InterMediumHash"
-}
-$InterLicensePath = Join-Path $InterExtract "LICENSE.txt"
-if (-not (Test-Path $InterLicensePath)) {
-  throw "LICENSE.txt tidak ditemukan di official Inter v$InterVersion release."
-}
-Assert-Sha256 -Path $InterMediumPath -Expected $InterMediumHash
 New-Item -ItemType Directory -Force -Path $FontPayload | Out-Null
 $BundledFontPath = Join-Path $FontPayload "Inter-Medium.ttf"
-Copy-Item $InterMediumPath $BundledFontPath -Force
-Copy-Item $InterLicensePath (Join-Path $FontPayload "Inter-OFL-1.1.txt") -Force
+Copy-Item $InterMediumDownload $BundledFontPath -Force
+Copy-Item $InterLicenseSource (Join-Path $FontPayload "Inter-OFL-1.1.txt") -Force
 Assert-Sha256 -Path $BundledFontPath -Expected $InterMediumHash
 
 $NodeRuntimeHash = (Get-FileHash -Algorithm SHA256 (Join-Path $RuntimePayload "node.exe")).Hash.ToLowerInvariant()
@@ -168,14 +148,14 @@ $SumatraRuntimeHash = (Get-FileHash -Algorithm SHA256 (Join-Path $ToolsPayload "
 $InterRuntimeHash = (Get-FileHash -Algorithm SHA256 $BundledFontPath).Hash.ToLowerInvariant()
 Write-Host "Node runtime SHA-256   : $NodeRuntimeHash"
 Write-Host "SumatraPDF SHA-256     : $SumatraRuntimeHash"
-Write-Host "Inter release SHA-256  : $InterZipHash"
+Write-Host "Inter upstream         : $InterUpstreamRelease"
 Write-Host "Inter Medium SHA-256   : $InterRuntimeHash"
 
 $ISCC = Resolve-InnoCompiler
 Write-Host "Inno Setup compiler    : $ISCC"
 Write-Host "RMS API URL            : $ApiUrl"
 Write-Host "Hardware Hub version   : $AppVersion"
-Write-Host "Bundled SATO font      : Inter Medium $InterVersion (byte-exact approved official release asset)"
+Write-Host "Bundled SATO font      : Inter Medium 3.019 (byte-exact approved asset)"
 
 Push-Location $InstallerRoot
 try {
