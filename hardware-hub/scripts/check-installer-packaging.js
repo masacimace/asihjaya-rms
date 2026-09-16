@@ -53,6 +53,12 @@ async function main() {
     "Builder wajib pin + verify Node 24.14.0 dan SumatraPDF 3.6.1 artifacts.",
   );
   assert.ok(
+    builder.includes('$InterVersion = "3.19"') &&
+      builder.includes("a645f55492d1c8cdace43c72be8cbec08e680b5a86d8b4c2d1c50d6e41e9cc96") &&
+      builder.includes("Inter-Medium.ttf"),
+    "Builder wajib pin Inter Medium 3.19 yang sudah physical-approved untuk SATO V3.",
+  );
+  assert.ok(
     builder.includes("$IsLoopbackHttp") &&
       builder.includes('$Api.Host -eq "127.0.0.1"') &&
       builder.includes('$Api.Host -eq "localhost"') &&
@@ -85,13 +91,16 @@ async function main() {
     const logDir = path.join(tempRoot, "program-data", "logs");
     const supportDir = path.join(tempRoot, "program-data", "support-bundles");
     const toolsDir = path.join(tempRoot, "tools");
+    const bundledFontPath = path.join(appRoot, "assets", "fonts", "Inter-Medium.ttf");
     fs.mkdirSync(appRoot, { recursive: true });
     fs.mkdirSync(toolsDir, { recursive: true });
+    fs.mkdirSync(path.dirname(bundledFontPath), { recursive: true });
     fs.copyFileSync(path.join(root, ".env.example"), path.join(appRoot, ".env.example"));
     const pdfExecutable = path.join(toolsDir, "SumatraPDF.exe");
     const powershellExecutable = path.join(toolsDir, "powershell.exe");
     fs.writeFileSync(pdfExecutable, "fixture");
     fs.writeFileSync(powershellExecutable, "fixture");
+    fs.writeFileSync(bundledFontPath, "fixture-font");
 
     const configured = configureInstaller({
       appRoot,
@@ -116,6 +125,8 @@ async function main() {
     assert.equal(path.normalize(env.HARDWARE_INSTALLER_STATE_DIR), path.normalize(stateDir));
     assert.equal(path.normalize(env.HARDWARE_LOG_DIR), path.normalize(logDir));
     assert.equal(path.normalize(env.PDF_PRINT_EXECUTABLE), path.normalize(pdfExecutable));
+    assert.equal(path.normalize(env.SATO_LABEL_FONT_PATH), path.normalize(bundledFontPath));
+    assert.equal(path.normalize(configured.satoLabelFontPath), path.normalize(bundledFontPath));
 
     const healthPath = path.join(stateDir, "health-state.json");
     fs.writeFileSync(
@@ -134,7 +145,7 @@ async function main() {
   }
 
   console.log(
-    "OK: Stage 5 native Setup.exe packaging, ProgramData state, printer wizard, private runtime, and readiness contracts valid.",
+    "OK: Stage 5 native Setup.exe packaging, bundled SATO font, ProgramData state, printer wizard, private runtime, and readiness contracts valid.",
   );
 }
 
