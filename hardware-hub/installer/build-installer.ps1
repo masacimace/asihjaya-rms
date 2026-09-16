@@ -22,7 +22,8 @@ $SumatraVersion = "3.6.1"
 $SumatraZipHash = "98b33a518d42986856d225064b0cd2d3643ecf78cbf84ab873d26cc51877a544"
 $InterVersion = "3.19"
 $InterMediumHash = "a645f55492d1c8cdace43c72be8cbec08e680b5a86d8b4c2d1c50d6e41e9cc96"
-$InterMediumUrl = "https://color4bg.com/static/font/Inter-Medium.ttf"
+$InterMirrorCommit = "39762b0e1e95f856ca8ee5e32606adba2366334e"
+$InterMediumUrl = "https://raw.githubusercontent.com/apache/incubator-resilientdb-site/$InterMirrorCommit/fonts/Inter-Medium.ttf"
 $InterUpstreamRelease = "https://github.com/rsms/inter/releases/tag/v$InterVersion"
 
 function Assert-Sha256([string]$Path, [string]$Expected) {
@@ -129,8 +130,8 @@ if (-not $SumatraExe) { throw "SumatraPDF executable tidak ditemukan di archive.
 Copy-Item $SumatraExe.FullName (Join-Path $ToolsPayload "SumatraPDF.exe") -Force
 
 # The SATO V3 font is pinned by the SHA-256 of the exact Inter 3.019 build that was
-# physically approved. The download host is only a byte transport: any changed bytes
-# fail closed before packaging. Upstream project/license provenance remains rsms/inter.
+# physically approved. The immutable GitHub mirror is only a byte transport: any
+# changed bytes fail closed before packaging. Upstream project/license remains rsms/inter.
 $InterMediumDownload = Join-Path $DownloadRoot "Inter-Medium-$InterVersion.ttf"
 Download-Verified -Uri $InterMediumUrl -Destination $InterMediumDownload -Sha256 $InterMediumHash
 $InterLicenseSource = Join-Path $InstallerRoot "assets\Inter-OFL-1.1.txt"
@@ -148,6 +149,7 @@ $SumatraRuntimeHash = (Get-FileHash -Algorithm SHA256 (Join-Path $ToolsPayload "
 $InterRuntimeHash = (Get-FileHash -Algorithm SHA256 $BundledFontPath).Hash.ToLowerInvariant()
 Write-Host "Node runtime SHA-256   : $NodeRuntimeHash"
 Write-Host "SumatraPDF SHA-256     : $SumatraRuntimeHash"
+Write-Host "Inter mirror commit    : $InterMirrorCommit"
 Write-Host "Inter upstream         : $InterUpstreamRelease"
 Write-Host "Inter Medium SHA-256   : $InterRuntimeHash"
 
