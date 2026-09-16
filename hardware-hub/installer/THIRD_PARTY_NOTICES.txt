@@ -1,0 +1,22 @@
+ASIHJAYA Hardware Hub - Third-Party Notices
+==========================================
+
+This installer packages standalone third-party programs used by the Hardware Hub runtime.
+They remain governed by their own licenses.
+
+Node.js 24.14.0
+---------------
+Project: https://nodejs.org/
+Source: https://github.com/nodejs/node
+License: MIT and third-party notices distributed by the Node.js project.
+Bundled artifact: official Windows x64 Node.js release binary.
+
+SumatraPDF 3.6.1 (64-bit portable)
+---------------------------------
+Project: https://www.sumatrapdfreader.org/
+Source: https://github.com/sumatrapdfreader/sumatrapdf/tree/3.6.1rel
+License: GNU General Public License v3 and third-party component licenses described by the SumatraPDF project.
+Bundled artifact: official standalone 64-bit portable executable.
+
+ASIHJAYA Hardware Hub invokes SumatraPDF as a separate process for silent PDF printing.
+No SumatraPDF source code is incorporated into the Hardware Hub application.

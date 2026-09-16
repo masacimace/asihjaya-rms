@@ -1,6 +1,7 @@
 param(
   [string]$TaskName = "Asihjaya Hardware Hub Agent",
   [int]$StartupDelaySeconds = 15,
+  [string]$NodeExecutable = "",
   [switch]$RunNow
 )
 
@@ -10,18 +11,33 @@ $StartScript = Join-Path $HubRoot "scripts\start-agent.ps1"
 $EnvFile = Join-Path $HubRoot ".env"
 
 if (-not (Test-Path $EnvFile)) {
-  throw "File .env belum ada di $HubRoot. Copy .env.example menjadi .env lalu isi konfigurasi agent."
+  throw "File .env belum ada di $HubRoot. Jalankan ASIHJAYA Hardware Hub Setup terlebih dahulu."
 }
 
-$NodeCommand = Get-Command node -ErrorAction SilentlyContinue
-if (-not $NodeCommand) {
-  throw "Node.js tidak ditemukan di PATH. Install Node.js yang didukung lalu buka terminal baru."
+if ($NodeExecutable) {
+  $NodeExecutable = [System.IO.Path]::GetFullPath($NodeExecutable)
+  if (-not (Test-Path $NodeExecutable)) {
+    throw "Node.js private runtime tidak ditemukan: $NodeExecutable"
+  }
+} else {
+  $BundledNode = Join-Path (Split-Path $HubRoot -Parent) "runtime\node.exe"
+  if (Test-Path $BundledNode) {
+    $NodeExecutable = $BundledNode
+  } else {
+    $NodeCommand = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $NodeCommand) {
+      throw "Node.js tidak ditemukan. Install ulang Hardware Hub atau sediakan -NodeExecutable."
+    }
+    $NodeExecutable = $NodeCommand.Source
+  }
 }
-$NodeExecutable = $NodeCommand.Source
 
 Write-Host "Checking Hardware Hub config..."
 Push-Location $HubRoot
 try { & $NodeExecutable scripts/check-config.js } finally { Pop-Location }
+if ($LASTEXITCODE -ne 0) {
+  throw "Hardware Hub config check gagal."
+}
 
 $UserId = "$env:USERDOMAIN\$env:USERNAME"
 $ActionArgs = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$StartScript`" -NodeExecutable `"$NodeExecutable`""

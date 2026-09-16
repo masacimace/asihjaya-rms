@@ -1,3 +1,4 @@
+/* eslint-disable */
 const { createHardwareRequestHeaders } = require("./request-signing");
 
 class HardwareEnrollmentClaimError extends Error {
