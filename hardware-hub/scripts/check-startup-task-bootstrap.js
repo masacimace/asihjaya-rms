@@ -16,6 +16,14 @@ function main() {
   const readiness = read("scripts/installer-readiness.js");
 
   assert.ok(
+    startup.includes("function ConvertFrom-DotEnvValue") &&
+      startup.includes("return ConvertFrom-DotEnvValue $Line.Substring($Prefix.Length)") &&
+      startup.includes("$StateDirectory = ConvertFrom-DotEnvValue $StateDirectory") &&
+      startup.includes("$LogDirectory = ConvertFrom-DotEnvValue $LogDirectory"),
+    "Startup task staging wajib decode quoted/escaped .env path sebelum Path.GetFullPath dipanggil.",
+  );
+
+  assert.ok(
     startup.includes("startup-task-request.json") &&
       startup.includes("[System.Security.Principal.WindowsIdentity]::GetCurrent()") &&
       startup.includes("targetUserId") &&
@@ -55,7 +63,7 @@ function main() {
   );
 
   console.log(
-    "OK: original-user task staging, elevated hidden registration, diagnostics, and restart recovery bootstrap contracts valid.",
+    "OK: quoted installer path parsing, original-user task staging, elevated hidden registration, diagnostics, and restart recovery bootstrap contracts valid.",
   );
 }
 
