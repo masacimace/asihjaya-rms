@@ -1,4 +1,12 @@
 import { spawn } from "node:child_process";
+import {
+  cpSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { config as loadDotenv } from "dotenv";
 import { Client } from "pg";
@@ -11,15 +19,28 @@ import {
   analyzeMigrationHistory,
   findDestructiveMigrationFindings,
   loadMigrationPlan,
-  parseBoolean,
   parsePositiveInteger,
   type AppliedMigration,
+  type MigrationDescriptor,
 } from "./database-deployment-state";
 
 type CliOptions = {
   checkOnly: boolean;
+  allowDestructive: boolean;
   migrationsDirectory: string;
   environmentFile?: string;
+};
+
+type MigrationJournal = {
+  version: string;
+  dialect: string;
+  entries: Array<{
+    idx: number;
+    version: string;
+    when: number;
+    tag: string;
+    breakpoints: boolean;
+  }>;
 };
 
 const projectRoot = process.cwd();
@@ -35,7 +56,7 @@ function optionValue(args: string[], name: string): string | undefined {
 function parseOptions(args: string[]): CliOptions {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (argument === "--check-only") continue;
+    if (argument === "--check-only" || argument === "--allow-destructive") continue;
     if (argument === "--migrations-dir" || argument === "--env-file") {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new Error(`${argument} membutuhkan value.`);
@@ -45,14 +66,14 @@ function parseOptions(args: string[]): CliOptions {
     throw new Error(`Argument tidak dikenal: ${argument}.`);
   }
 
-  const options = {
+  return {
     checkOnly: args.includes("--check-only"),
-    migrationsDirectory: optionValue(args, "--migrations-dir") ?? path.join(projectRoot, "drizzle"),
+    allowDestructive: args.includes("--allow-destructive"),
+    migrationsDirectory:
+      optionValue(args, "--migrations-dir") ?? path.join(projectRoot, "drizzle"),
     environmentFile: optionValue(args, "--env-file"),
   };
-  return options;
 }
-
 
 function writeCommandResult(
   startedAt: string,
@@ -67,7 +88,9 @@ function writeCommandResult(
 
   const releaseId = process.env.APP_RELEASE_ID?.trim();
   if (!releaseId) {
-    throw new Error("APP_RELEASE_ID wajib diatur ketika DATABASE_DEPLOYMENT_RESULT_PATH digunakan.");
+    throw new Error(
+      "APP_RELEASE_ID wajib diatur ketika DATABASE_DEPLOYMENT_RESULT_PATH digunakan.",
+    );
   }
 
   writeDatabaseDeploymentResult(resultPath, {
@@ -93,13 +116,13 @@ function sleep(durationMs: number): Promise<void> {
 function redactSensitiveText(value: string): string {
   let result = value;
   const databaseUrl = process.env.DATABASE_URL?.trim();
-  if (databaseUrl) result = result.split(databaseUrl).join("[REDACTED_DATABASE_URL]");
-  return result.replace(/postgres(?:ql)?:\/\/[^\s@]+@/gi, "postgresql://[REDACTED]@");
-}
-
-function isValidApprovalReference(value: string | undefined): value is string {
-  if (!value || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{7,127}$/.test(value)) return false;
-  return !/(?:change|replace|generate)[-_ ]?me|example|sample|dummy|todo/i.test(value);
+  if (databaseUrl) {
+    result = result.split(databaseUrl).join("[REDACTED_DATABASE_URL]");
+  }
+  return result.replace(
+    /postgres(?:ql)?:\/\/[^\s@]+@/gi,
+    "postgresql://[REDACTED]@",
+  );
 }
 
 function safeDatabaseLabel(databaseUrl: string): string {
@@ -111,24 +134,34 @@ function safeDatabaseLabel(databaseUrl: string): string {
   }
 }
 
-async function connectWithRetry(databaseUrl: string, timeoutMs: number): Promise<Client> {
+async function connectWithRetry(
+  databaseUrl: string,
+  timeoutMs: number,
+): Promise<Client> {
   const deadline = Date.now() + timeoutMs;
   let lastMessage = "belum dapat terhubung";
 
   while (Date.now() < deadline) {
-    const client = new Client({ connectionString: databaseUrl, connectionTimeoutMillis: 5_000 });
+    const client = new Client({
+      connectionString: databaseUrl,
+      connectionTimeoutMillis: 5_000,
+    });
     try {
       await client.connect();
       await client.query("select 1");
       return client;
     } catch (error) {
-      lastMessage = redactSensitiveText(error instanceof Error ? error.message : String(error));
+      lastMessage = redactSensitiveText(
+        error instanceof Error ? error.message : String(error),
+      );
       await client.end().catch(() => undefined);
       await sleep(1_000);
     }
   }
 
-  throw new Error(`Database belum siap setelah ${timeoutMs} ms. Detail terakhir: ${lastMessage}`);
+  throw new Error(
+    `Database belum siap setelah ${timeoutMs} ms. Detail terakhir: ${lastMessage}`,
+  );
 }
 
 async function acquireMigrationLock(
@@ -152,16 +185,28 @@ async function acquireMigrationLock(
     await sleep(1_000);
   }
 
-  throw new Error(`Timeout ${timeoutMs} ms saat menunggu migration advisory lock.`);
+  throw new Error(
+    `Timeout ${timeoutMs} ms saat menunggu migration advisory lock.`,
+  );
 }
 
-async function readAppliedMigrations(client: Client): Promise<AppliedMigration[]> {
+async function readAppliedMigrations(
+  client: Client,
+): Promise<AppliedMigration[]> {
   const tableResult = await client.query<{ migration_table: string | null }>(
     "select to_regclass('drizzle.__drizzle_migrations')::text as migration_table",
   );
-  if (tableResult.rows[0]?.migration_table !== "drizzle.__drizzle_migrations") return [];
+  if (
+    tableResult.rows[0]?.migration_table !== "drizzle.__drizzle_migrations"
+  ) {
+    return [];
+  }
 
-  const result = await client.query<{ id: number; hash: string; created_at: string }>(
+  const result = await client.query<{
+    id: number;
+    hash: string;
+    created_at: string;
+  }>(
     `select id, hash, created_at::text
      from drizzle.__drizzle_migrations
      order by created_at asc, id asc`,
@@ -175,11 +220,18 @@ async function readAppliedMigrations(client: Client): Promise<AppliedMigration[]
 
 function resolveNpmCommand(args: string[]) {
   const npmExecPath = process.env.npm_execpath?.trim();
-  if (npmExecPath) return { executable: process.execPath, args: [npmExecPath, ...args] };
-  return { executable: process.platform === "win32" ? "npm.cmd" : "npm", args };
+  if (npmExecPath) {
+    return { executable: process.execPath, args: [npmExecPath, ...args] };
+  }
+  return {
+    executable: process.platform === "win32" ? "npm.cmd" : "npm",
+    args,
+  };
 }
 
-async function runDrizzleMigration(environment: NodeJS.ProcessEnv): Promise<void> {
+async function runDrizzleMigration(
+  environment: NodeJS.ProcessEnv,
+): Promise<void> {
   const command = resolveNpmCommand(["run", "db:migrate"]);
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command.executable, command.args, {
@@ -191,32 +243,148 @@ async function runDrizzleMigration(environment: NodeJS.ProcessEnv): Promise<void
     child.once("error", reject);
     child.once("exit", (code, signal) => {
       if (code === 0) resolve();
-      else reject(new Error(`drizzle-kit migrate gagal dengan exit code ${code ?? "null"}${signal ? ` (${signal})` : ""}.`));
+      else {
+        reject(
+          new Error(
+            `drizzle-kit migrate gagal dengan exit code ${code ?? "null"}${
+              signal ? ` (${signal})` : ""
+            }.`,
+          ),
+        );
+      }
     });
   });
 }
 
-function buildPgOptions(existing: string | undefined, ddlLockTimeoutMs: number, statementTimeoutMs: number): string {
-  const values = [existing?.trim(), `-c lock_timeout=${ddlLockTimeoutMs}`, `-c statement_timeout=${statementTimeoutMs}`]
-    .filter(Boolean);
-  return values.join(" ");
+function buildPgOptions(
+  existing: string | undefined,
+  ddlLockTimeoutMs: number,
+  statementTimeoutMs: number,
+): string {
+  return [
+    existing?.trim(),
+    `-c lock_timeout=${ddlLockTimeoutMs}`,
+    `-c statement_timeout=${statementTimeoutMs}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function createStepMigrationDirectory(
+  sourceDirectory: string,
+): {
+  directory: string;
+  journal: MigrationJournal;
+  cleanup: () => void;
+} {
+  const temporaryRoot = mkdtempSync(
+    path.join(os.tmpdir(), "asihjaya-migration-step-"),
+  );
+  const directory = path.join(temporaryRoot, "drizzle");
+  cpSync(sourceDirectory, directory, { recursive: true });
+
+  const journalPath = path.join(directory, "meta", "_journal.json");
+  const journal = JSON.parse(
+    readFileSync(journalPath, "utf8"),
+  ) as MigrationJournal;
+
+  return {
+    directory,
+    journal,
+    cleanup: () => rmSync(temporaryRoot, { recursive: true, force: true }),
+  };
+}
+
+function exposeMigrationPrefix(
+  directory: string,
+  journal: MigrationJournal,
+  migration: MigrationDescriptor,
+): void {
+  const prefix = {
+    ...journal,
+    entries: journal.entries.slice(0, migration.index + 1),
+  } satisfies MigrationJournal;
+  writeFileSync(
+    path.join(directory, "meta", "_journal.json"),
+    `${JSON.stringify(prefix, null, 2)}\n`,
+  );
+}
+
+async function applyPendingMigrationsOneByOne({
+  client,
+  localMigrations,
+  pending,
+  migrationsDirectory,
+  environment,
+}: {
+  client: Client;
+  localMigrations: readonly MigrationDescriptor[];
+  pending: readonly MigrationDescriptor[];
+  migrationsDirectory: string;
+  environment: NodeJS.ProcessEnv;
+}): Promise<void> {
+  if (pending.length === 0) return;
+
+  const step = createStepMigrationDirectory(migrationsDirectory);
+  try {
+    for (const migration of pending) {
+      exposeMigrationPrefix(step.directory, step.journal, migration);
+      console.log(
+        `Menerapkan migration ${migration.tag} dengan commit boundary terpisah...`,
+      );
+      await runDrizzleMigration({
+        ...environment,
+        DRIZZLE_MIGRATIONS_DIR: step.directory,
+      });
+
+      const progress = analyzeMigrationHistory(
+        localMigrations,
+        await readAppliedMigrations(client),
+      );
+      const expectedCount = migration.index + 1;
+      if (progress.appliedCount !== expectedCount) {
+        throw new Error(
+          `Migration ${migration.tag} selesai tetapi history mencatat ${progress.appliedCount}/${expectedCount} migration pada checkpoint ini.`,
+        );
+      }
+    }
+  } finally {
+    step.cleanup();
+  }
 }
 
 async function main(): Promise<void> {
   const startedAt = new Date().toISOString();
   const options = parseOptions(process.argv.slice(2));
   if (options.environmentFile) {
-    const result = loadDotenv({ path: options.environmentFile, override: true, quiet: true });
-    if (result.error) throw new Error(`Gagal membaca environment file ${options.environmentFile}.`);
+    const result = loadDotenv({
+      path: options.environmentFile,
+      override: true,
+      quiet: true,
+    });
+    if (result.error) {
+      throw new Error(
+        `Gagal membaca environment file ${options.environmentFile}.`,
+      );
+    }
   }
 
   const databaseUrl = process.env.DATABASE_URL?.trim();
-  if (!databaseUrl) throw new Error("DATABASE_URL wajib diatur untuk database deployment.");
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL wajib diatur untuk database deployment.");
+  }
 
   const usesDefaultMigrationsDirectory =
-    path.resolve(options.migrationsDirectory) === path.resolve(projectRoot, "drizzle");
-  if (!options.checkOnly && !usesDefaultMigrationsDirectory && process.env.NODE_ENV !== "test") {
-    throw new Error("--migrations-dir non-default hanya boleh diterapkan pada NODE_ENV=test.");
+    path.resolve(options.migrationsDirectory) ===
+    path.resolve(projectRoot, "drizzle");
+  if (
+    !options.checkOnly &&
+    !usesDefaultMigrationsDirectory &&
+    process.env.NODE_ENV !== "test"
+  ) {
+    throw new Error(
+      "--migrations-dir non-default hanya boleh diterapkan pada NODE_ENV=test.",
+    );
   }
 
   const readyTimeoutMs = parsePositiveInteger(
@@ -243,14 +411,21 @@ async function main(): Promise<void> {
     "DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS",
     3_600_000,
   );
-  const lockKey = process.env.DATABASE_MIGRATION_LOCK_KEY?.trim() || "718143293674";
-  if (!/^-?\d{1,19}$/.test(lockKey)) throw new Error("DATABASE_MIGRATION_LOCK_KEY harus berupa bigint PostgreSQL.");
+  const lockKey =
+    process.env.DATABASE_MIGRATION_LOCK_KEY?.trim() || "718143293674";
+  if (!/^-?\d{1,19}$/.test(lockKey)) {
+    throw new Error(
+      "DATABASE_MIGRATION_LOCK_KEY harus berupa bigint PostgreSQL.",
+    );
+  }
   const parsedLockKey = BigInt(lockKey);
   if (
     parsedLockKey < BigInt("-9223372036854775808") ||
     parsedLockKey > BigInt("9223372036854775807")
   ) {
-    throw new Error("DATABASE_MIGRATION_LOCK_KEY berada di luar rentang bigint PostgreSQL.");
+    throw new Error(
+      "DATABASE_MIGRATION_LOCK_KEY berada di luar rentang bigint PostgreSQL.",
+    );
   }
 
   const localMigrations = loadMigrationPlan(options.migrationsDirectory);
@@ -261,40 +436,61 @@ async function main(): Promise<void> {
     const versionResult = await client.query<{ server_version_num: string }>(
       "select current_setting('server_version_num') as server_version_num",
     );
-    const majorVersion = Number(versionResult.rows[0]?.server_version_num.slice(0, 2));
-    if (majorVersion !== 17) throw new Error(`Database deployment membutuhkan PostgreSQL 17, ditemukan versi ${majorVersion}.`);
+    const majorVersion = Number(
+      versionResult.rows[0]?.server_version_num.slice(0, 2),
+    );
+    if (majorVersion !== 17) {
+      throw new Error(
+        `Database deployment membutuhkan PostgreSQL 17, ditemukan versi ${majorVersion}.`,
+      );
+    }
 
     await acquireMigrationLock(client, lockKey, lockTimeoutMs);
     lockAcquired = true;
 
-    const testHoldMs = process.env.NODE_ENV === "test"
-      ? Number(process.env.DATABASE_MIGRATION_TEST_HOLD_LOCK_MS || 0)
-      : 0;
-    if (Number.isFinite(testHoldMs) && testHoldMs > 0) await sleep(Math.min(testHoldMs, 10_000));
+    const testHoldMs =
+      process.env.NODE_ENV === "test"
+        ? Number(process.env.DATABASE_MIGRATION_TEST_HOLD_LOCK_MS || 0)
+        : 0;
+    if (Number.isFinite(testHoldMs) && testHoldMs > 0) {
+      await sleep(Math.min(testHoldMs, 10_000));
+    }
 
-    const before = analyzeMigrationHistory(localMigrations, await readAppliedMigrations(client));
+    const before = analyzeMigrationHistory(
+      localMigrations,
+      await readAppliedMigrations(client),
+    );
     if (before.lineEndingCompatibilityMatches.length > 0) {
-      const tags = before.lineEndingCompatibilityMatches.map((match) => match.tag).join(", ");
+      const tags = before.lineEndingCompatibilityMatches
+        .map((match) => match.tag)
+        .join(", ");
       console.warn(
         `Compatibility migration line-ending diterima untuk ${before.lineEndingCompatibilityMatches.length} migration (${tags}); hash database hanya berbeda karena LF/CRLF.`,
       );
     }
+
     const destructiveFindings = findDestructiveMigrationFindings(before.pending);
     const destructiveOperations = destructiveFindings.map(
       (finding) => `${finding.migrationTag}:${finding.operation}`,
     );
     if (destructiveFindings.length > 0) {
-      const allowDestructive = parseBoolean(process.env.DATABASE_MIGRATION_ALLOW_DESTRUCTIVE, false);
-      const approvalReference = process.env.DATABASE_MIGRATION_APPROVAL_REFERENCE?.trim();
-      if (!allowDestructive || !isValidApprovalReference(approvalReference)) {
-        const detail = destructiveFindings
-          .map((finding) => `${finding.migrationTag}: ${finding.operation}`)
-          .join(", ");
+      const detail = destructiveFindings
+        .map((finding) => `${finding.migrationTag}: ${finding.operation}`)
+        .join(", ");
+
+      if (before.appliedCount === 0) {
+        console.log(
+          `Fresh database terdeteksi; historical destructive migration diizinkan otomatis (${detail}).`,
+        );
+      } else if (!options.allowDestructive) {
         throw new Error(
-          `Migration destruktif terdeteksi (${detail}). Set DATABASE_MIGRATION_ALLOW_DESTRUCTIVE=true dan approval reference minimal 8 karakter setelah backup serta review eksplisit.`,
+          `Migration destruktif terdeteksi pada database existing (${detail}). Review perubahan dan pastikan backup tersedia, lalu jalankan ulang dengan --allow-destructive jika perubahan memang disengaja.`,
+        );
+      } else {
+        console.log(
+          `Destructive migration existing database diizinkan untuk invocation ini (${detail}).`,
         );
       }
-      console.log(`Approval migration destruktif diterima dengan reference ${approvalReference}.`);
     }
 
     console.log(
@@ -310,27 +506,53 @@ async function main(): Promise<void> {
         before.pending.length,
         destructiveOperations,
       );
-      console.log("OK: database deployment preflight lulus tanpa menerapkan migration.");
+      console.log(
+        "OK: database deployment preflight lulus tanpa menerapkan migration.",
+      );
       return;
     }
 
     if (before.pending.length === 0) {
-      writeCommandResult(startedAt, "completed", before.appliedCount, before.appliedCount, 0, destructiveOperations);
-      console.log("OK: tidak ada migration pending; deployment database merupakan no-op.");
+      writeCommandResult(
+        startedAt,
+        "completed",
+        before.appliedCount,
+        before.appliedCount,
+        0,
+        destructiveOperations,
+      );
+      console.log(
+        "OK: tidak ada migration pending; deployment database merupakan no-op.",
+      );
       return;
     }
 
     const childEnvironment: NodeJS.ProcessEnv = {
       ...process.env,
       DATABASE_URL: databaseUrl,
-      DRIZZLE_MIGRATIONS_DIR: path.resolve(options.migrationsDirectory),
-      PGOPTIONS: buildPgOptions(process.env.PGOPTIONS, ddlLockTimeoutMs, statementTimeoutMs),
+      PGOPTIONS: buildPgOptions(
+        process.env.PGOPTIONS,
+        ddlLockTimeoutMs,
+        statementTimeoutMs,
+      ),
     };
-    await runDrizzleMigration(childEnvironment);
 
-    const after = analyzeMigrationHistory(localMigrations, await readAppliedMigrations(client));
+    await applyPendingMigrationsOneByOne({
+      client,
+      localMigrations,
+      pending: before.pending,
+      migrationsDirectory: path.resolve(options.migrationsDirectory),
+      environment: childEnvironment,
+    });
+
+    const after = analyzeMigrationHistory(
+      localMigrations,
+      await readAppliedMigrations(client),
+    );
     if (after.pending.length !== 0) {
-      throw new Error(`Migration selesai tetapi masih tersisa ${after.pending.length} migration pending.`);
+      throw new Error(
+        `Migration selesai tetapi masih tersisa ${after.pending.length} migration pending.`,
+      );
     }
 
     writeCommandResult(
@@ -341,17 +563,23 @@ async function main(): Promise<void> {
       before.pending.length,
       destructiveOperations,
     );
-    console.log(`OK: ${localMigrations.length} migration tervalidasi dan database deployment selesai.`);
+    console.log(
+      `OK: ${localMigrations.length} migration tervalidasi dan database deployment selesai.`,
+    );
   } finally {
     if (lockAcquired) {
-      await client.query("select pg_advisory_unlock($1::bigint)", [lockKey]).catch(() => undefined);
+      await client
+        .query("select pg_advisory_unlock($1::bigint)", [lockKey])
+        .catch(() => undefined);
     }
     await client.end().catch(() => undefined);
   }
 }
 
 main().catch((error) => {
-  const message = redactSensitiveText(error instanceof Error ? error.message : String(error));
+  const message = redactSensitiveText(
+    error instanceof Error ? error.message : String(error),
+  );
   console.error(`Database deployment gagal: ${message}`);
   process.exitCode = 1;
 });
