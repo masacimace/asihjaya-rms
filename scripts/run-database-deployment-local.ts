@@ -134,6 +134,17 @@ const environment: NodeJS.ProcessEnv = {
   DATABASE_MIGRATION_LOCK_TIMEOUT_MS: "30000",
   DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS: "10000",
   DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS: "300000",
+  DEFAULT_ORGANIZATION_SLUG: "asihjaya",
+  BOOTSTRAP_ORGANIZATION_NAME: "ASIHJAYA CI",
+  BOOTSTRAP_ORGANIZATION_SLUG: "asihjaya",
+  BOOTSTRAP_OUTLET_CODE: "CI-OUTLET",
+  BOOTSTRAP_OUTLET_NAME: "CI Outlet",
+  BOOTSTRAP_REGISTER_CODE: "CI-REG-01",
+  BOOTSTRAP_REGISTER_NAME: "CI Register",
+  BOOTSTRAP_ADMIN_NAME: "CI Administrator",
+  BOOTSTRAP_ADMIN_USERNAME: "ci-admin",
+  BOOTSTRAP_ADMIN_EMAIL: "ci-admin@asihjaya.test",
+  BOOTSTRAP_ADMIN_PASSWORD: "ci-bootstrap-admin-password-2026",
 };
 const composeArgs = [
   "compose",
@@ -202,8 +213,7 @@ try {
     );
   }
 
-  console.log("Memvalidasi schema dan idempotent no-op deployment...");
-  await runNpm(["run", "check:database:live"], environment);
+  console.log("Memvalidasi idempotent no-op deployment...");
   const noOp = await runNpm(["run", "db:deploy"], environment, {
     capture: true,
   });
@@ -211,6 +221,13 @@ try {
     noOp.output.includes("no-op"),
     "Deployment kedua harus terdeteksi sebagai no-op.",
   );
+
+  console.log("Menjalankan bootstrap seed fresh database dan menguji idempotency...");
+  await runNpm(["run", "db:seed"], environment);
+  await runNpm(["run", "db:seed"], environment);
+
+  console.log("Memvalidasi schema PostgreSQL setelah migration + bootstrap seed...");
+  await runNpm(["run", "check:database:live"], environment);
 
   console.log("Menguji deteksi migration history drift...");
   const client = new Client({ connectionString: databaseUrl });
@@ -404,7 +421,7 @@ try {
   );
 
   console.log(
-    "OK: database deployment rehearsal lulus; fresh auto-approval, per-migration commit boundary, readiness, advisory lock, idempotency, history drift, one-shot destructive guard, dan failure stop terverifikasi.",
+    "OK: database deployment rehearsal lulus; fresh auto-approval, per-migration commit boundary, bootstrap seed idempotency, readiness, advisory lock, idempotency, history drift, one-shot destructive guard, dan failure stop terverifikasi.",
   );
 } finally {
   console.log(
