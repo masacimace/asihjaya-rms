@@ -78,8 +78,14 @@ assert(
 );
 assert(
   compose.includes("ASIHJAYA_MIGRATOR_IMAGE") &&
-    compose.includes("DATABASE_MIGRATION_ALLOW_DESTRUCTIVE"),
-  "Compose production wajib memiliki migrator image dan destructive migration boundary.",
+    compose.includes("DATABASE_MIGRATION_LOCK_KEY") &&
+    compose.includes("DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS"),
+  "Compose production wajib memiliki migrator image, advisory lock, dan migration timeout boundary.",
+);
+assert(
+  !compose.includes("DATABASE_MIGRATION_ALLOW_DESTRUCTIVE") &&
+    !compose.includes("DATABASE_MIGRATION_APPROVAL_REFERENCE"),
+  "Compose production tidak boleh menyimpan persistent destructive-migration approval; gunakan one-shot CLI flag.",
 );
 
 for (const requiredComposeContract of [
