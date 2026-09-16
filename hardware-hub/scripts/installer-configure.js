@@ -60,6 +60,12 @@ function configureInstaller(input) {
   const powershellExecutable = path.resolve(
     required(input.powershellExecutable, "PowerShell executable"),
   );
+  const satoLabelFontPath = path.resolve(
+    appRoot,
+    "assets",
+    "fonts",
+    "Inter-Medium.ttf",
+  );
 
   const templatePath = path.join(appRoot, ".env.example");
   const envPath = path.join(appRoot, ".env");
@@ -71,6 +77,9 @@ function configureInstaller(input) {
   }
   if (!fs.existsSync(powershellExecutable)) {
     throw new Error(`PowerShell tidak ditemukan: ${powershellExecutable}`);
+  }
+  if (!fs.existsSync(satoLabelFontPath)) {
+    throw new Error(`Bundled Inter Medium untuk label SATO tidak ditemukan: ${satoLabelFontPath}`);
   }
 
   for (const directory of [
@@ -112,6 +121,7 @@ function configureInstaller(input) {
     LABEL_PRINTER_NAME: labelPrinter,
     DOCUMENT_PRINTER_NAME: documentPrinter,
     CASH_DRAWER_PRINTER_NAME: "",
+    SATO_LABEL_FONT_PATH: satoLabelFontPath,
     PDF_PRINT_EXECUTABLE: pdfExecutable,
     HARDWARE_LOG_DIR: logDir,
     HARDWARE_LOCK_PATH: path.join(stateDir, "agent.lock"),
@@ -137,6 +147,7 @@ function configureInstaller(input) {
     labelPrinter,
     documentPrinter,
     pdfExecutable,
+    satoLabelFontPath,
   };
 }
 
