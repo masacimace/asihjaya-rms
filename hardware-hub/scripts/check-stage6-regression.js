@@ -18,6 +18,7 @@ function read(relativePath) {
 function main() {
   const iss = read("installer/AsihjayaHardwareHub.iss");
   const builder = read("installer/build-installer.ps1");
+  const interLicense = read("installer/assets/Inter-OFL-1.1.txt");
   const installerConfigure = read("scripts/installer-configure.js");
   const uat = read("scripts/run-local-uat.ps1");
   const support = read("scripts/export-support-bundle.ps1");
@@ -63,14 +64,19 @@ function main() {
 
   assert.ok(
     builder.includes('$InterVersion = "3.19"') &&
-      builder.includes("150ab6230d1762a57bebf35dfc04d606ff91598a31d785f7f100356ecdcc0032") &&
       builder.includes("a645f55492d1c8cdace43c72be8cbec08e680b5a86d8b4c2d1c50d6e41e9cc96") &&
-      builder.includes("https://github.com/rsms/inter/releases/download/v$InterVersion/$InterZipName") &&
-      builder.includes('Inter Hinted for Windows\\Desktop\\Inter-Medium.ttf') &&
-      builder.includes('LICENSE.txt') &&
+      builder.includes('https://color4bg.com/static/font/Inter-Medium.ttf') &&
+      builder.includes('https://github.com/rsms/inter/releases/tag/v$InterVersion') &&
+      builder.includes('Download-Verified -Uri $InterMediumUrl') &&
+      builder.includes('assets\\Inter-OFL-1.1.txt') &&
       builder.includes('Inter-OFL-1.1.txt') &&
       !builder.includes("registry.npmjs.org/inter-font"),
-    "Installer wajib mengambil official Inter v3.19 release, memverifikasi archive + hash byte-exact Inter Medium approved, dan membundle OFL.",
+    "Installer wajib memverifikasi hash byte-exact Inter Medium approved, menyimpan provenance upstream Inter v3.19, dan membundle OFL.",
+  );
+  assert.ok(
+    interLicense.includes("SIL OPEN FONT LICENSE Version 1.1") &&
+      interLicense.includes("The Inter Project Authors"),
+    "Bundled Inter wajib membawa complete OFL 1.1 notice.",
   );
   assert.ok(
     installerConfigure.includes('"assets"') &&
