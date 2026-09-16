@@ -12,6 +12,7 @@ $PayloadRoot = Join-Path $InstallerRoot "payload"
 $AppPayload = Join-Path $PayloadRoot "app"
 $RuntimePayload = Join-Path $PayloadRoot "runtime"
 $ToolsPayload = Join-Path $PayloadRoot "tools"
+$FontPayload = Join-Path $AppPayload "assets\fonts"
 $DownloadRoot = Join-Path $InstallerRoot ".downloads"
 $OutputRoot = Join-Path $InstallerRoot "output"
 $IssPath = Join-Path $InstallerRoot "AsihjayaHardwareHub.iss"
@@ -19,6 +20,8 @@ $IssPath = Join-Path $InstallerRoot "AsihjayaHardwareHub.iss"
 $NodeZipHash = "313fa40c0d7b18575821de8cb17483031fe07d95de5994f6f435f3b345f85c66"
 $SumatraVersion = "3.6.1"
 $SumatraZipHash = "98b33a518d42986856d225064b0cd2d3643ecf78cbf84ab873d26cc51877a544"
+$InterVersion = "3.19"
+$InterMediumHash = "a645f55492d1c8cdace43c72be8cbec08e680b5a86d8b4c2d1c50d6e41e9cc96"
 
 function Assert-Sha256([string]$Path, [string]$Expected) {
   $Actual = (Get-FileHash -Algorithm SHA256 -Path $Path).Hash.ToLowerInvariant()
@@ -33,6 +36,13 @@ function Download-Verified([string]$Uri, [string]$Destination, [string]$Sha256) 
     Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $Destination
   }
   Assert-Sha256 -Path $Destination -Expected $Sha256
+}
+
+function Download-File([string]$Uri, [string]$Destination) {
+  if (-not (Test-Path $Destination)) {
+    Write-Host "Downloading $Uri"
+    Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $Destination
+  }
 }
 
 function Copy-HubPayload {
@@ -123,15 +133,44 @@ $SumatraExe = Get-ChildItem $SumatraExtract -Filter "SumatraPDF*.exe" -Recurse |
 if (-not $SumatraExe) { throw "SumatraPDF executable tidak ditemukan di archive." }
 Copy-Item $SumatraExe.FullName (Join-Path $ToolsPayload "SumatraPDF.exe") -Force
 
+$InterZipName = "Inter-$InterVersion.zip"
+$InterZip = Join-Path $DownloadRoot $InterZipName
+$InterUrl = "https://github.com/rsms/inter/releases/download/v$InterVersion/$InterZipName"
+Download-File -Uri $InterUrl -Destination $InterZip
+$InterExtract = Join-Path $DownloadRoot "inter-$InterVersion"
+Remove-Item $InterExtract -Recurse -Force -ErrorAction SilentlyContinue
+Expand-Archive -Path $InterZip -DestinationPath $InterExtract -Force
+$InterMedium = Get-ChildItem $InterExtract -Filter "Inter-Medium.ttf" -Recurse | Where-Object {
+  (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLowerInvariant() -eq $InterMediumHash
+} | Select-Object -First 1
+if (-not $InterMedium) {
+  $Candidates = Get-ChildItem $InterExtract -Filter "Inter-Medium.ttf" -Recurse | ForEach-Object {
+    "$($_.FullName)=$((Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLowerInvariant())"
+  }
+  throw "Inter-Medium.ttf v$InterVersion dengan SHA-256 approved tidak ditemukan. candidates=$($Candidates -join '; ')"
+}
+$InterLicense = Get-ChildItem $InterExtract -Filter "LICENSE.txt" -Recurse | Select-Object -First 1
+if (-not $InterLicense) {
+  throw "LICENSE.txt Inter v$InterVersion tidak ditemukan di official release archive."
+}
+New-Item -ItemType Directory -Force -Path $FontPayload | Out-Null
+$BundledFontPath = Join-Path $FontPayload "Inter-Medium.ttf"
+Copy-Item $InterMedium.FullName $BundledFontPath -Force
+Copy-Item $InterLicense.FullName (Join-Path $FontPayload "Inter-OFL-1.1.txt") -Force
+Assert-Sha256 -Path $BundledFontPath -Expected $InterMediumHash
+
 $NodeRuntimeHash = (Get-FileHash -Algorithm SHA256 (Join-Path $RuntimePayload "node.exe")).Hash.ToLowerInvariant()
 $SumatraRuntimeHash = (Get-FileHash -Algorithm SHA256 (Join-Path $ToolsPayload "SumatraPDF.exe")).Hash.ToLowerInvariant()
+$InterRuntimeHash = (Get-FileHash -Algorithm SHA256 $BundledFontPath).Hash.ToLowerInvariant()
 Write-Host "Node runtime SHA-256   : $NodeRuntimeHash"
 Write-Host "SumatraPDF SHA-256     : $SumatraRuntimeHash"
+Write-Host "Inter Medium SHA-256   : $InterRuntimeHash"
 
 $ISCC = Resolve-InnoCompiler
 Write-Host "Inno Setup compiler    : $ISCC"
 Write-Host "RMS API URL            : $ApiUrl"
 Write-Host "Hardware Hub version   : $AppVersion"
+Write-Host "Bundled SATO font      : Inter Medium $InterVersion"
 
 Push-Location $InstallerRoot
 try {
