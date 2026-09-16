@@ -40,8 +40,9 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $UserId = "$env:USERDOMAIN\$env:USERNAME"
-$ActionArgs = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$StartScript`" -NodeExecutable `"$NodeExecutable`""
-$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $ActionArgs
+$PowerShellExecutable = (Get-Command powershell.exe -ErrorAction Stop).Source
+$ActionArgs = "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$StartScript`" -NodeExecutable `"$NodeExecutable`""
+$Action = New-ScheduledTaskAction -Execute $PowerShellExecutable -Argument $ActionArgs
 $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $UserId
 try { $Trigger.Delay = "PT$([Math]::Max(0, $StartupDelaySeconds))S" } catch {}
 $Settings = New-ScheduledTaskSettingsSet `
@@ -63,13 +64,15 @@ Register-ScheduledTask `
   -Trigger $Trigger `
   -Settings $Settings `
   -Principal $Principal `
-  -Description "Runs the Asihjaya RMS local Hardware Hub Agent in the dedicated outlet user context." `
+  -Description "Runs the Asihjaya RMS local Hardware Hub Agent silently in the dedicated outlet user context." `
   -Force | Out-Null
 
 Write-Host "Scheduled task installed: $TaskName"
 Write-Host "User context          : $UserId"
+Write-Host "PowerShell executable : $PowerShellExecutable"
 Write-Host "Node executable       : $NodeExecutable"
 Write-Host "Start script          : $StartScript"
+Write-Host "Window mode           : hidden/background"
 Write-Host "Multiple instances    : IgnoreNew"
 Write-Host "Restart policy        : 1 minute, up to 999 attempts"
 
