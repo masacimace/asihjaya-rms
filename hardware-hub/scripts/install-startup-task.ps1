@@ -54,12 +54,15 @@ function Write-TaskLog([string]$Level, [string]$Message) {
 
 function Test-IsAdministrator {
   $Identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-  $Principal = New-Object System.Security.Principal.WindowsPrincipal($Identity)
+  $Principal = [System.Security.Principal.WindowsPrincipal]::new($Identity)
   return $Principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
 function Resolve-Sid([string]$UserId) {
-  $Account = New-Object System.Security.Principal.NTAccount($UserId)
+  if ($UserId -match '^S-\d-') {
+    return [System.Security.Principal.SecurityIdentifier]::new($UserId).Value
+  }
+  $Account = [System.Security.Principal.NTAccount]::new($UserId)
   return $Account.Translate([System.Security.Principal.SecurityIdentifier]).Value
 }
 
@@ -215,11 +218,17 @@ try {
   $Acl.SetOwner($Identity.User)
   $Allow = [System.Security.AccessControl.AccessControlType]::Allow
   $FullControl = [System.Security.AccessControl.FileSystemRights]::FullControl
-  $Acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($Identity.User, $FullControl, $Allow)))
-  $AdministratorsSid = New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
-  $SystemSid = New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
-  $Acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($AdministratorsSid, $FullControl, $Allow)))
-  $Acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($SystemSid, $FullControl, $Allow)))
+  $Acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($Identity.User, $FullControl, $Allow))
+  $AdministratorsSid = [System.Security.Principal.SecurityIdentifier]::new(
+    [System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid,
+    $null
+  )
+  $SystemSid = [System.Security.Principal.SecurityIdentifier]::new(
+    [System.Security.Principal.WellKnownSidType]::LocalSystemSid,
+    $null
+  )
+  $Acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($AdministratorsSid, $FullControl, $Allow))
+  $Acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($SystemSid, $FullControl, $Allow))
   Set-Acl -LiteralPath $TempPath -AclObject $Acl
 
   Move-Item -LiteralPath $TempPath -Destination $RequestPath -Force
