@@ -8,6 +8,10 @@ package-lock.json text eol=lf
 .npmrc text eol=lf
 .nvmrc text eol=lf
 
+# Hardware Hub SATO freeze locks hash the raw config bytes. Keep JSON byte-stable
+# when the native installer payload is checked out and built on Windows.
+hardware-hub/config/*.json text eol=lf
+
 # Migration hashes must remain identical on Windows, CI, and Linux production.
 drizzle/*.sql text eol=lf
 drizzle/meta/*.json text eol=lf
