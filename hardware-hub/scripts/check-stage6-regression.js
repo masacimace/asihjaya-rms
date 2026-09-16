@@ -62,13 +62,15 @@ function main() {
   );
 
   assert.ok(
-    builder.includes('$InterVersion = "3.19.0"') &&
+    builder.includes('$InterVersion = "3.19"') &&
+      builder.includes("150ab6230d1762a57bebf35dfc04d606ff91598a31d785f7f100356ecdcc0032") &&
       builder.includes("a645f55492d1c8cdace43c72be8cbec08e680b5a86d8b4c2d1c50d6e41e9cc96") &&
-      builder.includes("https://registry.npmjs.org/inter-font/-/$InterPackageName") &&
-      builder.includes('package\\ttf\\Inter-Medium.ttf') &&
-      builder.includes('package\\OFL.txt') &&
-      builder.includes('Inter-OFL-1.1.txt'),
-    "Installer wajib mengambil inter-font 3.19.0, memverifikasi hash byte-exact Inter Medium approved, dan membundle OFL.",
+      builder.includes("https://github.com/rsms/inter/releases/download/v$InterVersion/$InterZipName") &&
+      builder.includes('Inter Hinted for Windows\\Desktop\\Inter-Medium.ttf') &&
+      builder.includes('LICENSE.txt') &&
+      builder.includes('Inter-OFL-1.1.txt') &&
+      !builder.includes("registry.npmjs.org/inter-font"),
+    "Installer wajib mengambil official Inter v3.19 release, memverifikasi archive + hash byte-exact Inter Medium approved, dan membundle OFL.",
   );
   assert.ok(
     installerConfigure.includes('"assets"') &&
