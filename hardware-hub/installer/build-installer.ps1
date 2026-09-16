@@ -130,6 +130,7 @@ Copy-Item $SumatraExe.FullName (Join-Path $ToolsPayload "SumatraPDF.exe") -Force
 # Pin the official Inter v3.19 release archive, then locate the exact Inter-Medium.ttf
 # bytes that were physically approved for the SATO V3 label. Do not silently accept
 # another Inter Medium build with different hinting/metrics.
+# Historical Windows candidate kept as a regression marker: Inter Hinted for Windows\Desktop\Inter-Medium.ttf
 $InterZipName = "Inter-$InterVersion.zip"
 $InterZip = Join-Path $DownloadRoot $InterZipName
 $InterUrl = "https://github.com/rsms/inter/releases/download/v$InterVersion/$InterZipName"
