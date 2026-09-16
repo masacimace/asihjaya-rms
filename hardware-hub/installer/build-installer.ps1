@@ -66,8 +66,16 @@ function Resolve-InnoCompiler {
 }
 
 $Api = [Uri]$ApiUrl
-if ($Api.Scheme -ne "https") {
-  throw "Build production Setup.exe wajib memakai HTTPS ApiUrl."
+$IsLoopbackHttp =
+  ($Api.Scheme -eq "http") -and
+  (($Api.Host -eq "127.0.0.1") -or ($Api.Host -eq "localhost"))
+
+if (($Api.Scheme -ne "https") -and (-not $IsLoopbackHttp)) {
+  throw "Setup.exe production wajib memakai HTTPS ApiUrl. HTTP hanya diizinkan untuk localhost/127.0.0.1 pada local UAT."
+}
+
+if ($IsLoopbackHttp) {
+  Write-Host "LOCAL UAT MODE          : HTTP loopback diizinkan untuk $ApiUrl"
 }
 
 $Package = Get-Content (Join-Path $HubRoot "package.json") -Raw | ConvertFrom-Json

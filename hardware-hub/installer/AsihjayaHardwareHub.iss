@@ -1,6 +1,6 @@
 #define MyAppName "ASIHJAYA Hardware Hub"
 #ifndef AppVersion
-  #define AppVersion "0.8.0"
+  #define AppVersion "0.9.0"
 #endif
 #ifndef AppApiUrl
   #define AppApiUrl "https://ajsystem.id"
@@ -46,6 +46,7 @@ Name: "{commonappdata}\ASIHJAYA\Hardware Hub"; Permissions: users-modify
 Name: "{commonappdata}\ASIHJAYA\Hardware Hub\data"; Permissions: users-modify
 Name: "{commonappdata}\ASIHJAYA\Hardware Hub\logs"; Permissions: users-modify
 Name: "{commonappdata}\ASIHJAYA\Hardware Hub\support-bundles"; Permissions: users-modify
+Name: "{commonappdata}\ASIHJAYA\Hardware Hub\uat-reports"; Permissions: users-modify
 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\app\scripts\uninstall-startup-task.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "HardwareHubTask"
@@ -53,7 +54,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile
 [Code]
 const
   TaskName = 'Asihjaya Hardware Hub Agent';
-  InstallerVersion = 'stage5-{#AppVersion}';
+  InstallerVersion = 'stage6-{#AppVersion}';
 
 var
   InstallationPage: TInputQueryWizardPage;
@@ -62,11 +63,15 @@ var
   DocumentPrinterCombo: TNewComboBox;
   RefreshPrintersButton: TNewButton;
   PrinterStatusLabel: TNewStaticText;
+  RepairStatusLabel: TNewStaticText;
   TestLabelButton: TNewButton;
   TestDocumentButton: TNewButton;
   FinishDetailLabel: TNewStaticText;
   PrintersLoaded: Boolean;
   InstallSucceeded: Boolean;
+  ExistingInstallation: Boolean;
+  ExistingLabelPrinter: String;
+  ExistingDocumentPrinter: String;
 
 function Q(const Value: String): String;
 begin
@@ -98,6 +103,16 @@ begin
   Result := ExpandConstant('{commonappdata}\ASIHJAYA\Hardware Hub\support-bundles');
 end;
 
+function CredentialPath: String;
+begin
+  Result := StateDir + '\agent-credential.json';
+end;
+
+function ExistingEnvPath: String;
+begin
+  Result := ExpandConstant('{autopf}\ASIHJAYA\Hardware Hub\app\.env');
+end;
+
 function PdfExecutable: String;
 begin
   Result := ExpandConstant('{app}\tools\SumatraPDF.exe');
@@ -106,6 +121,31 @@ end;
 function PowerShellExecutable: String;
 begin
   Result := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+end;
+
+function ReadExistingEnvValue(const Key: String): String;
+var
+  Lines: TArrayOfString;
+  I: Integer;
+  LineValue: String;
+  Prefix: String;
+begin
+  Result := '';
+  if not FileExists(ExistingEnvPath) then
+    Exit;
+  if not LoadStringsFromFile(ExistingEnvPath, Lines) then
+    Exit;
+
+  Prefix := Key + '=';
+  for I := 0 to GetArrayLength(Lines) - 1 do
+  begin
+    LineValue := Trim(Lines[I]);
+    if Pos(Prefix, LineValue) = 1 then
+    begin
+      Result := Trim(Copy(LineValue, Length(Prefix) + 1, Length(LineValue)));
+      Exit;
+    end;
+  end;
 end;
 
 function SelectedLabelPrinter: String;
@@ -140,6 +180,22 @@ begin
   Result := (Pos('EPSON', UpperValue) > 0) and
     ((Pos('L3250', UpperValue) > 0) or (Pos('L3251', UpperValue) > 0) or
      (Pos('ECOTANK', UpperValue) > 0));
+end;
+
+procedure SelectPrinterByExactName(Combo: TNewComboBox; const PrinterName: String);
+var
+  I: Integer;
+begin
+  if PrinterName = '' then
+    Exit;
+  for I := 0 to Combo.Items.Count - 1 do
+  begin
+    if CompareText(Combo.Items[I], PrinterName) = 0 then
+    begin
+      Combo.ItemIndex := I;
+      Exit;
+    end;
+  end;
 end;
 
 procedure SelectRecommendedPrinters;
@@ -189,6 +245,12 @@ begin
         Break;
       end;
     end;
+  end;
+
+  if ExistingInstallation then
+  begin
+    SelectPrinterByExactName(LabelPrinterCombo, ExistingLabelPrinter);
+    SelectPrinterByExactName(DocumentPrinterCombo, ExistingDocumentPrinter);
   end;
 end;
 
@@ -254,6 +316,8 @@ begin
   PrintersLoaded := True;
   if LabelPrinterCombo.Items.Count = 0 then
     PrinterStatusLabel.Caption := 'Tidak ada printer Windows yang ditemukan.'
+  else if ExistingInstallation then
+    PrinterStatusLabel.Caption := Format('%d printer ditemukan. Pilihan instalasi sebelumnya dipertahankan bila masih tersedia.', [LabelPrinterCombo.Items.Count])
   else
     PrinterStatusLabel.Caption := Format('%d printer ditemukan dari user Windows outlet. SATO/EPSON dipilih otomatis bila tersedia.', [LabelPrinterCombo.Items.Count]);
 end;
@@ -332,6 +396,19 @@ begin
     RaiseException(Format('Enrollment Hardware Hub gagal (exit code %d).', [ResultCode]));
 end;
 
+procedure ResumeExistingHub;
+var
+  ResultCode: Integer;
+  Params: String;
+begin
+  Params := '--resume --state-dir ' + Q(StateDir) +
+    ' --installer-version ' + Q(InstallerVersion);
+  if not RunOriginalNode('enroll-installer.js', Params, ResultCode) then
+    RaiseException('Credential Hardware Hub lama tidak dapat dibaca pada user Windows ini.');
+  if ResultCode <> 0 then
+    RaiseException(Format('Repair/upgrade gagal memverifikasi credential lama (exit code %d). Gunakan user Windows yang sama seperti instalasi awal atau jalankan alur Ganti Mini PC dari RMS.', [ResultCode]));
+end;
+
 procedure ValidateInstalledHub;
 var
   ResultCode: Integer;
@@ -367,6 +444,17 @@ begin
   Params := '--state-dir ' + Q(StateDir) + ' --timeout-ms 30000';
   if not RunElevatedNode('installer-readiness.js', Params) then
     RaiseException('Hardware Hub belum mencapai status ready. Periksa koneksi RMS dan driver printer.');
+end;
+
+function StopExistingTask: Boolean;
+var
+  ResultCode: Integer;
+  Params: String;
+begin
+  Params := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ' +
+    Q('$ErrorActionPreference=''Stop''; $task=Get-ScheduledTask -TaskName ''' + TaskName + ''' -ErrorAction SilentlyContinue; if($task){ Stop-ScheduledTask -TaskName ''' + TaskName + ''' -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 }');
+  Result := ExecAsOriginalUser(PowerShellExecutable, Params, '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
 end;
 
 procedure RunPhysicalTest(const DeviceName, PrinterName: String);
@@ -406,6 +494,10 @@ procedure InitializeWizard;
 var
   CaptionLabel: TNewStaticText;
 begin
+  ExistingInstallation := FileExists(CredentialPath);
+  ExistingLabelPrinter := ReadExistingEnvValue('LABEL_PRINTER_NAME');
+  ExistingDocumentPrinter := ReadExistingEnvValue('DOCUMENT_PRINTER_NAME');
+
   InstallationPage := CreateInputQueryPage(wpWelcome,
     'Hubungkan Hardware Hub',
     'Masukkan Installation Code dari halaman Hardware Hub RMS.',
@@ -416,36 +508,48 @@ begin
     'Pilih Printer',
     'Pilih printer label SATO dan printer nota EPSON yang terpasang di Windows.');
 
+  RepairStatusLabel := TNewStaticText.Create(PrinterPage);
+  RepairStatusLabel.Parent := PrinterPage.Surface;
+  RepairStatusLabel.Left := 0;
+  RepairStatusLabel.Top := ScaleY(0);
+  RepairStatusLabel.Width := ScaleX(450);
+  RepairStatusLabel.AutoSize := False;
+  RepairStatusLabel.WordWrap := True;
+  if ExistingInstallation then
+    RepairStatusLabel.Caption := 'Mode Perbaiki / Upgrade: credential aman dan data ProgramData akan dipertahankan.'
+  else
+    RepairStatusLabel.Caption := 'Mode Instalasi Baru: Setup akan mendaftarkan Mini PC menggunakan Installation Code.';
+
   CaptionLabel := TNewStaticText.Create(PrinterPage);
   CaptionLabel.Parent := PrinterPage.Surface;
   CaptionLabel.Left := 0;
-  CaptionLabel.Top := ScaleY(8);
+  CaptionLabel.Top := ScaleY(40);
   CaptionLabel.Caption := 'Printer Label';
 
   LabelPrinterCombo := TNewComboBox.Create(PrinterPage);
   LabelPrinterCombo.Parent := PrinterPage.Surface;
   LabelPrinterCombo.Left := 0;
-  LabelPrinterCombo.Top := ScaleY(28);
+  LabelPrinterCombo.Top := ScaleY(60);
   LabelPrinterCombo.Width := ScaleX(410);
   LabelPrinterCombo.Style := csDropDownList;
 
   CaptionLabel := TNewStaticText.Create(PrinterPage);
   CaptionLabel.Parent := PrinterPage.Surface;
   CaptionLabel.Left := 0;
-  CaptionLabel.Top := ScaleY(68);
+  CaptionLabel.Top := ScaleY(100);
   CaptionLabel.Caption := 'Printer Nota';
 
   DocumentPrinterCombo := TNewComboBox.Create(PrinterPage);
   DocumentPrinterCombo.Parent := PrinterPage.Surface;
   DocumentPrinterCombo.Left := 0;
-  DocumentPrinterCombo.Top := ScaleY(88);
+  DocumentPrinterCombo.Top := ScaleY(120);
   DocumentPrinterCombo.Width := ScaleX(410);
   DocumentPrinterCombo.Style := csDropDownList;
 
   RefreshPrintersButton := TNewButton.Create(PrinterPage);
   RefreshPrintersButton.Parent := PrinterPage.Surface;
   RefreshPrintersButton.Left := 0;
-  RefreshPrintersButton.Top := ScaleY(130);
+  RefreshPrintersButton.Top := ScaleY(162);
   RefreshPrintersButton.Width := ScaleX(120);
   RefreshPrintersButton.Caption := 'Deteksi Ulang';
   RefreshPrintersButton.OnClick := @RefreshPrintersClick;
@@ -453,7 +557,7 @@ begin
   PrinterStatusLabel := TNewStaticText.Create(PrinterPage);
   PrinterStatusLabel.Parent := PrinterPage.Surface;
   PrinterStatusLabel.Left := ScaleX(132);
-  PrinterStatusLabel.Top := ScaleY(136);
+  PrinterStatusLabel.Top := ScaleY(168);
   PrinterStatusLabel.Width := ScaleX(320);
   PrinterStatusLabel.AutoSize := False;
   PrinterStatusLabel.WordWrap := True;
@@ -488,12 +592,17 @@ begin
   TestDocumentButton.Visible := False;
 end;
 
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := ExistingInstallation and (PageID = InstallationPage.ID);
+end;
+
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
   CodeValue: String;
 begin
   Result := True;
-  if CurPageID = InstallationPage.ID then
+  if (CurPageID = InstallationPage.ID) and (not ExistingInstallation) then
   begin
     CodeValue := Trim(InstallationPage.Values[0]);
     if (Length(CodeValue) < 10) or (Pos('AJ-', Uppercase(CodeValue)) <> 1) then
@@ -519,6 +628,13 @@ begin
   end;
 end;
 
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if ExistingInstallation and (not StopExistingTask) then
+    Result := 'Hardware Hub lama tidak dapat dihentikan. Tutup proses Hardware Hub lalu jalankan Setup lagi.';
+end;
+
 procedure CurPageChanged(CurPageID: Integer);
 begin
   if (CurPageID = PrinterPage.ID) and (not PrintersLoaded) then
@@ -528,7 +644,10 @@ begin
   begin
     if InstallSucceeded then
     begin
-      WizardForm.FinishedLabel.Caption := 'Hardware Hub berhasil terhubung ke RMS.';
+      if ExistingInstallation then
+        WizardForm.FinishedLabel.Caption := 'Hardware Hub berhasil diperbaiki / diperbarui.'
+      else
+        WizardForm.FinishedLabel.Caption := 'Hardware Hub berhasil terhubung ke RMS.';
       FinishDetailLabel.Caption :=
         'Mini PC: ' + GetEnv('COMPUTERNAME') + #13#10 +
         'Printer Label: ' + SelectedLabelPrinter + #13#10 +
@@ -546,7 +665,10 @@ begin
   if CurStep = ssPostInstall then
   begin
     ConfigureInstalledHub;
-    EnrollInstalledHub;
+    if ExistingInstallation then
+      ResumeExistingHub
+    else
+      EnrollInstalledHub;
     ValidateInstalledHub;
     InstallAndStartScheduledTask;
     WaitForReadiness;
