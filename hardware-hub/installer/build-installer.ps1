@@ -20,7 +20,7 @@ $IssPath = Join-Path $InstallerRoot "AsihjayaHardwareHub.iss"
 $NodeZipHash = "313fa40c0d7b18575821de8cb17483031fe07d95de5994f6f435f3b345f85c66"
 $SumatraVersion = "3.6.1"
 $SumatraZipHash = "98b33a518d42986856d225064b0cd2d3643ecf78cbf84ab873d26cc51877a544"
-$InterVersion = "3.19"
+$InterVersion = "3.19.0"
 $InterMediumHash = "a645f55492d1c8cdace43c72be8cbec08e680b5a86d8b4c2d1c50d6e41e9cc96"
 
 function Assert-Sha256([string]$Path, [string]$Expected) {
@@ -133,30 +133,32 @@ $SumatraExe = Get-ChildItem $SumatraExtract -Filter "SumatraPDF*.exe" -Recurse |
 if (-not $SumatraExe) { throw "SumatraPDF executable tidak ditemukan di archive." }
 Copy-Item $SumatraExe.FullName (Join-Path $ToolsPayload "SumatraPDF.exe") -Force
 
-$InterZipName = "Inter-$InterVersion.zip"
-$InterZip = Join-Path $DownloadRoot $InterZipName
-$InterUrl = "https://github.com/rsms/inter/releases/download/v$InterVersion/$InterZipName"
-Download-File -Uri $InterUrl -Destination $InterZip
-$InterExtract = Join-Path $DownloadRoot "inter-$InterVersion"
+# Use the pinned npm distribution because its static Inter-Medium.ttf is byte-identical
+# to the physical-approved SATO V3 font. The copied font is still fail-closed by SHA-256.
+$InterPackageName = "inter-font-$InterVersion.tgz"
+$InterPackage = Join-Path $DownloadRoot $InterPackageName
+$InterUrl = "https://registry.npmjs.org/inter-font/-/$InterPackageName"
+Download-File -Uri $InterUrl -Destination $InterPackage
+$InterExtract = Join-Path $DownloadRoot "inter-font-$InterVersion"
 Remove-Item $InterExtract -Recurse -Force -ErrorAction SilentlyContinue
-Expand-Archive -Path $InterZip -DestinationPath $InterExtract -Force
-$InterMedium = Get-ChildItem $InterExtract -Filter "Inter-Medium.ttf" -Recurse | Where-Object {
-  (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLowerInvariant() -eq $InterMediumHash
-} | Select-Object -First 1
-if (-not $InterMedium) {
-  $Candidates = Get-ChildItem $InterExtract -Filter "Inter-Medium.ttf" -Recurse | ForEach-Object {
-    "$($_.FullName)=$((Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLowerInvariant())"
-  }
-  throw "Inter-Medium.ttf v$InterVersion dengan SHA-256 approved tidak ditemukan. candidates=$($Candidates -join '; ')"
+New-Item -ItemType Directory -Force -Path $InterExtract | Out-Null
+& tar.exe -xzf $InterPackage -C $InterExtract
+if ($LASTEXITCODE -ne 0) {
+  throw "Extract inter-font@$InterVersion gagal dengan exit code $LASTEXITCODE."
 }
-$InterLicense = Get-ChildItem $InterExtract -Filter "LICENSE.txt" -Recurse | Select-Object -First 1
-if (-not $InterLicense) {
-  throw "LICENSE.txt Inter v$InterVersion tidak ditemukan di official release archive."
+$InterMediumPath = Join-Path $InterExtract "package\ttf\Inter-Medium.ttf"
+$InterLicensePath = Join-Path $InterExtract "package\OFL.txt"
+if (-not (Test-Path $InterMediumPath)) {
+  throw "Inter-Medium.ttf tidak ditemukan di inter-font@$InterVersion."
 }
+if (-not (Test-Path $InterLicensePath)) {
+  throw "OFL.txt tidak ditemukan di inter-font@$InterVersion."
+}
+Assert-Sha256 -Path $InterMediumPath -Expected $InterMediumHash
 New-Item -ItemType Directory -Force -Path $FontPayload | Out-Null
 $BundledFontPath = Join-Path $FontPayload "Inter-Medium.ttf"
-Copy-Item $InterMedium.FullName $BundledFontPath -Force
-Copy-Item $InterLicense.FullName (Join-Path $FontPayload "Inter-OFL-1.1.txt") -Force
+Copy-Item $InterMediumPath $BundledFontPath -Force
+Copy-Item $InterLicensePath (Join-Path $FontPayload "Inter-OFL-1.1.txt") -Force
 Assert-Sha256 -Path $BundledFontPath -Expected $InterMediumHash
 
 $NodeRuntimeHash = (Get-FileHash -Algorithm SHA256 (Join-Path $RuntimePayload "node.exe")).Hash.ToLowerInvariant()
@@ -170,7 +172,7 @@ $ISCC = Resolve-InnoCompiler
 Write-Host "Inno Setup compiler    : $ISCC"
 Write-Host "RMS API URL            : $ApiUrl"
 Write-Host "Hardware Hub version   : $AppVersion"
-Write-Host "Bundled SATO font      : Inter Medium $InterVersion"
+Write-Host "Bundled SATO font      : Inter Medium $InterVersion (inter-font npm distribution)"
 
 Push-Location $InstallerRoot
 try {
