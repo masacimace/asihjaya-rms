@@ -406,9 +406,7 @@ begin
   if not RunOriginalNode('enroll-installer.js', Params, ResultCode) then
     RaiseException('Credential Hardware Hub lama tidak dapat dibaca pada user Windows ini.');
   if ResultCode <> 0 then
-    RaiseException(Format(
-      'Repair/upgrade gagal memverifikasi credential lama (exit code %d). Gunakan user Windows yang sama seperti instalasi awal atau jalankan alur Ganti Mini PC dari RMS.',
-      [ResultCode]));
+    RaiseException(Format('Repair/upgrade gagal memverifikasi credential lama (exit code %d). Gunakan user Windows yang sama seperti instalasi awal atau jalankan alur Ganti Mini PC dari RMS.', [ResultCode]));
 end;
 
 procedure ValidateInstalledHub;
