@@ -56,12 +56,13 @@ async function main() {
   assert.ok(
     builder.includes('$InterVersion = "3.19"') &&
       builder.includes("a645f55492d1c8cdace43c72be8cbec08e680b5a86d8b4c2d1c50d6e41e9cc96") &&
-      builder.includes('https://color4bg.com/static/font/Inter-Medium.ttf') &&
+      builder.includes('$InterMirrorCommit = "39762b0e1e95f856ca8ee5e32606adba2366334e"') &&
+      builder.includes('https://raw.githubusercontent.com/apache/incubator-resilientdb-site/$InterMirrorCommit/fonts/Inter-Medium.ttf') &&
       builder.includes('https://github.com/rsms/inter/releases/tag/v$InterVersion') &&
       builder.includes('Download-Verified -Uri $InterMediumUrl') &&
       builder.includes('assets\\Inter-OFL-1.1.txt') &&
       !builder.includes("registry.npmjs.org/inter-font"),
-    "Builder wajib membundle byte-exact Inter Medium approved dengan SHA-256 fail-closed dan provenance upstream Inter v3.19.",
+    "Builder wajib membundle byte-exact Inter Medium approved dari immutable GitHub mirror dengan SHA-256 fail-closed dan provenance upstream Inter v3.19.",
   );
   assert.ok(
     interLicense.includes("SIL OPEN FONT LICENSE Version 1.1") &&
