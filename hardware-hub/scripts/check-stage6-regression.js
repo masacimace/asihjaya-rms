@@ -19,6 +19,8 @@ function main() {
   const iss = read("installer/AsihjayaHardwareHub.iss");
   const uat = read("scripts/run-local-uat.ps1");
   const support = read("scripts/export-support-bundle.ps1");
+  const startupTask = read("scripts/install-startup-task.ps1");
+  const recoveryTest = read("scripts/test-agent-recovery.ps1");
 
   assert.ok(
     iss.includes("ExistingInstallation := FileExists(CredentialPath)") &&
@@ -55,6 +57,21 @@ function main() {
     iss.includes("{commonappdata}\\ASIHJAYA\\Hardware Hub\\uat-reports") &&
       iss.includes("Mode Perbaiki / Upgrade"),
     "Installer Stage 6 wajib memiliki ProgramData UAT path dan UX repair yang eksplisit.",
+  );
+
+  assert.ok(
+    startupTask.includes("-WindowStyle Hidden") &&
+      startupTask.includes("RestartCount 999") &&
+      startupTask.includes("RestartInterval (New-TimeSpan -Minutes 1)") &&
+      startupTask.includes("MultipleInstances IgnoreNew"),
+    "Scheduled Task production wajib berjalan hidden/background dan memiliki automatic restart policy.",
+  );
+  assert.ok(
+    recoveryTest.includes("Stop-Process -Id $OldPid -Force") &&
+      recoveryTest.includes("-WindowStyle\\s+Hidden") &&
+      recoveryTest.includes("DifferentFromPid") &&
+      recoveryTest.includes("Agent recovered"),
+    "Recovery UAT wajib mensimulasikan crash dan membuktikan agent healthy kembali dengan PID baru.",
   );
 
   assert.ok(
@@ -136,7 +153,7 @@ function main() {
   }
 
   console.log(
-    "OK: Stage 6 repair/upgrade, ProgramData preservation, local UAT, and support diagnostics contracts valid.",
+    "OK: Stage 6 repair/upgrade, hidden background runner, restart recovery, ProgramData preservation, local UAT, and support diagnostics contracts valid.",
   );
 }
 
