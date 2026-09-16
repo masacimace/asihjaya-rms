@@ -16,11 +16,24 @@ if (-not (Test-Path $EnvFile)) {
   throw "File .env belum ada di $HubRoot. Jalankan ASIHJAYA Hardware Hub Setup terlebih dahulu."
 }
 
+function ConvertFrom-DotEnvValue([string]$Value) {
+  $Text = [string]$Value
+  $Text = $Text.Trim()
+  if ($Text.Length -ge 2 -and $Text[0] -eq '"' -and $Text[$Text.Length - 1] -eq '"') {
+    $Text = $Text.Substring(1, $Text.Length - 2)
+    $Text = $Text.Replace('\"', '"')
+    $Text = $Text.Replace('\\', '\')
+  } elseif ($Text.Length -ge 2 -and $Text[0] -eq "'" -and $Text[$Text.Length - 1] -eq "'") {
+    $Text = $Text.Substring(1, $Text.Length - 2)
+  }
+  return $Text
+}
+
 function Get-EnvValue([string]$Key) {
   $Prefix = "$Key="
   foreach ($Line in Get-Content -LiteralPath $EnvFile) {
     if ($Line.StartsWith($Prefix, [System.StringComparison]::Ordinal)) {
-      return $Line.Substring($Prefix.Length).Trim()
+      return ConvertFrom-DotEnvValue $Line.Substring($Prefix.Length)
     }
   }
   return ""
@@ -32,6 +45,7 @@ if (-not $StateDirectory) {
 if (-not $StateDirectory) {
   $StateDirectory = Join-Path $env:ProgramData "ASIHJAYA\Hardware Hub\data"
 }
+$StateDirectory = ConvertFrom-DotEnvValue $StateDirectory
 $StateDirectory = [System.IO.Path]::GetFullPath($StateDirectory)
 New-Item -ItemType Directory -Force -Path $StateDirectory | Out-Null
 
@@ -39,6 +53,7 @@ $LogDirectory = Get-EnvValue "HARDWARE_LOG_DIR"
 if (-not $LogDirectory) {
   $LogDirectory = Join-Path (Split-Path $StateDirectory -Parent) "logs"
 }
+$LogDirectory = ConvertFrom-DotEnvValue $LogDirectory
 $LogDirectory = [System.IO.Path]::GetFullPath($LogDirectory)
 New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
 
