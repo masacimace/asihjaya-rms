@@ -53,6 +53,13 @@ async function main() {
     "Builder wajib pin + verify Node 24.14.0 dan SumatraPDF 3.6.1 artifacts.",
   );
   assert.ok(
+    builder.includes("$IsLoopbackHttp") &&
+      builder.includes('$Api.Host -eq "127.0.0.1"') &&
+      builder.includes('$Api.Host -eq "localhost"') &&
+      builder.includes("HTTP hanya diizinkan untuk localhost/127.0.0.1 pada local UAT"),
+    "Builder wajib mempertahankan HTTPS production dan hanya mengizinkan HTTP pada loopback local UAT.",
+  );
+  assert.ok(
     startup.includes("-NodeExecutable") || startup.includes("[string]$NodeExecutable"),
     "Scheduled Task installer wajib menerima private Node executable.",
   );
