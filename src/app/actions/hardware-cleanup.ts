@@ -225,10 +225,18 @@ export async function purgeInactiveHardwareAgentAction(
           };
         }
 
-        const [jobReference, attemptReference, enrollmentReference] =
+        const [jobReferences, attemptReferences, enrollmentReference] =
           await Promise.all([
             tx
-              .select({ id: hardwareJobs.id, status: hardwareJobs.status })
+              .select({
+                id: hardwareJobs.id,
+                status: hardwareJobs.status,
+                jobType: hardwareJobs.jobType,
+                protocolVersion: hardwareJobs.protocolVersion,
+                agentId: hardwareJobs.agentId,
+                targetAgentId: hardwareJobs.targetAgentId,
+                currentAttemptId: hardwareJobs.currentAttemptId,
+              })
               .from(hardwareJobs)
               .where(
                 and(
@@ -238,17 +246,41 @@ export async function purgeInactiveHardwareAgentAction(
                     eq(hardwareJobs.targetAgentId, agent.id),
                   ),
                 ),
-              )
-              .limit(1),
+              ),
             tx
               .select({
                 id: hardwareJobAttempts.id,
                 jobId: hardwareJobAttempts.jobId,
+                attemptNumber: hardwareJobAttempts.attemptNumber,
                 status: hardwareJobAttempts.status,
+                payloadHash: hardwareJobAttempts.payloadHash,
+                eventSequence: hardwareJobAttempts.eventSequence,
+                leaseExpiresAt: hardwareJobAttempts.leaseExpiresAt,
+                dispatchStartedAt: hardwareJobAttempts.dispatchStartedAt,
+                submittedAt: hardwareJobAttempts.submittedAt,
+                serverAcknowledgedAt: hardwareJobAttempts.serverAcknowledgedAt,
+                finishedAt: hardwareJobAttempts.finishedAt,
+                errorCode: hardwareJobAttempts.errorCode,
+                errorMessage: hardwareJobAttempts.errorMessage,
+                retrySafe: hardwareJobAttempts.retrySafe,
+                result: hardwareJobAttempts.result,
+                createdAt: hardwareJobAttempts.createdAt,
+                updatedAt: hardwareJobAttempts.updatedAt,
+                jobStatus: hardwareJobs.status,
+                jobType: hardwareJobs.jobType,
+                jobProtocolVersion: hardwareJobs.protocolVersion,
+                jobAgentId: hardwareJobs.agentId,
+                jobTargetAgentId: hardwareJobs.targetAgentId,
+                jobCurrentAttemptId: hardwareJobs.currentAttemptId,
               })
               .from(hardwareJobAttempts)
-              .where(eq(hardwareJobAttempts.agentId, agent.id))
-              .limit(1),
+              .innerJoin(hardwareJobs, eq(hardwareJobAttempts.jobId, hardwareJobs.id))
+              .where(
+                and(
+                  eq(hardwareJobAttempts.agentId, agent.id),
+                  eq(hardwareJobs.organizationId, auth.organization.id),
+                ),
+              ),
             tx
               .select({
                 id: hardwareAgentEnrollments.id,
@@ -268,8 +300,14 @@ export async function purgeInactiveHardwareAgentAction(
               .limit(1),
           ]);
 
-        const blockingJob = jobReference[0] ?? null;
-        const blockingAttempt = attemptReference[0] ?? null;
+        const blockingJob =
+          jobReferences.find((job) => job.status !== "completed") ?? null;
+        const blockingAttempt =
+          attemptReferences.find(
+            (attempt) =>
+              attempt.status !== "acknowledged" ||
+              attempt.jobStatus !== "completed",
+          ) ?? null;
         const enrollment = enrollmentReference[0] ?? null;
 
         if (blockingJob || blockingAttempt) {
@@ -278,7 +316,7 @@ export async function purgeInactiveHardwareAgentAction(
               ? `riwayat job ${blockingJob.id} (${blockingJob.status})`
               : null,
             blockingAttempt
-              ? `attempt ${blockingAttempt.id} untuk job ${blockingAttempt.jobId} (${blockingAttempt.status})`
+              ? `attempt ${blockingAttempt.id} untuk job ${blockingAttempt.jobId} (${blockingAttempt.status}; job ${blockingAttempt.jobStatus})`
               : null,
           ]
             .filter((value): value is string => Boolean(value))
@@ -286,7 +324,7 @@ export async function purgeInactiveHardwareAgentAction(
 
           return {
             ok: false as const,
-            message: `Perangkat belum aman dihapus karena masih memiliki ${dependencies}. Hapus/selesaikan dependency tersebut terlebih dahulu.`,
+            message: `Perangkat belum aman dihapus karena masih memiliki dependency non-terminal: ${dependencies}. Selesaikan dependency tersebut terlebih dahulu.`,
           };
         }
 
@@ -295,6 +333,171 @@ export async function purgeInactiveHardwareAgentAction(
             ok: false as const,
             message: `Perangkat belum aman dihapus. Enrollment ${enrollment.id} masih berstatus ${enrollment.status}; histori provisioning ini belum final dan tidak boleh dipurge.`,
           };
+        }
+
+        const terminalJobs = new Map<
+          string,
+          {
+            id: string;
+            status: string;
+            jobType: string;
+            protocolVersion: number;
+            agentId: string | null;
+            targetAgentId: string | null;
+            currentAttemptId: string | null;
+          }
+        >();
+
+        for (const job of jobReferences) {
+          terminalJobs.set(job.id, job);
+        }
+
+        for (const attempt of attemptReferences) {
+          if (!terminalJobs.has(attempt.jobId)) {
+            terminalJobs.set(attempt.jobId, {
+              id: attempt.jobId,
+              status: attempt.jobStatus,
+              jobType: attempt.jobType,
+              protocolVersion: attempt.jobProtocolVersion,
+              agentId: attempt.jobAgentId,
+              targetAgentId: attempt.jobTargetAgentId,
+              currentAttemptId: attempt.jobCurrentAttemptId,
+            });
+          }
+        }
+
+        const archivedAttemptIds = attemptReferences.map((attempt) => attempt.id);
+        const archivedAttemptIdSet = new Set(archivedAttemptIds);
+        const archivedTerminalJobIds = [...terminalJobs.keys()];
+
+        for (const attempt of attemptReferences) {
+          await tx.insert(auditLogs).values({
+            organizationId: auth.organization.id,
+            outletId: agent.outletId,
+            actorUserId: auth.user.id,
+            action: "hardware.job_attempt_archive_for_agent_purge",
+            entityType: "hardware_job_attempt",
+            entityId: attempt.id,
+            beforeData: {
+              jobId: attempt.jobId,
+              attemptNumber: attempt.attemptNumber,
+              status: attempt.status,
+              agentId: agent.id,
+              agentCode: agent.code,
+              payloadHash: attempt.payloadHash,
+              eventSequence: attempt.eventSequence,
+              leaseExpiresAt: attempt.leaseExpiresAt.toISOString(),
+              dispatchStartedAt: attempt.dispatchStartedAt?.toISOString() ?? null,
+              submittedAt: attempt.submittedAt?.toISOString() ?? null,
+              serverAcknowledgedAt:
+                attempt.serverAcknowledgedAt?.toISOString() ?? null,
+              finishedAt: attempt.finishedAt?.toISOString() ?? null,
+              errorCode: attempt.errorCode,
+              errorMessage: attempt.errorMessage,
+              retrySafe: attempt.retrySafe,
+              result: attempt.result,
+              createdAt: attempt.createdAt.toISOString(),
+              updatedAt: attempt.updatedAt.toISOString(),
+            },
+            afterData: {
+              operationalRowDeleted: true,
+              auditPreserved: true,
+              parentJobPreserved: true,
+            },
+            reason:
+              "Attempt acknowledged diarsipkan sebelum attribution Hardware Agent nonaktif dilepas untuk purge.",
+            ipAddress: requestMetadata.ipAddress,
+            userAgent: requestMetadata.userAgent,
+            metadata: {
+              source: "admin.hardware_dashboard",
+              agentId: agent.id,
+              agentCode: agent.code,
+              jobId: attempt.jobId,
+            },
+          });
+        }
+
+        for (const job of terminalJobs.values()) {
+          await tx.insert(auditLogs).values({
+            organizationId: auth.organization.id,
+            outletId: agent.outletId,
+            actorUserId: auth.user.id,
+            action: "hardware.job_detach_agent_for_agent_purge",
+            entityType: "hardware_job",
+            entityId: job.id,
+            beforeData: {
+              status: job.status,
+              jobType: job.jobType,
+              protocolVersion: job.protocolVersion,
+              agentId: job.agentId,
+              targetAgentId: job.targetAgentId,
+              currentAttemptId: job.currentAttemptId,
+              purgedAgentId: agent.id,
+              purgedAgentCode: agent.code,
+            },
+            afterData: {
+              jobPreserved: true,
+              agentReferenceDetached: true,
+              attemptReferenceArchived:
+                Boolean(job.currentAttemptId) &&
+                archivedAttemptIdSet.has(job.currentAttemptId ?? ""),
+            },
+            reason:
+              "Attribution terminal job diarsipkan sebelum Hardware Agent nonaktif dipurge.",
+            ipAddress: requestMetadata.ipAddress,
+            userAgent: requestMetadata.userAgent,
+            metadata: {
+              source: "admin.hardware_dashboard",
+              agentId: agent.id,
+              agentCode: agent.code,
+            },
+          });
+
+          const updatedJob = await tx
+            .update(hardwareJobs)
+            .set({
+              agentId: job.agentId === agent.id ? null : job.agentId,
+              targetAgentId:
+                job.targetAgentId === agent.id ? null : job.targetAgentId,
+              currentAttemptId:
+                job.currentAttemptId &&
+                archivedAttemptIdSet.has(job.currentAttemptId)
+                  ? null
+                  : job.currentAttemptId,
+            })
+            .where(
+              and(
+                eq(hardwareJobs.id, job.id),
+                eq(hardwareJobs.organizationId, auth.organization.id),
+                eq(hardwareJobs.status, "completed"),
+              ),
+            )
+            .returning({ id: hardwareJobs.id });
+
+          if (updatedJob.length !== 1) {
+            throw new HardwareCleanupRaceError(
+              `Status hardware job ${job.id} berubah saat terminal history diarsipkan. Muat ulang halaman lalu coba lagi.`,
+            );
+          }
+        }
+
+        for (const attempt of attemptReferences) {
+          const deletedAttempt = await tx
+            .delete(hardwareJobAttempts)
+            .where(
+              and(
+                eq(hardwareJobAttempts.id, attempt.id),
+                eq(hardwareJobAttempts.agentId, agent.id),
+                eq(hardwareJobAttempts.status, "acknowledged"),
+              ),
+            )
+            .returning({ id: hardwareJobAttempts.id });
+
+          if (deletedAttempt.length !== 1) {
+            throw new HardwareCleanupRaceError(
+              `Status attempt ${attempt.id} berubah saat terminal history diarsipkan. Muat ulang halaman lalu coba lagi.`,
+            );
+          }
         }
 
         let archivedEnrollmentId: string | null = null;
@@ -386,15 +589,19 @@ export async function purgeInactiveHardwareAgentAction(
           afterData: {
             deleted: true,
             archivedEnrollmentId,
+            archivedTerminalJobIds,
+            archivedAttemptIds,
           },
           reason:
-            "Hardware Agent nonaktif tanpa dependency operasional dihapus permanen dari dashboard Hardware Hub.",
+            "Hardware Agent nonaktif tanpa dependency non-terminal dihapus permanen setelah terminal history diarsipkan.",
           ipAddress: requestMetadata.ipAddress,
           userAgent: requestMetadata.userAgent,
           metadata: {
             source: "admin.hardware_dashboard",
             agentCode: agent.code,
             archivedEnrollmentId,
+            archivedTerminalJobCount: archivedTerminalJobIds.length,
+            archivedAttemptCount: archivedAttemptIds.length,
           },
         });
 
@@ -403,6 +610,8 @@ export async function purgeInactiveHardwareAgentAction(
           agentName: agent.name,
           agentCode: agent.code,
           archivedEnrollmentId,
+          archivedTerminalJobCount: archivedTerminalJobIds.length,
+          archivedAttemptCount: archivedAttemptIds.length,
         };
       });
     } catch (error) {
@@ -420,10 +629,21 @@ export async function purgeInactiveHardwareAgentAction(
 
   revalidatePath(HARDWARE_DASHBOARD_PATH);
   revalidatePath("/admin");
+
+  const archivedParts = [
+    result.archivedTerminalJobCount > 0
+      ? `${result.archivedTerminalJobCount} job terminal`
+      : null,
+    result.archivedAttemptCount > 0
+      ? `${result.archivedAttemptCount} attempt acknowledged`
+      : null,
+    result.archivedEnrollmentId ? "1 enrollment completed" : null,
+  ].filter((value): value is string => Boolean(value));
+
   redirectWithMessage(
     "success",
-    result.archivedEnrollmentId
-      ? `Hardware Agent ${result.agentName} (${result.agentCode}) dan enrollment completed terkait sudah dipurge dengan audit tetap tersimpan.`
+    archivedParts.length > 0
+      ? `Hardware Agent ${result.agentName} (${result.agentCode}) sudah dihapus permanen. Audit ${archivedParts.join(", ")} tetap tersimpan.`
       : `Hardware Agent ${result.agentName} (${result.agentCode}) sudah dihapus permanen.`,
   );
 }
