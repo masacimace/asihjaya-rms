@@ -41,14 +41,14 @@ assert(
 );
 
 assert(
-  workspace.includes(
-    '<th className="whitespace-nowrap px-4 py-3">Berat</th>',
+  /<th className="whitespace-nowrap px-4 py-3">\s*Berat\s*<\/th>/.test(
+    workspace,
   ) &&
-    workspace.includes(
-      '<th className="whitespace-nowrap px-4 py-3">Status</th>',
+    /<th className="whitespace-nowrap px-4 py-3">\s*Status\s*<\/th>/.test(
+      workspace,
     ) &&
-    workspace.includes(
-      '<th className="whitespace-nowrap px-4 py-3 sm:px-5">Aksi</th>',
+    /<th className="whitespace-nowrap px-4 py-3 sm:px-5">\s*Aksi\s*<\/th>/.test(
+      workspace,
     ),
   "Header Berat/Status/Aksi wajib nowrap.",
 );
