@@ -134,6 +134,14 @@ assert(
   "Threshold dan register POS wajib mengikuti active agent yang sama dengan dashboard Hardware Hub.",
 );
 assert(
+  posHardwareStatus.includes('status: "online"') &&
+    posHardwareStatus.includes('label: "Printer siap"') &&
+    !posHardwareStatus.includes('status: hasConfigWarnings ? "stale" : "online"') &&
+    posHardwareStatus.includes('id: "hardware-config-warning"') &&
+    posHardwareStatus.includes("silent print tetap aktif"),
+  "Config warning tidak boleh menurunkan connectivity agent online; warning wajib diinformasikan terpisah sebagai non-blocking.",
+);
+assert(
   posLayout.includes("getPosShellStatusWithActiveAgent") &&
     posShellRoute.includes("getPosShellStatusWithActiveAgent"),
   "Initial POS shell dan live polling wajib memakai active-agent reconciliation yang sama.",
@@ -152,15 +160,21 @@ assert(
     cleanupActions.includes("hardwareJobAttempts") &&
     cleanupActions.includes("hardwareAgentEnrollments") &&
     cleanupActions.includes("hardwareJobs.targetAgentId") &&
+    cleanupActions.includes('job.status !== "completed"') &&
+    cleanupActions.includes('attempt.status !== "acknowledged"') &&
+    cleanupActions.includes('attempt.jobStatus !== "completed"') &&
+    cleanupActions.includes('"hardware.job_attempt_archive_for_agent_purge"') &&
+    cleanupActions.includes('"hardware.job_detach_agent_for_agent_purge"') &&
+    cleanupActions.includes(".delete(hardwareJobAttempts)") &&
+    cleanupActions.includes("agentId: job.agentId === agent.id ? null : job.agentId") &&
     cleanupActions.includes("enrollment.status !== \"completed\"") &&
     cleanupActions.includes(".delete(hardwareAgentEnrollments)") &&
     cleanupActions.includes('"hardware.enrollment_archive_for_agent_purge"') &&
-    cleanupActions.includes("Enrollment ${enrollment.id}") &&
     cleanupActions.includes("HardwareCleanupRaceError") &&
     cleanupActions.includes("eq(hardwareAgents.isActive, false)") &&
     cleanupActions.includes('eq(hardwareAgents.status, "disabled")') &&
     cleanupActions.includes('"hardware.agent_purge_inactive"'),
-  "Purge Hardware Agent wajib menolak dependency operasional, mengarsipkan completed enrollment, menyebut enrollment non-final secara spesifik, rollback saat race, dan diaudit.",
+  "Purge Hardware Agent wajib hanya detach completed/acknowledged terminal history dengan audit snapshot, menjaga non-terminal dependency, rollback saat race, dan tetap permission-guarded.",
 );
 assert(
   cleanupButtons.includes("window.confirm") &&
@@ -179,5 +193,5 @@ assert(
 );
 
 console.log(
-  "OK: Hardware Hub lifecycle, outlet-active POS status, dan guarded cleanup contract siap digunakan.",
+  "OK: Hardware Hub lifecycle, POS connectivity/config-warning separation, dan terminal-history guarded purge siap digunakan.",
 );
