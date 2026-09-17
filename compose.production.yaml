@@ -241,6 +241,11 @@ services:
     mem_limit: 512m
     cpus: 0.40
     stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
     networks:
       - edge
       - backend
