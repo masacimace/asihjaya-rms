@@ -70,9 +70,12 @@ assert(
 
 assert(
   workspace.includes(
-    'inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-neutral-950',
-  ),
-  "Button Proses Cuci/Rongsok wajib tetap satu baris.",
+    'inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3',
+  ) &&
+    workspace.includes('row.processingType === "cleaning"') &&
+    workspace.includes("border-blue-200 bg-blue-50") &&
+    workspace.includes("border-amber-200 bg-amber-50"),
+  "Button Proses Cuci/Rongsok wajib tetap satu baris dan mempertahankan treatment per jenis proses.",
 );
 
 console.log(
