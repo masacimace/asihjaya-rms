@@ -66,8 +66,8 @@ assert(
     adminHistoryPage.includes('action="/admin/buyback"') &&
     adminHistoryPage.includes('historyBaseHref="/admin/buyback"') &&
     adminHistoryPage.includes("Export XLSX") &&
-    adminShell.includes('label: "Riwayat Buyback"') &&
-    adminShell.includes('href: "/admin/buyback"') &&
+    adminShell.includes('label: "Buyback Pembelian"') &&
+    /href:\s*"\/admin\/buyback(?:\?[^\"]*)?"/.test(adminShell) &&
     historyFilters.includes('today: "Hari ini"') &&
     historyFilters.includes('last30: "30 hari terakhir"'),
   "Admin Buyback history/date filter belum lengkap.",
