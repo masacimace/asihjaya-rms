@@ -99,8 +99,6 @@ services:
       DATABASE_MIGRATION_LOCK_TIMEOUT_MS: ${DATABASE_MIGRATION_LOCK_TIMEOUT_MS:-120000}
       DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS: ${DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS:-30000}
       DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS: ${DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS:-900000}
-      DATABASE_MIGRATION_ALLOW_DESTRUCTIVE: ${DATABASE_MIGRATION_ALLOW_DESTRUCTIVE:-false}
-      DATABASE_MIGRATION_APPROVAL_REFERENCE: ${DATABASE_MIGRATION_APPROVAL_REFERENCE:-}
     depends_on:
       db:
         condition: service_healthy
@@ -243,11 +241,6 @@ services:
     mem_limit: 512m
     cpus: 0.40
     stop_grace_period: 30s
-    logging:
-      driver: json-file
-      options:
-        max-size: 5m
-        max-file: "3"
     networks:
       - edge
       - backend
