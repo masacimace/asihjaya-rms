@@ -167,8 +167,6 @@ export async function getPosShellStatusWithActiveAgent({
         eq(hardwareAgents.organizationId, organizationId),
         eq(hardwareAgents.outletId, outletId),
         eq(hardwareAgents.isActive, true),
-        eq(registers.isActive, true),
-        eq(registers.isHardwareHub, true),
       ),
     )
     .orderBy(
