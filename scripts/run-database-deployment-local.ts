@@ -145,10 +145,11 @@ try {
     "Runner kedua wajib menunggu advisory lock.",
   );
 
-  console.log("Memvalidasi schema dan idempotent no-op deployment...");
-  await runNpm(["run", "check:database:live"], environment);
+  console.log("Memvalidasi idempotent no-op deployment, seed, dan schema...");
   const noOp = await runNpm(["run", "db:deploy"], environment, { capture: true });
   assert(noOp.output.includes("no-op"), "Deployment kedua harus terdeteksi sebagai no-op.");
+  await runNpm(["run", "db:seed"], environment);
+  await runNpm(["run", "check:database:live"], environment);
 
   console.log("Menguji deteksi migration history drift...");
   const client = new Client({ connectionString: databaseUrl });
@@ -265,7 +266,7 @@ try {
   );
 
   console.log(
-    "OK: database deployment rehearsal lulus; readiness, advisory lock, idempotency, history drift, destructive guard, dan failure stop terverifikasi.",
+    "OK: database deployment rehearsal lulus; readiness, advisory lock, idempotency, seeded schema validation, history drift, destructive guard, dan failure stop terverifikasi.",
   );
 } finally {
   console.log("Menghapus PostgreSQL database-deployment test beserta volume sementara...");
