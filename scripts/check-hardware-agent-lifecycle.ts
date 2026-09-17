@@ -117,14 +117,15 @@ assert(
   posHardwareStatus.includes("getPosShellStatusWithActiveAgent") &&
     posHardwareStatus.includes("eq(hardwareAgents.isActive, true)") &&
     posHardwareStatus.includes("eq(hardwareAgents.outletId, outletId)") &&
-    posHardwareStatus.includes("innerJoin(registers") &&
-    posHardwareStatus.includes("eq(registers.isHardwareHub, true)"),
+    posHardwareStatus.includes("innerJoin(registers"),
   "Status Hardware Hub di POS wajib berasal langsung dari active agent pada outlet POS.",
 );
 assert(
   !posHardwareStatus.includes("getDefaultPosRegisterCondition") &&
-    !posHardwareStatus.includes("eq(hardwareAgents.registerId, register.id)"),
-  "Live status POS tidak boleh lagi bergantung pada preselection default register sebelum memilih active agent.",
+    !posHardwareStatus.includes("eq(hardwareAgents.registerId, register.id)") &&
+    !posHardwareStatus.includes("eq(registers.isActive, true)") &&
+    !posHardwareStatus.includes("eq(registers.isHardwareHub, true)"),
+  "Live status POS tidak boleh digagalkan oleh preselection atau lifecycle register setelah active agent ditemukan.",
 );
 assert(
   posHardwareStatus.includes("90 * 1000") &&
@@ -155,10 +156,11 @@ assert(
     cleanupActions.includes(".delete(hardwareAgentEnrollments)") &&
     cleanupActions.includes('"hardware.enrollment_archive_for_agent_purge"') &&
     cleanupActions.includes("Enrollment ${enrollment.id}") &&
+    cleanupActions.includes("HardwareCleanupRaceError") &&
     cleanupActions.includes("eq(hardwareAgents.isActive, false)") &&
     cleanupActions.includes('eq(hardwareAgents.status, "disabled")') &&
     cleanupActions.includes('"hardware.agent_purge_inactive"'),
-  "Purge Hardware Agent wajib menolak dependency operasional, mengarsipkan completed enrollment, menyebut enrollment non-final secara spesifik, dan diaudit.",
+  "Purge Hardware Agent wajib menolak dependency operasional, mengarsipkan completed enrollment, menyebut enrollment non-final secara spesifik, rollback saat race, dan diaudit.",
 );
 assert(
   cleanupButtons.includes("window.confirm") &&
