@@ -10,7 +10,6 @@ import {
   analyzeMigrationHistory,
   findDestructiveMigrationFindings,
   loadMigrationPlan,
-  parseBoolean,
   parsePositiveInteger,
   type AppliedMigration,
   type MigrationDescriptor,
@@ -18,6 +17,7 @@ import {
 
 type CliOptions = {
   checkOnly: boolean;
+  allowDestructive: boolean;
   migrationsDirectory: string;
   environmentFile?: string;
 };
@@ -35,7 +35,7 @@ function optionValue(args: string[], name: string): string | undefined {
 function parseOptions(args: string[]): CliOptions {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (argument === "--check-only") continue;
+    if (argument === "--check-only" || argument === "--allow-destructive") continue;
     if (argument === "--migrations-dir" || argument === "--env-file") {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new Error(`${argument} membutuhkan value.`);
@@ -47,6 +47,7 @@ function parseOptions(args: string[]): CliOptions {
 
   return {
     checkOnly: args.includes("--check-only"),
+    allowDestructive: args.includes("--allow-destructive"),
     migrationsDirectory: optionValue(args, "--migrations-dir") ?? path.join(projectRoot, "drizzle"),
     environmentFile: optionValue(args, "--env-file"),
   };
@@ -93,11 +94,6 @@ function redactSensitiveText(value: string): string {
   const databaseUrl = process.env.DATABASE_URL?.trim();
   if (databaseUrl) result = result.split(databaseUrl).join("[REDACTED_DATABASE_URL]");
   return result.replace(/postgres(?:ql)?:\/\/[^\s@]+@/gi, "postgresql://[REDACTED]@");
-}
-
-function isValidApprovalReference(value: string | undefined): value is string {
-  if (!value || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{7,127}$/.test(value)) return false;
-  return !/(?:change|replace|generate)[-_ ]?me|example|sample|dummy|todo/i.test(value);
 }
 
 function safeDatabaseLabel(databaseUrl: string): string {
@@ -308,18 +304,17 @@ async function main(): Promise<void> {
         console.log(
           `Fresh database terdeteksi; ${destructiveFindings.length} operasi destructive historical diizinkan otomatis selama replay migration penuh.`,
         );
+      } else if (!options.allowDestructive) {
+        const detail = destructiveFindings
+          .map((finding) => `${finding.migrationTag}: ${finding.operation}`)
+          .join(", ");
+        throw new Error(
+          `Migration destruktif terdeteksi (${detail}). Review perubahan dan pastikan backup tersedia, lalu jalankan ulang dengan --allow-destructive.`,
+        );
       } else {
-        const allowDestructive = parseBoolean(process.env.DATABASE_MIGRATION_ALLOW_DESTRUCTIVE, false);
-        const approvalReference = process.env.DATABASE_MIGRATION_APPROVAL_REFERENCE?.trim();
-        if (!allowDestructive || !isValidApprovalReference(approvalReference)) {
-          const detail = destructiveFindings
-            .map((finding) => `${finding.migrationTag}: ${finding.operation}`)
-            .join(", ");
-          throw new Error(
-            `Migration destruktif terdeteksi (${detail}). Set DATABASE_MIGRATION_ALLOW_DESTRUCTIVE=true dan approval reference minimal 8 karakter setelah backup serta review eksplisit.`,
-          );
-        }
-        console.log(`Approval migration destruktif diterima dengan reference ${approvalReference}.`);
+        console.log(
+          `Flag --allow-destructive diterima untuk ${destructiveFindings.length} operasi destructive pada database existing.`,
+        );
       }
     }
 
