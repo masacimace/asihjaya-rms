@@ -94,7 +94,7 @@ assert(
 assert(
   buybackItemsSchema.includes('"buyback_items_price_positive_ck"') &&
     /buybackPricePerGram\}\s+is null or/.test(buybackItemsSchema),
-  "Constraint Harga/Gram harus menerima NULL untuk transaksi B2.",
+  "Constraint Harga/Gram harus menerima NULL pada contract B2.",
 );
 
 assert(
@@ -157,7 +157,7 @@ assert(
   "Success UX wajib menjelaskan barang belum saleable.",
 );
 assert(
-  page.includes("Total Harga manual") && page.includes("Cuci / Rongsok"),
+  /tentukan Cuci\s*\/\s*Rongsok[\s\S]{0,120}?Total Harga (?:final|manual)/i.test(page),
   "Header halaman Buyback belum menjelaskan flow sederhana B2.",
 );
 
