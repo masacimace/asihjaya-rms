@@ -1,16 +1,15 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { hardwareAgents, registers } from "@/db/schema";
-import { getDefaultPosRegisterCondition } from "@/features/pos/context";
 import {
   getPosShellStatus,
   type PosShellNotification,
   type PosShellStatus,
 } from "@/features/pos/queries";
 
-const HARDWARE_ONLINE_WINDOW_MS = 2 * 60 * 1000;
-const HARDWARE_STALE_WINDOW_MS = 10 * 60 * 1000;
+const HARDWARE_ONLINE_WINDOW_MS = 90 * 1000;
+const HARDWARE_STALE_WINDOW_MS = 5 * 60 * 1000;
 
 function readConfigWarnings(value: unknown) {
   if (!value || typeof value !== "object") {
@@ -41,7 +40,7 @@ function resolveActiveHardwareStatus({
   if (!agent) {
     return {
       status: "not_configured",
-      label: "Hardware Hub belum dibuat",
+      label: "Hardware Hub belum aktif",
       agentName: null,
       lastSeenAt: null,
       hasConfigWarnings: false,
@@ -152,17 +151,6 @@ export async function getPosShellStatusWithActiveAgent({
     return baseStatus;
   }
 
-  const [register] = await db
-    .select({ id: registers.id })
-    .from(registers)
-    .where(getDefaultPosRegisterCondition(outletId))
-    .orderBy(asc(registers.name))
-    .limit(1);
-
-  if (!register) {
-    return baseStatus;
-  }
-
   const [activeAgent] = await db
     .select({
       name: hardwareAgents.name,
@@ -170,17 +158,24 @@ export async function getPosShellStatusWithActiveAgent({
       isActive: hardwareAgents.isActive,
       lastSeenAt: hardwareAgents.lastSeenAt,
       capabilities: hardwareAgents.capabilities,
+      registerName: registers.name,
     })
     .from(hardwareAgents)
+    .innerJoin(registers, eq(hardwareAgents.registerId, registers.id))
     .where(
       and(
         eq(hardwareAgents.organizationId, organizationId),
         eq(hardwareAgents.outletId, outletId),
-        eq(hardwareAgents.registerId, register.id),
         eq(hardwareAgents.isActive, true),
+        eq(registers.isActive, true),
+        eq(registers.isHardwareHub, true),
       ),
     )
-    .orderBy(desc(hardwareAgents.lastSeenAt), desc(hardwareAgents.updatedAt))
+    .orderBy(
+      sql`case when ${hardwareAgents.status} = 'online' then 0 else 1 end`,
+      sql`${hardwareAgents.lastSeenAt} desc nulls last`,
+      desc(hardwareAgents.updatedAt),
+    )
     .limit(1);
 
   const hardware = resolveActiveHardwareStatus({
@@ -190,6 +185,7 @@ export async function getPosShellStatusWithActiveAgent({
 
   return {
     ...baseStatus,
+    registerName: activeAgent?.registerName ?? baseStatus.registerName,
     hardware,
     notifications: reconcileNotifications(baseStatus.notifications, hardware),
   };
