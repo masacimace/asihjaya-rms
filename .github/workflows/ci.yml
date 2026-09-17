@@ -243,6 +243,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run destructive migration deployment rehearsal
+        run: npm run test:database-deployment:local
+
       - name: Run disposable backup and restore rehearsal
         run: npm run test:database-backup:local
 
