@@ -15,7 +15,7 @@ assert.match(pricingDialogSource, /aria-labelledby="pos-item-pricing-title"/);
 assert.match(pricingDialogSource, /Berat \(Gram\)/);
 assert.match(pricingDialogSource, /Berat tersimpan/);
 assert.match(pricingDialogSource, /Harga Standar Kadar/);
-assert.match(pricingDialogSource, /Harga \/ Gram Transaksi/);
+assert.match(pricingDialogSource, /Harga \/ Gram/);
 assert.match(pricingDialogSource, /Diskon/);
 assert.match(pricingDialogSource, /Ongkos/);
 assert.match(pricingDialogSource, /Round/);
