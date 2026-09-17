@@ -114,6 +114,16 @@ const environment: NodeJS.ProcessEnv = {
   DATABASE_MIGRATION_LOCK_TIMEOUT_MS: "30000",
   DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS: "10000",
   DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS: "300000",
+  BOOTSTRAP_ORGANIZATION_NAME: "ASIHJAYA Migration Rehearsal",
+  BOOTSTRAP_ORGANIZATION_SLUG: "asihjaya-migration-rehearsal",
+  BOOTSTRAP_OUTLET_CODE: "MIG01",
+  BOOTSTRAP_OUTLET_NAME: "Migration Rehearsal Outlet",
+  BOOTSTRAP_REGISTER_CODE: "REG-MIG",
+  BOOTSTRAP_REGISTER_NAME: "Migration Rehearsal Register",
+  BOOTSTRAP_ADMIN_NAME: "Migration Rehearsal Admin",
+  BOOTSTRAP_ADMIN_USERNAME: "migration-rehearsal-admin",
+  BOOTSTRAP_ADMIN_EMAIL: "migration-rehearsal@example.com",
+  BOOTSTRAP_ADMIN_PASSWORD: "migration-rehearsal-Admin-2026-Strong",
 };
 const composeArgs = [
   "compose",
