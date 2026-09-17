@@ -116,8 +116,21 @@ assert(
 assert(
   posHardwareStatus.includes("getPosShellStatusWithActiveAgent") &&
     posHardwareStatus.includes("eq(hardwareAgents.isActive, true)") &&
-    posHardwareStatus.includes("hardwareAgents.registerId"),
-  "Status Hardware Hub di POS wajib berasal dari active agent pada register aktif.",
+    posHardwareStatus.includes("eq(hardwareAgents.outletId, outletId)") &&
+    posHardwareStatus.includes("innerJoin(registers") &&
+    posHardwareStatus.includes("eq(registers.isHardwareHub, true)"),
+  "Status Hardware Hub di POS wajib berasal langsung dari active agent pada outlet POS.",
+);
+assert(
+  !posHardwareStatus.includes("getDefaultPosRegisterCondition") &&
+    !posHardwareStatus.includes("eq(hardwareAgents.registerId, register.id)"),
+  "Live status POS tidak boleh lagi bergantung pada preselection default register sebelum memilih active agent.",
+);
+assert(
+  posHardwareStatus.includes("90 * 1000") &&
+    posHardwareStatus.includes("5 * 60 * 1000") &&
+    posHardwareStatus.includes("activeAgent?.registerName ?? baseStatus.registerName"),
+  "Threshold dan register POS wajib mengikuti active agent yang sama dengan dashboard Hardware Hub.",
 );
 assert(
   posLayout.includes("getPosShellStatusWithActiveAgent") &&
@@ -138,10 +151,14 @@ assert(
     cleanupActions.includes("hardwareJobAttempts") &&
     cleanupActions.includes("hardwareAgentEnrollments") &&
     cleanupActions.includes("hardwareJobs.targetAgentId") &&
+    cleanupActions.includes("enrollment.status !== \"completed\"") &&
+    cleanupActions.includes(".delete(hardwareAgentEnrollments)") &&
+    cleanupActions.includes('"hardware.enrollment_archive_for_agent_purge"') &&
+    cleanupActions.includes("Enrollment ${enrollment.id}") &&
     cleanupActions.includes("eq(hardwareAgents.isActive, false)") &&
     cleanupActions.includes('eq(hardwareAgents.status, "disabled")') &&
     cleanupActions.includes('"hardware.agent_purge_inactive"'),
-  "Purge Hardware Agent wajib permission-guarded, hanya agent nonaktif, menolak dependency, dan diaudit.",
+  "Purge Hardware Agent wajib menolak dependency operasional, mengarsipkan completed enrollment, menyebut enrollment non-final secara spesifik, dan diaudit.",
 );
 assert(
   cleanupButtons.includes("window.confirm") &&
@@ -160,5 +177,5 @@ assert(
 );
 
 console.log(
-  "OK: Hardware Hub lifecycle, active POS status, dan guarded cleanup contract siap digunakan.",
+  "OK: Hardware Hub lifecycle, outlet-active POS status, dan guarded cleanup contract siap digunakan.",
 );
