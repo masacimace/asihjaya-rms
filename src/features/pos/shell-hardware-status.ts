@@ -73,8 +73,8 @@ function resolveActiveHardwareStatus({
 
   if (agent.status === "online" && diffMs <= HARDWARE_ONLINE_WINDOW_MS) {
     return {
-      status: hasConfigWarnings ? "stale" : "online",
-      label: hasConfigWarnings ? "Hardware perlu cek" : "Printer siap",
+      status: "online",
+      label: "Printer siap",
       agentName: agent.name,
       lastSeenAt: agent.lastSeenAt,
       hasConfigWarnings,
@@ -105,7 +105,11 @@ function reconcileNotifications(
   hardware: PosShellStatus["hardware"],
 ): PosShellNotification[] {
   const next = notifications
-    .filter((notification) => notification.id !== "hardware-status")
+    .filter(
+      (notification) =>
+        notification.id !== "hardware-status" &&
+        notification.id !== "hardware-config-warning",
+    )
     .map((notification) => {
       if (notification.id !== "active-print-jobs") {
         return notification;
@@ -131,6 +135,17 @@ function reconcileNotifications(
       href: "/pos/shift",
       actionLabel: "Cek Perangkat",
       tone: hardware.status === "stale" ? "warning" : "danger",
+      icon: "hardware",
+    });
+  } else if (hardware.hasConfigWarnings) {
+    next.push({
+      id: "hardware-config-warning",
+      title: "Konfigurasi Hardware perlu dicek",
+      description:
+        "Hardware Hub online dan silent print tetap aktif, tetapi ada peringatan konfigurasi yang perlu ditinjau di dashboard Hardware Hub.",
+      href: "/admin/operasional/hardware",
+      actionLabel: "Lihat Hardware Hub",
+      tone: "warning",
       icon: "hardware",
     });
   }
