@@ -219,7 +219,7 @@ export async function purgeInactiveHardwareAgentAction(
     const [jobReference, attemptReference, enrollmentReference] =
       await Promise.all([
         tx
-          .select({ id: hardwareJobs.id })
+          .select({ id: hardwareJobs.id, status: hardwareJobs.status })
           .from(hardwareJobs)
           .where(
             and(
@@ -232,12 +232,23 @@ export async function purgeInactiveHardwareAgentAction(
           )
           .limit(1),
         tx
-          .select({ id: hardwareJobAttempts.id })
+          .select({
+            id: hardwareJobAttempts.id,
+            jobId: hardwareJobAttempts.jobId,
+            status: hardwareJobAttempts.status,
+          })
           .from(hardwareJobAttempts)
           .where(eq(hardwareJobAttempts.agentId, agent.id))
           .limit(1),
         tx
-          .select({ id: hardwareAgentEnrollments.id })
+          .select({
+            id: hardwareAgentEnrollments.id,
+            status: hardwareAgentEnrollments.status,
+            claimedAt: hardwareAgentEnrollments.claimedAt,
+            completedAt: hardwareAgentEnrollments.completedAt,
+            claimedByInstanceId: hardwareAgentEnrollments.claimedByInstanceId,
+            createdAt: hardwareAgentEnrollments.createdAt,
+          })
           .from(hardwareAgentEnrollments)
           .where(
             and(
@@ -248,19 +259,89 @@ export async function purgeInactiveHardwareAgentAction(
           .limit(1),
       ]);
 
-    if (jobReference[0] || attemptReference[0] || enrollmentReference[0]) {
+    const blockingJob = jobReference[0] ?? null;
+    const blockingAttempt = attemptReference[0] ?? null;
+    const enrollment = enrollmentReference[0] ?? null;
+
+    if (blockingJob || blockingAttempt) {
       const dependencies = [
-        jobReference[0] ? "riwayat job" : null,
-        attemptReference[0] ? "attempt job" : null,
-        enrollmentReference[0] ? "riwayat enrollment" : null,
+        blockingJob
+          ? `riwayat job ${blockingJob.id} (${blockingJob.status})`
+          : null,
+        blockingAttempt
+          ? `attempt ${blockingAttempt.id} untuk job ${blockingAttempt.jobId} (${blockingAttempt.status})`
+          : null,
       ]
         .filter((value): value is string => Boolean(value))
         .join(", ");
 
       return {
         ok: false as const,
-        message: `Perangkat belum aman dihapus karena masih memiliki ${dependencies}. Riwayat audit tersebut harus dipertahankan.`,
+        message: `Perangkat belum aman dihapus karena masih memiliki ${dependencies}. Hapus/selesaikan dependency tersebut terlebih dahulu.`,
       };
+    }
+
+    if (enrollment && enrollment.status !== "completed") {
+      return {
+        ok: false as const,
+        message: `Perangkat belum aman dihapus. Enrollment ${enrollment.id} masih berstatus ${enrollment.status}; histori provisioning ini belum final dan tidak boleh dipurge.`,
+      };
+    }
+
+    let archivedEnrollmentId: string | null = null;
+
+    if (enrollment) {
+      const archivedEnrollment = await tx
+        .delete(hardwareAgentEnrollments)
+        .where(
+          and(
+            eq(hardwareAgentEnrollments.id, enrollment.id),
+            eq(hardwareAgentEnrollments.agentId, agent.id),
+            eq(hardwareAgentEnrollments.status, "completed"),
+          ),
+        )
+        .returning({ id: hardwareAgentEnrollments.id });
+
+      if (archivedEnrollment.length !== 1) {
+        return {
+          ok: false as const,
+          message:
+            "Status enrollment berubah saat proses purge. Muat ulang halaman lalu coba lagi.",
+        };
+      }
+
+      archivedEnrollmentId = enrollment.id;
+
+      await tx.insert(auditLogs).values({
+        organizationId: auth.organization.id,
+        outletId: agent.outletId,
+        actorUserId: auth.user.id,
+        action: "hardware.enrollment_archive_for_agent_purge",
+        entityType: "hardware_agent_enrollment",
+        entityId: enrollment.id,
+        beforeData: {
+          status: enrollment.status,
+          agentId: agent.id,
+          agentCode: agent.code,
+          claimedAt: enrollment.claimedAt?.toISOString() ?? null,
+          completedAt: enrollment.completedAt?.toISOString() ?? null,
+          claimedByInstanceId: enrollment.claimedByInstanceId,
+          createdAt: enrollment.createdAt.toISOString(),
+        },
+        afterData: {
+          operationalRowDeleted: true,
+          auditPreserved: true,
+        },
+        reason:
+          "Enrollment completed diarsipkan ke audit sebelum Hardware Agent nonaktif dipurge.",
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+        metadata: {
+          source: "admin.hardware_dashboard",
+          agentId: agent.id,
+          agentCode: agent.code,
+        },
+      });
     }
 
     const deleted = await tx
@@ -297,14 +378,18 @@ export async function purgeInactiveHardwareAgentAction(
         isActive: agent.isActive,
         registerId: agent.registerId,
       },
-      afterData: { deleted: true },
+      afterData: {
+        deleted: true,
+        archivedEnrollmentId,
+      },
       reason:
-        "Hardware Agent nonaktif tanpa dependency dihapus permanen dari dashboard Hardware Hub.",
+        "Hardware Agent nonaktif tanpa dependency operasional dihapus permanen dari dashboard Hardware Hub.",
       ipAddress: requestMetadata.ipAddress,
       userAgent: requestMetadata.userAgent,
       metadata: {
         source: "admin.hardware_dashboard",
         agentCode: agent.code,
+        archivedEnrollmentId,
       },
     });
 
@@ -312,6 +397,7 @@ export async function purgeInactiveHardwareAgentAction(
       ok: true as const,
       agentName: agent.name,
       agentCode: agent.code,
+      archivedEnrollmentId,
     };
   });
 
@@ -323,6 +409,8 @@ export async function purgeInactiveHardwareAgentAction(
   revalidatePath("/admin");
   redirectWithMessage(
     "success",
-    `Hardware Agent ${result.agentName} (${result.agentCode}) sudah dihapus permanen.`,
+    result.archivedEnrollmentId
+      ? `Hardware Agent ${result.agentName} (${result.agentCode}) dan enrollment completed terkait sudah dipurge dengan audit tetap tersimpan.`
+      : `Hardware Agent ${result.agentName} (${result.agentCode}) sudah dihapus permanen.`,
   );
 }
