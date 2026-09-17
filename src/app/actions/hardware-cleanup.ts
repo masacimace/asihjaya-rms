@@ -103,6 +103,25 @@ export async function deleteFailedHardwareJobAction(
       };
     }
 
+    const deleted = await tx
+      .delete(hardwareJobs)
+      .where(
+        and(
+          eq(hardwareJobs.id, job.id),
+          eq(hardwareJobs.organizationId, auth.organization.id),
+          eq(hardwareJobs.status, "failed"),
+        ),
+      )
+      .returning({ id: hardwareJobs.id });
+
+    if (deleted.length !== 1) {
+      return {
+        ok: false as const,
+        message:
+          "Status hardware job berubah saat proses penghapusan. Muat ulang halaman lalu coba lagi.",
+      };
+    }
+
     await tx.insert(auditLogs).values({
       organizationId: auth.organization.id,
       outletId: job.outletId,
@@ -127,25 +146,6 @@ export async function deleteFailedHardwareJobAction(
         registerId: job.registerId,
       },
     });
-
-    const deleted = await tx
-      .delete(hardwareJobs)
-      .where(
-        and(
-          eq(hardwareJobs.id, job.id),
-          eq(hardwareJobs.organizationId, auth.organization.id),
-          eq(hardwareJobs.status, "failed"),
-        ),
-      )
-      .returning({ id: hardwareJobs.id });
-
-    if (deleted.length !== 1) {
-      return {
-        ok: false as const,
-        message:
-          "Status hardware job berubah saat proses penghapusan. Muat ulang halaman lalu coba lagi.",
-      };
-    }
 
     return { ok: true as const, jobId: job.id };
   });
@@ -263,6 +263,26 @@ export async function purgeInactiveHardwareAgentAction(
       };
     }
 
+    const deleted = await tx
+      .delete(hardwareAgents)
+      .where(
+        and(
+          eq(hardwareAgents.id, agent.id),
+          eq(hardwareAgents.organizationId, auth.organization.id),
+          eq(hardwareAgents.isActive, false),
+          eq(hardwareAgents.status, "disabled"),
+        ),
+      )
+      .returning({ id: hardwareAgents.id });
+
+    if (deleted.length !== 1) {
+      return {
+        ok: false as const,
+        message:
+          "Status Hardware Agent berubah saat proses penghapusan. Muat ulang halaman lalu coba lagi.",
+      };
+    }
+
     await tx.insert(auditLogs).values({
       organizationId: auth.organization.id,
       outletId: agent.outletId,
@@ -287,26 +307,6 @@ export async function purgeInactiveHardwareAgentAction(
         agentCode: agent.code,
       },
     });
-
-    const deleted = await tx
-      .delete(hardwareAgents)
-      .where(
-        and(
-          eq(hardwareAgents.id, agent.id),
-          eq(hardwareAgents.organizationId, auth.organization.id),
-          eq(hardwareAgents.isActive, false),
-          eq(hardwareAgents.status, "disabled"),
-        ),
-      )
-      .returning({ id: hardwareAgents.id });
-
-    if (deleted.length !== 1) {
-      return {
-        ok: false as const,
-        message:
-          "Status Hardware Agent berubah saat proses penghapusan. Muat ulang halaman lalu coba lagi.",
-      };
-    }
 
     return {
       ok: true as const,
