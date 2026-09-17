@@ -153,13 +153,19 @@ assert.match(runner, /pg_advisory_unlock/);
 assert.match(runner, /DATABASE_MIGRATION_APPROVAL_REFERENCE/);
 assert.match(runner, /analyzeMigrationHistory/);
 assert.match(runner, /Compatibility migration line-ending diterima/);
-assert.match(runner, /runDrizzleMigration/);
-assert.match(runner, /DRIZZLE_MIGRATIONS_DIR/);
+assert.match(runner, /ensureMigrationHistoryTable/);
+assert.match(runner, /applyPendingMigrations/);
+assert.match(runner, /await client\.query\("begin"\)/);
+assert.match(runner, /await client\.query\("commit"\)/);
+assert.match(runner, /await client\.query\("rollback"\)/);
+assert.match(runner, /Fresh database terdeteksi/);
+assert.doesNotMatch(runner, /runDrizzleMigration/);
+assert.doesNotMatch(runner, /spawn\(/);
 assert.doesNotMatch(runner, /console\.(?:log|error)\([^\n]*DATABASE_URL/);
 
 const attributes = readProjectText(".gitattributes");
 assert.match(attributes, /^drizzle\/\*\.sql text eol=lf$/m);
 
 console.log(
-  `OK: ${migrationPlan.length} migration memiliki preflight history, destructive guard, PostgreSQL advisory lock, migrator container, dan deployment scripts yang konsisten.`,
+  `OK: ${migrationPlan.length} migration memiliki preflight history, fresh replay per-file transaction, destructive guard, PostgreSQL advisory lock, migrator container, dan deployment scripts yang konsisten.`,
 );
