@@ -208,6 +208,20 @@ jobs:
       - name: Re-run guarded deployment for idempotent no-op
         run: npm run db:deploy
 
+      - name: Seed fresh database
+        env:
+          BOOTSTRAP_ORGANIZATION_NAME: ASIHJAYA CI
+          BOOTSTRAP_ORGANIZATION_SLUG: asihjaya-ci
+          BOOTSTRAP_OUTLET_CODE: CI01
+          BOOTSTRAP_OUTLET_NAME: Outlet CI
+          BOOTSTRAP_REGISTER_CODE: REG-CI
+          BOOTSTRAP_REGISTER_NAME: Register CI
+          BOOTSTRAP_ADMIN_NAME: CI Admin
+          BOOTSTRAP_ADMIN_USERNAME: ci-admin
+          BOOTSTRAP_ADMIN_EMAIL: ci-admin@example.com
+          BOOTSTRAP_ADMIN_PASSWORD: ci-bootstrap-Admin-2026-Strong
+        run: npm run db:seed
+
       - name: Validate migrated PostgreSQL schema
         run: npm run check:database:live
 
