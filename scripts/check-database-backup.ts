@@ -264,15 +264,20 @@ const backupLocalRehearsal = readFileSync(
   path.join(projectRoot, "scripts/run-database-backup-local.ts"),
   "utf8",
 );
-assert.match(
+assert.doesNotMatch(
   backupLocalRehearsal,
-  /DATABASE_MIGRATION_ALLOW_DESTRUCTIVE:\s*"true"/,
-  "Backup rehearsal fresh DB wajib mengizinkan replay historical destructive migration pada database disposable.",
+  /DATABASE_MIGRATION_ALLOW_DESTRUCTIVE/,
+  "Backup rehearsal fresh DB tidak boleh memakai destructive migration env flag.",
+);
+assert.doesNotMatch(
+  backupLocalRehearsal,
+  /DATABASE_MIGRATION_APPROVAL_REFERENCE/,
+  "Backup rehearsal fresh DB tidak boleh memakai migration approval reference.",
 );
 assert.match(
   backupLocalRehearsal,
-  /DATABASE_MIGRATION_APPROVAL_REFERENCE:\s*"REHEARSAL-BACKUP-FRESH-DB"/,
-  "Backup rehearsal fresh DB wajib memakai approval reference test-only.",
+  /await runNpm\(\["run", "db:deploy"\], environment\)/,
+  "Backup rehearsal fresh DB wajib replay migration melalui default auto-allow fresh database.",
 );
 
 const backupRunner = readFileSync(path.join(projectRoot, "scripts/run-database-backup.ts"), "utf8");
