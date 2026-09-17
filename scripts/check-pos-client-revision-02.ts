@@ -24,13 +24,13 @@ const desktopHomeIndex = posShellSource.indexOf(
 const desktopCreateIndex = posShellSource.indexOf(
   'label: "Tambah Produk",\n    href: "/pos/produk/tambah"',
 );
-const desktopTransactionIndex = posShellSource.indexOf('label: "Transaksi",');
+const desktopTransactionIndex = posShellSource.indexOf('label: "Transaksi Penjualan",');
 
 assert.ok(desktopHomeIndex >= 0, "Menu desktop Beranda harus tersedia.");
 assert.ok(
   desktopCreateIndex > desktopHomeIndex &&
     desktopCreateIndex < desktopTransactionIndex,
-  "Tambah Produk desktop harus berada tepat di area setelah Beranda dan sebelum Transaksi.",
+  "Tambah Produk desktop harus berada tepat di area setelah Beranda dan sebelum Transaksi Penjualan.",
 );
 
 const mobileMoreStart = posShellSource.indexOf("const mobileMoreNavigation = [");
@@ -39,12 +39,12 @@ const mobileCreateIndex = posShellSource.indexOf(
   mobileMoreStart,
 );
 const mobileHeldIndex = posShellSource.indexOf(
-  '{ label: "Transaksi Tertahan", href: "/pos/ditahan", icon: Pause }',
+  '{ label: "Transaksi Ditahan", href: "/pos/ditahan", icon: Pause }',
   mobileMoreStart,
 );
 assert.ok(
-  mobileCreateIndex >= 0 && mobileCreateIndex < mobileHeldIndex,
-  "Tambah Produk mobile harus berada di Menu Lainnya sebelum Transaksi Tertahan.",
+  mobileCreateIndex >= 0 && mobileHeldIndex >= 0 && mobileCreateIndex < mobileHeldIndex,
+  "Tambah Produk mobile harus berada di Menu Lainnya sebelum Transaksi Ditahan.",
 );
 assert.match(posShellSource, /canCreateProducts/);
 assert.match(posLayoutSource, /canCreateProducts: hasPermission\(auth, "sales\.create"\)/);
