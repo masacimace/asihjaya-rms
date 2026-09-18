@@ -6,6 +6,10 @@ const path = require("path");
 const { createFailureInjectionController } = require("../lib/failure-injection");
 const { createHardwareAdapterFactory } = require("../lib/hardware-adapters");
 const {
+  SATO_LAYOUT_FINGERPRINT_ALGORITHM,
+  computeSatoLayoutSha256,
+} = require("../lib/sato-label-freeze");
+const {
   SATO_JEWELRY_LABEL_TEMPLATE_ID,
   SATO_JEWELRY_LABEL_PROFILE_ID,
   loadSatoJewelryLabelConfig,
@@ -22,10 +26,10 @@ assert.equal(loaded.config.version, 3);
 assert.equal(loaded.config.font.family, "Inter");
 assert.equal(loaded.config.font.filePathEnv, "SATO_LABEL_FONT_PATH");
 
-// The exact client-approved coordinates/font sizes are frozen by SHA-256 lock,
-// not duplicated here. This keeps the user's final fine-tuning as the authority.
+// Client-approved layout is protected by a semantic fingerprint. Whitespace,
+// indentation, key ordering in the source file, and LF/CRLF do not affect it.
 assert.equal(loaded.config.physicalValidation, "accepted");
-assert.equal(loaded.lock.schemaVersion, 1);
+assert.equal(loaded.lock.schemaVersion, 2);
 assert.equal(loaded.lock.templateId, SATO_JEWELRY_LABEL_TEMPLATE_ID);
 assert.equal(loaded.lock.templateVersion, 3);
 assert.equal(loaded.lock.printerProfileId, SATO_JEWELRY_LABEL_PROFILE_ID);
@@ -34,8 +38,28 @@ assert.equal(loaded.lock.physicalValidation, "accepted");
 assert.equal(loaded.lock.barcode.strategy, "CODE128_B");
 assert.deepEqual(loaded.lock.frontContent, ["productMasterName", "barcode", "barcodeNumber"]);
 assert.deepEqual(loaded.lock.backContent, ["weight", "itemDisplayName"]);
+assert.equal(loaded.lock.layoutFingerprintAlgorithm, SATO_LAYOUT_FINGERPRINT_ALGORITHM);
+assert.equal(loaded.lock.layoutSha256, computeSatoLayoutSha256(loaded.config));
+assert.equal(Object.hasOwn(loaded.lock, "configSha256"), false);
 assert.equal(Object.hasOwn(loaded.config.back, "purity"), false);
 assert(fs.existsSync(renderScript), "production SATO renderer PowerShell wajib tersedia");
+
+const reformattedCrlf = JSON.parse(
+  `${JSON.stringify(loaded.config, null, 4)}\r\n`,
+);
+assert.equal(
+  computeSatoLayoutSha256(reformattedCrlf),
+  loaded.lock.layoutSha256,
+  "Semantic fingerprint tidak boleh berubah hanya karena formatting/line-ending berbeda.",
+);
+
+const changedLayout = JSON.parse(JSON.stringify(loaded.config));
+changedLayout.front.productMasterName.x += 1;
+assert.notEqual(
+  computeSatoLayoutSha256(changedLayout),
+  loaded.lock.layoutSha256,
+  "Perubahan coordinate layout wajib mengubah semantic fingerprint.",
+);
 
 const payload = {
   schemaVersion: 1,
@@ -158,7 +182,7 @@ async function checkFakeProductionMetadata() {
 }
 
 checkFakeProductionMetadata()
-  .then(() => console.log("OK: SATO Label V3 client-approved frozen contract checks passed."))
+  .then(() => console.log("OK: SATO Label V3 semantic freeze contract checks passed."))
   .catch((error) => {
     console.error(error);
     process.exit(1);
