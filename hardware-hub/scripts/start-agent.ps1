@@ -24,7 +24,7 @@ Write-Host "Hub root       : $HubRoot"
 Write-Host "Node executable: $NodeExecutable"
 Write-Host "Structured logs: $LogDir"
 
-& $NodeExecutable agent.js
+& $NodeExecutable scripts/start-agent-secure.js
 $NodeExitCode = $LASTEXITCODE
 if ($NodeExitCode -ne 0) {
   Write-Error "Hardware Hub Agent exited with code $NodeExitCode."

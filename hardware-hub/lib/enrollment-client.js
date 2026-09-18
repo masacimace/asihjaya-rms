@@ -1,3 +1,5 @@
+const { createHardwareRequestHeaders } = require("./request-signing");
+
 class HardwareEnrollmentClaimError extends Error {
   constructor(message, { status = null, code = null, retryAfterSeconds = null } = {}) {
     super(message);
@@ -53,6 +55,14 @@ async function parseJsonResponse(response) {
   }
 }
 
+function validateTimeout(timeoutMs) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 120_000) {
+    throw new HardwareEnrollmentClaimError("Enrollment timeout tidak valid.", {
+      code: "INVALID_TIMEOUT",
+    });
+  }
+}
+
 async function claimHardwareEnrollment({
   apiUrl,
   installationCode,
@@ -68,12 +78,7 @@ async function claimHardwareEnrollment({
     });
   }
 
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 120_000) {
-    throw new HardwareEnrollmentClaimError("Enrollment timeout tidak valid.", {
-      code: "INVALID_TIMEOUT",
-    });
-  }
-
+  validateTimeout(timeoutMs);
   const baseUrl = normalizeApiUrl(apiUrl);
   const code = String(installationCode || "").trim().toUpperCase();
   const persistentInstanceId = String(instanceId || "").trim().toLowerCase();
@@ -133,6 +138,7 @@ async function claimHardwareEnrollment({
   }
 
   if (
+    !payload?.enrollment?.id ||
     !payload?.agent?.id ||
     !payload?.credential?.secret ||
     payload?.credential?.authMode !== "signed"
@@ -146,7 +152,92 @@ async function claimHardwareEnrollment({
   return payload;
 }
 
+async function completeHardwareEnrollment({
+  apiUrl,
+  enrollmentId,
+  instanceId,
+  agentId,
+  agentSecret,
+  installerVersion,
+  credentialStoreKind,
+  agentVersion = installerVersion || "hardware-hub-installer",
+  timeoutMs = 15_000,
+  fetchImpl = globalThis.fetch,
+}) {
+  if (typeof fetchImpl !== "function") {
+    throw new HardwareEnrollmentClaimError("HTTP client tidak tersedia.", {
+      code: "HTTP_CLIENT_UNAVAILABLE",
+    });
+  }
+  validateTimeout(timeoutMs);
+
+  const baseUrl = normalizeApiUrl(apiUrl);
+  const pathname = "/api/hardware/v2/enrollments/complete";
+  const body = JSON.stringify({
+    enrollmentId: String(enrollmentId || "").trim().toLowerCase(),
+    instanceId: String(instanceId || "").trim().toLowerCase(),
+    installerVersion: optionalText(installerVersion),
+    credentialStoreKind: optionalText(credentialStoreKind),
+  });
+  const normalizedAgentId = String(agentId || "").trim().toLowerCase();
+  const secret = String(agentSecret || "");
+  if (!normalizedAgentId || secret.length < 32) {
+    throw new HardwareEnrollmentClaimError(
+      "Credential Hardware Agent untuk completion tidak valid.",
+      { code: "INVALID_COMPLETION_CREDENTIAL" },
+    );
+  }
+
+  const signedHeaders = createHardwareRequestHeaders({
+    agentId: normalizedAgentId,
+    agentSecret: secret,
+    agentVersion: String(agentVersion || "hardware-hub-installer").trim(),
+    authMode: "signed",
+    method: "POST",
+    pathAndQuery: pathname,
+    payload: body,
+  });
+
+  let response;
+  try {
+    response = await fetchImpl(`${baseUrl}${pathname}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        ...signedHeaders,
+      },
+      body,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      throw new HardwareEnrollmentClaimError(
+        "Koneksi ke RMS timeout saat menyelesaikan enrollment.",
+        { code: "COMPLETION_TIMEOUT" },
+      );
+    }
+    throw new HardwareEnrollmentClaimError(
+      "Tidak dapat terhubung ke RMS untuk menyelesaikan enrollment.",
+      { code: "COMPLETION_NETWORK_ERROR" },
+    );
+  }
+
+  const payload = await parseJsonResponse(response);
+  if (!response.ok || payload?.success !== true || payload?.enrollment?.status !== "completed") {
+    throw new HardwareEnrollmentClaimError(
+      `Enrollment completion ditolak oleh RMS (${payload?.error || response.status}).`,
+      {
+        status: response.status,
+        code: payload?.error || "COMPLETION_REJECTED",
+      },
+    );
+  }
+  return payload;
+}
+
 module.exports = {
   HardwareEnrollmentClaimError,
   claimHardwareEnrollment,
+  completeHardwareEnrollment,
 };
