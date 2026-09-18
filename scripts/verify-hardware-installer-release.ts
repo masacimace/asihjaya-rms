@@ -41,9 +41,11 @@ assert(
 assert(
   workflow.includes("Verify installer checksum before publishing") &&
     workflow.includes('sha256sum "$setup"') &&
+    workflow.includes("tr -d '\\r'") &&
+    workflow.includes('[[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]') &&
     workflow.includes('gh release create "$GITHUB_REF_NAME"') &&
     workflow.includes("contents: write"),
-  "Production release wajib memverifikasi SHA-256 lalu publish GitHub Release dengan permission write yang terisolasi pada release job.",
+  "Production release wajib menormalisasi CRLF checksum lintas Windows/Linux, memvalidasi format SHA-256, lalu publish GitHub Release dengan permission write yang terisolasi pada release job.",
 );
 assert(
   workflow.includes("actions/upload-artifact@v4") &&
@@ -124,5 +126,5 @@ assert(
 );
 
 console.log(
-  `OK: Hardware Hub v${packageJson.version} production installer build, immutable GitHub Release, checksum, download URL, dan deployment validation contract konsisten.`,
+  `OK: Hardware Hub v${packageJson.version} production installer build, immutable GitHub Release, cross-platform checksum, download URL, dan deployment validation contract konsisten.`,
 );
