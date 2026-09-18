@@ -17,6 +17,9 @@ const page = read("src/app/(admin)/admin/operasional/hardware/page.tsx");
 const setupDialog = read(
   "src/components/hardware/hardware-hub-setup-dialog.tsx",
 );
+const installerDownloadRoute = read(
+  "src/app/api/hardware/installer/download/route.ts",
+);
 const manageDialog = read(
   "src/components/hardware/hardware-hub-manage-dialog.tsx",
 );
@@ -70,6 +73,19 @@ assert(
   setupDialog.includes("Buat Installation Code") &&
     setupDialog.includes("Installation Code"),
   "Normal onboarding wajib menggunakan Installation Code.",
+);
+assert(
+  setupDialog.includes("/api/hardware/installer/download") &&
+    setupDialog.includes("Download ASIHJAYA Hardware Hub Setup") &&
+    setupDialog.includes("Run as administrator"),
+  "Stage 5 setup UI wajib menyediakan download Setup.exe dan panduan original-user UAC.",
+);
+assert(
+  installerDownloadRoute.includes("HARDWARE_HUB_INSTALLER_DOWNLOAD_URL") &&
+    installerDownloadRoute.includes('hasPermission(auth, "hardware.agents.manage")') &&
+    installerDownloadRoute.includes('url.protocol !== "https:"') &&
+    installerDownloadRoute.includes("NextResponse.redirect"),
+  "Installer download redirect wajib permission-gated dan hanya menerima target HTTPS dari server env.",
 );
 assert(
   setupDialog.includes("revokeHardwareHubEnrollmentAction"),
@@ -156,4 +172,6 @@ assert(
   "Dashboard tidak boleh mengarahkan normal onboarding ke CLI.",
 );
 
-console.log("OK: Hardware Hub Stage 2 Installation Code enrollment contract siap digunakan.");
+console.log(
+  "OK: Hardware Hub Installation Code + native Setup.exe download contract siap digunakan.",
+);
