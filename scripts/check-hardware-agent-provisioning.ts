@@ -61,11 +61,16 @@ assert(
   !coreServiceSource.includes("metadata: {\n          secret:"),
   "Secret Hardware Agent tidak boleh disimpan pada audit metadata.",
 );
+assert(
+  coreServiceSource.includes("isHardwareHub: registers.isHardwareHub") &&
+    coreServiceSource.includes("!register.isHardwareHub"),
+  "Core provisioning wajib tetap menolak register non-Hardware-Hub sebagai defense in depth.",
+);
 
 assert(
-  guardedServiceSource.includes("eq(registers.isHardwareHub") &&
+  guardedServiceSource.includes("!target.isHardwareHub") &&
     guardedServiceSource.includes("provisionHardwareAgent(input)"),
-  "Public Hardware Hub provisioning boundary wajib enforce dedicated register sebelum core provisioning.",
+  "Direct Hardware Hub provisioning helper wajib tetap enforce dedicated register sebelum core provisioning.",
 );
 assert(
   optionsSource.includes("eq(registers.isHardwareHub, true)"),
@@ -73,11 +78,12 @@ assert(
 );
 assert(
   actionSource.includes('requirePermission("hardware.agents.manage")'),
-  "Server action provisioning wajib memakai hardware.agents.manage.",
+  "Server action setup wajib memakai hardware.agents.manage.",
 );
 assert(
-  actionSource.includes("provisionDedicatedHardwareHub"),
-  "Server action provisioning wajib melewati dedicated Hardware Hub guard.",
+  actionSource.includes("createHardwareAgentEnrollment") &&
+    !actionSource.includes("provisionDedicatedHardwareHub"),
+  "Normal Stage 2 setup wajib membuat enrollment; agent baru dibuat oleh claim flow Stage 3.",
 );
 
 const journal = JSON.parse(journalSource) as {
@@ -87,5 +93,11 @@ assert(
   journal.entries?.some((entry) => entry.tag?.startsWith("0015_")),
   "Migration Hardware Agent provisioning wajib tetap tercatat di Drizzle journal.",
 );
+assert(
+  journal.entries?.some(
+    (entry) => entry.tag === "0026_hardware_agent_enrollments",
+  ),
+  "Migration Hardware Agent enrollment wajib tercatat di Drizzle journal.",
+);
 
-console.log("OK: dedicated Hardware Hub provisioning contract siap digunakan.");
+console.log("OK: Hardware Hub provisioning + enrollment boundary contract siap digunakan.");

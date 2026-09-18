@@ -1,6 +1,7 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, gt, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
+import { hardwareAgentEnrollments } from "@/db/schema/hardware-enrollment";
 import { hardwareAgents, outlets, registers } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/session";
 
@@ -20,12 +21,16 @@ export type HardwareHubProvisioningOption = {
     code: string;
     name: string;
   } | null;
+  pendingEnrollment: {
+    id: string;
+    expiresAt: Date;
+  } | null;
 };
 
 /**
  * Provisioning normal hanya boleh menargetkan register yang secara eksplisit
- * ditandai sebagai Hardware Hub. Service provisioning tetap memiliki guard
- * yang sama agar crafted request tidak dapat melewati invariant ini.
+ * ditandai sebagai Hardware Hub. Service enrollment/provisioning tetap memiliki
+ * guard yang sama agar crafted request tidak dapat melewati invariant ini.
  */
 export async function getHardwareHubProvisioningOptions(
   auth: AuthContext,
@@ -36,6 +41,7 @@ export async function getHardwareHubProvisioningOptions(
     return [];
   }
 
+  const now = new Date();
   const rows = await db
     .select({
       outletId: outlets.id,
@@ -47,6 +53,8 @@ export async function getHardwareHubProvisioningOptions(
       activeAgentId: hardwareAgents.id,
       activeAgentCode: hardwareAgents.code,
       activeAgentName: hardwareAgents.name,
+      pendingEnrollmentId: hardwareAgentEnrollments.id,
+      pendingEnrollmentExpiresAt: hardwareAgentEnrollments.expiresAt,
     })
     .from(registers)
     .innerJoin(outlets, eq(registers.outletId, outlets.id))
@@ -55,6 +63,14 @@ export async function getHardwareHubProvisioningOptions(
       and(
         eq(hardwareAgents.registerId, registers.id),
         eq(hardwareAgents.isActive, true),
+      ),
+    )
+    .leftJoin(
+      hardwareAgentEnrollments,
+      and(
+        eq(hardwareAgentEnrollments.registerId, registers.id),
+        eq(hardwareAgentEnrollments.status, "pending"),
+        gt(hardwareAgentEnrollments.expiresAt, now),
       ),
     )
     .where(
@@ -85,6 +101,13 @@ export async function getHardwareHubProvisioningOptions(
             id: row.activeAgentId,
             code: row.activeAgentCode,
             name: row.activeAgentName,
+          }
+        : null,
+    pendingEnrollment:
+      row.pendingEnrollmentId && row.pendingEnrollmentExpiresAt
+        ? {
+            id: row.pendingEnrollmentId,
+            expiresAt: row.pendingEnrollmentExpiresAt,
           }
         : null,
   }));
