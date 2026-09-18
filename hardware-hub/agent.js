@@ -77,11 +77,15 @@ function resolveLocalPath(envName, fallback) {
   return path.resolve(__dirname, process.env[envName]?.trim() || fallback);
 }
 
+function isLoopbackHostname(hostname) {
+  return ["localhost", "127.0.0.1", "::1"].includes(hostname);
+}
+
 const ASIHJAYA_API_URL = requiredEnv("ASIHJAYA_API_URL").replace(/\/$/, "");
 let ASIHJAYA_API_ORIGIN;
 try {
   const parsedApiUrl = new URL(ASIHJAYA_API_URL);
-  const isLoopback = ["localhost", "127.0.0.1", "::1"].includes(parsedApiUrl.hostname);
+  const isLoopback = isLoopbackHostname(parsedApiUrl.hostname);
   if (parsedApiUrl.protocol !== "https:" && !isLoopback) {
     console.error("[-] ASIHJAYA_API_URL production wajib menggunakan HTTPS.");
     process.exit(1);
@@ -443,7 +447,8 @@ function getConfigWarnings() {
   if (!isFakeAdapter("cash_drawer") && !CASH_DRAWER_PRINTER_NAME) {
     warnings.push("CASH_DRAWER_PRINTER_NAME belum dikonfigurasi.");
   }
-  if (ASIHJAYA_API_URL.startsWith("http://") && !ASIHJAYA_API_URL.includes("localhost")) {
+  const apiUrl = new URL(ASIHJAYA_API_URL);
+  if (apiUrl.protocol !== "https:" && !isLoopbackHostname(apiUrl.hostname)) {
     warnings.push("Production Hardware Hub seharusnya memakai HTTPS.");
   }
   return warnings;
