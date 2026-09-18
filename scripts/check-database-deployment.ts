@@ -142,7 +142,8 @@ assert.match(compose, /target: migrator/);
 assert.match(compose, /condition: service_completed_successfully/);
 assert.match(compose, /restart: "no"/);
 assert.match(compose, /read_only: true/);
-assert.match(compose, /DATABASE_MIGRATION_ALLOW_DESTRUCTIVE/);
+assert.doesNotMatch(compose, /DATABASE_MIGRATION_ALLOW_DESTRUCTIVE/);
+assert.doesNotMatch(compose, /DATABASE_MIGRATION_APPROVAL_REFERENCE/);
 
 const drizzleConfig = readProjectText("drizzle.config.ts");
 assert.match(drizzleConfig, /DRIZZLE_MIGRATIONS_DIR/);
@@ -150,16 +151,24 @@ assert.match(drizzleConfig, /DRIZZLE_MIGRATIONS_DIR/);
 const runner = readProjectText("scripts/run-database-deployment.ts");
 assert.match(runner, /pg_try_advisory_lock/);
 assert.match(runner, /pg_advisory_unlock/);
-assert.match(runner, /DATABASE_MIGRATION_APPROVAL_REFERENCE/);
+assert.match(runner, /--allow-destructive/);
 assert.match(runner, /analyzeMigrationHistory/);
 assert.match(runner, /Compatibility migration line-ending diterima/);
-assert.match(runner, /runDrizzleMigration/);
-assert.match(runner, /DRIZZLE_MIGRATIONS_DIR/);
+assert.match(runner, /ensureMigrationHistoryTable/);
+assert.match(runner, /applyPendingMigrations/);
+assert.match(runner, /await client\.query\("begin"\)/);
+assert.match(runner, /await client\.query\("commit"\)/);
+assert.match(runner, /await client\.query\("rollback"\)/);
+assert.match(runner, /Fresh database terdeteksi/);
+assert.doesNotMatch(runner, /DATABASE_MIGRATION_ALLOW_DESTRUCTIVE/);
+assert.doesNotMatch(runner, /DATABASE_MIGRATION_APPROVAL_REFERENCE/);
+assert.doesNotMatch(runner, /runDrizzleMigration/);
+assert.doesNotMatch(runner, /spawn\(/);
 assert.doesNotMatch(runner, /console\.(?:log|error)\([^\n]*DATABASE_URL/);
 
 const attributes = readProjectText(".gitattributes");
 assert.match(attributes, /^drizzle\/\*\.sql text eol=lf$/m);
 
 console.log(
-  `OK: ${migrationPlan.length} migration memiliki preflight history, destructive guard, PostgreSQL advisory lock, migrator container, dan deployment scripts yang konsisten.`,
+  `OK: ${migrationPlan.length} migration memiliki preflight history, fresh replay per-file transaction, simple destructive opt-in, PostgreSQL advisory lock, migrator container, dan deployment scripts yang konsisten.`,
 );

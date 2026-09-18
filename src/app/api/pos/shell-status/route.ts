@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getPosShellStatus } from "@/features/pos/queries";
+import { getPosShellStatusWithActiveAgent } from "@/features/pos/shell-hardware-status";
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
@@ -20,7 +20,7 @@ export async function GET() {
   const primaryOutlet =
     auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
 
-  const status = await getPosShellStatus({
+  const status = await getPosShellStatusWithActiveAgent({
     organizationId: auth.organization.id,
     outletId: primaryOutlet?.id,
   });

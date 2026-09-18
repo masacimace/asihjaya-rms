@@ -24,15 +24,15 @@ assert(
 );
 
 assert(
-  source.includes(
-    'mt-3 grid min-w-0 w-full max-w-full gap-2 lg:grid-cols-2',
+  /className="[^"]*grid[^"]*min-w-0[^"]*w-full[^"]*max-w-full[^"]*lg:grid-cols-2[^"]*"/.test(
+    source,
   ),
   "Grid hasil pencarian wajib mengikuti lebar parent.",
 );
 
 assert(
-  source.includes(
-    'min-w-0 w-full max-w-full overflow-hidden rounded-xl border border-[var(--border)] bg-white p-3 text-left',
+  /className="[^"]*min-w-0[^"]*w-full[^"]*max-w-full[^"]*overflow-hidden[^"]*rounded-xl[^"]*border border-\[var\(--border\)\][^"]*bg-white[^"]*p-3[^"]*text-left[^"]*"/.test(
+    source,
   ),
   "Card hasil pencarian wajib dapat shrink di viewport sempit.",
 );

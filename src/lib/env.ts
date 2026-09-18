@@ -72,8 +72,6 @@ export const PRODUCTION_ENVIRONMENT_TEMPLATE_NAMES = [
   "DATABASE_MIGRATION_LOCK_TIMEOUT_MS",
   "DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS",
   "DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS",
-  "DATABASE_MIGRATION_ALLOW_DESTRUCTIVE",
-  "DATABASE_MIGRATION_APPROVAL_REFERENCE",
   "DATABASE_BACKUP_ROOT",
   "DATABASE_BACKUP_ENVIRONMENT",
   "DATABASE_BACKUP_KIND",
@@ -927,7 +925,6 @@ function validateProductionDeployment(
   validateOptionalInteger(source, issues, "DATABASE_MIGRATION_LOCK_TIMEOUT_MS", 1_000, 900_000);
   validateOptionalInteger(source, issues, "DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS", 1_000, 900_000);
   validateOptionalInteger(source, issues, "DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS", 1_000, 3_600_000);
-  validateOptionalBoolean(source, issues, "DATABASE_MIGRATION_ALLOW_DESTRUCTIVE");
   validateOptionalInteger(source, issues, "DATABASE_BACKUP_COMPRESSION_LEVEL", 0, 9);
   validateOptionalInteger(source, issues, "DATABASE_BACKUP_MIN_FREE_BYTES", 0, Number.MAX_SAFE_INTEGER);
   validateOptionalInteger(source, issues, "DATABASE_BACKUP_FREE_SPACE_FACTOR", 1, 10);
@@ -1073,20 +1070,6 @@ function validateProductionDeployment(
           "berada di luar rentang bigint PostgreSQL.",
         );
       }
-    }
-  }
-
-  const allowDestructiveMigration = optional(source, "DATABASE_MIGRATION_ALLOW_DESTRUCTIVE")
-    ?.trim()
-    .toLowerCase();
-  const destructiveApproval = optional(source, "DATABASE_MIGRATION_APPROVAL_REFERENCE");
-  if (["true", "1", "yes", "on"].includes(allowDestructiveMigration ?? "")) {
-    if (!destructiveApproval || destructiveApproval.length < 8 || isPlaceholder(destructiveApproval)) {
-      pushIssue(
-        issues,
-        "DATABASE_MIGRATION_APPROVAL_REFERENCE",
-        "wajib berisi change/approval reference minimal 8 karakter saat destructive migration diizinkan.",
-      );
     }
   }
 

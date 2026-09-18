@@ -53,22 +53,22 @@ function Copy-HubPayload {
 
 function Resolve-InnoCompiler {
   if ($InnoCompiler) {
-    if (-not (Test-Path $InnoCompiler)) {
+    if (-not (Test-Path -LiteralPath $InnoCompiler)) {
       throw "ISCC.exe tidak ditemukan: $InnoCompiler"
     }
-    return (Resolve-Path $InnoCompiler).Path
+    return (Resolve-Path -LiteralPath $InnoCompiler).Path
   }
 
-  $Candidates = @(
+  $Candidate = @(
     "$env:ProgramFiles\Inno Setup 7\ISCC.exe",
     "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
     "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe"
-  ) | Where-Object { $_ -and (Test-Path $_) }
+  ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 
-  if (-not $Candidates) {
+  if (-not $Candidate) {
     throw "ISCC.exe tidak ditemukan. Install Inno Setup 7 atau berikan -InnoCompiler."
   }
-  return (Resolve-Path $Candidates[0]).Path
+  return (Resolve-Path -LiteralPath $Candidate).Path
 }
 
 $Api = [Uri]$ApiUrl

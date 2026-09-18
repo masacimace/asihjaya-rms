@@ -1,22 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
+import { resolveHardwareInstallerDownloadUrl } from "@/lib/hardware-installer-environment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function resolveInstallerDownloadUrl(): URL | null {
-  const raw = process.env.HARDWARE_HUB_INSTALLER_DOWNLOAD_URL?.trim();
-  if (!raw) return null;
-
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== "https:") return null;
-    return url;
-  } catch {
-    return null;
-  }
-}
 
 export async function GET() {
   const auth = await getCurrentAuth();
@@ -27,7 +15,7 @@ export async function GET() {
     return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   }
 
-  const downloadUrl = resolveInstallerDownloadUrl();
+  const downloadUrl = resolveHardwareInstallerDownloadUrl(process.env);
   if (!downloadUrl) {
     return NextResponse.json(
       {

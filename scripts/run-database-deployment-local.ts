@@ -114,7 +114,16 @@ const environment: NodeJS.ProcessEnv = {
   DATABASE_MIGRATION_LOCK_TIMEOUT_MS: "30000",
   DATABASE_MIGRATION_DDL_LOCK_TIMEOUT_MS: "10000",
   DATABASE_MIGRATION_STATEMENT_TIMEOUT_MS: "300000",
-  DATABASE_MIGRATION_ALLOW_DESTRUCTIVE: "false",
+  BOOTSTRAP_ORGANIZATION_NAME: "ASIHJAYA Migration Rehearsal",
+  BOOTSTRAP_ORGANIZATION_SLUG: "asihjaya-migration-rehearsal",
+  BOOTSTRAP_OUTLET_CODE: "MIG01",
+  BOOTSTRAP_OUTLET_NAME: "Migration Rehearsal Outlet",
+  BOOTSTRAP_REGISTER_CODE: "REG-MIG",
+  BOOTSTRAP_REGISTER_NAME: "Migration Rehearsal Register",
+  BOOTSTRAP_ADMIN_NAME: "Migration Rehearsal Admin",
+  BOOTSTRAP_ADMIN_USERNAME: "migration-rehearsal-admin",
+  BOOTSTRAP_ADMIN_EMAIL: "migration-rehearsal@example.com",
+  BOOTSTRAP_ADMIN_PASSWORD: "migration-rehearsal-Admin-2026-Strong",
 };
 const composeArgs = [
   "compose",
@@ -146,10 +155,11 @@ try {
     "Runner kedua wajib menunggu advisory lock.",
   );
 
-  console.log("Memvalidasi schema dan idempotent no-op deployment...");
-  await runNpm(["run", "check:database:live"], environment);
+  console.log("Memvalidasi idempotent no-op deployment, seed, dan schema...");
   const noOp = await runNpm(["run", "db:deploy"], environment, { capture: true });
   assert(noOp.output.includes("no-op"), "Deployment kedua harus terdeteksi sebagai no-op.");
+  await runNpm(["run", "db:seed"], environment);
+  await runNpm(["run", "check:database:live"], environment);
 
   console.log("Menguji deteksi migration history drift...");
   const client = new Client({ connectionString: databaseUrl });
@@ -175,7 +185,7 @@ try {
   ]);
   await client.end();
 
-  console.log("Menguji guard migration destruktif dan approval eksplisit...");
+  console.log("Menguji guard migration destruktif dan opt-in CLI eksplisit...");
   const temporaryMigrations = path.join(temporaryRoot, "drizzle");
   cpSync(path.join(projectRoot, "drizzle"), temporaryMigrations, { recursive: true });
   const journalPath = path.join(temporaryMigrations, "meta", "_journal.json");
@@ -203,21 +213,25 @@ try {
   );
   assert(
     !rejected.success && rejected.output.includes("Migration destruktif terdeteksi"),
-    "Migration destruktif tanpa approval wajib ditolak.",
+    "Migration destruktif tanpa opt-in CLI wajib ditolak.",
   );
 
   const approved = await runNpm(
-    ["run", "db:deploy", "--", "--check-only", "--migrations-dir", temporaryMigrations],
-    {
-      ...environment,
-      DATABASE_MIGRATION_ALLOW_DESTRUCTIVE: "true",
-      DATABASE_MIGRATION_APPROVAL_REFERENCE: "CHANGE-TEST-1",
-    },
+    [
+      "run",
+      "db:deploy",
+      "--",
+      "--check-only",
+      "--allow-destructive",
+      "--migrations-dir",
+      temporaryMigrations,
+    ],
+    environment,
     { capture: true },
   );
   assert(
-    approved.success && approved.output.includes("Approval migration destruktif diterima"),
-    "Migration destruktif dengan approval eksplisit wajib diterima pada check-only.",
+    approved.success && approved.output.includes("Flag --allow-destructive diterima"),
+    "Migration destruktif dengan opt-in CLI eksplisit wajib diterima pada check-only.",
   );
 
   console.log("Menguji migration failure menghentikan deployment tanpa merusak history...");
@@ -251,8 +265,8 @@ try {
   );
   assert(!failedMigration.success, "Migration SQL invalid wajib menghentikan deployment.");
   assert(
-    failedMigration.output.includes("drizzle-kit migrate gagal"),
-    "Failure runner wajib menjelaskan bahwa primitive migration gagal.",
+    failedMigration.output.includes(`Migration ${failingTag} gagal`),
+    "Failure runner wajib menjelaskan migration file yang gagal.",
   );
   assert(!failedMigration.output.includes(databaseUrl), "Migration failure tidak boleh membocorkan DATABASE_URL.");
   const afterFailure = await runNpm(["run", "db:deploy"], environment, { capture: true });
@@ -262,7 +276,7 @@ try {
   );
 
   console.log(
-    "OK: database deployment rehearsal lulus; readiness, advisory lock, idempotency, history drift, destructive guard, dan failure stop terverifikasi.",
+    "OK: database deployment rehearsal lulus; readiness, advisory lock, idempotency, seeded schema validation, history drift, destructive guard, dan failure stop terverifikasi.",
   );
 } finally {
   console.log("Menghapus PostgreSQL database-deployment test beserta volume sementara...");

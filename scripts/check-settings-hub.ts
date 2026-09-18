@@ -48,6 +48,14 @@ const buybackProcessingActionSource = read(
   "src/app/actions/buyback-processing.ts",
 );
 
+function usesColorPresetOptions(source: string, collectionName: string): boolean {
+  return (
+    source.includes(`${collectionName}.map((preset) =>`) &&
+    source.includes("value={preset.name}") &&
+    source.includes("{preset.name}")
+  );
+}
+
 assert(
   hubSource.includes('requirePermission("settings.manage")'),
   "Settings Hub wajib memakai permission settings.manage.",
@@ -94,11 +102,14 @@ assert(
 );
 assert(
   productItemFormSource.includes('name="color"') &&
-    productItemFormSource.includes("colorPresets.map") &&
+    usesColorPresetOptions(productItemFormSource, "colorPresets") &&
     productItemEditFormSource.includes('name="color"') &&
-    productItemEditFormSource.includes("colorPresets.map") &&
-    buybackWorkspaceSource.includes("colorPresets.map") &&
-    buybackProcessingWorkspaceSource.includes("colorPresets.map"),
+    usesColorPresetOptions(productItemEditFormSource, "colorPresets") &&
+    usesColorPresetOptions(buybackWorkspaceSource, "localColorPresets") &&
+    usesColorPresetOptions(
+      buybackProcessingWorkspaceSource,
+      "localColorPresets",
+    ),
   "Tambah Produk, Edit Item, Buyback, dan Pemrosesan Buyback wajib memakai preset warna.",
 );
 assert(

@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   BookOpenCheck,
   CheckCircle2,
-  Clock3,
   FileText,
   MonitorCog,
   RefreshCw,
@@ -28,6 +27,10 @@ import {
   retryHardwareJobAction,
 } from "@/app/actions/hardware";
 import { HardwareAgentReactivateButton } from "@/components/hardware/hardware-agent-reactivate-button";
+import {
+  DeleteFailedHardwareJobButton,
+  PurgeInactiveHardwareAgentButton,
+} from "@/components/hardware/hardware-cleanup-buttons";
 import { HardwareHubManageDialog } from "@/components/hardware/hardware-hub-manage-dialog";
 import { HardwareHubSetupDialog } from "@/components/hardware/hardware-hub-setup-dialog";
 import type {
@@ -383,17 +386,22 @@ function RecentActivity({ jobs }: { jobs: HardwareJobSummary[] }) {
                 ) : null}
               </div>
 
-              <Link
-                href={`/admin/operasional/hardware/jobs/${job.id}`}
-                className={cn(
-                  "inline-flex min-h-9 shrink-0 items-center justify-center rounded-xl border px-3 py-2 text-xs font-semibold",
-                  job.status === "unknown_outcome"
-                    ? "border-orange-300 bg-orange-50 text-orange-900"
-                    : "border-[var(--border)] bg-white text-neutral-700",
-                )}
-              >
-                {job.status === "unknown_outcome" ? "Periksa" : "Detail"}
-              </Link>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {job.status === "failed" ? (
+                  <DeleteFailedHardwareJobButton jobId={job.id} />
+                ) : null}
+                <Link
+                  href={`/admin/operasional/hardware/jobs/${job.id}`}
+                  className={cn(
+                    "inline-flex min-h-9 shrink-0 items-center justify-center rounded-xl border px-3 py-2 text-xs font-semibold",
+                    job.status === "unknown_outcome"
+                      ? "border-orange-300 bg-orange-50 text-orange-900"
+                      : "border-[var(--border)] bg-white text-neutral-700",
+                  )}
+                >
+                  {job.status === "unknown_outcome" ? "Periksa" : "Detail"}
+                </Link>
+              </div>
             </div>
           ))}
         </div>
@@ -421,6 +429,14 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
   );
   const disabledAgents = dashboard.agents.filter(
     (agent) => !agent.isActive || agent.displayStatus === "disabled",
+  );
+  const configurationWarnings = activeAgents.flatMap((agent) =>
+    agent.diagnostics.configWarnings.map((warning) => ({
+      agentId: agent.id,
+      agentName: agent.name,
+      registerName: agent.register.name,
+      warning,
+    })),
   );
   const problems =
     dashboard.observability.metrics.unknownOutcomeJobs +
@@ -600,6 +616,35 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
             </div>
           ) : null}
 
+          {configurationWarnings.length > 0 ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-800" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-amber-950">Peringatan Konfigurasi</p>
+                  <p className="mt-1 text-xs leading-5 text-amber-900">
+                    Detail berikut berasal langsung dari heartbeat Hardware Hub aktif.
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {configurationWarnings.map((item) => (
+                      <div
+                        key={`${item.agentId}:${item.warning}`}
+                        className="rounded-xl border border-amber-200 bg-white/70 px-3 py-2"
+                      >
+                        <p className="text-xs font-semibold text-amber-950">
+                          {item.registerName}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-amber-900">
+                          {item.warning}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-[var(--border)] p-4">
             <div className="flex items-start gap-3">
               <ShieldAlert className="mt-0.5 size-5 text-neutral-500" />
@@ -686,6 +731,9 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                           </button>
                         </form>
                       ) : null}
+                      {job.status === "failed" ? (
+                        <DeleteFailedHardwareJobButton jobId={job.id} />
+                      ) : null}
                       <Link
                         href={`/admin/operasional/hardware/jobs/${job.id}`}
                         className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700"
@@ -706,7 +754,7 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                 <div>
                   <p className="font-semibold text-neutral-950">Riwayat Perangkat</p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    Agent nonaktif disimpan untuk audit dan dapat diaktifkan kembali jika register belum dipakai perangkat lain.
+                    Agent nonaktif tetap disimpan untuk audit. Perangkat hanya dapat dihapus permanen jika tidak lagi memiliki dependency job, attempt, atau enrollment.
                   </p>
                 </div>
               </div>
@@ -730,7 +778,7 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                         <StatusPill status="disabled" />
                       </div>
                       {canManageAgents ? (
-                        <div className="mt-3">
+                        <div className="mt-3 space-y-2">
                           <HardwareAgentReactivateButton
                             agent={{
                               id: agent.id,
@@ -748,6 +796,10 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                                   }
                                 : null
                             }
+                          />
+                          <PurgeInactiveHardwareAgentButton
+                            agentId={agent.id}
+                            agentName={agent.name}
                           />
                         </div>
                       ) : null}

@@ -77,9 +77,13 @@ assert(
   "Migrator image wajib menjalankan guarded database deployment sebagai user non-root.",
 );
 assert(
-  compose.includes("ASIHJAYA_MIGRATOR_IMAGE") &&
-    compose.includes("DATABASE_MIGRATION_ALLOW_DESTRUCTIVE"),
-  "Compose production wajib memiliki migrator image dan destructive migration boundary.",
+  compose.includes("ASIHJAYA_MIGRATOR_IMAGE"),
+  "Compose production wajib memiliki migrator image.",
+);
+assert(
+  !compose.includes("DATABASE_MIGRATION_ALLOW_DESTRUCTIVE") &&
+    !compose.includes("DATABASE_MIGRATION_APPROVAL_REFERENCE"),
+  "Compose production tidak boleh menyimpan destructive migration permission; opt-in hanya melalui CLI one-shot.",
 );
 
 for (const requiredComposeContract of [

@@ -4,6 +4,7 @@ import {
   assertServerEnvironment,
   type EnvironmentMode,
 } from "../src/lib/env";
+import { assertHardwareInstallerEnvironment } from "../src/lib/hardware-installer-environment";
 
 function optionValue(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
@@ -58,6 +59,9 @@ assertServerEnvironment(process.env, {
   mode,
   requireCore: mode === "production" || process.env.NODE_ENV === "production",
   requireDeployment,
+});
+assertHardwareInstallerEnvironment(process.env, {
+  required: requireDeployment,
 });
 
 console.log(

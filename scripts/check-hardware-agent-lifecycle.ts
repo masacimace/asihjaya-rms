@@ -18,6 +18,10 @@ function read(relativePath: string) {
 
 const service = read("src/features/hardware/agent-lifecycle.ts");
 const actions = read("src/app/actions/hardware-agent-lifecycle.ts");
+const cleanupActions = read("src/app/actions/hardware-cleanup.ts");
+const cleanupButtons = read(
+  "src/components/hardware/hardware-cleanup-buttons.tsx",
+);
 const manageDialog = read(
   "src/components/hardware/hardware-hub-manage-dialog.tsx",
 );
@@ -25,6 +29,10 @@ const reactivate = read(
   "src/components/hardware/hardware-agent-reactivate-button.tsx",
 );
 const page = read("src/app/(admin)/admin/operasional/hardware/page.tsx");
+const hardwareAgent = read("hardware-hub/agent.js");
+const posHardwareStatus = read("src/features/pos/shell-hardware-status.ts");
+const posLayout = read("src/app/(pos)/pos/layout.tsx");
+const posShellRoute = read("src/app/api/pos/shell-status/route.ts");
 const schema = read("src/db/schema/index.ts");
 
 assert(
@@ -106,6 +114,101 @@ assert(
   "DB guard satu active agent/register wajib tetap tersedia.",
 );
 
+assert(
+  hardwareAgent.includes("function isLoopbackHostname(hostname)") &&
+    hardwareAgent.includes('["localhost", "127.0.0.1", "::1"]') &&
+    hardwareAgent.includes("isLoopbackHostname(parsedApiUrl.hostname)") &&
+    hardwareAgent.includes("!isLoopbackHostname(apiUrl.hostname)") &&
+    !hardwareAgent.includes('!ASIHJAYA_API_URL.includes("localhost")'),
+  "Startup validation dan config warning Hardware Hub wajib memakai definisi loopback yang sama untuk localhost, 127.0.0.1, dan ::1.",
+);
+assert(
+  page.includes("configurationWarnings = activeAgents.flatMap") &&
+    page.includes("Peringatan Konfigurasi") &&
+    page.includes("item.warning") &&
+    page.includes("berasal langsung dari heartbeat Hardware Hub aktif"),
+  "Diagnostik Lanjutan wajib menampilkan detail config warning yang dihitung pada indikator halaman utama.",
+);
+
+assert(
+  posHardwareStatus.includes("getPosShellStatusWithActiveAgent") &&
+    posHardwareStatus.includes("eq(hardwareAgents.isActive, true)") &&
+    posHardwareStatus.includes("eq(hardwareAgents.outletId, outletId)") &&
+    posHardwareStatus.includes("innerJoin(registers"),
+  "Status Hardware Hub di POS wajib berasal langsung dari active agent pada outlet POS.",
+);
+assert(
+  !posHardwareStatus.includes("getDefaultPosRegisterCondition") &&
+    !posHardwareStatus.includes("eq(hardwareAgents.registerId, register.id)") &&
+    !posHardwareStatus.includes("eq(registers.isActive, true)") &&
+    !posHardwareStatus.includes("eq(registers.isHardwareHub, true)"),
+  "Live status POS tidak boleh digagalkan oleh preselection atau lifecycle register setelah active agent ditemukan.",
+);
+assert(
+  posHardwareStatus.includes("90 * 1000") &&
+    posHardwareStatus.includes("5 * 60 * 1000") &&
+    posHardwareStatus.includes("activeAgent?.registerName ?? baseStatus.registerName"),
+  "Threshold dan register POS wajib mengikuti active agent yang sama dengan dashboard Hardware Hub.",
+);
+assert(
+  posHardwareStatus.includes('status: "online"') &&
+    posHardwareStatus.includes('label: "Printer siap"') &&
+    !posHardwareStatus.includes('status: hasConfigWarnings ? "stale" : "online"') &&
+    posHardwareStatus.includes('id: "hardware-config-warning"') &&
+    posHardwareStatus.includes("silent print tetap aktif"),
+  "Config warning tidak boleh menurunkan connectivity agent online; warning wajib diinformasikan terpisah sebagai non-blocking.",
+);
+assert(
+  posLayout.includes("getPosShellStatusWithActiveAgent") &&
+    posShellRoute.includes("getPosShellStatusWithActiveAgent"),
+  "Initial POS shell dan live polling wajib memakai active-agent reconciliation yang sama.",
+);
+
+assert(
+  cleanupActions.includes("deleteFailedHardwareJobAction") &&
+    cleanupActions.includes('job.status !== "failed"') &&
+    cleanupActions.includes("hardwareJobResolutions") &&
+    cleanupActions.includes('"hardware.job_delete_failed"'),
+  "Delete individual hardware job wajib hanya menerima status failed, menjaga manual resolution, dan menulis audit log.",
+);
+assert(
+  cleanupActions.includes("purgeInactiveHardwareAgentAction") &&
+    cleanupActions.includes('requirePermission("hardware.agents.manage")') &&
+    cleanupActions.includes("hardwareJobAttempts") &&
+    cleanupActions.includes("hardwareAgentEnrollments") &&
+    cleanupActions.includes("hardwareJobs.targetAgentId") &&
+    cleanupActions.includes('job.status !== "completed"') &&
+    cleanupActions.includes('attempt.status !== "acknowledged"') &&
+    cleanupActions.includes('attempt.jobStatus !== "completed"') &&
+    cleanupActions.includes('"hardware.job_attempt_archive_for_agent_purge"') &&
+    cleanupActions.includes('"hardware.job_detach_agent_for_agent_purge"') &&
+    cleanupActions.includes(".delete(hardwareJobAttempts)") &&
+    cleanupActions.includes("agentId: job.agentId === agent.id ? null : job.agentId") &&
+    cleanupActions.includes("enrollment.status !== \"completed\"") &&
+    cleanupActions.includes(".delete(hardwareAgentEnrollments)") &&
+    cleanupActions.includes('"hardware.enrollment_archive_for_agent_purge"') &&
+    cleanupActions.includes("HardwareCleanupRaceError") &&
+    cleanupActions.includes("eq(hardwareAgents.isActive, false)") &&
+    cleanupActions.includes('eq(hardwareAgents.status, "disabled")') &&
+    cleanupActions.includes('"hardware.agent_purge_inactive"'),
+  "Purge Hardware Agent wajib hanya detach completed/acknowledged terminal history dengan audit snapshot, menjaga non-terminal dependency, rollback saat race, dan tetap permission-guarded.",
+);
+assert(
+  cleanupButtons.includes("window.confirm") &&
+    cleanupButtons.includes("DeleteFailedHardwareJobButton") &&
+    cleanupButtons.includes("PurgeInactiveHardwareAgentButton"),
+  "Destructive hardware cleanup UI wajib memakai konfirmasi eksplisit.",
+);
+assert(
+  page.includes("DeleteFailedHardwareJobButton") &&
+    page.includes("PurgeInactiveHardwareAgentButton"),
+  "Dashboard Hardware Hub wajib mengekspos delete failed job dan safe purge inactive agent.",
+);
+assert(
+  !page.includes("  Clock3,\n"),
+  "Hardware Hub page tidak boleh menyisakan import Clock3 yang tidak digunakan.",
+);
+
 console.log(
-  "OK: Hardware Hub lifecycle + simplified management contract siap digunakan.",
+  "OK: Hardware Hub lifecycle, loopback warning diagnostics, POS connectivity/config-warning separation, dan terminal-history guarded purge siap digunakan.",
 );

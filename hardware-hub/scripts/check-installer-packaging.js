@@ -77,6 +77,13 @@ async function main() {
     "Builder wajib mempertahankan HTTPS production dan hanya mengizinkan HTTP pada loopback local UAT.",
   );
   assert.ok(
+    builder.includes("$Candidate = @(") &&
+      builder.includes("Select-Object -First 1") &&
+      builder.includes("Resolve-Path -LiteralPath $Candidate") &&
+      !builder.includes("$Candidates[0]"),
+    "Builder wajib resolve satu kandidat ISCC.exe sebagai path utuh, bukan mengindeks karakter pertama string PowerShell.",
+  );
+  assert.ok(
     startup.includes("-NodeExecutable") || startup.includes("[string]$NodeExecutable"),
     "Scheduled Task installer wajib menerima private Node executable.",
   );

@@ -102,8 +102,14 @@ assert.equal(templateEnvironment.ASIHJAYA_BIND_ADDRESS, "127.0.0.1");
 assert.equal(templateEnvironment.ASIHJAYA_MIGRATOR_IMAGE, "asihjaya-rms-migrator:production");
 assert.equal(templateEnvironment.ASIHJAYA_OPERATIONS_IMAGE, "asihjaya-rms-operations:production");
 assert.equal(templateEnvironment.APP_RELEASE_ID, "unknown");
-assert.equal(templateEnvironment.DATABASE_MIGRATION_ALLOW_DESTRUCTIVE, "false");
-assert.equal(templateEnvironment.DATABASE_MIGRATION_APPROVAL_REFERENCE, "");
+assert(
+  !Object.hasOwn(templateEnvironment, "DATABASE_MIGRATION_ALLOW_DESTRUCTIVE"),
+  "Production template tidak boleh menyimpan destructive migration permission permanen.",
+);
+assert(
+  !Object.hasOwn(templateEnvironment, "DATABASE_MIGRATION_APPROVAL_REFERENCE"),
+  "Production template tidak boleh menyimpan migration approval reference yang sudah retired.",
+);
 assert.equal(templateEnvironment.DATABASE_BACKUP_ROOT, ".data/backups/postgres");
 assert.equal(templateEnvironment.DATABASE_BACKUP_KIND, "daily");
 assert.equal(templateEnvironment.DATABASE_BACKUP_COMPRESSION_LEVEL, "6");
@@ -296,21 +302,6 @@ ${localGeneration.stderr}`,
 } finally {
   rmSync(temporaryRoot, { recursive: true, force: true });
 }
-
-const unsafeMigrationEnvironment = {
-  ...templateEnvironment,
-  DATABASE_MIGRATION_ALLOW_DESTRUCTIVE: "true",
-  DATABASE_MIGRATION_APPROVAL_REFERENCE: "",
-};
-const unsafeMigrationIssues = collectServerEnvironmentIssues(unsafeMigrationEnvironment, {
-  mode: "production",
-  requireCore: true,
-  requireDeployment: true,
-});
-assert(
-  unsafeMigrationIssues.some((issue) => issue.name === "DATABASE_MIGRATION_APPROVAL_REFERENCE"),
-  "Destructive migration tanpa approval reference wajib ditolak validator production.",
-);
 
 const unsafeRestoreEnvironment = {
   ...templateEnvironment,
