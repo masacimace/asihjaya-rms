@@ -29,6 +29,7 @@ const reactivate = read(
   "src/components/hardware/hardware-agent-reactivate-button.tsx",
 );
 const page = read("src/app/(admin)/admin/operasional/hardware/page.tsx");
+const hardwareAgent = read("hardware-hub/agent.js");
 const posHardwareStatus = read("src/features/pos/shell-hardware-status.ts");
 const posLayout = read("src/app/(pos)/pos/layout.tsx");
 const posShellRoute = read("src/app/api/pos/shell-status/route.ts");
@@ -114,6 +115,22 @@ assert(
 );
 
 assert(
+  hardwareAgent.includes("function isLoopbackHostname(hostname)") &&
+    hardwareAgent.includes('["localhost", "127.0.0.1", "::1"]') &&
+    hardwareAgent.includes("isLoopbackHostname(parsedApiUrl.hostname)") &&
+    hardwareAgent.includes("!isLoopbackHostname(apiUrl.hostname)") &&
+    !hardwareAgent.includes('!ASIHJAYA_API_URL.includes("localhost")'),
+  "Startup validation dan config warning Hardware Hub wajib memakai definisi loopback yang sama untuk localhost, 127.0.0.1, dan ::1.",
+);
+assert(
+  page.includes("configurationWarnings = activeAgents.flatMap") &&
+    page.includes("Peringatan Konfigurasi") &&
+    page.includes("item.warning") &&
+    page.includes("berasal langsung dari heartbeat Hardware Hub aktif"),
+  "Diagnostik Lanjutan wajib menampilkan detail config warning yang dihitung pada indikator halaman utama.",
+);
+
+assert(
   posHardwareStatus.includes("getPosShellStatusWithActiveAgent") &&
     posHardwareStatus.includes("eq(hardwareAgents.isActive, true)") &&
     posHardwareStatus.includes("eq(hardwareAgents.outletId, outletId)") &&
@@ -193,5 +210,5 @@ assert(
 );
 
 console.log(
-  "OK: Hardware Hub lifecycle, POS connectivity/config-warning separation, dan terminal-history guarded purge siap digunakan.",
+  "OK: Hardware Hub lifecycle, loopback warning diagnostics, POS connectivity/config-warning separation, dan terminal-history guarded purge siap digunakan.",
 );
