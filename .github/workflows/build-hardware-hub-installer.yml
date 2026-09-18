@@ -132,9 +132,13 @@ jobs:
           test -f "$setup"
           test -f "$checksum_file"
 
-          expected="$(sed -n 's/^SHA256=//p' "$checksum_file" | tr '[:upper:]' '[:lower:]')"
+          expected="$(sed -n 's/^SHA256=//p' "$checksum_file" | tr -d '\r' | tr '[:upper:]' '[:lower:]')"
           actual="$(sha256sum "$setup" | awk '{print $1}')"
-          if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+          if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Installer checksum file is malformed: $checksum_file" >&2
+            exit 1
+          fi
+          if [ "$expected" != "$actual" ]; then
             echo "Installer SHA-256 verification failed. expected=$expected actual=$actual" >&2
             exit 1
           fi
