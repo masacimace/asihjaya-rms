@@ -27,8 +27,6 @@ yarn-error.log*
 pnpm-debug.log*
 
 # local environment
-.env
-.env.*
 !.env.example
 !.env.production.example
 !hardware-hub/.env.example

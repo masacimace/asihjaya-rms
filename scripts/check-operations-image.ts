@@ -72,7 +72,10 @@ const finalResult: DatabasePreDeploymentBackupResult = {
     fullVerification: true,
   },
 };
-assert.equal(parseDatabasePreDeploymentBackupResult(JSON.stringify(finalResult)).status, "verified");
+assert.equal(
+  parseDatabasePreDeploymentBackupResult(JSON.stringify(finalResult)).status,
+  "verified",
+);
 assert.throws(
   () =>
     parseDatabasePreDeploymentBackupResult(
@@ -91,11 +94,16 @@ assert.throws(
   /Release ID/,
 );
 
-const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), "asihjaya-operations-contract-"));
+const temporaryRoot = mkdtempSync(
+  path.join(os.tmpdir(), "asihjaya-operations-contract-"),
+);
 try {
   const resultPath = path.join(temporaryRoot, "pre-deployment.json");
   writeDatabasePreDeploymentBackupResult(resultPath, finalResult);
-  assert.deepEqual(readDatabasePreDeploymentBackupResult(resultPath), finalResult);
+  assert.deepEqual(
+    readDatabasePreDeploymentBackupResult(resultPath),
+    finalResult,
+  );
 } finally {
   rmSync(temporaryRoot, { recursive: true, force: true });
 }
@@ -107,19 +115,31 @@ for (const contract of [
   'org.opencontainers.image.version="${APP_RELEASE_ID}"',
   "COPY --from=deps /app/node_modules ./node_modules",
   "COPY scripts ./scripts",
+  "COPY src/lib/hardware-installer-environment.ts ./src/lib/hardware-installer-environment.ts",
   "--uid 10003",
   "USER operations",
   'CMD ["npm", "run", "db:backup:pre-deployment:verified"]',
 ]) {
-  assert(dockerfile.includes(contract), `Dockerfile operations target wajib memuat ${contract}.`);
+  assert(
+    dockerfile.includes(contract),
+    `Dockerfile operations target wajib memuat ${contract}.`,
+  );
 }
-assert(!/COPY\s+.*\.env/i.test(dockerfile), "Operations image tidak boleh menyalin environment file.");
+assert(
+  !/COPY\s+.*\.env/i.test(dockerfile),
+  "Operations image tidak boleh menyalin environment file.",
+);
 
-const dockerignoreLines = readFileSync(path.join(projectRoot, ".dockerignore"), "utf8")
+const dockerignoreLines = readFileSync(
+  path.join(projectRoot, ".dockerignore"),
+  "utf8",
+)
   .replace(/\r\n/g, "\n")
   .split("\n");
 const composeIgnoreIndex = dockerignoreLines.indexOf("compose*.yaml");
-const productionComposeIncludeIndex = dockerignoreLines.indexOf("!compose.production.yaml");
+const productionComposeIncludeIndex = dockerignoreLines.indexOf(
+  "!compose.production.yaml",
+);
 assert(
   composeIgnoreIndex >= 0,
   ".dockerignore wajib mengabaikan file Compose umum melalui compose*.yaml.",
@@ -129,7 +149,10 @@ assert(
   ".dockerignore wajib memasukkan kembali compose.production.yaml setelah pola compose*.yaml agar operations image dapat dibangun.",
 );
 
-const compose = readFileSync(path.join(projectRoot, "compose.production.yaml"), "utf8");
+const compose = readFileSync(
+  path.join(projectRoot, "compose.production.yaml"),
+  "utf8",
+);
 for (const contract of [
   "  operations:",
   "ASIHJAYA_OPERATIONS_IMAGE",
@@ -137,10 +160,16 @@ for (const contract of [
   "- operations",
   "network_mode: none",
 ]) {
-  assert(compose.includes(contract), `Compose operations service wajib memuat ${contract}.`);
+  assert(
+    compose.includes(contract),
+    `Compose operations service wajib memuat ${contract}.`,
+  );
 }
 
-const wrapper = readFileSync(path.join(projectRoot, "ops/scripts/ajsystem-db-backup"), "utf8");
+const wrapper = readFileSync(
+  path.join(projectRoot, "ops/scripts/ajsystem-db-backup"),
+  "utf8",
+);
 for (const contract of [
   "ASIHJAYA_OPERATIONS_IMAGE",
   "pre-deployment",
@@ -150,11 +179,19 @@ for (const contract of [
   "pre-deployment-${JOB_RELEASE_ID}.json",
   "tag latest/production ditolak",
 ]) {
-  assert(wrapper.includes(contract), `Wrapper backup wajib memuat ${contract}.`);
+  assert(
+    wrapper.includes(contract),
+    `Wrapper backup wajib memuat ${contract}.`,
+  );
 }
-assert(!wrapper.includes('IMAGE="asihjaya-rms-tools:backup"'), "Wrapper tidak boleh memakai tools image hard-coded lama.");
+assert(
+  !wrapper.includes('IMAGE="asihjaya-rms-tools:backup"'),
+  "Wrapper tidak boleh memakai tools image hard-coded lama.",
+);
 
-const packageJson = JSON.parse(readFileSync(path.join(projectRoot, "package.json"), "utf8")) as {
+const packageJson = JSON.parse(
+  readFileSync(path.join(projectRoot, "package.json"), "utf8"),
+) as {
   scripts?: Record<string, string>;
 };
 for (const scriptName of [
@@ -162,13 +199,24 @@ for (const scriptName of [
   "db:backup:pre-deployment:verified",
   "container:production:build",
 ]) {
-  assert(packageJson.scripts?.[scriptName], `package.json wajib memiliki ${scriptName}.`);
+  assert(
+    packageJson.scripts?.[scriptName],
+    `package.json wajib memiliki ${scriptName}.`,
+  );
 }
-assert.match(packageJson.scripts?.["container:production:build"] ?? "", /operations/);
-assert.match(packageJson.scripts?.["db:deploy:production"] ?? "", /db:backup:pre-deployment:verified/);
+assert.match(
+  packageJson.scripts?.["container:production:build"] ?? "",
+  /operations/,
+);
+assert.match(
+  packageJson.scripts?.["db:deploy:production"] ?? "",
+  /db:backup:pre-deployment:verified/,
+);
 
-
-const workflow = readFileSync(path.join(projectRoot, ".github/workflows/ci.yml"), "utf8");
+const workflow = readFileSync(
+  path.join(projectRoot, ".github/workflows/ci.yml"),
+  "utf8",
+);
 assert.match(workflow, /--target operations --tag asihjaya-rms-operations:ci/);
 assert.match(workflow, /npm run check:operations-image/);
 
@@ -177,7 +225,10 @@ const environmentTemplate = readFileSync(
   "utf8",
 );
 assert.match(environmentTemplate, /^ASIHJAYA_OPERATIONS_IMAGE=/m);
-assert.match(environmentTemplate, /^DATABASE_PRE_DEPLOYMENT_BACKUP_RESULT_PATH=/m);
+assert.match(
+  environmentTemplate,
+  /^DATABASE_PRE_DEPLOYMENT_BACKUP_RESULT_PATH=/m,
+);
 
 const orchestrator = readFileSync(
   path.join(projectRoot, "scripts/run-database-backup-pre-deployment.ts"),
@@ -190,9 +241,15 @@ for (const contract of [
   "offsiteResult.fullVerification",
   "writeDatabasePreDeploymentBackupResult",
 ]) {
-  assert(orchestrator.includes(contract), `Pre-deployment orchestrator wajib memuat ${contract}.`);
+  assert(
+    orchestrator.includes(contract),
+    `Pre-deployment orchestrator wajib memuat ${contract}.`,
+  );
 }
-assert(!orchestrator.includes("--upload-latest"), "Pre-deployment tidak boleh memilih backup melalui --upload-latest.");
+assert(
+  !orchestrator.includes("--upload-latest"),
+  "Pre-deployment tidak boleh memilih backup melalui --upload-latest.",
+);
 
 console.log(
   "OK: operations image reproducible, immutable, non-root, dan pre-deployment backup memakai exact artifact dengan full off-site verification.",
