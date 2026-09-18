@@ -7,18 +7,15 @@ import {
   BookOpenCheck,
   CheckCircle2,
   Clock3,
-  Cpu,
-  Eye,
   FileText,
+  MonitorCog,
   RefreshCw,
-  RotateCcw,
   ScanBarcode,
   Server,
+  Settings2,
   ShieldAlert,
-  ShieldCheck,
   Trash2,
   WalletCards,
-  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -30,17 +27,16 @@ import {
   recoverStaleHardwareJobsAction,
   retryHardwareJobAction,
 } from "@/app/actions/hardware";
+import { HardwareAgentReactivateButton } from "@/components/hardware/hardware-agent-reactivate-button";
+import { HardwareHubManageDialog } from "@/components/hardware/hardware-hub-manage-dialog";
+import { HardwareHubSetupDialog } from "@/components/hardware/hardware-hub-setup-dialog";
 import type {
   HardwareAgentDisplayStatus,
   HardwareAgentSummary,
   HardwareJobSummary,
 } from "@/features/hardware/contracts";
-import { HardwareAgentReactivateButton } from "@/components/hardware/hardware-agent-reactivate-button";
-import { HardwareAgentProvisioningDialog } from "@/components/hardware/hardware-agent-provisioning-dialog";
-import {
-  getHardwareAgentProvisioningOptions,
-  getHardwareHubDashboard,
-} from "@/features/hardware/queries";
+import { getHardwareHubProvisioningOptions } from "@/features/hardware/provisioning-options";
+import { getHardwareHubDashboard } from "@/features/hardware/queries";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
@@ -69,53 +65,32 @@ const jobStatusLabels: Record<HardwareJobSummary["status"], string> = {
   pending: "Menunggu",
   claimed: "Diklaim",
   processing: "Diproses",
-  printing: "Diproses (v1)",
+  printing: "Diproses",
   submitted: "Terkirim ke printer",
   completed: "Selesai",
   failed: "Gagal",
-  unknown_outcome: "Hasil belum diketahui",
+  unknown_outcome: "Perlu diperiksa",
   expired: "Kedaluwarsa",
   cancelled: "Dibatalkan",
 };
 
 const jobTypeLabels: Record<HardwareJobSummary["jobType"], string> = {
-  print_label_sato: "Cetak Label SATO",
-  print_receipt_certificate: "Cetak Nota/Certificate",
+  print_label_sato: "Cetak Label",
+  print_receipt_certificate: "Cetak Nota",
   open_cash_drawer: "Buka Cash Drawer",
-  test_label_printer: "Test Label Printer",
-  test_document_printer: "Test Document Printer",
+  test_label_printer: "Test Label",
+  test_document_printer: "Test Nota",
   test_cash_drawer: "Test Cash Drawer",
 };
 
 function formatDateTime(value: Date | null) {
-  if (!value) {
-    return "Belum pernah";
-  }
+  if (!value) return "Belum pernah";
 
   return new Intl.DateTimeFormat("id-ID", {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "Asia/Jakarta",
   }).format(value);
-}
-
-function formatAgeSeconds(value: number | null) {
-  if (value === null) return "-";
-  if (value < 60) return `${value} detik`;
-  if (value < 3600) return `${Math.floor(value / 60)} menit`;
-  return `${Math.floor(value / 3600)} jam ${Math.floor((value % 3600) / 60)} menit`;
-}
-
-function formatDuration(value: number | null) {
-  if (!value) {
-    return null;
-  }
-
-  if (value < 1000) {
-    return `${value} ms`;
-  }
-
-  return `${(value / 1000).toFixed(1)} dtk`;
 }
 
 function readBooleanCapability(
@@ -125,13 +100,21 @@ function readBooleanCapability(
   return capabilities[key] === true;
 }
 
+function readStringCapability(
+  capabilities: Record<string, unknown>,
+  key: string,
+) {
+  const value = capabilities[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 function StatusPill({ status }: { status: HardwareAgentDisplayStatus }) {
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
         status === "online" && "bg-emerald-50 text-emerald-700",
-        status === "stale" && "bg-amber-50 text-amber-700",
+        status === "stale" && "bg-amber-50 text-amber-800",
         status === "offline" && "bg-neutral-100 text-neutral-600",
         status === "disabled" && "bg-red-50 text-red-700",
       )}
@@ -150,76 +133,45 @@ function StatusPill({ status }: { status: HardwareAgentDisplayStatus }) {
   );
 }
 
-function JobStatusPill({ status }: { status: HardwareJobSummary["status"] }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-        status === "completed" && "bg-emerald-50 text-emerald-700",
-        status === "failed" && "bg-red-50 text-red-700",
-        status === "unknown_outcome" && "bg-orange-50 text-orange-800",
-        (status === "processing" || status === "printing") &&
-          "bg-blue-50 text-blue-700",
-        status === "submitted" && "bg-violet-50 text-violet-700",
-        status === "claimed" && "bg-amber-50 text-amber-700",
-        status === "pending" && "bg-neutral-100 text-neutral-600",
-        (status === "cancelled" || status === "expired") &&
-          "bg-neutral-100 text-neutral-500",
-      )}
-    >
-      {jobStatusLabels[status]}
-    </span>
-  );
-}
-
-function CapabilityBadge({
+function DeviceRow({
   label,
-  enabled,
+  configured,
+  helper,
 }: {
   label: string;
-  enabled: boolean;
+  configured: boolean;
+  helper: string;
 }) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-        enabled
-          ? "bg-emerald-50 text-emerald-700"
-          : "bg-neutral-100 text-neutral-500",
-      )}
-    >
-      {enabled ? (
-        <CheckCircle2 className="size-3" />
-      ) : (
-        <XCircle className="size-3" />
-      )}
-      {label}
-    </span>
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-3">
+      <div>
+        <p className="text-sm font-semibold text-neutral-900">{label}</p>
+        <p className="mt-0.5 text-xs leading-5 text-[var(--muted)]">{helper}</p>
+      </div>
+      <span
+        className={cn(
+          "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
+          configured
+            ? "bg-emerald-50 text-emerald-700"
+            : "bg-neutral-200 text-neutral-600",
+        )}
+      >
+        {configured ? "Dikonfigurasi" : "Belum tersedia"}
+      </span>
+    </div>
   );
 }
 
-function DryRunBadge({ outputDir }: { outputDir: string | null }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800"
-      title={outputDir ? `Output: ${outputDir}` : undefined}
-    >
-      <ShieldCheck className="size-3" />
-      Dry Run Aktif
-    </span>
-  );
-}
-
-function TestJobButton({
+function TestButton({
   agentId,
   jobType,
-  children,
   disabled,
+  children,
 }: {
   agentId: string;
   jobType: "test_label_printer" | "test_document_printer" | "test_cash_drawer";
+  disabled: boolean;
   children: ReactNode;
-  disabled?: boolean;
 }) {
   return (
     <form action={createHardwareTestJobAction}>
@@ -229,234 +181,57 @@ function TestJobButton({
       <button
         type="submit"
         disabled={disabled}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-45"
+        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-40"
       >
         {children}
       </button>
     </form>
-  );
-}
-
-function HardwareJobActionButton({
-  action,
-  jobId,
-  children,
-  tone = "neutral",
-}: {
-  action: (formData: FormData) => Promise<void>;
-  jobId: string;
-  children: ReactNode;
-  tone?: "neutral" | "danger";
-}) {
-  return (
-    <form action={action}>
-      <input type="hidden" name="jobId" value={jobId} />
-      <button
-        type="submit"
-        className={cn(
-          "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition",
-          tone === "neutral" &&
-            "border-[var(--border)] bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]",
-          tone === "danger" &&
-            "border-red-200 bg-red-50 text-red-700 hover:border-red-300 hover:bg-red-100",
-        )}
-      >
-        {children}
-      </button>
-    </form>
-  );
-}
-
-function HeaderMetric({
-  label,
-  value,
-  helper,
-}: {
-  label: string;
-  value: ReactNode;
-  helper: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-        {label}
-      </p>
-      <p className="mt-1 text-xl font-semibold text-neutral-950">{value}</p>
-      <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{helper}</p>
-    </div>
-  );
-}
-
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-  helper,
-  tone = "neutral",
-}: {
-  icon: typeof Server;
-  label: string;
-  value: number;
-  helper: string;
-  tone?: "neutral" | "success" | "warning" | "danger";
-}) {
-  return (
-    <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-            {label}
-          </p>
-          <p className="mt-2 text-2xl font-semibold text-neutral-950">
-            {value}
-          </p>
-          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{helper}</p>
-        </div>
-        <div
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-xl",
-            tone === "neutral" && "bg-neutral-100 text-neutral-600",
-            tone === "success" && "bg-emerald-50 text-emerald-700",
-            tone === "warning" && "bg-amber-50 text-amber-700",
-            tone === "danger" && "bg-red-50 text-red-700",
-          )}
-        >
-          <Icon className="size-5" />
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function RetentionStat({
-  label,
-  value,
-  helper,
-}: {
-  label: string;
-  value: number;
-  helper: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-semibold text-neutral-950">{value}</p>
-      <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{helper}</p>
-    </div>
   );
 }
 
 function AgentCard({
   agent,
   canManageAgents,
-  activePeer,
 }: {
   agent: HardwareAgentSummary;
   canManageAgents: boolean;
-  activePeer: {
-    id: string;
-    code: string;
-    name: string;
-  } | null;
 }) {
-  const canPrintLabel = readBooleanCapability(
+  const labelConfigured = readBooleanCapability(
     agent.capabilities,
     "print_label_sato",
   );
-  const canPrintDocument = readBooleanCapability(
+  const documentConfigured = readBooleanCapability(
     agent.capabilities,
     "print_receipt_certificate",
   );
-  const canOpenDrawer = readBooleanCapability(
+  const drawerConfigured = readBooleanCapability(
     agent.capabilities,
     "open_cash_drawer",
   );
-  const isDryRun = readBooleanCapability(agent.capabilities, "dry_run");
-  const dryRunOutputDir =
-    typeof agent.capabilities.dry_run_output_dir === "string"
-      ? agent.capabilities.dry_run_output_dir
-      : null;
-  const diagnostics = agent.diagnostics;
-  const runtimeLabel = [
-    diagnostics.agentVersion,
-    diagnostics.platform,
-    diagnostics.arch,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const hostname = agent.diagnostics.hostname ?? "Mini PC belum melapor";
+  const labelPrinter =
+    readStringCapability(agent.capabilities, "label_printer_name") ??
+    "Printer label";
+  const documentPrinter =
+    readStringCapability(agent.capabilities, "document_printer_name") ??
+    "Printer nota";
   const isDisabled = agent.displayStatus === "disabled";
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-      <div className="flex flex-col gap-4 border-b border-[var(--border)] p-5 lg:flex-row lg:items-start lg:justify-between">
+    <article className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+      <div className="flex flex-col gap-4 border-b border-[var(--border)] p-5 lg:flex-row lg:items-start lg:justify-between lg:p-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold text-neutral-950">
-              {agent.name}
+              {agent.register.name}
             </h2>
             <StatusPill status={agent.displayStatus} />
           </div>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            {agent.outlet.name} · {agent.register.name} · {agent.code}
-          </p>
+          <p className="mt-1 text-sm text-[var(--muted)]">{agent.outlet.name}</p>
         </div>
 
-        <div className="flex flex-wrap gap-2 lg:max-w-xs lg:justify-end">
-          <CapabilityBadge label="Label SATO" enabled={canPrintLabel} />
-          <CapabilityBadge label="Nota PDF" enabled={canPrintDocument} />
-          <CapabilityBadge label="Cash Drawer" enabled={canOpenDrawer} />
-          {isDryRun ? <DryRunBadge outputDir={dryRunOutputDir} /> : null}
-        </div>
-      </div>
-
-      <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-            Last seen
-          </p>
-          <p className="mt-1 text-xs font-semibold text-neutral-950">
-            {formatDateTime(agent.lastSeenAt)}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-            IP Address
-          </p>
-          <p className="mt-1 text-xs font-semibold text-neutral-950">
-            {agent.lastIpAddress ?? "-"}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-            Outlet
-          </p>
-          <p className="mt-1 text-xs font-semibold text-neutral-950">
-            {agent.outlet.code}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-            Register
-          </p>
-          <p className="mt-1 text-xs font-semibold text-neutral-950">
-            {agent.register.code}
-          </p>
-        </div>
-      </div>
-
-      {runtimeLabel ? (
-        <p className="px-5 pb-4 text-xs leading-5 text-[var(--muted)]">
-          Runtime: {runtimeLabel}
-          {diagnostics.nodeVersion ? ` · Node ${diagnostics.nodeVersion}` : ""}
-          {diagnostics.hostname ? ` · ${diagnostics.hostname}` : ""}
-        </p>
-      ) : null}
-
-      {isDisabled && canManageAgents ? (
-        <div className="border-t border-[var(--border)] bg-white p-4">
-          <HardwareAgentReactivateButton
+        {canManageAgents && !isDisabled ? (
+          <HardwareHubManageDialog
             agent={{
               id: agent.id,
               code: agent.code,
@@ -464,180 +239,166 @@ function AgentCard({
               outletName: agent.outlet.name,
               registerName: agent.register.name,
             }}
-            blockedByAgent={activePeer}
           />
+        ) : null}
+      </div>
+
+      <div className="grid gap-5 p-5 lg:grid-cols-[0.9fr_1.1fr] lg:p-6">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Mini PC
+          </p>
+          <p className="mt-2 text-base font-semibold text-neutral-950">{hostname}</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+            Terakhir terhubung {formatDateTime(agent.lastSeenAt)}
+          </p>
+          {agent.diagnostics.agentVersion ? (
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Hardware Hub {agent.diagnostics.agentVersion}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid gap-2">
+          <DeviceRow
+            label="Printer Label"
+            configured={labelConfigured}
+            helper={labelPrinter}
+          />
+          <DeviceRow
+            label="Printer Nota"
+            configured={documentConfigured}
+            helper={documentPrinter}
+          />
+          {drawerConfigured ? (
+            <DeviceRow
+              label="Cash Drawer"
+              configured
+              helper="Perangkat drawer dikonfigurasi"
+            />
+          ) : null}
+        </div>
+      </div>
+
+      {!isDisabled ? (
+        <div className="grid gap-2 border-t border-[var(--border)] bg-[var(--surface-muted)] p-4 sm:grid-cols-2 lg:grid-cols-3">
+          <TestButton
+            agentId={agent.id}
+            jobType="test_label_printer"
+            disabled={!labelConfigured}
+          >
+            <ScanBarcode className="size-4" />
+            Test Label
+          </TestButton>
+          <TestButton
+            agentId={agent.id}
+            jobType="test_document_printer"
+            disabled={!documentConfigured}
+          >
+            <FileText className="size-4" />
+            Test Nota
+          </TestButton>
+          <TestButton
+            agentId={agent.id}
+            jobType="test_cash_drawer"
+            disabled={!drawerConfigured}
+          >
+            <WalletCards className="size-4" />
+            Test Drawer
+          </TestButton>
         </div>
       ) : null}
-      <div className="grid gap-2 border-t border-[var(--border)] bg-[var(--surface-muted)] p-4 sm:grid-cols-3">
-        <TestJobButton
-          agentId={agent.id}
-          jobType="test_label_printer"
-          disabled={isDisabled}
-        >
-          <ScanBarcode className="size-4" />
-          Test Label
-        </TestJobButton>
-        <TestJobButton
-          agentId={agent.id}
-          jobType="test_document_printer"
-          disabled={isDisabled || !canPrintDocument}
-        >
-          <FileText className="size-4" />
-          Test Nota PDF
-        </TestJobButton>
-        <TestJobButton
-          agentId={agent.id}
-          jobType="test_cash_drawer"
-          disabled={isDisabled || !canOpenDrawer}
-        >
-          <WalletCards className="size-4" />
-          Test Drawer
-        </TestJobButton>
-      </div>
 
-      <div className="space-y-3 px-5 pb-5 pt-4">
-        {isDryRun ? (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-            Dry-run aktif: job akan diproses sampai completed tanpa mengirim
-            perintah ke hardware fisik. File hasil simulasi disimpan di folder
-            dry-run agent.
-          </p>
-        ) : null}
-
-        {diagnostics.configWarnings.length > 0 ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-800">
-            <p className="font-semibold">Peringatan konfigurasi agent:</p>
-            <ul className="mt-1 list-disc space-y-1 pl-4">
-              {diagnostics.configWarnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        {agent.displayStatus !== "online" &&
-        agent.displayStatus !== "disabled" ? (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-            Agent belum terdeteksi online dalam beberapa menit terakhir. Test
-            job tetap bisa masuk antrean, tetapi baru diproses saat Hardware Hub
-            aktif.
-          </p>
-        ) : null}
-      </div>
+      {agent.diagnostics.configWarnings.length > 0 ? (
+        <div className="border-t border-amber-200 bg-amber-50 px-5 py-3 text-xs leading-5 text-amber-900">
+          Konfigurasi Mini PC perlu diperiksa. Buka Diagnostik Lanjutan untuk detail.
+        </div>
+      ) : null}
     </article>
   );
 }
 
-function RecentJobMobileCard({ job }: { job: HardwareJobSummary }) {
+function JobStatusPill({ status }: { status: HardwareJobSummary["status"] }) {
   return (
-    <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-semibold text-neutral-950">
-            {jobTypeLabels[job.jobType]}
-          </p>
-          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            {job.deviceType} · attempts {job.attempts}/{job.maxAttempts}
-            {formatDuration(job.durationMs)
-              ? ` · ${formatDuration(job.durationMs)}`
-              : ""}
-          </p>
-        </div>
-        <JobStatusPill status={job.status} />
-      </div>
+    <span
+      className={cn(
+        "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+        status === "completed" && "bg-emerald-50 text-emerald-700",
+        status === "failed" && "bg-red-50 text-red-700",
+        status === "unknown_outcome" && "bg-orange-50 text-orange-800",
+        ["pending", "claimed", "processing", "printing", "submitted"].includes(status) &&
+          "bg-amber-50 text-amber-800",
+        (status === "cancelled" || status === "expired") &&
+          "bg-neutral-100 text-neutral-500",
+      )}
+    >
+      {jobStatusLabels[status]}
+    </span>
+  );
+}
 
-      <div className="mt-4 grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm">
+function RecentActivity({ jobs }: { jobs: HardwareJobSummary[] }) {
+  const visibleJobs = jobs.slice(0, 5);
+
+  return (
+    <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+      <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] p-5 lg:p-6">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Agent
-          </p>
-          <p className="mt-1 font-medium text-neutral-950">
-            {job.agent?.name ?? "Belum diklaim"}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Outlet/Register
-          </p>
-          <p className="mt-1 font-medium text-neutral-950">{job.outlet.name}</p>
-          <p className="text-xs text-[var(--muted)]">{job.register.name}</p>
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Waktu
-          </p>
-          <p className="mt-1 font-medium text-neutral-950">
-            {formatDateTime(job.createdAt)}
+          <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
+            <Activity className="size-3.5" />
+            Aktivitas terbaru
+          </div>
+          <h2 className="mt-3 text-xl font-semibold text-neutral-950">
+            Aktivitas Hardware
+          </h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Ringkasan lima aktivitas terbaru. Detail teknis tetap tersedia saat dibutuhkan.
           </p>
         </div>
       </div>
 
-      {job.error ? (
-        <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
-          {job.error}
-        </p>
-      ) : null}
-
-      {job.manualResolution ? (
-        <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
-          Resolusi manual: {job.manualResolution.resolutionType} oleh{" "}
-          {job.manualResolution.resolvedByName ?? "operator"}.
-        </p>
-      ) : null}
-
-      <div className="mt-3 grid gap-2">
-        {job.status === "unknown_outcome" ? (
-          <Link
-            href={`/admin/operasional/hardware/jobs/${job.id}`}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-900 transition hover:bg-orange-100"
-          >
-            <ShieldAlert className="size-3.5" />
-            Periksa & Resolusi
-          </Link>
-        ) : null}
-        {job.isStale ? (
-          <form action={recoverStaleHardwareJobsAction}>
-            <button
-              type="submit"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100"
+      {visibleJobs.length === 0 ? (
+        <div className="p-8 text-center text-sm text-[var(--muted)]">
+          Belum ada aktivitas hardware.
+        </div>
+      ) : (
+        <div className="divide-y divide-[var(--border)]">
+          {visibleJobs.map((job) => (
+            <div
+              key={job.id}
+              className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
             >
-              <RotateCcw className="size-3.5" />
-              Pulihkan
-            </button>
-          </form>
-        ) : null}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-semibold text-neutral-950">
+                    {jobTypeLabels[job.jobType]}
+                  </p>
+                  <JobStatusPill status={job.status} />
+                </div>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  {job.outlet.name} · {job.register.name} · {formatDateTime(job.createdAt)}
+                </p>
+                {job.error ? (
+                  <p className="mt-1 line-clamp-1 text-xs text-red-700">{job.error}</p>
+                ) : null}
+              </div>
 
-        {job.status === "failed" ||
-        (job.protocolVersion === 1 && job.status === "cancelled") ? (
-          <HardwareJobActionButton
-            action={retryHardwareJobAction}
-            jobId={job.id}
-          >
-            <RotateCcw className="size-3.5" />
-            Retry
-          </HardwareJobActionButton>
-        ) : null}
-
-        {job.status === "pending" ? (
-          <HardwareJobActionButton
-            action={cancelHardwareJobAction}
-            jobId={job.id}
-            tone="danger"
-          >
-            <Trash2 className="size-3.5" />
-            Batalkan
-          </HardwareJobActionButton>
-        ) : null}
-
-        <Link
-          href={`/admin/operasional/hardware/jobs/${job.id}`}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
-        >
-          <Eye className="size-3.5" />
-          Detail
-        </Link>
-      </div>
-    </article>
+              <Link
+                href={`/admin/operasional/hardware/jobs/${job.id}`}
+                className={cn(
+                  "inline-flex min-h-9 shrink-0 items-center justify-center rounded-xl border px-3 py-2 text-xs font-semibold",
+                  job.status === "unknown_outcome"
+                    ? "border-orange-300 bg-orange-50 text-orange-900"
+                    : "border-[var(--border)] bg-white text-neutral-700",
+                )}
+              >
+                {job.status === "unknown_outcome" ? "Periksa" : "Detail"}
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -651,92 +412,56 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
   const [dashboard, provisioningOptions] = await Promise.all([
     getHardwareHubDashboard(auth),
     canManageAgents
-      ? getHardwareAgentProvisioningOptions(auth)
+      ? getHardwareHubProvisioningOptions(auth)
       : Promise.resolve([]),
   ]);
+
+  const activeAgents = dashboard.agents.filter(
+    (agent) => agent.isActive && agent.displayStatus !== "disabled",
+  );
+  const disabledAgents = dashboard.agents.filter(
+    (agent) => !agent.isActive || agent.displayStatus === "disabled",
+  );
+  const problems =
+    dashboard.observability.metrics.unknownOutcomeJobs +
+    dashboard.observability.metrics.staleSubmittedJobs +
+    dashboard.totals.configurationWarningAgents +
+    dashboard.totals.offlineAgents +
+    dashboard.totals.staleAgents;
   const message = typeof query.message === "string" ? query.message : null;
   const messageType = query.type === "success" ? "success" : "error";
 
   return (
     <div className="space-y-6">
-      <header className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
-        <div className="grid gap-6 p-5 lg:grid-cols-[1fr_360px] lg:p-7">
-          <div className="min-w-0">
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-500 transition hover:text-[var(--accent)]"
-            >
-              <ArrowLeft className="size-4" />
-              Kembali ke Dashboard
-            </Link>
-            <h1 className="mt-4 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
-              Hardware Hub
-            </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Pantau Mini PC outlet, status agent, antrean hardware job, dan
-              test printer label, printer nota, serta cash drawer dari satu
-              halaman operasional.
-            </p>
+      <header className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-7">
+        <Link
+          href="/admin"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-500 transition hover:text-[var(--accent)]"
+        >
+          <ArrowLeft className="size-4" />
+          Kembali ke Dashboard
+        </Link>
+
+        <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-3">
+              <div className="grid size-11 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                <MonitorCog className="size-5" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
+                  Hardware Hub
+                </h1>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Hubungkan Mini PC outlet untuk mencetak label dan nota secara otomatis.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <HeaderMetric
-              label="Agent online"
-              value={`${dashboard.totals.onlineAgents}/${dashboard.totals.agents}`}
-              helper="Mini PC aktif dari total agent outlet."
-            />
-            <HeaderMetric
-              label="Job aktif"
-              value={dashboard.totals.pendingJobs}
-              helper="Pending, diklaim, atau sedang diproses."
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2 border-t border-[var(--border)] p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          <p className="text-xs leading-5 text-[var(--muted)]">
-            Gunakan aksi recovery hanya saat job terlihat macet atau antrean
-            lama sudah tidak relevan.
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-            <form action={recoverStaleHardwareJobsAction}>
-              <button
-                type="submit"
-                disabled={dashboard.totals.staleJobs === 0}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
-              >
-                <RotateCcw className="size-4" />
-                Pulihkan Job Macet
-              </button>
-            </form>
-
-            <form action={cleanupHardwareJobsAction}>
-              <button
-                type="submit"
-                disabled={dashboard.totals.cleanupEligibleJobs === 0}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
-              >
-                <Trash2 className="size-4" />
-                Bersihkan Job Lama
-              </button>
-            </form>
-
-            <Link
-              href="/admin/operasional/hardware/setup-guide"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] sm:w-auto"
-            >
-              <BookOpenCheck className="size-4" />
-              Panduan Setup
-            </Link>
-
-            <Link
-              href="/admin/operasional/hardware"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] sm:w-auto"
-            >
-              <RefreshCw className="size-4" />
-              Refresh
-            </Link>
-          </div>
+          {canManageAgents && provisioningOptions.some((option) => !option.activeAgent) ? (
+            <HardwareHubSetupDialog options={provisioningOptions} />
+          ) : null}
         </div>
       </header>
 
@@ -753,445 +478,287 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
         </div>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          icon={Server}
-          label="Total Agent"
-          value={dashboard.totals.agents}
-          helper="Mini PC/Register yang terdaftar."
-        />
-        <SummaryCard
-          icon={CheckCircle2}
-          label="Online"
-          value={dashboard.totals.onlineAgents}
-          helper="Agent aktif dan siap menerima job."
-          tone="success"
-        />
-        <SummaryCard
-          icon={Clock3}
-          label="Perlu Dicek"
-          value={dashboard.totals.staleAgents}
-          helper="Agent tidak heartbeat beberapa menit."
-          tone="warning"
-        />
-        <SummaryCard
-          icon={ShieldCheck}
-          label="Config Warning"
-          value={dashboard.totals.configurationWarningAgents}
-          helper="Agent punya peringatan konfigurasi."
-          tone="danger"
-        />
-        <SummaryCard
-          icon={Activity}
-          label="Job Aktif"
-          value={dashboard.totals.pendingJobs}
-          helper="Job pending/claimed/processing/submitted."
-          tone="warning"
-        />
-        <SummaryCard
-          icon={AlertTriangle}
-          label="Job Macet"
-          value={dashboard.totals.staleJobs}
-          helper="Job aktif yang perlu dipulihkan."
-          tone="warning"
-        />
-        <SummaryCard
-          icon={AlertTriangle}
-          label="Job Gagal"
-          value={dashboard.totals.failedJobs}
-          helper="Job terminal yang gagal diproses."
-          tone="danger"
-        />
-        <SummaryCard
-          icon={Trash2}
-          label="Bisa Dibersihkan"
-          value={dashboard.totals.cleanupEligibleJobs}
-          helper="Job terminal melewati retensi."
-        />
-      </section>
+      {activeAgents.length === 0 ? (
+        <section className="rounded-3xl border border-dashed border-[var(--border)] bg-white p-8 text-center sm:p-12">
+          <MonitorCog className="mx-auto size-10 text-neutral-300" />
+          <h2 className="mt-4 text-xl font-semibold text-neutral-950">
+            Hardware Hub belum disiapkan
+          </h2>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--muted)]">
+            Hubungkan Mini PC outlet agar POS dapat mencetak label dan nota secara otomatis tanpa setup teknis di halaman utama.
+          </p>
+          {canManageAgents && provisioningOptions.some((option) => !option.activeAgent) ? (
+            <div className="mt-5 flex justify-center">
+              <HardwareHubSetupDialog options={provisioningOptions} />
+            </div>
+          ) : null}
+        </section>
+      ) : (
+        <section className="space-y-4">
+          {activeAgents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              canManageAgents={canManageAgents}
+            />
+          ))}
+        </section>
+      )}
 
       <section
         className={cn(
-          "rounded-3xl border p-5 lg:p-6",
-          dashboard.observability.status === "healthy" &&
-            "border-emerald-200 bg-emerald-50",
-          dashboard.observability.status === "warning" &&
-            "border-amber-200 bg-amber-50",
-          dashboard.observability.status === "critical" &&
-            "border-red-300 bg-red-50",
+          "flex flex-col gap-4 rounded-3xl border p-5 sm:flex-row sm:items-center sm:justify-between lg:p-6",
+          problems === 0
+            ? "border-emerald-200 bg-emerald-50"
+            : "border-amber-200 bg-amber-50",
         )}
       >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex gap-3">
-            <ShieldAlert
-              className={cn(
-                "mt-0.5 size-6 shrink-0",
-                dashboard.observability.status === "healthy" &&
-                  "text-emerald-700",
-                dashboard.observability.status === "warning" &&
-                  "text-amber-800",
-                dashboard.observability.status === "critical" && "text-red-800",
-              )}
-            />
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Operational observability
-              </p>
-              <h2 className="mt-1 text-xl font-semibold text-neutral-950">
-                Status: {dashboard.observability.status}
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-neutral-700">
-                Snapshot ini mengukur unknown outcome, acknowledgement yang
-                terlambat, umur antrean, status agent, dan hasil 24 jam
-                terakhir.
-              </p>
-            </div>
-          </div>
-          <p className="text-xs text-[var(--muted)]">
-            Diperbarui {formatDateTime(dashboard.observability.generatedAt)}
-          </p>
-        </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <HeaderMetric
-            label="Unknown outcome"
-            value={dashboard.observability.metrics.unknownOutcomeJobs}
-            helper="Wajib diperiksa operator sebelum retry."
-          />
-          <HeaderMetric
-            label="Submitted stale"
-            value={dashboard.observability.metrics.staleSubmittedJobs}
-            helper={`Belum ACK final lebih dari ${dashboard.observability.thresholds.submittedWarningSeconds} detik.`}
-          />
-          <HeaderMetric
-            label="Pending tertua"
-            value={formatAgeSeconds(
-              dashboard.observability.metrics.oldestPendingAgeSeconds,
-            )}
-            helper="Umur job pending paling lama."
-          />
-          <HeaderMetric
-            label="Success 24 jam"
-            value={
-              dashboard.observability.metrics.successRateLast24Hours === null
-                ? "-"
-                : `${dashboard.observability.metrics.successRateLast24Hours.toFixed(1)}%`
-            }
-            helper={`${dashboard.observability.metrics.completedLast24Hours} selesai · ${dashboard.observability.metrics.failedLast24Hours} gagal.`}
-          />
-        </div>
-
-        {dashboard.observability.alerts.length > 0 ? (
-          <div className="mt-4 grid gap-2">
-            {dashboard.observability.alerts.map((alert) => (
-              <div
-                key={alert.code}
-                className={cn(
-                  "rounded-xl border bg-white px-3 py-2 text-sm",
-                  alert.severity === "critical"
-                    ? "border-red-300 text-red-800"
-                    : "border-amber-300 text-amber-900",
-                )}
-              >
-                <strong>{alert.code}</strong> · {alert.message}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-4 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-800">
-            Tidak ada indikator hardware yang memerlukan tindakan saat ini.
-          </p>
-        )}
-      </section>
-
-      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-start gap-3">
+          {problems === 0 ? (
+            <CheckCircle2 className="mt-0.5 size-6 shrink-0 text-emerald-700" />
+          ) : (
+            <AlertTriangle className="mt-0.5 size-6 shrink-0 text-amber-800" />
+          )}
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
-              <Trash2 className="size-3.5" />
-              Retensi job
-            </div>
-            <h2 className="mt-4 text-xl font-semibold text-neutral-950">
-              Retensi Hardware Jobs
+            <h2 className="font-semibold text-neutral-950">
+              {problems === 0
+                ? "Sistem hardware berjalan normal"
+                : `${problems} indikator perlu diperiksa`}
             </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Cleanup hanya menghapus job terminal yang sudah lama: selesai,
-              dibatalkan, atau gagal. Job aktif dan job yang memiliki resolusi
-              manual operator tidak akan dihapus agar evidence audit tetap utuh.
+            <p className="mt-1 text-sm leading-6 text-neutral-700">
+              {problems === 0
+                ? "Tidak ada indikator operasional yang memerlukan tindakan saat ini."
+                : "Buka Diagnostik Lanjutan untuk melihat detail tanpa memenuhi halaman utama dengan informasi teknis."}
             </p>
           </div>
-          <form action={cleanupHardwareJobsAction}>
-            <button
-              type="submit"
-              disabled={dashboard.cleanupPreview.totalEligible === 0}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
-            >
-              <Trash2 className="size-4" />
-              Bersihkan Sekarang
-            </button>
-          </form>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <RetentionStat
-            label="Completed"
-            value={dashboard.cleanupPreview.completed}
-            helper={`Lebih lama dari ${dashboard.cleanupPreview.retentionDays.completed} hari · cutoff ${formatDateTime(dashboard.cleanupPreview.cutoffs.completed)}`}
-          />
-          <RetentionStat
-            label="Cancelled"
-            value={dashboard.cleanupPreview.cancelled}
-            helper={`Lebih lama dari ${dashboard.cleanupPreview.retentionDays.cancelled} hari · cutoff ${formatDateTime(dashboard.cleanupPreview.cutoffs.cancelled)}`}
-          />
-          <RetentionStat
-            label="Failed"
-            value={dashboard.cleanupPreview.failed}
-            helper={`Lebih lama dari ${dashboard.cleanupPreview.retentionDays.failed} hari · cutoff ${formatDateTime(dashboard.cleanupPreview.cutoffs.failed)}`}
-          />
         </div>
       </section>
 
-      <section className="space-y-3">
-        <div className="min-w-0">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <RecentActivity jobs={dashboard.recentJobs} />
+
+      <details className="group overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 lg:p-6">
+          <div className="flex items-center gap-3">
+            <div className="grid size-10 place-items-center rounded-xl bg-neutral-100 text-neutral-600">
+              <Settings2 className="size-5" />
+            </div>
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-                <Cpu className="size-3.5" />
-                Agent outlet
-              </div>
-              <h2 className="mt-3 text-xl font-semibold text-neutral-950">
-                Mini PC/Register Outlet
-              </h2>
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                Satu agent mewakili Mini PC/Register yang mengontrol hardware
-                lokal.
+              <h2 className="font-semibold text-neutral-950">Diagnostik Lanjutan</h2>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                Informasi teknis, maintenance job, dan riwayat perangkat.
               </p>
             </div>
-            {canManageAgents ? (
-              <HardwareAgentProvisioningDialog options={provisioningOptions} />
-            ) : null}
           </div>
-        </div>
+          <span className="text-xs font-semibold text-[var(--muted)] group-open:hidden">
+            Buka
+          </span>
+          <span className="hidden text-xs font-semibold text-[var(--muted)] group-open:inline">
+            Tutup
+          </span>
+        </summary>
 
-        {dashboard.agents.length > 0 ? (
-          <div className="space-y-4">
-            {dashboard.agents.map((agent) => {
-              const activePeer =
-                dashboard.agents.find(
-                  (candidate) =>
-                    candidate.id !== agent.id &&
-                    candidate.register.id === agent.register.id &&
-                    candidate.isActive &&
-                    candidate.displayStatus !== "disabled",
-                ) ?? null;
-
-              return (
-                <AgentCard
-                  agent={agent}
-                  canManageAgents={canManageAgents}
-                  activePeer={
-                    activePeer
-                      ? {
-                          id: activePeer.id,
-                          code: activePeer.code,
-                          name: activePeer.name,
-                        }
-                      : null
-                  }
-                  key={agent.id}
-                />
-              );
-            })}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
-            <Cpu className="mx-auto size-10 text-neutral-300" />
-            <h3 className="mt-3 font-semibold text-neutral-950">
-              Belum ada Hardware Agent
-            </h3>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--muted)]">
-              {canManageAgents
-                ? "Tambahkan Hardware Agent dari dashboard ini, lalu download konfigurasi untuk Mini PC outlet."
-                : "Belum ada Hardware Agent yang terdaftar pada outlet yang bisa kamu akses."}
-            </p>
-          </div>
-        )}
-      </section>
-
-      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
-        <div className="flex flex-col gap-3 border-b border-[var(--border)] p-5 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
-              <Activity className="size-3.5" />
-              Ledger hardware
+        <div className="space-y-6 border-t border-[var(--border)] p-5 lg:p-6">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Status</p>
+              <p className="mt-2 text-lg font-semibold text-neutral-950">
+                {dashboard.observability.status}
+              </p>
             </div>
-            <h2 className="mt-3 text-xl font-semibold text-neutral-950">
-              Recent Jobs
-            </h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              30 hardware job terbaru dari outlet yang bisa kamu akses.
-            </p>
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Unknown outcome</p>
+              <p className="mt-2 text-lg font-semibold text-neutral-950">
+                {dashboard.observability.metrics.unknownOutcomeJobs}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Job aktif</p>
+              <p className="mt-2 text-lg font-semibold text-neutral-950">
+                {dashboard.totals.pendingJobs}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Success 24 jam</p>
+              <p className="mt-2 text-lg font-semibold text-neutral-950">
+                {dashboard.observability.metrics.successRateLast24Hours === null
+                  ? "-"
+                  : `${dashboard.observability.metrics.successRateLast24Hours.toFixed(1)}%`}
+              </p>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-xs text-[var(--muted)] sm:grid-cols-4">
-            <span className="rounded-full bg-neutral-100 px-2.5 py-1">
-              Pending: {dashboard.jobStatusSummary.pending}
-            </span>
-            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
-              Printing: {dashboard.jobStatusSummary.printing}
-            </span>
-            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
-              Completed: {dashboard.jobStatusSummary.completed}
-            </span>
-            <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700">
-              Failed: {dashboard.jobStatusSummary.failed}
-            </span>
-          </div>
-        </div>
 
-        {dashboard.recentJobs.length > 0 ? (
-          <>
-            <div className="hidden lg:block">
-              <div className="grid min-w-[1120px] grid-cols-[1.45fr_0.85fr_1fr_1fr_1fr_1.25fr_0.8fr] border-b border-[var(--border)] bg-[var(--surface-muted)] px-5 py-3 text-xs font-medium text-[var(--muted)]">
-                <div>Job</div>
-                <div>Status</div>
-                <div>Agent</div>
-                <div>Outlet</div>
-                <div>Waktu</div>
-                <div>Error</div>
-                <div className="text-right">Aksi</div>
-              </div>
-              <div className="max-h-[520px] overflow-y-auto">
-                <div className="min-w-[1120px] divide-y divide-[var(--border)]">
-                  {dashboard.recentJobs.map((job) => (
-                    <div
-                      key={job.id}
-                      className="grid grid-cols-[1.45fr_0.85fr_1fr_1fr_1fr_1.25fr_0.8fr] items-start gap-4 px-5 py-4 text-sm"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-neutral-950">
-                          {jobTypeLabels[job.jobType]}
-                        </div>
-                        <div className="mt-1 text-xs text-[var(--muted)]">
-                          {job.deviceType} · attempts {job.attempts}/
-                          {job.maxAttempts}
-                          {formatDuration(job.durationMs)
-                            ? ` · ${formatDuration(job.durationMs)}`
-                            : ""}
-                        </div>
-                        {job.isStale ? (
-                          <div className="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                            Terdeteksi macet
-                          </div>
-                        ) : null}
-                        {job.manualResolution ? (
-                          <div className="mt-2 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-                            Resolusi: {job.manualResolution.resolutionType}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div>
-                        <JobStatusPill status={job.status} />
-                      </div>
-                      <div className="min-w-0 truncate text-neutral-700">
-                        {job.agent?.name ?? "Belum diklaim"}
-                      </div>
-                      <div className="min-w-0 text-neutral-700">
-                        <p className="truncate">{job.outlet.name}</p>
-                        <div className="truncate text-xs text-[var(--muted)]">
-                          {job.register.name}
-                        </div>
-                      </div>
-                      <div className="text-neutral-700">
-                        {formatDateTime(job.createdAt)}
-                      </div>
-                      <div className="min-w-0 text-xs leading-5">
-                        {job.error ? (
-                          <div className="space-y-1 text-red-700">
-                            <p className="line-clamp-2">{job.error}</p>
-                            {job.errorCategory || job.errorCode ? (
-                              <p className="truncate text-[var(--muted)]">
-                                {[job.errorCategory, job.errorCode]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </p>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <span className="text-[var(--muted)]">-</span>
-                        )}
-                      </div>
-                      <div className="grid gap-2">
-                        {job.status === "unknown_outcome" ? (
-                          <Link
-                            href={`/admin/operasional/hardware/jobs/${job.id}`}
-                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-900 transition hover:bg-orange-100"
-                          >
-                            <ShieldAlert className="size-3.5" />
-                            Resolusi
-                          </Link>
-                        ) : null}
-
-                        {job.isStale ? (
-                          <form action={recoverStaleHardwareJobsAction}>
-                            <button
-                              type="submit"
-                              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100"
-                            >
-                              <RotateCcw className="size-3.5" />
-                              Pulihkan
-                            </button>
-                          </form>
-                        ) : null}
-
-                        {job.status === "failed" ||
-                        (job.protocolVersion === 1 &&
-                          job.status === "cancelled") ? (
-                          <HardwareJobActionButton
-                            action={retryHardwareJobAction}
-                            jobId={job.id}
-                          >
-                            <RotateCcw className="size-3.5" />
-                            Retry
-                          </HardwareJobActionButton>
-                        ) : null}
-
-                        {job.status === "pending" ? (
-                          <HardwareJobActionButton
-                            action={cancelHardwareJobAction}
-                            jobId={job.id}
-                            tone="danger"
-                          >
-                            <Trash2 className="size-3.5" />
-                            Batalkan
-                          </HardwareJobActionButton>
-                        ) : null}
-
-                        <Link
-                          href={`/admin/operasional/hardware/jobs/${job.id}`}
-                          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                        >
-                          <Eye className="size-3.5" />
-                          Detail
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
+          {dashboard.observability.alerts.length > 0 ? (
+            <div className="grid gap-2">
+              {dashboard.observability.alerts.map((alert) => (
+                <div
+                  key={alert.code}
+                  className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                >
+                  <strong>{alert.code}</strong> · {alert.message}
                 </div>
-              </div>
-            </div>
-
-            <div className="space-y-3 p-4 lg:hidden">
-              {dashboard.recentJobs.map((job) => (
-                <RecentJobMobileCard job={job} key={job.id} />
               ))}
             </div>
-          </>
-        ) : (
-          <div className="p-8 text-center text-sm text-[var(--muted)]">
-            Belum ada hardware job.
+          ) : null}
+
+          <div className="rounded-2xl border border-[var(--border)] p-4">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="mt-0.5 size-5 text-neutral-500" />
+              <div>
+                <p className="font-semibold text-neutral-950">Maintenance Job</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Recovery ini hanya untuk compatibility job lama. Protocol v2 melakukan lease recovery sendiri.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <form action={recoverStaleHardwareJobsAction}>
+                <button
+                  type="submit"
+                  disabled={dashboard.totals.staleJobs === 0}
+                  className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 disabled:opacity-40"
+                >
+                  <RefreshCw className="size-4" />
+                  Pulihkan Job Lama
+                </button>
+              </form>
+              <form action={cleanupHardwareJobsAction}>
+                <button
+                  type="submit"
+                  disabled={dashboard.totals.cleanupEligibleJobs === 0}
+                  className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-40"
+                >
+                  <Trash2 className="size-4" />
+                  Bersihkan Job Lama
+                </button>
+              </form>
+            </div>
           </div>
-        )}
-      </section>
+
+          <div className="rounded-2xl border border-[var(--border)] p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-semibold text-neutral-950">Riwayat Job</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">30 job terbaru untuk troubleshooting.</p>
+              </div>
+              <Link
+                href="/admin/operasional/hardware/setup-guide"
+                className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--accent)]"
+              >
+                <BookOpenCheck className="size-4" />
+                Panduan teknis
+              </Link>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {dashboard.recentJobs.map((job) => (
+                <div
+                  key={job.id}
+                  className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3"
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-neutral-950">
+                          {jobTypeLabels[job.jobType]}
+                        </p>
+                        <JobStatusPill status={job.status} />
+                      </div>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {job.agent?.name ?? "Belum diklaim"} · {formatDateTime(job.createdAt)}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {job.status === "failed" ||
+                      (job.protocolVersion === 1 && job.status === "cancelled") ? (
+                        <form action={retryHardwareJobAction}>
+                          <input type="hidden" name="jobId" value={job.id} />
+                          <button className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700">
+                            Retry
+                          </button>
+                        </form>
+                      ) : null}
+                      {job.status === "pending" ? (
+                        <form action={cancelHardwareJobAction}>
+                          <input type="hidden" name="jobId" value={job.id} />
+                          <button className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700">
+                            Batalkan
+                          </button>
+                        </form>
+                      ) : null}
+                      <Link
+                        href={`/admin/operasional/hardware/jobs/${job.id}`}
+                        className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700"
+                      >
+                        Detail
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {disabledAgents.length > 0 ? (
+            <div className="rounded-2xl border border-[var(--border)] p-4">
+              <div className="flex items-start gap-3">
+                <Server className="mt-0.5 size-5 text-neutral-500" />
+                <div>
+                  <p className="font-semibold text-neutral-950">Riwayat Perangkat</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    Agent nonaktif disimpan untuk audit dan dapat diaktifkan kembali jika register belum dipakai perangkat lain.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {disabledAgents.map((agent) => {
+                  const activePeer =
+                    activeAgents.find(
+                      (candidate) => candidate.register.id === agent.register.id,
+                    ) ?? null;
+
+                  return (
+                    <div key={agent.id} className="rounded-xl border border-[var(--border)] p-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-neutral-950">{agent.name}</p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">
+                            {agent.outlet.name} · {agent.register.name} · {agent.code}
+                          </p>
+                        </div>
+                        <StatusPill status="disabled" />
+                      </div>
+                      {canManageAgents ? (
+                        <div className="mt-3">
+                          <HardwareAgentReactivateButton
+                            agent={{
+                              id: agent.id,
+                              code: agent.code,
+                              name: agent.name,
+                              outletName: agent.outlet.name,
+                              registerName: agent.register.name,
+                            }}
+                            blockedByAgent={
+                              activePeer
+                                ? {
+                                    id: activePeer.id,
+                                    code: activePeer.code,
+                                    name: activePeer.name,
+                                  }
+                                : null
+                            }
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </details>
     </div>
   );
 }
