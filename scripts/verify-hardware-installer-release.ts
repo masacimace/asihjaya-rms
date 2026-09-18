@@ -22,6 +22,10 @@ const packageJson = JSON.parse(read("hardware-hub/package.json")) as {
 };
 
 assert(packageJson.version, "hardware-hub/package.json wajib memiliki version release.");
+const releaseTag = `hardware-hub-v${packageJson.version}`;
+const validReleaseUrl =
+  `https://github.com/masacimace/asihjaya-rms/releases/download/${releaseTag}/ASIHJAYA-Hardware-Hub-Setup.exe`;
+
 assert(
   workflow.includes('tags:\n      - "hardware-hub-v*"') &&
     workflow.includes("publish-release:") &&
@@ -64,8 +68,8 @@ assert.match(
   ".env.production.example wajib mendokumentasikan installer release URL sebagai deployment-specific value.",
 );
 assert(
-  productionTemplate.includes("/releases/download/hardware-hub-v0.9.0/ASIHJAYA-Hardware-Hub-Setup.exe"),
-  "Production template wajib menjelaskan bentuk GitHub Release asset URL yang stabil.",
+  productionTemplate.includes(validReleaseUrl),
+  "Production template wajib menjelaskan stable GitHub Release asset URL untuk package version aktif.",
 );
 assert(
   environmentCli.includes("assertHardwareInstallerEnvironment") &&
@@ -77,8 +81,6 @@ assert(
   "Runtime download endpoint wajib memakai URL policy yang sama dengan production validator.",
 );
 
-const validReleaseUrl =
-  "https://github.com/masacimace/asihjaya-rms/releases/download/hardware-hub-v0.9.0/ASIHJAYA-Hardware-Hub-Setup.exe";
 assert.deepEqual(
   collectHardwareInstallerEnvironmentIssues(
     { HARDWARE_HUB_INSTALLER_DOWNLOAD_URL: validReleaseUrl },
