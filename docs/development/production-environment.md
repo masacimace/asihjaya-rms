@@ -180,9 +180,9 @@ Set `ASIHJAYA_ENV_FILE=/etc/asihjaya-rms/production.env` di file tersebut agar s
 
 ## Environment database deployment
 
-Tahap 1D.3 menambahkan konfigurasi migrator image, readiness timeout, advisory-lock timeout, DDL lock timeout, statement timeout, dan destructive migration approval. Nilai default aman tersedia di `.env.production.example`.
+Tahap 1D.3 menambahkan konfigurasi migrator image, readiness timeout, advisory-lock timeout, DDL lock timeout, dan statement timeout. Nilai default aman tersedia di `.env.production.example`.
 
-`DATABASE_MIGRATION_ALLOW_DESTRUCTIVE` harus tetap `false` pada operasi normal. Pengaktifan sementara wajib disertai `DATABASE_MIGRATION_APPROVAL_REFERENCE` yang dapat diaudit dan hanya dilakukan setelah backup serta review SQL. Detail lengkap tersedia di `docs/development/database-deployment.md`.
+Destructive migration permission tidak disimpan di production environment. Fresh database mengizinkan historical destructive DDL secara otomatis; existing database dengan destructive migration pending tetap fail closed dan hanya dapat direrun untuk satu invocation menggunakan `npm run db:deploy -- --allow-destructive` setelah SQL direview serta backup terverifikasi. Detail lengkap tersedia di `docs/development/database-deployment.md`.
 
 ## Environment backup dan restore
 

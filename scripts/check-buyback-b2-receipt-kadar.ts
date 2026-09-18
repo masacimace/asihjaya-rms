@@ -18,12 +18,12 @@ const receiptHtml = read(
 );
 
 assert(
-  receiptHtml.includes('const isBuyback = data.documentKind === "buyback";'),
+  receiptHtml.includes('const isBuybackDocument = data.documentKind === "buyback";'),
   "Receipt renderer wajib mengenali documentKind Buyback.",
 );
 
 assert(
-  /formatPercent\(\s*isBuyback\s*\?\s*item\.snapshot\.purityPercent\s*:\s*item\.snapshot\.exchangePurityPercent,\s*\)/m.test(
+  /formatPercent\(\s*isBuybackDocument\s*\?\s*item\.snapshot\.purityPercent\s*:\s*item\.snapshot\.exchangePurityPercent,\s*\)/m.test(
     receiptHtml,
   ),
   "Kolom Kadar wajib memakai purityPercent untuk Buyback dan mempertahankan exchangePurityPercent untuk Sale.",

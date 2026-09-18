@@ -282,22 +282,17 @@ production-health.json
 
 ## 8. Guard migration destructive
 
-Operasi seperti `DROP TABLE`, `DROP COLUMN`, `DROP CONSTRAINT`, `DROP TYPE`, `TRUNCATE`, `DELETE FROM`, dan `ALTER COLUMN TYPE` membuat deployment fail-closed.
+Operasi seperti `DROP TABLE`, `DROP COLUMN`, `DROP CONSTRAINT`, `DROP TYPE`, `TRUNCATE`, `DELETE FROM`, dan `ALTER COLUMN TYPE` membuat deployment fail-closed pada existing database.
 
-Temporary approval hanya setelah review:
+Fresh database yang belum memiliki migration history mengizinkan historical destructive DDL secara otomatis agar seluruh migration history dapat direplay dari nol tanpa bypass permanen.
 
-```text
-DATABASE_MIGRATION_ALLOW_DESTRUCTIVE=true
-DATABASE_MIGRATION_APPROVAL_REFERENCE=<AUDITABLE_REFERENCE>
+Untuk existing database, destructive pending migration hanya boleh dijalankan setelah SQL direview dan pre-deployment backup telah terverifikasi. Opt-in berlaku satu invocation saja:
+
+```powershell
+npm run db:deploy -- --allow-destructive
 ```
 
-Setelah selesai:
-
-```text
-DATABASE_MIGRATION_ALLOW_DESTRUCTIVE=false
-```
-
-dan baris `DATABASE_MIGRATION_APPROVAL_REFERENCE` harus dihapus.
+Jangan menyimpan destructive permission permanen di `.env.production`. Restore-production approval/reference adalah concern terpisah dan tetap mengikuti restore runbook.
 
 ## 9. Rollback
 
@@ -607,7 +602,7 @@ Biasanya app lama masih aktif dan DB belum berubah. Perbaiki source di local dan
 
 ### Deployment gagal karena destructive guard
 
-Review migration, pastikan backup verified, pakai temporary approval jika memang disetujui, lalu cabut approval setelah deployment.
+Review migration, pastikan backup verified, lalu rerun invocation yang sudah direview dengan `npm run db:deploy -- --allow-destructive`. Jangan menaruh izin destructive permanen di environment.
 
 ### Deployment gagal setelah migration
 

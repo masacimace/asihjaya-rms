@@ -172,6 +172,7 @@ export async function provisionHardwareAgent(
           code: registers.code,
           name: registers.name,
           isActive: registers.isActive,
+          isHardwareHub: registers.isHardwareHub,
         })
         .from(registers)
         .where(
@@ -179,10 +180,10 @@ export async function provisionHardwareAgent(
         )
         .limit(1);
 
-      if (!register || !register.isActive) {
+      if (!register || !register.isActive || !register.isHardwareHub) {
         throw new HardwareAgentProvisioningError(
           "REGISTER_NOT_FOUND",
-          "Register tidak ditemukan atau sudah tidak aktif.",
+          "Register tidak ditemukan atau bukan register Hardware Hub aktif.",
         );
       }
 

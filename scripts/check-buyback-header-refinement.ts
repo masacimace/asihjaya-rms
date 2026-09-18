@@ -13,20 +13,23 @@ assert(existsSync(pagePath), "Halaman /pos/buyback tidak ditemukan.");
 const page = readFileSync(pagePath, "utf8");
 
 assert(
-  page.includes("Operasional Buyback"),
+  page.includes("actions={") &&
+    page.includes('className="w-full rounded-[22px] border border-[var(--border)] bg-neutral-50'),
   "Header Buyback wajib memiliki operational card yang terpisah dari title.",
 );
 
 assert(
   page.includes("bg-neutral-50") &&
-    page.includes("lg:w-[360px]") &&
-    page.includes("xl:w-[400px]"),
+    page.includes("lg:w-[560px]") &&
+    page.includes("xl:w-[500px]"),
   "Operational card wajib memakai background soft dan responsive width.",
 );
 
 assert(
-  page.includes("sm:grid-cols-2") && page.includes("sm:col-span-2"),
-  "Info Outlet, Shift, dan helper Buyback wajib responsive.",
+  page.includes("sm:grid-cols-2") &&
+    page.includes("Outlet aktif") &&
+    page.includes("Status kasir"),
+  "Info Outlet dan Shift pada operational card wajib responsive.",
 );
 
 assert(

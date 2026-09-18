@@ -1,0 +1,214 @@
+name: Build Hardware Hub Installer
+
+on:
+  push:
+    branches:
+      - feat/hardware-hub-native-installer-stage5
+      - feat/hardware-hub-polishing-regression-stage6
+    tags:
+      - "hardware-hub-v*"
+    paths:
+      - "hardware-hub/**"
+      - ".gitattributes"
+      - ".github/workflows/build-hardware-hub-installer.yml"
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "RMS HTTPS URL embedded into Setup.exe"
+        required: true
+        default: "https://ajsystem.id"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build production installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.14.0"
+          cache: npm
+          cache-dependency-path: hardware-hub/package-lock.json
+
+      - name: Install Hardware Hub dependencies
+        run: npm ci --prefix hardware-hub --omit=dev
+
+      - name: Validate SATO freeze and installer regression contracts
+        run: |
+          npm --prefix hardware-hub run check:sato
+          npm --prefix hardware-hub run check:installer
+          npm --prefix hardware-hub run check:stage6
+
+      - name: Install Inno Setup 7
+        shell: pwsh
+        run: |
+          winget install --id JRSoftware.InnoSetup.7 -e --source winget --silent --disable-interactivity --accept-package-agreements --accept-source-agreements
+          $compiler = @(
+            "$env:ProgramFiles\Inno Setup 7\ISCC.exe",
+            "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
+            "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe"
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+          if (-not $compiler) { throw "Inno Setup 7 ISCC.exe not found after installation." }
+          "INNO_COMPILER=$compiler" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build Setup.exe
+        shell: pwsh
+        run: |
+          $apiUrl = "${{ github.event.inputs.api_url }}"
+          if (-not $apiUrl) { $apiUrl = "https://ajsystem.id" }
+          if ($env:GITHUB_REF -like "refs/tags/hardware-hub-v*" -and $apiUrl -ne "https://ajsystem.id") {
+            throw "Tagged production release wajib embed https://ajsystem.id."
+          }
+          & hardware-hub/installer/build-installer.ps1 -ApiUrl $apiUrl -InnoCompiler $env:INNO_COMPILER -SkipNpmInstall
+
+      - name: Record installer checksum
+        shell: pwsh
+        run: |
+          $setup = "hardware-hub/installer/output/ASIHJAYA-Hardware-Hub-Setup.exe"
+          $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
+          "SHA256=$hash" | Set-Content "hardware-hub/installer/output/ASIHJAYA-Hardware-Hub-Setup.sha256.txt" -Encoding ascii
+          Write-Host "Setup SHA256: $hash"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asihjaya-hardware-hub-setup
+          path: |
+            hardware-hub/installer/output/ASIHJAYA-Hardware-Hub-Setup.exe
+            hardware-hub/installer/output/ASIHJAYA-Hardware-Hub-Setup.sha256.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release:
+    name: Publish production GitHub Release
+    if: startsWith(github.ref, 'refs/tags/hardware-hub-v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout tagged source with main history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify release tag and main ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "Tagged Hardware Hub release must point to a commit already integrated into main." >&2
+            exit 1
+          }
+
+          version="$(node -p "require('./hardware-hub/package.json').version")"
+          expected_tag="hardware-hub-v${version}"
+          if [ "$GITHUB_REF_NAME" != "$expected_tag" ]; then
+            echo "Release tag $GITHUB_REF_NAME must match hardware-hub/package.json version: $expected_tag" >&2
+            exit 1
+          fi
+
+          echo "HARDWARE_HUB_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Download reviewed production installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: asihjaya-hardware-hub-setup
+          path: release
+
+      - name: Verify installer checksum before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          setup="release/ASIHJAYA-Hardware-Hub-Setup.exe"
+          checksum_file="release/ASIHJAYA-Hardware-Hub-Setup.sha256.txt"
+          test -f "$setup"
+          test -f "$checksum_file"
+
+          expected="$(sed -n 's/^SHA256=//p' "$checksum_file" | tr '[:upper:]' '[:lower:]')"
+          actual="$(sha256sum "$setup" | awk '{print $1}')"
+          if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+            echo "Installer SHA-256 verification failed. expected=$expected actual=$actual" >&2
+            exit 1
+          fi
+
+      - name: Publish immutable GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; refusing to overwrite immutable production assets." >&2
+            exit 1
+          fi
+
+          gh release create "$GITHUB_REF_NAME" \
+            "release/ASIHJAYA-Hardware-Hub-Setup.exe" \
+            "release/ASIHJAYA-Hardware-Hub-Setup.sha256.txt" \
+            --verify-tag \
+            --title "ASIHJAYA Hardware Hub v${HARDWARE_HUB_VERSION}" \
+            --notes "Production Hardware Hub installer built from commit ${GITHUB_SHA} with RMS API https://ajsystem.id. Verify ASIHJAYA-Hardware-Hub-Setup.sha256.txt before distribution."
+
+  build-local-uat:
+    if: github.event_name == 'push' && github.ref_name == 'feat/hardware-hub-polishing-regression-stage6'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.14.0"
+          cache: npm
+          cache-dependency-path: hardware-hub/package-lock.json
+
+      - name: Install Hardware Hub dependencies
+        run: npm ci --prefix hardware-hub --omit=dev
+
+      - name: Validate SATO freeze and installer regression contracts
+        run: |
+          npm --prefix hardware-hub run check:sato
+          npm --prefix hardware-hub run check:installer
+          npm --prefix hardware-hub run check:stage6
+
+      - name: Install Inno Setup 7
+        shell: pwsh
+        run: |
+          winget install --id JRSoftware.InnoSetup.7 -e --source winget --silent --disable-interactivity --accept-package-agreements --accept-source-agreements
+          $compiler = @(
+            "$env:ProgramFiles\Inno Setup 7\ISCC.exe",
+            "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
+            "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe"
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+          if (-not $compiler) { throw "Inno Setup 7 ISCC.exe not found after installation." }
+          "INNO_COMPILER=$compiler" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build localhost UAT Setup.exe
+        shell: pwsh
+        run: |
+          & hardware-hub/installer/build-installer.ps1 -ApiUrl "http://127.0.0.1:3000" -InnoCompiler $env:INNO_COMPILER -SkipNpmInstall
+
+      - name: Record localhost UAT installer checksum
+        shell: pwsh
+        run: |
+          $setup = "hardware-hub/installer/output/ASIHJAYA-Hardware-Hub-Setup.exe"
+          $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
+          "SHA256=$hash" | Set-Content "hardware-hub/installer/output/ASIHJAYA-Hardware-Hub-Setup.sha256.txt" -Encoding ascii
+          Write-Host "Local UAT Setup SHA256: $hash"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asihjaya-hardware-hub-setup-local-uat
+          path: |
+            hardware-hub/installer/output/ASIHJAYA-Hardware-Hub-Setup.exe
+            hardware-hub/installer/output/ASIHJAYA-Hardware-Hub-Setup.sha256.txt
+          if-no-files-found: error
+          retention-days: 14

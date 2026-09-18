@@ -94,7 +94,7 @@ assert(
 assert(
   buybackItemsSchema.includes('"buyback_items_price_positive_ck"') &&
     /buybackPricePerGram\}\s+is null or/.test(buybackItemsSchema),
-  "Constraint Harga/Gram harus menerima NULL untuk transaksi B2.",
+  "Constraint Harga/Gram harus menerima NULL pada contract B2.",
 );
 
 assert(
@@ -157,7 +157,7 @@ assert(
   "Success UX wajib menjelaskan barang belum saleable.",
 );
 assert(
-  page.includes("Total Harga manual") && page.includes("Cuci / Rongsok"),
+  /tentukan Cuci\s*\/\s*Rongsok[\s\S]{0,120}?Total Harga (?:final|manual)/i.test(page),
   "Header halaman Buyback belum menjelaskan flow sederhana B2.",
 );
 
@@ -204,12 +204,11 @@ assert(
 const journal = JSON.parse(read("drizzle/meta/_journal.json")) as {
   entries?: Array<{ idx?: number; tag?: string }>;
 };
-const lastEntry = journal.entries?.at(-1);
-assert(lastEntry?.idx === 23, "Migration B2 harus menjadi idx 23 setelah B1/0022.");
-assert(
-  lastEntry?.tag === "0023_buyback_simplified_acquisition",
-  "Migration B2 harus bernama 0023_buyback_simplified_acquisition.",
+const b2Entry = journal.entries?.find(
+  (entry) => entry.tag === "0023_buyback_simplified_acquisition",
 );
+assert(b2Entry, "Migration B2 0023_buyback_simplified_acquisition harus terdaftar di journal.");
+assert(b2Entry.idx === 23, "Migration B2 harus tetap berada pada idx 23 setelah B1/0022.");
 
 const migration = read("drizzle/0023_buyback_simplified_acquisition.sql");
 for (const column of [

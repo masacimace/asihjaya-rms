@@ -63,12 +63,11 @@ assert(
 const journal = JSON.parse(read("drizzle/meta/_journal.json")) as {
   entries?: Array<{ idx?: number; tag?: string }>;
 };
-const lastEntry = journal.entries?.at(-1);
-assert(lastEntry?.idx === 22, "Migration B1 harus menjadi idx 22 setelah R4/0021.");
-assert(
-  lastEntry?.tag === "0022_buyback_processing_lifecycle",
-  "Migration B1 harus bernama 0022_buyback_processing_lifecycle.",
+const b1Entry = journal.entries?.find(
+  (entry) => entry.tag === "0022_buyback_processing_lifecycle",
 );
+assert(b1Entry, "Migration B1 0022_buyback_processing_lifecycle harus terdaftar di journal.");
+assert(b1Entry.idx === 22, "Migration B1 harus tetap berada pada idx 22 setelah R4/0021.");
 
 const migrationPath = "drizzle/0022_buyback_processing_lifecycle.sql";
 const migration = read(migrationPath);
