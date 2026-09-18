@@ -174,6 +174,14 @@ const integrationSource = readFileSync(
   "src/server/integrations/gold-reference/emas-api.ts",
   "utf8",
 );
+const developmentEnvironmentExample = readFileSync(
+  ".env.example",
+  "utf8",
+);
+const productionEnvironmentExample = readFileSync(
+  ".env.production.example",
+  "utf8",
+);
 
 assert.ok(dashboardSource.includes("getGoldReference()"));
 assert.ok(dashboardSource.includes("<GoldReferenceCard result={goldReference} />"));
@@ -202,6 +210,34 @@ assert.ok(integrationSource.includes('"ANTAM MULIA RETRO"'));
 assert.ok(integrationSource.includes('"ANTAM NON PEGADAIAN"'));
 assert.ok(integrationSource.includes('"LOTUS ARCHI"'));
 assert.ok(integrationSource.includes('"SENTRA BUYBACK"'));
+
+for (const environmentExample of [
+  developmentEnvironmentExample,
+  productionEnvironmentExample,
+]) {
+  for (const contract of [
+    "EMAS_API_ID_BASE_URL=https://emas.maulanar.my.id",
+    "EMAS_API_ID_API_KEY=",
+    "EMAS_API_ID_CACHE_SECONDS=3600",
+    "EMAS_API_ID_TIMEOUT_MS=8000",
+  ]) {
+    assert.ok(
+      environmentExample.includes(contract),
+      `Environment template wajib memuat ${contract}.`,
+    );
+  }
+
+  assert.match(
+    environmentExample,
+    /^EMAS_API_ID_API_KEY=$/m,
+    "Environment template tidak boleh menyimpan Emas API ID key konkret.",
+  );
+}
+
+assert.ok(
+  integrationSource.includes("if (!config.apiKey)"),
+  "Emas API ID wajib tetap optional saat API key belum dikonfigurasi.",
+);
 
 console.log(
   "Gold reference contracts: OK — multi-source 1g selector, exclusions, dashboard + Harga/Gram read-only integration.",
