@@ -430,6 +430,14 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
   const disabledAgents = dashboard.agents.filter(
     (agent) => !agent.isActive || agent.displayStatus === "disabled",
   );
+  const configurationWarnings = activeAgents.flatMap((agent) =>
+    agent.diagnostics.configWarnings.map((warning) => ({
+      agentId: agent.id,
+      agentName: agent.name,
+      registerName: agent.register.name,
+      warning,
+    })),
+  );
   const problems =
     dashboard.observability.metrics.unknownOutcomeJobs +
     dashboard.observability.metrics.staleSubmittedJobs +
@@ -605,6 +613,35 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                   <strong>{alert.code}</strong> · {alert.message}
                 </div>
               ))}
+            </div>
+          ) : null}
+
+          {configurationWarnings.length > 0 ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-800" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-amber-950">Peringatan Konfigurasi</p>
+                  <p className="mt-1 text-xs leading-5 text-amber-900">
+                    Detail berikut berasal langsung dari heartbeat Hardware Hub aktif.
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {configurationWarnings.map((item) => (
+                      <div
+                        key={`${item.agentId}:${item.warning}`}
+                        className="rounded-xl border border-amber-200 bg-white/70 px-3 py-2"
+                      >
+                        <p className="text-xs font-semibold text-amber-950">
+                          {item.registerName}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-amber-900">
+                          {item.warning}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
 
