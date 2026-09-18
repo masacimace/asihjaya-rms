@@ -4,6 +4,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const projectRoot = process.cwd();
+const legacyProductionEnvPath = [
+  "/etc/asihjaya-rms",
+  "production.env",
+].join("/");
 
 function source(relativePath: string): string {
   const absolutePath = path.join(projectRoot, relativePath);
@@ -32,6 +36,21 @@ const backupService = source("ops/systemd/ajsystem-db-backup@.service");
 const tmpfilesConfig = source("ops/tmpfiles.d/asihjaya-rms-deployment.conf");
 const lockHelper = source("ops/scripts/ajsystem-deployment-lock");
 const runbook = source("docs/development/deployment-rollback-vps-rehearsal.md");
+
+const legacyProductionEnvSearch = spawnSync(
+  "git",
+  ["grep", "-n", "--", legacyProductionEnvPath],
+  {
+    cwd: projectRoot,
+    encoding: "utf8",
+  },
+);
+
+assert.equal(
+  legacyProductionEnvSearch.status,
+  1,
+  `Repository tidak boleh kembali memakai legacy production environment path ${legacyProductionEnvPath}.\n${legacyProductionEnvSearch.stdout || legacyProductionEnvSearch.stderr}`,
+);
 
 for (const scriptPath of [installerPath, preflightPath]) {
   assert(statSync(path.join(projectRoot, scriptPath)).isFile(), `${scriptPath} wajib regular file.`);
@@ -106,7 +125,7 @@ for (const marker of [
   "1D.7F",
   "git checkout --detach --force",
   "systemctl stop",
-  "chown root:ubuntu /etc/asihjaya-rms/production.env",
+  "chown root:ubuntu /opt/asihjaya-rms/app/.env.production",
   "ajsystem-install-deployment-automation install",
   "ajsystem-deployment-preflight snapshot",
   "ajsystem-deployment-preflight lock-test",

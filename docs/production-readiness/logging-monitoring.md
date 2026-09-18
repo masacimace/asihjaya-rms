@@ -144,7 +144,7 @@ active, and the Healthchecks.io check has returned to `Up`.
 ## Sensitive files excluded from the repository
 
 ```text
-/etc/asihjaya-rms/production.env
+/opt/asihjaya-rms/app/.env.production
 /etc/asihjaya-rms/monitor-heartbeat.env
 /etc/caddy/certs/cloudflare-authenticated-origin-pull-ca.pem
 ```

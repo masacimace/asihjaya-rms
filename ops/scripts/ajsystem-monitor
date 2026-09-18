@@ -8,7 +8,7 @@ trap 'rm -f "$ISSUES_FILE"' EXIT
 
 COMPOSE=(
   docker compose
-  --env-file /etc/asihjaya-rms/production.env
+  --env-file /opt/asihjaya-rms/app/.env.production
   -f /opt/asihjaya-rms/app/compose.production.yaml
 )
 

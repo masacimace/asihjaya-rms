@@ -4,7 +4,7 @@ umask 027
 
 ACTION="${1:-check}"
 PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
-ENV_FILE="${ASIHJAYA_ENV_FILE:-/etc/asihjaya-rms/production.env}"
+ENV_FILE="${ASIHJAYA_ENV_FILE:-/opt/asihjaya-rms/app/.env.production}"
 STATE_ROOT="${ASIHJAYA_DEPLOYMENT_STATE_ROOT:-/var/lib/asihjaya-rms/deployments}"
 RELEASE_ENV_FILE="${ASIHJAYA_RELEASE_ENV_FILE:-$STATE_ROOT/current.env}"
 DEPLOYMENT_USER="${ASIHJAYA_DEPLOYMENT_USER:-ubuntu}"
