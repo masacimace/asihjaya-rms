@@ -56,19 +56,19 @@ function Resolve-InnoCompiler {
     if (-not (Test-Path $InnoCompiler)) {
       throw "ISCC.exe tidak ditemukan: $InnoCompiler"
     }
-    return (Resolve-Path $InnoCompiler).Path
+    return (Resolve-Path -LiteralPath $InnoCompiler).Path
   }
 
-  $Candidates = @(
+  $Candidate = @(
     "$env:ProgramFiles\Inno Setup 7\ISCC.exe",
     "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
     "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe"
-  ) | Where-Object { $_ -and (Test-Path $_) }
+  ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 
-  if (-not $Candidates) {
+  if (-not $Candidate) {
     throw "ISCC.exe tidak ditemukan. Install Inno Setup 7 atau berikan -InnoCompiler."
   }
-  return (Resolve-Path $Candidates[0]).Path
+  return (Resolve-Path -LiteralPath $Candidate).Path
 }
 
 $Api = [Uri]$ApiUrl
@@ -121,7 +121,7 @@ Copy-Item $NodeExe.FullName (Join-Path $RuntimePayload "node.exe") -Force
 $SumatraZipName = "SumatraPDF-$SumatraVersion-64.zip"
 $SumatraZip = Join-Path $DownloadRoot $SumatraZipName
 $SumatraUrl = "https://www.sumatrapdfreader.org/dl/rel/$SumatraVersion/$SumatraZipName"
-Download-Verified -Uri $SumatraUrl -Destination $SumatraZip -Sha256 $SumatraZipHash
+Download-Verified -Uri $SumatraUrl -DestinationPath $SumatraZip -Sha256 $SumatraZipHash
 $SumatraExtract = Join-Path $DownloadRoot "sumatra-$SumatraVersion"
 Remove-Item $SumatraExtract -Recurse -Force -ErrorAction SilentlyContinue
 Expand-Archive -Path $SumatraZip -DestinationPath $SumatraExtract -Force
