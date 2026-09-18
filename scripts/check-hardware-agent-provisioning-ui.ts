@@ -20,6 +20,9 @@ const setupDialog = read(
 const installerDownloadRoute = read(
   "src/app/api/hardware/installer/download/route.ts",
 );
+const installerEnvironmentPolicy = read(
+  "src/lib/hardware-installer-environment.ts",
+);
 const manageDialog = read(
   "src/components/hardware/hardware-hub-manage-dialog.tsx",
 );
@@ -81,11 +84,18 @@ assert(
   "Stage 5 setup UI wajib menyediakan download Setup.exe dan panduan original-user UAC.",
 );
 assert(
-  installerDownloadRoute.includes("HARDWARE_HUB_INSTALLER_DOWNLOAD_URL") &&
-    installerDownloadRoute.includes('hasPermission(auth, "hardware.agents.manage")') &&
-    installerDownloadRoute.includes('url.protocol !== "https:"') &&
+  installerDownloadRoute.includes('hasPermission(auth, "hardware.agents.manage")') &&
+    installerDownloadRoute.includes("resolveHardwareInstallerDownloadUrl(process.env)") &&
     installerDownloadRoute.includes("NextResponse.redirect"),
-  "Installer download redirect wajib permission-gated dan hanya menerima target HTTPS dari server env.",
+  "Installer download redirect wajib permission-gated dan memakai shared server-side URL policy.",
+);
+assert(
+  installerEnvironmentPolicy.includes("HARDWARE_HUB_INSTALLER_DOWNLOAD_URL") &&
+    installerEnvironmentPolicy.includes('url.protocol !== "https:"') &&
+    installerEnvironmentPolicy.includes("isLoopbackHostname(url.hostname)") &&
+    installerEnvironmentPolicy.includes('url.pathname.includes("/actions/")') &&
+    installerEnvironmentPolicy.includes("/ASIHJAYA-Hardware-Hub-Setup.exe"),
+  "Shared installer URL policy wajib menerima hanya stable HTTPS Setup.exe non-loopback dan menolak Actions artifact sementara.",
 );
 assert(
   setupDialog.includes("revokeHardwareHubEnrollmentAction"),
@@ -173,5 +183,5 @@ assert(
 );
 
 console.log(
-  "OK: Hardware Hub Installation Code + native Setup.exe download contract siap digunakan.",
+  "OK: Hardware Hub Installation Code + stable native Setup.exe download contract siap digunakan.",
 );
