@@ -53,7 +53,7 @@ function Copy-HubPayload {
 
 function Resolve-InnoCompiler {
   if ($InnoCompiler) {
-    if (-not (Test-Path $InnoCompiler)) {
+    if (-not (Test-Path -LiteralPath $InnoCompiler)) {
       throw "ISCC.exe tidak ditemukan: $InnoCompiler"
     }
     return (Resolve-Path -LiteralPath $InnoCompiler).Path
@@ -121,7 +121,7 @@ Copy-Item $NodeExe.FullName (Join-Path $RuntimePayload "node.exe") -Force
 $SumatraZipName = "SumatraPDF-$SumatraVersion-64.zip"
 $SumatraZip = Join-Path $DownloadRoot $SumatraZipName
 $SumatraUrl = "https://www.sumatrapdfreader.org/dl/rel/$SumatraVersion/$SumatraZipName"
-Download-Verified -Uri $SumatraUrl -DestinationPath $SumatraZip -Sha256 $SumatraZipHash
+Download-Verified -Uri $SumatraUrl -Destination $SumatraZip -Sha256 $SumatraZipHash
 $SumatraExtract = Join-Path $DownloadRoot "sumatra-$SumatraVersion"
 Remove-Item $SumatraExtract -Recurse -Force -ErrorAction SilentlyContinue
 Expand-Archive -Path $SumatraZip -DestinationPath $SumatraExtract -Force
