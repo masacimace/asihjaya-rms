@@ -168,7 +168,7 @@ jobs:
         run: npm run check:hardware-app
 
       - name: Hardware installer release contract
-        run: npx --no-install tsx scripts/check-hardware-installer-release.ts
+        run: npx --no-install tsx scripts/verify-hardware-installer-release.ts
 
   database-migrations:
     name: Database Migration
