@@ -101,6 +101,19 @@ export function collectHardwareInstallerEnvironmentIssues(
   return issues;
 }
 
+export function resolveHardwareInstallerDownloadUrl(
+  source: HardwareInstallerEnvironmentSource,
+): URL | null {
+  if (collectHardwareInstallerEnvironmentIssues(source).length > 0) return null;
+  const raw = source[INSTALLER_ENV_NAME]?.trim();
+  if (!raw) return null;
+  try {
+    return new URL(raw);
+  } catch {
+    return null;
+  }
+}
+
 export function assertHardwareInstallerEnvironment(
   source: HardwareInstallerEnvironmentSource,
   options: { required?: boolean } = {},
