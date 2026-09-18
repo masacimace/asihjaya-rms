@@ -77,7 +77,7 @@ Project checkout
 /opt/asihjaya-rms/app
 
 Production secrets
-/etc/asihjaya-rms/production.env
+/opt/asihjaya-rms/app/.env.production
 
 Deployment state
 /var/lib/asihjaya-rms/deployments/
@@ -98,7 +98,7 @@ Installed operational commands
 | Lokasi | Fungsi |
 |---|---|
 | Git repository | source code, migration, systemd source, documentation |
-| `/etc/asihjaya-rms/production.env` | production secrets/config |
+| `/opt/asihjaya-rms/app/.env.production` | production secrets/config |
 | `/var/lib/asihjaya-rms/deployments` | release identity, history, evidence |
 | `/var/backups/asihjaya-rms/postgres` | database backup lokal |
 | Backblaze B2 | off-site PostgreSQL backup |
@@ -326,7 +326,7 @@ Recovery assets:
 ```text
 SOURCE   → Git repository
 DATABASE → local PostgreSQL dump + Backblaze B2
-SECRETS  → /etc/asihjaya-rms/production.env + secure external secret backup
+SECRETS  → /opt/asihjaya-rms/app/.env.production + secure external secret backup
 ```
 
 Timer:

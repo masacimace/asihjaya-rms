@@ -203,7 +203,7 @@ Bukti deployment disimpan di:
 └── work/
 ```
 
-`current.env` tidak mengandung secret. File ini hanya menyimpan release ID, revision, build date, serta tiga immutable image references. Backup timer membaca operations image dari file tersebut sehingga daily/weekly job tetap memakai tool image release aktif. Secret tetap berada di `/etc/asihjaya-rms/production.env`.
+`current.env` tidak mengandung secret. File ini hanya menyimpan release ID, revision, build date, serta tiga immutable image references. Backup timer membaca operations image dari file tersebut sehingga daily/weekly job tetap memakai tool image release aktif. Secret tetap berada di `/opt/asihjaya-rms/app/.env.production`.
 
 Quality gate tahap ini:
 

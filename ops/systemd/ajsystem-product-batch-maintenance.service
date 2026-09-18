@@ -5,7 +5,7 @@ After=network-online.target docker.service
 Requires=docker.service
 
 ConditionPathExists=/opt/asihjaya-rms/app/compose.production.yaml
-ConditionPathExists=/etc/asihjaya-rms/production.env
+ConditionPathExists=/opt/asihjaya-rms/app/.env.production
 ConditionPathExists=/var/lib/asihjaya-rms/deployments/current.env
 ConditionPathExists=/var/run/docker.sock
 ConditionFileIsExecutable=/usr/local/sbin/ajsystem-product-batch-maintenance

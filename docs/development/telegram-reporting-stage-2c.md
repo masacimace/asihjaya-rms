@@ -60,7 +60,7 @@ kecuali template environment yang memang committed.
 Production environment tetap berada di:
 
 ```text
-/etc/asihjaya-rms/production.env
+/opt/asihjaya-rms/app/.env.production
 ```
 
 ## 3. Audit checklist 2C.0
@@ -1976,7 +1976,7 @@ Contract local-first:
 - source systemd dibuat di repository lokal dan di-install dari exact deployed commit;
 - tidak ada source yang diedit langsung di VPS;
 - runtime Telegram memakai immutable `ASIHJAYA_OPERATIONS_IMAGE` milik current release;
-- production secret tetap hanya dibaca dari `/etc/asihjaya-rms/production.env` dan tidak ditulis ke systemd unit;
+- production secret tetap hanya dibaca dari `/opt/asihjaya-rms/app/.env.production` dan tidak ditulis ke systemd unit;
 - installer tidak meng-enable timer secara otomatis;
 - delivery worker adalah `oneshot` yang dipicu timer setiap 2 menit;
 - reconciliation adalah `oneshot` yang dipicu timer setiap 1 jam;

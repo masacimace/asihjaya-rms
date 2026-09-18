@@ -26,7 +26,7 @@ esac
 printf '[%s] Wrapper backup dipanggil mode=%s\n' "$(date --iso-8601=seconds)" "$MODE"
 
 PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
-ENV_FILE="${ASIHJAYA_ENV_FILE:-/etc/asihjaya-rms/production.env}"
+ENV_FILE="${ASIHJAYA_ENV_FILE:-/opt/asihjaya-rms/app/.env.production}"
 RELEASE_ENV_FILE="${ASIHJAYA_RELEASE_ENV_FILE:-/var/lib/asihjaya-rms/deployments/current.env}"
 BACKUP_DIR="${ASIHJAYA_DATABASE_BACKUP_DIR:-/var/backups/asihjaya-rms/postgres}"
 STATUS_DIR="${ASIHJAYA_OFFSITE_STATUS_DIR:-/var/lib/asihjaya-rms/offsite-status}"

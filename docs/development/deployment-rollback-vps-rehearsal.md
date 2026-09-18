@@ -66,8 +66,8 @@ whoami
 cd /opt/asihjaya-rms/app
 git status --short
 git rev-parse HEAD
-docker compose --env-file /etc/asihjaya-rms/production.env -f compose.production.yaml ps
-docker inspect --format '{{.Config.Image}} | {{.Image}}' "$(docker compose --env-file /etc/asihjaya-rms/production.env -f compose.production.yaml ps -q app)"
+docker compose --env-file /opt/asihjaya-rms/app/.env.production -f compose.production.yaml ps
+docker inspect --format '{{.Config.Image}} | {{.Image}}' "$(docker compose --env-file /opt/asihjaya-rms/app/.env.production -f compose.production.yaml ps -q app)"
 systemctl list-timers 'ajsystem-*' --all --no-pager
 curl -fsS http://127.0.0.1:3000/api/health
 curl -fsS https://ajsystem.id/api/health
@@ -112,16 +112,16 @@ Ini adalah satu-satunya checkout manual untuk bootstrap automation. Deployment b
 Periksa metadata tanpa mencetak isi file:
 
 ```bash
-sudo stat -c '%U:%G %a %n' /etc/asihjaya-rms/production.env
+sudo stat -c '%U:%G %a %n' /opt/asihjaya-rms/app/.env.production
 ```
 
 Atur permission yang dibutuhkan automation:
 
 ```bash
-sudo chown root:ubuntu /etc/asihjaya-rms/production.env
-sudo chmod 0640 /etc/asihjaya-rms/production.env
-sudo -u ubuntu test -r /etc/asihjaya-rms/production.env
-sudo stat -c '%U:%G %a %n' /etc/asihjaya-rms/production.env
+sudo chown root:ubuntu /opt/asihjaya-rms/app/.env.production
+sudo chmod 0640 /opt/asihjaya-rms/app/.env.production
+sudo -u ubuntu test -r /opt/asihjaya-rms/app/.env.production
+sudo stat -c '%U:%G %a %n' /opt/asihjaya-rms/app/.env.production
 ```
 
 Output akhir harus `root:ubuntu 640`. Jangan menjalankan `cat`, `grep` tanpa filter aman, atau menyalin file tersebut.
@@ -282,7 +282,7 @@ Service oneshot dapat kembali menjadi `inactive (dead)` setelah sukses. Exit sta
 ```bash
 ajsystem-deployment-preflight check
 ajsystem-deployment-preflight status
-docker compose --env-file /etc/asihjaya-rms/production.env -f /opt/asihjaya-rms/app/compose.production.yaml ps
+docker compose --env-file /opt/asihjaya-rms/app/.env.production -f /opt/asihjaya-rms/app/compose.production.yaml ps
 sudo systemctl --failed --no-pager
 sudo journalctl -u 'ajsystem-db-backup@*.service' --since '2 hours ago' --no-pager
 sudo journalctl -u ajsystem-monitor.service --since '30 minutes ago' --no-pager

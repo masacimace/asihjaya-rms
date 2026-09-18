@@ -13,14 +13,14 @@ Repository hanya menyimpan template berikut:
 File berisi secret sebenarnya harus berada di luar Git. Untuk lokal gunakan `.env.production`. Pada VPS, lokasi yang direkomendasikan:
 
 ```text
-/etc/asihjaya-rms/production.env
+/opt/asihjaya-rms/app/.env.production
 ```
 
 Buat file dengan user deployment dan permission terbatas:
 
 ```bash
 sudo install -d -m 750 -o deploy -g deploy /etc/asihjaya-rms
-sudo install -m 600 -o deploy -g deploy /dev/null /etc/asihjaya-rms/production.env
+sudo install -m 600 -o deploy -g deploy /dev/null /opt/asihjaya-rms/app/.env.production
 ```
 
 User yang menjadi anggota grup `docker` dapat membaca environment container melalui Docker API. Perlakukan akses grup Docker setara dengan akses administrator server.
@@ -153,19 +153,19 @@ Salin melalui kanal terenkripsi tanpa mencetak isi file:
 
 ```bash
 scp .env.production deploy@SERVER:/tmp/asihjaya-production.env
-ssh deploy@SERVER 'install -m 600 /tmp/asihjaya-production.env /etc/asihjaya-rms/production.env && rm -f /tmp/asihjaya-production.env'
+ssh deploy@SERVER 'install -m 600 /tmp/asihjaya-production.env /opt/asihjaya-rms/app/.env.production && rm -f /tmp/asihjaya-production.env'
 ```
 
 Pada deployment VPS, jalankan Compose dengan file tersebut:
 
 ```bash
 docker compose \
-  --env-file /etc/asihjaya-rms/production.env \
+  --env-file /opt/asihjaya-rms/app/.env.production \
   -f compose.production.yaml \
   config --quiet
 ```
 
-Set `ASIHJAYA_ENV_FILE=/etc/asihjaya-rms/production.env` di file tersebut agar service aplikasi membaca file yang sama.
+Set `ASIHJAYA_ENV_FILE=/opt/asihjaya-rms/app/.env.production` di file tersebut agar service aplikasi membaca file yang sama.
 
 ## Checklist sebelum production start
 

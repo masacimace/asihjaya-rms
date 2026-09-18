@@ -3,7 +3,7 @@ set -Eeuo pipefail
 umask 027
 
 PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
-ENV_FILE="${ASIHJAYA_ENV_FILE:-/etc/asihjaya-rms/production.env}"
+ENV_FILE="${ASIHJAYA_ENV_FILE:-/opt/asihjaya-rms/app/.env.production}"
 COMPOSE_FILE="${ASIHJAYA_COMPOSE_FILE:-$PROJECT_DIR/compose.production.yaml}"
 STATE_ROOT="${ASIHJAYA_DEPLOYMENT_STATE_ROOT:-/var/lib/asihjaya-rms/deployments}"
 RELEASE_ENV_FILE="${ASIHJAYA_RELEASE_ENV_FILE:-$STATE_ROOT/current.env}"
