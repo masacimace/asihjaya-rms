@@ -2,6 +2,7 @@ import { ArrowLeft, Download, History, Store } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { BuybackBankPayoutSnapshotCard } from "@/components/buybacks/buyback-bank-payout-snapshot";
 import { BuybackHistoryPanel } from "@/components/buybacks/buyback-history-panel";
 import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
 import {
@@ -206,20 +207,23 @@ export default async function BuybackHistoryPage({
       />
 
       {historyData.detail ? (
-        <BuybackHistoryPanel
-          data={historyData}
-          timeZone={auth.organization.timezone}
-          mode="history"
-          page={page}
-          pageSize={PAGE_SIZE}
-          filters={{
-            q: search,
-            process: processingFilter,
-            payout: payoutFilter,
-            range: dateRange,
-          }}
-          detailBackHref={listHref}
-        />
+        <div className="space-y-5">
+          <BuybackHistoryPanel
+            data={historyData}
+            timeZone={auth.organization.timezone}
+            mode="history"
+            page={page}
+            pageSize={PAGE_SIZE}
+            filters={{
+              q: search,
+              process: processingFilter,
+              payout: payoutFilter,
+              range: dateRange,
+            }}
+            detailBackHref={listHref}
+          />
+          <BuybackBankPayoutSnapshotCard buybackId={historyData.detail.id} />
+        </div>
       ) : (
         <div className="space-y-5">
           <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">

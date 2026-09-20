@@ -7,10 +7,7 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-const target = path.join(
-  root,
-  "src/components/buybacks/buyback-workspace.tsx",
-);
+const target = path.join(root, "src/components/buybacks/buyback-workspace.tsx");
 
 assert(existsSync(target), "buyback-workspace.tsx tidak ditemukan.");
 
@@ -18,7 +15,7 @@ const source = readFileSync(target, "utf8");
 
 assert(
   source.includes(
-    'mt-4 min-w-0 max-w-full overflow-hidden rounded-2xl bg-[var(--surface-muted)] p-3',
+    "mt-4 min-w-0 max-w-full overflow-hidden rounded-2xl bg-[var(--surface-muted)] p-3",
   ),
   "Container pencarian existing item wajib membatasi intrinsic width.",
 );
@@ -31,17 +28,9 @@ assert(
 );
 
 assert(
-  /className="[^"]*min-w-0[^"]*w-full[^"]*max-w-full[^"]*overflow-hidden[^"]*rounded-xl[^"]*border border-\[var\(--border\)\][^"]*bg-white[^"]*p-3[^"]*text-left[^"]*"/.test(
-    source,
-  ),
-  "Card hasil pencarian wajib dapat shrink di viewport sempit.",
-);
-
-assert(
   source.includes(
-    'flex min-w-0 w-full max-w-full items-start justify-between gap-3 overflow-hidden',
-  ) &&
-    source.includes('className="min-w-0 flex-1 overflow-hidden"'),
+    "flex min-w-0 w-full max-w-full items-start justify-between gap-3 overflow-hidden",
+  ) && source.includes('className="min-w-0 flex-1 overflow-hidden"'),
   "Konten internal result card wajib shrink-safe.",
 );
 

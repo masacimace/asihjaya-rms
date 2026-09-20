@@ -8,6 +8,7 @@ import {
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { BuybackBankPayoutSnapshotCard } from "@/components/buybacks/buyback-bank-payout-snapshot";
 import { BuybackHistoryPanel } from "@/components/buybacks/buyback-history-panel";
 import {
   buybackHistoryDateRanges,
@@ -169,9 +170,9 @@ export default async function AdminBuybackHistoryPage({
   });
   const isFiltered = Boolean(
     search ||
-    processingFilter !== "all" ||
-    payoutFilter !== "all" ||
-    dateRange !== "today",
+      processingFilter !== "all" ||
+      payoutFilter !== "all" ||
+      dateRange !== "today",
   );
 
   return (
@@ -237,21 +238,24 @@ export default async function AdminBuybackHistoryPage({
       </header>
 
       {historyData.detail ? (
-        <BuybackHistoryPanel
-          data={historyData}
-          timeZone={auth.organization.timezone}
-          mode="history"
-          page={page}
-          pageSize={PAGE_SIZE}
-          filters={{
-            q: search,
-            process: processingFilter,
-            payout: payoutFilter,
-            range: dateRange,
-          }}
-          detailBackHref={listHref}
-          historyBaseHref="/admin/buyback"
-        />
+        <div className="space-y-5">
+          <BuybackHistoryPanel
+            data={historyData}
+            timeZone={auth.organization.timezone}
+            mode="history"
+            page={page}
+            pageSize={PAGE_SIZE}
+            filters={{
+              q: search,
+              process: processingFilter,
+              payout: payoutFilter,
+              range: dateRange,
+            }}
+            detailBackHref={listHref}
+            historyBaseHref="/admin/buyback"
+          />
+          <BuybackBankPayoutSnapshotCard buybackId={historyData.detail.id} />
+        </div>
       ) : (
         <>
           <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">

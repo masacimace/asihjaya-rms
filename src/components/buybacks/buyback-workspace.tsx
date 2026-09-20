@@ -30,9 +30,11 @@ import {
 } from "react";
 
 import {
-  completeBuybackAction,
-  searchBuybackExistingItemsAction,
-} from "@/app/actions/buybacks";
+  completeBuybackWithBankAccountAction,
+  getBuybackBankAccountsAction,
+  type BuybackBankAccountOption,
+} from "@/app/actions/buyback-bank-payouts";
+import { searchBuybackExistingItemsAction } from "@/app/actions/buybacks";
 import { createPosQuickCustomerAction } from "@/app/actions/pos";
 import { BuybackExistingItemImage } from "@/components/buybacks/buyback-existing-item-image";
 import { CameraCaptureModal } from "@/components/media/camera-capture-modal";
@@ -241,6 +243,7 @@ type DraftItem = {
 
 type PayoutState = Record<BuybackPayoutMethod, string> & {
   bankTransferReference: string;
+  bankAccountProfileId: string;
 };
 
 function BuybackImageInput({
@@ -520,7 +523,7 @@ export function BuybackWorkspace({
   timeZone: string;
 }) {
   const [state, formAction, isSubmitting] = useActionState(
-    completeBuybackAction,
+    completeBuybackWithBankAccountAction,
     initialBuybackActionState,
   );
   const [idempotencyKey, setIdempotencyKey] = useState(initialIdempotencyKey);
@@ -548,7 +551,51 @@ export function BuybackWorkspace({
     bank_transfer: "",
     customer_deposit: "",
     bankTransferReference: "",
+    bankAccountProfileId: "",
   });
+  const [bankAccounts, setBankAccounts] = useState<BuybackBankAccountOption[]>(
+    [],
+  );
+  const [bankAccountsLoading, setBankAccountsLoading] = useState(canCreate);
+  const [bankAccountsError, setBankAccountsError] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!canCreate) return;
+
+    let cancelled = false;
+
+    void getBuybackBankAccountsAction()
+      .then((result) => {
+        if (cancelled) return;
+
+        if (result.status === "success") {
+          setBankAccounts(result.accounts);
+          setBankAccountsError(null);
+          return;
+        }
+
+        setBankAccounts([]);
+        setBankAccountsError(
+          result.message ?? "Rekening Transfer belum bisa dimuat.",
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setBankAccounts([]);
+        setBankAccountsError(
+          "Rekening Transfer belum bisa dimuat. Refresh halaman lalu coba kembali.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setBankAccountsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canCreate]);
 
   const customer = usePosCustomer({
     customers: initialData.customers,
@@ -582,6 +629,10 @@ export function BuybackWorkspace({
     payoutAmounts.bank_transfer +
     payoutAmounts.customer_deposit;
   const payoutDifference = totalAmount - payoutTotal;
+  const selectedBankAccount =
+    bankAccounts.find(
+      (account) => account.id === payouts.bankAccountProfileId,
+    ) ?? null;
 
   const payload = useMemo<BuybackSubmitPayload>(
     () => ({
@@ -635,6 +686,7 @@ export function BuybackWorkspace({
         bank_transfer: "",
         customer_deposit: "",
         bankTransferReference: "",
+        bankAccountProfileId: "",
       });
       setExistingQuery("");
       setExistingResults([]);
@@ -797,12 +849,18 @@ export function BuybackWorkspace({
     items.length > 0 &&
     items.every(isDraftItemComplete) &&
     totalAmount > 0 &&
-    payoutDifference === 0;
+    payoutDifference === 0 &&
+    (payoutAmounts.bank_transfer <= 0 || Boolean(payouts.bankAccountProfileId));
 
   return (
     <>
       <form action={formAction} className="space-y-5">
         <input type="hidden" name="payload" value={JSON.stringify(payload)} />
+        <input
+          type="hidden"
+          name="bankAccountProfileId"
+          value={payouts.bankAccountProfileId}
+        />
 
         {state.status === "success" && state.result ? (
           <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
@@ -999,7 +1057,7 @@ export function BuybackWorkspace({
                         className="flex min-w-0 flex-1 items-start justify-between gap-3 self-stretch rounded-lg px-1.5 py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                       >
                         <span className="min-w-0 flex-1 self-center overflow-hidden">
-                          <span className="block truncate text-[11px] md:text-sm font-semibold text-neutral-950">
+                          <span className="block truncate text-sm font-semibold text-neutral-950">
                             {result.sku} · {result.productName}
                           </span>
                           <span className="mt-1 block max-w-full truncate text-xs text-[var(--muted)]">
@@ -1395,6 +1453,62 @@ export function BuybackWorkspace({
               }
               onFill={() => fillPayoutRemainder("bank_transfer")}
             >
+              <div className="mt-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] font-semibold text-neutral-700">
+                    Rekening sumber payout *
+                  </span>
+                  <select
+                    value={payouts.bankAccountProfileId}
+                    onChange={(event) =>
+                      setPayouts((current) => ({
+                        ...current,
+                        bankAccountProfileId: event.target.value,
+                      }))
+                    }
+                    disabled={bankAccountsLoading || bankAccounts.length === 0}
+                    className={cn(
+                      inputClassName,
+                      "disabled:cursor-not-allowed disabled:bg-neutral-50",
+                    )}
+                  >
+                    <option value="">
+                      {bankAccountsLoading
+                        ? "Memuat Rekening Transfer..."
+                        : bankAccounts.length > 0
+                          ? "Pilih rekening sumber payout"
+                          : "Belum ada Rekening Transfer aktif"}
+                    </option>
+                    {bankAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name} · {account.provider}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {selectedBankAccount ? (
+                  <div className="mt-2 rounded-xl border border-[var(--border)] bg-neutral-50 px-3 py-2 text-[11px] leading-5 text-neutral-700">
+                    <p className="font-semibold text-neutral-900">
+                      {selectedBankAccount.provider} ·{" "}
+                      {selectedBankAccount.name}
+                    </p>
+                    <p>{selectedBankAccount.destinationAccount}</p>
+                  </div>
+                ) : null}
+
+                {bankAccountsError ? (
+                  <p className="mt-2 text-[11px] font-medium text-red-700">
+                    {bankAccountsError}
+                  </p>
+                ) : null}
+                {state.fieldErrors?.bankAccountProfileId ? (
+                  <p className="mt-2 text-[11px] font-medium text-red-700">
+                    {state.fieldErrors.bankAccountProfileId}
+                  </p>
+                ) : null}
+              </div>
+
               <input
                 value={payouts.bankTransferReference}
                 onChange={(event) =>
@@ -1501,6 +1615,11 @@ export function BuybackWorkspace({
             <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
               Lengkapi semua data barang dan foto kondisi sebelum menyelesaikan
               Buyback.
+            </p>
+          ) : null}
+          {payoutAmounts.bank_transfer > 0 && !payouts.bankAccountProfileId ? (
+            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+              Pilih Rekening sumber payout untuk nominal Transfer Bank.
             </p>
           ) : null}
           {state.fieldErrors && Object.keys(state.fieldErrors).length > 0 ? (

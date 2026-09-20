@@ -18,6 +18,16 @@ import type {
   BuybackReportRow,
 } from "@/features/buybacks/report-contracts";
 
+function readMetadataText(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
 function buildBuybackReportConditions({
   organizationId,
   outletId,
@@ -144,6 +154,7 @@ export async function getBuybackReportRows({
         method: buybackPayouts.method,
         amount: buybackPayouts.amount,
         reference: buybackPayouts.reference,
+        metadata: buybackPayouts.metadata,
       })
       .from(buybackPayouts)
       .where(inArray(buybackPayouts.buybackId, ids))
@@ -177,6 +188,17 @@ export async function getBuybackReportRows({
       method: payout.method,
       amount: payout.amount,
       reference: payout.reference,
+      bankAccountProfileId: readMetadataText(
+        payout.metadata,
+        "bankAccountProfileId",
+      ),
+      bankAccountCode: readMetadataText(payout.metadata, "bankAccountCode"),
+      bankAccountName: readMetadataText(payout.metadata, "bankAccountName"),
+      bankProvider: readMetadataText(payout.metadata, "bankProvider"),
+      bankAccountNumber: readMetadataText(
+        payout.metadata,
+        "bankAccountNumber",
+      ),
     });
     payoutsByBuyback.set(payout.buybackId, current);
   }

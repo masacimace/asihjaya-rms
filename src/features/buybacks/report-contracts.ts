@@ -19,6 +19,11 @@ export type BuybackReportPayout = {
   method: BuybackPayoutMethod;
   amount: string;
   reference: string | null;
+  bankAccountProfileId?: string | null;
+  bankAccountCode?: string | null;
+  bankAccountName?: string | null;
+  bankProvider?: string | null;
+  bankAccountNumber?: string | null;
 };
 
 export type BuybackReportItem = {

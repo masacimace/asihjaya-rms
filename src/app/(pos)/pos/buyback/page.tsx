@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { BuybackBankPayoutSnapshotCard } from "@/components/buybacks/buyback-bank-payout-snapshot";
 import {
   BuybackHistoryPanel,
   type BuybackProcessingQuickActionData,
@@ -204,11 +205,14 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
       />
 
       {historyData.detail ? (
-        <BuybackHistoryPanel
-          data={historyData}
-          timeZone={auth.organization.timezone}
-          feedback={feedback}
-        />
+        <div className="space-y-5">
+          <BuybackHistoryPanel
+            data={historyData}
+            timeZone={auth.organization.timezone}
+            feedback={feedback}
+          />
+          <BuybackBankPayoutSnapshotCard buybackId={historyData.detail.id} />
+        </div>
       ) : (
         <div className="space-y-5">
           <BuybackWorkspace

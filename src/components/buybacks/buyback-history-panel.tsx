@@ -322,7 +322,7 @@ export function BuybackHistoryPanel({
               <article key={row.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-neutral-950">
+                    <p className="truncate !text-[11px] font-semibold text-neutral-950">
                       {row.buybackNumber}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
@@ -332,7 +332,7 @@ export function BuybackHistoryPanel({
                       )}
                     </p>
                   </div>
-                  <p className="shrink-0 text-sm font-bold text-neutral-950">
+                  <p className="shrink-0 text-xs font-bold text-neutral-950">
                     {formatCurrency(Number(row.totalAmount))}
                   </p>
                 </div>
@@ -415,10 +415,7 @@ export function BuybackHistoryPanel({
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {data.rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="align-top hover:bg-neutral-50/60"
-                  >
+                  <tr key={row.id} className="align-top hover:bg-neutral-50/60">
                     <td className="px-4 py-4 sm:px-5">
                       <p className="font-semibold text-neutral-950">
                         {row.buybackNumber}
@@ -474,7 +471,9 @@ export function BuybackHistoryPanel({
                                 processingRow.buybackId === row.id,
                             )}
                             categories={processingQuickActions.categories}
-                            productMasters={processingQuickActions.productMasters}
+                            productMasters={
+                              processingQuickActions.productMasters
+                            }
                             colorPresets={processingQuickActions.colorPresets}
                             priceRates={processingQuickActions.priceRates}
                             canProcess={processingQuickActions.canProcess}
@@ -770,20 +769,16 @@ function BuybackDetailPanel({
                       {item.buybackPricePerGram && recommendedBuybackAmount ? (
                         <div className="mt-2 grid gap-1 text-xs text-neutral-700 sm:grid-cols-2">
                           <p>
-                            Rate saat transaksi {" "}
+                            Rate saat transaksi{" "}
                             <span className="font-semibold text-neutral-950">
-                              {formatCurrency(
-                                Number(item.buybackPricePerGram),
-                              )}
+                              {formatCurrency(Number(item.buybackPricePerGram))}
                               /gr
                             </span>
                           </p>
                           <p>
-                            Rekomendasi {" "}
+                            Rekomendasi{" "}
                             <span className="font-semibold text-neutral-950">
-                              {formatCurrency(
-                                Number(recommendedBuybackAmount),
-                              )}
+                              {formatCurrency(Number(recommendedBuybackAmount))}
                             </span>
                           </p>
                         </div>

@@ -88,6 +88,11 @@ const rows: BuybackReportRow[] = [
         method: "bank_transfer",
         amount: "2000000",
         reference: "TRX-BCA-001",
+        bankAccountProfileId: "profile-bca-1",
+        bankAccountCode: "TRF-BCA-01",
+        bankAccountName: "BCA — Rekening Toko",
+        bankProvider: "BCA",
+        bankAccountNumber: "1234567890 a.n. Asihjaya",
       },
     ],
     items: [
@@ -213,7 +218,10 @@ assert.equal(transactionSheet.A4?.v, "TOTAL NILAI BUYBACK");
 assert.equal(transactionSheet.B4?.v, 3_500_000);
 assert.equal(transactionSheet.A6?.v, "No. Buyback");
 assert.equal(transactionSheet.L7?.v, "Cash + Dana Titip");
-assert.equal(transactionSheet.Q8?.v, "TRX-BCA-001");
+assert.equal(
+  transactionSheet.Q8?.v,
+  "BCA · BCA — Rekening Toko · TRF-BCA-01 · 1234567890 a.n. Asihjaya · Ref: TRX-BCA-001",
+);
 assert.equal(getFillRgb(transactionSheet.A1), "24483F");
 assert.equal(getFillRgb(transactionSheet.A4), "24483F");
 assert.equal(getFillRgb(transactionSheet.A6), "24483F");
@@ -253,6 +261,15 @@ const reportQuery = fs.readFileSync(
   "src/features/buybacks/report-queries.ts",
   "utf8",
 );
+const bankPayoutAction = fs.readFileSync(
+  "src/app/actions/buyback-bank-payouts.ts",
+  "utf8",
+);
+const workspace = fs.readFileSync(
+  "src/components/buybacks/buyback-workspace.tsx",
+  "utf8",
+);
+
 assert.match(historyPage, /Export XLSX/);
 assert.match(historyPage, /buyback\/riwayat\/export\/xlsx/);
 assert.match(exportRoute, /hasPermission\(auth, "buybacks\.view"\)/);
@@ -261,6 +278,9 @@ assert.match(exportRoute, /getBuybackReportRows/);
 assert.match(reportQuery, /processingFilter === "pending"/);
 assert.match(reportQuery, /filters\.payoutFilter !== "all"/);
 assert.match(reportQuery, /createBuybackHistoryPeriod\(filters\.dateRange, timeZone\)/);
+assert.match(reportQuery, /metadata: buybackPayouts\.metadata/);
+assert.match(reportQuery, /bankAccountName/);
+assert.match(reportQuery, /bankAccountNumber/);
 assert.match(historyPage, /name="range"/);
 assert.match(historyPage, /buybackHistoryDateRanges\.map/);
 assert.match(exportRoute, /normalizeBuybackHistoryDateRange/);
@@ -275,5 +295,11 @@ assert.match(adminShell, /href: "\/admin\/buyback(?:\?[^\"]*)?"/);
 assert.match(historyFilters, /today: "Hari ini"/);
 assert.match(historyFilters, /last7: "7 hari terakhir"/);
 assert.match(historyFilters, /thisMonth: "Bulan ini"/);
+assert.match(bankPayoutAction, /manualPaymentProfiles/);
+assert.match(bankPayoutAction, /bankAccountProfileId/);
+assert.match(bankPayoutAction, /bankAccountNumber/);
+assert.match(bankPayoutAction, /completeBuybackAction/);
+assert.match(workspace, /Rekening sumber payout/);
+assert.match(workspace, /bankAccountProfileId/);
 
-console.log("Buyback XLSX report contracts: OK");
+console.log("Buyback XLSX + bank payout report contracts: OK");

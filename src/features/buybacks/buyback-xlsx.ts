@@ -106,8 +106,12 @@ function readSnapshotText(snapshot: Record<string, unknown>, ...keys: string[]) 
 
 function getItemDisplayName(item: BuybackReportItem) {
   return (
-    readSnapshotText(item.snapshot, "displayName", "originalDisplayName", "originalProductMasterName") ||
-    "Item Buyback"
+    readSnapshotText(
+      item.snapshot,
+      "displayName",
+      "originalDisplayName",
+      "originalProductMasterName",
+    ) || "Item Buyback"
   );
 }
 
@@ -138,12 +142,23 @@ function getPayoutMethodsLabel(row: BuybackReportRow) {
   return methods.length > 0 ? Array.from(new Set(methods)).join(" + ") : "—";
 }
 
-function getTransferReferences(row: BuybackReportRow) {
-  const references = row.payouts
+function getTransferDetails(row: BuybackReportRow) {
+  const details = row.payouts
     .filter((payout) => payout.method === "bank_transfer")
-    .map((payout) => payout.reference?.trim())
-    .filter((value): value is string => Boolean(value));
-  return references.length > 0 ? Array.from(new Set(references)).join(" · ") : "";
+    .map((payout) => {
+      const parts = [
+        payout.bankProvider?.trim(),
+        payout.bankAccountName?.trim(),
+        payout.bankAccountCode?.trim(),
+        payout.bankAccountNumber?.trim(),
+        payout.reference?.trim() ? `Ref: ${payout.reference.trim()}` : null,
+      ].filter((value): value is string => Boolean(value));
+
+      return parts.join(" · ");
+    })
+    .filter(Boolean);
+
+  return details.length > 0 ? Array.from(new Set(details)).join(" | ") : "";
 }
 
 function getTransactionProcessingLabel(row: BuybackReportRow) {
@@ -348,7 +363,7 @@ function buildTransactionRows(rows: BuybackReportRow[], timeZone: string) {
     getPayoutAmount(row, "cash"),
     getPayoutAmount(row, "bank_transfer"),
     getPayoutAmount(row, "customer_deposit"),
-    sanitizeWorksheetText(getTransferReferences(row)),
+    sanitizeWorksheetText(getTransferDetails(row)),
     sanitizeWorksheetText(row.notes ?? ""),
   ]);
 }
@@ -509,14 +524,14 @@ export function buildBuybackWorkbook({
     "Payout Cash",
     "Payout Transfer",
     "Payout Dana Titip",
-    "Referensi Transfer",
+    "Detail Transfer (Bank / Rekening / Ref)",
     "Catatan",
   ];
   const transactionWorksheet = createDetailWorksheet({
     headers: transactionHeaders,
     rows: buildTransactionRows(rows, auth.organization.timezone),
     widths: [
-      34, 24, 32, 22, 25, 24, 30, 22, 13, 18, 24, 28, 19, 19, 19, 21, 28,
+      34, 24, 32, 22, 25, 24, 30, 22, 13, 18, 24, 28, 19, 19, 19, 21, 72,
       40,
     ],
     amountColumnIndexes: [12, 13, 14, 15],
