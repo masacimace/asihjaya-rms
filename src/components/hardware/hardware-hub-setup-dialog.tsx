@@ -118,7 +118,8 @@ export function HardwareHubSetupDialog({
                   Hardware Hub siap dipasang
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                  {state.enrollment.outletName} · {state.enrollment.registerName}
+                  {state.enrollment.outletName} ·{" "}
+                  {state.enrollment.registerName}
                 </p>
               </div>
             </div>
@@ -128,7 +129,8 @@ export function HardwareHubSetupDialog({
                 1. Download installer
               </p>
               <p className="mt-1 text-sm leading-6 text-sky-950">
-                Download installer resmi, lalu jalankan dengan double-click pada Mini PC outlet.
+                Download installer resmi, lalu jalankan dengan double-click pada
+                Mini PC outlet.
               </p>
               <a
                 href="/api/hardware/installer/download"
@@ -138,8 +140,9 @@ export function HardwareHubSetupDialog({
                 Download ASIHJAYA Hardware Hub Setup
               </a>
               <p className="mt-2 text-xs leading-5 text-sky-800">
-                Jalankan Setup secara normal dan setujui UAC ketika diminta. Jangan gunakan menu
-                Run as administrator agar credential DPAPI tetap terikat ke user Windows outlet.
+                Jalankan Setup secara normal dan setujui UAC ketika diminta.
+                Jangan gunakan menu Run as administrator agar credential DPAPI
+                tetap terikat ke user Windows outlet.
               </p>
             </div>
 
@@ -156,21 +159,27 @@ export function HardwareHubSetupDialog({
                 onClick={() => copyInstallationCode(state.installationCode)}
                 className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:border-[var(--accent)] hover:text-[var(--accent)]"
               >
-                {copied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
+                {copied ? (
+                  <Check className="size-4" />
+                ) : (
+                  <Clipboard className="size-4" />
+                )}
                 {copied ? "Kode disalin" : "Salin Kode"}
               </button>
               <p className="mt-3 text-center text-xs leading-5 text-[var(--muted)]">
-                Berlaku sampai {formatExpiry(state.enrollment.expiresAt)}. Kode hanya
-                digunakan untuk menghubungkan satu Mini PC ke register ini.
+                Berlaku sampai {formatExpiry(state.enrollment.expiresAt)}. Kode
+                hanya digunakan untuk menghubungkan satu Mini PC ke register
+                ini.
               </p>
             </div>
 
             <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-950">
               <p className="font-semibold">3. Selesaikan wizard di Mini PC</p>
               <p className="mt-1">
-                Masukkan Installation Code, pilih printer SATO untuk label dan EPSON untuk nota,
-                lalu biarkan Setup menyimpan credential secara aman dan mengaktifkan Hardware Hub.
-                Agent ID, secret, Node.js, dan konfigurasi teknis tidak perlu diisi staff.
+                Masukkan Installation Code, pilih printer SATO untuk label dan
+                EPSON untuk nota, lalu biarkan Setup menyimpan credential secara
+                aman dan mengaktifkan Hardware Hub. Agent ID, secret, Node.js,
+                dan konfigurasi teknis tidak perlu diisi staff.
               </p>
             </div>
 
@@ -182,7 +191,7 @@ export function HardwareHubSetupDialog({
                   value={state.enrollment.id}
                 />
                 <FormSubmitButton
-                  className="w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50"
+                  className="w-full rounded-xl border border-red-200 !bg-white px-4 py-2.5 text-sm font-semibold !text-red-700 hover:bg-red-50"
                   pendingText="Membatalkan..."
                 >
                   Batalkan Kode
@@ -191,7 +200,9 @@ export function HardwareHubSetupDialog({
 
               <button
                 type="button"
-                onClick={() => window.location.assign("/admin/operasional/hardware")}
+                onClick={() =>
+                  window.location.assign("/admin/operasional/hardware")
+                }
                 className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white"
               >
                 Selesai
@@ -206,7 +217,8 @@ export function HardwareHubSetupDialog({
                   Siapkan Hardware Hub
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                  Pilih outlet dan register Hardware Hub yang akan dihubungkan ke Mini PC.
+                  Pilih outlet dan register Hardware Hub yang akan dihubungkan
+                  ke Mini PC.
                 </p>
               </div>
               <button
@@ -219,7 +231,10 @@ export function HardwareHubSetupDialog({
               </button>
             </div>
 
-            <form action={action} className="min-h-0 overflow-y-auto p-5 sm:p-6">
+            <form
+              action={action}
+              className="min-h-0 overflow-y-auto p-5 sm:p-6"
+            >
               {state.status === "error" ? (
                 <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {state.message}
@@ -253,11 +268,16 @@ export function HardwareHubSetupDialog({
                   <span className="font-medium text-neutral-800">Register</span>
                   <select
                     value={selectedRegisterId}
-                    onChange={(event) => setSelectedRegisterId(event.target.value)}
+                    onChange={(event) =>
+                      setSelectedRegisterId(event.target.value)
+                    }
                     className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm"
                   >
                     {registers.map((option) => (
-                      <option key={option.register.id} value={option.register.id}>
+                      <option
+                        key={option.register.id}
+                        value={option.register.id}
+                      >
                         {option.register.name}
                       </option>
                     ))}
@@ -266,23 +286,32 @@ export function HardwareHubSetupDialog({
               </div>
 
               <input type="hidden" name="outletId" value={selectedOutletId} />
-              <input type="hidden" name="registerId" value={selectedRegisterId} />
+              <input
+                type="hidden"
+                name="registerId"
+                value={selectedRegisterId}
+              />
               <input type="hidden" name="requestId" value={requestId} />
 
               {selectedOption?.pendingEnrollment ? (
                 <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-                  <p className="font-semibold">Installation Code masih aktif.</p>
+                  <p className="font-semibold">
+                    Installation Code masih aktif.
+                  </p>
                   <p className="mt-1">
-                    Berlaku sampai {formatExpiry(selectedOption.pendingEnrollment.expiresAt)}.
-                    Demi keamanan, kode plaintext tidak dapat ditampilkan ulang setelah halaman
-                    ditutup atau direfresh. Membuat kode baru akan otomatis membatalkan kode lama.
+                    Berlaku sampai{" "}
+                    {formatExpiry(selectedOption.pendingEnrollment.expiresAt)}.
+                    Demi keamanan, kode plaintext tidak dapat ditampilkan ulang
+                    setelah halaman ditutup atau direfresh. Membuat kode baru
+                    akan otomatis membatalkan kode lama.
                   </p>
                 </div>
               ) : (
                 <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm leading-6 text-[var(--muted)]">
-                  RMS akan membuat Installation Code sementara. Staff cukup memasukkan
-                  kode tersebut ke installer Hardware Hub pada Mini PC; tidak ada Agent ID,
-                  secret, atau file konfigurasi yang perlu dipindahkan manual.
+                  RMS akan membuat Installation Code sementara. Staff cukup
+                  memasukkan kode tersebut ke installer Hardware Hub pada Mini
+                  PC; tidak ada Agent ID, secret, atau file konfigurasi yang
+                  perlu dipindahkan manual.
                 </div>
               )}
 
