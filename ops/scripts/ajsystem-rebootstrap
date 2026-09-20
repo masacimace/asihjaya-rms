@@ -187,10 +187,16 @@ log "Menghentikan dan menghapus container runtime yang memegang persistent volum
 "${COMPOSE[@]}" stop app db >/dev/null
 "${COMPOSE[@]}" rm -f -s app db migrate >/dev/null
 
+log "Memastikan seluruh target volume sudah bebas sebelum penghapusan dimulai..."
 for volume_name in "$POSTGRES_VOLUME" "$UPLOADS_VOLUME" "$CACHE_VOLUME"; do
   if docker volume inspect "$volume_name" >/dev/null 2>&1; then
     holders="$(docker ps -a --filter "volume=$volume_name" --format '{{.ID}} {{.Names}}')"
     [[ -z "$holders" ]] || fail "volume $volume_name masih digunakan container: $holders"
+  fi
+done
+
+for volume_name in "$POSTGRES_VOLUME" "$UPLOADS_VOLUME" "$CACHE_VOLUME"; do
+  if docker volume inspect "$volume_name" >/dev/null 2>&1; then
     docker volume rm "$volume_name" >/dev/null
     log "Volume dihapus: $volume_name"
   fi
