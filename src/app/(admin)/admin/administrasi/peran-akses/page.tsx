@@ -182,6 +182,7 @@ export default async function RolesPage({
 
           <Link
             href="/admin/administrasi/peran-akses/tambah"
+            scroll={false}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
           >
             <Plus className="size-4" />
