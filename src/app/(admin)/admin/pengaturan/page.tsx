@@ -144,6 +144,7 @@ export default async function SettingsHubPage() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    scroll={false}
                     className="group flex min-h-[178px] flex-col rounded-2xl border border-[var(--border)] bg-white p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--accent)] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
                   >
                     <div className="flex items-start gap-4">
