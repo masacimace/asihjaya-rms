@@ -33,28 +33,28 @@ Arsitektur tetap mempertahankan scope organization/outlet sehingga perluasan out
 
 ## Modul Utama Saat Ini
 
-| Modul | Kemampuan saat ini |
-| --- | --- |
-| Authentication & Authorization | Session berbasis database, role/permission, organization/outlet scope |
-| Admin Dashboard | Ringkasan operasional, laporan, dan entry point manajemen |
-| POS | Catalog, scan/search item, cart, pricing, checkout, held cart, riwayat transaksi |
-| Harga Jewelry | Harga/Gram global per Kadar Persen + override per transaksi |
-| Pembayaran Manual | Cash, EDC, Transfer, payment profile, metadata verifikasi |
-| Pelanggan | Customer master, riwayat transaksi, Dana Titip, public receipt history |
-| Product Master | Identitas produk, kategori, foto, lifecycle active/draft |
-| Inventaris Fisik | SKU, barcode/QR, foto item, berat, kadar, kondisi, lokasi, availability |
-| Buyback | Pembelian kembali, Cuci/Rongsok, historical snapshots, penjualan kembali |
-| Shift & Cash | Opening, closing, expected cash, controlled reopen, cash movement |
-| Riwayat Penjualan | Riwayat POS/Admin, receipt, historical item snapshots |
-| Refund / Return | Koreksi finansial dan pengembalian barang fisik |
-| Laporan | Laporan sales, inventory, financial, operational, dan export |
-| Migrasi Produk Legacy | Direct import XLSX langsung menjadi stok tersedia + sinkronisasi foto legacy |
-| Notification Center | Notifikasi operasional di dalam aplikasi |
-| Telegram Reporting | Opening/daily/weekly/monthly outbound reporting dan delivery operations |
-| Settings Hub | Payment profile, Harga/Gram, konfigurasi Telegram |
-| Hardware Hub | Signed agent, job polling, print job protocol, label/document printer adapter |
-| Operasi Database | Forward migration, backup, restore, off-site replication |
-| Operasi Deployment | Container contract, health check, backup, rollback automation |
+| Modul                          | Kemampuan saat ini                                                               |
+| ------------------------------ | -------------------------------------------------------------------------------- |
+| Authentication & Authorization | Session berbasis database, role/permission, organization/outlet scope            |
+| Admin Dashboard                | Ringkasan operasional, laporan, dan entry point manajemen                        |
+| POS                            | Catalog, scan/search item, cart, pricing, checkout, held cart, riwayat transaksi |
+| Harga Jewelry                  | Harga/Gram global per Kadar Persen + override per transaksi                      |
+| Pembayaran Manual              | Cash, EDC, Transfer, payment profile, metadata verifikasi                        |
+| Pelanggan                      | Customer master, riwayat transaksi, Dana Titip, public receipt history           |
+| Product Master                 | Identitas produk, kategori, foto, lifecycle active/draft                         |
+| Inventaris Fisik               | SKU, barcode/QR, foto item, berat, kadar, kondisi, lokasi, availability          |
+| Buyback                        | Pembelian kembali, Cuci/Rongsok, historical snapshots, penjualan kembali         |
+| Shift & Cash                   | Opening, closing, expected cash, controlled reopen, cash movement                |
+| Riwayat Penjualan              | Riwayat POS/Admin, receipt, historical item snapshots                            |
+| Refund / Return                | Koreksi finansial dan pengembalian barang fisik                                  |
+| Laporan                        | Laporan sales, inventory, financial, operational, dan export                     |
+| Migrasi Produk Legacy          | Direct import XLSX langsung menjadi stok tersedia + sinkronisasi foto legacy     |
+| Notification Center            | Notifikasi operasional di dalam aplikasi                                         |
+| Telegram Reporting             | Opening/daily/weekly/monthly outbound reporting dan delivery operations          |
+| Settings Hub                   | Payment profile, Harga/Gram, konfigurasi Telegram                                |
+| Hardware Hub                   | Signed agent, job polling, print job protocol, label/document printer adapter    |
+| Operasi Database               | Forward migration, backup, restore, off-site replication                         |
+| Operasi Deployment             | Container contract, health check, backup, rollback automation                    |
 
 ## Model Pembayaran POS
 
@@ -206,11 +206,11 @@ docs/development/buyback-lifecycle.md
 
 ### Route Buyback
 
-| Route | Fungsi |
-| --- | --- |
-| `/pos/buyback` | acquisition + preview 5 transaksi terbaru |
-| `/pos/buyback/pemrosesan` | antrean dan completion Cuci/Rongsok |
-| `/pos/buyback/riwayat` | full history, search/filter, pagination 10/page |
+| Route                     | Fungsi                                          |
+| ------------------------- | ----------------------------------------------- |
+| `/pos/buyback`            | acquisition + preview 5 transaksi terbaru       |
+| `/pos/buyback/pemrosesan` | antrean dan completion Cuci/Rongsok             |
+| `/pos/buyback/riwayat`    | full history, search/filter, pagination 10/page |
 
 ### Status implementasi Buyback
 
@@ -588,6 +588,9 @@ npm ci
 npm run db:migrate
 npm run db:seed
 npm run dev
+
+## supaya local dev bisa di akses melalui wifi / lan yang sama:
+npm run dev:lan
 ```
 
 `db:seed` hanya digunakan untuk database baru atau reset yang memang disengaja.
@@ -603,6 +606,9 @@ npm run check:database
 npm run check:database:live
 npm run typecheck
 npm run dev
+
+## supaya local dev bisa di akses melalui wifi / lan yang sama:
+npm run dev:lan
 ```
 
 ### Reset local yang disengaja
@@ -757,35 +763,35 @@ docs/development/environment-configuration.md
 
 ### POS
 
-| Route | Fungsi |
-| --- | --- |
-| `/pos` | workspace POS |
-| `/pos/produk` | product/catalog access |
-| `/pos/pelanggan` | customer access |
-| `/pos/ditahan` | transaksi ditahan |
-| `/pos/shift` | operasi shift |
-| `/pos/transaksi` | riwayat transaksi POS |
-| `/pos/buyback` | acquisition Buyback |
+| Route                     | Fungsi                  |
+| ------------------------- | ----------------------- |
+| `/pos`                    | workspace POS           |
+| `/pos/produk`             | product/catalog access  |
+| `/pos/pelanggan`          | customer access         |
+| `/pos/ditahan`            | transaksi ditahan       |
+| `/pos/shift`              | operasi shift           |
+| `/pos/transaksi`          | riwayat transaksi POS   |
+| `/pos/buyback`            | acquisition Buyback     |
 | `/pos/buyback/pemrosesan` | Cuci/Rongsok processing |
-| `/pos/buyback/riwayat` | full Buyback history |
+| `/pos/buyback/riwayat`    | full Buyback history    |
 
 ### Admin
 
-| Route | Fungsi |
-| --- | --- |
-| `/admin` | dashboard |
-| `/admin/produk` | Product Master |
-| `/admin/inventaris` | inventaris fisik |
-| `/admin/penjualan` | sales history/admin transaction tools |
-| `/admin/pelanggan` | customer administration |
-| `/admin/laporan` | reporting |
-| `/admin/migrasi-produk` | direct import produk legacy |
-| `/admin/operasional/*` | shift/cash/hardware operations |
-| `/admin/notifikasi` | Notification Center |
-| `/admin/pengaturan` | Settings Hub |
-| `/admin/pengaturan/pembayaran/manual-edc` | profile EDC/transfer |
-| `/admin/pengaturan/harga-gram` | Harga/Gram |
-| `/admin/pengaturan/integrasi/telegram` | Telegram Reporting |
+| Route                                     | Fungsi                                |
+| ----------------------------------------- | ------------------------------------- |
+| `/admin`                                  | dashboard                             |
+| `/admin/produk`                           | Product Master                        |
+| `/admin/inventaris`                       | inventaris fisik                      |
+| `/admin/penjualan`                        | sales history/admin transaction tools |
+| `/admin/pelanggan`                        | customer administration               |
+| `/admin/laporan`                          | reporting                             |
+| `/admin/migrasi-produk`                   | direct import produk legacy           |
+| `/admin/operasional/*`                    | shift/cash/hardware operations        |
+| `/admin/notifikasi`                       | Notification Center                   |
+| `/admin/pengaturan`                       | Settings Hub                          |
+| `/admin/pengaturan/pembayaran/manual-edc` | profile EDC/transfer                  |
+| `/admin/pengaturan/harga-gram`            | Harga/Gram                            |
+| `/admin/pengaturan/integrasi/telegram`    | Telegram Reporting                    |
 
 Semua route/action sensitif wajib melakukan backend authorization. Menu visibility bukan authorization boundary.
 

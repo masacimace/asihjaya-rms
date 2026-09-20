@@ -113,7 +113,10 @@ export default async function CreateRolePage() {
         </div>
       </section>
 
-      <CreateRoleForm permissions={permissionCatalog} />
+      {/* Keep this long create flow on AdminShell's single main scroll. */}
+      <div className="min-w-0 [&_aside]:static">
+        <CreateRoleForm permissions={permissionCatalog} />
+      </div>
     </div>
   );
 }
