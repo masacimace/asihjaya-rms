@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 
 import { createProductItemAction } from "@/app/actions/product-items";
 import { SingleImageInput } from "@/components/media/single-image-input";
+import { QuickPriceRateControl } from "@/components/pricing/quick-price-rate-control";
 import { QuickProductCategoryDialog } from "@/components/products/quick-product-category-dialog";
 import { QuickProductColorDialog } from "@/components/products/quick-product-color-dialog";
 import { QuickProductMasterDialog } from "@/components/products/quick-product-master-dialog";
@@ -75,7 +76,6 @@ function normalizePurityKey(value: string) {
   return numeric.toFixed(3).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 }
 
-
 function ProductSubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
 
@@ -133,6 +133,7 @@ export function ProductItemForm({
   const [purityPercent, setPurityPercent] = useState("");
   const [weightGram, setWeightGram] = useState("");
   const [deductionPerGram, setDeductionPerGram] = useState("0");
+  const [rateOverrides, setRateOverrides] = useState<Record<string, string>>({});
 
   const [state, formAction] = useActionState(
     createProductItemAction,
@@ -144,17 +145,26 @@ export function ProductItemForm({
     [categoryId, productMasters],
   );
 
-  const selectedCategory = categories.find((category) => category.id === categoryId);
+  const selectedCategory = categories.find(
+    (category) => category.id === categoryId,
+  );
   const rateMap = useMemo(
     () => new Map(priceRates.map((rate) => [rate.purityKey, rate.ratePerGram])),
     [priceRates],
   );
   const purityKey = normalizePurityKey(purityPercent);
-  const activeRate = purityKey ? rateMap.get(purityKey) ?? null : null;
+  const activeRate = purityKey
+    ? rateOverrides[purityKey] ?? rateMap.get(purityKey) ?? null
+    : null;
   const estimatedBasePrice = useMemo(() => {
     const weight = Number(weightGram.replace(",", "."));
     const rate = Number(activeRate ?? "0");
-    if (!Number.isFinite(weight) || weight <= 0 || !Number.isFinite(rate) || rate <= 0) {
+    if (
+      !Number.isFinite(weight) ||
+      weight <= 0 ||
+      !Number.isFinite(rate) ||
+      rate <= 0
+    ) {
       return null;
     }
     return Math.round(weight * rate);
@@ -162,7 +172,9 @@ export function ProductItemForm({
 
   const handleQuickCreated = useCallback((master: ProductMasterOption) => {
     setProductMasters((current) =>
-      current.some((entry) => entry.id === master.id) ? current : [...current, master],
+      current.some((entry) => entry.id === master.id)
+        ? current
+        : [...current, master],
     );
     setCategoryId(master.categoryId);
     setProductMasterId(master.id);
@@ -184,16 +196,19 @@ export function ProductItemForm({
     [],
   );
 
-  const handleQuickColorCreated = useCallback((preset: ProductColorPresetOption) => {
-    setColorPresets((current) => {
-      const next = current.filter((entry) => entry.id !== preset.id);
-      return [...next, preset].sort((left, right) =>
-        left.name.localeCompare(right.name, "id-ID"),
-      );
-    });
-    setColor(preset.name);
-    setQuickColorOpen(false);
-  }, []);
+  const handleQuickColorCreated = useCallback(
+    (preset: ProductColorPresetOption) => {
+      setColorPresets((current) => {
+        const next = current.filter((entry) => entry.id !== preset.id);
+        return [...next, preset].sort((left, right) =>
+          left.name.localeCompare(right.name, "id-ID"),
+        );
+      });
+      setColor(preset.name);
+      setQuickColorOpen(false);
+    },
+    [],
+  );
 
   const defaultOutletId = outlets.length === 1 ? outlets[0]?.id ?? "" : "";
 
@@ -281,7 +296,11 @@ export function ProductItemForm({
                   disabled={!categoryId || !canCreateProductMaster}
                   className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
                   aria-label="Tambah Product Master"
-                  title={canCreateProductMaster ? "Tambah Product Master" : "Tidak memiliki permission membuat Product Master"}
+                  title={
+                    canCreateProductMaster
+                      ? "Tambah Product Master"
+                      : "Tidak memiliki permission membuat Product Master"
+                  }
                 >
                   <Plus className="size-5" />
                 </button>
@@ -290,7 +309,9 @@ export function ProductItemForm({
             </div>
 
             <label className="block text-sm">
-              <span className="mb-2 block font-medium text-neutral-800">Kode Produk</span>
+              <span className="mb-2 block font-medium text-neutral-800">
+                Kode Produk
+              </span>
               <input
                 value="Dibuat otomatis setelah disimpan"
                 readOnly
@@ -317,9 +338,12 @@ export function ProductItemForm({
 
         <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
           <div>
-            <h2 className="font-semibold text-neutral-950">Detail Fisik & Harga / Gram</h2>
+            <h2 className="font-semibold text-neutral-950">
+              Detail Fisik & Harga / Gram
+            </h2>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Harga / Gram otomatis mengikuti Kadar Persen aktif. Harga jual final baru dihitung saat transaksi POS.
+              Harga / Gram otomatis mengikuti Kadar Persen aktif. Harga jual
+              final baru dihitung saat transaksi POS.
             </p>
           </div>
 
@@ -338,7 +362,9 @@ export function ProductItemForm({
                   className={`${inputClassName} pr-10`}
                   placeholder="Contoh: 40"
                 />
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-neutral-500">%</span>
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-neutral-500">
+                  %
+                </span>
               </div>
               <FieldError message={state.fieldErrors?.purityPercent} />
             </label>
@@ -357,32 +383,61 @@ export function ProductItemForm({
               <FieldError message={state.fieldErrors?.exchangePurityPercent} />
             </label>
 
-            <label className="block text-sm">
-              <span className="mb-2 block font-medium text-neutral-800">Harga / Gram</span>
-              <input
-                value={activeRate ? formatMoney(activeRate) : "Belum diatur untuk kadar ini"}
-                readOnly
-                className={`${inputClassName} cursor-not-allowed bg-neutral-50 font-semibold`}
-              />
+            <div className="block text-sm">
+              <span className="mb-2 block font-medium text-neutral-800">
+                Harga / Gram
+              </span>
+              <div className="flex gap-2">
+                <input
+                  value={
+                    activeRate
+                      ? formatMoney(activeRate)
+                      : "Belum diatur untuk kadar ini"
+                  }
+                  readOnly
+                  className={`${inputClassName} min-w-0 flex-1 cursor-not-allowed bg-neutral-50 font-semibold`}
+                />
+                <QuickPriceRateControl
+                  kind="sale"
+                  purityPercent={purityPercent}
+                  ratePerGram={activeRate}
+                  onSaved={({ purityKey: savedKey, ratePerGram }) =>
+                    setRateOverrides((current) => ({
+                      ...current,
+                      [savedKey]: ratePerGram,
+                    }))
+                  }
+                />
+              </div>
               <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
                 {activeRate
-                  ? "Mengikuti Harga / Gram Aktif dan tidak disimpan sebagai harga jual final."
-                  : "Produk tetap boleh dibuat. Atur rate kadar ini dari Pengaturan → Harga / Gram Aktif sebelum transaksi."}
+                  ? "Mengikuti Rate Jual Global. Gunakan ikon edit untuk memperbarui rate kadar ini."
+                  : "Produk tetap boleh dibuat. Gunakan tombol + untuk membuat Rate Jual Global kadar ini tanpa meninggalkan form."}
               </p>
-            </label>
+            </div>
 
             <label className="block text-sm">
               <span className="mb-2 block font-medium text-neutral-800">
                 Potongan / Gram <span className="text-red-500">*</span>
               </span>
-              <input type="hidden" name="deductionPerGram" value={deductionPerGram} />
+              <input
+                type="hidden"
+                name="deductionPerGram"
+                value={deductionPerGram}
+              />
               <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-neutral-500">Rp</span>
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-neutral-500">
+                  Rp
+                </span>
                 <input
                   type="text"
                   inputMode="numeric"
                   value={formatRupiahDigits(deductionPerGram)}
-                  onChange={(event) => setDeductionPerGram(normalizeRupiahDigits(event.target.value) || "0")}
+                  onChange={(event) =>
+                    setDeductionPerGram(
+                      normalizeRupiahDigits(event.target.value) || "0",
+                    )
+                  }
                   className={`${inputClassName} pl-11`}
                   placeholder="0"
                 />
@@ -405,7 +460,9 @@ export function ProductItemForm({
                   className={`${inputClassName} pl-10 pr-12`}
                   placeholder="Contoh: 3,05"
                 />
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-neutral-500">gr</span>
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-neutral-500">
+                  gr
+                </span>
               </div>
               <FieldError message={state.fieldErrors?.weightGram} />
             </label>
@@ -456,7 +513,11 @@ export function ProductItemForm({
               <span className="mb-2 block font-medium text-neutral-800">
                 Kondisi <span className="text-red-500">*</span>
               </span>
-              <select name="condition" defaultValue="good" className={inputClassName}>
+              <select
+                name="condition"
+                defaultValue="good"
+                className={inputClassName}
+              >
                 <option value="good">Baru</option>
                 <option value="used">Bekas</option>
               </select>
@@ -486,7 +547,9 @@ export function ProductItemForm({
 
           {estimatedBasePrice !== null ? (
             <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
-              <p className="text-xs text-[var(--muted)]">Estimasi harga dasar saat ini</p>
+              <p className="text-xs text-[var(--muted)]">
+                Estimasi harga dasar saat ini
+              </p>
               <p className="mt-1 text-lg font-semibold text-neutral-950">
                 {formatMoney(estimatedBasePrice)}
               </p>
@@ -513,7 +576,8 @@ export function ProductItemForm({
           <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
             <ImageIcon className="mt-0.5 size-4 shrink-0" />
             <p className="text-xs leading-5">
-              Akun ini belum mempunyai outlet aktif. Tambahkan akses outlet sebelum membuat produk fisik.
+              Akun ini belum mempunyai outlet aktif. Tambahkan akses outlet
+              sebelum membuat produk fisik.
             </p>
           </div>
         ) : null}

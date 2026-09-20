@@ -34,7 +34,12 @@ import {
   searchBuybackExistingItemsAction,
 } from "@/app/actions/buybacks";
 import { createPosQuickCustomerAction } from "@/app/actions/pos";
+import { BuybackExistingItemImage } from "@/components/buybacks/buyback-existing-item-image";
 import { CameraCaptureModal } from "@/components/media/camera-capture-modal";
+import {
+  QuickPriceRateControl,
+  type QuickPriceRateSavedValue,
+} from "@/components/pricing/quick-price-rate-control";
 import { QuickProductCategoryDialog } from "@/components/products/quick-product-category-dialog";
 import { QuickProductColorDialog } from "@/components/products/quick-product-color-dialog";
 import { PosQuickCustomerDialog } from "@/components/pos/workspace/pos-quick-customer-dialog";
@@ -77,7 +82,9 @@ const processingLabels: Record<BuybackProcessingType, string> = {
 };
 
 function normalizeColorKey(value: string | null | undefined) {
-  return String(value ?? "").trim().toLocaleLowerCase("id-ID");
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("id-ID");
 }
 
 function formatPreviousSaleDate(value: Date | null, timeZone: string) {
@@ -130,8 +137,7 @@ function calculateRecommendedBuybackAmount({
 
   const [wholeWeight = "0", decimalWeight = ""] = normalizedWeight.split(".");
   const weightMilli =
-    BigInt(wholeWeight) * BigInt(1000) +
-    BigInt(decimalWeight.padEnd(3, "0"));
+    BigInt(wholeWeight) * BigInt(1000) + BigInt(decimalWeight.padEnd(3, "0"));
   const rate = BigInt(ratePerGram);
 
   if (weightMilli <= BigInt(0) || rate <= BigInt(0)) {
@@ -146,18 +152,20 @@ function calculateRecommendedBuybackAmount({
   return Number(roundedAmount);
 }
 
-function ExternalBuybackRecommendation({
+function BuybackRecommendation({
   purityPercent,
   weightGram,
   priceRates,
+  onRateSaved,
 }: {
   purityPercent: string;
   weightGram: string;
   priceRates: BuybackPriceRateOption[];
+  onRateSaved: (value: QuickPriceRateSavedValue) => void;
 }) {
   const purityKey = normalizePurityKey(purityPercent);
   const activeRate = purityKey
-    ? priceRates.find((rate) => rate.purityKey === purityKey) ?? null
+    ? (priceRates.find((rate) => rate.purityKey === purityKey) ?? null)
     : null;
   const recommendedAmount = activeRate
     ? calculateRecommendedBuybackAmount({
@@ -170,7 +178,7 @@ function ExternalBuybackRecommendation({
   let helperClassName = "mt-1 text-[11px] text-[var(--muted)]";
 
   if (purityKey && !activeRate) {
-    helper = `Rate Buyback ${purityKey}% belum diatur di Pengaturan Harga / Gram.`;
+    helper = `Rate Buyback ${purityKey}% belum diatur.`;
     helperClassName = "mt-1 text-[11px] text-amber-700";
   } else if (activeRate && recommendedAmount === null) {
     helper = `Rate Buyback ${purityKey}% · ${formatCurrency(
@@ -183,25 +191,33 @@ function ExternalBuybackRecommendation({
   }
 
   return (
-    <label className="block text-sm">
+    <div className="block text-sm">
       <span className="mb-2 block font-medium text-neutral-800">
         Harga Rekomendasi Buyback
       </span>
-      <input
-        value={
-          recommendedAmount !== null
-            ? formatCurrency(recommendedAmount)
-            : "Tidak tersedia"
-        }
-        readOnly
-        className={cn(
-          inputClassName,
-          "cursor-default bg-neutral-50 font-semibold text-neutral-700",
-        )}
-        aria-label="Harga rekomendasi Buyback"
-      />
+      <div className="flex gap-2">
+        <input
+          value={
+            recommendedAmount !== null
+              ? formatCurrency(recommendedAmount)
+              : "Tidak tersedia"
+          }
+          readOnly
+          className={cn(
+            inputClassName,
+            "min-w-0 flex-1 cursor-default bg-neutral-50 font-semibold text-neutral-700",
+          )}
+          aria-label="Harga rekomendasi Buyback"
+        />
+        <QuickPriceRateControl
+          kind="buyback"
+          purityPercent={purityPercent}
+          ratePerGram={activeRate?.ratePerGram ?? null}
+          onSaved={onRateSaved}
+        />
+      </div>
       <p className={helperClassName}>{helper}</p>
-    </label>
+    </div>
   );
 }
 
@@ -280,8 +296,6 @@ function BuybackImageInput({
   function handleCameraCapture(file: File) {
     if (!galleryInputRef.current) return;
 
-    // Pertahankan nama field FormData Buyback existing dengan menyalin hasil
-    // custom camera ke input upload utama sebelum transaksi disubmit.
     const transfer = new DataTransfer();
     transfer.items.add(file);
     galleryInputRef.current.files = transfer.files;
@@ -444,7 +458,8 @@ function mapExistingItem(
   colorPresets: ProductColorPresetOption[],
 ): DraftItem {
   const activeColor = colorPresets.find(
-    (preset) => normalizeColorKey(preset.name) === normalizeColorKey(item.color),
+    (preset) =>
+      normalizeColorKey(preset.name) === normalizeColorKey(item.color),
   )?.name;
 
   return {
@@ -512,10 +527,16 @@ export function BuybackWorkspace({
   const [items, setItems] = useState<DraftItem[]>([]);
   const [localCategories, setLocalCategories] = useState(categories);
   const [localColorPresets, setLocalColorPresets] = useState(colorPresets);
+  const [localBuybackPriceRates, setLocalBuybackPriceRates] =
+    useState(buybackPriceRates);
   const [notes, setNotes] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [quickCategoryItemKey, setQuickCategoryItemKey] = useState<string | null>(null);
-  const [quickColorItemKey, setQuickColorItemKey] = useState<string | null>(null);
+  const [quickCategoryItemKey, setQuickCategoryItemKey] = useState<
+    string | null
+  >(null);
+  const [quickColorItemKey, setQuickColorItemKey] = useState<string | null>(
+    null,
+  );
   const [existingQuery, setExistingQuery] = useState("");
   const [existingResults, setExistingResults] = useState<
     BuybackExistingItemOption[]
@@ -672,6 +693,17 @@ export function BuybackWorkspace({
     setQuickColorItemKey(null);
   }
 
+  function handleBuybackRateSaved(saved: QuickPriceRateSavedValue) {
+    setLocalBuybackPriceRates((current) => {
+      const next = current.filter((rate) => rate.purityKey !== saved.purityKey);
+      return [
+        ...next,
+        { purityKey: saved.purityKey, ratePerGram: saved.ratePerGram },
+      ].sort((left, right) => Number(left.purityKey) - Number(right.purityKey));
+    });
+    setFeedback(`Rate Buyback ${saved.purityKey}% berhasil diperbarui.`);
+  }
+
   function addExternalItem() {
     if (items.length >= BUYBACK_MAX_ITEMS) {
       setFeedback(`Maksimal ${BUYBACK_MAX_ITEMS} item dalam satu Buyback.`);
@@ -690,7 +722,10 @@ export function BuybackWorkspace({
       setFeedback(`${item.sku} sudah ada di daftar Buyback.`);
       return;
     }
-    setItems((current) => [...current, mapExistingItem(item, localColorPresets)]);
+    setItems((current) => [
+      ...current,
+      mapExistingItem(item, localColorPresets),
+    ]);
     setFeedback(
       `${item.sku} ditambahkan. Pilih Cuci/Rongsok, cek data fisik, isi Total Harga, lalu ambil foto kondisi barang.`,
     );
@@ -948,32 +983,38 @@ export function BuybackWorkspace({
 
             {existingResults.length > 0 ? (
               <>
-                <div className="mt-3 grid min-w-0 w-full max-w-full max-h-[452px] gap-2 overflow-y-auto overscroll-contain pr-1 lg:max-h-none lg:grid-cols-2 lg:overflow-visible lg:pr-0">
+                <div className="mt-3 grid min-w-0 w-full max-w-full max-h-[500px] gap-2 overflow-y-auto overscroll-contain pr-1 lg:max-h-none lg:grid-cols-2 lg:overflow-visible lg:pr-0">
                   {existingResults.map((result) => (
-                    <button
+                    <div
                       key={result.id}
-                      type="button"
-                      onClick={() => addExistingItem(result)}
-                      className="h-[84px] min-w-0 w-full max-w-full overflow-hidden rounded-xl border border-[var(--border)] bg-white p-3 text-left transition hover:border-[var(--accent)] lg:h-auto"
+                      className="flex min-h-[90px] min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-xl border border-[var(--border)] bg-white p-2.5 transition hover:border-[var(--accent)]"
                     >
-                      <div className="flex min-w-0 w-full max-w-full items-start justify-between gap-3 overflow-hidden">
-                        <div className="min-w-0 flex-1 overflow-hidden">
-                          <p className="truncate text-sm font-semibold text-neutral-950">
+                      <BuybackExistingItemImage
+                        imageKey={result.imageKey}
+                        alt={`${result.sku} · ${result.productName}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addExistingItem(result)}
+                        className="flex min-w-0 flex-1 items-start justify-between gap-3 self-stretch rounded-lg px-1.5 py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                      >
+                        <span className="min-w-0 flex-1 self-center overflow-hidden">
+                          <span className="block truncate text-[11px] md:text-sm font-semibold text-neutral-950">
                             {result.sku} · {result.productName}
-                          </p>
-                          <p className="mt-1 max-w-full truncate text-xs text-[var(--muted)]">
+                          </span>
+                          <span className="mt-1 block max-w-full truncate text-xs text-[var(--muted)]">
                             {result.categoryName} · {result.weightGram ?? "-"}{" "}
                             gr · Kadar {result.purityPercent ?? "-"}%
-                          </p>
+                          </span>
                           {result.lastInvoiceNumber ? (
-                            <p className="mt-1 max-w-full truncate text-[11px] text-neutral-500">
+                            <span className="mt-1 block max-w-full truncate text-[11px] text-neutral-500">
                               Sale terakhir: {result.lastInvoiceNumber}
-                            </p>
+                            </span>
                           ) : null}
-                        </div>
-                        <Plus className="size-4 shrink-0 text-[var(--accent)]" />
-                      </div>
-                    </button>
+                        </span>
+                        <Plus className="mt-1 size-4 shrink-0 text-[var(--accent)]" />
+                      </button>
+                    </div>
                   ))}
                 </div>
                 {existingResults.length > 5 ? (
@@ -1164,7 +1205,8 @@ export function BuybackWorkspace({
                     </div>
                     {localColorPresets.length === 0 ? (
                       <p className="mt-1.5 text-xs leading-5 text-amber-700">
-                        Gunakan tombol + untuk membuat warna tanpa meninggalkan Buyback.
+                        Gunakan tombol + untuk membuat warna tanpa meninggalkan
+                        Buyback.
                       </p>
                     ) : null}
                   </div>
@@ -1237,13 +1279,14 @@ export function BuybackWorkspace({
                           "Riwayat penjualan terakhir belum tersedia."}
                       </p>
                     </label>
-                  ) : (
-                    <ExternalBuybackRecommendation
-                      purityPercent={item.purityPercent}
-                      weightGram={item.weightGram}
-                      priceRates={buybackPriceRates}
-                    />
-                  )}
+                  ) : null}
+
+                  <BuybackRecommendation
+                    purityPercent={item.purityPercent}
+                    weightGram={item.weightGram}
+                    priceRates={localBuybackPriceRates}
+                    onRateSaved={handleBuybackRateSaved}
+                  />
 
                   <label className="block text-sm">
                     <span className="mb-2 block font-medium text-neutral-800">

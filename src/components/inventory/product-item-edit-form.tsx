@@ -7,6 +7,7 @@ import { useFormStatus } from "react-dom";
 
 import { updateProductItemAction } from "@/app/actions/product-items";
 import { SingleImageInput } from "@/components/media/single-image-input";
+import { QuickPriceRateControl } from "@/components/pricing/quick-price-rate-control";
 import {
   initialProductItemActionState,
   type ProductItemActionState,
@@ -157,6 +158,7 @@ export function ProductItemEditForm({
   const [deductionPerGram, setDeductionPerGram] = useState(
     item.deductionPerGram ?? "0",
   );
+  const [rateOverrides, setRateOverrides] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (state.status === "success") {
@@ -169,7 +171,9 @@ export function ProductItemEditForm({
     [priceRates],
   );
   const purityKey = normalizePurityKey(purityPercent);
-  const activeRate = purityKey ? rateMap.get(purityKey) ?? null : null;
+  const activeRate = purityKey
+    ? rateOverrides[purityKey] ?? rateMap.get(purityKey) ?? null
+    : null;
   const estimatedBasePrice = useMemo(() => {
     const weight = Number(weightGram.replace(",", "."));
     const rate = Number(activeRate ?? "0");
@@ -206,13 +210,16 @@ export function ProductItemEditForm({
         <div>
           <h2 className="font-semibold text-neutral-950">Identitas Produk</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            SKU, barcode, dan Product Master tetap terkunci agar histori inventaris tidak berubah.
+            SKU, barcode, dan Product Master tetap terkunci agar histori
+            inventaris tidak berubah.
           </p>
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">Product Master</span>
+            <span className="mb-2 block font-medium text-neutral-800">
+              Product Master
+            </span>
             <input
               value={`${item.productCode} — ${item.productName}`}
               readOnly
@@ -221,7 +228,9 @@ export function ProductItemEditForm({
           </label>
 
           <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">Kode / Barcode</span>
+            <span className="mb-2 block font-medium text-neutral-800">
+              Kode / Barcode
+            </span>
             <input
               value={`${item.sku} · ${item.barcode}`}
               readOnly
@@ -250,9 +259,12 @@ export function ProductItemEditForm({
 
       <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
         <div>
-          <h2 className="font-semibold text-neutral-950">Detail Fisik & Harga / Gram</h2>
+          <h2 className="font-semibold text-neutral-950">
+            Detail Fisik & Harga / Gram
+          </h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Harga / Gram mengikuti rate aktif berdasarkan Kadar Persen. Harga jual final tidak diedit dari inventaris.
+            Harga / Gram mengikuti rate aktif berdasarkan Kadar Persen. Harga
+            jual final tidak diedit dari inventaris.
           </p>
         </div>
 
@@ -272,7 +284,9 @@ export function ProductItemEditForm({
                 className={`${inputClassName} pr-10`}
                 placeholder="Contoh: 40"
               />
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-neutral-500">%</span>
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-neutral-500">
+                %
+              </span>
             </div>
             <FieldError message={state.fieldErrors?.purityPercent} />
           </label>
@@ -293,27 +307,53 @@ export function ProductItemEditForm({
             <FieldError message={state.fieldErrors?.exchangePurityPercent} />
           </label>
 
-          <label className="block text-sm">
-            <span className="mb-2 block font-medium text-neutral-800">Harga / Gram Aktif</span>
-            <input
-              value={activeRate ? formatMoney(activeRate) : "Belum diatur untuk kadar ini"}
-              readOnly
-              className={`${inputClassName} cursor-not-allowed bg-neutral-50 font-semibold`}
-            />
+          <div className="block text-sm">
+            <span className="mb-2 block font-medium text-neutral-800">
+              Harga / Gram Aktif
+            </span>
+            <div className="flex gap-2">
+              <input
+                value={
+                  activeRate
+                    ? formatMoney(activeRate)
+                    : "Belum diatur untuk kadar ini"
+                }
+                readOnly
+                className={`${inputClassName} min-w-0 flex-1 cursor-not-allowed bg-neutral-50 font-semibold`}
+              />
+              <QuickPriceRateControl
+                kind="sale"
+                purityPercent={purityPercent}
+                ratePerGram={activeRate}
+                disabled={!canEdit}
+                onSaved={({ purityKey: savedKey, ratePerGram }) =>
+                  setRateOverrides((current) => ({
+                    ...current,
+                    [savedKey]: ratePerGram,
+                  }))
+                }
+              />
+            </div>
             <p className="mt-1.5 text-xs leading-5 text-[var(--muted)]">
               {activeRate
-                ? "Rate ini otomatis dipakai sebagai dasar pricing."
-                : "Item tetap dapat disimpan. Atur rate kadar ini sebelum transaksi POS."}
+                ? "Rate Jual Global ini otomatis dipakai sebagai dasar pricing. Gunakan ikon edit untuk memperbaruinya."
+                : "Item tetap dapat disimpan. Gunakan tombol + untuk membuat Rate Jual Global kadar ini."}
             </p>
-          </label>
+          </div>
 
           <label className="block text-sm">
             <span className="mb-2 block font-medium text-neutral-800">
               Potongan / Gram <span className="text-red-500">*</span>
             </span>
-            <input type="hidden" name="deductionPerGram" value={deductionPerGram} />
+            <input
+              type="hidden"
+              name="deductionPerGram"
+              value={deductionPerGram}
+            />
             <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-neutral-500">Rp</span>
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-neutral-500">
+                Rp
+              </span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -347,7 +387,9 @@ export function ProductItemEditForm({
                 className={`${inputClassName} pl-10 pr-12`}
                 placeholder="Contoh: 3,05"
               />
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-neutral-500">gr</span>
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-neutral-500">
+                gr
+              </span>
             </div>
             <FieldError message={state.fieldErrors?.weightGram} />
           </label>
@@ -424,14 +466,19 @@ export function ProductItemEditForm({
               </select>
             ) : (
               <>
-                <input type="hidden" name="currentOutletId" value={item.currentOutletId ?? ""} />
+                <input
+                  type="hidden"
+                  name="currentOutletId"
+                  value={item.currentOutletId ?? ""}
+                />
                 <input
                   value={item.outletName ?? "Belum ditempatkan"}
                   readOnly
                   className={`${inputClassName} cursor-not-allowed bg-neutral-50`}
                 />
                 <p className="mt-1.5 text-xs text-[var(--muted)]">
-                  Perpindahan outlet tetap dilakukan melalui fitur transfer inventaris.
+                  Perpindahan outlet tetap dilakukan melalui fitur transfer
+                  inventaris.
                 </p>
               </>
             )}
@@ -441,12 +488,15 @@ export function ProductItemEditForm({
 
         {estimatedBasePrice !== null ? (
           <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
-            <p className="text-xs text-[var(--muted)]">Estimasi harga dasar saat ini</p>
+            <p className="text-xs text-[var(--muted)]">
+              Estimasi harga dasar saat ini
+            </p>
             <p className="mt-1 text-lg font-semibold text-neutral-950">
               {formatMoney(estimatedBasePrice)}
             </p>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              Berat × Harga / Gram aktif. Harga final baru ditentukan pada transaksi POS.
+              Berat × Harga / Gram aktif. Harga final baru ditentukan pada
+              transaksi POS.
             </p>
           </div>
         ) : null}

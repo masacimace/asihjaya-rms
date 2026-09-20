@@ -14,12 +14,13 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 
 import { completeBuybackProcessingAction } from "@/app/actions/buyback-processing";
 import { CameraCaptureModal } from "@/components/media/camera-capture-modal";
 import { ImageLightbox } from "@/components/media/image-lightbox";
+import { QuickPriceRateControl } from "@/components/pricing/quick-price-rate-control";
 import { QuickProductCategoryDialog } from "@/components/products/quick-product-category-dialog";
 import { QuickProductColorDialog } from "@/components/products/quick-product-color-dialog";
 import { QuickProductMasterDialog } from "@/components/products/quick-product-master-dialog";
@@ -174,8 +175,6 @@ function ResultImageInput({ error }: { error?: string }) {
   function handleCameraCapture(file: File) {
     if (!inputRef.current) return;
 
-    // Pertahankan field FormData resultImage existing. Hasil custom camera
-    // disalin ke input upload utama agar action/storage tidak perlu berubah.
     const transfer = new DataTransfer();
     transfer.items.add(file);
     inputRef.current.files = transfer.files;
@@ -338,9 +337,11 @@ export function ProcessingDrawer({
   const [color, setColor] = useState(initialColor ?? "");
   const [pricePerGramInput, setPricePerGramInput] = useState("");
   const [priceTouched, setPriceTouched] = useState(false);
+  const [rateOverrides, setRateOverrides] = useState<Record<string, string>>({});
   const [quickMasterOpen, setQuickMasterOpen] = useState(false);
   const [quickCategoryOpen, setQuickCategoryOpen] = useState(false);
   const [quickColorOpen, setQuickColorOpen] = useState(false);
+
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -354,9 +355,11 @@ export function ProcessingDrawer({
     const key = normalizePurityKey(purityPercent);
     if (!key) return null;
     return (
-      priceRates.find((rate) => rate.purityKey === key)?.ratePerGram ?? null
+      rateOverrides[key] ??
+      priceRates.find((rate) => rate.purityKey === key)?.ratePerGram ??
+      null
     );
-  }, [priceRates, purityPercent]);
+  }, [priceRates, purityPercent, rateOverrides]);
 
   const suggestedPricePerGram = suggestedRate
     ? formatRupiahInput(suggestedRate)
@@ -697,19 +700,33 @@ export function ProcessingDrawer({
                 ) : null}
               </div>
 
-              <label className="block">
-                <span className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-neutral-800">
+              <div className="block">
+                <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-neutral-800">
                   <span>Harga / Gram Hasil *</span>
-                  {suggestedRate ? (
-                    <span className="text-[11px] font-normal text-emerald-700">
-                      Global {formatCurrency(Number(suggestedRate))}
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-normal text-amber-700">
-                      Rate global belum tersedia
-                    </span>
-                  )}
-                </span>
+                  <div className="flex items-center gap-2">
+                    {suggestedRate ? (
+                      <span className="text-[11px] font-normal text-emerald-700">
+                        Global {formatCurrency(Number(suggestedRate))}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-normal text-amber-700">
+                        Rate global belum tersedia
+                      </span>
+                    )}
+                    <QuickPriceRateControl
+                      kind="sale"
+                      purityPercent={purityPercent}
+                      ratePerGram={suggestedRate}
+                      onSaved={({ purityKey, ratePerGram }) => {
+                        setRateOverrides((current) => ({
+                          ...current,
+                          [purityKey]: ratePerGram,
+                        }));
+                        setPriceTouched(false);
+                      }}
+                    />
+                  </div>
+                </div>
                 <div className="relative">
                   <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
                     Rp
@@ -733,11 +750,11 @@ export function ProcessingDrawer({
                   </p>
                 ) : null}
                 <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-                  Rate global otomatis disarankan. Nilai ini disimpan sebagai
-                  snapshot hasil; pricing transaksi POS tetap memakai flow
-                  global rate + override yang sudah ada.
+                  Rate Jual Global otomatis disarankan. Input tetap boleh
+                  dioverride sebagai snapshot hasil item; ikon edit di atas
+                  mengubah Rate Jual Global untuk kadar ini.
                 </p>
-              </label>
+              </div>
             </div>
           </section>
 
