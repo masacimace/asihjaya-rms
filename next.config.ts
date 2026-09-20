@@ -31,6 +31,16 @@ function getServerActionBodySizeLimit(): ServerActionBodySizeLimit {
 const isDevelopment = process.env.NODE_ENV !== "production";
 const shouldEnableHsts = process.env.NODE_ENV === "production";
 
+function getAllowedDevOrigins() {
+  const lanTrainingHost = isDevelopment
+    ? process.env.ASIHJAYA_LAN_TRAINING_HOST?.trim()
+    : undefined;
+
+  return lanTrainingHost
+    ? ["127.0.0.1", lanTrainingHost]
+    : ["127.0.0.1"];
+}
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${isDevelopment ? " 'unsafe-eval'" : ""}`,
@@ -92,7 +102,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["127.0.0.1"],
+  allowedDevOrigins: getAllowedDevOrigins(),
   output: "standalone",
   poweredByHeader: false,
   experimental: {
