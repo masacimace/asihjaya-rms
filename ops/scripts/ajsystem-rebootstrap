@@ -24,7 +24,7 @@ Usage:
 
 Efek:
   - menghapus seluruh data PostgreSQL production;
-  - menghapus seluruh application uploads;
+  - menghapus seluruh application uploads pada local Docker volume;
   - menghapus Next.js cache volume;
   - mempertahankan .env.production, backup historis, deployment state, Docker,
     reverse proxy, systemd, Git repository, dan tooling host;
@@ -157,6 +157,11 @@ done
 docker info >/dev/null 2>&1 || fail "Docker daemon tidak dapat diakses."
 docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin tidak tersedia."
 docker network inspect "$BACKEND_NETWORK" >/dev/null 2>&1 || fail "backend network tidak ditemukan: $BACKEND_NETWORK"
+
+STORAGE_DRIVER="$(read_env_file_value "$ENV_FILE" IMAGE_STORAGE_DRIVER)"
+STORAGE_ROOT="$(read_env_file_value "$ENV_FILE" IMAGE_STORAGE_ROOT)"
+[[ "${STORAGE_DRIVER,,}" == "local" ]] || fail "rebootstrap full-upload hanya mendukung IMAGE_STORAGE_DRIVER=local."
+[[ -z "$STORAGE_ROOT" || "$STORAGE_ROOT" == ".data/uploads" ]] || fail "rebootstrap full-upload mengharuskan IMAGE_STORAGE_ROOT=.data/uploads."
 
 cd "$PROJECT_DIR"
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || fail "working tree VPS tidak bersih; commit/remove perubahan lokal sebelum rebootstrap."
