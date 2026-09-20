@@ -210,7 +210,7 @@ function PosAccessCard({ onNavigate }: { onNavigate?: () => void }) {
         </p>
       </div>
 
-      <ChevronRight className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-neutral-950" />
+      <ChevronRight className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
     </Link>
   );
 }
