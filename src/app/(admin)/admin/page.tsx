@@ -187,7 +187,6 @@ function getComparison(
   };
 }
 
-
 type SalesChartInsight = {
   label: string;
   value: string;
