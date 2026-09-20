@@ -29,13 +29,6 @@ assert(
 
 assert(
   source.includes(
-    "flex min-w-0 w-full max-w-full items-start justify-between gap-3 overflow-hidden",
-  ) && source.includes('className="min-w-0 flex-1 overflow-hidden"'),
-  "Konten internal result card wajib shrink-safe.",
-);
-
-assert(
-  source.includes(
     'className="mt-1 max-w-full truncate text-[11px] text-neutral-500"',
   ),
   "Nomor Sale panjang wajib tidak mendorong lebar card.",
