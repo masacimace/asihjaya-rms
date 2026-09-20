@@ -24,6 +24,7 @@ COMMANDS=(
   ajsystem-deployment-lock
   ajsystem-db-backup
   ajsystem-deploy
+  ajsystem-rebootstrap
   ajsystem-rollback
   ajsystem-deployment-preflight
 )
@@ -171,7 +172,7 @@ verify_installation() {
   local service_source service_destination service_owner service_group service_mode
   service_source="$(service_source_path)"
   service_destination="$(service_destination_path)"
-  [[ -f "$service_destination" && ! -L "$service_destination" ]] || fail "installed systemd unit tidak tersedia: $service_destination"
+  [[ -f "$service_destination" && ! -L "$service_destination" ]] || fail "installed file tidak tersedia: $service_destination"
   service_owner="$(stat -c '%U' "$service_destination")"
   service_group="$(stat -c '%G' "$service_destination")"
   service_mode="$(stat -c '%a' "$service_destination")"

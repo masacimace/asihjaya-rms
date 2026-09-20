@@ -1,0 +1,252 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 027
+
+PROJECT_DIR="${ASIHJAYA_PROJECT_DIR:-/opt/asihjaya-rms/app}"
+ENV_FILE="${ASIHJAYA_ENV_FILE:-/opt/asihjaya-rms/app/.env.production}"
+COMPOSE_FILE="${ASIHJAYA_COMPOSE_FILE:-$PROJECT_DIR/compose.production.yaml}"
+STATE_ROOT="${ASIHJAYA_DEPLOYMENT_STATE_ROOT:-/var/lib/asihjaya-rms/deployments}"
+RELEASE_ENV_FILE="${ASIHJAYA_RELEASE_ENV_FILE:-$STATE_ROOT/current.env}"
+LOCK_HELPER="${ASIHJAYA_DEPLOYMENT_LOCK_HELPER:-/usr/local/sbin/ajsystem-deployment-lock}"
+DEPLOY_COMMAND="${ASIHJAYA_DEPLOY_COMMAND:-/usr/local/sbin/ajsystem-deploy}"
+DEPLOYMENT_USER="${ASIHJAYA_DEPLOYMENT_USER:-ubuntu}"
+COMPOSE_PROJECT_NAME_VALUE="asihjaya-rms-production"
+BACKEND_NETWORK="${COMPOSE_PROJECT_NAME_VALUE}_backend"
+POSTGRES_VOLUME="${COMPOSE_PROJECT_NAME_VALUE}_postgres_data"
+UPLOADS_VOLUME="${COMPOSE_PROJECT_NAME_VALUE}_app_uploads"
+CACHE_VOLUME="${COMPOSE_PROJECT_NAME_VALUE}_app_next_cache"
+REQUIRED_CONFIRMATION="RESET_ALL_RUNTIME_DATA"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ajsystem-rebootstrap <exact-git-sha> --confirm=RESET_ALL_RUNTIME_DATA
+
+Efek:
+  - menghapus seluruh data PostgreSQL production;
+  - menghapus seluruh application uploads pada local Docker volume;
+  - menghapus Next.js cache volume;
+  - mempertahankan .env.production, backup historis, deployment state, Docker,
+    reverse proxy, systemd, Git repository, dan tooling host;
+  - deploy exact SHA dari origin/main;
+  - replay seluruh migration pada database fresh;
+  - menjalankan db:seed untuk bootstrap organization/outlet/register/admin;
+  - restart app lalu memverifikasi local dan public health endpoint.
+
+Command ini bersifat DESTRUKTIF dan hanya untuk intentional fresh rebootstrap.
+USAGE
+}
+
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 64
+}
+
+log() {
+  printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*"
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "command wajib tidak tersedia: $1"
+}
+
+assert_absolute_path() {
+  [[ "$2" == /* ]] || fail "$1 harus absolute: $2"
+}
+
+assert_runtime_user() {
+  [[ "$EUID" -ne 0 ]] || fail "jalankan rebootstrap sebagai $DEPLOYMENT_USER tanpa sudo."
+  [[ "$(id -un)" == "$DEPLOYMENT_USER" ]] || fail "rebootstrap wajib dijalankan sebagai user $DEPLOYMENT_USER."
+}
+
+read_env_file_value() {
+  local file_path="$1" key="$2" line value
+  line="$(grep -E "^${key}=" "$file_path" | tail -n 1 || true)"
+  value="${line#*=}"
+  value="${value%$'\r'}"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "$value"
+}
+
+validate_request() {
+  local target_sha="$1" confirmation="$2"
+  [[ "$target_sha" =~ ^[a-f0-9]{40,64}$ ]] || fail "target wajib exact lowercase Git SHA 40-64 karakter."
+  [[ "$confirmation" == "--confirm=$REQUIRED_CONFIRMATION" ]] || {
+    usage >&2
+    fail "confirmation wajib --confirm=$REQUIRED_CONFIRMATION."
+  }
+}
+
+wait_http_health() {
+  local name="$1" url="$2"
+  local attempt body
+
+  for attempt in $(seq 1 30); do
+    if body="$(curl -fsS --max-time 8 "$url" 2>/dev/null)"; then
+      if python3 -c '
+import json
+import sys
+payload = json.load(sys.stdin)
+raise SystemExit(0 if payload.get("status") == "ok" else 1)
+' <<< "$body"
+      then
+        log "Health $name PASS: $url"
+        return 0
+      fi
+    fi
+    sleep 2
+  done
+
+  fail "health $name belum PASS setelah 60 detik: $url"
+}
+
+create_compose_volume() {
+  local logical_name="$1" actual_name="$2"
+  docker volume create \
+    --label "com.docker.compose.project=$COMPOSE_PROJECT_NAME_VALUE" \
+    --label "com.docker.compose.volume=$logical_name" \
+    "$actual_name" >/dev/null
+}
+
+TARGET_SHA="${1:-}"
+CONFIRMATION="${2:-}"
+
+if [[ "${1:-}" != "--locked" ]]; then
+  [[ $# -eq 2 ]] || { usage >&2; exit 64; }
+  validate_request "$TARGET_SHA" "$CONFIRMATION"
+  assert_runtime_user
+  [[ -x "$LOCK_HELPER" ]] || fail "deployment lock helper tidak executable: $LOCK_HELPER"
+
+  export ASIHJAYA_DEPLOYMENT_OPERATION=rebootstrap
+  export APP_RELEASE_ID=rebootstrap
+  exec "$LOCK_HELPER" -- "$0" --locked "$TARGET_SHA" "$CONFIRMATION"
+fi
+
+shift
+[[ $# -eq 2 ]] || { usage >&2; exit 64; }
+TARGET_SHA="$1"
+CONFIRMATION="$2"
+validate_request "$TARGET_SHA" "$CONFIRMATION"
+assert_runtime_user
+
+for pair in \
+  "PROJECT_DIR:$PROJECT_DIR" \
+  "ENV_FILE:$ENV_FILE" \
+  "COMPOSE_FILE:$COMPOSE_FILE" \
+  "STATE_ROOT:$STATE_ROOT" \
+  "RELEASE_ENV_FILE:$RELEASE_ENV_FILE" \
+  "LOCK_HELPER:$LOCK_HELPER" \
+  "DEPLOY_COMMAND:$DEPLOY_COMMAND"
+do
+  assert_absolute_path "${pair%%:*}" "${pair#*:}"
+done
+
+for command_name in git docker curl python3 grep tail date seq sleep id; do
+  require_command "$command_name"
+done
+[[ -x "$DEPLOY_COMMAND" ]] || fail "deployment command tidak executable: $DEPLOY_COMMAND"
+[[ -d "$PROJECT_DIR/.git" ]] || fail "Git working copy tidak ditemukan: $PROJECT_DIR"
+[[ -f "$ENV_FILE" && ! -L "$ENV_FILE" && -r "$ENV_FILE" ]] || fail "production environment tidak tersedia sebagai regular readable file: $ENV_FILE"
+[[ -f "$COMPOSE_FILE" && ! -L "$COMPOSE_FILE" && -r "$COMPOSE_FILE" ]] || fail "Compose production tidak tersedia: $COMPOSE_FILE"
+[[ -f "$RELEASE_ENV_FILE" && ! -L "$RELEASE_ENV_FILE" && -r "$RELEASE_ENV_FILE" ]] || fail "current release environment tidak tersedia: $RELEASE_ENV_FILE"
+
+docker info >/dev/null 2>&1 || fail "Docker daemon tidak dapat diakses."
+docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin tidak tersedia."
+docker network inspect "$BACKEND_NETWORK" >/dev/null 2>&1 || fail "backend network tidak ditemukan: $BACKEND_NETWORK"
+
+STORAGE_DRIVER="$(read_env_file_value "$ENV_FILE" IMAGE_STORAGE_DRIVER)"
+STORAGE_ROOT="$(read_env_file_value "$ENV_FILE" IMAGE_STORAGE_ROOT)"
+[[ "${STORAGE_DRIVER,,}" == "local" ]] || fail "rebootstrap full-upload hanya mendukung IMAGE_STORAGE_DRIVER=local."
+[[ -z "$STORAGE_ROOT" || "$STORAGE_ROOT" == ".data/uploads" ]] || fail "rebootstrap full-upload mengharuskan IMAGE_STORAGE_ROOT=.data/uploads."
+
+cd "$PROJECT_DIR"
+[[ -z "$(git status --porcelain --untracked-files=all)" ]] || fail "working tree VPS tidak bersih; commit/remove perubahan lokal sebelum rebootstrap."
+
+git fetch --prune origin
+if ! git cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null; then
+  fail "exact Git SHA tidak ditemukan setelah fetch: $TARGET_SHA"
+fi
+RESOLVED_SHA="$(git rev-parse "${TARGET_SHA}^{commit}")"
+[[ "$RESOLVED_SHA" == "$TARGET_SHA" ]] || fail "target SHA tidak resolve secara exact: $TARGET_SHA -> $RESOLVED_SHA"
+git merge-base --is-ancestor "$TARGET_SHA" origin/main || fail "target SHA bukan bagian dari origin/main."
+
+PUBLIC_ORIGIN="$(read_env_file_value "$ENV_FILE" APP_URL)"
+[[ "$PUBLIC_ORIGIN" =~ ^https:// ]] || fail "APP_URL production wajib HTTPS untuk final health check."
+
+log "PERINGATAN: rebootstrap akan menghapus PostgreSQL, uploads, dan Next.js cache production."
+log "Target exact SHA: $TARGET_SHA"
+log "Environment, backup historis, deployment state, networks, dan host tooling dipertahankan."
+
+COMPOSE=(
+  docker compose
+  --env-file "$ENV_FILE"
+  --env-file "$RELEASE_ENV_FILE"
+  -f "$COMPOSE_FILE"
+)
+
+log "Menghentikan dan menghapus container runtime yang memegang persistent volumes..."
+"${COMPOSE[@]}" stop app db >/dev/null
+"${COMPOSE[@]}" rm -f -s app db migrate >/dev/null
+
+log "Memastikan seluruh target volume sudah bebas sebelum penghapusan dimulai..."
+for volume_name in "$POSTGRES_VOLUME" "$UPLOADS_VOLUME" "$CACHE_VOLUME"; do
+  if docker volume inspect "$volume_name" >/dev/null 2>&1; then
+    holders="$(docker ps -a --filter "volume=$volume_name" --format '{{.ID}} {{.Names}}')"
+    [[ -z "$holders" ]] || fail "volume $volume_name masih digunakan container: $holders"
+  fi
+done
+
+for volume_name in "$POSTGRES_VOLUME" "$UPLOADS_VOLUME" "$CACHE_VOLUME"; do
+  if docker volume inspect "$volume_name" >/dev/null 2>&1; then
+    docker volume rm "$volume_name" >/dev/null
+    log "Volume dihapus: $volume_name"
+  fi
+done
+
+log "Membuat ulang tiga volume runtime sebagai volume Compose kosong..."
+create_compose_volume postgres_data "$POSTGRES_VOLUME"
+create_compose_volume app_uploads "$UPLOADS_VOLUME"
+create_compose_volume app_next_cache "$CACHE_VOLUME"
+
+log "Menjalankan deployment exact SHA pada database fresh..."
+"$DEPLOY_COMMAND" --locked "$TARGET_SHA"
+
+[[ -f "$RELEASE_ENV_FILE" && -r "$RELEASE_ENV_FILE" ]] || fail "current.env tidak tersedia setelah deployment."
+DEPLOYED_REVISION="$(read_env_file_value "$RELEASE_ENV_FILE" APP_REVISION)"
+[[ "$DEPLOYED_REVISION" == "$TARGET_SHA" ]] || fail "revision setelah deployment tidak sesuai target: ${DEPLOYED_REVISION:-empty}"
+
+BOOTSTRAP_IMAGE="asihjaya-rms-rebootstrap-seed:${TARGET_SHA:0:12}"
+cleanup_bootstrap_image() {
+  if [[ -n "${BOOTSTRAP_IMAGE:-}" ]]; then
+    docker image rm "$BOOTSTRAP_IMAGE" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup_bootstrap_image EXIT
+
+log "Menyiapkan bootstrap image dari exact deployed source..."
+docker build --target builder --tag "$BOOTSTRAP_IMAGE" "$PROJECT_DIR" >/dev/null
+
+log "Menjalankan db:seed untuk bootstrap organization/outlet/register/admin..."
+docker run --rm \
+  --network "$BACKEND_NETWORK" \
+  --env-file "$ENV_FILE" \
+  --env-file "$RELEASE_ENV_FILE" \
+  "$BOOTSTRAP_IMAGE" \
+  npm run db:seed
+
+docker image rm "$BOOTSTRAP_IMAGE" >/dev/null 2>&1 || true
+BOOTSTRAP_IMAGE=""
+trap - EXIT
+
+log "Restart application setelah bootstrap seed..."
+"${COMPOSE[@]}" restart app >/dev/null
+
+wait_http_health local "http://127.0.0.1:3000/api/health"
+wait_http_health public "${PUBLIC_ORIGIN%/}/api/health"
+
+log "PASS: VPS fresh rebootstrap selesai untuk revision $TARGET_SHA."
+log "PostgreSQL, uploads, dan cache dimulai dari kosong; bootstrap seed sudah diterapkan."
