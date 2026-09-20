@@ -23,26 +23,27 @@ export default async function CreateProductPage() {
     "inventory.manage",
   ]);
 
-  const [categories, productMasters, outlets, priceRates, colorPresets] = await Promise.all([
-    getProductMasterCategoryOptions(auth.organization.id),
-    getActiveProductMasterOptions(auth.organization.id),
-    getProductItemCreateOutletOptions({
-      organizationId: auth.organization.id,
-      allowedOutletIds: auth.outlets.map((outlet) => outlet.id),
-    }),
-    getActiveGoldPriceRates({ organizationId: auth.organization.id }),
-    getActiveProductColorPresetOptions(auth.organization.id),
-  ]);
+  const [categories, productMasters, outlets, priceRates, colorPresets] =
+    await Promise.all([
+      getProductMasterCategoryOptions(auth.organization.id),
+      getActiveProductMasterOptions(auth.organization.id),
+      getProductItemCreateOutletOptions({
+        organizationId: auth.organization.id,
+        allowedOutletIds: auth.outlets.map((outlet) => outlet.id),
+      }),
+      getActiveGoldPriceRates({ organizationId: auth.organization.id }),
+      getActiveProductColorPresetOptions(auth.organization.id),
+    ]);
 
   return (
     <div className="flex w-full min-w-0 max-w-full flex-col gap-5 overflow-x-clip pb-6">
       <section className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5">
         <Link
-          href="/admin/inventaris"
+          href="/admin/produk"
           className="inline-flex h-10 w-fit items-center gap-2 bg-white px-3 text-sm font-semibold text-neutral-700"
         >
           <ArrowLeft className="size-4" />
-          Kembali ke inventaris
+          Kembali ke Produk Master
         </Link>
 
         <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
