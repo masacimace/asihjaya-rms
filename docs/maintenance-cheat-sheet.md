@@ -1,6 +1,6 @@
 # ASIHJAYA RMS — Maintenance Cheat Sheet
 
-Dokumen ini adalah panduan operasional singkat untuk maintenance harian ASIHJAYA RMS, baik di development lokal maupun VPS production/preview.
+Dokumen ini adalah panduan operasional utama untuk maintenance harian ASIHJAYA RMS, baik di development lokal maupun VPS production/preview.
 
 Tujuan utamanya sederhana: ketika workflow sudah lama tidak disentuh, buka bagian **Quick Cheat Sheet** terlebih dahulu. Bagian lain digunakan ketika membutuhkan detail tambahan.
 
@@ -22,13 +22,14 @@ git pull --ff-only origin main
 npm run dev
 ```
 
-Buka aplikasi lokal seperti biasa dan smoke test hanya area yang diubah.
+Buka aplikasi lokal seperti biasa dan smoke test area yang diubah.
 
 ## 3. Commit + push langsung ke `main`
 
 Workflow maintenance default untuk single maintainer:
 
 ```powershell
+git status --short
 git add .
 git commit -m "fix: deskripsi perubahan"
 git push origin main
@@ -39,31 +40,32 @@ Catat exact SHA dari `git rev-parse HEAD`.
 
 ## 4. Deploy normal ke VPS
 
-Di VPS, jalankan sebagai user `ubuntu`, **tanpa sudo**:
+Jalankan sebagai user `ubuntu`, **tanpa sudo**:
 
 ```bash
 cd /opt/asihjaya-rms/app
 ajsystem-deploy <EXACT_SHA>
 ```
 
-Contoh:
-
-```bash
-ajsystem-deploy 0123456789abcdef0123456789abcdef01234567
-```
-
 Gunakan exact SHA agar release yang dipasang tidak ambigu.
 
-## 5. Cek release aktif VPS
+## 5. Setelah mengubah `.env.production` di VPS
 
-```bash
-grep '^APP_REVISION=' /var/lib/asihjaya-rms/deployments/current.env
-git rev-parse HEAD
+Canonical environment:
+
+```text
+/opt/asihjaya-rms/app/.env.production
 ```
 
-Jika deployment baru selesai, keduanya harus menunjuk revision yang sama.
+Jika hanya `.env.production` yang berubah, **tidak perlu commit atau push GitHub**. Terapkan perubahan dengan me-deploy ulang exact SHA yang sedang aktif:
 
-## 6. Health check VPS
+```bash
+cd /opt/asihjaya-rms/app
+SHA="$(grep '^APP_REVISION=' /var/lib/asihjaya-rms/deployments/current.env | cut -d= -f2)"
+ajsystem-deploy "$SHA"
+```
+
+Lalu health check:
 
 ```bash
 curl -fsS http://127.0.0.1:3000/api/health
@@ -72,7 +74,27 @@ curl -fsS https://ajsystem.id/api/health
 echo
 ```
 
-## 7. Fresh database LOCAL
+**Jangan mengganti `POSTGRES_PASSWORD`, `POSTGRES_USER`, `POSTGRES_DB`, atau `DATABASE_URL` dengan prosedur ini tanpa sinkronisasi credential PostgreSQL. Jangan merotasi `HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY` tanpa migration plan.**
+
+## 6. Cek release aktif VPS
+
+```bash
+grep '^APP_REVISION=' /var/lib/asihjaya-rms/deployments/current.env
+git rev-parse HEAD
+```
+
+Setelah deployment selesai, keduanya harus menunjuk revision yang sama.
+
+## 7. Health check VPS
+
+```bash
+curl -fsS http://127.0.0.1:3000/api/health
+echo
+curl -fsS https://ajsystem.id/api/health
+echo
+```
+
+## 8. Fresh database LOCAL
 
 > DESTRUKTIF. Hanya jalankan jika memang sengaja ingin menghapus seluruh database development lokal.
 
@@ -86,7 +108,7 @@ Reset database + hapus local upload storage:
 npm run db:fresh:local -- --confirm=RESET_LOCAL_DATABASE --purge-local-storage
 ```
 
-## 8. Fresh total runtime VPS
+## 9. Fresh total runtime VPS
 
 > **SANGAT DESTRUKTIF.** Menghapus database production/preview, seluruh local uploads, dan Next.js cache, lalu migration + seed ulang.
 
@@ -96,7 +118,7 @@ ajsystem-rebootstrap <EXACT_SHA> --confirm=RESET_ALL_RUNTIME_DATA
 
 Command ini tetap mempertahankan `.env.production`, backup historis, deployment state, Git repository, Docker, reverse proxy, systemd, dan host tooling.
 
-## 9. Status container production
+## 10. Status container production
 
 ```bash
 cd /opt/asihjaya-rms/app
@@ -108,7 +130,7 @@ docker compose \
   ps
 ```
 
-## 10. Logs aplikasi
+## 11. Logs aplikasi
 
 ```bash
 cd /opt/asihjaya-rms/app
@@ -130,29 +152,17 @@ docker compose \
   logs --tail 200 db
 ```
 
-## 11. Preflight VPS
+## 12. Preflight VPS
 
 ```bash
 ajsystem-deployment-preflight check
-```
-
-Status ringkas:
-
-```bash
 ajsystem-deployment-preflight status
 ```
 
-## 12. Rollback aplikasi
-
-Cek apakah previous healthy release tersedia:
+## 13. Rollback aplikasi
 
 ```bash
 ajsystem-rollback check
-```
-
-Rollback hanya jika hasil check memang sesuai dengan release yang ingin dikembalikan:
-
-```bash
 ajsystem-rollback execute
 ```
 
@@ -174,9 +184,19 @@ edit local
 → smoke test VPS
 ```
 
-GitHub Quality Gate tetap berjalan otomatis ketika source dipush. Untuk maintenance harian, tidak perlu membuat branch/PR hanya untuk perubahan kecil apabila maintainer memang memilih workflow direct-to-main.
+Untuk perubahan environment VPS:
 
-Branch/PR tetap boleh digunakan ketika perubahan sangat besar, eksperimental, atau memang membutuhkan isolasi tambahan. Ini pilihan workflow, bukan kewajiban untuk setiap perubahan.
+```text
+edit /opt/asihjaya-rms/app/.env.production
+→ tidak perlu Git commit
+→ ambil APP_REVISION aktif
+→ ajsystem-deploy <SHA aktif>
+→ health check
+```
+
+GitHub Quality Gate tetap berjalan otomatis ketika source dipush. Untuk maintenance harian, branch/PR tidak wajib untuk perubahan kecil jika maintainer memilih workflow direct-to-main.
+
+Branch/PR tetap berguna untuk perubahan besar, eksperimental, deployment tooling, migration berisiko tinggi, atau perubahan yang memang membutuhkan isolasi tambahan.
 
 ---
 
@@ -198,7 +218,7 @@ npm run dev
 
 Lakukan perubahan lalu smoke test fitur yang disentuh.
 
-Untuk perubahan yang lebih luas, command berikut tersedia:
+Untuk perubahan yang lebih luas:
 
 ```powershell
 npm run lint
@@ -251,7 +271,7 @@ ajsystem-deploy <EXACT_SHA>
 
 `ajsystem-deploy` adalah jalur resmi deployment. Ia menangani fetch source, build image, production environment validation, guarded migration, pre-deployment backup, candidate health, application activation, public health, dan release promotion.
 
-Jangan menggantikan normal deployment dengan rangkaian manual `git pull + docker compose up` kecuali sedang melakukan troubleshooting yang memang terarah.
+Jangan menggantikan normal deployment dengan rangkaian manual `git pull + docker compose up` kecuali sedang melakukan troubleshooting terarah.
 
 ## Setelah deployment
 
@@ -276,17 +296,7 @@ Kemudian buka fitur yang baru diubah dan lakukan smoke test browser.
 
 # 4. Perubahan UI/UX
 
-Untuk perubahan seperti:
-
-- spacing;
-- layout;
-- typography;
-- label/copywriting;
-- responsive behavior;
-- visual refinement;
-- perubahan komponen yang tidak mengubah business invariant;
-
-workflow paling pendek adalah:
+Untuk perubahan seperti spacing, layout, typography, label/copywriting, responsive behavior, visual refinement, atau komponen yang tidak mengubah business invariant:
 
 ```text
 edit → local smoke → push main → exact SHA deploy → browser smoke VPS
@@ -298,22 +308,13 @@ Tidak perlu reset database.
 
 # 5. Perubahan Business Flow Backend
 
-Untuk perubahan backend normal seperti:
-
-- server action;
-- service/business logic;
-- query;
-- API route;
-- authorization flow;
-- calculation/business process;
-
-workflow deployment tetap sama:
+Untuk perubahan backend normal seperti server action, service/business logic, query, API route, authorization flow, calculation, atau business process, workflow deployment tetap:
 
 ```bash
 ajsystem-deploy <EXACT_SHA>
 ```
 
-Yang berbeda hanyalah local test sebelum push harus mencakup flow bisnis yang diubah.
+Yang berbeda hanya local test sebelum push harus mencakup flow bisnis yang diubah.
 
 ---
 
@@ -337,15 +338,7 @@ Review SQL migration yang dihasilkan sebelum commit.
 
 ## Migration additive / normal
 
-Contoh:
-
-- tambah table;
-- tambah column;
-- tambah index;
-- tambah constraint yang kompatibel;
-- schema addition lainnya.
-
-Workflow:
+Contohnya tambah table, column, index, compatible constraint, atau schema addition lain.
 
 ```text
 buat migration baru
@@ -354,7 +347,7 @@ buat migration baru
 → ajsystem-deploy <SHA>
 ```
 
-Deployment akan menjalankan migration secara otomatis.
+Deployment menjalankan migration secara otomatis.
 
 ## Migration destructive
 
@@ -370,22 +363,17 @@ Contoh operasi yang dapat diblokir:
 
 Existing database akan **fail closed** jika ada destructive migration pending tanpa explicit one-shot approval.
 
-Jangan menyimpan permission destructive permanen di `.env.production`.
+Jangan menyimpan destructive permission permanen di `.env.production`.
 
-One-shot runner tersedia dalam bentuk:
+One-shot runner:
 
 ```powershell
 npm run db:deploy -- --allow-destructive
 ```
 
-Tetapi untuk VPS, gunakan one-shot destructive hanya setelah:
+Untuk VPS, gunakan one-shot destructive hanya setelah SQL direview, backup pre-deployment terverifikasi, impact data loss/downtime dipahami, dan exact candidate/release context jelas.
 
-1. SQL migration direview;
-2. backup pre-deployment terverifikasi;
-3. impact data loss/downtime dipahami;
-4. exact candidate/release context sudah jelas.
-
-Jika normal `ajsystem-deploy <SHA>` berhenti karena destructive migration, jangan improvisasi dengan `drizzle-kit migrate`. Gunakan prosedur di:
+Jika `ajsystem-deploy <SHA>` berhenti karena destructive migration, jangan improvisasi dengan `drizzle-kit migrate`. Gunakan prosedur:
 
 ```text
 docs/development/database-deployment.md
@@ -399,29 +387,29 @@ Fresh database berbeda: historical destructive migration diperbolehkan otomatis 
 
 Secara default, database lokal **dipertahankan** agar data preview/regression tidak hilang.
 
-Jika memang sengaja ingin fresh local database:
+Fresh local database:
 
 ```powershell
 npm run db:fresh:local -- --confirm=RESET_LOCAL_DATABASE
 ```
 
-Script ini:
+Script menjalankan:
 
 ```text
 hapus volume database development lokal
 → start PostgreSQL baru
-→ jalankan seluruh migration
-→ jalankan db:seed
+→ seluruh migration
+→ db:seed
 → validasi migration/schema
 ```
 
-Jika ingin sekaligus menghapus local upload storage:
+Sekaligus hapus local upload storage:
 
 ```powershell
 npm run db:fresh:local -- --confirm=RESET_LOCAL_DATABASE --purge-local-storage
 ```
 
-Jangan memakai flag `--purge-local-storage` jika hanya database yang ingin di-reset.
+Jangan memakai `--purge-local-storage` jika hanya database yang ingin di-reset.
 
 ---
 
@@ -435,7 +423,7 @@ ajsystem-rebootstrap <EXACT_SHA> --confirm=RESET_ALL_RUNTIME_DATA
 
 Jalankan sebagai user `ubuntu`, **tanpa sudo**.
 
-Command ini hanya menerima exact lowercase Git SHA yang merupakan bagian dari `origin/main`.
+Command hanya menerima exact lowercase Git SHA yang merupakan bagian dari `origin/main`.
 
 ## Yang dihapus
 
@@ -445,7 +433,7 @@ asihjaya-rms-production_app_uploads
 asihjaya-rms-production_app_next_cache
 ```
 
-Efeknya:
+Efek:
 
 ```text
 PostgreSQL kosong
@@ -483,24 +471,19 @@ IMAGE_STORAGE_DRIVER=local
 IMAGE_STORAGE_ROOT=.data/uploads
 ```
 
-Jika storage driver bukan `local`, command akan berhenti sebelum destructive volume cleanup.
+Jika storage driver bukan `local`, command berhenti sebelum destructive volume cleanup.
 
 ## Kapan digunakan
 
-Gunakan hanya ketika memang ingin VPS kembali seperti fresh application installation dari sisi data, misalnya:
+Gunakan ketika memang ingin VPS kembali seperti fresh application installation dari sisi data, misalnya preview environment ingin dikosongkan total atau disposable environment memang akan disiapkan ulang.
 
-- preview environment ingin dikosongkan total;
-- selesai perubahan schema besar dan memang sengaja memulai data baru;
-- environment disposable akan disiapkan ulang;
-- sebelum handoff tertentu ketika seluruh data lama memang tidak diperlukan.
-
-Jangan gunakan command ini untuk update aplikasi biasa.
+Jangan gunakan untuk update aplikasi biasa.
 
 ---
 
 # 9. Environment VPS
 
-Canonical environment file:
+## Canonical environment
 
 ```text
 /opt/asihjaya-rms/app/.env.production
@@ -513,23 +496,88 @@ cd /opt/asihjaya-rms/app
 stat -c '%F | %U:%G | %a | %n' .env.production
 ```
 
-Jangan paste isi environment lengkap ke chat, issue, commit, atau log publik karena file tersebut memuat secret.
+Canonical file adalah `.env.production`, **bukan** `/etc/asihjaya-rms/production.env` dan bukan root `.env`.
 
-Jangan commit `.env.production`.
+Jangan paste isi environment lengkap ke chat, issue, commit, atau log publik. Jangan commit `.env.production` ke Git.
 
-## Release identity
+## Setelah mengedit `.env.production`
+
+Container yang sudah berjalan tidak otomatis mendapatkan environment baru hanya karena file di host berubah. Setelah save, gunakan workflow berikut:
 
 ```bash
-cat /var/lib/asihjaya-rms/deployments/current.env
+cd /opt/asihjaya-rms/app
+
+SHA="$(grep '^APP_REVISION=' /var/lib/asihjaya-rms/deployments/current.env | cut -d= -f2)"
+printf 'Active revision: %s\n' "$SHA"
+
+ajsystem-deploy "$SHA"
 ```
 
-File `current.env` berisi metadata release dan image aktif. Ia bukan pengganti `.env.production`.
+Tidak perlu membuat Git commit baru jika yang berubah hanya konfigurasi private di `.env.production`.
+
+Setelah deployment:
+
+```bash
+curl -fsS http://127.0.0.1:3000/api/health
+echo
+curl -fsS https://ajsystem.id/api/health
+echo
+```
+
+Kemudian smoke test fitur yang terkait dengan variable yang baru diubah.
+
+### Contoh perubahan environment yang normal
+
+Contohnya konfigurasi server-side integration, timeout, cache duration, URL runtime, Telegram settings, atau secret aplikasi yang memang boleh diganti sesuai prosedur fitur tersebut.
+
+Workflow sederhananya:
+
+```text
+edit .env.production
+→ save
+→ ajsystem-deploy <APP_REVISION aktif>
+→ health check
+→ smoke test fitur terkait
+```
+
+### Credential database — jangan sekadar edit lalu deploy
+
+Variable berikut memiliki hubungan dengan state PostgreSQL yang sudah berjalan:
+
+```text
+POSTGRES_DB
+POSTGRES_USER
+POSTGRES_PASSWORD
+DATABASE_URL
+```
+
+Jangan mengubah salah satu sisi saja. Perubahan credential database harus disinkronkan antara PostgreSQL dan application connection. Jika dilakukan hanya dengan edit `.env.production` lalu deploy, aplikasi/database dapat kehilangan koneksi.
+
+### Hardware credential encryption key — jangan rotate biasa
+
+```text
+HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY
+```
+
+Key ini dipakai untuk credential Hardware Hub yang terenkripsi. Jangan merotasinya seperti secret biasa tanpa migration/re-encryption plan untuk data yang sudah tersimpan.
+
+## `.env.production` vs `current.env`
+
+```text
+.env.production
+  = konfigurasi mutable/private VPS
+
+/var/lib/asihjaya-rms/deployments/current.env
+  = identity release/image aktif yang dikelola deployment automation
+```
+
+Jangan edit `current.env` secara manual untuk mengganti release identity.
 
 ---
 
 # 10. Preflight Deployment
 
-Cek readiness host:
+Readiness host:
 
 ```bash
 ajsystem-deployment-preflight check
@@ -541,14 +589,14 @@ Status:
 ajsystem-deployment-preflight status
 ```
 
-Command lain yang tersedia:
+Command maintenance tooling lain:
 
 ```bash
 ajsystem-deployment-preflight snapshot
 ajsystem-deployment-preflight lock-test
 ```
 
-Gunakan `snapshot` atau `lock-test` hanya ketika sedang melakukan maintenance deployment tooling atau diagnosis lock.
+Gunakan `snapshot` atau `lock-test` ketika melakukan maintenance deployment tooling atau diagnosis lock.
 
 ---
 
@@ -611,20 +659,18 @@ npm run db:backup:offsite:verify
 
 Normal `ajsystem-deploy` sudah menjalankan pre-deployment backup + verification sebagai bagian deployment orchestration.
 
-Cek timer backup di VPS:
+Cek timer backup:
 
 ```bash
 systemctl is-active ajsystem-db-backup-daily.timer
 systemctl is-enabled ajsystem-db-backup-daily.timer
-
 systemctl is-active ajsystem-db-backup-weekly.timer
 systemctl is-enabled ajsystem-db-backup-weekly.timer
-
 systemctl is-active ajsystem-db-backup-verify.timer
 systemctl is-enabled ajsystem-db-backup-verify.timer
 ```
 
-Daftar jadwal timer:
+Daftar jadwal:
 
 ```bash
 systemctl list-timers --all | grep ajsystem
@@ -641,12 +687,11 @@ systemctl is-active ajsystem-monitor.timer
 systemctl is-enabled ajsystem-monitor.timer
 ```
 
-Telegram reporting timers:
+Telegram reporting:
 
 ```bash
 systemctl is-active ajsystem-telegram-delivery.timer
 systemctl is-enabled ajsystem-telegram-delivery.timer
-
 systemctl is-active ajsystem-telegram-report-reconcile.timer
 systemctl is-enabled ajsystem-telegram-report-reconcile.timer
 ```
@@ -666,8 +711,6 @@ Karena monitor adalah oneshot service, status dapat kembali `inactive (dead)` se
 
 Rollback hanya menuju previous healthy release.
 
-Cek terlebih dahulu:
-
 ```bash
 ajsystem-rollback check
 ```
@@ -683,16 +726,16 @@ Aturan penting:
 - database tidak pernah otomatis di-rollback;
 - schema change dapat membutuhkan compatibility approval;
 - rollback tetap melakukan candidate smoke dan production health;
-- jangan memakai rollback sebagai pengganti forward-fix untuk migration database yang sudah terlanjur mengubah data/schema secara incompatible.
+- jangan memakai rollback sebagai pengganti forward-fix untuk migration database yang sudah mengubah data/schema secara incompatible.
 
-Untuk schema change, command yang tersedia:
+Untuk schema change tersedia:
 
 ```bash
 ajsystem-rollback approve <compatibility-reference>
 ajsystem-rollback deny <compatibility-reference>
 ```
 
-Gunakan hanya jika memang sedang menjalankan prosedur compatibility rollback yang sudah direview.
+Gunakan hanya dalam prosedur compatibility rollback yang sudah direview.
 
 ---
 
@@ -717,7 +760,7 @@ Verifikasi:
 sudo ./ops/scripts/ajsystem-install-deployment-automation verify
 ```
 
-Command utama yang dipasang:
+Command utama:
 
 ```text
 ajsystem-deployment-lock
@@ -736,18 +779,14 @@ Command runtime deployment/rebootstrap/rollback dijalankan sebagai `ubuntu` tanp
 
 ## Deployment menolak working tree VPS
 
-Cek:
-
 ```bash
 cd /opt/asihjaya-rms/app
 git status --short
 ```
 
-Working tree deployment harus bersih. Jangan memakai `git reset --hard` tanpa mengetahui perubahan apa yang akan hilang.
+Working tree deployment harus bersih. Jangan memakai `git reset --hard` tanpa mengetahui perubahan yang akan hilang.
 
 ## Deployment gagal pada migration
-
-Cek output deployment dan migration log:
 
 ```bash
 docker compose \
@@ -765,8 +804,6 @@ Jika penyebabnya destructive migration, ikuti bagian **Database Migration → Mi
 curl -i http://127.0.0.1:3000/api/health
 curl -i https://ajsystem.id/api/health
 ```
-
-Lalu:
 
 ```bash
 docker compose \
@@ -794,9 +831,21 @@ docker compose \
   logs --tail 200 db
 ```
 
+## Perubahan `.env.production` belum terlihat
+
+Pastikan container sudah direcreate melalui exact active revision:
+
+```bash
+cd /opt/asihjaya-rms/app
+SHA="$(grep '^APP_REVISION=' /var/lib/asihjaya-rms/deployments/current.env | cut -d= -f2)"
+ajsystem-deploy "$SHA"
+```
+
+Jangan hanya `docker restart app`, karena restart container lama tidak membuat ulang environment dari file host.
+
 ## Command host tidak sama dengan source
 
-Contoh untuk rebootstrap:
+Contoh rebootstrap:
 
 ```bash
 sha256sum \
@@ -804,7 +853,7 @@ sha256sum \
   /usr/local/sbin/ajsystem-rebootstrap
 ```
 
-Jika hash berbeda, install ulang deployment automation dari source revision yang memang ingin dijadikan current tooling:
+Jika hash berbeda:
 
 ```bash
 sudo ./ops/scripts/ajsystem-install-deployment-automation install
@@ -814,7 +863,7 @@ sudo ./ops/scripts/ajsystem-install-deployment-automation install
 
 # 17. Hal yang Jangan Dilakukan
 
-Hindari command berikut sebagai shortcut maintenance biasa:
+Hindari shortcut maintenance berikut:
 
 ```text
 docker compose down -v
@@ -822,16 +871,18 @@ docker system prune --volumes
 docker volume prune
 ```
 
-Command tersebut terlalu luas dan dapat menghapus resource di luar target maintenance yang dimaksud.
+Command tersebut terlalu luas dan dapat menghapus resource di luar target maintenance.
 
 Jangan:
 
 - commit `.env` atau `.env.production`;
 - paste secret ke issue/chat/log publik;
+- edit `current.env` secara manual;
 - mengedit migration lama yang sudah applied;
 - menghapus migration history secara manual;
 - menjalankan `drizzle-kit migrate` sebagai jalur production release;
-- merotasi `HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY` tanpa migration plan untuk credential yang sudah terenkripsi;
+- mengganti credential PostgreSQL hanya pada `.env.production` tanpa sinkronisasi database;
+- merotasi `HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY` tanpa migration plan;
 - menjalankan `ajsystem-rebootstrap` untuk update harian biasa;
 - menjalankan deployment/rebootstrap/rollback dengan `sudo`.
 
@@ -849,6 +900,12 @@ Backend/business flow normal
   → local test flow terkait
   → push main
   → ajsystem-deploy <SHA>
+
+.env.production berubah
+  → tidak perlu Git commit
+  → ambil APP_REVISION aktif
+  → ajsystem-deploy <APP_REVISION aktif>
+  → health + feature smoke
 
 DB additive
   → migration baru
@@ -878,7 +935,7 @@ Aplikasi release bermasalah
 
 # 19. Referensi Detail
 
-Jika butuh detail di luar cheat sheet ini, gunakan dokumentasi project berikut:
+Jika butuh detail di luar cheat sheet ini:
 
 ```text
 docs/development/database-deployment.md
@@ -889,4 +946,4 @@ docs/development/production-environment.md
 docs/development/asihjaya-rms-production-handoff.md
 ```
 
-Cheat sheet ini adalah titik masuk utama untuk maintenance harian. Dokumentasi detail di atas digunakan ketika sedang menangani migration destructive, recovery, restore, deployment tooling, atau incident yang membutuhkan prosedur lebih lengkap.
+Cheat sheet ini adalah titik masuk utama untuk maintenance harian. Dokumentasi detail digunakan ketika menangani migration destructive, recovery, restore, deployment tooling, credential/database changes, atau incident yang membutuhkan prosedur lebih lengkap.
