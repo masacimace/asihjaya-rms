@@ -496,7 +496,7 @@ cd /opt/asihjaya-rms/app
 stat -c '%F | %U:%G | %a | %n' .env.production
 ```
 
-Canonical file adalah `.env.production`, **bukan** `/etc/asihjaya-rms/production.env` dan bukan root `.env`.
+Canonical file adalah `.env.production` di project root; bukan legacy env di direktori `/etc/asihjaya-rms/` dan bukan root `.env`.
 
 Jangan paste isi environment lengkap ke chat, issue, commit, atau log publik. Jangan commit `.env.production` ke Git.
 
