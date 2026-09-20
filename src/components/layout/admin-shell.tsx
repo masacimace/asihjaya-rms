@@ -210,7 +210,7 @@ function PosAccessCard({ onNavigate }: { onNavigate?: () => void }) {
         </p>
       </div>
 
-      <ChevronRight className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
+      <ChevronRight className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-neutral-950" />
     </Link>
   );
 }
@@ -271,6 +271,7 @@ function SidebarContent({
 
     return true;
   });
+
   return (
     <>
       {showBrand ? <AdminBrandLink onNavigate={onNavigate} /> : null}
@@ -286,6 +287,7 @@ function SidebarContent({
             const isChildActive = visibleChildren.some((child) =>
               isNavigationActive(pathname, child.href),
             );
+
             return (
               <details key={label} open={isChildActive} className="group">
                 <summary className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-sm font-medium text-black transition-colors hover:bg-neutral-100 hover:text-neutral-950 marker:content-none [&::-webkit-details-marker]:hidden">
@@ -505,7 +507,7 @@ export function AdminShell({
 
       <div className="flex h-dvh min-h-0 min-w-0 max-w-full flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="sticky top-0 z-50 flex h-20 w-full max-w-full min-w-0 shrink-0 items-center overflow-visible border-b border-[var(--border)] bg-white/95 px-1.5 backdrop-blur sm:px-6 lg:px-8">
+        <header className="relative z-50 flex h-20 w-full max-w-full min-w-0 shrink-0 items-center overflow-visible border-b border-[var(--border)] bg-white/95 px-1.5 backdrop-blur sm:px-6 lg:px-8">
           <button
             type="button"
             aria-label="Buka navigasi"
