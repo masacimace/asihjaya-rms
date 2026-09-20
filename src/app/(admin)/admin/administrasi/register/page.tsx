@@ -227,6 +227,7 @@ export default async function RegisterPage() {
                   <td className="px-5 py-4 text-right">
                     <Link
                       href={`/admin/administrasi/register/${register.id}`}
+                      scroll={false}
                       className="inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40 hover:text-[var(--accent)]"
                     >
                       Kelola
@@ -244,6 +245,7 @@ export default async function RegisterPage() {
             <Link
               key={register.id}
               href={`/admin/administrasi/register/${register.id}`}
+              scroll={false}
               className="rounded-2xl border border-[var(--border)] bg-white p-4 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/10"
             >
               <div className="flex items-start gap-3">
