@@ -27,8 +27,10 @@ function assertOrdered(content: string, markers: string[]): void {
 
 const installerPath = "ops/scripts/ajsystem-install-deployment-automation";
 const preflightPath = "ops/scripts/ajsystem-deployment-preflight";
+const rebootstrapPath = "ops/scripts/ajsystem-rebootstrap";
 const installer = source(installerPath);
 const preflight = source(preflightPath);
+const rebootstrap = source(rebootstrapPath);
 const deploy = source("ops/scripts/ajsystem-deploy");
 const rollback = source("ops/scripts/ajsystem-rollback");
 const backup = source("ops/scripts/ajsystem-db-backup");
@@ -52,7 +54,7 @@ assert.equal(
   `Repository tidak boleh kembali memakai legacy production environment path ${legacyProductionEnvPath}.\n${legacyProductionEnvSearch.stdout || legacyProductionEnvSearch.stderr}`,
 );
 
-for (const scriptPath of [installerPath, preflightPath]) {
+for (const scriptPath of [installerPath, preflightPath, rebootstrapPath]) {
   assert(statSync(path.join(projectRoot, scriptPath)).isFile(), `${scriptPath} wajib regular file.`);
 }
 
@@ -61,6 +63,7 @@ for (const marker of [
   "restore)",
   "INSTALL_BACKUP_ROOT",
   "sha256sum",
+  "ajsystem-rebootstrap",
   'install -m 0750 -o root -g "$DEPLOYMENT_GROUP"',
   'install -d -m 0750 -o "$DEPLOYMENT_USER"',
   "runuser -u \"$DEPLOYMENT_USER\" -- docker info",
@@ -95,10 +98,53 @@ for (const forbidden of ["docker compose down", "db:restore", "POSTGRES_PASSWORD
   assert(!preflight.includes(forbidden), `Preflight tidak boleh memuat ${forbidden}.`);
 }
 
+for (const marker of [
+  "RESET_ALL_RUNTIME_DATA",
+  "assert_runtime_user",
+  "ASIHJAYA_DEPLOYMENT_OPERATION=rebootstrap",
+  "git status --porcelain --untracked-files=all",
+  "git merge-base --is-ancestor",
+  "POSTGRES_VOLUME",
+  "UPLOADS_VOLUME",
+  "CACHE_VOLUME",
+  "docker volume rm",
+  "create_compose_volume",
+  '"$DEPLOY_COMMAND" --locked "$TARGET_SHA"',
+  "--target builder",
+  "npm run db:seed",
+  "wait_http_health local",
+  "wait_http_health public",
+]) {
+  assert(rebootstrap.includes(marker), `Rebootstrap wajib memuat ${marker}.`);
+}
+for (const forbidden of [
+  "docker compose down",
+  "docker system prune",
+  "docker volume prune",
+  "source \"$ENV_FILE\"",
+  "cat \"$ENV_FILE\"",
+  "sudo ",
+]) {
+  assert(!rebootstrap.includes(forbidden), `Rebootstrap tidak boleh memuat ${forbidden}.`);
+}
+assertOrdered(rebootstrap, [
+  "git fetch --prune origin",
+  '"${COMPOSE[@]}" stop app db',
+  'docker volume rm "$volume_name"',
+  "create_compose_volume postgres_data",
+  '"$DEPLOY_COMMAND" --locked "$TARGET_SHA"',
+  "docker build --target builder",
+  "npm run db:seed",
+  '"${COMPOSE[@]}" restart app',
+  "wait_http_health local",
+  "wait_http_health public",
+]);
+
 for (const [name, content] of [
   ["deploy", deploy],
   ["rollback", rollback],
   ["backup", backup],
+  ["rebootstrap", rebootstrap],
 ] as const) {
   assert(content.includes("ASIHJAYA_DEPLOYMENT_USER"), `${name} wajib memakai deployment user contract.`);
   assert(content.includes("tanpa sudo"), `${name} wajib menolak runtime root/sudo.`);
@@ -144,6 +190,7 @@ if (process.platform !== "win32") {
   for (const scriptPath of [
     installerPath,
     preflightPath,
+    rebootstrapPath,
     "ops/scripts/ajsystem-deploy",
     "ops/scripts/ajsystem-rollback",
     "ops/scripts/ajsystem-db-backup",
@@ -170,5 +217,5 @@ assert(
 );
 
 console.log(
-  "OK: instalasi deployment automation memiliki atomic command backup/restore, deployment-user guard, immutable bootstrap preflight, lock rehearsal, dan VPS runbook yang dapat diaudit.",
+  "OK: instalasi deployment automation memiliki atomic command backup/restore, guarded VPS rebootstrap, deployment-user guard, immutable bootstrap preflight, lock rehearsal, dan VPS runbook yang dapat diaudit.",
 );
