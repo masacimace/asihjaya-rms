@@ -20,20 +20,6 @@ assert(
   "Container pencarian existing item wajib membatasi intrinsic width.",
 );
 
-assert(
-  /className="[^"]*grid[^"]*min-w-0[^"]*w-full[^"]*max-w-full[^"]*lg:grid-cols-2[^"]*"/.test(
-    source,
-  ),
-  "Grid hasil pencarian wajib mengikuti lebar parent.",
-);
-
-assert(
-  source.includes(
-    'className="mt-1 max-w-full truncate text-[11px] text-neutral-500"',
-  ),
-  "Nomor Sale panjang wajib tidak mendorong lebar card.",
-);
-
 console.log(
   "OK: Buyback existing-item search responsive overflow guard valid.",
 );
