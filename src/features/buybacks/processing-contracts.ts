@@ -31,7 +31,9 @@ export type BuybackProcessingQueueRow = {
   sourceCategoryName: string;
   sourceWeightGram: string;
   sourcePurityPercent: string;
+  sourceExchangePurityPercent: string | null;
   sourceColor: string;
+  sourceDeductionPerGram: string | null;
   beforeImageKey: string | null;
   beforeImageUrl: string | null;
   resultProductItemId: string | null;
@@ -40,8 +42,10 @@ export type BuybackProcessingQueueRow = {
   resultDisplayName: string | null;
   resultWeightGram: string | null;
   resultPurityPercent: string | null;
+  resultExchangePurityPercent: string | null;
   resultColor: string | null;
   resultPricePerGram: string | null;
+  resultDeductionPerGram: string | null;
   resultImageKey: string | null;
   resultImageUrl: string | null;
   processedAt: Date | null;
@@ -63,8 +67,10 @@ export type BuybackProcessingSubmitPayload = {
   displayName: string;
   weightGram: string;
   purityPercent: string;
+  exchangePurityPercent: string;
   color: string;
   pricePerGram: string;
+  deductionPerGram: string;
 };
 
 export type NormalizedBuybackProcessingPayload = {
@@ -74,8 +80,10 @@ export type NormalizedBuybackProcessingPayload = {
   displayName: string;
   weightGram: string;
   purityPercent: string;
+  exchangePurityPercent: string;
   color: string;
   pricePerGram: string;
+  deductionPerGram: string;
 };
 
 export type BuybackProcessingActionState = {

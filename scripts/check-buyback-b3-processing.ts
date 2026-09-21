@@ -13,6 +13,7 @@ function read(relativePath: string) {
   return readFileSync(file, "utf8");
 }
 
+const contracts = read("src/features/buybacks/processing-contracts.ts");
 const query = read("src/features/buybacks/processing-queries.ts");
 const service = read("src/features/buybacks/processing-service.ts");
 const action = read("src/app/actions/buyback-processing.ts");
@@ -65,8 +66,22 @@ assert(
 );
 
 assert(
-  service.includes("exchangePurityPercent: payload.purityPercent"),
-  "B3 harus menjaga kompatibilitas receipt Sale tanpa menambah field Kadar Tukaran ke UI.",
+  contracts.includes("exchangePurityPercent: string") &&
+    contracts.includes("deductionPerGram: string"),
+  "B3 contract wajib membawa Kadar Tukaran dan Potongan/Gram hasil.",
+);
+
+assert(
+  service.includes("exchangePurityPercent: payload.exchangePurityPercent") &&
+    service.includes("deductionPerGram: payload.deductionPerGram"),
+  "B3 completion wajib menyimpan Kadar Tukaran dan Potongan/Gram ke Physical Item final.",
+);
+
+assert(
+  action.includes("normalizeExchangePurity") &&
+    action.includes('normalizeBuybackMoney(raw.deductionPerGram, {') &&
+    action.includes("allowZero: true"),
+  "B3 action wajib memvalidasi Kadar Tukaran dan Potongan/Gram secara server-side.",
 );
 
 assert(
@@ -83,9 +98,17 @@ assert(
     workspace.includes("Rongsok") &&
     workspace.includes("QuickProductMasterDialog") &&
     workspace.includes("Berat Sesudah") &&
+    workspace.includes("Kadar Tukaran") &&
     workspace.includes("Harga / Gram") &&
+    workspace.includes("Potongan / Gram") &&
     workspace.includes("Foto Sesudah"),
-  "B3 UI belum membawa queue dan form hasil yang disepakati.",
+  "B3 UI belum membawa queue dan form hasil final yang disepakati.",
+);
+
+assert(
+  service.includes("calculateJewelryBasePrice({") &&
+    !service.includes("pricePerGram: payload.pricePerGram -"),
+  "Potongan/Gram metadata tidak boleh mengubah kalkulasi sellingAmount hasil.",
 );
 
 assert(
@@ -101,5 +124,5 @@ assert(
 );
 
 console.log(
-  "OK: B3 Processing Cuci/Rongsok contract valid — pending -> completed -> saleable.",
+  "OK: B3 Processing Cuci/Rongsok contract valid — pending -> completed -> saleable dengan Kadar Tukaran dan Potongan/Gram final.",
 );

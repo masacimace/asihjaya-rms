@@ -330,6 +330,10 @@ export function ProcessingDrawer({
   const [displayName, setDisplayName] = useState(row.sourceDisplayName);
   const [weightGram, setWeightGram] = useState(row.sourceWeightGram);
   const [purityPercent, setPurityPercent] = useState(row.sourcePurityPercent);
+  const [exchangePurityPercent, setExchangePurityPercent] = useState(
+    row.sourceExchangePurityPercent ?? row.sourcePurityPercent,
+  );
+  const [exchangePurityTouched, setExchangePurityTouched] = useState(false);
   const initialColor = colorPresets.find(
     (preset) =>
       normalizeColorKey(preset.name) === normalizeColorKey(row.sourceColor),
@@ -337,6 +341,9 @@ export function ProcessingDrawer({
   const [color, setColor] = useState(initialColor ?? "");
   const [pricePerGramInput, setPricePerGramInput] = useState("");
   const [priceTouched, setPriceTouched] = useState(false);
+  const [deductionPerGram, setDeductionPerGram] = useState(() =>
+    formatRupiahInput(row.sourceDeductionPerGram ?? "0"),
+  );
   const [rateOverrides, setRateOverrides] = useState<Record<string, string>>({});
   const [quickMasterOpen, setQuickMasterOpen] = useState(false);
   const [quickCategoryOpen, setQuickCategoryOpen] = useState(false);
@@ -380,13 +387,17 @@ export function ProcessingDrawer({
       displayName,
       weightGram,
       purityPercent,
+      exchangePurityPercent,
       color,
       pricePerGram,
+      deductionPerGram,
     }),
     [
       categoryId,
       color,
+      deductionPerGram,
       displayName,
+      exchangePurityPercent,
       masterId,
       pricePerGram,
       purityPercent,
@@ -642,7 +653,11 @@ export function ProcessingDrawer({
                 <input
                   value={purityPercent}
                   onChange={(event) => {
-                    setPurityPercent(formatPosWeightInput(event.target.value));
+                    const nextValue = formatPosWeightInput(event.target.value);
+                    setPurityPercent(nextValue);
+                    if (!exchangePurityTouched) {
+                      setExchangePurityPercent(nextValue);
+                    }
                     setPriceTouched(false);
                   }}
                   inputMode="decimal"
@@ -654,6 +669,33 @@ export function ProcessingDrawer({
                     {state.fieldErrors.purityPercent}
                   </p>
                 ) : null}
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-neutral-800">
+                  Kadar Tukaran *
+                </span>
+                <input
+                  value={exchangePurityPercent}
+                  onChange={(event) => {
+                    setExchangePurityTouched(true);
+                    setExchangePurityPercent(
+                      formatPosWeightInput(event.target.value),
+                    );
+                  }}
+                  inputMode="decimal"
+                  className={inputClassName}
+                  placeholder="35"
+                />
+                {state.fieldErrors?.exchangePurityPercent ? (
+                  <p className="mt-1.5 text-xs text-red-600">
+                    {state.fieldErrors.exchangePurityPercent}
+                  </p>
+                ) : null}
+                <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+                  Diprefill dari data sebelumnya atau Kadar hasil, lalu tetap
+                  dapat disesuaikan sebelum item masuk inventory.
+                </p>
               </label>
 
               <div className="block">
@@ -755,6 +797,37 @@ export function ProcessingDrawer({
                   mengubah Rate Jual Global untuk kadar ini.
                 </p>
               </div>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-neutral-800">
+                  Potongan / Gram *
+                </span>
+                <div className="relative">
+                  <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
+                    Rp
+                  </span>
+                  <input
+                    value={deductionPerGram}
+                    onChange={(event) =>
+                      setDeductionPerGram(
+                        formatRupiahInput(event.target.value) || "0",
+                      )
+                    }
+                    inputMode="numeric"
+                    className={cn(inputClassName, "pl-9")}
+                    placeholder="0"
+                  />
+                </div>
+                {state.fieldErrors?.deductionPerGram ? (
+                  <p className="mt-1.5 text-xs text-red-600">
+                    {state.fieldErrors.deductionPerGram}
+                  </p>
+                ) : null}
+                <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+                  Disimpan pada Physical Item final dan tidak mengubah harga
+                  dasar hasil (Berat × Harga / Gram).
+                </p>
+              </label>
             </div>
           </section>
 
@@ -778,8 +851,10 @@ export function ProcessingDrawer({
                 !displayName.trim() ||
                 !weightGram ||
                 !purityPercent ||
+                !exchangePurityPercent ||
                 !color.trim() ||
-                !pricePerGram
+                !pricePerGram ||
+                !deductionPerGram
               }
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -1149,6 +1224,13 @@ export function BuybackProcessingWorkspace({
                               <p className="mt-1 truncate text-xs font-semibold text-neutral-900">
                                 {row.resultDisplayName}
                               </p>
+                              <p className="mt-0.5 text-[10px] text-neutral-600">
+                                Kadar Tukaran {row.resultExchangePurityPercent ?? "-"}
+                                {row.resultExchangePurityPercent ? "%" : ""} · Potongan/Gr{" "}
+                                {formatCurrency(
+                                  Number(row.resultDeductionPerGram ?? 0),
+                                )}
+                              </p>
                               <p className="mt-0.5 text-[10px] text-neutral-500">
                                 Selesai {formatDate(row.processedAt)}
                               </p>
@@ -1241,9 +1323,18 @@ export function BuybackProcessingWorkspace({
                             </p>
                             {row.status === "completed" &&
                             row.resultDisplayName ? (
-                              <p className="mt-1 text-xs font-medium text-emerald-700">
-                                Hasil: {row.resultDisplayName}
-                              </p>
+                              <>
+                                <p className="mt-1 text-xs font-medium text-emerald-700">
+                                  Hasil: {row.resultDisplayName}
+                                </p>
+                                <p className="mt-1 text-[11px] text-neutral-500">
+                                  Tukaran {row.resultExchangePurityPercent ?? "-"}
+                                  {row.resultExchangePurityPercent ? "%" : ""} · Pot/Gr{" "}
+                                  {formatCurrency(
+                                    Number(row.resultDeductionPerGram ?? 0),
+                                  )}
+                                </p>
+                              </>
                             ) : null}
                           </div>
                         </td>

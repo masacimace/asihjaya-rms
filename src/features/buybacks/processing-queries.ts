@@ -111,6 +111,12 @@ export async function getBuybackProcessingData({
       readSnapshotText(sourceSnapshot, "originalCategoryName") ??
       "Tanpa kategori";
     const sourceColor = readSnapshotText(sourceSnapshot, "color") ?? "-";
+    const sourceExchangePurityPercent =
+      readSnapshotText(sourceSnapshot, "exchangePurityPercent") ??
+      readSnapshotText(sourceSnapshot, "storedExchangePurityPercent");
+    const sourceDeductionPerGram =
+      readSnapshotText(sourceSnapshot, "deductionPerGram") ??
+      readSnapshotText(sourceSnapshot, "storedDeductionPerGram");
     const beforeImageKey = readSnapshotText(sourceSnapshot, "imageKey");
 
     const resultImageKey = readSnapshotText(resultSnapshot, "imageKey");
@@ -141,7 +147,9 @@ export async function getBuybackProcessingData({
       sourcePurityPercent:
         readSnapshotText(sourceSnapshot, "purityPercent") ??
         row.sourcePurityPercent,
+      sourceExchangePurityPercent,
       sourceColor,
+      sourceDeductionPerGram,
       beforeImageKey,
       beforeImageUrl: getImageUrl(beforeImageKey),
       resultProductItemId: row.resultProductItemId,
@@ -150,8 +158,16 @@ export async function getBuybackProcessingData({
       resultDisplayName: readSnapshotText(resultSnapshot, "displayName"),
       resultWeightGram: readSnapshotText(resultSnapshot, "weightGram"),
       resultPurityPercent: readSnapshotText(resultSnapshot, "purityPercent"),
+      resultExchangePurityPercent: readSnapshotText(
+        resultSnapshot,
+        "exchangePurityPercent",
+      ),
       resultColor: readSnapshotText(resultSnapshot, "color"),
       resultPricePerGram: readSnapshotText(resultSnapshot, "pricePerGram"),
+      resultDeductionPerGram: readSnapshotText(
+        resultSnapshot,
+        "deductionPerGram",
+      ),
       resultImageKey,
       resultImageUrl: getImageUrl(resultImageKey),
       processedAt: row.processedAt,

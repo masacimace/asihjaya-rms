@@ -28,7 +28,6 @@ import { validateImageFile } from "@/lib/storage/image-validation";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-
 function failure(
   message: string,
   fieldErrors?: Record<string, string>,
@@ -40,6 +39,14 @@ function normalizeNullableText(value: unknown, maxLength: number) {
   const normalized = String(value ?? "").trim();
   if (!normalized) return null;
   return normalized.slice(0, maxLength);
+}
+
+function normalizeExchangePurity(value: unknown) {
+  const normalized = normalizeBuybackDecimal(value);
+  if (!normalized) return null;
+
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) && numeric <= 999.999 ? normalized : null;
 }
 
 function parsePayload(formData: FormData): BuybackProcessingSubmitPayload | null {
@@ -94,6 +101,14 @@ function normalizePayload(
       "Kadar hasil wajib lebih besar dari 0 dan maksimal 100%.";
   }
 
+  const exchangePurityPercent = normalizeExchangePurity(
+    raw.exchangePurityPercent,
+  );
+  if (!exchangePurityPercent) {
+    fieldErrors.exchangePurityPercent =
+      "Kadar Tukaran wajib lebih besar dari 0 dan maksimal 999,999.";
+  }
+
   const color = normalizeNullableText(raw.color, 64);
   if (!color) {
     fieldErrors.color = "Warna hasil wajib diisi.";
@@ -102,6 +117,14 @@ function normalizePayload(
   const pricePerGram = normalizeBuybackMoney(raw.pricePerGram);
   if (!pricePerGram) {
     fieldErrors.pricePerGram = "Harga/Gram wajib lebih besar dari Rp 0.";
+  }
+
+  const deductionPerGram = normalizeBuybackMoney(raw.deductionPerGram, {
+    allowZero: true,
+  });
+  if (deductionPerGram === null) {
+    fieldErrors.deductionPerGram =
+      "Potongan/Gram wajib berupa nominal Rp0 atau lebih besar.";
   }
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -121,8 +144,10 @@ function normalizePayload(
       displayName: displayName!,
       weightGram: weightGram!,
       purityPercent: purityPercent!,
+      exchangePurityPercent: exchangePurityPercent!,
       color: color!,
       pricePerGram: pricePerGram!,
+      deductionPerGram: deductionPerGram!,
     },
   };
 }
