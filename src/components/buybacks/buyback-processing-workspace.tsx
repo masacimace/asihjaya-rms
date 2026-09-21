@@ -344,7 +344,9 @@ export function ProcessingDrawer({
   const [deductionPerGram, setDeductionPerGram] = useState(() =>
     formatRupiahInput(row.sourceDeductionPerGram ?? "0"),
   );
-  const [rateOverrides, setRateOverrides] = useState<Record<string, string>>({});
+  const [rateOverrides, setRateOverrides] = useState<Record<string, string>>(
+    {},
+  );
   const [quickMasterOpen, setQuickMasterOpen] = useState(false);
   const [quickCategoryOpen, setQuickCategoryOpen] = useState(false);
   const [quickColorOpen, setQuickColorOpen] = useState(false);
@@ -526,7 +528,7 @@ export function ProcessingDrawer({
               </h3>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid items-start gap-x-4 gap-y-5 lg:grid-cols-2">
               <div>
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Kategori *
@@ -603,10 +605,6 @@ export function ProcessingDrawer({
                     {state.fieldErrors.productMasterId}
                   </p>
                 ) : null}
-                <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-                  Hanya Product Master pada kategori{" "}
-                  {category?.label ?? "yang dipilih"}.
-                </p>
               </div>
 
               <label className="block">
@@ -692,10 +690,6 @@ export function ProcessingDrawer({
                     {state.fieldErrors.exchangePurityPercent}
                   </p>
                 ) : null}
-                <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-                  Diprefill dari data sebelumnya atau Kadar hasil, lalu tetap
-                  dapat disesuaikan sebelum item masuk inventory.
-                </p>
               </label>
 
               <div className="block">
@@ -742,19 +736,29 @@ export function ProcessingDrawer({
                 ) : null}
               </div>
 
-              <div className="block">
-                <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-neutral-800">
-                  <span>Harga / Gram Hasil *</span>
-                  <div className="flex items-center gap-2">
-                    {suggestedRate ? (
-                      <span className="text-[11px] font-normal text-emerald-700">
-                        Global {formatCurrency(Number(suggestedRate))}
+              <div className="grid gap-4">
+                <div className="block">
+                  <span className="mb-2 block text-sm font-medium text-neutral-800">
+                    Harga / Gram Hasil *
+                  </span>
+                  <div className="flex gap-2">
+                    <div className="relative min-w-0 flex-1">
+                      <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
+                        Rp
                       </span>
-                    ) : (
-                      <span className="text-[11px] font-normal text-amber-700">
-                        Rate global belum tersedia
-                      </span>
-                    )}
+                      <input
+                        value={pricePerGram}
+                        onChange={(event) => {
+                          setPriceTouched(true);
+                          setPricePerGramInput(
+                            formatRupiahInput(event.target.value),
+                          );
+                        }}
+                        inputMode="numeric"
+                        className={cn(inputClassName, "pl-9")}
+                        placeholder="1.250.000"
+                      />
+                    </div>
                     <QuickPriceRateControl
                       kind="sale"
                       purityPercent={purityPercent}
@@ -768,66 +772,54 @@ export function ProcessingDrawer({
                       }}
                     />
                   </div>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
-                    Rp
-                  </span>
-                  <input
-                    value={pricePerGram}
-                    onChange={(event) => {
-                      setPriceTouched(true);
-                      setPricePerGramInput(
-                        formatRupiahInput(event.target.value),
-                      );
-                    }}
-                    inputMode="numeric"
-                    className={cn(inputClassName, "pl-9")}
-                    placeholder="1.250.000"
-                  />
-                </div>
-                {state.fieldErrors?.pricePerGram ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.pricePerGram}
+                  {state.fieldErrors?.pricePerGram ? (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {state.fieldErrors.pricePerGram}
+                    </p>
+                  ) : null}
+                  <p
+                    className={cn(
+                      "mt-1.5 text-[11px]",
+                      suggestedRate ? "text-emerald-700" : "text-amber-700",
+                    )}
+                  >
+                    {suggestedRate
+                      ? `Rate Jual Global ${formatCurrency(Number(suggestedRate))}.`
+                      : "Rate Jual Global belum tersedia untuk kadar ini."}
                   </p>
-                ) : null}
-                <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-                  Rate Jual Global otomatis disarankan. Input tetap boleh
-                  dioverride sebagai snapshot hasil item; ikon edit di atas
-                  mengubah Rate Jual Global untuk kadar ini.
-                </p>
-              </div>
+                </div>
 
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-neutral-800">
-                  Potongan / Gram *
-                </span>
-                <div className="relative">
-                  <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
-                    Rp
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-neutral-800">
+                    Potongan / Gram *
                   </span>
-                  <input
-                    value={deductionPerGram}
-                    onChange={(event) =>
-                      setDeductionPerGram(
-                        formatRupiahInput(event.target.value) || "0",
-                      )
-                    }
-                    inputMode="numeric"
-                    className={cn(inputClassName, "pl-9")}
-                    placeholder="0"
-                  />
-                </div>
-                {state.fieldErrors?.deductionPerGram ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.deductionPerGram}
+                  <div className="relative">
+                    <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
+                      Rp
+                    </span>
+                    <input
+                      value={deductionPerGram}
+                      onChange={(event) =>
+                        setDeductionPerGram(
+                          formatRupiahInput(event.target.value) || "0",
+                        )
+                      }
+                      inputMode="numeric"
+                      className={cn(inputClassName, "pl-9")}
+                      placeholder="0"
+                    />
+                  </div>
+                  {state.fieldErrors?.deductionPerGram ? (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {state.fieldErrors.deductionPerGram}
+                    </p>
+                  ) : null}
+                  <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+                    Disimpan pada Physical Item final dan tidak mengubah harga
+                    dasar hasil (Berat × Harga / Gram).
                   </p>
-                ) : null}
-                <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-                  Disimpan pada Physical Item final dan tidak mengubah harga
-                  dasar hasil (Berat × Harga / Gram).
-                </p>
-              </label>
+                </label>
+              </div>
             </div>
           </section>
 
@@ -1225,8 +1217,10 @@ export function BuybackProcessingWorkspace({
                                 {row.resultDisplayName}
                               </p>
                               <p className="mt-0.5 text-[10px] text-neutral-600">
-                                Kadar Tukaran {row.resultExchangePurityPercent ?? "-"}
-                                {row.resultExchangePurityPercent ? "%" : ""} · Potongan/Gr{" "}
+                                Kadar Tukaran{" "}
+                                {row.resultExchangePurityPercent ?? "-"}
+                                {row.resultExchangePurityPercent ? "%" : ""} ·
+                                Potongan/Gr{" "}
                                 {formatCurrency(
                                   Number(row.resultDeductionPerGram ?? 0),
                                 )}
@@ -1328,8 +1322,10 @@ export function BuybackProcessingWorkspace({
                                   Hasil: {row.resultDisplayName}
                                 </p>
                                 <p className="mt-1 text-[11px] text-neutral-500">
-                                  Tukaran {row.resultExchangePurityPercent ?? "-"}
-                                  {row.resultExchangePurityPercent ? "%" : ""} · Pot/Gr{" "}
+                                  Tukaran{" "}
+                                  {row.resultExchangePurityPercent ?? "-"}
+                                  {row.resultExchangePurityPercent ? "%" : ""} ·
+                                  Pot/Gr{" "}
                                   {formatCurrency(
                                     Number(row.resultDeductionPerGram ?? 0),
                                   )}
