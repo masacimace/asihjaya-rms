@@ -33,7 +33,7 @@
     "setup:production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-production.ps1 -RunNow",
     "check:operations": "node scripts/check-production-operations.js",
     "check:print-profiles": "node scripts/check-document-print-profiles.js",
-    "check:sato": "node scripts/check-sato-production-renderer.js",
+    "check:sato": "node scripts/check-sato-runtime-path.js && node scripts/check-sato-production-renderer.js",
     "outlet:preflight": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/outlet-preflight.ps1",
     "outlet:fixtures": "node scripts/generate-outlet-fixtures.js",
     "outlet:test-epson-a4": "node scripts/generate-outlet-fixtures.js",

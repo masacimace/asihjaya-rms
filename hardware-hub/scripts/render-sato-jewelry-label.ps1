@@ -632,13 +632,24 @@ try {
   $barcodeTextGraphic = New-FittedTextGraphic -FontFamily $fontContext.Family -FontStyle $fontStyle -Text $Barcode -CanvasWidth $barcodeTextCanvasWidth -CanvasHeight $barcodeTextCanvasHeight -FontPx $barcodeTextFontPx -MinFontPx $barcodeTextMinFontPx -TextAlign ([string]$barcodeTextConfig.textAlign) -Rotate180 $false -SpreadPx $inkSpreadPx
   $backGraphic = New-BackGraphicV3 -FontFamily $fontContext.Family -FontStyle $fontStyle -WeightText $weightText -ItemDisplayName $itemText -CanvasWidth $backCanvasWidth -CanvasHeight $backCanvasHeight -WeightConfig $backConfig.weight -ItemConfig $backConfig.itemDisplayName -Rotate180 $true -SpreadPx $inkSpreadPx
 
-  $outputDir = Join-Path $HardwareHubRoot "data\temp"
-  New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
   if ([string]::IsNullOrWhiteSpace($OutputFile)) {
+    $outputDir = [Environment]::GetEnvironmentVariable("HARDWARE_TEMP_DIR")
+    if ([string]::IsNullOrWhiteSpace($outputDir)) {
+      $outputDir = Join-Path $HardwareHubRoot "data\temp"
+    } elseif (-not [System.IO.Path]::IsPathRooted($outputDir)) {
+      $outputDir = Join-Path $HardwareHubRoot $outputDir
+    }
     $OutputFile = Join-Path $outputDir "sato-jewelry-v3.sbpl"
   } elseif (-not [System.IO.Path]::IsPathRooted($OutputFile)) {
     $OutputFile = Join-Path (Get-Location) $OutputFile
   }
+
+  $OutputFile = [System.IO.Path]::GetFullPath($OutputFile)
+  $outputDir = Split-Path -Parent $OutputFile
+  if ([string]::IsNullOrWhiteSpace($outputDir)) {
+    throw "Output directory SATO tidak valid untuk file: $OutputFile"
+  }
+  New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
   $stream = [System.IO.MemoryStream]::new()
   try {
