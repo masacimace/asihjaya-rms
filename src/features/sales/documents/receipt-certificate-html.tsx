@@ -1436,7 +1436,6 @@ export function ReceiptCertificateHtmlDocument({
           const pageNumber = itemIndex + 1;
           const itemSubtotalAmount = toNumber(item.listPriceAmount);
           const itemDiscountAmount = toNumber(item.discountAmount);
-          const itemTotalAmount = toNumber(item.finalPriceAmount);
 
           return (
             <article
@@ -1708,7 +1707,9 @@ export function ReceiptCertificateHtmlDocument({
                           Total Item
                         </span>
                         <strong className="aj-total-amount aj-dynamic-print">
-                          {formatAmount(itemTotalAmount)}
+                          {formatAmount(
+                            data.customerDeposit.externalPaymentDueAmount,
+                          )}
                         </strong>
                       </div>
                     </section>
