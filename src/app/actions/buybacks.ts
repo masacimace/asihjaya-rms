@@ -169,6 +169,12 @@ function normalizePayload(raw: BuybackSubmitPayload):
     const weightGram = normalizeBuybackDecimal(rawItem.weightGram);
     const purityPercent = normalizeBuybackPurity(rawItem.purityPercent, 100);
     const totalAmountText = normalizeBuybackMoney(rawItem.totalAmount);
+    const deductionAmountText =
+      source === "asihjaya"
+        ? normalizeBuybackMoney(rawItem.deductionAmount ?? "0", {
+            allowZero: true,
+          })
+        : "0";
     const color = String(rawItem.color ?? "").trim();
 
     if (!weightGram) {
@@ -187,6 +193,10 @@ function normalizePayload(raw: BuybackSubmitPayload):
       fieldErrors[`${prefix}.totalAmount`] =
         "Total Harga Buyback wajib lebih besar dari Rp 0.";
     }
+    if (source === "asihjaya" && deductionAmountText === null) {
+      fieldErrors[`${prefix}.deductionAmount`] =
+        "Potongan harus berupa nominal Rp0 atau lebih besar.";
+    }
 
     if (
       !displayName ||
@@ -196,7 +206,8 @@ function normalizePayload(raw: BuybackSubmitPayload):
       !weightGram ||
       !purityPercent ||
       !color ||
-      !totalAmountText
+      !totalAmountText ||
+      deductionAmountText === null
     ) {
       continue;
     }
@@ -211,6 +222,7 @@ function normalizePayload(raw: BuybackSubmitPayload):
       weightGram,
       purityPercent,
       color,
+      deductionAmount: Number(deductionAmountText),
       finalAmount: Number(totalAmountText),
     });
   }

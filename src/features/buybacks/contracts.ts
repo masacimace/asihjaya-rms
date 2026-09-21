@@ -61,6 +61,7 @@ export type BuybackItemPayload = {
   weightGram: string;
   purityPercent: string;
   color: string;
+  deductionAmount?: string | null;
   totalAmount: string;
 };
 
@@ -88,6 +89,7 @@ export type NormalizedBuybackItem = {
   weightGram: string;
   purityPercent: string;
   color: string;
+  deductionAmount: number;
   finalAmount: number;
 };
 

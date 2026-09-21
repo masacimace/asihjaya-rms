@@ -237,6 +237,7 @@ type DraftItem = {
   weightGram: string;
   purityPercent: string;
   color: string;
+  deductionAmount: string;
   totalAmount: string;
   imageSelected: boolean;
 };
@@ -451,6 +452,7 @@ function createExternalDraft(): DraftItem {
     weightGram: "",
     purityPercent: "",
     color: "",
+    deductionAmount: "",
     totalAmount: "",
     imageSelected: false,
   };
@@ -479,12 +481,34 @@ function mapExistingItem(
     weightGram: item.weightGram ?? "",
     purityPercent: item.purityPercent ?? "",
     color: activeColor ?? item.color ?? "",
+    deductionAmount: "",
     totalAmount: "",
     imageSelected: false,
   };
 }
 
+function getPreviousSaleAmount(item: DraftItem) {
+  const amount = Number(item.lastSaleFinalPriceAmount ?? 0);
+  return Number.isSafeInteger(amount) && amount > 0 ? amount : 0;
+}
+
+function getDeductionAmount(item: DraftItem) {
+  const normalized = normalizeBuybackMoney(item.deductionAmount, {
+    allowZero: true,
+  });
+  const amount = Number(normalized ?? 0);
+  return Number.isSafeInteger(amount) && amount >= 0 ? amount : 0;
+}
+
 function getItemAmount(item: DraftItem) {
+  if (item.source === "asihjaya") {
+    const previousSaleAmount = getPreviousSaleAmount(item);
+    const deductionAmount = getDeductionAmount(item);
+    const finalAmount = previousSaleAmount - deductionAmount;
+
+    return previousSaleAmount > 0 && finalAmount > 0 ? finalAmount : 0;
+  }
+
   const normalized = normalizeBuybackMoney(item.totalAmount);
   return normalized ? Number(normalized) : 0;
 }
@@ -492,6 +516,12 @@ function getItemAmount(item: DraftItem) {
 function isDraftItemComplete(item: DraftItem) {
   const weight = normalizeBuybackDecimal(item.weightGram);
   const purity = Number(item.purityPercent.replace(",", "."));
+  const previousSaleAmount = getPreviousSaleAmount(item);
+  const deductionAmount = getDeductionAmount(item);
+  const validInternalPricing =
+    item.source !== "asihjaya" ||
+    (previousSaleAmount > 0 && deductionAmount < previousSaleAmount);
+
   return (
     item.displayName.trim().length >= 2 &&
     Boolean(item.categoryId) &&
@@ -500,6 +530,7 @@ function isDraftItemComplete(item: DraftItem) {
     purity > 0 &&
     purity <= 100 &&
     item.color.trim().length > 0 &&
+    validInternalPricing &&
     getItemAmount(item) > 0 &&
     item.imageSelected
   );
@@ -649,7 +680,12 @@ export function BuybackWorkspace({
         weightGram: item.weightGram,
         purityPercent: item.purityPercent,
         color: item.color,
-        totalAmount: item.totalAmount,
+        deductionAmount:
+          item.source === "asihjaya" ? String(getDeductionAmount(item)) : null,
+        totalAmount:
+          item.source === "asihjaya"
+            ? String(getItemAmount(item))
+            : item.totalAmount,
       })),
       payouts: (Object.keys(payoutLabels) as BuybackPayoutMethod[])
         .filter((method) => payoutAmounts[method] > 0)
@@ -779,7 +815,7 @@ export function BuybackWorkspace({
       mapExistingItem(item, localColorPresets),
     ]);
     setFeedback(
-      `${item.sku} ditambahkan. Pilih Cuci/Rongsok, cek data fisik, isi Total Harga, lalu ambil foto kondisi barang.`,
+      `${item.sku} ditambahkan. Pilih Cuci/Rongsok, cek data fisik, isi Potongan, cek Total Harga otomatis, lalu ambil foto kondisi barang.`,
     );
   }
 
@@ -1092,7 +1128,16 @@ export function BuybackWorkspace({
               </div>
             ) : null}
 
-            {items.map((item, index) => (
+            {items.map((item, index) => {
+              const previousSaleAmount = getPreviousSaleAmount(item);
+              const deductionAmount = getDeductionAmount(item);
+              const itemAmount = getItemAmount(item);
+              const deductionTooLarge =
+                item.source === "asihjaya" &&
+                previousSaleAmount > 0 &&
+                deductionAmount >= previousSaleAmount;
+
+              return (
               <article
                 key={item.clientKey}
                 className="rounded-2xl border border-[var(--border)] p-4"
@@ -1306,70 +1351,141 @@ export function BuybackWorkspace({
                   </label>
 
                   {item.source === "asihjaya" ? (
-                    <label className="block text-sm">
-                      <span className="mb-2 block font-medium text-neutral-800">
-                        Harga Jual Sebelumnya
-                      </span>
-                      <input
-                        value={
-                          item.lastSaleFinalPriceAmount
-                            ? formatCurrency(
-                                Number(item.lastSaleFinalPriceAmount),
-                              )
-                            : "Tidak tersedia"
-                        }
-                        readOnly
-                        className={cn(
-                          inputClassName,
-                          "cursor-default bg-neutral-50 font-semibold text-neutral-700",
-                        )}
-                        aria-label="Harga jual sebelumnya"
-                      />
-                      <p className="mt-1 text-[11px] text-[var(--muted)]">
-                        {[
-                          item.lastInvoiceNumber
-                            ? `Invoice ${item.lastInvoiceNumber}`
-                            : null,
-                          formatPreviousSaleDate(item.soldAt, timeZone),
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") ||
-                          "Riwayat penjualan terakhir belum tersedia."}
-                      </p>
-                    </label>
-                  ) : null}
+                    <>
+                      <label className="block text-sm">
+                        <span className="mb-2 block font-medium text-neutral-800">
+                          Harga Jual Sebelumnya
+                        </span>
+                        <input
+                          value={
+                            previousSaleAmount > 0
+                              ? formatCurrency(previousSaleAmount)
+                              : "Tidak tersedia"
+                          }
+                          readOnly
+                          className={cn(
+                            inputClassName,
+                            "cursor-default bg-neutral-50 font-semibold text-neutral-700",
+                          )}
+                          aria-label="Harga jual sebelumnya"
+                        />
+                        <p
+                          className={cn(
+                            "mt-1 text-[11px]",
+                            previousSaleAmount > 0
+                              ? "text-[var(--muted)]"
+                              : "font-medium text-red-700",
+                          )}
+                        >
+                          {previousSaleAmount > 0
+                            ? [
+                                item.lastInvoiceNumber
+                                  ? `Invoice ${item.lastInvoiceNumber}`
+                                  : null,
+                                formatPreviousSaleDate(item.soldAt, timeZone),
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")
+                            : "Riwayat penjualan terakhir belum tersedia. Item ini belum dapat diproses sebagai Buyback internal."}
+                        </p>
+                      </label>
 
-                  <BuybackRecommendation
-                    purityPercent={item.purityPercent}
-                    weightGram={item.weightGram}
-                    priceRates={localBuybackPriceRates}
-                    onRateSaved={handleBuybackRateSaved}
-                  />
+                      <label className="block text-sm">
+                        <span className="mb-2 block font-medium text-neutral-800">
+                          Potongan
+                        </span>
+                        <div className="relative">
+                          <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
+                            Rp
+                          </span>
+                          <input
+                            value={item.deductionAmount}
+                            onChange={(event) =>
+                              updateItem(item.clientKey, {
+                                deductionAmount: formatRupiahInput(
+                                  event.target.value,
+                                ),
+                              })
+                            }
+                            inputMode="numeric"
+                            className={cn(inputClassName, "pl-9")}
+                            placeholder="0"
+                          />
+                        </div>
+                        <p
+                          className={cn(
+                            "mt-1 text-[11px]",
+                            deductionTooLarge
+                              ? "font-medium text-red-700"
+                              : "text-[var(--muted)]",
+                          )}
+                        >
+                          {deductionTooLarge
+                            ? "Potongan harus lebih kecil dari Harga Jual Sebelumnya."
+                            : "Dikurangkan langsung dari Harga Jual Sebelumnya."}
+                        </p>
+                      </label>
 
-                  <label className="block text-sm">
-                    <span className="mb-2 block font-medium text-neutral-800">
-                      Total Harga Buyback *
-                    </span>
-                    <div className="relative">
-                      <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
-                        Rp
-                      </span>
-                      <input
-                        value={item.totalAmount}
-                        onChange={(event) =>
-                          updateItem(item.clientKey, {
-                            totalAmount: formatRupiahInput(event.target.value),
-                          })
-                        }
-                        inputMode="numeric"
-                        className={cn(inputClassName, "pl-9")}
-                        placeholder="500.000"
+                      <label className="block text-sm lg:col-span-2">
+                        <span className="mb-2 block font-medium text-neutral-800">
+                          Total Harga Buyback *
+                        </span>
+                        <input
+                          value={
+                            previousSaleAmount > 0
+                              ? formatCurrency(itemAmount)
+                              : "Tidak tersedia"
+                          }
+                          readOnly
+                          className={cn(
+                            inputClassName,
+                            "cursor-default bg-neutral-50 font-semibold",
+                            itemAmount > 0
+                              ? "text-neutral-800"
+                              : "text-red-700",
+                          )}
+                          aria-label="Total harga Buyback internal"
+                        />
+                        <p className="mt-1 text-[11px] text-[var(--muted)]">
+                          Otomatis: Harga Jual Sebelumnya - Potongan.
+                        </p>
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <BuybackRecommendation
+                        purityPercent={item.purityPercent}
+                        weightGram={item.weightGram}
+                        priceRates={localBuybackPriceRates}
+                        onRateSaved={handleBuybackRateSaved}
                       />
-                    </div>
-                    <p className="mt-1 text-[11px] text-[var(--muted)]">
-                      Nominal final ditentukan manual oleh staff.
-                    </p>
-                  </label>
+
+                      <label className="block text-sm">
+                        <span className="mb-2 block font-medium text-neutral-800">
+                          Total Harga Buyback *
+                        </span>
+                        <div className="relative">
+                          <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
+                            Rp
+                          </span>
+                          <input
+                            value={item.totalAmount}
+                            onChange={(event) =>
+                              updateItem(item.clientKey, {
+                                totalAmount: formatRupiahInput(event.target.value),
+                              })
+                            }
+                            inputMode="numeric"
+                            className={cn(inputClassName, "pl-9")}
+                            placeholder="500.000"
+                          />
+                        </div>
+                        <p className="mt-1 text-[11px] text-[var(--muted)]">
+                          Nominal final ditentukan manual oleh staff.
+                        </p>
+                      </label>
+                    </>
+                  )}
 
                   <div className="lg:col-span-2">
                     <BuybackImageInput
@@ -1390,11 +1506,12 @@ export function BuybackWorkspace({
                     Total item Buyback
                   </span>
                   <span className="text-base font-bold">
-                    {formatCurrency(getItemAmount(item))}
+                    {formatCurrency(itemAmount)}
                   </span>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         </section>
 

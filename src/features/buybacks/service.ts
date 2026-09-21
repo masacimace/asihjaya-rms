@@ -18,6 +18,8 @@ import {
   productItems,
   productMasters,
   registers,
+  saleItems,
+  sales,
   shifts,
 } from "@/db/schema";
 import type { NormalizedBuybackPayload } from "@/features/buybacks/contracts";
@@ -165,6 +167,12 @@ async function getExistingBuybackReplayResultInTransaction(
         incoming.source === "asihjaya"
           ? stored.productItemId === incoming.productItemId
           : stored.productItemId === null;
+      const incomingDeductionAmount =
+        incoming.source === "asihjaya" ? incoming.deductionAmount : 0;
+      const incomingBaseAmount =
+        incoming.source === "asihjaya"
+          ? incoming.finalAmount + incomingDeductionAmount
+          : incoming.finalAmount;
 
       if (
         !identityMatches ||
@@ -173,8 +181,8 @@ async function getExistingBuybackReplayResultInTransaction(
         !sameNumeric(stored.weightGram, incoming.weightGram) ||
         !sameNumeric(stored.purityPercent, incoming.purityPercent) ||
         !sameNullableText(readSnapshotText(snapshot, "color"), incoming.color) ||
-        !sameNumeric(stored.baseAmount, incoming.finalAmount) ||
-        !sameNumeric(stored.deductionAmount, 0) ||
+        !sameNumeric(stored.baseAmount, incomingBaseAmount) ||
+        !sameNumeric(stored.deductionAmount, incomingDeductionAmount) ||
         !sameNumeric(stored.finalAmount, incoming.finalAmount)
       ) {
         matches = false;
@@ -402,6 +410,84 @@ export async function completeBuybackTransaction({
       }
     }
 
+    const latestSaleRows =
+      existingItemIds.length > 0
+        ? await transaction
+            .select({
+              productItemId: saleItems.productItemId,
+              invoiceNumber: sales.invoiceNumber,
+              finalPriceAmount: saleItems.finalPriceAmount,
+              completedAt: sales.completedAt,
+              createdAt: sales.createdAt,
+            })
+            .from(saleItems)
+            .innerJoin(sales, eq(saleItems.saleId, sales.id))
+            .where(
+              and(
+                eq(sales.organizationId, auth.organization.id),
+                inArray(saleItems.productItemId, existingItemIds),
+                inArray(sales.status, ["completed", "partially_refunded"]),
+              ),
+            )
+            .orderBy(desc(sales.completedAt), desc(sales.createdAt))
+        : [];
+
+    const latestSaleByItem = new Map<
+      string,
+      {
+        invoiceNumber: string;
+        finalPriceAmount: string;
+        completedAt: Date | null;
+        createdAt: Date;
+      }
+    >();
+    for (const sale of latestSaleRows) {
+      if (!latestSaleByItem.has(sale.productItemId)) {
+        latestSaleByItem.set(sale.productItemId, {
+          invoiceNumber: sale.invoiceNumber,
+          finalPriceAmount: sale.finalPriceAmount,
+          completedAt: sale.completedAt,
+          createdAt: sale.createdAt,
+        });
+      }
+    }
+
+    for (const item of payload.items) {
+      if (item.source !== "asihjaya" || !item.productItemId) continue;
+
+      const existing = existingById.get(item.productItemId);
+      const latestSale = latestSaleByItem.get(item.productItemId);
+      if (!existing || !latestSale) {
+        throw new BuybackValidationError(
+          `${existing?.sku ?? "Produk ASIHJAYA"} belum memiliki riwayat harga jual sebelumnya yang valid.`,
+        );
+      }
+
+      const previousSaleAmount = Number(latestSale.finalPriceAmount);
+      if (!Number.isSafeInteger(previousSaleAmount) || previousSaleAmount <= 0) {
+        throw new BuybackValidationError(
+          `Harga Jual Sebelumnya ${existing.sku} tidak valid. Periksa riwayat transaksi penjualan item.`,
+        );
+      }
+      if (!Number.isSafeInteger(item.deductionAmount) || item.deductionAmount < 0) {
+        throw new BuybackValidationError(
+          `Potongan ${existing.sku} tidak valid. Gunakan nominal Rp0 atau lebih besar.`,
+        );
+      }
+
+      const authoritativeFinalAmount = previousSaleAmount - item.deductionAmount;
+      if (authoritativeFinalAmount <= 0) {
+        throw new BuybackValidationError(
+          `Potongan ${existing.sku} harus lebih kecil dari Harga Jual Sebelumnya.`,
+        );
+      }
+      if (authoritativeFinalAmount !== item.finalAmount) {
+        throw new BuybackValidationError(
+          `Total Harga Buyback ${existing.sku} sudah tidak sesuai. Harga jual sebelumnya atau Potongan berubah; buka ulang item lalu coba kembali.`,
+        );
+      }
+    }
+
     const categoryIds = Array.from(
       new Set(payload.items.map((item) => item.categoryId)),
     );
@@ -563,6 +649,8 @@ export async function completeBuybackTransaction({
       let recommendedBuybackAmount: number | null = null;
       let buybackRateEffectiveFrom: Date | null = null;
       let buybackPurityKey: string | null = null;
+      let baseAmount = item.finalAmount;
+      let deductionAmount = 0;
 
       if (item.source === "external") {
         buybackPurityKey = normalizePurityKey(item.purityPercent);
@@ -593,9 +681,13 @@ export async function completeBuybackTransaction({
 
       if (item.source === "asihjaya") {
         const existing = existingById.get(item.productItemId!);
-        if (!existing) {
+        const latestSale = latestSaleByItem.get(item.productItemId!);
+        if (!existing || !latestSale) {
           throw new BuybackValidationError("Item Buyback tidak ditemukan.");
         }
+
+        baseAmount = Number(latestSale.finalPriceAmount);
+        deductionAmount = item.deductionAmount;
 
         const claimed = await transaction
           .update(productItems)
@@ -656,8 +748,13 @@ export async function completeBuybackTransaction({
           storedColor: existing.color,
           color: item.color,
           totalAmount: String(item.finalAmount),
-          baseAmount: String(item.finalAmount),
-          deductionAmount: "0",
+          baseAmount: String(baseAmount),
+          deductionAmount: String(deductionAmount),
+          deductionType: "nominal",
+          previousSaleInvoiceNumber: latestSale.invoiceNumber,
+          previousSaleFinalPriceAmount: latestSale.finalPriceAmount,
+          previousSaleCompletedAt:
+            (latestSale.completedAt ?? latestSale.createdAt).toISOString(),
           previousCostAmount: existing.costAmount,
           previousImageKey: existing.imageKey,
           imageKey: artifact.imageKey,
@@ -736,8 +833,8 @@ export async function completeBuybackTransaction({
         exchangePurityPercent: null,
         buybackPricePerGram,
         deductionPerGram: "0",
-        baseAmount: String(item.finalAmount),
-        deductionAmount: "0",
+        baseAmount: String(baseAmount),
+        deductionAmount: String(deductionAmount),
         finalAmount: String(item.finalAmount),
         snapshot,
         createdAt: now,
@@ -781,6 +878,13 @@ export async function completeBuybackTransaction({
             customerId: customer.id,
             lineNumber: item.lineNumber,
             processingStatus: "pending",
+            baseAmount: String(
+              (payload.items[item.lineNumber - 1]?.finalAmount ?? 0) +
+                (payload.items[item.lineNumber - 1]?.deductionAmount ?? 0),
+            ),
+            deductionAmount: String(
+              payload.items[item.lineNumber - 1]?.deductionAmount ?? 0,
+            ),
             finalAmount: String(
               payload.items[item.lineNumber - 1]?.finalAmount ?? 0,
             ),

@@ -172,11 +172,16 @@ export type PosPricingDraftValues = {
   transactionWeightGram?: string | number | null;
   priceSource?: PosPriceSource;
   pricePerGram?: string | number | null;
+  deductionPerGram?: string | number | null;
   basePriceSource?: PosBasePriceSource;
   basePriceAmount?: string | number | null;
   discountAmount: number;
   laborAmount: number;
   adjustmentAmount: number;
+};
+
+export type PosCartPricingInputWithDeduction = PosCartPricingInput & {
+  deductionPerGram: number;
 };
 
 export type BuildPosCartItemResult =
@@ -198,6 +203,8 @@ export function buildPosCartItem(
     submittedPricePerGram && /^\d+$/.test(submittedPricePerGram)
       ? submittedPricePerGram
       : null;
+  const deductionPerGram =
+    toSafeMoney(values.deductionPerGram ?? item.deductionPerGram) ?? 0;
 
   if (!item.purityPercent) {
     return {
@@ -274,6 +281,7 @@ export function buildPosCartItem(
     status: "success",
     item: {
       ...item,
+      deductionPerGram: String(deductionPerGram),
       transactionWeightGram,
       priceSource: getPosPriceSource({
         activePricePerGram: item.activePricePerGram,
@@ -291,7 +299,9 @@ export function buildPosCartItem(
   };
 }
 
-export function getPosCartPricingInput(item: PosCartItem): PosCartPricingInput {
+export function getPosCartPricingInput(
+  item: PosCartItem,
+): PosCartPricingInputWithDeduction {
   return {
     itemId: item.id,
     transactionWeightGram:
@@ -305,6 +315,7 @@ export function getPosCartPricingInput(item: PosCartItem): PosCartPricingInput {
         transactionPricePerGram: item.pricePerGram,
       }),
     pricePerGram: item.pricePerGram,
+    deductionPerGram: toSafeMoney(item.deductionPerGram) ?? 0,
     basePriceSource:
       item.basePriceSource === "manual_override"
         ? "manual_override"

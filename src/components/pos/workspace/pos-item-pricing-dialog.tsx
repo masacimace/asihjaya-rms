@@ -41,6 +41,7 @@ export function PosItemPricingDialog(props: PosItemPricingDialogProps) {
     props.item.id,
     existingItem?.transactionWeightGram ?? props.item.weightGram ?? "",
     existingItem?.pricePerGram ?? props.item.activePricePerGram ?? "",
+    existingItem?.deductionPerGram ?? props.item.deductionPerGram ?? "",
     existingItem?.basePriceSource ?? "calculated",
     existingItem?.basePriceAmount ?? "",
     existingItem?.discountAmount ?? "",
@@ -59,6 +60,8 @@ function PosItemPricingDialogContent({
 }: PosItemPricingDialogProps) {
   const initialPricePerGram =
     existingItem?.pricePerGram ?? item.activePricePerGram ?? "";
+  const initialDeductionPerGram =
+    existingItem?.deductionPerGram ?? item.deductionPerGram ?? "0";
 
   const [transactionWeightInput, setTransactionWeightInput] = useState(() =>
     formatPosWeightInput(
@@ -68,6 +71,11 @@ function PosItemPricingDialogContent({
   const [pricePerGramInput, setPricePerGramInput] = useState(() =>
     Number(initialPricePerGram) > 0
       ? formatRupiahInput(initialPricePerGram)
+      : "",
+  );
+  const [deductionPerGramInput, setDeductionPerGramInput] = useState(() =>
+    Number(initialDeductionPerGram) > 0
+      ? formatRupiahInput(initialDeductionPerGram)
       : "",
   );
   const [isBasePriceOverride, setIsBasePriceOverride] = useState(
@@ -102,6 +110,7 @@ function PosItemPricingDialogContent({
   const transactionPricePerGram = parsePaymentAmountInput(pricePerGramInput);
   const transactionPricePerGramText =
     transactionPricePerGram > 0 ? String(transactionPricePerGram) : null;
+  const deductionPerGram = parsePaymentAmountInput(deductionPerGramInput);
   const discountAmount = parsePaymentAmountInput(discountInput);
   const laborAmount = parsePaymentAmountInput(laborInput);
   const adjustmentAmount = parsePaymentAmountInput(adjustmentInput);
@@ -170,6 +179,7 @@ function PosItemPricingDialogContent({
       transactionWeightGram,
       priceSource,
       pricePerGram: transactionPricePerGramText,
+      deductionPerGram,
       basePriceSource: isBasePriceOverride ? "manual_override" : "calculated",
       basePriceAmount: isBasePriceOverride ? manualBasePriceAmount : null,
       discountAmount,
@@ -380,6 +390,32 @@ function PosItemPricingDialogContent({
             ) : null}
           </div>
 
+          <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white p-4">
+            <label
+              htmlFor="pos-transaction-deduction-per-gram"
+              className="flex items-center gap-2 text-sm font-semibold text-neutral-900"
+            >
+              <BadgePercent className="size-4 text-[var(--accent)]" />
+              Potongan / Gram
+            </label>
+            <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+              Nilai ini dicatat sebagai data Potongan / Gram transaksi dan tidak
+              mengubah Total Harga Item.
+            </p>
+            <input
+              id="pos-transaction-deduction-per-gram"
+              value={deductionPerGramInput}
+              onChange={(event) => {
+                setDeductionPerGramInput(formatRupiahInput(event.target.value));
+                setFeedback(null);
+              }}
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="0"
+              className="mt-3 h-12 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-base font-semibold text-neutral-950 outline-none transition placeholder:font-normal placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+            />
+          </div>
+
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-[var(--border)] bg-white p-3">
               <p className="text-xs text-[var(--muted)]">
@@ -458,15 +494,6 @@ function PosItemPricingDialogContent({
                 </>
               )}
             </div>
-          </div>
-
-          <div className="mt-3 rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-3 text-xs leading-5 text-[var(--muted)]">
-            Potongan/Gram:{" "}
-            <span className="font-semibold text-neutral-800">
-              {formatCurrency(item.deductionPerGram ?? 0)}
-            </span>
-            . Nilai ini tetap disimpan sebagai data item dan tidak masuk
-            perhitungan harga jual.
           </div>
 
           {!hasItemPricingData ? (

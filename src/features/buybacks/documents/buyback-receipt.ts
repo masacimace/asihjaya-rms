@@ -178,10 +178,14 @@ export async function getBuybackReceiptData({
     },
     items: items.map((item) => {
       const snapshot = item.snapshot ?? {};
+      const nominalDeduction = Number(item.deductionAmount);
+
       return {
         lineNumber: item.lineNumber,
         listPriceAmount: item.baseAmount,
-        discountAmount: item.deductionAmount,
+        // Artwork fisik memakai kolom DISKON terpisah. Potongan nominal Buyback
+        // ditampilkan lewat slot POTONGAN/GR saja agar tidak tercetak dua kali.
+        discountAmount: "0",
         finalPriceAmount: item.finalAmount,
         snapshot: {
           sku: readSnapshotString(snapshot, "sku") ?? item.currentSku,
@@ -217,9 +221,13 @@ export async function getBuybackReceiptData({
           color: readSnapshotString(snapshot, "color"),
           gemstone: null,
           sellingAmount: null,
+          // Khusus nota Buyback, slot POTONGAN/GR pada kertas preprinted
+          // menampilkan Potongan nominal transaksi internal. Nilai DB
+          // deductionPerGram tetap 0 karena secara bisnis ini bukan per gram.
           deductionPerGram:
-            readSnapshotString(snapshot, "deductionPerGram") ??
-            item.deductionPerGram,
+            Number.isFinite(nominalDeduction) && nominalDeduction > 0
+              ? item.deductionAmount
+              : null,
           buybackPricePerGram:
             readSnapshotString(snapshot, "buybackPricePerGram") ??
             item.buybackPricePerGram,

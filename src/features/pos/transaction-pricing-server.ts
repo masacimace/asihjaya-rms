@@ -18,11 +18,16 @@ import { normalizePurityKey } from "@/features/pricing/metal-price-rates";
 
 type PosDbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+type PosCartPricingInputWithDeduction = PosCartPricingInput & {
+  deductionPerGram?: unknown;
+};
+
 export type PosTransactionPricingSourceItem = {
   id: string;
   sku: string;
   weightGram: string | null;
   purityPercent: string | null;
+  deductionPerGram?: string | null;
 };
 
 export type ResolvedPosTransactionPricing = {
@@ -62,6 +67,11 @@ function normalizeBasePriceSource(value: unknown): PosBasePriceSource {
   return value === "manual_override" ? "manual_override" : "calculated";
 }
 
+export function getPosPricingDeductionPerGram(value: PosCartPricingInput) {
+  const raw = (value as PosCartPricingInputWithDeduction).deductionPerGram ?? 0;
+  return isSafeMoney(raw) ? Number(raw) : 0;
+}
+
 export function normalizePosCartPricingInputs(
   values: readonly PosCartPricingInput[] | null | undefined,
 ): PosCartPricingInput[] {
@@ -88,6 +98,8 @@ export function normalizePosCartPricingInputs(
     const priceSource = normalizePriceSource(value?.priceSource);
     const basePriceSource = normalizeBasePriceSource(value?.basePriceSource);
     const basePriceAmount = value?.basePriceAmount;
+    const rawDeductionPerGram =
+      (value as PosCartPricingInputWithDeduction).deductionPerGram ?? 0;
 
     if (!itemId || seenItemIds.has(itemId)) {
       throw new PosTransactionPricingError(
@@ -104,6 +116,12 @@ export function normalizePosCartPricingInputs(
     if (!/^\d+$/.test(pricePerGram) || Number(pricePerGram) <= 0) {
       throw new PosTransactionPricingError(
         "Harga / Gram tidak valid. Kembali ke cart lalu atur harga item.",
+      );
+    }
+
+    if (!isSafeMoney(rawDeductionPerGram)) {
+      throw new PosTransactionPricingError(
+        "Potongan / Gram tidak valid. Gunakan nominal Rp0 atau lebih besar.",
       );
     }
 
@@ -133,13 +151,14 @@ export function normalizePosCartPricingInputs(
       transactionWeightGram,
       priceSource,
       pricePerGram,
+      deductionPerGram: Number(rawDeductionPerGram),
       basePriceSource,
       basePriceAmount:
         basePriceSource === "manual_override" ? Number(basePriceAmount) : undefined,
       discountAmount: value.discountAmount,
       laborAmount: value.laborAmount,
       adjustmentAmount: value.adjustmentAmount,
-    };
+    } as PosCartPricingInput;
   });
 }
 
@@ -279,6 +298,11 @@ export async function resolvePosTransactionPricing({
         `Harga Jual ${item.sku} tidak valid. Kembali ke cart lalu atur item.`,
       );
     }
+
+    // deductionPerGram adalah metadata transaksi. Sinkronkan ke row in-memory
+    // supaya caller existing dapat menyimpan snapshot nilai transaksi tanpa mengubah
+    // product_items dan tanpa memasukkannya ke kalkulasi harga jual.
+    item.deductionPerGram = String(getPosPricingDeductionPerGram(input));
 
     const finalPriceAmount = calculatePosFinalPrice({
       basePriceAmount,
