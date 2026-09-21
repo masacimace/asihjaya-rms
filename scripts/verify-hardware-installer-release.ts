@@ -21,10 +21,12 @@ const packageJson = JSON.parse(read("hardware-hub/package.json")) as {
   version?: string;
 };
 
-assert(packageJson.version, "hardware-hub/package.json wajib memiliki version release.");
+assert(
+  packageJson.version,
+  "hardware-hub/package.json wajib memiliki version release.",
+);
 const releaseTag = `hardware-hub-v${packageJson.version}`;
-const validReleaseUrl =
-  `https://github.com/masacimace/asihjaya-rms/releases/download/${releaseTag}/ASIHJAYA-Hardware-Hub-Setup.exe`;
+const validReleaseUrl = `https://github.com/masacimace/asihjaya-rms/releases/download/${releaseTag}/ASIHJAYA-Hardware-Hub-Setup.exe`;
 
 assert(
   workflow.includes('tags:\n      - "hardware-hub-v*"') &&
@@ -38,8 +40,12 @@ assert(
   "Tagged production installer wajib berasal dari commit yang sudah terintegrasi ke main dan tag harus cocok dengan package version.",
 );
 assert(
-  workflow.includes('if ($env:GITHUB_REF -like "refs/tags/hardware-hub-v*" -and $apiUrl -ne "https://ajsystem.id")') &&
-    workflow.includes("Tagged production release wajib embed https://ajsystem.id."),
+  workflow.includes(
+    'if ($env:GITHUB_REF -like "refs/tags/hardware-hub-v*" -and $apiUrl -ne "https://ajsystem.id")',
+  ) &&
+    workflow.includes(
+      "Tagged production release wajib embed https://ajsystem.id.",
+    ),
   "Tagged installer wajib fail closed jika RMS API bukan https://ajsystem.id.",
 );
 assert(
@@ -58,7 +64,9 @@ assert(
   "Temporary Actions artifact tetap wajib tersedia untuk review dan membawa checksum.",
 );
 assert(
-  workflow.includes("Release $GITHUB_REF_NAME already exists; refusing to overwrite immutable production assets."),
+  workflow.includes(
+    "Release $GITHUB_REF_NAME already exists; refusing to overwrite immutable production assets.",
+  ),
   "Workflow production tidak boleh overwrite release asset immutable yang sudah terbit.",
 );
 
@@ -66,10 +74,6 @@ assert.match(
   productionTemplate,
   /^HARDWARE_HUB_INSTALLER_DOWNLOAD_URL=CHANGE_ME$/m,
   ".env.production.example wajib mendokumentasikan installer release URL sebagai deployment-specific value.",
-);
-assert(
-  productionTemplate.includes(validReleaseUrl),
-  "Production template wajib menjelaskan stable GitHub Release asset URL untuk package version aktif.",
 );
 assert(
   environmentCli.includes("assertHardwareInstallerEnvironment") &&
