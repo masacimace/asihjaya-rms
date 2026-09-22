@@ -242,7 +242,7 @@ const styles = String.raw`
     align-content: center;
     gap: 0.45mm;
     color: var(--ink);
-    font-family: Georgia, 'Times New Roman', serif;
+    font-family: Times New Roman, Georgia, 'Times New Roman', serif;
     line-height: 1;
     text-transform: uppercase;
   }
