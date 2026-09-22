@@ -1,13 +1,14 @@
 import {
   ArrowDownRight,
   ArrowLeft,
+  ArrowRight,
   ArrowUpRight,
   Banknote,
-  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
+  Filter,
   Landmark,
   Search,
   WalletCards,
@@ -58,6 +59,11 @@ function formatMoney(value: number) {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
+function formatSignedMoney(value: number) {
+  const prefix = value < 0 ? "-" : "+";
+  return `${prefix}${formatMoney(Math.abs(value))}`;
+}
+
 function formatInteger(value: number) {
   return new Intl.NumberFormat("id-ID", {
     maximumFractionDigits: 0,
@@ -102,6 +108,45 @@ function buildExportUrl(filters: BankInflowFilters) {
   return query
     ? `/admin/operasional/pemasukan-bank/export/xlsx?${query}`
     : "/admin/operasional/pemasukan-bank/export/xlsx";
+}
+
+function getPaginationTokens(page: number, pageCount: number) {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
+  }
+
+  const visiblePages = new Set<number>([
+    1,
+    pageCount,
+    page - 1,
+    page,
+    page + 1,
+  ]);
+
+  if (page <= 4) {
+    [2, 3, 4, 5].forEach((value) => visiblePages.add(value));
+  }
+
+  if (page >= pageCount - 3) {
+    [pageCount - 4, pageCount - 3, pageCount - 2, pageCount - 1].forEach(
+      (value) => visiblePages.add(value),
+    );
+  }
+
+  const pages = [...visiblePages]
+    .filter((value) => value >= 1 && value <= pageCount)
+    .sort((a, b) => a - b);
+  const tokens: Array<number | "ellipsis"> = [];
+
+  pages.forEach((value, index) => {
+    const previous = pages[index - 1];
+    if (index > 0 && previous !== undefined && value - previous > 1) {
+      tokens.push("ellipsis");
+    }
+    tokens.push(value);
+  });
+
+  return tokens;
 }
 
 function SummaryCard({
@@ -194,9 +239,17 @@ export default async function BankInflowPage({ searchParams }: PageProps) {
   const currentOutlet = filters.outletId
     ? (data.outlets.find((outlet) => outlet.id === filters.outletId) ?? null)
     : null;
+  const activeFilterCount = [
+    filters.search || null,
+    filters.outletId,
+    filters.provider,
+    filters.method !== "all" ? filters.method : null,
+    filters.dateRange !== "thisMonth" ? filters.dateRange : null,
+  ].filter(Boolean).length;
 
   const startItem = data.total === 0 ? 0 : (data.page - 1) * data.pageSize + 1;
   const endItem = Math.min(data.page * data.pageSize, data.total);
+  const paginationTokens = getPaginationTokens(data.page, data.pageCount);
 
   return (
     <div className="space-y-6 pb-10">
@@ -283,24 +336,43 @@ export default async function BankInflowPage({ searchParams }: PageProps) {
       </section>
 
       <details className="group overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 transition hover:bg-neutral-50 sm:px-5 [&::-webkit-details-marker]:hidden">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-              <CalendarDays className="size-5" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="font-semibold text-neutral-950">Filter Laporan</h2>
-              <p className="mt-1 truncate text-xs leading-5 text-[var(--muted)]">
-                Periode: {data.period.label} · Outlet:{" "}
-                {currentOutlet
-                  ? `${currentOutlet.code} — ${currentOutlet.name}`
-                  : "Semua outlet"}
-              </p>
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] sm:px-5 [&::-webkit-details-marker]:hidden">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+            <Filter className="size-4" />
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-semibold text-neutral-950">Filter laporan</h2>
+              {activeFilterCount > 0 ? (
+                <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                  {activeFilterCount} filter aktif
+                </span>
+              ) : (
+                <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                  Opsional
+                </span>
+              )}
+              <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                {data.period.label}
+              </span>
             </div>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
+              {formatInteger(data.total)} mutasi sesuai filter · Outlet:{" "}
+              {currentOutlet
+                ? `${currentOutlet.code} — ${currentOutlet.name}`
+                : "Semua outlet"}
+            </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2 text-xs font-semibold text-neutral-600">
-            <span className="hidden sm:inline">Buka / tutup filter</span>
-            <ChevronDown className="size-5 transition-transform duration-200 group-open:rotate-180" />
+
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <span className="hidden text-xs font-semibold text-neutral-500 sm:inline sm:group-open:hidden">
+              Buka filter
+            </span>
+            <span className="hidden text-xs font-semibold text-neutral-500 sm:group-open:inline">
+              Tutup filter
+            </span>
+            <ChevronDown className="size-5 text-neutral-500 transition-transform duration-200 group-open:rotate-180" />
           </div>
         </summary>
 
@@ -407,8 +479,9 @@ export default async function BankInflowPage({ searchParams }: PageProps) {
             <div className="flex flex-wrap items-end gap-2 md:col-span-2 xl:col-span-4">
               <button
                 type="submit"
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:opacity-90"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-5 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
               >
+                <Filter className="size-4" />
                 Terapkan Filter
               </button>
               <Link
@@ -439,52 +512,79 @@ export default async function BankInflowPage({ searchParams }: PageProps) {
             Belum ada mutasi bank pada filter ini.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-[820px] w-full text-sm">
-              <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
-                <tr>
-                  <th className="px-5 py-3 font-medium">Bank</th>
-                  <th className="px-5 py-3 text-right font-medium">EDC</th>
-                  <th className="px-5 py-3 text-right font-medium">Transfer</th>
-                  <th className="px-5 py-3 text-right font-medium">
-                    Penerimaan
-                  </th>
-                  <th className="px-5 py-3 text-right font-medium">Refund</th>
-                  <th className="px-5 py-3 text-right font-medium">Bersih</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {data.bankSummary.map((bank) => (
-                  <tr key={bank.provider} className="hover:bg-neutral-50/70">
-                    <td className="px-5 py-4 font-semibold text-neutral-950">
+          <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-2 sm:p-5">
+            {data.bankSummary.map((bank) => (
+              <article
+                key={bank.provider}
+                className="overflow-hidden rounded-2xl border border-[var(--border)] bg-neutral-50/50"
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] bg-white px-4 py-3.5">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      Bank / Provider
+                    </p>
+                    <h3 className="mt-1 truncate font-semibold text-neutral-950">
                       {bank.provider}
-                    </td>
-                    <td className="px-5 py-4 text-right tabular-nums">
+                    </h3>
+                  </div>
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                    <Landmark className="size-4" />
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-px bg-[var(--border)]">
+                  <div className="bg-white p-3.5">
+                    <p className="text-[11px] font-medium text-[var(--muted)]">
+                      EDC
+                    </p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums text-neutral-950">
                       {formatMoney(bank.edcAmount)}
-                    </td>
-                    <td className="px-5 py-4 text-right tabular-nums">
+                    </p>
+                  </div>
+                  <div className="bg-white p-3.5">
+                    <p className="text-[11px] font-medium text-[var(--muted)]">
+                      Transfer
+                    </p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums text-neutral-950">
                       {formatMoney(bank.transferAmount)}
-                    </td>
-                    <td className="px-5 py-4 text-right font-medium tabular-nums text-emerald-700">
+                    </p>
+                  </div>
+                  <div className="bg-white p-3.5">
+                    <p className="text-[11px] font-medium text-[var(--muted)]">
+                      Penerimaan
+                    </p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-700">
                       {formatMoney(bank.receiptAmount)}
-                    </td>
-                    <td className="px-5 py-4 text-right font-medium tabular-nums text-red-700">
+                    </p>
+                  </div>
+                  <div className="bg-white p-3.5">
+                    <p className="text-[11px] font-medium text-[var(--muted)]">
+                      Refund
+                    </p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums text-red-700">
                       {formatMoney(bank.refundAmount)}
-                    </td>
-                    <td
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 bg-neutral-950 px-4 py-3.5 text-white">
+                  <div>
+                    <p className="text-[11px] font-medium text-neutral-400">
+                      Bersih
+                    </p>
+                    <p
                       className={cn(
-                        "px-5 py-4 text-right font-semibold tabular-nums",
-                        bank.netAmount < 0
-                          ? "text-red-700"
-                          : "text-neutral-950",
+                        "mt-1 text-base font-semibold tabular-nums",
+                        bank.netAmount < 0 ? "text-red-300" : "text-white",
                       )}
                     >
                       {formatMoney(bank.netAmount)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </p>
+                  </div>
+                  <WalletCards className="size-5 text-neutral-400" />
+                </div>
+              </article>
+            ))}
           </div>
         )}
       </section>
@@ -514,206 +614,206 @@ export default async function BankInflowPage({ searchParams }: PageProps) {
             </p>
           </div>
         ) : (
-          <>
-            <div className="hidden overflow-x-auto lg:block">
-              <table className="min-w-[1220px] w-full text-sm">
-                <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Tanggal</th>
-                    <th className="px-4 py-3 font-medium">Invoice</th>
-                    <th className="px-4 py-3 font-medium">Customer</th>
-                    <th className="px-4 py-3 font-medium">Outlet</th>
-                    <th className="px-4 py-3 font-medium">Bank</th>
-                    <th className="px-4 py-3 font-medium">Metode</th>
-                    <th className="px-4 py-3 text-center font-medium">Jenis</th>
-                    <th className="px-4 py-3 text-center font-medium">
-                      Penerimaan
-                    </th>
-                    <th className="px-4 py-3 text-center font-medium">
-                      Refund
-                    </th>
-                    <th className="px-4 py-3 text-center font-medium">
-                      Bersih
-                    </th>
-                    <th className="px-4 py-3 font-medium">
-                      Referensi / Profil
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {data.rows.map((row) => {
-                    const netAmount =
-                      row.kind === "receipt" ? row.amount : -row.amount;
-                    return (
-                      <tr key={row.id} className="hover:bg-neutral-50/70">
-                        <td className="whitespace-nowrap px-4 py-4 text-xs text-neutral-600">
-                          {formatDateTime(
-                            row.occurredAt,
-                            auth.organization.timezone,
-                          )}
-                        </td>
-                        <td className="px-4 py-4">
-                          <Link
-                            href={`/admin/penjualan/${row.saleId}`}
-                            className="font-semibold text-neutral-950 hover:text-[var(--accent)] hover:underline"
-                          >
-                            {row.invoiceNumber}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-4">
-                          <p className="font-medium text-neutral-900">
-                            {row.customerName ?? "Walk-in"}
-                          </p>
-                          <p className="mt-0.5 text-xs text-[var(--muted)]">
-                            {row.customerCode ?? row.customerPhone ?? "—"}
-                          </p>
-                        </td>
-                        <td className="px-4 py-4">
-                          <p className="font-medium text-neutral-900">
-                            {row.outletName}
-                          </p>
-                          <p className="mt-0.5 text-xs text-[var(--muted)]">
-                            {row.outletCode}
-                          </p>
-                        </td>
-                        <td className="px-4 py-4 font-semibold text-neutral-950">
-                          {row.provider}
-                        </td>
-                        <td className="px-4 py-4 text-neutral-700">
-                          {row.method === "debit_card" ? "EDC" : "Transfer"}
-                        </td>
-                        <td className="px-4 py-4">
-                          <MovementBadge row={row} />
-                        </td>
-                        <td className="px-4 py-4 text-right font-medium tabular-nums text-emerald-700">
-                          {row.kind === "receipt"
-                            ? formatMoney(row.amount)
-                            : "—"}
-                        </td>
-                        <td className="px-4 py-4 text-right font-medium tabular-nums text-red-700">
-                          {row.kind === "refund"
-                            ? formatMoney(row.amount)
-                            : "—"}
-                        </td>
-                        <td
-                          className={cn(
-                            "px-4 py-4 text-right font-semibold tabular-nums",
-                            netAmount < 0 ? "text-red-700" : "text-neutral-950",
-                          )}
-                        >
-                          {formatMoney(netAmount)}
-                        </td>
-                        <td
-                          className="max-w-48 truncate px-4 py-4 text-xs text-neutral-600"
-                          title={row.providerReference ?? undefined}
-                        >
-                          {row.providerReference ?? "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          <div className="grid gap-3 p-3 sm:p-4">
+            {data.rows.map((row) => {
+              const netAmount =
+                row.kind === "receipt" ? row.amount : -row.amount;
+              const isReceipt = row.kind === "receipt";
 
-            <div className="divide-y divide-[var(--border)] lg:hidden">
-              {data.rows.map((row) => {
-                const netAmount =
-                  row.kind === "receipt" ? row.amount : -row.amount;
-                return (
-                  <article key={row.id} className="space-y-3 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <Link
-                          href={`/admin/penjualan/${row.saleId}`}
-                          className="truncate font-semibold text-[11px] text-neutral-950 hover:text-[var(--accent)]"
-                        >
-                          {row.invoiceNumber}
-                        </Link>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {formatDateTime(
-                            row.occurredAt,
-                            auth.organization.timezone,
-                          )}
-                        </p>
-                      </div>
-                      <MovementBadge row={row} />
+              return (
+                <article
+                  key={row.id}
+                  className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white transition hover:border-neutral-300 hover:shadow-sm"
+                >
+                  <div className="flex flex-col gap-3 border-b border-[var(--border)] px-4 py-3.5 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/admin/penjualan/${row.saleId}`}
+                        className="inline-flex max-w-full items-center gap-1.5 text-sm font-semibold text-neutral-950 transition hover:text-[var(--accent)]"
+                      >
+                        <span className="truncate">{row.invoiceNumber}</span>
+                        <ArrowRight className="size-3.5 shrink-0" />
+                      </Link>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {formatDateTime(
+                          row.occurredAt,
+                          auth.organization.timezone,
+                        )}
+                      </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 rounded-xl bg-neutral-50 p-3 text-xs">
-                      <div>
-                        <p className="text-[var(--muted)]">Bank / Metode</p>
-                        <p className="mt-1 font-semibold text-neutral-900">
-                          {row.provider} ·{" "}
-                          {row.method === "debit_card" ? "EDC" : "Transfer"}
+                    <MovementBadge row={row} />
+                  </div>
+
+                  <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(220px,0.65fr)] lg:items-stretch">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                      <div className="rounded-xl bg-neutral-50 p-3">
+                        <p className="text-[11px] font-medium text-[var(--muted)]">
+                          Customer
+                        </p>
+                        <p className="mt-1 break-words text-sm font-semibold text-neutral-950">
+                          {row.customerName ?? "Walk-in"}
+                        </p>
+                        <p className="mt-1 break-words text-xs text-[var(--muted)]">
+                          {row.customerCode ??
+                            row.customerPhone ??
+                            "Tanpa data customer"}
                         </p>
                       </div>
-                      <div>
-                        <p className="text-[var(--muted)]">Bersih</p>
+
+                      <div className="rounded-xl bg-neutral-50 p-3">
+                        <p className="text-[11px] font-medium text-[var(--muted)]">
+                          Outlet
+                        </p>
+                        <p className="mt-1 break-words text-sm font-semibold text-neutral-950">
+                          {row.outletName}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">
+                          {row.outletCode}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-[var(--border)] p-3.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--accent)]">
+                          <Landmark className="size-3.5" />
+                          {row.provider}
+                        </span>
+                        <span className="inline-flex rounded-full border border-[var(--border)] bg-white px-2.5 py-1 text-xs font-semibold text-neutral-700">
+                          {row.method === "debit_card"
+                            ? "EDC"
+                            : "Transfer Bank"}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-[11px] font-medium text-[var(--muted)]">
+                        Referensi / Profil
+                      </p>
+                      <p className="mt-1 break-all text-xs font-medium leading-5 text-neutral-700">
+                        {row.providerReference ?? "Tidak ada referensi"}
+                      </p>
+                    </div>
+
+                    <div
+                      className={cn(
+                        "flex min-h-28 flex-col justify-between rounded-xl border p-3.5",
+                        isReceipt
+                          ? "border-emerald-200 bg-emerald-50/70"
+                          : "border-red-200 bg-red-50/70",
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p
+                            className={cn(
+                              "text-[11px] font-semibold uppercase tracking-wide",
+                              isReceipt ? "text-emerald-700" : "text-red-700",
+                            )}
+                          >
+                            {isReceipt ? "Dana masuk" : "Dana keluar"}
+                          </p>
+                          <p
+                            className={cn(
+                              "mt-1 text-lg font-semibold tabular-nums",
+                              isReceipt ? "text-emerald-800" : "text-red-800",
+                            )}
+                          >
+                            {formatMoney(row.amount)}
+                          </p>
+                        </div>
+                        {isReceipt ? (
+                          <ArrowUpRight className="size-5 text-emerald-700" />
+                        ) : (
+                          <ArrowDownRight className="size-5 text-red-700" />
+                        )}
+                      </div>
+
+                      <div className="mt-4 border-t border-neutral-200/70 pt-3">
+                        <p className="text-[11px] font-medium text-[var(--muted)]">
+                          Dampak bersih
+                        </p>
                         <p
                           className={cn(
-                            "mt-1 font-semibold",
+                            "mt-1 text-sm font-semibold tabular-nums",
                             netAmount < 0 ? "text-red-700" : "text-emerald-700",
                           )}
                         >
-                          {formatMoney(netAmount)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[var(--muted)]">Customer</p>
-                        <p className="mt-1 font-semibold text-neutral-900">
-                          {row.customerName ?? "Walk-in"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[var(--muted)]">Outlet</p>
-                        <p className="mt-1 font-semibold text-neutral-900">
-                          {row.outletName}
+                          {formatSignedMoney(netAmount)}
                         </p>
                       </div>
                     </div>
-                    {row.providerReference ? (
-                      <p className="text-xs text-[var(--muted)]">
-                        Ref: {row.providerReference}
-                      </p>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-          </>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         )}
 
-        <div className="flex flex-col gap-3 border-t border-[var(--border)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-[var(--muted)]">
-            Halaman {data.page} dari {data.pageCount}
-          </p>
-          <div className="flex items-center gap-2">
-            {data.page > 1 ? (
-              <Link
-                href={buildListUrl(data.page - 1, filters)}
-                className="inline-flex h-9 items-center gap-1 rounded-lg border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-              >
-                <ChevronLeft className="size-4" /> Sebelumnya
-              </Link>
-            ) : (
-              <span className="inline-flex h-9 items-center gap-1 rounded-lg border border-neutral-200 px-3 text-xs font-semibold text-neutral-300">
-                <ChevronLeft className="size-4" /> Sebelumnya
-              </span>
-            )}
-            {data.page < data.pageCount ? (
-              <Link
-                href={buildListUrl(data.page + 1, filters)}
-                className="inline-flex h-9 items-center gap-1 rounded-lg border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-              >
-                Berikutnya <ChevronRight className="size-4" />
-              </Link>
-            ) : (
-              <span className="inline-flex h-9 items-center gap-1 rounded-lg border border-neutral-200 px-3 text-xs font-semibold text-neutral-300">
-                Berikutnya <ChevronRight className="size-4" />
-              </span>
-            )}
+        {data.total > 0 ? (
+          <div className="border-t border-[var(--border)] px-4 py-4 sm:px-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-[var(--muted)]">
+                Halaman {data.page} dari {data.pageCount}
+              </p>
+
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                {data.page > 1 ? (
+                  <Link
+                    href={buildListUrl(data.page - 1, filters)}
+                    className="inline-flex h-10 items-center justify-center gap-1 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                  >
+                    <ChevronLeft className="size-4" /> Sebelumnya
+                  </Link>
+                ) : (
+                  <span className="inline-flex h-10 items-center justify-center gap-1 rounded-xl border border-neutral-200 px-3 text-xs font-semibold text-neutral-300">
+                    <ChevronLeft className="size-4" /> Sebelumnya
+                  </span>
+                )}
+
+                <div className="hidden items-center gap-1 lg:flex">
+                  {paginationTokens.map((token, index) =>
+                    token === "ellipsis" ? (
+                      <span
+                        key={`ellipsis-${index}`}
+                        className="grid size-9 place-items-center text-xs font-semibold text-neutral-400"
+                      >
+                        …
+                      </span>
+                    ) : token === data.page ? (
+                      <span
+                        key={token}
+                        aria-current="page"
+                        className="grid size-9 place-items-center rounded-lg bg-neutral-950 text-xs font-semibold text-white"
+                      >
+                        {token}
+                      </span>
+                    ) : (
+                      <Link
+                        key={token}
+                        href={buildListUrl(token, filters)}
+                        className="grid size-9 place-items-center rounded-lg border border-[var(--border)] text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                      >
+                        {token}
+                      </Link>
+                    ),
+                  )}
+                </div>
+
+                {data.page < data.pageCount ? (
+                  <Link
+                    href={buildListUrl(data.page + 1, filters)}
+                    className="inline-flex h-10 items-center justify-center gap-1 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                  >
+                    Berikutnya <ChevronRight className="size-4" />
+                  </Link>
+                ) : (
+                  <span className="inline-flex h-10 items-center justify-center gap-1 rounded-xl border border-neutral-200 px-3 text-xs font-semibold text-neutral-300">
+                    Berikutnya <ChevronRight className="size-4" />
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        ) : null}
       </section>
     </div>
   );
