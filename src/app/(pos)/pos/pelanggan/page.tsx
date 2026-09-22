@@ -1,12 +1,12 @@
 import Link from "next/link";
 import {
   AlertCircle,
-  ArrowRight,
   CheckCircle2,
   ChevronDown,
   Info,
   Mail,
   MapPin,
+  MessageCircle,
   Phone,
   Plus,
   ReceiptText,
@@ -125,6 +125,28 @@ function getCustomerInitials(name: string) {
     .slice(0, 2)
     .map((word) => word[0]?.toUpperCase() ?? "")
     .join("");
+}
+
+function buildWhatsAppHref(phone: string | null) {
+  if (!phone) {
+    return null;
+  }
+
+  let digits = phone.replace(/\D/g, "");
+
+  if (!digits) {
+    return null;
+  }
+
+  if (digits.startsWith("0")) {
+    digits = `62${digits.slice(1)}`;
+  }
+
+  if (!digits.startsWith("62")) {
+    digits = `62${digits}`;
+  }
+
+  return `https://wa.me/${digits}`;
 }
 
 function buildTransactionsHref(customer: PosCustomerListItem) {
@@ -383,6 +405,7 @@ function CustomerCompactRow({
     customer.totalTransactions > 0
       ? buildTransactionsHref(customer)
       : "/pos/transaksi";
+  const whatsappHref = buildWhatsAppHref(customer.phone);
 
   return (
     <article
@@ -425,13 +448,18 @@ function CustomerCompactRow({
             <ReceiptText className="size-3.5" />
             Transaksi
           </Link>
-          <Link
-            href="/pos"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-3 text-xs font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
-          >
-            Ke POS
-            <ArrowRight className="size-3.5" />
-          </Link>
+          {whatsappHref ? (
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+              aria-label={`Chat WhatsApp ${customer.fullName}`}
+            >
+              <MessageCircle className="size-4" />
+              WhatsApp
+            </a>
+          ) : null}
         </div>
       </div>
 
