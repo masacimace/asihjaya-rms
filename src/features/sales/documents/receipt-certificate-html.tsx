@@ -226,9 +226,7 @@ const styles = String.raw`
   }
 
   .aj-logo {
-    width: 28mm;
-    height: 28mm;
-    margin-bottom: 2mm;
+    width: 38mm;
     object-fit: contain;
   }
 
@@ -1677,7 +1675,9 @@ export function ReceiptCertificateHtmlDocument({
                         </div>
                         {itemDiscountAmount > 0 ? (
                           <div className="aj-total-detail-row aj-total-row-discount">
-                            <span className="aj-static-artwork">Diskon Item</span>
+                            <span className="aj-static-artwork">
+                              Diskon Item
+                            </span>
                             <strong className="aj-dynamic-print">
                               {formatNegativeAmount(itemDiscountAmount)}
                             </strong>
@@ -1685,7 +1685,9 @@ export function ReceiptCertificateHtmlDocument({
                         ) : null}
                         {pageCount > 1 ? (
                           <div className="aj-total-detail-row">
-                            <span className="aj-static-artwork">Total Order</span>
+                            <span className="aj-static-artwork">
+                              Total Order
+                            </span>
                             <strong className="aj-dynamic-print">
                               {formatAmount(data.sale.totalAmount)}
                             </strong>
@@ -1768,8 +1770,9 @@ export function ReceiptCertificateHtmlDocument({
                   <div>
                     <div className="aj-back-title">Informasi & Ketentuan</div>
                     <div className="aj-back-subtitle">
-                      Simpan nota ini sebagai bukti transaksi resmi dan referensi
-                      saat melakukan layanan lanjutan di outlet Asihjaya.
+                      Simpan nota ini sebagai bukti transaksi resmi dan
+                      referensi saat melakukan layanan lanjutan di outlet
+                      Asihjaya.
                     </div>
                   </div>
 
@@ -1794,102 +1797,100 @@ export function ReceiptCertificateHtmlDocument({
                       Terima kasih telah memilih Asih Jaya
                     </div>
 
-
                     <ol className="aj-back-policy-list">
-                        <li>
-                          1. Setiap permintaan untuk layanan lebih lanjut
-                          (Penukaran, Pembelian kembali produk, dan Keluhan)
-                          harus disertal invoice/kuitansi dan sertifikat asli.
-                        </li>
+                      <li>
+                        1. Setiap permintaan untuk layanan lebih lanjut
+                        (Penukaran, Pembelian kembali produk, dan Keluhan) harus
+                        disertal invoice/kuitansi dan sertifikat asli.
+                      </li>
+                      <br />
+                      <li>
+                        2. Asih Jaya Bantar Gebang dapat menarik atau mengubah
+                        kebijakan penukaran/pembelian kembali produk Asih Jaya
+                        Bantar Gebang tanpa pemberitahuan sebelumnya pada waktu
+                        tertentu dan keputusan Asih Jaya Bantar Gebang bersifat
+                        mutlak
+                      </li>{" "}
+                      <br />
+                      <li>
+                        3. Perhiasan yang dijual oleh Asih Jaya Bantar Gebang
+                        dapat ditukar pada toko Asih Jaya Bantar Gebang untuk
+                        produk dengan nilai yang sama, jika perhiasan yang
+                        ditukar memenuhi kondisi berikut:
+                        <ol className="aj-back-policy-sublist" type="a">
+                          <li>Perhiasan belum pernah digunakan.</li>
+                          <li>
+                            Perhiasan dalam kondisi yang sama pada saat
+                            perhiasan dijual.
+                          </li>
+                          <li>
+                            Perhiasan dikembalikan dalam waktu maksimal 2 hari
+                            dari waktu pembelian.
+                          </li>
+                          <li>Produk tidak dirusak atau diubah.</li>
+                          <li>
+                            Jika pelanggan menukar produk dengan produk bernilai
+                            lebih rendah, tidak ada pengembalian uang atas
+                            jumlah perbedaan yang akan diberikan. Namun jika
+                            pelanggan menukar produk dengan produk bernilai
+                            lebih tinggi, maka selisih jumlah tersebut harus
+                            dibayar oleh pelanggan.
+                          </li>
+                        </ol>
+                      </li>
+                      <li>
+                        {" "}
                         <br />
-                        <li>
-                          2. Asih Jaya Bantar Gebang dapat menarik atau mengubah
-                          kebijakan penukaran/pembelian kembali produk Asih Jaya
-                          Bantar Gebang tanpa pemberitahuan sebelumnya pada
-                          waktu tertentu dan keputusan Asih Jaya Bantar Gebang
-                          bersifat mutlak
-                        </li>{" "}
-                        <br />
-                        <li>
-                          3. Perhiasan yang dijual oleh Asih Jaya Bantar Gebang
-                          dapat ditukar pada toko Asih Jaya Bantar Gebang untuk
-                          produk dengan nilai yang sama, jika perhiasan yang
-                          ditukar memenuhi kondisi berikut:
-                          <ol className="aj-back-policy-sublist" type="a">
-                            <li>Perhiasan belum pernah digunakan.</li>
-                            <li>
-                              Perhiasan dalam kondisi yang sama pada saat
-                              perhiasan dijual.
-                            </li>
-                            <li>
-                              Perhiasan dikembalikan dalam waktu maksimal 2 hari
-                              dari waktu pembelian.
-                            </li>
-                            <li>Produk tidak dirusak atau diubah.</li>
-                            <li>
-                              Jika pelanggan menukar produk dengan produk
-                              bernilai lebih rendah, tidak ada pengembalian uang
-                              atas jumlah perbedaan yang akan diberikan. Namun
-                              jika pelanggan menukar produk dengan produk
-                              bernilai lebih tinggi, maka selisih jumlah
-                              tersebut harus dibayar oleh pelanggan.
-                            </li>
-                          </ol>
-                        </li>
-                        <li>
-                          {" "}
-                          <br />
-                          Kebijakan penukaran/pembelian kembali:
-                          <ol className="aj-back-policy-sublist" type="a">
-                            <li>
-                              Kami akan menerima produk Asih Jaya Bantar Gebang
-                              yang dijual melalui cabang kami sesuai dengan
-                              syarat dan ketentuan yang berlaku, dan kebijakan
-                              Exchange/Buyback kami, yang merupakan kebijakan
-                              Asih Jaya Bantar Gebang.
-                            </li>
-                            <li>
-                              Asih Jaya Bantar Gebang akan menerima perhiasan
-                              dibawah kebijakan penukaran/pembelian kembali
-                              setelah memeriksa dengan cermat bobot produk dan
-                              keasliannya sebagai produk Asih Jaya. Dengan
-                              melakukan identifikasi kerusakan atau cacat batu
-                              (Retakan, Penggantian dan Perubahan).
-                            </li>
-                            <li>
-                              Pada saat penukaran/pembelian kembali perhiasan
-                              yang dibeli dari toko kami, kami akan menghargai
-                              bagian dari syarat dan ketentuan Asih Jaya Bantar
-                              Gebang.
-                            </li>
-                            <li>
-                              Batu berwarna/mutiara/cincin
-                              pernikahan/hadiah/perhiasan yang dibuat khusus
-                              tidak dapat dibeli kembali atau ditukar.
-                            </li>
-                            <li>
-                              Berat emas akan menjadi bersih di luar berat
-                              mutiara, batu, lac, debu, kotoran dan bahan asing
-                              lainnya.
-                            </li>
-                            <li>
-                              Semua penilaian dan pembelian kembali tidak
-                              termasuk PPN/Pajak Penjualan/Ongko Pembuatan.
-                            </li>
-                            <li>
-                              Pengumpulan/desain khusus tidak tunduk pada
-                              kebijakan pertukaran dan pembelian kembali di
-                              atas, hal tersebut adalah kebijakan Asih Jaya
-                              Bantar Gebang.
-                            </li>
-                            <li>
-                              Simpan invoice pembelian/sertifikat asli sebagai
-                              bukti transaksi yang sah Asih Jaya Bantar Gebang
-                              berhak menolak pembelian kembali atau penukaran
-                              tanpa disertai invoice pembelian asli.
-                            </li>
-                          </ol>
-                        </li>
+                        Kebijakan penukaran/pembelian kembali:
+                        <ol className="aj-back-policy-sublist" type="a">
+                          <li>
+                            Kami akan menerima produk Asih Jaya Bantar Gebang
+                            yang dijual melalui cabang kami sesuai dengan syarat
+                            dan ketentuan yang berlaku, dan kebijakan
+                            Exchange/Buyback kami, yang merupakan kebijakan Asih
+                            Jaya Bantar Gebang.
+                          </li>
+                          <li>
+                            Asih Jaya Bantar Gebang akan menerima perhiasan
+                            dibawah kebijakan penukaran/pembelian kembali
+                            setelah memeriksa dengan cermat bobot produk dan
+                            keasliannya sebagai produk Asih Jaya. Dengan
+                            melakukan identifikasi kerusakan atau cacat batu
+                            (Retakan, Penggantian dan Perubahan).
+                          </li>
+                          <li>
+                            Pada saat penukaran/pembelian kembali perhiasan yang
+                            dibeli dari toko kami, kami akan menghargai bagian
+                            dari syarat dan ketentuan Asih Jaya Bantar Gebang.
+                          </li>
+                          <li>
+                            Batu berwarna/mutiara/cincin
+                            pernikahan/hadiah/perhiasan yang dibuat khusus tidak
+                            dapat dibeli kembali atau ditukar.
+                          </li>
+                          <li>
+                            Berat emas akan menjadi bersih di luar berat
+                            mutiara, batu, lac, debu, kotoran dan bahan asing
+                            lainnya.
+                          </li>
+                          <li>
+                            Semua penilaian dan pembelian kembali tidak termasuk
+                            PPN/Pajak Penjualan/Ongko Pembuatan.
+                          </li>
+                          <li>
+                            Pengumpulan/desain khusus tidak tunduk pada
+                            kebijakan pertukaran dan pembelian kembali di atas,
+                            hal tersebut adalah kebijakan Asih Jaya Bantar
+                            Gebang.
+                          </li>
+                          <li>
+                            Simpan invoice pembelian/sertifikat asli sebagai
+                            bukti transaksi yang sah Asih Jaya Bantar Gebang
+                            berhak menolak pembelian kembali atau penukaran
+                            tanpa disertai invoice pembelian asli.
+                          </li>
+                        </ol>
+                      </li>
                     </ol>
                   </article>
 

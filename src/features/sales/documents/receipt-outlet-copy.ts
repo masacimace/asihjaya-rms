@@ -40,11 +40,11 @@ function normalizeInstagramHandle(value: string | null | undefined) {
 }
 
 export function formatReceiptWhatsapp(phone: string) {
-  return `Whatsapp: ${phone}`;
+  return phone;
 }
 
 export function formatReceiptInstagram(instagramHandle: string) {
-  return `Instagram: ${instagramHandle}`;
+  return instagramHandle;
 }
 
 export function resolveReceiptRuntimeOutletCopy(
