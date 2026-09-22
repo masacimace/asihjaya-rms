@@ -34,7 +34,7 @@
 
 /* Header: logo / central brand / order metadata */
 .aj-receipt-front-design .aj-header {
-  grid-template-columns: 26mm minmax(0, 1fr) 56mm !important;
+  grid-template-columns: 31mm minmax(0, 1fr) 46mm !important;
   gap: 2.1mm !important;
   align-items: center !important;
 }
@@ -70,7 +70,7 @@
 
 .aj-receipt-front-design .aj-brand-main {
   color: var(--client-red) !important;
-  font-size: 42pt !important;
+  font-size: 45pt !important;
   font-weight: 900 !important;
   letter-spacing: 0.045em !important;
   white-space: nowrap !important;
@@ -100,7 +100,6 @@
   justify-self: center !important;
   white-space: normal !important;
   font-size: 9.1pt !important;
-  line-height: 1.12 !important;
 }
 
 .aj-receipt-front-design .aj-contact-item:nth-child(2)::before,
@@ -237,8 +236,8 @@
 }
 
 .aj-receipt-front-design .aj-thumb {
-  width: 26mm !important;
-  height: 26mm !important;
+  width: 27mm !important;
+  height: 27mm !important;
   padding: 1.1mm !important;
   border-radius: 2.1mm !important;
 }
@@ -344,13 +343,13 @@
 
 .aj-receipt-front-design .aj-total-detail-row {
   color: #333 !important;
-  font-size: 6.35pt !important;
+  font-size: 6.4pt !important;
   line-height: 1.5 !important;
 }
 
 .aj-receipt-front-design .aj-total-detail-row strong {
   color: #161616 !important;
-  font-size: 6.35pt !important;
+  font-size: 6.4pt !important;
 }
 
 .aj-receipt-front-design .aj-total-breakdown {
