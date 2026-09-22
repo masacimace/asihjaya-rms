@@ -58,14 +58,14 @@
 }
 
 .aj-receipt-front-design .aj-brand-kicker {
-  font-size: 17pt !important;
+  font-size: 19pt !important;
   font-weight: 800 !important;
   letter-spacing: 0.015em !important;
 }
 
 .aj-receipt-front-design .aj-brand-main {
   color: var(--client-red) !important;
-  font-size: 50pt !important;
+  font-size: 48pt !important;
   font-weight: 500 !important;
   font-style: normal !important;
   font-synthesis: none !important;
@@ -128,7 +128,7 @@
   gap: 1.45mm !important;
   color: #202020 !important;
   font-size: 8.35pt !important;
-  line-height: 1.1 !important;
+  line-height: 1.4 !important;
 }
 
 .aj-receipt-front-design .aj-summary-row {
@@ -366,7 +366,7 @@
 
 .aj-receipt-front-design .aj-total-label {
   color: #202020 !important;
-  font-size: 5.5pt !important;
+  font-size: 5.8pt !important;
   letter-spacing: 0.03em !important;
 }
 
