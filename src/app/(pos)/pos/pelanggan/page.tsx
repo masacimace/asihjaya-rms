@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   Info,
   Mail,
   MapPin,
@@ -11,7 +12,6 @@ import {
   ReceiptText,
   Search,
   Store,
-  UserRound,
   UsersRound,
   WalletCards,
 } from "lucide-react";
@@ -77,7 +77,20 @@ function formatMoney(value: string | number | null) {
   }).format(Number.isFinite(parsedValue) ? parsedValue : 0);
 }
 
-function formatDateTime(value: Date | null) {
+function formatDate(value: Date | null, timeZone: string) {
+  if (!value) {
+    return "Belum pernah";
+  }
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone,
+  }).format(value);
+}
+
+function formatDateTime(value: Date | null, timeZone: string) {
   if (!value) {
     return "Belum ada transaksi";
   }
@@ -88,7 +101,7 @@ function formatDateTime(value: Date | null) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "Asia/Jakarta",
+    timeZone,
   }).format(value);
 }
 
@@ -96,6 +109,22 @@ function formatCustomerCode(
   customer: Pick<PosCustomerListItem, "customerCode">,
 ) {
   return customer.customerCode?.trim() || "Tanpa kode";
+}
+
+function getCustomerInitials(name: string) {
+  const words = name
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+
+  if (words.length === 0) {
+    return "?";
+  }
+
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
 }
 
 function buildTransactionsHref(customer: PosCustomerListItem) {
@@ -123,7 +152,7 @@ function SummaryCard({
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm text-[var(--muted)]">{title}</p>
-          <p className="mt-2 truncate text-xl font-semibold text-neutral-950">
+          <p className="mt-2 break-words text-xl font-semibold text-neutral-950">
             {value}
           </p>
           <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{helper}</p>
@@ -178,7 +207,7 @@ function OutletBadge({ data }: { data: PosCustomerListData }) {
 
 function CustomerContactInfo({ customer }: { customer: PosCustomerListItem }) {
   return (
-    <div className="mt-3 space-y-1.5 text-xs leading-5 text-[var(--muted)]">
+    <div className="space-y-2 text-xs leading-5 text-[var(--muted)]">
       {customer.phone ? (
         <p className="flex min-w-0 items-center gap-2">
           <Phone className="size-3.5 shrink-0" />
@@ -192,9 +221,9 @@ function CustomerContactInfo({ customer }: { customer: PosCustomerListItem }) {
         </p>
       ) : null}
       {customer.address ? (
-        <p className="flex min-w-0 items-center gap-2">
-          <MapPin className="size-3.5 shrink-0" />
-          <span className="truncate">{customer.address}</span>
+        <p className="flex min-w-0 items-start gap-2">
+          <MapPin className="mt-0.5 size-3.5 shrink-0" />
+          <span className="line-clamp-2">{customer.address}</span>
         </p>
       ) : null}
       {!customer.phone && !customer.email && !customer.address ? (
@@ -342,78 +371,127 @@ function QuickCreateCustomerForm({ returnTo }: { returnTo: string }) {
   );
 }
 
-function CustomerCard({ customer }: { customer: PosCustomerListItem }) {
+
+function CustomerCompactRow({
+  customer,
+  timeZone,
+}: {
+  customer: PosCustomerListItem;
+  timeZone: string;
+}) {
+  const transactionsHref =
+    customer.totalTransactions > 0
+      ? buildTransactionsHref(customer)
+      : "/pos/transaksi";
+
   return (
-    <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:hidden">
-      <div className="flex items-start gap-3">
-        <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-          <UserRound className="size-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold text-neutral-950">
-            {customer.fullName}
-          </p>
-          <p className="mt-1 text-xs text-[var(--muted)]">
-            {formatCustomerCode(customer)}
-          </p>
-        </div>
-      </div>
+    <article
+      data-customer-layout="compact-row-card"
+      className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm shadow-neutral-950/[0.02] transition hover:border-neutral-300 hover:shadow-md hover:shadow-neutral-950/[0.04] sm:p-5"
+    >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent)]">
+            {getCustomerInitials(customer.fullName)}
+          </div>
 
-      <CustomerContactInfo customer={customer} />
-
-      <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl bg-neutral-50 p-3 text-sm">
-        <div>
-          <p className="text-xs text-[var(--muted)]">Transaksi</p>
-          <p className="mt-1 font-semibold text-neutral-950">
-            {customer.totalTransactions}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-[var(--muted)]">Total nilai</p>
-          <p className="mt-1 truncate font-semibold text-neutral-950">
-            {formatMoney(customer.totalAmount)}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4 rounded-2xl border border-[var(--border)] p-3">
-        <p className="text-xs text-[var(--muted)]">Transaksi terakhir</p>
-        {customer.lastTransaction ? (
-          <div className="mt-2">
-            <p className="font-semibold text-neutral-950">
-              {customer.lastTransaction.invoiceNumber}
-            </p>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate text-base font-semibold text-neutral-950">
+                {customer.fullName}
+              </p>
+              <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                Aktif
+              </span>
+            </div>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              {formatDateTime(customer.lastTransaction.completedAt)} ·{" "}
-              {formatMoney(customer.lastTransaction.totalAmount)}
+              {formatCustomerCode(customer)} · Bergabung{" "}
+              {formatDate(customer.createdAt, timeZone)}
+            </p>
+
+            {customer.notes ? (
+              <p className="mt-2 line-clamp-2 max-w-3xl text-xs leading-5 text-[var(--muted)]">
+                {customer.notes}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Link
+            href={transactionsHref}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+          >
+            <ReceiptText className="size-3.5" />
+            Transaksi
+          </Link>
+          <Link
+            href="/pos"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-3 text-xs font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+          >
+            Ke POS
+            <ArrowRight className="size-3.5" />
+          </Link>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div className="rounded-xl border border-[var(--border)] bg-neutral-50/60 p-3.5">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Kontak pelanggan
+          </p>
+          <CustomerContactInfo customer={customer} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-neutral-50 p-3.5">
+            <p className="text-[11px] font-medium uppercase text-[var(--muted)]">
+              Total nilai
+            </p>
+            <p className="mt-1.5 break-words text-base font-semibold text-neutral-950">
+              {formatMoney(customer.totalAmount)}
             </p>
           </div>
+          <div className="rounded-xl bg-neutral-50 p-3.5">
+            <p className="text-[11px] font-medium uppercase text-[var(--muted)]">
+              Transaksi
+            </p>
+            <p className="mt-1.5 text-base font-semibold text-neutral-950">
+              {customer.totalTransactions}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-xl border border-[var(--border)] px-3.5 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+          Transaksi terakhir
+        </p>
+        {customer.lastTransaction ? (
+          <div className="mt-1.5 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
+            <Link
+              href={transactionsHref}
+              className="text-xs font-semibold text-neutral-950 transition hover:text-[var(--accent)]"
+            >
+              {customer.lastTransaction.invoiceNumber}
+            </Link>
+            <span className="hidden text-neutral-300 sm:inline">·</span>
+            <span className="text-xs text-[var(--muted)]">
+              {formatDateTime(
+                customer.lastTransaction.completedAt,
+                timeZone,
+              )}
+            </span>
+            <span className="hidden text-neutral-300 sm:inline">·</span>
+            <span className="text-xs font-semibold text-neutral-800">
+              {formatMoney(customer.lastTransaction.totalAmount)}
+            </span>
+          </div>
         ) : (
-          <p className="mt-2 text-sm text-[var(--muted)]">
+          <p className="mt-1.5 text-xs text-[var(--muted)]">
             Belum ada transaksi completed di outlet aktif.
           </p>
         )}
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <Link
-          href={
-            customer.totalTransactions > 0
-              ? buildTransactionsHref(customer)
-              : "/pos/transaksi"
-          }
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-        >
-          <ReceiptText className="size-3.5" />
-          Transaksi
-        </Link>
-        <Link
-          href="/pos"
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-        >
-          <ArrowRight className="size-3.5" />
-          Ke POS
-        </Link>
       </div>
     </article>
   );
@@ -436,6 +514,7 @@ export default async function PosCustomersPage({ searchParams }: PageProps) {
     query,
   });
   const currentHref = buildCustomersHref({ query: data.query });
+  const timeZone = auth.organization.timezone;
 
   return (
     <PosPageContainer>
@@ -472,45 +551,78 @@ export default async function PosCustomersPage({ searchParams }: PageProps) {
 
       <QuickCreateCustomerForm returnTo={currentHref} />
 
-      <section className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-4">
-        <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-          <label className="flex h-11 min-w-0 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3">
-            <Search className="size-4 shrink-0 text-neutral-400" />
-            <input
-              type="search"
-              name="q"
-              defaultValue={data.query}
-              placeholder="Cari nama, kode customer, nomor HP, email..."
-              className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
-            />
-          </label>
-
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-black px-4 text-sm font-semibold text-white transition hover:bg-black/80"
-            >
-              <Search className="size-4" />
-              Cari
-            </button>
-            {data.query ? (
-              <Link
-                href="/pos/pelanggan"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-              >
-                Reset
-              </Link>
-            ) : null}
+      <details className="group mt-5 overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] [&::-webkit-details-marker]:hidden">
+          <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-neutral-50 text-neutral-600">
+            <Search className="size-4" />
           </div>
-        </form>
 
-        {data.query ? (
-          <p className="mt-3 text-xs text-[var(--muted)]">
-            Search aktif: <span className="font-semibold">{data.query}</span>.
-            Reset pencarian untuk kembali melihat customer aktif.
-          </p>
-        ) : null}
-      </section>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-neutral-950">
+                Cari customer
+              </p>
+              {data.query ? (
+                <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                  Search aktif
+                </span>
+              ) : (
+                <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                  Opsional
+                </span>
+              )}
+            </div>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
+              {data.summary.totalCustomers} customer ditampilkan
+              {data.query ? ` untuk "${data.query}"` : ""}. Buka untuk mencari
+              nama, kode, nomor HP, atau email.
+            </p>
+          </div>
+
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <span className="hidden text-xs font-semibold text-neutral-500 sm:inline group-open:hidden">
+              Buka pencarian
+            </span>
+            <span className="hidden text-xs font-semibold text-neutral-500 sm:group-open:inline">
+              Tutup pencarian
+            </span>
+            <ChevronDown className="size-4 text-neutral-500 transition-transform duration-200 group-open:rotate-180" />
+          </div>
+        </summary>
+
+        <div className="border-t border-[var(--border)] p-4">
+          <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <label className="flex h-11 min-w-0 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3 transition focus-within:border-[var(--accent)]">
+              <Search className="size-4 shrink-0 text-neutral-400" />
+              <input
+                type="search"
+                name="q"
+                defaultValue={data.query}
+                placeholder="Cari nama, kode customer, nomor HP, email..."
+                className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
+              />
+            </label>
+
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-black px-4 text-sm font-semibold text-white transition hover:bg-black/80 lg:flex-none"
+              >
+                <Search className="size-4" />
+                Cari
+              </button>
+              {data.query ? (
+                <Link
+                  href="/pos/pelanggan"
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                >
+                  Reset
+                </Link>
+              ) : null}
+            </div>
+          </form>
+        </div>
+      </details>
 
       {feedbackMessage ? (
         <CustomerFeedbackNotice type={feedbackType} message={feedbackMessage} />
@@ -532,108 +644,32 @@ export default async function PosCustomersPage({ searchParams }: PageProps) {
           </div>
         </section>
       ) : (
-        <>
-          <div className="mt-5 space-y-3 sm:hidden">
-            {data.customers.map((customer) => (
-              <CustomerCard key={customer.id} customer={customer} />
-            ))}
+        <section className="mt-5 rounded-2xl border border-[var(--border)] bg-neutral-50/40 p-3 sm:p-4">
+          <div className="flex flex-col gap-2 px-1 pb-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="font-semibold text-neutral-950">
+                Customer outlet aktif
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                Kontak, metrik transaksi, dan aktivitas terakhir dalam compact
+                row-card.
+              </p>
+            </div>
+            <span className="inline-flex w-fit rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700">
+              {data.customers.length} customer
+            </span>
           </div>
 
-          <section className="mt-5 hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-white sm:block">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-                <thead className="bg-neutral-50 text-left text-xs text-[var(--muted)]">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Customer</th>
-                    <th className="px-4 py-3 font-medium">Kontak</th>
-                    <th className="px-4 py-3 font-medium">
-                      Transaksi terakhir
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium">Total</th>
-                    <th className="px-4 py-3 text-right font-medium">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {data.customers.map((customer) => (
-                    <tr key={customer.id} className="align-top">
-                      <td className="px-4 py-4">
-                        <div className="flex items-start gap-3">
-                          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-                            <UserRound className="size-5" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-neutral-950">
-                              {customer.fullName}
-                            </p>
-                            <p className="mt-1 text-xs text-[var(--muted)]">
-                              {formatCustomerCode(customer)}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="max-w-[260px] px-4 py-4">
-                        <CustomerContactInfo customer={customer} />
-                      </td>
-                      <td className="px-4 py-4">
-                        {customer.lastTransaction ? (
-                          <div>
-                            <p className="font-semibold text-neutral-950">
-                              {customer.lastTransaction.invoiceNumber}
-                            </p>
-                            <p className="mt-1 text-xs text-[var(--muted)]">
-                              {formatDateTime(
-                                customer.lastTransaction.completedAt,
-                              )}
-                            </p>
-                            <p className="mt-1 text-xs font-medium text-neutral-800">
-                              {formatMoney(
-                                customer.lastTransaction.totalAmount,
-                              )}
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-[var(--muted)]">
-                            Belum ada transaksi completed di outlet aktif.
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        <p className="font-semibold text-neutral-950">
-                          {formatMoney(customer.totalAmount)}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {customer.totalTransactions} transaksi
-                        </p>
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        <div className="inline-flex flex-col gap-2">
-                          <Link
-                            href={
-                              customer.totalTransactions > 0
-                                ? buildTransactionsHref(customer)
-                                : "/pos/transaksi"
-                            }
-                            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                          >
-                            <ReceiptText className="size-3.5" />
-                            Transaksi
-                          </Link>
-                          <Link
-                            href="/pos"
-                            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                          >
-                            <ArrowRight className="size-3.5" />
-                            Ke POS
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
+          <div className="space-y-3">
+            {data.customers.map((customer) => (
+              <CustomerCompactRow
+                key={customer.id}
+                customer={customer}
+                timeZone={timeZone}
+              />
+            ))}
+          </div>
+        </section>
       )}
     </PosPageContainer>
   );
