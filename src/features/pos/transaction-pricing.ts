@@ -180,10 +180,6 @@ export type PosPricingDraftValues = {
   adjustmentAmount: number;
 };
 
-export type PosCartPricingInputWithDeduction = PosCartPricingInput & {
-  deductionPerGram: number;
-};
-
 export type BuildPosCartItemResult =
   | { status: "success"; item: PosCartItem }
   | { status: "error"; message: string };
@@ -301,7 +297,7 @@ export function buildPosCartItem(
 
 export function getPosCartPricingInput(
   item: PosCartItem,
-): PosCartPricingInputWithDeduction {
+): PosCartPricingInput {
   return {
     itemId: item.id,
     transactionWeightGram:

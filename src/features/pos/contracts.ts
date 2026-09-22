@@ -74,6 +74,7 @@ export type PosCartPricingInput = {
   transactionWeightGram?: string;
   priceSource?: PosPriceSource;
   pricePerGram: string;
+  deductionPerGram?: number;
   basePriceSource?: PosBasePriceSource;
   basePriceAmount?: number;
   discountAmount: number;

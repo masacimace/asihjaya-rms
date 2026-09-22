@@ -119,6 +119,24 @@ assert.deepEqual(
 );
 assert.equal(parseStoredCheckoutAttemptState({ version: 3 }), null);
 
+const legacyAttemptWithoutDeduction = structuredClone(initialAttempt);
+const [legacyPricing] = legacyAttemptWithoutDeduction.payload.itemPricing;
+assert(legacyPricing);
+delete legacyPricing.deductionPerGram;
+assert.deepEqual(
+  parseStoredCheckoutAttemptState(legacyAttemptWithoutDeduction),
+  legacyAttemptWithoutDeduction,
+);
+
+const invalidDeductionAttempt = structuredClone(initialAttempt);
+const [invalidDeductionPricing] = invalidDeductionAttempt.payload.itemPricing;
+assert(invalidDeductionPricing);
+invalidDeductionPricing.deductionPerGram = -1;
+assert.equal(
+  parseStoredCheckoutAttemptState(invalidDeductionAttempt),
+  null,
+);
+
 const retryPayload = createCheckoutPayload({
   submission,
   existingAttempt: initialAttempt,

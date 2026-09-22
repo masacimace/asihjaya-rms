@@ -18,10 +18,6 @@ import { normalizePurityKey } from "@/features/pricing/metal-price-rates";
 
 type PosDbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-type PosCartPricingInputWithDeduction = PosCartPricingInput & {
-  deductionPerGram?: unknown;
-};
-
 export type PosTransactionPricingSourceItem = {
   id: string;
   sku: string;
@@ -68,7 +64,7 @@ function normalizeBasePriceSource(value: unknown): PosBasePriceSource {
 }
 
 export function getPosPricingDeductionPerGram(value: PosCartPricingInput) {
-  const raw = (value as PosCartPricingInputWithDeduction).deductionPerGram ?? 0;
+  const raw = value.deductionPerGram ?? 0;
   return isSafeMoney(raw) ? Number(raw) : 0;
 }
 
@@ -98,8 +94,7 @@ export function normalizePosCartPricingInputs(
     const priceSource = normalizePriceSource(value?.priceSource);
     const basePriceSource = normalizeBasePriceSource(value?.basePriceSource);
     const basePriceAmount = value?.basePriceAmount;
-    const rawDeductionPerGram =
-      (value as PosCartPricingInputWithDeduction).deductionPerGram ?? 0;
+    const rawDeductionPerGram = value?.deductionPerGram ?? 0;
 
     if (!itemId || seenItemIds.has(itemId)) {
       throw new PosTransactionPricingError(
@@ -158,7 +153,7 @@ export function normalizePosCartPricingInputs(
       discountAmount: value.discountAmount,
       laborAmount: value.laborAmount,
       adjustmentAmount: value.adjustmentAmount,
-    } as PosCartPricingInput;
+    };
   });
 }
 

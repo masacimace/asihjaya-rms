@@ -1,12 +1,8 @@
 import { createHash } from "node:crypto";
 
-import { type PosCheckoutPayload } from "@/features/pos/contracts";
+import type { PosCheckoutPayload } from "@/features/pos/contracts";
 
 const IDEMPOTENCY_KEY_PATTERN = /^pos_[a-zA-Z0-9_-]{8,116}$/;
-
-type PosPricingFingerprintItem = PosCheckoutPayload["itemPricing"][number] & {
-  deductionPerGram?: number;
-};
 
 export type PosCheckoutFingerprintContext = {
   organizationId: string;
@@ -45,9 +41,7 @@ function canonicalizeCheckoutPayload(payload: PosCheckoutPayload) {
     );
 
   const itemPricing = payload.itemPricing
-    .map((rawItem) => {
-      const item = rawItem as PosPricingFingerprintItem;
-      return {
+    .map((item) => ({
         itemId: item.itemId,
         transactionWeightGram: normalizeFingerprintText(item.transactionWeightGram),
         priceSource: item.priceSource ?? "global",
@@ -61,8 +55,7 @@ function canonicalizeCheckoutPayload(payload: PosCheckoutPayload) {
         discountAmount: item.discountAmount,
         laborAmount: item.laborAmount,
         adjustmentAmount: item.adjustmentAmount,
-      };
-    })
+      }))
     .sort((left, right) => left.itemId.localeCompare(right.itemId));
   const customerDepositUsedAmount = payload.customerDepositUsedAmount ?? 0;
   const customerDepositInAmount = payload.customerDepositInAmount ?? 0;
