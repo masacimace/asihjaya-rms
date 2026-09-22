@@ -3,6 +3,8 @@ import {
   ArrowLeft,
   Barcode,
   Boxes,
+  ChevronLeft,
+  ChevronRight,
   CircleDot,
   Filter,
   PackageCheck,
@@ -54,18 +56,6 @@ const conditionLabels: Record<ItemCondition, string> = {
   returned: "Retur",
 };
 
-const quickAvailabilityFilters: Array<{
-  label: string;
-  value: ItemAvailability | null;
-}> = [
-  { label: "Semua", value: null },
-  { label: "Tersedia", value: "available" },
-  { label: "Hold Migrasi", value: "migration_hold" },
-  { label: "Reserved", value: "reserved" },
-  { label: "Terjual", value: "sold" },
-  { label: "Draft", value: "draft" },
-];
-
 function getAvailabilityClass(availability: ItemAvailability) {
   if (availability === "available") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -77,6 +67,10 @@ function getAvailabilityClass(availability: ItemAvailability) {
 
   if (availability === "sold") {
     return "border-neutral-200 bg-neutral-950 text-white";
+  }
+
+  if (availability === "processing" || availability === "inspection") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
   }
 
   return "border-blue-200 bg-blue-50 text-blue-700";
@@ -129,18 +123,6 @@ function formatPricePerGram(value: string | null | undefined) {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function formatWeightValue(value: number | string | null) {
-  const amount = typeof value === "string" ? Number(value) : (value ?? 0);
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return "—";
-  }
-
-  return new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 3,
   }).format(amount);
 }
 
@@ -203,20 +185,44 @@ function buildInventoryUrl(
   return query ? `/admin/inventaris?${query}` : "/admin/inventaris";
 }
 
-function buildAvailabilityUrl(
-  availability: ItemAvailability | null,
-  filters: {
-    search: string;
-    outletId: string | null;
-    availability: ItemAvailability | null;
-    condition: ItemCondition | null;
-    status: "active" | "archived";
-  },
-) {
-  return buildInventoryUrl(1, {
-    ...filters,
-    availability,
+function getPaginationTokens(page: number, pageCount: number) {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
+  }
+
+  const visiblePages = new Set<number>([1, pageCount, page - 1, page, page + 1]);
+
+  if (page <= 4) {
+    [2, 3, 4, 5].forEach((value) => visiblePages.add(value));
+  }
+
+  if (page >= pageCount - 3) {
+    [pageCount - 4, pageCount - 3, pageCount - 2, pageCount - 1].forEach(
+      (value) => visiblePages.add(value),
+    );
+  }
+
+  const pages = [...visiblePages]
+    .filter((value) => value >= 1 && value <= pageCount)
+    .sort((left, right) => left - right);
+  const tokens: Array<number | string> = [];
+
+  pages.forEach((value, index) => {
+    const previous = pages[index - 1];
+
+    if (previous !== undefined) {
+      const gap = value - previous;
+      if (gap === 2) {
+        tokens.push(previous + 1);
+      } else if (gap > 2) {
+        tokens.push(`ellipsis-${previous}-${value}`);
+      }
+    }
+
+    tokens.push(value);
   });
+
+  return tokens;
 }
 
 function SummaryCard({
@@ -250,6 +256,30 @@ function SummaryCard({
   );
 }
 
+function InventoryMetric({
+  label,
+  value,
+  emphasis = false,
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50 px-3 py-2.5">
+      <p className="text-[11px] font-medium text-neutral-500">{label}</p>
+      <p
+        className={cn(
+          "mt-1 truncate text-sm font-semibold tabular-nums text-neutral-950",
+          emphasis && "text-[var(--accent)]",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
 export default async function InventoryPage({
   searchParams,
 }: {
@@ -280,6 +310,7 @@ export default async function InventoryPage({
   const selectedOutlet = outletOptions.find(
     (outlet) => outlet.id === filters.outletId,
   );
+  const paginationTokens = getPaginationTokens(itemList.page, itemList.pageCount);
 
   return (
     <div className="space-y-6">
@@ -352,47 +383,24 @@ export default async function InventoryPage({
       </section>
 
       <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-neutral-950">
-              Filter inventaris
-            </p>
-            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Gunakan pencarian cepat untuk SKU, barcode, produk, outlet, atau
-              kondisi item.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {quickAvailabilityFilters.map((filter) => {
-              const active = filters.availability === filter.value;
-
-              return (
-                <Link
-                  key={filter.label}
-                  href={buildAvailabilityUrl(filter.value, filters)}
-                  className={cn(
-                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
-                    active
-                      ? "border-neutral-950 bg-neutral-950 !text-white"
-                      : "border-[var(--border)] bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40 hover:text-neutral-950",
-                  )}
-                >
-                  {filter.label}
-                </Link>
-              );
-            })}
-          </div>
+        <div className="mb-4">
+          <p className="text-sm font-semibold text-neutral-950">
+            Filter inventaris
+          </p>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+            Cari item lalu kombinasikan dengan outlet, status stok, atau kondisi
+            untuk mempersempit hasil.
+          </p>
         </div>
 
-        <form className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_150px_200px_160px_160px_auto]">
-          <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-neutral-50 px-3 transition focus-within:border-[var(--accent)] focus-within:bg-white">
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-neutral-50 px-3 transition focus-within:border-[var(--accent)] focus-within:bg-white md:col-span-2 xl:col-span-2">
             <Search className="size-4 shrink-0 text-neutral-400" />
             <input
               name="q"
               type="search"
               defaultValue={filters.search}
-              placeholder="Cari SKU, barcode, serial, atau produk..."
+              placeholder="Cari SKU, barcode, nama, atau kode produk..."
               className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
             />
           </label>
@@ -400,7 +408,7 @@ export default async function InventoryPage({
           <select
             name="status"
             defaultValue={filters.status}
-            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
+            className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
           >
             <option value="active">Item aktif</option>
             <option value="archived">Item diarsipkan</option>
@@ -409,7 +417,7 @@ export default async function InventoryPage({
           <select
             name="outletId"
             defaultValue={filters.outletId ?? ""}
-            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
+            className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
           >
             <option value="">Semua outlet</option>
             {outletOptions.map((outlet) => (
@@ -423,38 +431,42 @@ export default async function InventoryPage({
           <select
             name="availability"
             defaultValue={filters.availability ?? ""}
-            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
+            className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
           >
-            <option value="">Semua status</option>
-            <option value="draft">Draft</option>
+            <option value="">Semua status stok</option>
             <option value="available">Tersedia</option>
             <option value="reserved">Reserved</option>
+            <option value="draft">Draft</option>
+            <option value="migration_hold">Hold Migrasi</option>
+            <option value="processing">Pemrosesan Buyback</option>
+            <option value="inspection">Inspeksi</option>
             <option value="sold">Terjual</option>
           </select>
 
           <select
             name="condition"
             defaultValue={filters.condition ?? ""}
-            className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
+            className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
           >
             <option value="">Semua kondisi</option>
-            <option value="good">Baik</option>
+            <option value="good">Baru</option>
+            <option value="used">Bekas</option>
             <option value="damaged">Rusak</option>
             <option value="lost">Hilang</option>
             <option value="returned">Retur</option>
           </select>
 
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2 md:col-span-2 xl:col-span-2 xl:flex xl:justify-end">
             <button
               type="submit"
-              className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-5 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
             >
               <Filter className="size-4" />
               Terapkan
             </button>
             <Link
               href="/admin/inventaris"
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40 hover:text-neutral-950"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-5 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40 hover:text-neutral-950"
             >
               Reset
             </Link>
@@ -462,16 +474,21 @@ export default async function InventoryPage({
         </form>
 
         {isFiltered ? (
-          <div className="mt-4 rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
-            Menampilkan {formatNumber(itemList.total)} item
-            {selectedOutlet ? ` di ${selectedOutlet.name}` : ""} sesuai filter
-            aktif.
+          <div className="mt-4 flex flex-col gap-1 rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 px-4 py-3 text-sm text-neutral-700 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <span>
+              Menampilkan <strong>{formatNumber(itemList.total)}</strong> item
+              {selectedOutlet ? ` di ${selectedOutlet.name}` : ""} sesuai filter
+              aktif.
+            </span>
+            <span className="text-xs text-[var(--muted)]">
+              Reset filter untuk kembali ke seluruh inventaris.
+            </span>
           </div>
         ) : null}
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-        <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-[var(--border)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div>
             <h2 className="font-semibold text-neutral-950">
               Daftar Item Inventaris
@@ -481,7 +498,7 @@ export default async function InventoryPage({
               {itemList.page} dari {itemList.pageCount}
             </p>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-neutral-50 px-3 py-1.5 text-xs font-semibold text-neutral-700">
+          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[var(--border)] bg-neutral-50 px-3 py-1.5 text-xs font-semibold text-neutral-700">
             <Barcode className="size-3.5" />
             SKU & barcode aktif
           </div>
@@ -508,140 +525,142 @@ export default async function InventoryPage({
           </div>
         ) : (
           <>
-            <div className="hidden xl:block">
-              <div className="overflow-x-auto">
-                <div className="min-w-[1520px]">
-                  <div className="grid grid-cols-[minmax(300px,1.55fr)_180px_190px_110px_175px_150px_165px_130px] gap-4 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-xs font-medium text-neutral-500">
-                    <div>Item</div>
-                    <div className="min-w-0 self-center pl-5">
-                      SKU / Barcode
-                    </div>
-                    <div className="min-w-0 self-center pl-10">
-                      Stock Tersedia
-                    </div>
-                    <div className="min-w-0 self-center pl-13">Kadar %</div>
-                    <div className="min-w-0 self-center pl-20">
-                      Harga / Gram
-                    </div>
-                    <div className="min-w-0 self-center pl-15">
-                      Berat (Gram)
-                    </div>
-                    <div className="min-w-0 self-center pl-15">Warna</div>
-                    <div className="min-w-0 self-center pl-6">Status</div>
-                  </div>
+            <div className="hidden 2xl:block">
+              <div className="grid grid-cols-[minmax(260px,1.7fr)_minmax(120px,0.8fr)_minmax(170px,1fr)_minmax(130px,0.75fr)_minmax(120px,0.65fr)] gap-3 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-xs font-medium text-neutral-500">
+                <div>Item & identitas</div>
+                <div>Outlet / Lokasi</div>
+                <div>Spesifikasi</div>
+                <div>Harga / Gram</div>
+                <div>Status</div>
+              </div>
 
-                  <div className="divide-y divide-[var(--border)]">
-                    {itemList.rows.map((item) => {
-                      const imageUrl = getImageUrl(item.imageKey);
-                      const purityKey = normalizePurityKey(item.purityPercent);
-                      const activeRate = purityKey
-                        ? activePriceRateMap.get(purityKey)
-                        : null;
+              <div className="divide-y divide-[var(--border)]">
+                {itemList.rows.map((item) => {
+                  const imageUrl = getImageUrl(item.imageKey);
+                  const purityKey = normalizePurityKey(item.purityPercent);
+                  const activeRate = purityKey
+                    ? activePriceRateMap.get(purityKey)
+                    : null;
 
-                      return (
-                        <div
-                          key={item.id}
-                          className="group pointer-events-none relative grid grid-cols-[minmax(300px,1.55fr)_180px_190px_110px_175px_150px_165px_130px] gap-4 px-5 py-4 text-inherit no-underline transition hover:bg-neutral-50"
-                        >
-                          <Link
-                            href={`/admin/inventaris/item/${item.id}`}
-                            aria-label={`Buka detail item ${item.productName} ${item.sku}`}
-                            className="pointer-events-auto absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
-                          >
-                            <span className="sr-only">
-                              Buka detail item {item.productName} {item.sku}
-                            </span>
-                          </Link>
-                          <div className="flex min-w-0 items-center gap-3">
-                            <ProductImage
-                              src={imageUrl}
-                              alt={`${item.productName} ${item.sku}`}
-                              className={cn(
-                                "relative z-10 size-14 shrink-0 rounded-xl border border-[var(--border)]",
-                                imageUrl
-                                  ? "pointer-events-auto"
-                                  : "pointer-events-none",
-                              )}
-                            />
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-neutral-950 transition group-hover:text-[var(--accent)]">
-                                {item.productName}
-                              </p>
-                              <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                                {item.masterProductName}
-                              </p>
-                              <p className="mt-1 truncate text-[11px] text-neutral-400">
-                                Update {formatDateTime(item.updatedAt)}
-                              </p>
-                            </div>
-                          </div>
+                  return (
+                    <div
+                      key={item.id}
+                      className="group pointer-events-none relative grid grid-cols-[minmax(260px,1.7fr)_minmax(120px,0.8fr)_minmax(170px,1fr)_minmax(130px,0.75fr)_minmax(120px,0.65fr)] gap-3 px-5 py-4 transition hover:bg-neutral-50"
+                    >
+                      <Link
+                        href={`/admin/inventaris/item/${item.id}`}
+                        aria-label={`Buka detail item ${item.productName} ${item.sku}`}
+                        className="pointer-events-auto absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+                      >
+                        <span className="sr-only">
+                          Buka detail item {item.productName} {item.sku}
+                        </span>
+                      </Link>
 
-                          <div className="min-w-0 self-center pl-6">
-                            <p className="truncate font-mono text-xs font-semibold text-neutral-900">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <ProductImage
+                          src={imageUrl}
+                          alt={`${item.productName} ${item.sku}`}
+                          className={cn(
+                            "relative z-10 size-16 shrink-0 rounded-xl border border-[var(--border)]",
+                            imageUrl
+                              ? "pointer-events-auto"
+                              : "pointer-events-none",
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-neutral-950 transition group-hover:text-[var(--accent)]">
+                            {item.productName}
+                          </p>
+                          <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                            {item.masterProductName}
+                          </p>
+                          <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                            <span className="truncate font-mono font-semibold text-neutral-800">
                               {item.sku}
-                            </p>
-                            <p className="mt-1 truncate font-mono text-xs text-[var(--muted)]">
+                            </span>
+                            <span className="truncate font-mono text-[var(--muted)]">
                               {item.barcode}
-                            </p>
-                          </div>
-
-                          <div className="min-w-0 self-center pl-5">
-                            <p className="truncate text-sm font-semibold text-neutral-950">
-                              {item.outletName ?? "Belum ditempatkan"}
-                            </p>
-                            <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                              {item.outletCode || "Kode outlet belum tersedia"}
-                            </p>
-                          </div>
-
-                          <div className="min-w-0 self-center pl-16">
-                            <p className="text-sm font-semibold tabular-nums text-neutral-950">
-                              {formatPurity(item.purityPercent)}
-                            </p>
-                          </div>
-
-                          <div className="self-center text-right">
-                            <p className="text-sm font-semibold tabular-nums text-neutral-950">
-                              {formatPricePerGram(activeRate?.ratePerGram)}
-                            </p>
-                            {!activeRate ? (
-                              <p className="mt-1 text-[11px] text-amber-600">
-                                Rate belum tersedia
-                              </p>
-                            ) : null}
-                          </div>
-
-                          <div className="min-w-0 self-center pl-22">
-                            <p className="text-sm font-semibold tabular-nums text-neutral-950">
-                              {formatWeightValue(item.weightGram)}
-                            </p>
-                          </div>
-
-                          <div className="min-w-0 self-center pl-15">
-                            <p className="truncate text-sm font-medium text-neutral-900">
-                              {item.color || "—"}
-                            </p>
-                          </div>
-
-                          <div className="min-w-0 self-center pl-5">
-                            <span
-                              className={cn(
-                                "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
-                                getAvailabilityClass(item.availability),
-                              )}
-                            >
-                              {availabilityLabels[item.availability]}
                             </span>
                           </div>
+                          <p className="mt-1 truncate text-[11px] text-neutral-400">
+                            Update {formatDateTime(item.updatedAt)}
+                          </p>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                      </div>
+
+                      <div className="min-w-0 self-center">
+                        <p className="truncate text-sm font-semibold text-neutral-950">
+                          {item.outletName ?? "Belum ditempatkan"}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                          {item.outletCode || "Kode outlet belum tersedia"}
+                        </p>
+                      </div>
+
+                      <div className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-2 self-center text-xs">
+                        <div>
+                          <p className="text-neutral-500">Kadar</p>
+                          <p className="mt-0.5 font-semibold tabular-nums text-neutral-950">
+                            {formatPurity(item.purityPercent)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-neutral-500">Berat</p>
+                          <p className="mt-0.5 font-semibold tabular-nums text-neutral-950">
+                            {formatWeight(item.weightGram)}
+                          </p>
+                        </div>
+                        <div className="col-span-2 min-w-0">
+                          <p className="text-neutral-500">Warna</p>
+                          <p className="mt-0.5 truncate font-semibold text-neutral-950">
+                            {item.color || "—"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="min-w-0 self-center">
+                        <p className="text-sm font-semibold tabular-nums text-neutral-950">
+                          {formatPricePerGram(activeRate?.ratePerGram)}
+                        </p>
+                        {!activeRate ? (
+                          <p className="mt-1 text-[11px] text-amber-600">
+                            Rate belum tersedia
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-[11px] text-[var(--muted)]">
+                            Rate aktif kadar {formatPurity(item.purityPercent)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex min-w-0 flex-col items-start justify-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-flex max-w-full rounded-full border px-2.5 py-1 text-xs font-semibold",
+                            getAvailabilityClass(item.availability),
+                          )}
+                        >
+                          <span className="truncate">
+                            {availabilityLabels[item.availability]}
+                          </span>
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+                            getConditionClass(item.condition),
+                          )}
+                        >
+                          {conditionLabels[item.condition]}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="divide-y divide-[var(--border)] lg:hidden">
+            <div className="divide-y divide-[var(--border)] 2xl:hidden">
               {itemList.rows.map((item) => {
                 const imageUrl = getImageUrl(item.imageKey);
                 const purityKey = normalizePurityKey(item.purityPercent);
@@ -652,7 +671,7 @@ export default async function InventoryPage({
                 return (
                   <div
                     key={item.id}
-                    className="group pointer-events-none relative block p-4 text-inherit no-underline transition hover:bg-neutral-50"
+                    className="group pointer-events-none relative p-4 transition hover:bg-neutral-50 sm:p-5"
                   >
                     <Link
                       href={`/admin/inventaris/item/${item.id}`}
@@ -663,12 +682,13 @@ export default async function InventoryPage({
                         Buka detail item {item.productName} {item.sku}
                       </span>
                     </Link>
-                    <div className="flex gap-3">
+
+                    <div className="flex min-w-0 items-start gap-3 sm:gap-4">
                       <ProductImage
                         src={imageUrl}
                         alt={`${item.productName} ${item.sku}`}
                         className={cn(
-                          "relative z-10 size-20 shrink-0 rounded-2xl border border-[var(--border)]",
+                          "relative z-10 size-16 shrink-0 rounded-2xl border border-[var(--border)] sm:size-20",
                           imageUrl
                             ? "pointer-events-auto"
                             : "pointer-events-none",
@@ -676,70 +696,27 @@ export default async function InventoryPage({
                       />
 
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0">
                             <h3 className="line-clamp-2 font-semibold leading-5 text-neutral-950 transition group-hover:text-[var(--accent)]">
                               {item.productName}
                             </h3>
-                            <p className="mt-1 truncate font-mono text-xs text-[var(--muted)]">
-                              {item.sku}
+                            <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                              {item.masterProductName}
                             </p>
                           </div>
-                          <span
-                            className={cn(
-                              "shrink-0 rounded-full border px-2 py-1 text-xs font-semibold",
-                              getAvailabilityClass(item.availability),
-                            )}
-                          >
-                            {availabilityLabels[item.availability]}
-                          </span>
-                        </div>
-
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
-                            <p className="text-neutral-500">Kadar %</p>
-                            <p className="mt-1 font-semibold text-neutral-950">
-                              {formatPurity(item.purityPercent)}
-                            </p>
-                          </div>
-                          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
-                            <p className="text-neutral-500">Harga / Gram</p>
-                            <p className="mt-1 font-semibold text-neutral-950">
-                              {formatPricePerGram(activeRate?.ratePerGram)}
-                            </p>
-                          </div>
-                          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
-                            <p className="text-neutral-500">Berat (Gram)</p>
-                            <p className="mt-1 font-semibold text-neutral-950">
-                              {formatWeightValue(item.weightGram)}
-                            </p>
-                          </div>
-                          <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
-                            <p className="text-neutral-500">Warna</p>
-                            <p className="mt-1 truncate font-semibold text-neutral-950">
-                              {item.color || "—"}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 space-y-1.5 text-xs text-neutral-700">
-                          <div className="flex justify-between gap-3">
-                            <span className="text-[var(--muted)]">Outlet</span>
-                            <span className="min-w-0 truncate font-semibold text-neutral-950">
-                              {item.outletName ?? "Belum ditempatkan"}
-                            </span>
-                          </div>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-[var(--muted)]">Barcode</span>
-                            <span className="min-w-0 truncate font-mono text-neutral-950">
-                              {item.barcode}
-                            </span>
-                          </div>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-[var(--muted)]">Kondisi</span>
+                          <div className="flex shrink-0 flex-wrap gap-1.5">
                             <span
                               className={cn(
-                                "rounded-full border px-2 py-0.5 font-semibold",
+                                "rounded-full border px-2 py-1 text-xs font-semibold",
+                                getAvailabilityClass(item.availability),
+                              )}
+                            >
+                              {availabilityLabels[item.availability]}
+                            </span>
+                            <span
+                              className={cn(
+                                "rounded-full border px-2 py-1 text-xs font-semibold",
                                 getConditionClass(item.condition),
                               )}
                             >
@@ -748,12 +725,55 @@ export default async function InventoryPage({
                           </div>
                         </div>
 
-                        <div className="mt-4 border-t border-[var(--border)] pt-3">
-                          <span className="text-xs text-[var(--muted)]">
-                            Update {formatDateTime(item.updatedAt)}
-                          </span>
+                        <div className="mt-2 grid min-w-0 gap-1 text-[11px] sm:grid-cols-2 sm:gap-x-4">
+                          <p className="truncate font-mono font-semibold text-neutral-800">
+                            SKU: {item.sku}
+                          </p>
+                          <p className="truncate font-mono text-[var(--muted)]">
+                            Barcode: {item.barcode}
+                          </p>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <InventoryMetric
+                        label="Kadar"
+                        value={formatPurity(item.purityPercent)}
+                      />
+                      <InventoryMetric
+                        label="Harga / Gram"
+                        value={formatPricePerGram(activeRate?.ratePerGram)}
+                        emphasis={Boolean(activeRate)}
+                      />
+                      <InventoryMetric
+                        label="Berat"
+                        value={formatWeight(item.weightGram)}
+                      />
+                      <InventoryMetric label="Warna" value={item.color || "—"} />
+                    </div>
+
+                    {!activeRate ? (
+                      <p className="mt-2 text-[11px] font-medium text-amber-600">
+                        Harga / Gram untuk kadar ini belum tersedia.
+                      </p>
+                    ) : null}
+
+                    <div className="mt-4 flex flex-col gap-2 border-t border-[var(--border)] pt-3 text-xs text-neutral-700 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                      <div className="min-w-0">
+                        <span className="text-[var(--muted)]">Outlet / Lokasi: </span>
+                        <span className="font-semibold text-neutral-950">
+                          {item.outletName ?? "Belum ditempatkan"}
+                        </span>
+                        {item.outletCode ? (
+                          <span className="text-[var(--muted)]">
+                            {` · ${item.outletCode}`}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 text-[var(--muted)]">
+                        Update {formatDateTime(item.updatedAt)}
+                      </span>
                     </div>
                   </div>
                 );
@@ -763,42 +783,77 @@ export default async function InventoryPage({
         )}
 
         {itemList.pageCount > 1 ? (
-          <div className="flex flex-col gap-3 border-t border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-[var(--muted)]">
-              Halaman {itemList.page} dari {itemList.pageCount} ·{" "}
-              {formatNumber(itemList.total)} item
-            </p>
-            <div className="grid grid-cols-2 gap-2 sm:flex">
-              <Link
-                href={buildInventoryUrl(
-                  Math.max(1, itemList.page - 1),
-                  filters,
-                )}
-                aria-disabled={itemList.page <= 1}
-                className={cn(
-                  "inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-900 transition",
-                  itemList.page <= 1
-                    ? "pointer-events-none opacity-40"
-                    : "hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40",
-                )}
-              >
-                Sebelumnya
-              </Link>
-              <Link
-                href={buildInventoryUrl(
-                  Math.min(itemList.pageCount, itemList.page + 1),
-                  filters,
-                )}
-                aria-disabled={itemList.page >= itemList.pageCount}
-                className={cn(
-                  "inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-900 transition",
-                  itemList.page >= itemList.pageCount
-                    ? "pointer-events-none opacity-40"
-                    : "hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40",
-                )}
-              >
-                Berikutnya
-              </Link>
+          <div className="border-t border-[var(--border)] px-4 py-4 sm:px-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <p className="text-xs text-[var(--muted)]">
+                Halaman {itemList.page} dari {itemList.pageCount} ·{" "}
+                {formatNumber(itemList.total)} item
+              </p>
+
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="grid grid-cols-2 gap-2 sm:flex">
+                  <Link
+                    href={buildInventoryUrl(
+                      Math.max(1, itemList.page - 1),
+                      filters,
+                    )}
+                    aria-disabled={itemList.page <= 1}
+                    className={cn(
+                      "inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-semibold text-neutral-900 transition",
+                      itemList.page <= 1
+                        ? "pointer-events-none opacity-40"
+                        : "hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40",
+                    )}
+                  >
+                    <ChevronLeft className="size-4" />
+                    Sebelumnya
+                  </Link>
+                  <Link
+                    href={buildInventoryUrl(
+                      Math.min(itemList.pageCount, itemList.page + 1),
+                      filters,
+                    )}
+                    aria-disabled={itemList.page >= itemList.pageCount}
+                    className={cn(
+                      "inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-semibold text-neutral-900 transition",
+                      itemList.page >= itemList.pageCount
+                        ? "pointer-events-none opacity-40"
+                        : "hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40",
+                    )}
+                  >
+                    Berikutnya
+                    <ChevronRight className="size-4" />
+                  </Link>
+                </div>
+
+                <div className="hidden items-center gap-1 xl:flex">
+                  {paginationTokens.map((token) =>
+                    typeof token === "number" ? (
+                      <Link
+                        key={token}
+                        href={buildInventoryUrl(token, filters)}
+                        aria-current={token === itemList.page ? "page" : undefined}
+                        className={cn(
+                          "grid size-10 place-items-center rounded-xl border text-sm font-semibold transition",
+                          token === itemList.page
+                            ? "border-neutral-950 bg-neutral-950 !text-white"
+                            : "border-[var(--border)] bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40 hover:text-neutral-950",
+                        )}
+                      >
+                        {token}
+                      </Link>
+                    ) : (
+                      <span
+                        key={token}
+                        className="grid size-8 place-items-center text-sm text-[var(--muted)]"
+                        aria-hidden="true"
+                      >
+                        …
+                      </span>
+                    ),
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         ) : null}
