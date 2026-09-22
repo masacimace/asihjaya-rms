@@ -16,6 +16,9 @@ function read(relativePath: string) {
 const contracts = read("src/features/buybacks/contracts.ts");
 const queries = read("src/features/buybacks/queries.ts");
 const panel = read("src/components/buybacks/buyback-history-panel.tsx");
+const compactPanel = read(
+  "src/components/buybacks/buyback-compact-history-panel.tsx",
+);
 const mainPage = read("src/app/(pos)/pos/buyback/page.tsx");
 const historyPage = read("src/app/(pos)/pos/buyback/riwayat/page.tsx");
 const adminHistoryPage = read("src/app/(admin)/admin/buyback/page.tsx");
@@ -57,8 +60,10 @@ assert(
     historyPage.includes("processingFilter") &&
     historyPage.includes("payoutFilter") &&
     historyPage.includes('name="range"') &&
-    historyPage.includes("buybackHistoryDateRanges.map"),
-  "Dedicated history page belum lengkap.",
+    historyPage.includes("buybackHistoryDateRanges.map") &&
+    historyPage.includes("<details") &&
+    historyPage.includes("<BuybackCompactHistoryPanel"),
+  "Dedicated POS history page belum lengkap atau belum memakai compact/collapsible UX.",
 );
 
 assert(
@@ -66,43 +71,87 @@ assert(
     adminHistoryPage.includes('action="/admin/buyback"') &&
     adminHistoryPage.includes('historyBaseHref="/admin/buyback"') &&
     adminHistoryPage.includes("Export XLSX") &&
+    adminHistoryPage.includes("<details") &&
+    adminHistoryPage.includes("<BuybackCompactHistoryPanel") &&
     adminShell.includes('label: "Buyback Pembelian"') &&
     /href:\s*"\/admin\/buyback(?:\?[^\"]*)?"/.test(adminShell) &&
     historyFilters.includes('today: "Hari ini"') &&
     historyFilters.includes('last30: "30 hari terakhir"'),
-  "Admin Buyback history/date filter belum lengkap.",
+  "Admin Buyback history/date filter belum lengkap atau belum memakai compact/collapsible UX.",
 );
 
-const responsiveChecks = {
+const previewChecks = {
   previewMode: panel.includes('mode = "preview"'),
   totalCount: panel.includes("data.totalCount"),
   mobileCards: panel.includes("md:hidden"),
   desktopTable: panel.includes("hidden overflow-x-auto md:block"),
   allHistoryCta: panel.includes("Lihat semua riwayat"),
-  paginationRange:
-    panel.includes("Menampilkan {firstRow}-{lastRow} dari") ||
-    /Menampilkan \{firstRow\}[^\r\n]*\{lastRow\} dari/.test(panel),
   detailBack: panel.includes("href={backHref}"),
 };
 
-const missingResponsiveChecks = Object.entries(responsiveChecks)
+const missingPreviewChecks = Object.entries(previewChecks)
   .filter(([, valid]) => !valid)
   .map(([name]) => name);
 
 assert(
-  missingResponsiveChecks.length === 0,
-  `Responsive preview/history panel belum lengkap: ${missingResponsiveChecks.join(
+  missingPreviewChecks.length === 0,
+  `Preview Buyback existing berubah tanpa sengaja: ${missingPreviewChecks.join(
     ", ",
   )}.`,
+);
+
+const compactHistoryChecks = {
+  explicitLayout: compactPanel.includes(
+    'data-history-layout="compact-row-card"',
+  ),
+  noTable: !compactPanel.includes("<table"),
+  payoutAmount:
+    compactPanel.includes("payoutLabels[payout.method]") &&
+    compactPanel.includes("formatCurrency(Number(payout.amount))"),
+  photoPreview: compactPanel.includes("BuybackImagesPreview"),
+  processingState: compactPanel.includes("getProcessingSummary"),
+  customer: compactPanel.includes("row.customerName"),
+  outletAndStaff:
+    compactPanel.includes("row.outletName") &&
+    compactPanel.includes("row.processedByName"),
+  adaptivePagination:
+    compactPanel.includes("getPaginationTokens") &&
+    compactPanel.includes('aria-current={token === page ? "page" : undefined}'),
+  preservedFilters:
+    compactPanel.includes('params.set("process", filters.process)') &&
+    compactPanel.includes('params.set("payout", filters.payout)') &&
+    compactPanel.includes('params.set("range", filters.range)'),
+};
+
+const missingCompactChecks = Object.entries(compactHistoryChecks)
+  .filter(([, valid]) => !valid)
+  .map(([name]) => name);
+
+assert(
+  missingCompactChecks.length === 0,
+  `Compact Buyback history belum lengkap: ${missingCompactChecks.join(", ")}.`,
+);
+
+assert(
+  historyPage.includes("activeFilterCount") &&
+    historyPage.includes("group-open:rotate-180") &&
+    adminHistoryPage.includes("activeFilterCount") &&
+    adminHistoryPage.includes("group-open:rotate-180") &&
+    historyPage.includes("buybackHistoryDateRangeLabels[dateRange]") &&
+    adminHistoryPage.includes("buybackHistoryDateRangeLabels[dateRange]"),
+  "Filter collapse/active-period indicator Buyback belum konsisten di POS dan Admin.",
 );
 
 assert(
   !panel.includes("â€“") &&
     !panel.includes("â†") &&
-    !panel.includes("Ã"),
+    !panel.includes("Ã") &&
+    !compactPanel.includes("â€“") &&
+    !compactPanel.includes("â†") &&
+    !compactPanel.includes("Ã"),
   "Masih ditemukan karakter mojibake hasil encoding PowerShell.",
 );
 
 console.log(
-  "OK: Buyback history UX V3 valid — date filter, Admin history, 10/page, XLSX, mobile cards.",
+  "OK: Buyback history UX V4 valid — shared compact row-card, collapsible filters, adaptive pagination, preview unchanged.",
 );

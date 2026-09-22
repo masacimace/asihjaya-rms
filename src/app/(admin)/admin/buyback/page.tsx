@@ -1,14 +1,17 @@
 import {
   ArrowLeft,
   CalendarDays,
+  ChevronDown,
   Download,
   Filter,
   History,
+  Search,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { BuybackBankPayoutSnapshotCard } from "@/components/buybacks/buyback-bank-payout-snapshot";
+import { BuybackCompactHistoryPanel } from "@/components/buybacks/buyback-compact-history-panel";
 import { BuybackHistoryPanel } from "@/components/buybacks/buyback-history-panel";
 import {
   buybackHistoryDateRanges,
@@ -168,12 +171,13 @@ export default async function AdminBuybackHistoryPage({
     payout: payoutFilter,
     range: dateRange,
   });
-  const isFiltered = Boolean(
-    search ||
-      processingFilter !== "all" ||
-      payoutFilter !== "all" ||
-      dateRange !== "today",
-  );
+  const activeFilterCount = [
+    search || null,
+    processingFilter !== "all" ? processingFilter : null,
+    payoutFilter !== "all" ? payoutFilter : null,
+    dateRange !== "today" ? dateRange : null,
+  ].filter(Boolean).length;
+  const isFiltered = activeFilterCount > 0;
 
   return (
     <div className="space-y-6">
@@ -258,87 +262,121 @@ export default async function AdminBuybackHistoryPage({
         </div>
       ) : (
         <>
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="font-semibold text-neutral-950">
-                  Filter riwayat Buyback
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                  Cari No. Buyback atau customer, lalu batasi periode, status
-                  proses, dan metode payout.
+          <details className="group overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] sm:px-5 [&::-webkit-details-marker]:hidden">
+              <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-neutral-50 text-neutral-600">
+                <Filter className="size-4" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-neutral-950">
+                    Filter riwayat Buyback
+                  </p>
+                  {isFiltered ? (
+                    <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                      {activeFilterCount} filter aktif
+                    </span>
+                  ) : (
+                    <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                      Opsional
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                    <CalendarDays className="size-3" />
+                    {buybackHistoryDateRangeLabels[dateRange]}
+                  </span>
+                </div>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
+                  {isFiltered
+                    ? `${historyData.totalCount} transaksi sesuai filter. Buka untuk mengubah pencarian, periode, status proses, atau payout.`
+                    : "Buka untuk mencari No. Buyback atau customer, lalu batasi periode, status proses, dan metode payout."}
                 </p>
               </div>
-              {isFiltered ? (
-                <Link
-                  href="/admin/buyback"
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <span className="hidden text-xs font-semibold text-neutral-500 sm:inline group-open:hidden">
+                  Buka filter
+                </span>
+                <span className="hidden text-xs font-semibold text-neutral-500 sm:group-open:inline">
+                  Tutup filter
+                </span>
+                <ChevronDown className="size-4 text-neutral-500 transition-transform duration-200 group-open:rotate-180" />
+              </div>
+            </summary>
+
+            <div className="border-t border-[var(--border)] p-4 sm:p-5">
+              <form
+                action="/admin/buyback"
+                method="get"
+                className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+              >
+                <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-neutral-50 px-3 transition focus-within:border-[var(--accent)] focus-within:bg-white md:col-span-2 xl:col-span-2">
+                  <Search className="size-4 shrink-0 text-neutral-400" />
+                  <input
+                    name="q"
+                    type="search"
+                    defaultValue={search}
+                    placeholder="No. Buyback, nama, kode, atau telepon customer..."
+                    className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
+                  />
+                </label>
+
+                <select
+                  name="range"
+                  defaultValue={dateRange}
+                  className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)]"
                 >
-                  Reset filter
-                </Link>
-              ) : null}
+                  {buybackHistoryDateRanges.map((range) => (
+                    <option key={range} value={range}>
+                      {buybackHistoryDateRangeLabels[range]}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  name="process"
+                  defaultValue={processingFilter}
+                  className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)]"
+                >
+                  <option value="all">Semua status proses</option>
+                  <option value="pending">Menunggu proses</option>
+                  <option value="clear">Tidak ada antrean</option>
+                </select>
+
+                <select
+                  name="payout"
+                  defaultValue={payoutFilter}
+                  className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)] md:col-span-1"
+                >
+                  <option value="all">Semua payout</option>
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Transfer</option>
+                  <option value="customer_deposit">Dana Titip</option>
+                </select>
+
+                <div className="grid grid-cols-2 gap-2 md:col-span-2 xl:col-span-3 xl:flex xl:justify-end">
+                  <button
+                    type="submit"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-5 text-sm font-semibold !text-white transition hover:bg-neutral-800"
+                  >
+                    <Filter className="size-4" />
+                    Terapkan
+                  </button>
+                  <Link
+                    href="/admin/buyback"
+                    className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
+                  >
+                    Reset
+                  </Link>
+                </div>
+              </form>
             </div>
+          </details>
 
-            <form
-              action="/admin/buyback"
-              method="get"
-              className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_170px_190px_190px_auto]"
-            >
-              <input
-                name="q"
-                type="search"
-                defaultValue={search}
-                placeholder="No. Buyback atau customer..."
-                className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
-              />
-
-              <select
-                name="range"
-                defaultValue={dateRange}
-                className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)]"
-              >
-                {buybackHistoryDateRanges.map((range) => (
-                  <option key={range} value={range}>
-                    {buybackHistoryDateRangeLabels[range]}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                name="process"
-                defaultValue={processingFilter}
-                className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)]"
-              >
-                <option value="all">Semua status proses</option>
-                <option value="pending">Menunggu proses</option>
-                <option value="clear">Tidak ada antrean</option>
-              </select>
-
-              <select
-                name="payout"
-                defaultValue={payoutFilter}
-                className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none focus:border-[var(--accent)]"
-              >
-                <option value="all">Semua payout</option>
-                <option value="cash">Cash</option>
-                <option value="bank_transfer">Transfer</option>
-                <option value="customer_deposit">Dana Titip</option>
-              </select>
-
-              <button
-                type="submit"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold !text-white transition hover:bg-neutral-800"
-              >
-                <Filter className="size-4" />
-                Terapkan
-              </button>
-            </form>
-          </section>
-
-          <BuybackHistoryPanel
+          <BuybackCompactHistoryPanel
             data={historyData}
             timeZone={auth.organization.timezone}
-            mode="history"
             page={page}
             pageSize={PAGE_SIZE}
             filters={{
@@ -347,7 +385,6 @@ export default async function AdminBuybackHistoryPage({
               payout: payoutFilter,
               range: dateRange,
             }}
-            detailBackHref={listHref}
             historyBaseHref="/admin/buyback"
           />
         </>
