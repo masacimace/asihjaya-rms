@@ -1,4 +1,5 @@
 import { createQrSvgDataUri } from "@/lib/qr-code/svg";
+import localFont from "next/font/local";
 
 import type { ReceiptCertificateData } from "./receipt-certificate";
 import {
@@ -22,6 +23,14 @@ import {
   resolveReceiptRuntimeOutletCopy,
   resolveReceiptVendorStaticOutletCopy,
 } from "./receipt-outlet-copy";
+
+const benguiatBrandFont = localFont({
+  src: "./fonts/benguiat-bold.ttf",
+  display: "swap",
+  style: "regular",
+  weight: "500",
+  preload: true,
+});
 
 const styles = String.raw`
   html,
@@ -254,9 +263,6 @@ const styles = String.raw`
   }
 
   .aj-brand-main {
-    color: #e70101;
-    font-size: 40pt;
-    font-weight: 900;
     letter-spacing: 0.052em;
   }
 
@@ -1468,7 +1474,11 @@ export function ReceiptCertificateHtmlDocument({
                         aria-label="Toko Emas Asih Jaya"
                       >
                         <div className="aj-brand-kicker">Toko Emas</div>
-                        <div className="aj-brand-main">Asih Jaya</div>
+                        <div
+                          className={`${benguiatBrandFont.className} aj-brand-main`}
+                        >
+                          ASIH JAYA
+                        </div>
                       </div>
                       <div className="aj-contact-lines aj-static-artwork">
                         <span className="aj-contact-item">

@@ -57,7 +57,6 @@
 .aj-receipt-front-design .aj-brand-title {
   gap: 0.25mm !important;
   color: var(--client-ink) !important;
-  font-family: Georgia, "Times New Roman", serif !important;
   line-height: 0.96 !important;
   text-align: center !important;
 }
@@ -70,8 +69,10 @@
 
 .aj-receipt-front-design .aj-brand-main {
   color: var(--client-red) !important;
-  font-size: 45pt !important;
-  font-weight: 900 !important;
+  font-size: 47pt !important;
+  font-weight: 500 !important;
+  font-style: normal !important;
+  font-synthesis: none !important;
   letter-spacing: 0.045em !important;
   white-space: nowrap !important;
 }
@@ -99,7 +100,7 @@
   max-width: 112mm !important;
   justify-self: center !important;
   white-space: normal !important;
-  font-size: 9.1pt !important;
+  font-size: 9.6pt !important;
 }
 
 .aj-receipt-front-design .aj-contact-item:nth-child(2)::before,
@@ -141,7 +142,8 @@
 }
 
 .aj-receipt-front-design .aj-summary-value {
-  font-weight: 700 !important;
+  font-weight: 600 !important;
+  font-size: 7.35pt !important;
 }
 
 /* Customer strip */
@@ -199,6 +201,7 @@
   ) !important;
   font-size: 6.35pt !important;
   font-weight: 900 !important;
+  margin-top: 0.05rem !important;
 }
 
 .aj-receipt-front-design .aj-product-head > div:nth-child(7) {
@@ -289,7 +292,7 @@
 
 .aj-receipt-front-design .aj-payment-support-title {
   color: #222 !important;
-  font-size: 6.25pt !important;
+  font-size: 7.5pt !important;
   font-weight: 900 !important;
   letter-spacing: 0.02em !important;
 }
@@ -332,7 +335,7 @@
 
 .aj-receipt-front-design .aj-signature-name {
   color: #333 !important;
-  font-size: 6.9pt !important;
+  font-size: 7.5pt !important;
   font-weight: 500 !important;
 }
 
