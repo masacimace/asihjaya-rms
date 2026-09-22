@@ -187,7 +187,7 @@
 }
 
 .aj-receipt-front-design .aj-product-row {
-  grid-template-columns: 18mm 31mm minmax(0, 1fr) 18mm 16mm 25mm 16mm 21mm !important;
+  grid-template-columns: 21mm 28mm minmax(0, 1fr) 18mm 16mm 25mm 16mm 21mm !important;
   column-gap: 1.1mm !important;
   padding: 0 2.2mm !important;
 }
@@ -209,7 +209,7 @@
 }
 
 .aj-receipt-front-design .aj-product-head > div:nth-child(7)::after {
-  content: "DISCOUNT";
+  content: "DISKON";
   font-size: 6.35pt;
   font-weight: 900;
 }
@@ -239,9 +239,9 @@
 }
 
 .aj-receipt-front-design .aj-thumb {
-  width: 27mm !important;
-  height: 27mm !important;
-  padding: 1.1mm !important;
+  width: 25mm !important;
+  height: 25mm !important;
+  padding: 0.6mm !important;
   border-radius: 2.1mm !important;
 }
 
@@ -258,9 +258,10 @@
 .aj-receipt-front-design .aj-product-name {
   color: #171717 !important;
   font-family: Arial, Helvetica, sans-serif !important;
-  font-size: 6.8pt !important;
+  font-size: 6.5pt !important;
   font-weight: 800 !important;
   line-height: 1.15 !important;
+  margin-left: 1.9mm !important;
 }
 
 .aj-receipt-front-design .aj-product-meta {
@@ -268,6 +269,7 @@
   color: #555 !important;
   font-size: 5.7pt !important;
   font-weight: 600 !important;
+  margin-left: 1.9mm !important;
 }
 
 /* Footer cards */

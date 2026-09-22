@@ -771,7 +771,7 @@ const styles = String.raw`
     margin-top: 1mm;
     color: var(--ink);
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 18.4pt;
+    font-size: 18.5pt;
     font-weight: 900;
     line-height: 1;
     text-transform: uppercase;
@@ -809,7 +809,7 @@ const styles = String.raw`
 
   .aj-back-outlet-text {
     color: var(--muted);
-    font-size: 5.35pt;
+    font-size: 5.5pt;
     line-height: 1.25;
   }
 
@@ -842,7 +842,7 @@ const styles = String.raw`
 
   .aj-back-policy-heading {
     color: var(--ink);
-    font-size: 7.45pt;
+    font-size: 8.45pt;
     font-weight: 900;
     line-height: 1.16;
     text-transform: uppercase;
@@ -852,8 +852,8 @@ const styles = String.raw`
     display: grid;
     margin: 0;
     color: #2f2924;
-    font-size: 5.8pt;
-    line-height: 1.32;
+    font-size: 6.2pt;
+    line-height: 1.15;
   }
 
   .aj-back-policy-list > li {
@@ -881,7 +881,7 @@ const styles = String.raw`
   .aj-back-card-compact .aj-back-section-title {
     gap: 1.2mm;
     padding-bottom: 0.45mm;
-    font-size: 5.65pt;
+    font-size: 6.5pt;
   }
 
   .aj-back-card-compact .aj-back-section-icon {
@@ -899,7 +899,7 @@ const styles = String.raw`
     align-items: center;
     gap: 1.7mm;
     color: var(--ink);
-    font-size: 5.6pt;
+    font-size: 6.5pt;
     font-weight: 900;
     text-transform: uppercase;
     padding-bottom: 1mm;
@@ -943,7 +943,7 @@ const styles = String.raw`
 
   .aj-back-service-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(1, minmax(0, 1fr));
     gap: 1.05mm;
   }
 
@@ -955,7 +955,7 @@ const styles = String.raw`
     border-radius: 1.7mm;
     color: #4b4037;
     background: rgba(245, 245, 245, 0.78);
-    font-size: 4.55pt;
+    font-size: 5.5pt;
     font-weight: 800;
     line-height: 1.2;
   }

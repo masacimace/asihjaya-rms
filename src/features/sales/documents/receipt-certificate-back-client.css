@@ -1,0 +1,49 @@
+/*
+ * Client-approved back receipt artwork polish.
+ *
+ * Every rule is scoped to .aj-receipt-back-design so the finished front
+ * artwork, receipt data binding, calculations, and print behavior stay
+ * untouched.
+ */
+
+.aj-receipt-back-design {
+  --client-back-gold: #d1b45f;
+  --client-back-gold-soft: #fff7a8;
+
+  --gold: var(--client-back-gold);
+  --gold-2: var(--client-back-gold);
+  --line: var(--client-back-gold);
+
+  background: #fff !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Keep a subtle gold frame while removing the previous muted border tone. */
+.aj-receipt-back-design::before {
+  border: 0.24mm solid rgba(209, 180, 95, 0.72) !important;
+}
+
+/* The back page should stay clean: no centered logo watermark. */
+.aj-receipt-back-design > .aj-watermark {
+  display: none !important;
+}
+
+.aj-receipt-back-design .aj-back-header {
+  border-bottom-color: var(--client-back-gold) !important;
+}
+
+.aj-receipt-back-design .aj-back-outlet-card,
+.aj-receipt-back-design .aj-back-card {
+  border-color: var(--client-back-gold) !important;
+  background: #fff !important;
+}
+
+.aj-receipt-back-design .aj-back-section-icon {
+  background: var(--client-back-gold-soft) !important;
+}
+
+.aj-receipt-back-design .aj-back-service-pill {
+  border: 0.14mm solid rgba(209, 180, 95, 0.36) !important;
+  background: #fffdf3 !important;
+}
