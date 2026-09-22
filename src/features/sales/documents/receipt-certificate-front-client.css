@@ -27,11 +27,6 @@
   display: none !important;
 }
 
-.aj-receipt-front-design .aj-document-content {
-  grid-template-rows: 34.5mm 9.4mm minmax(0, 1fr) 36.5mm !important;
-  gap: 2.25mm !important;
-}
-
 /* Header: logo / central brand / order metadata */
 .aj-receipt-front-design .aj-header {
   grid-template-columns: 31mm minmax(0, 1fr) 46mm !important;
@@ -43,6 +38,7 @@
   align-content: center !important;
   gap: 0 !important;
   padding: 0 !important;
+  margin-bottom: 0.3rem !important;
 }
 
 .aj-receipt-front-design .aj-logo {
@@ -62,14 +58,14 @@
 }
 
 .aj-receipt-front-design .aj-brand-kicker {
-  font-size: 16pt !important;
+  font-size: 17pt !important;
   font-weight: 800 !important;
   letter-spacing: 0.015em !important;
 }
 
 .aj-receipt-front-design .aj-brand-main {
   color: var(--client-red) !important;
-  font-size: 47pt !important;
+  font-size: 50pt !important;
   font-weight: 500 !important;
   font-style: normal !important;
   font-synthesis: none !important;
@@ -81,17 +77,17 @@
   grid-template-columns: max-content max-content !important;
   justify-content: center !important;
   gap: 0.7mm 9mm !important;
-  margin-top: 0.5mm !important;
+  margin-top: 0.1mm !important;
   color: #303030 !important;
   font-size: 6.4pt !important;
-  line-height: 1.15 !important;
+  line-height: 1.2 !important;
   text-align: center !important;
 }
 
 .aj-receipt-front-design .aj-contact-item {
   justify-content: center !important;
   gap: 1.35mm !important;
-  font-size: 9.5pt !important;
+  font-size: 9.3pt !important;
   white-space: nowrap !important;
 }
 
@@ -100,20 +96,19 @@
   max-width: 112mm !important;
   justify-self: center !important;
   white-space: normal !important;
-  font-size: 9.6pt !important;
+  font-size: 9.8pt !important;
 }
 
 .aj-receipt-front-design .aj-contact-item:nth-child(2)::before,
 .aj-receipt-front-design .aj-contact-item:nth-child(3)::before {
   content: "";
   display: block;
-  width: 4.8mm;
-  height: 4.8mm;
+  width: 4.2mm;
+  height: 4.2mm;
   flex: 0 0 4.8mm;
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
-  border-radius: 5px;
 }
 
 .aj-receipt-front-design .aj-contact-item:nth-child(2)::before {
