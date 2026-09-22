@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Barcode,
   Boxes,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleDot,
@@ -190,7 +191,13 @@ function getPaginationTokens(page: number, pageCount: number) {
     return Array.from({ length: pageCount }, (_, index) => index + 1);
   }
 
-  const visiblePages = new Set<number>([1, pageCount, page - 1, page, page + 1]);
+  const visiblePages = new Set<number>([
+    1,
+    pageCount,
+    page - 1,
+    page,
+    page + 1,
+  ]);
 
   if (page <= 4) {
     [2, 3, 4, 5].forEach((value) => visiblePages.add(value));
@@ -310,7 +317,17 @@ export default async function InventoryPage({
   const selectedOutlet = outletOptions.find(
     (outlet) => outlet.id === filters.outletId,
   );
-  const paginationTokens = getPaginationTokens(itemList.page, itemList.pageCount);
+  const activeFilterCount = [
+    filters.search || null,
+    filters.outletId,
+    filters.availability,
+    filters.condition,
+    filters.status !== "active" ? filters.status : null,
+  ].filter(Boolean).length;
+  const paginationTokens = getPaginationTokens(
+    itemList.page,
+    itemList.pageCount,
+  );
 
   return (
     <div className="space-y-6">
@@ -382,110 +399,140 @@ export default async function InventoryPage({
         />
       </section>
 
-      <section className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-        <div className="mb-4">
-          <p className="text-sm font-semibold text-neutral-950">
-            Filter inventaris
-          </p>
-          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Cari item lalu kombinasikan dengan outlet, status stok, atau kondisi
-            untuk mempersempit hasil.
-          </p>
+      <details className="group overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] sm:px-5 [&::-webkit-details-marker]:hidden">
+          <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-neutral-50 text-neutral-600">
+            <Filter className="size-4" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-neutral-950">
+                Filter inventaris
+              </p>
+              {isFiltered ? (
+                <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                  {activeFilterCount} filter aktif
+                </span>
+              ) : (
+                <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                  Opsional
+                </span>
+              )}
+            </div>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
+              {isFiltered
+                ? `${formatNumber(itemList.total)} item sesuai filter. Buka untuk mengubah pencarian, outlet, status stok, atau kondisi.`
+                : "Buka untuk mencari item berdasarkan SKU, barcode, produk, outlet, status stok, atau kondisi."}
+            </p>
+          </div>
+
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <span className="hidden text-xs font-semibold text-neutral-500 sm:inline group-open:hidden">
+              Buka filter
+            </span>
+            <span className="hidden text-xs font-semibold text-neutral-500 sm:group-open:inline">
+              Tutup filter
+            </span>
+            <ChevronDown className="size-5 text-neutral-400 transition-transform duration-200 group-open:rotate-180" />
+          </div>
+        </summary>
+
+        <div className="border-t border-[var(--border)] px-4 py-4 sm:px-5 sm:py-5">
+          <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-neutral-50 px-3 transition focus-within:border-[var(--accent)] focus-within:bg-white md:col-span-2 xl:col-span-2">
+              <Search className="size-4 shrink-0 text-neutral-400" />
+              <input
+                name="q"
+                type="search"
+                defaultValue={filters.search}
+                placeholder="Cari SKU, barcode, nama, atau kode produk..."
+                className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
+              />
+            </label>
+
+            <select
+              name="status"
+              defaultValue={filters.status}
+              className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
+            >
+              <option value="active">Item aktif</option>
+              <option value="archived">Item diarsipkan</option>
+            </select>
+
+            <select
+              name="outletId"
+              defaultValue={filters.outletId ?? ""}
+              className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
+            >
+              <option value="">Semua outlet</option>
+              {outletOptions.map((outlet) => (
+                <option key={outlet.id} value={outlet.id}>
+                  {outlet.name}
+                  {outlet.isActive ? "" : " (Nonaktif)"}
+                </option>
+              ))}
+            </select>
+
+            <select
+              name="availability"
+              defaultValue={filters.availability ?? ""}
+              className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
+            >
+              <option value="">Semua status stok</option>
+              <option value="available">Tersedia</option>
+              <option value="reserved">Reserved</option>
+              <option value="draft">Draft</option>
+              <option value="migration_hold">Hold Migrasi</option>
+              <option value="processing">Pemrosesan Buyback</option>
+              <option value="inspection">Inspeksi</option>
+              <option value="sold">Terjual</option>
+            </select>
+
+            <select
+              name="condition"
+              defaultValue={filters.condition ?? ""}
+              className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
+            >
+              <option value="">Semua kondisi</option>
+              <option value="good">Baru</option>
+              <option value="used">Bekas</option>
+              <option value="damaged">Rusak</option>
+              <option value="lost">Hilang</option>
+              <option value="returned">Retur</option>
+            </select>
+
+            <div className="grid grid-cols-2 gap-2 md:col-span-2 xl:col-span-2 xl:flex xl:justify-end">
+              <button
+                type="submit"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-5 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+              >
+                <Filter className="size-4" />
+                Terapkan
+              </button>
+              <Link
+                href="/admin/inventaris"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-5 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40 hover:text-neutral-950"
+              >
+                Reset
+              </Link>
+            </div>
+          </form>
+
+          {isFiltered ? (
+            <div className="mt-4 flex flex-col gap-1 rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 px-4 py-3 text-sm text-neutral-700 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <span>
+                Menampilkan <strong>{formatNumber(itemList.total)}</strong> item
+                {selectedOutlet ? ` di ${selectedOutlet.name}` : ""} sesuai
+                filter aktif.
+              </span>
+              <span className="text-xs text-[var(--muted)]">
+                Reset filter untuk kembali ke seluruh inventaris.
+              </span>
+            </div>
+          ) : null}
         </div>
-
-        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-neutral-50 px-3 transition focus-within:border-[var(--accent)] focus-within:bg-white md:col-span-2 xl:col-span-2">
-            <Search className="size-4 shrink-0 text-neutral-400" />
-            <input
-              name="q"
-              type="search"
-              defaultValue={filters.search}
-              placeholder="Cari SKU, barcode, nama, atau kode produk..."
-              className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
-            />
-          </label>
-
-          <select
-            name="status"
-            defaultValue={filters.status}
-            className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
-          >
-            <option value="active">Item aktif</option>
-            <option value="archived">Item diarsipkan</option>
-          </select>
-
-          <select
-            name="outletId"
-            defaultValue={filters.outletId ?? ""}
-            className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
-          >
-            <option value="">Semua outlet</option>
-            {outletOptions.map((outlet) => (
-              <option key={outlet.id} value={outlet.id}>
-                {outlet.name}
-                {outlet.isActive ? "" : " (Nonaktif)"}
-              </option>
-            ))}
-          </select>
-
-          <select
-            name="availability"
-            defaultValue={filters.availability ?? ""}
-            className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
-          >
-            <option value="">Semua status stok</option>
-            <option value="available">Tersedia</option>
-            <option value="reserved">Reserved</option>
-            <option value="draft">Draft</option>
-            <option value="migration_hold">Hold Migrasi</option>
-            <option value="processing">Pemrosesan Buyback</option>
-            <option value="inspection">Inspeksi</option>
-            <option value="sold">Terjual</option>
-          </select>
-
-          <select
-            name="condition"
-            defaultValue={filters.condition ?? ""}
-            className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-[var(--accent)]"
-          >
-            <option value="">Semua kondisi</option>
-            <option value="good">Baru</option>
-            <option value="used">Bekas</option>
-            <option value="damaged">Rusak</option>
-            <option value="lost">Hilang</option>
-            <option value="returned">Retur</option>
-          </select>
-
-          <div className="grid grid-cols-2 gap-2 md:col-span-2 xl:col-span-2 xl:flex xl:justify-end">
-            <button
-              type="submit"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-5 text-sm font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
-            >
-              <Filter className="size-4" />
-              Terapkan
-            </button>
-            <Link
-              href="/admin/inventaris"
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-5 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/40 hover:text-neutral-950"
-            >
-              Reset
-            </Link>
-          </div>
-        </form>
-
-        {isFiltered ? (
-          <div className="mt-4 flex flex-col gap-1 rounded-2xl border border-dashed border-[var(--border)] bg-neutral-50 px-4 py-3 text-sm text-neutral-700 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <span>
-              Menampilkan <strong>{formatNumber(itemList.total)}</strong> item
-              {selectedOutlet ? ` di ${selectedOutlet.name}` : ""} sesuai filter
-              aktif.
-            </span>
-            <span className="text-xs text-[var(--muted)]">
-              Reset filter untuk kembali ke seluruh inventaris.
-            </span>
-          </div>
-        ) : null}
-      </section>
+      </details>
 
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
         <div className="flex flex-col gap-3 border-b border-[var(--border)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
@@ -525,142 +572,7 @@ export default async function InventoryPage({
           </div>
         ) : (
           <>
-            <div className="hidden 2xl:block">
-              <div className="grid grid-cols-[minmax(260px,1.7fr)_minmax(120px,0.8fr)_minmax(170px,1fr)_minmax(130px,0.75fr)_minmax(120px,0.65fr)] gap-3 border-b border-[var(--border)] bg-neutral-50 px-5 py-3 text-xs font-medium text-neutral-500">
-                <div>Item & identitas</div>
-                <div>Outlet / Lokasi</div>
-                <div>Spesifikasi</div>
-                <div>Harga / Gram</div>
-                <div>Status</div>
-              </div>
-
-              <div className="divide-y divide-[var(--border)]">
-                {itemList.rows.map((item) => {
-                  const imageUrl = getImageUrl(item.imageKey);
-                  const purityKey = normalizePurityKey(item.purityPercent);
-                  const activeRate = purityKey
-                    ? activePriceRateMap.get(purityKey)
-                    : null;
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="group pointer-events-none relative grid grid-cols-[minmax(260px,1.7fr)_minmax(120px,0.8fr)_minmax(170px,1fr)_minmax(130px,0.75fr)_minmax(120px,0.65fr)] gap-3 px-5 py-4 transition hover:bg-neutral-50"
-                    >
-                      <Link
-                        href={`/admin/inventaris/item/${item.id}`}
-                        aria-label={`Buka detail item ${item.productName} ${item.sku}`}
-                        className="pointer-events-auto absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
-                      >
-                        <span className="sr-only">
-                          Buka detail item {item.productName} {item.sku}
-                        </span>
-                      </Link>
-
-                      <div className="flex min-w-0 items-center gap-3">
-                        <ProductImage
-                          src={imageUrl}
-                          alt={`${item.productName} ${item.sku}`}
-                          className={cn(
-                            "relative z-10 size-16 shrink-0 rounded-xl border border-[var(--border)]",
-                            imageUrl
-                              ? "pointer-events-auto"
-                              : "pointer-events-none",
-                          )}
-                        />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-neutral-950 transition group-hover:text-[var(--accent)]">
-                            {item.productName}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                            {item.masterProductName}
-                          </p>
-                          <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-[11px]">
-                            <span className="truncate font-mono font-semibold text-neutral-800">
-                              {item.sku}
-                            </span>
-                            <span className="truncate font-mono text-[var(--muted)]">
-                              {item.barcode}
-                            </span>
-                          </div>
-                          <p className="mt-1 truncate text-[11px] text-neutral-400">
-                            Update {formatDateTime(item.updatedAt)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="min-w-0 self-center">
-                        <p className="truncate text-sm font-semibold text-neutral-950">
-                          {item.outletName ?? "Belum ditempatkan"}
-                        </p>
-                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                          {item.outletCode || "Kode outlet belum tersedia"}
-                        </p>
-                      </div>
-
-                      <div className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-2 self-center text-xs">
-                        <div>
-                          <p className="text-neutral-500">Kadar</p>
-                          <p className="mt-0.5 font-semibold tabular-nums text-neutral-950">
-                            {formatPurity(item.purityPercent)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-neutral-500">Berat</p>
-                          <p className="mt-0.5 font-semibold tabular-nums text-neutral-950">
-                            {formatWeight(item.weightGram)}
-                          </p>
-                        </div>
-                        <div className="col-span-2 min-w-0">
-                          <p className="text-neutral-500">Warna</p>
-                          <p className="mt-0.5 truncate font-semibold text-neutral-950">
-                            {item.color || "—"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="min-w-0 self-center">
-                        <p className="text-sm font-semibold tabular-nums text-neutral-950">
-                          {formatPricePerGram(activeRate?.ratePerGram)}
-                        </p>
-                        {!activeRate ? (
-                          <p className="mt-1 text-[11px] text-amber-600">
-                            Rate belum tersedia
-                          </p>
-                        ) : (
-                          <p className="mt-1 text-[11px] text-[var(--muted)]">
-                            Rate aktif kadar {formatPurity(item.purityPercent)}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex min-w-0 flex-col items-start justify-center gap-2">
-                        <span
-                          className={cn(
-                            "inline-flex max-w-full rounded-full border px-2.5 py-1 text-xs font-semibold",
-                            getAvailabilityClass(item.availability),
-                          )}
-                        >
-                          <span className="truncate">
-                            {availabilityLabels[item.availability]}
-                          </span>
-                        </span>
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
-                            getConditionClass(item.condition),
-                          )}
-                        >
-                          {conditionLabels[item.condition]}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="divide-y divide-[var(--border)] 2xl:hidden">
+            <div className="divide-y divide-[var(--border)]">
               {itemList.rows.map((item) => {
                 const imageUrl = getImageUrl(item.imageKey);
                 const purityKey = normalizePurityKey(item.purityPercent);
@@ -725,7 +637,7 @@ export default async function InventoryPage({
                           </div>
                         </div>
 
-                        <div className="mt-2 grid min-w-0 gap-1 text-[11px] sm:grid-cols-2 sm:gap-x-4">
+                        <div className="mt-2 grid min-w-0 gap-1 text-[13px] sm:grid-cols-2 sm:gap-x-4">
                           <p className="truncate font-mono font-semibold text-neutral-800">
                             SKU: {item.sku}
                           </p>
@@ -750,7 +662,10 @@ export default async function InventoryPage({
                         label="Berat"
                         value={formatWeight(item.weightGram)}
                       />
-                      <InventoryMetric label="Warna" value={item.color || "—"} />
+                      <InventoryMetric
+                        label="Warna"
+                        value={item.color || "—"}
+                      />
                     </div>
 
                     {!activeRate ? (
@@ -761,7 +676,9 @@ export default async function InventoryPage({
 
                     <div className="mt-4 flex flex-col gap-2 border-t border-[var(--border)] pt-3 text-xs text-neutral-700 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                       <div className="min-w-0">
-                        <span className="text-[var(--muted)]">Outlet / Lokasi: </span>
+                        <span className="text-[var(--muted)]">
+                          Outlet / Lokasi:{" "}
+                        </span>
                         <span className="font-semibold text-neutral-950">
                           {item.outletName ?? "Belum ditempatkan"}
                         </span>
@@ -832,7 +749,9 @@ export default async function InventoryPage({
                       <Link
                         key={token}
                         href={buildInventoryUrl(token, filters)}
-                        aria-current={token === itemList.page ? "page" : undefined}
+                        aria-current={
+                          token === itemList.page ? "page" : undefined
+                        }
                         className={cn(
                           "grid size-10 place-items-center rounded-xl border text-sm font-semibold transition",
                           token === itemList.page
