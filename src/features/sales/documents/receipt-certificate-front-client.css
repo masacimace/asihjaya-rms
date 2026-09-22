@@ -34,10 +34,9 @@
 
 /* Header: logo / central brand / order metadata */
 .aj-receipt-front-design .aj-header {
-  grid-template-columns: 29mm minmax(0, 1fr) 44mm !important;
-  gap: 2.4mm !important;
+  grid-template-columns: 26mm minmax(0, 1fr) 56mm !important;
+  gap: 2.1mm !important;
   align-items: center !important;
-  padding-bottom: 1.5mm !important;
 }
 
 .aj-receipt-front-design .aj-logo-block {
@@ -64,14 +63,14 @@
 }
 
 .aj-receipt-front-design .aj-brand-kicker {
-  font-size: 18pt !important;
+  font-size: 16pt !important;
   font-weight: 800 !important;
   letter-spacing: 0.015em !important;
 }
 
 .aj-receipt-front-design .aj-brand-main {
   color: var(--client-red) !important;
-  font-size: 46pt !important;
+  font-size: 42pt !important;
   font-weight: 900 !important;
   letter-spacing: 0.045em !important;
   white-space: nowrap !important;
