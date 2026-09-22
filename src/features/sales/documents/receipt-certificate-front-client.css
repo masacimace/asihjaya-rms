@@ -29,7 +29,7 @@
 
 /* Header: logo / central brand / order metadata */
 .aj-receipt-front-design .aj-header {
-  grid-template-columns: 31mm minmax(0, 1fr) 46mm !important;
+  grid-template-columns: 31mm minmax(0, 1fr) 43mm !important;
   gap: 2.1mm !important;
   align-items: center !important;
 }
@@ -80,7 +80,7 @@
   margin-top: 0.1mm !important;
   color: #303030 !important;
   font-size: 6.4pt !important;
-  line-height: 1.2 !important;
+  line-height: 1.25 !important;
   text-align: center !important;
 }
 
@@ -93,10 +93,10 @@
 
 .aj-receipt-front-design .aj-contact-item:first-child {
   grid-column: 1 / -1 !important;
-  max-width: 112mm !important;
+  max-width: 120mm !important;
   justify-self: center !important;
   white-space: normal !important;
-  font-size: 9.8pt !important;
+  font-size: 9.9pt !important;
 }
 
 .aj-receipt-front-design .aj-contact-item:nth-child(2)::before,
