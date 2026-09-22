@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import type { PosCartItem, PosCheckoutActionResult } from "@/features/pos/contracts";
+import type {
+  PosCartItem,
+  PosCheckoutActionResult,
+} from "@/features/pos/contracts";
 import {
   createCheckoutPayload,
   createStoredCheckoutAttempt,
@@ -79,20 +82,26 @@ const submission: CheckoutSubmissionInput = {
   customerId: null,
 };
 
-const initialPayload = createCheckoutPayload({ submission, existingAttempt: null });
+const initialPayload = createCheckoutPayload({
+  submission,
+  existingAttempt: null,
+});
 assert.match(initialPayload.idempotencyKey, /^pos_/);
 assert.deepEqual(initialPayload.itemIds, ["item-1"]);
-assert.deepEqual(initialPayload.itemPricing, [{
-  itemId: "item-1",
-  transactionWeightGram: "1.000",
-  priceSource: "global",
-  pricePerGram: "1010000",
-  basePriceSource: "calculated",
-  basePriceAmount: 1010000,
-  discountAmount: 5000,
-  laborAmount: 35000,
-  adjustmentAmount: 10000,
-}]);
+assert.deepEqual(initialPayload.itemPricing, [
+  {
+    itemId: "item-1",
+    transactionWeightGram: "1.000",
+    priceSource: "global",
+    pricePerGram: "1010000",
+    deductionPerGram: 25000,
+    basePriceSource: "calculated",
+    basePriceAmount: 1010000,
+    discountAmount: 5000,
+    laborAmount: 35000,
+    adjustmentAmount: 10000,
+  },
+]);
 assert.equal(initialPayload.discountApprovalId, null);
 assert.equal(initialPayload.discountAmount, null);
 assert.equal(initialPayload.discountReason, null);
@@ -104,19 +113,34 @@ const initialAttempt = createStoredCheckoutAttempt({
   nowIso: "2026-08-19T12:00:00.000Z",
 });
 assert.equal(initialAttempt.version, 4);
-assert.deepEqual(parseStoredCheckoutAttemptState(initialAttempt), initialAttempt);
+assert.deepEqual(
+  parseStoredCheckoutAttemptState(initialAttempt),
+  initialAttempt,
+);
 assert.equal(parseStoredCheckoutAttemptState({ version: 3 }), null);
 
-const retryPayload = createCheckoutPayload({ submission, existingAttempt: initialAttempt });
+const retryPayload = createCheckoutPayload({
+  submission,
+  existingAttempt: initialAttempt,
+});
 assert.equal(retryPayload.idempotencyKey, initialPayload.idempotencyKey);
 
-assert.equal(getCheckoutSubmissionValidationMessage({
-  rawCustomerDepositUsedAmount: 0,
-  customerDepositUsedAmount: 0,
-  canFinalizePayment: true,
-  paymentValidationMessage: null,
-}), null);
-assert.equal(getCheckoutRecoveryDecision({ status: "processing", message: "Masih diproses.", retryAfterMs: 2000 }, 0).status, "wait");
+assert.equal(
+  getCheckoutSubmissionValidationMessage({
+    rawCustomerDepositUsedAmount: 0,
+    customerDepositUsedAmount: 0,
+    canFinalizePayment: true,
+    paymentValidationMessage: null,
+  }),
+  null,
+);
+assert.equal(
+  getCheckoutRecoveryDecision(
+    { status: "processing", message: "Masih diproses.", retryAfterMs: 2000 },
+    0,
+  ).status,
+  "wait",
+);
 
 const checkoutError: Extract<PosCheckoutActionResult, { status: "error" }> = {
   status: "error",
@@ -124,8 +148,14 @@ const checkoutError: Extract<PosCheckoutActionResult, { status: "error" }> = {
   code: "validation_error",
   fieldErrors: { payments: "Payment belum lunas." },
 };
-assert.equal(getCheckoutErrorMessage(checkoutError), "Checkout gagal. Payment belum lunas.");
-assert.equal(POS_CHECKOUT_ATTEMPT_STORAGE_KEY, "asihjaya:pos-workspace-checkout-attempt");
+assert.equal(
+  getCheckoutErrorMessage(checkoutError),
+  "Checkout gagal. Payment belum lunas.",
+);
+assert.equal(
+  POS_CHECKOUT_ATTEMPT_STORAGE_KEY,
+  "asihjaya:pos-workspace-checkout-attempt",
+);
 assert.equal(POS_CHECKOUT_RECOVERY_MAX_POLLS, 12);
 
 console.log("POS checkout per-item pricing client contracts passed.");
