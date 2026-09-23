@@ -111,13 +111,13 @@ function formatPurity(value: string | null) {
 
 function formatPricePerGram(value: string | null | undefined) {
   if (!value) {
-    return "Belum diatur";
+    return "Harga Dinamis";
   }
 
   const amount = Number(value);
 
   if (!Number.isFinite(amount) || amount <= 0) {
-    return "Belum diatur";
+    return "Harga Dinamis";
   }
 
   return new Intl.NumberFormat("id-ID", {
@@ -637,11 +637,11 @@ export default async function InventoryPage({
                           </div>
                         </div>
 
-                        <div className="mt-2 grid min-w-0 gap-1 text-[13px] sm:grid-cols-2 sm:gap-x-4">
-                          <p className="truncate font-mono font-semibold text-neutral-800">
+                        <div className="mt-2 grid min-w-0 gap-1 text-[11px] sm:grid-cols-1 sm:gap-x-4">
+                          <p className="truncate font-semibold text-neutral-800">
                             SKU: {item.sku}
                           </p>
-                          <p className="truncate font-mono text-[var(--muted)]">
+                          <p className="truncate text-neutral-800">
                             Barcode: {item.barcode}
                           </p>
                         </div>
@@ -670,7 +670,7 @@ export default async function InventoryPage({
 
                     {!activeRate ? (
                       <p className="mt-2 text-[11px] font-medium text-amber-600">
-                        Harga / Gram untuk kadar ini belum tersedia.
+                        Harga / Gram untuk kadar ini dinamis.
                       </p>
                     ) : null}
 
