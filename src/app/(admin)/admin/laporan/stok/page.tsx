@@ -3,10 +3,8 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
-  Boxes,
   CalendarDays,
   ChevronDown,
-  Gem,
   History,
   Layers3,
   Package,
@@ -231,9 +229,7 @@ function StockReportFilter({ data }: { data: ReportStockData }) {
   const activeFilterCount = [
     data.filters.query || null,
     data.filters.outletId,
-    data.filters.movementType !== "all"
-      ? data.filters.movementType
-      : null,
+    data.filters.movementType !== "all" ? data.filters.movementType : null,
     data.filters.range !== "today" ? data.filters.range : null,
   ].filter(Boolean).length;
 
@@ -683,8 +679,8 @@ function SlowMovingCompactList({
           </div>
 
           <p className="mt-2 break-words text-[11px] leading-5 text-[var(--muted)]">
-            {formatGram(item.weightGram)} g · {formatMoney(item.sellingAmount)} ·{" "}
-            {item.barcode}
+            {formatGram(item.weightGram)} g · {formatMoney(item.sellingAmount)}{" "}
+            · {item.barcode}
           </p>
         </Link>
       ))}
@@ -705,12 +701,9 @@ function StockInsights({ data }: { data: ReportStockData }) {
   return (
     <section
       data-stock-insights-layout="responsive-four-card-grid"
-      className="rounded-3xl border border-[var(--border)] bg-neutral-50/50 p-3 sm:p-4"
+      className="rounded-3xl border border-[var(--border)] bg-white p-3 sm:p-4"
     >
       <div className="px-1 pb-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
-          Analisis stok
-        </p>
         <h2 className="mt-1 text-lg font-semibold text-neutral-950">
           Insight inventory utama
         </h2>
@@ -969,7 +962,7 @@ function MovementHistory({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-neutral-950">
+            <p className="text-lg font-semibold text-neutral-950">
               Riwayat pergerakan stok
             </p>
             <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-600">
@@ -998,13 +991,6 @@ function MovementHistory({
           <p className="text-xs leading-5 text-[var(--muted)]">
             Compact ledger berdasarkan filter laporan aktif.
           </p>
-          <Link
-            href={refreshHref}
-            className="inline-flex h-9 w-fit items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-          >
-            Refresh laporan
-            <ArrowRight className="size-3.5" />
-          </Link>
         </div>
 
         {movements.length === 0 ? (
@@ -1074,36 +1060,6 @@ export default async function LaporanStokPage({ searchParams }: PageProps) {
       </section>
 
       <StockReportFilter data={data} />
-
-      <section className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Stok tersedia"
-          value={`${formatInteger(data.summary.availableItemCount)} item`}
-          helper={`${formatGram(data.summary.availableWeightGram)} gram aktif di outlet`}
-          icon={<Boxes className="size-5" />}
-          tone="dark"
-        />
-        <StatCard
-          title="Nilai inventory"
-          value={formatCompactNumber(data.summary.availableCostValue)}
-          helper="estimasi berdasarkan harga modal item tersedia"
-          icon={<Gem className="size-5" />}
-        />
-        <StatCard
-          title="Item terjual"
-          value={formatInteger(data.summary.saleCount)}
-          helper="movement sale pada periode laporan"
-          icon={<ArrowDownRight className="size-5" />}
-          tone="danger"
-        />
-        <StatCard
-          title="Item kembali"
-          value={formatInteger(data.summary.returnCount)}
-          helper="sale return/reversal dari void atau refund"
-          icon={<RotateCcw className="size-5" />}
-          tone="success"
-        />
-      </section>
 
       <section className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.75fr)]">
         <StockTrendChart points={data.movementTrend} />
