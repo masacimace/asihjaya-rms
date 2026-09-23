@@ -403,6 +403,9 @@ export default async function KasPage({ searchParams }: PageProps) {
   const selectedOutlet = data.outlets.find(
     (outlet) => outlet.id === filters.outletId,
   );
+  const startItem =
+    data.total === 0 ? 0 : (data.page - 1) * data.pageSize + 1;
+  const endItem = Math.min(data.page * data.pageSize, data.total);
 
   return (
     <div className="space-y-6">
@@ -714,10 +717,11 @@ export default async function KasPage({ searchParams }: PageProps) {
           <section className="overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-white">
             <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="font-semibold text-neutral-950">Buku Kas</h2>
+                <h2 className="font-semibold text-neutral-950">Riwayat Buku Kas</h2>
                 <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                  Menampilkan {formatInteger(data.rows.length)} dari{" "}
-                  {formatInteger(data.total)} movement.
+                  Menampilkan {formatInteger(startItem)}–
+                  {formatInteger(endItem)} dari {formatInteger(data.total)}{" "}
+                  movement.
                 </p>
               </div>
               <Link

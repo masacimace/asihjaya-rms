@@ -3,9 +3,10 @@ import { readFileSync } from "node:fs";
 
 import * as XLSX from "xlsx";
 
-import type {
-  AdminCashMovementListData,
-  AdminCashMovementRow,
+import {
+  ADMIN_CASH_MOVEMENTS_PAGE_SIZE,
+  type AdminCashMovementListData,
+  type AdminCashMovementRow,
 } from "../src/features/cash-movements/contracts";
 import {
   buildCashMovementWorkbook,
@@ -122,7 +123,7 @@ const data: AdminCashMovementListData = {
   total: 3,
   page: 1,
   pageCount: 1,
-  pageSize: 20,
+  pageSize: 5,
   periodLabel: "Hari ini",
 };
 
@@ -201,6 +202,17 @@ const routeSource = readFileSync(
   "utf8",
 );
 
+const querySource = readFileSync(
+  new URL(
+    "../src/features/cash-movements/queries.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const exportQuerySource = querySource.slice(
+  querySource.indexOf("export async function getAdminCashMovementExportRows"),
+);
+
 const styleSource = readFileSync(
   new URL(
     "../src/features/bank-inflows/bank-inflow-xlsx-styles.ts",
@@ -209,8 +221,18 @@ const styleSource = readFileSync(
   "utf8",
 );
 
+assert.equal(ADMIN_CASH_MOVEMENTS_PAGE_SIZE, 5);
+assert.match(pageSource, /Riwayat Buku Kas/);
+assert.match(pageSource, /startItem/);
+assert.match(pageSource, /endItem/);
+assert.match(pageSource, /Halaman \{formatInteger\(data\.page\)\} dari/);
 assert.match(pageSource, />\s*Export Excel\s*</);
 assert.doesNotMatch(pageSource, />\s*XLSX\s*</);
+assert.match(exportQuerySource, /getAdminCashMovementExportRows/);
+assert.doesNotMatch(
+  exportQuerySource,
+  /\.limit\(ADMIN_CASH_MOVEMENTS_PAGE_SIZE\)/,
+);
 assert.match(routeSource, /buildCashMovementWorkbook/);
 assert.match(routeSource, /writeCashMovementWorkbook/);
 assert.match(routeSource, /auth\.organization\.timezone/);

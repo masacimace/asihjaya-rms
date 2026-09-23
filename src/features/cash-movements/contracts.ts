@@ -1,4 +1,4 @@
-export const ADMIN_CASH_MOVEMENTS_PAGE_SIZE = 20;
+export const ADMIN_CASH_MOVEMENTS_PAGE_SIZE = 5;
 
 export const adminCashMovementTypes = [
   "all",
