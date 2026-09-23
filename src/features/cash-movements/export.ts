@@ -364,11 +364,8 @@ function buildCashBookWorksheet({
     }
   }
 
-  if (detailRows.length > 0) {
-    worksheet["!autofilter"] = {
-      ref: `A6:L${detailRows.length + 6}`,
-    };
-  }
+  // Intentionally no AutoFilter: keep the finance ledger header clean.
+  // Freeze pane remains applied by the workbook styling pass.
 
   return worksheet;
 }

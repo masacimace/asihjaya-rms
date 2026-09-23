@@ -184,7 +184,7 @@ assert.equal(typeof cashBookSheet.I8?.v, "number");
 assert.match(String(cashBookSheet.I8?.z ?? ""), /Rp/);
 assert.equal(cashBookSheet.J9?.v, 500_000);
 assert.equal(cashBookSheet.K9?.v, -500_000);
-assert.ok(cashBookSheet["!autofilter"]);
+assert.equal(cashBookSheet["!autofilter"], undefined);
 
 const pageSource = readFileSync(
   new URL(
@@ -219,5 +219,5 @@ assert.match(styleSource, /state=\"frozen\"/);
 assert.match(styleSource, /showGridLines=\"0\"/);
 
 console.log(
-  "Cash Movement XLSX contracts: OK — styled summary, numeric Rupiah, frozen detail header, AutoFilter.",
+  "Cash Movement XLSX contracts: OK — styled summary, numeric Rupiah, frozen clean detail header.",
 );
