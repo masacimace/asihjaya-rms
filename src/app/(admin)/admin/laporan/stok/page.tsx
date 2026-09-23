@@ -566,7 +566,7 @@ function InsightCard({
   children: ReactNode;
 }) {
   return (
-    <article className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
+    <article className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-neutral-50/50 p-4 sm:p-5">
       <div className="min-w-0">
         {badge}
         <h3 className="mt-3 text-base font-semibold text-neutral-950">
@@ -854,7 +854,7 @@ function MovementCompactRow({
   return (
     <article
       data-stock-movement-layout="compact-row-card"
-      className="min-w-0 overflow-hidden rounded-2xl border border-neutral-100 bg-white p-4 shadow-sm shadow-neutral-950/[0.02]"
+      className="min-w-0 overflow-hidden rounded-2xl border border-neutral-100 bg-neutral-100 p-4 shadow-sm shadow-neutral-950/[0.02]"
     >
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
