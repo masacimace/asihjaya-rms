@@ -410,9 +410,9 @@ function CustomerCompactRow({
   return (
     <article
       data-customer-layout="compact-row-card"
-      className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm shadow-neutral-950/[0.02] transition hover:border-neutral-300 hover:shadow-md hover:shadow-neutral-950/[0.04] sm:p-5"
+      className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20 sm:p-5"
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent)]">
             {getCustomerInitials(customer.fullName)}
@@ -423,7 +423,7 @@ function CustomerCompactRow({
               <p className="truncate text-base font-semibold text-neutral-950">
                 {customer.fullName}
               </p>
-              <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                 Aktif
               </span>
             </div>
@@ -441,13 +441,6 @@ function CustomerCompactRow({
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
-          <Link
-            href={transactionsHref}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-          >
-            <ReceiptText className="size-3.5" />
-            Transaksi
-          </Link>
           {whatsappHref ? (
             <a
               href={whatsappHref}
@@ -460,10 +453,18 @@ function CustomerCompactRow({
               WhatsApp
             </a>
           ) : null}
+
+          <Link
+            href={transactionsHref}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-xs font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+          >
+            <ReceiptText className="size-3.5" />
+            Transaksi
+          </Link>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="rounded-xl border border-[var(--border)] bg-neutral-50/60 p-3.5">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
             Kontak pelanggan
@@ -471,10 +472,10 @@ function CustomerCompactRow({
           <CustomerContactInfo customer={customer} />
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="rounded-xl bg-neutral-50 p-3.5">
             <p className="text-[11px] font-medium uppercase text-[var(--muted)]">
-              Total nilai
+              Total belanja
             </p>
             <p className="mt-1.5 break-words text-base font-semibold text-neutral-950">
               {formatMoney(customer.totalAmount)}
@@ -492,34 +493,40 @@ function CustomerCompactRow({
       </div>
 
       <div className="mt-3 rounded-xl border border-[var(--border)] px-3.5 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-          Transaksi terakhir
-        </p>
-        {customer.lastTransaction ? (
-          <div className="mt-1.5 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
-            <Link
-              href={transactionsHref}
-              className="text-xs font-semibold text-neutral-950 transition hover:text-[var(--accent)]"
-            >
-              {customer.lastTransaction.invoiceNumber}
-            </Link>
-            <span className="hidden text-neutral-300 sm:inline">·</span>
-            <span className="text-xs text-[var(--muted)]">
-              {formatDateTime(
-                customer.lastTransaction.completedAt,
-                timeZone,
-              )}
-            </span>
-            <span className="hidden text-neutral-300 sm:inline">·</span>
-            <span className="text-xs font-semibold text-neutral-800">
-              {formatMoney(customer.lastTransaction.totalAmount)}
-            </span>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Transaksi terakhir
+            </p>
+            {customer.lastTransaction ? (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                <Link
+                  href={transactionsHref}
+                  className="font-semibold text-neutral-950 transition hover:text-[var(--accent)]"
+                >
+                  {customer.lastTransaction.invoiceNumber}
+                </Link>
+                <span className="text-neutral-300">·</span>
+                <span className="text-[var(--muted)]">
+                  {formatDateTime(
+                    customer.lastTransaction.completedAt,
+                    timeZone,
+                  )}
+                </span>
+              </div>
+            ) : (
+              <p className="mt-1.5 text-xs text-[var(--muted)]">
+                Belum ada transaksi completed di outlet aktif.
+              </p>
+            )}
           </div>
-        ) : (
-          <p className="mt-1.5 text-xs text-[var(--muted)]">
-            Belum ada transaksi completed di outlet aktif.
-          </p>
-        )}
+
+          {customer.lastTransaction ? (
+            <p className="shrink-0 text-xs font-semibold text-neutral-800">
+              {formatMoney(customer.lastTransaction.totalAmount)}
+            </p>
+          ) : null}
+        </div>
       </div>
     </article>
   );
@@ -672,7 +679,7 @@ export default async function PosCustomersPage({ searchParams }: PageProps) {
           </div>
         </section>
       ) : (
-        <section className="mt-5 rounded-2xl border border-[var(--border)] bg-neutral-50/40 p-3 sm:p-4">
+        <section className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-3 sm:p-4">
           <div className="flex flex-col gap-2 px-1 pb-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="font-semibold text-neutral-950">
