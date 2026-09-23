@@ -192,7 +192,7 @@ function SummaryCard({
           <p className="text-xs font-semibold uppercase text-[var(--muted)]">
             {title}
           </p>
-          <p className="mt-3 break-words text-2xl font-semibold text-neutral-950">
+          <p className="mt-3 break-words text-md md:text-2xl lg:text-2xl font-semibold text-neutral-950">
             {value}
           </p>
           <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{helper}</p>
@@ -463,7 +463,7 @@ export default async function CustomerListPage({
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid grid-cols-2 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           title="Total Pelanggan"
           value={formatInteger(organizationCustomerCount)}
@@ -600,7 +600,7 @@ export default async function CustomerListPage({
         </div>
       </details>
 
-      <section className="rounded-2xl border border-[var(--border)] bg-neutral-50/40 p-3 sm:p-4">
+      <section className="rounded-2xl border border-[var(--border)] bg-white p-3 sm:p-4">
         <div className="flex flex-col gap-2 px-1 pb-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="font-semibold text-neutral-950">Daftar pelanggan</h2>
