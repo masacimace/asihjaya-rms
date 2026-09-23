@@ -725,7 +725,7 @@ export default async function KasPage({ searchParams }: PageProps) {
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
               >
                 <Download className="size-4" />
-                XLSX
+                Export Excel
               </Link>
             </div>
 

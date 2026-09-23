@@ -1,12 +1,15 @@
 import type { NextRequest } from "next/server";
 
 import { parseAdminCashMovementFilters } from "@/features/cash-movements/contracts";
-import { buildCashMovementSheets } from "@/features/cash-movements/export";
+import {
+  buildCashMovementExportFilename,
+  buildCashMovementWorkbook,
+  writeCashMovementWorkbook,
+} from "@/features/cash-movements/export";
 import {
   getAdminCashMovementExportRows,
   getAdminCashMovementListData,
 } from "@/features/cash-movements/queries";
-import { createXlsxResponse, buildExportTimestamp } from "@/lib/export-files";
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
@@ -38,10 +41,28 @@ export async function GET(request: NextRequest) {
     getAdminCashMovementListData(auth, filters),
     getAdminCashMovementExportRows(auth, filters),
   ]);
-  const filename = `buku-kas-${filters.range}-${buildExportTimestamp()}.xlsx`;
+  const generatedAt = new Date();
+  const workbook = buildCashMovementWorkbook({
+    data,
+    rows,
+    auth,
+    generatedAt,
+  });
+  const workbookBuffer = writeCashMovementWorkbook(workbook);
+  const responseBody = new Uint8Array(workbookBuffer.length);
+  responseBody.set(workbookBuffer);
+  const filename = buildCashMovementExportFilename(
+    generatedAt,
+    auth.organization.timezone,
+  );
 
-  return createXlsxResponse({
-    filename,
-    sheets: buildCashMovementSheets({ data, rows }),
+  return new Response(responseBody.buffer, {
+    status: 200,
+    headers: {
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "no-store",
+    },
   });
 }
