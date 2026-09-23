@@ -1,9 +1,8 @@
 import {
-  ArrowRight,
   BadgePercent,
   Banknote,
   CalendarDays,
-  Download,
+  ChevronDown,
   Gem,
   LineChart,
   ReceiptText,
@@ -26,7 +25,6 @@ import {
   type ReportSaleStatus,
   type ReportSalesData,
   type ReportSalesDailyPoint,
-  type ReportSalesRow,
 } from "@/features/reports/contracts";
 import { getReportSalesData } from "@/features/reports/queries";
 import { requirePermission } from "@/lib/auth/session";
@@ -95,19 +93,6 @@ function formatGram(value: number) {
   }).format(value);
 }
 
-function formatDateTime(value: Date | null | undefined) {
-  if (!value) return "-";
-
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Jakarta",
-  }).format(value);
-}
-
 function formatCompactMoney(value: number) {
   if (value <= 0) return "0";
 
@@ -136,23 +121,6 @@ function getSalesChartMax(points: ReportSalesDailyPoint[]) {
   const step = maxValue >= 50_000_000 ? 10_000_000 : 5_000_000;
 
   return Math.ceil(maxValue / step) * step;
-}
-
-function buildSalesReportExportUrl(
-  params: Record<string, string | null | undefined>,
-) {
-  const searchParams = new URLSearchParams();
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value) {
-      searchParams.set(key, value);
-    }
-  });
-
-  const basePath = "/admin/laporan/penjualan/export/xlsx";
-  const query = searchParams.toString();
-
-  return query ? `${basePath}?${query}` : basePath;
 }
 
 function StatCard({
@@ -218,106 +186,158 @@ function StatCard({
 }
 
 function SalesReportFilter({ data }: { data: ReportSalesData }) {
+  const activeFilterCount = [
+    data.filters.query || null,
+    data.filters.outletId,
+    data.filters.status !== "all" ? data.filters.status : null,
+    data.filters.paymentMethod !== "all" ? data.filters.paymentMethod : null,
+  ].filter(Boolean).length;
+
   return (
-    <form className="rounded-2xl border border-[var(--border)] bg-white p-4">
-      <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr_0.8fr] lg:items-end">
-        <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
-          <span>Cari transaksi</span>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
-            <input
-              name="q"
-              defaultValue={data.filters.query}
-              placeholder="Invoice, pelanggan, kasir, outlet..."
-              className="h-11 w-full rounded-xl border border-neutral-200 bg-white py-2 pl-9 pr-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-            />
-          </div>
-        </label>
-
-        <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
-          <span>Periode</span>
-          <select
-            name="range"
-            defaultValue={data.filters.range}
-            className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-          >
-            {reportPeriodOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
-          <span>Outlet</span>
-          <select
-            name="outletId"
-            defaultValue={data.filters.outletId ?? "all"}
-            className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-          >
-            <option value="all">Semua outlet</option>
-            {data.outlets.map((outlet) => (
-              <option key={outlet.id} value={outlet.id}>
-                {outlet.name} ({outlet.code})
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
-          <span>Status</span>
-          <select
-            name="status"
-            defaultValue={data.filters.status}
-            className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-          >
-            {reportSalesStatusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
-          <span>Pembayaran</span>
-          <select
-            name="paymentMethod"
-            defaultValue={data.filters.paymentMethod}
-            className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-          >
-            {reportPaymentMethodOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="mt-4 flex flex-col gap-2 border-t border-neutral-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs leading-5 text-[var(--muted)]">
-          KPI utama dihitung dari transaksi selesai pada periode ini. Filter
-          status dipakai untuk daftar transaksi dan breakdown status.
-        </p>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Link
-            href="/admin/laporan/penjualan"
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-neutral-200 px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-          >
-            Reset
-          </Link>
-          <button
-            type="submit"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
-          >
-            <CalendarDays className="size-4" />
-            Terapkan Filter
-          </button>
+    <details className="group overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] sm:px-5 [&::-webkit-details-marker]:hidden">
+        <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-neutral-50 text-neutral-600">
+          <Search className="size-4" />
         </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-neutral-950">
+              Filter laporan penjualan
+            </p>
+            {activeFilterCount > 0 ? (
+              <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                {activeFilterCount} filter aktif
+              </span>
+            ) : (
+              <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                Opsional
+              </span>
+            )}
+            <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+              {data.period.label}
+            </span>
+          </div>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
+            {data.selectedOutlet?.name ?? "Semua outlet"} ·{" "}
+            {data.filters.status === "all"
+              ? "Semua status"
+              : saleStatusLabels[data.filters.status]} ·{" "}
+            {data.filters.paymentMethod === "all"
+              ? "Semua metode bayar"
+              : paymentMethodLabels[data.filters.paymentMethod]}.
+          </p>
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <span className="hidden text-xs font-semibold text-neutral-500 sm:inline group-open:hidden">
+            Buka filter
+          </span>
+          <span className="hidden text-xs font-semibold text-neutral-500 sm:group-open:inline">
+            Tutup filter
+          </span>
+          <ChevronDown className="size-4 text-neutral-500 transition-transform duration-200 group-open:rotate-180" />
+        </div>
+      </summary>
+
+      <div className="border-t border-[var(--border)] p-4 sm:p-5">
+        <form className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr_0.8fr] lg:items-end">
+          <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
+            <span>Cari transaksi</span>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+              <input
+                name="q"
+                defaultValue={data.filters.query}
+                placeholder="Invoice, pelanggan, kasir, outlet..."
+                className="h-11 w-full rounded-xl border border-neutral-200 bg-white py-2 pl-9 pr-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+              />
+            </div>
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
+            <span>Periode</span>
+            <select
+              name="range"
+              defaultValue={data.filters.range}
+              className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+            >
+              {reportPeriodOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
+            <span>Outlet</span>
+            <select
+              name="outletId"
+              defaultValue={data.filters.outletId ?? "all"}
+              className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+            >
+              <option value="all">Semua outlet</option>
+              {data.outlets.map((outlet) => (
+                <option key={outlet.id} value={outlet.id}>
+                  {outlet.name} ({outlet.code})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
+            <span>Status</span>
+            <select
+              name="status"
+              defaultValue={data.filters.status}
+              className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+            >
+              {reportSalesStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
+            <span>Pembayaran</span>
+            <select
+              name="paymentMethod"
+              defaultValue={data.filters.paymentMethod}
+              className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+            >
+              {reportPaymentMethodOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="flex flex-col gap-2 border-t border-neutral-100 pt-4 lg:col-span-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-5 text-[var(--muted)]">
+              KPI utama dihitung dari transaksi selesai pada periode ini. Filter
+              status dipakai untuk breakdown status.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Link
+                href="/admin/laporan/penjualan"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-neutral-200 px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+              >
+                Reset
+              </Link>
+              <button
+                type="submit"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
+              >
+                <CalendarDays className="size-4" />
+                Terapkan Filter
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
-    </form>
+    </details>
   );
 }
 
@@ -593,293 +613,6 @@ function OutletLeaderboard({ data }: { data: ReportSalesData }) {
   );
 }
 
-function PaymentPills({ methods }: { methods: ReportPaymentMethod[] }) {
-  if (methods.length === 0) {
-    return <span className="text-xs text-[var(--muted)]">-</span>;
-  }
-
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {methods.map((method) => (
-        <span
-          key={method}
-          className="inline-flex rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-xs font-semibold text-neutral-700"
-        >
-          {paymentMethodLabels[method]}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function SalesTable({ rows }: { rows: ReportSalesRow[] }) {
-  const shouldScroll = rows.length >= 5;
-  const desktopGridColumns =
-    "grid-cols-[minmax(190px,1.25fr)_minmax(135px,0.95fr)_minmax(145px,1fr)_minmax(135px,1fr)_minmax(90px,0.7fr)_minmax(175px,1.1fr)_minmax(105px,0.75fr)_minmax(130px,0.9fr)_minmax(120px,0.85fr)]";
-
-  return (
-    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-      <div className="flex flex-col gap-3 border-b border-neutral-100 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-neutral-950">
-            Daftar transaksi laporan
-          </h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Maksimal 50 transaksi terbaru sesuai filter laporan.
-          </p>
-        </div>
-        <Link
-          href="/admin/penjualan"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent)] hover:underline"
-        >
-          Buka modul penjualan
-          <ArrowRight className="size-4" />
-        </Link>
-      </div>
-
-      <div className="hidden lg:block">
-        <div className="overflow-x-auto">
-          <div className="min-w-[1320px]">
-            <div
-              className={cn(
-                "grid gap-x-4 border-b border-neutral-100 bg-neutral-50 px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500",
-                desktopGridColumns,
-              )}
-            >
-              <div>Invoice</div>
-              <div>Waktu</div>
-              <div>Outlet</div>
-              <div>Pelanggan</div>
-              <div>Item</div>
-              <div>Pembayaran</div>
-              <div>Status</div>
-              <div className="text-right">Total</div>
-              <div className="text-right">Laba</div>
-            </div>
-
-            <div
-              className={cn(
-                shouldScroll &&
-                  "max-h-[420px] overflow-y-auto overscroll-y-contain [scrollbar-gutter:stable] [scrollbar-width:thin]",
-              )}
-            >
-              {rows.length === 0 ? (
-                <div className="px-5 py-12 text-center text-sm text-[var(--muted)]">
-                  Tidak ada transaksi yang cocok dengan filter laporan.
-                </div>
-              ) : (
-                rows.map((sale) => (
-                  <div
-                    key={sale.id}
-                    className={cn(
-                      "grid items-start gap-x-4 border-b border-neutral-100 px-5 py-4 text-sm transition last:border-b-0 hover:bg-neutral-50/70",
-                      desktopGridColumns,
-                    )}
-                  >
-                    <div className="min-w-0">
-                      <Link
-                        href={`/admin/penjualan/${sale.id}`}
-                        className="block truncate font-semibold text-neutral-950 hover:text-[var(--accent)]"
-                      >
-                        {sale.invoiceNumber}
-                      </Link>
-                      <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                        {sale.cashierName}
-                      </p>
-                    </div>
-                    <div className="text-neutral-600">
-                      {formatDateTime(
-                        sale.completedAt ?? sale.cancelledAt ?? sale.createdAt,
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-neutral-800">
-                        {sale.outletName}
-                      </p>
-                      <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                        {sale.outletCode}
-                      </p>
-                    </div>
-                    <div className="min-w-0 text-neutral-600">
-                      <p className="truncate">
-                        {sale.customerName ?? "Walk-in"}
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-neutral-800">
-                        {formatInteger(sale.itemCount)} item
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {formatGram(sale.weightSoldGram)} gr
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <PaymentPills methods={sale.paymentMethods} />
-                    </div>
-                    <div>
-                      <span
-                        className={cn(
-                          "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
-                          saleStatusStyles[sale.status],
-                        )}
-                      >
-                        {saleStatusLabels[sale.status]}
-                      </span>
-                    </div>
-                    <div className="text-right font-semibold text-neutral-950">
-                      {formatMoney(sale.totalAmount)}
-                      {sale.discountAmount > 0 ? (
-                        <p className="mt-1 text-xs font-medium text-red-600">
-                          Disc {formatMoney(sale.discountAmount)}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="text-right font-semibold text-neutral-950">
-                      {formatMoney(sale.grossProfit)}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-        {shouldScroll ? (
-          <p className="border-t border-neutral-100 px-5 py-3 text-xs text-[var(--muted)]">
-            Scroll daftar untuk melihat transaksi laporan lainnya.
-          </p>
-        ) : null}
-      </div>
-
-      <div
-        className={cn(
-          "lg:hidden",
-          shouldScroll &&
-            "max-h-[680px] overflow-y-auto overscroll-y-contain [scrollbar-width:thin]",
-        )}
-      >
-        {rows.length === 0 ? (
-          <p className="p-6 text-center text-sm text-[var(--muted)]">
-            Tidak ada transaksi yang cocok dengan filter laporan.
-          </p>
-        ) : (
-          rows.map((sale) => (
-            <Link
-              key={sale.id}
-              href={`/admin/penjualan/${sale.id}`}
-              className="block border-b border-neutral-100 p-4 transition last:border-b-0 active:bg-neutral-50"
-            >
-              <article className="rounded-2xl border border-neutral-100 bg-white p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-neutral-950">
-                      {sale.invoiceNumber}
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      {formatDateTime(
-                        sale.completedAt ?? sale.cancelledAt ?? sale.createdAt,
-                      )}
-                    </p>
-                  </div>
-                  <span
-                    className={cn(
-                      "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold",
-                      saleStatusStyles[sale.status],
-                    )}
-                  >
-                    {saleStatusLabels[sale.status]}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3">
-                    <p className="text-xs font-medium text-[var(--muted)]">
-                      Total
-                    </p>
-                    <p className="mt-1 text-base font-semibold text-neutral-950">
-                      {formatMoney(sale.totalAmount)}
-                    </p>
-                    {sale.discountAmount > 0 ? (
-                      <p className="mt-1 text-[11px] font-semibold text-red-600">
-                        Disc {formatMoney(sale.discountAmount)}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3">
-                    <p className="text-xs font-medium text-[var(--muted)]">
-                      Laba
-                    </p>
-                    <p className="mt-1 text-base font-semibold text-neutral-950">
-                      {formatMoney(sale.grossProfit)}
-                    </p>
-                    <p className="mt-1 text-[11px] text-[var(--muted)]">
-                      estimasi
-                    </p>
-                  </div>
-                </div>
-
-                <dl className="mt-4 space-y-2 border-t border-neutral-100 pt-3 text-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <dt className="shrink-0 text-xs font-medium text-[var(--muted)]">
-                      Outlet
-                    </dt>
-                    <dd className="min-w-0 text-right font-medium text-neutral-900">
-                      <span className="block truncate">{sale.outletName}</span>
-                      <span className="mt-0.5 block truncate text-[11px] font-normal uppercase tracking-wide text-[var(--muted)]">
-                        {sale.outletCode}
-                      </span>
-                    </dd>
-                  </div>
-                  <div className="flex items-start justify-between gap-3">
-                    <dt className="shrink-0 text-xs font-medium text-[var(--muted)]">
-                      Pelanggan
-                    </dt>
-                    <dd className="min-w-0 text-right font-medium text-neutral-900">
-                      <span className="block truncate">
-                        {sale.customerName ?? "Walk-in"}
-                      </span>
-                    </dd>
-                  </div>
-                  <div className="flex items-start justify-between gap-3">
-                    <dt className="shrink-0 text-xs font-medium text-[var(--muted)]">
-                      Item
-                    </dt>
-                    <dd className="min-w-0 text-right font-medium text-neutral-900">
-                      {formatInteger(sale.itemCount)} item ·{" "}
-                      {formatGram(sale.weightSoldGram)} gr
-                    </dd>
-                  </div>
-                  <div className="flex items-start justify-between gap-3">
-                    <dt className="shrink-0 text-xs font-medium text-[var(--muted)]">
-                      Kasir
-                    </dt>
-                    <dd className="min-w-0 text-right font-medium text-neutral-900">
-                      <span className="block truncate">{sale.cashierName}</span>
-                    </dd>
-                  </div>
-                </dl>
-
-                <div className="mt-3 flex items-start justify-between gap-3 border-t border-neutral-100 pt-3">
-                  <p className="shrink-0 text-xs font-medium text-[var(--muted)]">
-                    Pembayaran
-                  </p>
-                  <div className="min-w-0">
-                    <PaymentPills methods={sale.paymentMethods} />
-                  </div>
-                </div>
-              </article>
-            </Link>
-          ))
-        )}
-      </div>
-      {shouldScroll ? (
-        <p className="border-t border-neutral-100 px-5 py-3 text-xs text-[var(--muted)] lg:hidden">
-          Scroll daftar untuk melihat transaksi laporan lainnya.
-        </p>
-      ) : null}
-    </section>
-  );
-}
-
 export default async function LaporanPenjualanPage({
   searchParams,
 }: PageProps) {
@@ -894,9 +627,9 @@ export default async function LaporanPenjualanPage({
       : 0;
   const snapshotMetrics = [
     {
-      label: "Semua transaksi di tabel",
+      label: "Transaksi sesuai filter",
       value: formatInteger(data.summary.allTransactionCount),
-      helper: "mengikuti filter status/search",
+      helper: "mengikuti filter status dan pencarian",
       icon: ReceiptText,
     },
     {
@@ -942,28 +675,6 @@ export default async function LaporanPenjualanPage({
               dan transaksi void/refund. Halaman ini bersifat read-only; aksi
               operasional tetap berada di modul penjualan.
             </p>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Link
-              href={buildSalesReportExportUrl({
-                range: data.filters.range,
-                outletId: data.filters.outletId,
-                q: data.filters.query,
-                status:
-                  data.filters.status === "all"
-                    ? null
-                    : data.filters.status,
-                paymentMethod:
-                  data.filters.paymentMethod === "all"
-                    ? null
-                    : data.filters.paymentMethod,
-              })}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-black px-4 text-sm font-semibold !text-white"
-            >
-              <Download className="size-4" />
-              Export XLSX
-            </Link>
           </div>
         </div>
 
@@ -1100,8 +811,6 @@ export default async function LaporanPenjualanPage({
         <StatusBreakdown data={data} />
         <OutletLeaderboard data={data} />
       </div>
-
-      <SalesTable rows={data.sales} />
     </div>
   );
 }

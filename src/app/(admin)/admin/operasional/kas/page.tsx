@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   Banknote,
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -312,13 +313,16 @@ function ReferenceLink({ movement }: { movement: AdminCashMovementRow }) {
   return <span>{movement.referenceLabel ?? "Manual"}</span>;
 }
 
-function MovementMobileCard({ movement }: { movement: AdminCashMovementRow }) {
+function MovementCompactRow({ movement }: { movement: AdminCashMovementRow }) {
   const signedAmount = getCashMovementSignedAmount(movement);
   const tone = getMovementTone(movement.type);
 
   return (
-    <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
+    <article
+      data-cash-layout="compact-row-card"
+      className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm shadow-neutral-950/[0.02] transition hover:border-neutral-300 hover:shadow-md hover:shadow-neutral-950/[0.04] sm:p-5"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <MovementBadge movement={movement} />
           <p className="mt-3 text-sm font-semibold text-neutral-950">
@@ -330,7 +334,7 @@ function MovementMobileCard({ movement }: { movement: AdminCashMovementRow }) {
         </div>
         <p
           className={cn(
-            "shrink-0 text-right text-sm font-semibold",
+            "shrink-0 text-left text-base font-semibold sm:text-right",
             tone.amount,
           )}
         >
@@ -338,25 +342,31 @@ function MovementMobileCard({ movement }: { movement: AdminCashMovementRow }) {
         </p>
       </div>
 
-      <div className="mt-4 grid gap-2 rounded-2xl bg-neutral-50 p-3 text-xs text-[var(--muted)]">
-        <p className="flex items-center justify-between gap-3">
-          <span>Outlet</span>
-          <span className="truncate text-right font-medium text-neutral-800">
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-xl bg-neutral-50 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Outlet
+          </p>
+          <p className="mt-1.5 truncate text-xs font-semibold text-neutral-800">
             {movement.outletName}
-          </span>
-        </p>
-        <p className="flex items-center justify-between gap-3">
-          <span>Register</span>
-          <span className="truncate text-right font-medium text-neutral-800">
+          </p>
+        </div>
+        <div className="rounded-xl bg-neutral-50 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Register
+          </p>
+          <p className="mt-1.5 truncate text-xs font-semibold text-neutral-800">
             {movement.registerName}
-          </span>
-        </p>
-        <p className="flex items-center justify-between gap-3">
-          <span>Referensi</span>
-          <span className="truncate text-right font-medium text-neutral-800">
+          </p>
+        </div>
+        <div className="rounded-xl bg-neutral-50 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Referensi
+          </p>
+          <div className="mt-1.5 min-w-0 truncate text-xs font-semibold text-neutral-800">
             <ReferenceLink movement={movement} />
-          </span>
-        </p>
+          </div>
+        </div>
       </div>
     </article>
   );
@@ -384,6 +394,15 @@ export default async function KasPage({ searchParams }: PageProps) {
   const query = await searchParams;
   const filters = parseAdminCashMovementFilters(query);
   const data = await getAdminCashMovementListData(auth, filters);
+  const activeFilterCount = [
+    filters.search || null,
+    filters.outletId,
+    filters.type !== "all" ? filters.type : null,
+    filters.range !== "today" ? filters.range : null,
+  ].filter(Boolean).length;
+  const selectedOutlet = data.outlets.find(
+    (outlet) => outlet.id === filters.outletId,
+  );
 
   return (
     <div className="space-y-6">
@@ -561,93 +580,136 @@ export default async function KasPage({ searchParams }: PageProps) {
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px] xl:items-start">
         <div className="space-y-6">
-          <section className="rounded-[1.75rem] border border-[var(--border)] bg-white p-4 sm:p-5">
-            <form className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_180px_180px_180px_auto] lg:items-end">
-              <label className="block text-sm">
-                <span className="mb-2 block font-medium text-neutral-800">
-                  Cari movement
-                </span>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
-                  <input
-                    name="q"
-                    defaultValue={filters.search}
-                    placeholder="Catatan, invoice, outlet, staff..."
-                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-white pl-10 pr-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                  />
-                </div>
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-2 block font-medium text-neutral-800">
-                  Outlet
-                </span>
-                <select
-                  name="outletId"
-                  defaultValue={filters.outletId ?? ""}
-                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                >
-                  <option value="">Semua outlet</option>
-                  {data.outlets.map((outlet) => (
-                    <option key={outlet.id} value={outlet.id}>
-                      {outlet.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-2 block font-medium text-neutral-800">
-                  Tipe
-                </span>
-                <select
-                  name="type"
-                  defaultValue={filters.type}
-                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                >
-                  {Object.entries(movementTypeLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-2 block font-medium text-neutral-800">
-                  Periode
-                </span>
-                <select
-                  name="range"
-                  defaultValue={filters.range}
-                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                >
-                  {Object.entries(rangeLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:brightness-95 lg:flex-none"
-                >
-                  <Search className="size-4" />
-                  Filter
-                </button>
-                <Link
-                  href="/admin/operasional/kas"
-                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                  aria-label="Reset filter"
-                >
-                  <RefreshCw className="size-4" />
-                </Link>
+          <details className="group overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-white">
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] sm:px-5 [&::-webkit-details-marker]:hidden">
+              <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-neutral-50 text-neutral-600">
+                <Search className="size-4" />
               </div>
-            </form>
-          </section>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-neutral-950">
+                    Filter Buku Kas
+                  </p>
+                  {activeFilterCount > 0 ? (
+                    <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                      {activeFilterCount} filter aktif
+                    </span>
+                  ) : (
+                    <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                      Opsional
+                    </span>
+                  )}
+                  <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                    {rangeLabels[filters.range]}
+                  </span>
+                </div>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
+                  {selectedOutlet?.name ?? "Semua outlet"} ·{" "}
+                  {movementTypeLabels[filters.type]} ·{" "}
+                  {formatInteger(data.total)} movement.
+                </p>
+              </div>
+
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <span className="hidden text-xs font-semibold text-neutral-500 sm:inline group-open:hidden">
+                  Buka filter
+                </span>
+                <span className="hidden text-xs font-semibold text-neutral-500 sm:group-open:inline">
+                  Tutup filter
+                </span>
+                <ChevronDown className="size-4 text-neutral-500 transition-transform duration-200 group-open:rotate-180" />
+              </div>
+            </summary>
+
+            <div className="border-t border-[var(--border)] p-4 sm:p-5">
+              <form className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_180px_180px_180px_auto] lg:items-end">
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium text-neutral-800">
+                    Cari movement
+                  </span>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+                    <input
+                      name="q"
+                      defaultValue={filters.search}
+                      placeholder="Catatan, invoice, outlet, staff..."
+                      className="h-11 w-full rounded-xl border border-[var(--border)] bg-white pl-10 pr-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                    />
+                  </div>
+                </label>
+
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium text-neutral-800">
+                    Outlet
+                  </span>
+                  <select
+                    name="outletId"
+                    defaultValue={filters.outletId ?? ""}
+                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                  >
+                    <option value="">Semua outlet</option>
+                    {data.outlets.map((outlet) => (
+                      <option key={outlet.id} value={outlet.id}>
+                        {outlet.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium text-neutral-800">
+                    Tipe
+                  </span>
+                  <select
+                    name="type"
+                    defaultValue={filters.type}
+                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                  >
+                    {Object.entries(movementTypeLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium text-neutral-800">
+                    Periode
+                  </span>
+                  <select
+                    name="range"
+                    defaultValue={filters.range}
+                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+                  >
+                    {Object.entries(rangeLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:brightness-95 lg:flex-none"
+                  >
+                    <Search className="size-4" />
+                    Filter
+                  </button>
+                  <Link
+                    href="/admin/operasional/kas"
+                    className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                    aria-label="Reset filter"
+                  >
+                    <RefreshCw className="size-4" />
+                  </Link>
+                </div>
+              </form>
+            </div>
+          </details>
 
           <section className="overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-white">
             <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -670,80 +732,11 @@ export default async function KasPage({ searchParams }: PageProps) {
             {data.rows.length === 0 ? (
               <EmptyState />
             ) : (
-              <>
-                <div className="hidden overflow-x-auto lg:block">
-                  <table className="w-full text-left text-sm text-neutral-600">
-                    <thead className="bg-neutral-50/80 text-xs text-neutral-500">
-                      <tr>
-                        <th className="px-5 py-4 font-semibold">Waktu</th>
-                        <th className="px-5 py-4 font-semibold">Movement</th>
-                        <th className="px-5 py-4 font-semibold">
-                          Outlet / Register
-                        </th>
-                        <th className="px-5 py-4 font-semibold">
-                          Dicatat Oleh
-                        </th>
-                        <th className="px-5 py-4 font-semibold">Referensi</th>
-                        <th className="px-5 py-4 text-right font-semibold">
-                          Nominal
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--border)]">
-                      {data.rows.map((movement) => {
-                        const signedAmount =
-                          getCashMovementSignedAmount(movement);
-                        const tone = getMovementTone(movement.type);
-
-                        return (
-                          <tr
-                            key={movement.id}
-                            className="align-top transition-colors hover:bg-neutral-50/70"
-                          >
-                            <td className="whitespace-nowrap px-5 py-4 text-neutral-800">
-                              {formatDateTime(movement.createdAt)}
-                            </td>
-                            <td className="px-5 py-4">
-                              <MovementBadge movement={movement} />
-                              <p className="mt-2 max-w-xs text-xs leading-5 text-[var(--muted)]">
-                                {movement.reason || "Tanpa catatan"}
-                              </p>
-                            </td>
-                            <td className="px-5 py-4">
-                              <p className="font-medium text-neutral-950">
-                                {movement.outletName}
-                              </p>
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {movement.registerName}
-                              </p>
-                            </td>
-                            <td className="px-5 py-4 font-medium text-neutral-900">
-                              {movement.createdByName}
-                            </td>
-                            <td className="px-5 py-4 text-xs text-[var(--muted)]">
-                              <ReferenceLink movement={movement} />
-                            </td>
-                            <td
-                              className={cn(
-                                "whitespace-nowrap px-5 py-4 text-right font-semibold",
-                                tone.amount,
-                              )}
-                            >
-                              {formatSignedMoney(signedAmount)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="grid gap-3 p-4 lg:hidden">
-                  {data.rows.map((movement) => (
-                    <MovementMobileCard key={movement.id} movement={movement} />
-                  ))}
-                </div>
-              </>
+              <div className="grid gap-3 p-4">
+                {data.rows.map((movement) => (
+                  <MovementCompactRow key={movement.id} movement={movement} />
+                ))}
+              </div>
             )}
 
             {data.pageCount > 1 ? (

@@ -6,11 +6,11 @@ import {
   Banknote,
   Boxes,
   CalendarDays,
+  ChevronDown,
   Gem,
   Landmark,
   LineChart,
   PackageCheck,
-  ReceiptText,
   RefreshCw,
   ShieldCheck,
   ShoppingBag,
@@ -55,19 +55,6 @@ const paymentMethodLabels: Record<ReportPaymentMethod, string> = {
   other: "Lainnya",
 };
 
-const saleStatusLabels: Record<
-  ReportSummaryData["recentSales"][number]["status"],
-  string
-> = {
-  draft: "Draft",
-  awaiting_payment: "Menunggu Bayar",
-  completed: "Selesai",
-  cancelled: "Dibatalkan",
-  voided: "Void",
-  partially_refunded: "Refund Parsial",
-  refunded: "Refund",
-};
-
 function formatMoney(value: number | string | null | undefined) {
   const amount = typeof value === "string" ? Number(value) : (value ?? 0);
 
@@ -87,19 +74,6 @@ function formatInteger(value: number) {
 function formatGram(value: number) {
   return new Intl.NumberFormat("id-ID", {
     maximumFractionDigits: 3,
-  }).format(value);
-}
-
-function formatDateTime(value: Date | null) {
-  if (!value) return "-";
-
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Jakarta",
   }).format(value);
 }
 
@@ -287,58 +261,91 @@ function MetricCard({
 
 function ReportFilter({ data }: { data: ReportSummaryData }) {
   return (
-    <form className="rounded-2xl border border-[var(--border)] bg-white p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:items-end">
-          <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
-            <span>Periode</span>
-            <select
-              name="range"
-              defaultValue={data.filters.range}
-              className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-            >
-              {reportPeriodOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
-            <span>Outlet</span>
-            <select
-              name="outletId"
-              defaultValue={data.filters.outletId ?? "all"}
-              className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-            >
-              <option value="all">Semua outlet</option>
-              {data.outlets.map((outlet) => (
-                <option key={outlet.id} value={outlet.id}>
-                  {outlet.name} ({outlet.code})
-                </option>
-              ))}
-            </select>
-          </label>
+    <details className="group overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] sm:px-5 [&::-webkit-details-marker]:hidden">
+        <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-neutral-50 text-neutral-600">
+          <CalendarDays className="size-4" />
         </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Link
-            href="/admin/laporan"
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-neutral-200 px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-          >
-            Reset
-          </Link>
-          <button
-            type="submit"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
-          >
-            <CalendarDays className="size-4" />
-            Terapkan Filter
-          </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-neutral-950">
+              Filter laporan
+            </p>
+            <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+              {data.period.label}
+            </span>
+            <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-600">
+              {data.selectedOutlet?.name ?? "Semua outlet"}
+            </span>
+          </div>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
+            {data.period.description} Buka untuk mengubah periode atau outlet laporan.
+          </p>
         </div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <span className="hidden text-xs font-semibold text-neutral-500 sm:inline group-open:hidden">
+            Buka filter
+          </span>
+          <span className="hidden text-xs font-semibold text-neutral-500 sm:group-open:inline">
+            Tutup filter
+          </span>
+          <ChevronDown className="size-4 text-neutral-500 transition-transform duration-200 group-open:rotate-180" />
+        </div>
+      </summary>
+
+      <div className="border-t border-[var(--border)] p-4 sm:p-5">
+        <form className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:items-end">
+            <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
+              <span>Periode</span>
+              <select
+                name="range"
+                defaultValue={data.filters.range}
+                className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+              >
+                {reportPeriodOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
+              <span>Outlet</span>
+              <select
+                name="outletId"
+                defaultValue={data.filters.outletId ?? "all"}
+                className="h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+              >
+                <option value="all">Semua outlet</option>
+                {data.outlets.map((outlet) => (
+                  <option key={outlet.id} value={outlet.id}>
+                    {outlet.name} ({outlet.code})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Link
+              href="/admin/laporan"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-neutral-200 px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+            >
+              Reset
+            </Link>
+            <button
+              type="submit"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
+            >
+              <CalendarDays className="size-4" />
+              Terapkan Filter
+            </button>
+          </div>
+        </form>
       </div>
-    </form>
+    </details>
   );
 }
 
@@ -736,164 +743,6 @@ function CashSnapshot({ data }: { data: ReportSummaryData }) {
   );
 }
 
-function RecentSales({ data }: { data: ReportSummaryData }) {
-  const shouldScroll = data.recentSales.length >= 5;
-  const tableGridClass = "grid grid-cols-[1.25fr_0.9fr_1fr_1fr_0.75fr_0.85fr]";
-
-  return (
-    <section className="rounded-2xl border border-[var(--border)] bg-white p-5 lg:col-span-2">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
-            <ReceiptText className="size-3.5" />
-            Transaksi terbaru
-          </div>
-          <h2 className="mt-4 text-lg font-semibold text-neutral-950">
-            Aktivitas transaksi periode ini
-          </h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Ringkasan cepat untuk membuka detail nota dari laporan.
-          </p>
-        </div>
-        <Link
-          href="/admin/penjualan"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent)] hover:underline"
-        >
-          Buka penjualan
-          <ArrowRight className="size-4" />
-        </Link>
-      </div>
-
-      {data.recentSales.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 p-6 text-center text-sm text-[var(--muted)]">
-          Belum ada transaksi pada periode ini.
-        </div>
-      ) : (
-        <>
-          {shouldScroll ? (
-            <p className="mt-4 text-xs font-medium text-[var(--muted)]">
-              Scroll daftar untuk melihat aktivitas transaksi lainnya.
-            </p>
-          ) : null}
-
-          <div className="mt-3 hidden overflow-hidden rounded-2xl border border-neutral-100 lg:block">
-            <div
-              className={cn(
-                tableGridClass,
-                "border-b border-neutral-100 bg-neutral-50 text-xs text-neutral-500",
-              )}
-            >
-              <div className="px-4 py-3 font-semibold">Invoice</div>
-              <div className="px-4 py-3 font-semibold">Outlet</div>
-              <div className="px-4 py-3 font-semibold">Pelanggan</div>
-              <div className="px-4 py-3 font-semibold">Kasir</div>
-              <div className="px-4 py-3 font-semibold">Status</div>
-              <div className="px-4 py-3 text-right font-semibold">Total</div>
-            </div>
-            <div
-              className={cn(
-                "divide-y divide-neutral-100 bg-white",
-                shouldScroll &&
-                  "max-h-[24rem] overflow-y-auto overscroll-contain",
-              )}
-            >
-              {data.recentSales.map((sale) => (
-                <div
-                  key={sale.id}
-                  className={cn(
-                    tableGridClass,
-                    "items-center text-sm transition hover:bg-neutral-50",
-                  )}
-                >
-                  <div className="min-w-0 px-4 py-4">
-                    <Link
-                      href={`/admin/penjualan/${sale.id}`}
-                      className="truncate font-semibold text-[var(--accent)] hover:underline"
-                    >
-                      {sale.invoiceNumber}
-                    </Link>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      {formatDateTime(sale.completedAt ?? sale.createdAt)}
-                    </p>
-                  </div>
-                  <div className="min-w-0 px-4 py-4 text-neutral-700">
-                    <span className="block truncate">{sale.outletName}</span>
-                  </div>
-                  <div className="min-w-0 px-4 py-4 text-neutral-700">
-                    <span className="block truncate">
-                      {sale.customerName ?? "Walk-in"}
-                    </span>
-                  </div>
-                  <div className="min-w-0 px-4 py-4 text-neutral-700">
-                    <span className="block truncate">{sale.cashierName}</span>
-                  </div>
-                  <div className="px-4 py-4">
-                    <span
-                      className={cn(
-                        "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-                        sale.status === "completed" &&
-                          "bg-emerald-50 text-emerald-700",
-                        (sale.status === "voided" ||
-                          sale.status === "refunded") &&
-                          "bg-red-50 text-red-700",
-                        sale.status !== "completed" &&
-                          sale.status !== "voided" &&
-                          sale.status !== "refunded" &&
-                          "bg-neutral-100 text-neutral-600",
-                      )}
-                    >
-                      {saleStatusLabels[sale.status]}
-                    </span>
-                  </div>
-                  <div className="px-4 py-4 text-right font-semibold text-neutral-950">
-                    {formatMoney(sale.totalAmount)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div
-            className={cn(
-              "mt-3 divide-y divide-neutral-100 overflow-hidden rounded-2xl border border-neutral-100 lg:hidden",
-              shouldScroll &&
-                "max-h-[28rem] overflow-y-auto overscroll-contain",
-            )}
-          >
-            {data.recentSales.map((sale) => (
-              <Link
-                key={sale.id}
-                href={`/admin/penjualan/${sale.id}`}
-                className="block bg-white p-4 transition hover:bg-neutral-50"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-[var(--accent)]">
-                      {sale.invoiceNumber}
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      {sale.outletName} · {sale.customerName ?? "Walk-in"}
-                    </p>
-                  </div>
-                  <p className="text-right text-xs font-semibold text-neutral-950">
-                    {formatMoney(sale.totalAmount)}
-                  </p>
-                </div>
-                <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[var(--muted)]">
-                  <span>
-                    {formatDateTime(sale.completedAt ?? sale.createdAt)}
-                  </span>
-                  <span>{saleStatusLabels[sale.status]}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
 export default async function LaporanDashboardPage({
   searchParams,
 }: PageProps) {
@@ -1053,8 +902,6 @@ export default async function LaporanDashboardPage({
         <OperationalSnapshot data={data} />
         <CashSnapshot data={data} />
       </div>
-
-      <RecentSales data={data} />
     </div>
   );
 }
