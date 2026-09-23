@@ -18,12 +18,23 @@ assert.match(pageSource, /Belum memiliki outlet/);
 assert.match(pageSource, /Edit Staff/);
 assert.match(pageSource, /hover:border-\[var\(--accent\)\]/);
 assert.match(pageSource, /hover:bg-\[var\(--accent-soft\)\]\/20/);
-assert.match(pageSource, /lg:max-h-\[38rem\]/);
+
+assert.match(pageSource, /const STAFF_PAGE_SIZE = 5/);
+assert.match(pageSource, /visibleStaff = staff\.slice/);
+assert.match(pageSource, /Menampilkan \{firstRow\}–\{lastRow\}/);
+assert.match(pageSource, /Halaman \{page\} dari \{pageCount\}/);
+assert.match(pageSource, /← Sebelumnya/);
+assert.match(pageSource, /Berikutnya →/);
+assert.match(pageSource, /buildStaffListUrl/);
+
+assert.doesNotMatch(pageSource, /lg:max-h-\[38rem\]/);
+assert.doesNotMatch(pageSource, /lg:overflow-y-auto/);
+assert.doesNotMatch(pageSource, /scrollbar-width:thin/);
 assert.match(pageSource, /getStaffList\(auth\.organization\.id\)/);
 assert.doesNotMatch(pageSource, /grid-cols-\[minmax\(18rem,1\.35fr\)/);
 assert.doesNotMatch(pageSource, /className="hidden lg:block"/);
 assert.doesNotMatch(pageSource, /className="grid gap-3 p-4 lg:hidden"/);
 
 console.log(
-  "Admin staff compact UX contracts: OK — single responsive card layout, access warning, explicit edit action.",
+  "Admin staff compact UX contracts: OK — five cards per page, browser-only scrolling, responsive cards, explicit edit action.",
 );

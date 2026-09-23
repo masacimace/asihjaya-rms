@@ -19,6 +19,25 @@ export const metadata = {
   title: "Staff",
 };
 
+const STAFF_PAGE_SIZE = 5;
+
+type PageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function normalizeStaffPage(value: string | string[] | undefined) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const parsed = Number.parseInt(rawValue ?? "1", 10);
+
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function buildStaffListUrl(page: number) {
+  return page > 1
+    ? `/admin/administrasi/staff?page=${page}`
+    : "/admin/administrasi/staff";
+}
+
 const statusLabels = {
   active: "Aktif",
   inactive: "Nonaktif",
@@ -67,8 +86,7 @@ function formatLastLogin(lastLoginAt: Date | null) {
 }
 
 function StaffCompactRow({ member }: { member: StaffListItem }) {
-  const hasCompleteAccess =
-    member.roles.length > 0 && member.outlets.length > 0;
+  const hasCompleteAccess = member.roles.length > 0 && member.outlets.length > 0;
 
   return (
     <article
@@ -210,11 +228,20 @@ function StaffCompactRow({ member }: { member: StaffListItem }) {
   );
 }
 
-export default async function StaffPage() {
-  const auth = await requirePermission("staff.manage");
+export default async function StaffPage({ searchParams }: PageProps) {
+  const [auth, query] = await Promise.all([
+    requirePermission("staff.manage"),
+    searchParams,
+  ]);
   const administrationAccess = getAdministrationAccess(auth);
 
   const staff = await getStaffList(auth.organization.id);
+  const pageCount = Math.max(1, Math.ceil(staff.length / STAFF_PAGE_SIZE));
+  const page = Math.min(normalizeStaffPage(query.page), pageCount);
+  const pageOffset = (page - 1) * STAFF_PAGE_SIZE;
+  const visibleStaff = staff.slice(pageOffset, pageOffset + STAFF_PAGE_SIZE);
+  const firstRow = staff.length === 0 ? 0 : pageOffset + 1;
+  const lastRow = Math.min(pageOffset + STAFF_PAGE_SIZE, staff.length);
 
   const activeStaff = staff.filter((member) => member.status === "active");
   const inactiveStaff = staff.filter((member) => member.status === "inactive");
@@ -307,17 +334,52 @@ export default async function StaffPage() {
             </p>
           </div>
         ) : (
-          <div
-            className={cn(
-              "grid gap-3 p-3 sm:p-4",
-              staff.length >= 5 &&
-                "lg:max-h-[38rem] lg:overflow-y-auto lg:[scrollbar-width:thin]",
-            )}
-          >
-            {staff.map((member) => (
-              <StaffCompactRow key={member.id} member={member} />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-3 p-3 sm:p-4">
+              {visibleStaff.map((member) => (
+                <StaffCompactRow key={member.id} member={member} />
+              ))}
+            </div>
+
+            {pageCount > 1 ? (
+              <div className="border-t border-[var(--border)] px-4 py-4 sm:px-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-[var(--muted)]">
+                    Menampilkan {firstRow}–{lastRow} dari {staff.length} staff ·
+                    Halaman {page} dari {pageCount}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                    <Link
+                      href={buildStaffListUrl(Math.max(1, page - 1))}
+                      aria-disabled={page <= 1}
+                      className={cn(
+                        "inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition",
+                        page <= 1
+                          ? "pointer-events-none opacity-40"
+                          : "hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20",
+                      )}
+                    >
+                      ← Sebelumnya
+                    </Link>
+
+                    <Link
+                      href={buildStaffListUrl(Math.min(pageCount, page + 1))}
+                      aria-disabled={page >= pageCount}
+                      className={cn(
+                        "inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition",
+                        page >= pageCount
+                          ? "pointer-events-none opacity-40"
+                          : "hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20",
+                      )}
+                    >
+                      Berikutnya →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </>
         )}
       </section>
     </div>

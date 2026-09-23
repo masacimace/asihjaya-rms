@@ -216,7 +216,9 @@ export default async function ProductDetailPage({
               Status pengelolaan
             </p>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Halaman ini hanya untuk reference dan pengelompokan. Produk fisik baru bisa ditambahkan langsung dari sini atau dari menu Tambah Produk.
+              Halaman ini hanya untuk reference dan pengelompokan. Produk fisik
+              baru bisa ditambahkan langsung dari sini atau dari menu Tambah
+              Produk.
             </p>
 
             <div className="mt-4 flex flex-col gap-2">
@@ -256,11 +258,12 @@ export default async function ProductDetailPage({
                 Item fisik
               </span>
               <h2 className="mt-3 font-semibold text-neutral-950">
-                Riwayat item produk
+                Daftar Produk
               </h2>
               <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--muted)]">
-                Unit perhiasan individual dengan barcode, berat, outlet, kondisi,
-                dan status inventaris masing-masing. Klik item untuk membuka detail.
+                Unit perhiasan individual dengan barcode, berat, outlet,
+                kondisi, dan status inventaris masing-masing. Klik item untuk
+                membuka detail.
               </p>
             </div>
 
@@ -309,7 +312,8 @@ export default async function ProductDetailPage({
                         className="pointer-events-auto absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
                       >
                         <span className="sr-only">
-                          Buka detail item {item.displayName ?? product.name} {item.sku}
+                          Buka detail item {item.displayName ?? product.name}{" "}
+                          {item.sku}
                         </span>
                       </Link>
                       <div className="flex min-w-0 items-center gap-3">
@@ -318,7 +322,9 @@ export default async function ProductDetailPage({
                           alt={`${product.name} ${item.sku}`}
                           className={cn(
                             "relative z-10 size-14 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]",
-                            itemImageUrl ? "pointer-events-auto" : "pointer-events-none",
+                            itemImageUrl
+                              ? "pointer-events-auto"
+                              : "pointer-events-none",
                           )}
                         />
 
@@ -388,7 +394,8 @@ export default async function ProductDetailPage({
                         className="pointer-events-auto absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
                       >
                         <span className="sr-only">
-                          Buka detail item {item.displayName ?? product.name} {item.sku}
+                          Buka detail item {item.displayName ?? product.name}{" "}
+                          {item.sku}
                         </span>
                       </Link>
                       <div className="flex min-w-0 items-start gap-3">
@@ -397,7 +404,9 @@ export default async function ProductDetailPage({
                           alt={`${product.name} ${item.sku}`}
                           className={cn(
                             "relative z-10 size-14 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]",
-                            itemImageUrl ? "pointer-events-auto" : "pointer-events-none",
+                            itemImageUrl
+                              ? "pointer-events-auto"
+                              : "pointer-events-none",
                           )}
                         />
 
@@ -459,7 +468,10 @@ export default async function ProductDetailPage({
 
               <div className="flex flex-col gap-3 border-t border-[var(--border)] bg-[var(--surface-muted)]/35 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <p className="text-xs text-[var(--muted)]">
-                  Menampilkan {formatInteger(itemRangeStart)}–{formatInteger(itemRangeEnd)} dari {formatInteger(product.totalItems)} item · Halaman {formatInteger(itemPage)} dari {formatInteger(itemPageCount)}
+                  Menampilkan {formatInteger(itemRangeStart)}–
+                  {formatInteger(itemRangeEnd)} dari{" "}
+                  {formatInteger(product.totalItems)} item · Halaman{" "}
+                  {formatInteger(itemPage)} dari {formatInteger(itemPageCount)}
                 </p>
 
                 {itemPageCount > 1 ? (
@@ -577,7 +589,10 @@ export default async function ProductDetailPage({
             <dl className="mt-5 space-y-4 border-t border-[var(--border)] pt-5">
               {[
                 ["Kode Master", product.code],
-                ["Kategori", `${product.categoryName} · ${product.categoryCode}`],
+                [
+                  "Kategori",
+                  `${product.categoryName} · ${product.categoryCode}`,
+                ],
                 ["Dibuat", formatDateTime(product.createdAt)],
                 ["Diperbarui", formatDateTime(product.updatedAt)],
               ].map(([label, value]) => (
@@ -593,7 +608,6 @@ export default async function ProductDetailPage({
               ))}
             </dl>
           </section>
-
         </aside>
       </section>
 
@@ -603,13 +617,14 @@ export default async function ProductDetailPage({
             <div className="min-w-0">
               <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
                 <Tag className="size-3.5" />
-                Pengaturan produk
+                Pengaturan Produk
               </span>
               <h2 className="mt-3 font-semibold text-neutral-950">
-                Edit data produk
+                Edit Master Produk
               </h2>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Ubah kategori, nama, atau status Product Master. Data fisik dan pricing tetap dikelola pada item produk.
+                Ubah kategori, nama, atau status Product Master. Data fisik dan
+                pricing tetap dikelola pada item produk.
               </p>
             </div>
 
