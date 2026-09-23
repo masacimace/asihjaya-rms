@@ -155,37 +155,6 @@ export default async function AdministrationPage() {
 
       <AdministrationTabs active="overview" access={administrationAccess} />
 
-      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        {summaryCards.map(({ key, label, tone, icon: Icon }) => (
-          <article
-            key={key}
-            className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div
-                className={`grid size-10 place-items-center rounded-2xl ring-1 sm:size-11 ${toneClassName[tone]}`}
-              >
-                <Icon className="size-5" />
-              </div>
-
-              {key === "activeStaff" ? (
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold sm:px-2.5 sm:py-1 sm:text-xs text-emerald-700 ring-1 ring-emerald-100">
-                  Aktif
-                </span>
-              ) : null}
-            </div>
-
-            <p className="mt-4 text-2xl font-semibold text-neutral-950 sm:mt-5 sm:text-3xl">
-              {summaryValues[key]}
-            </p>
-
-            <p className="mt-1 text-xs leading-5 text-[var(--muted)] sm:text-sm">
-              {label}
-            </p>
-          </article>
-        ))}
-      </section>
-
       <section className="rounded-2xl border border-[var(--border)] bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
