@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Download,
   Filter,
+  ImageIcon,
   MonitorUp,
   Printer,
   ReceiptText,
@@ -28,8 +29,10 @@ import {
   type AdminSalesDateRange,
   type AdminSalesFilters,
 } from "@/features/sales/admin-contracts";
+import { getAdminSaleListImagePreviews } from "@/features/sales/admin-sale-list-images";
 import { getAdminSalesListData } from "@/features/sales/admin-queries";
 import { requirePermission } from "@/lib/auth/session";
+import { getImageUrl } from "@/lib/storage/image-storage";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -392,37 +395,6 @@ function getPaginationTokens(page: number, pageCount: number) {
   return tokens;
 }
 
-function TransactionMetric({
-  label,
-  value,
-  helper,
-  emphasis = false,
-}: {
-  label: string;
-  value: string;
-  helper?: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50 px-3 py-2.5 sm:px-4 sm:py-3">
-      <p className="text-[11px] font-medium text-neutral-500">{label}</p>
-      <p
-        className={cn(
-          "mt-1 break-words text-sm font-semibold tabular-nums text-neutral-950 sm:text-base",
-          emphasis && "text-[var(--accent)]",
-        )}
-      >
-        {value}
-      </p>
-      {helper ? (
-        <p className="mt-1 line-clamp-1 text-[11px] text-[var(--muted)]">
-          {helper}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 export default async function PenjualanListPage({
   searchParams,
 }: {
@@ -431,12 +403,19 @@ export default async function PenjualanListPage({
   const auth = await requirePermission("sales.view");
   const filters = parseAdminSalesFilters(await searchParams);
   const data = await getAdminSalesListData(auth, filters);
+  const imagePreviewsBySaleId = await getAdminSaleListImagePreviews({
+    organizationId: auth.organization.id,
+    saleIds: data.rows.map((sale) => sale.id),
+    productItemIds: data.rows.flatMap((sale) =>
+      sale.items.map((item) => item.productItemId),
+    ),
+  });
   const isFiltered = Boolean(
     filters.search ||
-      filters.outletId ||
-      filters.status ||
-      filters.paymentMethod ||
-      filters.dateRange !== "today",
+    filters.outletId ||
+    filters.status ||
+    filters.paymentMethod ||
+    filters.dateRange !== "today",
   );
   const activeFilterCount = [
     filters.search || null,
@@ -743,6 +722,18 @@ export default async function PenjualanListPage({
               const paymentDisplay = getPaymentDisplay(sale);
               const firstItem = sale.items[0];
               const otherItemCount = Math.max(0, sale.totalItems - 1);
+              const imagePreviews = imagePreviewsBySaleId.get(sale.id) ?? [];
+              const previewItems = sale.items.slice(0, 3).map((item) => ({
+                ...item,
+                imageKey:
+                  imagePreviews.find(
+                    (preview) => preview.productItemId === item.productItemId,
+                  )?.imageKey ?? null,
+              }));
+              const hiddenThumbnailCount = Math.max(
+                0,
+                sale.totalItems - previewItems.length,
+              );
               const customerReference =
                 sale.customerCode ??
                 sale.customerPhone ??
@@ -752,22 +743,23 @@ export default async function PenjualanListPage({
                 <Link
                   key={sale.id}
                   href={`/admin/penjualan/${sale.id}`}
-                  className="group block min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] sm:p-5"
+                  data-sales-layout="compact-transaction-row"
+                  className="group block min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-3.5 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] sm:p-4"
                 >
-                  <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
-                      <p className="break-all font-mono text-sm font-semibold leading-5 text-neutral-950 transition group-hover:text-[var(--accent)] sm:break-normal sm:truncate sm:text-base">
+                      <p className="break-all text-sm font-semibold leading-5 text-neutral-950 transition group-hover:text-[var(--accent)] sm:break-normal sm:truncate">
                         {sale.invoiceNumber}
                       </p>
-                      <p className="mt-1 text-xs text-neutral-500">
+                      <p className="mt-0.5 text-[11px] text-neutral-500 sm:text-xs">
                         {formatDateTime(sale.completedAt ?? sale.createdAt)}
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap gap-1.5 lg:max-w-[48%] lg:justify-end">
+                    <div className="flex shrink-0 flex-wrap gap-1.5 sm:justify-end">
                       <span
                         className={cn(
-                          "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+                          "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold",
                           getSaleStatusClass(sale.status),
                         )}
                       >
@@ -775,7 +767,7 @@ export default async function PenjualanListPage({
                       </span>
                       <span
                         className={cn(
-                          "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
+                          "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
                           getPrintStatusClass(sale.printStatus),
                         )}
                       >
@@ -785,74 +777,108 @@ export default async function PenjualanListPage({
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50/70 px-3 py-3 sm:px-4">
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+                  <div className="mt-3 grid gap-x-4 gap-y-3 border-t border-[var(--border)] pt-3 sm:grid-cols-2 lg:grid-cols-[minmax(230px,1.35fr)_minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[minmax(260px,1.4fr)_minmax(170px,0.9fr)_minmax(200px,1fr)_minmax(170px,0.85fr)_minmax(150px,0.75fr)]">
+                    <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                        Produk
+                      </p>
+                      <div className="mt-1.5 flex min-w-0 items-center gap-3">
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {previewItems.length > 0 ? (
+                            previewItems.map((item) => {
+                              const imageUrl = getImageUrl(item.imageKey);
+
+                              return imageUrl ? (
+                                <div
+                                  key={item.productItemId}
+                                  className="size-14 overflow-hidden rounded-lg border border-[var(--border)] bg-neutral-100 sm:size-16"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={imageUrl}
+                                    alt={`Foto ${item.productName}`}
+                                    className="size-full object-cover"
+                                  />
+                                </div>
+                              ) : (
+                                <div
+                                  key={item.productItemId}
+                                  className="grid size-11 place-items-center rounded-lg border border-[var(--border)] bg-neutral-100 text-neutral-400 sm:size-12"
+                                  aria-label={`Foto ${item.productName} belum tersedia`}
+                                >
+                                  <ImageIcon className="size-4" />
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="grid size-11 place-items-center rounded-lg border border-[var(--border)] bg-neutral-100 text-neutral-400 sm:size-12">
+                              <ImageIcon className="size-4" />
+                            </div>
+                          )}
+
+                          {hiddenThumbnailCount > 0 ? (
+                            <span className="grid size-9 place-items-center rounded-lg bg-neutral-100 text-[10px] font-semibold text-neutral-600">
+                              +{formatInteger(hiddenThumbnailCount)}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="line-clamp-1 text-sm font-semibold text-neutral-950">
+                            {firstItem?.productName ?? "Item belum tercatat"}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                            {formatInteger(sale.totalItems)} item
+                            {otherItemCount > 0
+                              ? ` · +${formatInteger(otherItemCount)} item lainnya`
+                              : ""}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
                         Customer
                       </p>
                       <p className="mt-1 truncate text-sm font-semibold text-neutral-950">
                         {sale.customerName ?? "Walk-in Customer"}
                       </p>
-                      <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                      <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
                         {customerReference}
                       </p>
                     </div>
 
-                    <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50/70 px-3 py-3 sm:px-4">
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
                         Outlet / Kasir
                       </p>
                       <p className="mt-1 truncate text-sm font-semibold text-neutral-950">
                         {sale.outletName}
                       </p>
-                      <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                      <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
                         {sale.registerName} · {sale.cashierName}
                       </p>
                     </div>
-                  </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    <TransactionMetric
-                      label="Total transaksi"
-                      value={formatMoney(sale.totalAmount)}
-                      helper={
-                        Number(sale.discountAmount) > 0
-                          ? `Diskon ${formatMoney(sale.discountAmount)}`
-                          : undefined
-                      }
-                      emphasis
-                    />
-                    <TransactionMetric
-                      label={paymentDisplay.amountLabel}
-                      value={formatMoney(paymentDisplay.amount)}
-                      helper={paymentDisplay.label}
-                    />
-                    <div className="col-span-2 sm:col-span-1">
-                      <TransactionMetric
-                        label="Item"
-                        value={`${formatInteger(sale.totalItems)} item`}
-                        helper={firstItem?.productName ?? "Item belum tercatat"}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 border-t border-[var(--border)] pt-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.75fr)] lg:items-end">
                     <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                        Payment
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         <span
                           className={cn(
-                            "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+                            "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold",
                             getPaymentDisplayClass(paymentDisplay.tone),
                           )}
                         >
                           {paymentDisplay.label}
                         </span>
-                        <span className="text-xs text-neutral-500">
-                          {paymentDisplay.description}
+                        <span className="text-xs font-semibold tabular-nums text-neutral-900">
+                          {formatMoney(paymentDisplay.amount)}
                         </span>
                       </div>
-
-                      <div className="mt-2">
+                      <div className="mt-1.5">
                         <PaymentBadges
                           customerDepositUsedAmount={
                             sale.customerDepositUsedAmount
@@ -862,14 +888,19 @@ export default async function PenjualanListPage({
                       </div>
                     </div>
 
-                    <div className="min-w-0 lg:text-right">
-                      <p className="text-xs leading-5 text-neutral-500">
-                        {firstItem?.productName ?? "Item belum tercatat"}
-                        {otherItemCount > 0
-                          ? ` + ${formatInteger(otherItemCount)} item lainnya`
-                          : ""}
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                        Total
                       </p>
-                      <span className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--accent)]">
+                      <p className="mt-1 break-words text-sm font-semibold tabular-nums text-[var(--accent)]">
+                        {formatMoney(sale.totalAmount)}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                        {Number(sale.discountAmount) > 0
+                          ? `Diskon ${formatMoney(sale.discountAmount)}`
+                          : "Tanpa diskon"}
+                      </p>
+                      <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--accent)]">
                         Detail transaksi
                         <ChevronRight className="size-3.5" />
                       </span>

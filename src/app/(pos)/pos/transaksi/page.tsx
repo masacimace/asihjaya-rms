@@ -380,14 +380,14 @@ function TransactionImagesPreview({
       : previewItems.length === 2
         ? "size-24"
         : "size-20"
-    : "size-16";
+    : "size-18";
 
   if (previewItems.length === 0) {
     return (
       <TransactionProductImage
         imageKey={null}
         alt="Foto produk belum tersedia"
-        className={isMobile ? "size-28" : "size-16"}
+        className={isMobile ? "size-28" : "size-18"}
       />
     );
   }
@@ -510,7 +510,8 @@ function TransactionCard({
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
             {formatTransactionDate(
               transaction.completedAt ?? transaction.createdAt,
-            )} · {transaction.registerName} · {transaction.cashierName}
+            )}{" "}
+            · {transaction.registerName} · {transaction.cashierName}
           </p>
         </div>
         <PaymentStatusPill transaction={transaction} />
@@ -1160,9 +1161,7 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
               key={insight.label}
               className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/70 p-3"
             >
-              <p className="text-[11px] text-[var(--muted)]">
-                {insight.label}
-              </p>
+              <p className="text-[11px] text-[var(--muted)]">{insight.label}</p>
               <p className="mt-1 truncate text-sm font-semibold text-neutral-950">
                 {insight.value}
               </p>
@@ -1329,9 +1328,12 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
       <section className="mt-5 overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
         <div className="flex flex-col gap-3 border-b border-[var(--border)] p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
           <div className="min-w-0">
-            <h2 className="font-semibold text-neutral-950">Riwayat transaksi</h2>
+            <h2 className="font-semibold text-neutral-950">
+              Riwayat transaksi
+            </h2>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Invoice, customer, item, payment, dan total dalam compact row-card tanpa horizontal scroll.
+              Invoice, customer, item, payment, dan total dalam compact row-card
+              tanpa horizontal scroll.
             </p>
           </div>
           <span className="inline-flex w-fit rounded-full border border-[var(--border)] bg-neutral-50 px-3 py-1.5 text-xs font-semibold text-neutral-700">
@@ -1349,7 +1351,8 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
                 Transaksi belum ditemukan
               </h3>
               <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-                Belum ada transaksi completed untuk filter ini. Coba ubah periode atau kata kunci pencarian.
+                Belum ada transaksi completed untuk filter ini. Coba ubah
+                periode atau kata kunci pencarian.
               </p>
             </div>
           </div>
@@ -1376,7 +1379,9 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
           <div className="border-t border-[var(--border)] p-4 sm:px-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-[var(--muted)]">
-                Menampilkan {firstRow}–{lastRow} dari {data.pagination.total} transaksi · Halaman {data.pagination.page} dari {data.pagination.pageCount}
+                Menampilkan {firstRow}–{lastRow} dari {data.pagination.total}{" "}
+                transaksi · Halaman {data.pagination.page} dari{" "}
+                {data.pagination.pageCount}
               </p>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
                 <Link
@@ -1406,7 +1411,9 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
                       data.pagination.page + 1,
                     ),
                   })}
-                  aria-disabled={data.pagination.page >= data.pagination.pageCount}
+                  aria-disabled={
+                    data.pagination.page >= data.pagination.pageCount
+                  }
                   className={cn(
                     "inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition",
                     data.pagination.page >= data.pagination.pageCount

@@ -99,7 +99,10 @@ function BuybackImagesPreview({ row }: { row: BuybackHistoryRow }) {
 
 type PaginationToken = number | "ellipsis-left" | "ellipsis-right";
 
-function getPaginationTokens(page: number, pageCount: number): PaginationToken[] {
+function getPaginationTokens(
+  page: number,
+  pageCount: number,
+): PaginationToken[] {
   if (pageCount <= 7) {
     return Array.from({ length: pageCount }, (_, index) => index + 1);
   }
@@ -218,7 +221,8 @@ export function BuybackCompactHistoryPanel({
           {data.rows.map((row) => {
             const processing = getProcessingSummary(row);
             const status = getStatusSummary(row.status);
-            const firstItem = row.imagePreviews[0]?.displayName ?? "Produk Buyback";
+            const firstItem =
+              row.imagePreviews[0]?.displayName ?? "Produk Buyback";
             const additionalItems = Math.max(row.itemCount - 1, 0);
 
             return (
@@ -233,12 +237,15 @@ export function BuybackCompactHistoryPanel({
                         targetPage: page,
                         detailId: row.id,
                       })}
-                      className="break-all font-mono text-sm font-semibold text-neutral-950 transition hover:text-[var(--accent)] sm:break-normal"
+                      className="break-all text-sm font-semibold text-neutral-950 transition hover:text-[var(--accent)] sm:break-normal"
                     >
                       {row.buybackNumber}
                     </Link>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {formatDateTime(row.completedAt ?? row.createdAt, timeZone)}
+                      {formatDateTime(
+                        row.completedAt ?? row.createdAt,
+                        timeZone,
+                      )}
                     </p>
                   </div>
 
@@ -287,7 +294,9 @@ export function BuybackCompactHistoryPanel({
                           {row.customerName}
                         </p>
                         <p className="mt-1 break-words text-xs text-[var(--muted)]">
-                          {row.customerCode ?? row.customerPhone ?? "Tanpa kode customer"}
+                          {row.customerCode ??
+                            row.customerPhone ??
+                            "Tanpa kode customer"}
                         </p>
                       </div>
 
@@ -377,8 +386,8 @@ export function BuybackCompactHistoryPanel({
         <div className="border-t border-[var(--border)] p-4 sm:px-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <p className="text-center text-xs text-[var(--muted)] lg:text-left">
-              Menampilkan {firstRow}-{lastRow} dari {data.totalCount} transaksi ·
-              Halaman {page} dari {totalPages}
+              Menampilkan {firstRow}-{lastRow} dari {data.totalCount} transaksi
+              · Halaman {page} dari {totalPages}
             </p>
 
             <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-center">
