@@ -151,6 +151,16 @@ assert.match(workspace, /Dana Titip/);
 assert.match(workspace, /Selesaikan Buyback/);
 assert.match(workspace, /imageSelected: boolean/);
 assert.match(workspace, /name={`itemImage:\$\{clientKey\}`}/);
+assert.match(
+  workspace,
+  /<BuybackImageInput[\s\S]{0,800}showCamera/,
+  "Produk internal dan external Buyback wajib menampilkan action Ambil Foto.",
+);
+assert.doesNotMatch(
+  workspace,
+  /showCamera=\{item\.source === "external"\}/,
+  "Camera Buyback tidak boleh dibatasi hanya untuk produk external.",
+);
 assert.match(historyPanel, /Snapshot Rate Buyback/);
 assert.match(historyPanel, /Rate saat transaksi/);
 assert.match(historyPanel, /Rekomendasi/);

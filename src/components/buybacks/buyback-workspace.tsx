@@ -1490,7 +1490,7 @@ export function BuybackWorkspace({
                   <div className="lg:col-span-2">
                     <BuybackImageInput
                       clientKey={item.clientKey}
-                      showCamera={item.source === "external"}
+                      showCamera
                       error={
                         state.fieldErrors?.[`items.${item.clientKey}.image`]
                       }
