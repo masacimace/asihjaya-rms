@@ -824,7 +824,7 @@ export default async function PenjualanListPage({
                         </div>
 
                         <div className="min-w-0">
-                          <p className="line-clamp-1 text-sm font-semibold text-neutral-950">
+                          <p className="text-sm font-semibold text-neutral-950">
                             {firstItem?.productName ?? "Item belum tercatat"}
                           </p>
                           <p className="mt-0.5 text-[11px] text-[var(--muted)]">

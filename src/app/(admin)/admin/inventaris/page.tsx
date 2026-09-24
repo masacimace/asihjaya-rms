@@ -610,7 +610,7 @@ export default async function InventoryPage({
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0">
-                            <h3 className="line-clamp-2 font-semibold leading-5 text-neutral-950 transition group-hover:text-[var(--accent)]">
+                            <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-neutral-950 transition group-hover:text-[var(--accent)]">
                               {item.productName}
                             </h3>
                             <p className="mt-1 truncate text-xs text-[var(--muted)]">

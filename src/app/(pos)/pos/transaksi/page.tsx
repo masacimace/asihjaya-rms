@@ -380,14 +380,14 @@ function TransactionImagesPreview({
       : previewItems.length === 2
         ? "size-24"
         : "size-20"
-    : "size-18";
+    : "size-14";
 
   if (previewItems.length === 0) {
     return (
       <TransactionProductImage
         imageKey={null}
         alt="Foto produk belum tersedia"
-        className={isMobile ? "size-28" : "size-18"}
+        className={isMobile ? "size-28" : "size-14"}
       />
     );
   }
@@ -445,10 +445,7 @@ function TransactionItemsPreview({
   return (
     <div className="space-y-1">
       {previewItems.map((item) => (
-        <p
-          key={item.productItemId}
-          className="truncate text-xs text-neutral-700"
-        >
+        <p key={item.productItemId} className="text-xs text-neutral-700">
           <span className="font-semibold text-neutral-900">{item.sku}</span> ·{" "}
           {item.productName}
         </p>
@@ -492,17 +489,22 @@ function TransactionCard({
   detailHref: string;
   isSelected: boolean;
 }) {
+  const customerReference =
+    transaction.customerCode ??
+    transaction.customerPhone ??
+    "Tanpa data customer";
+
   return (
     <article
       data-transaction-layout="compact-row-card"
       className={cn(
-        "min-w-0 overflow-hidden rounded-2xl border bg-white p-4 transition sm:p-5",
+        "min-w-0 overflow-hidden rounded-2xl border bg-white p-3 transition sm:p-4",
         isSelected
           ? "border-[var(--accent)] bg-[var(--accent-soft)]/25 ring-2 ring-[var(--accent-soft)]"
           : "border-[var(--border)] hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20",
       )}
     >
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-neutral-950 sm:text-base">
             {transaction.invoiceNumber}
@@ -517,91 +519,113 @@ function TransactionCard({
         <PaymentStatusPill transaction={transaction} />
       </div>
 
-      <div className="mt-4 grid min-w-0 gap-3 lg:grid-cols-[180px_minmax(0,1fr)_minmax(240px,0.8fr)]">
-        <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50/70 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Foto produk
+      <div className="mt-3 grid min-w-0 gap-x-4 gap-y-3 border-t border-[var(--border)] pt-3 sm:grid-cols-2 xl:grid-cols-[minmax(300px,1.45fr)_minmax(170px,0.9fr)_minmax(180px,0.95fr)_minmax(150px,0.75fr)_auto] xl:items-start">
+        <div className="min-w-0 sm:col-span-2 xl:col-span-1">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Produk
           </p>
-          <div className="mt-3 min-w-0 overflow-hidden">
-            <TransactionImagesPreview transaction={transaction} />
-          </div>
-          <p className="mt-3 text-xs font-semibold text-neutral-800">
-            {formatInteger(transaction.totalItems)} item
-          </p>
-        </div>
-
-        <div className="min-w-0 space-y-3">
-          <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50/70 p-3.5">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-              <UserRound className="size-3.5" />
-              Customer
+          <div className="mt-2 flex min-w-0 items-start gap-3">
+            <div className="shrink-0">
+              <TransactionImagesPreview transaction={transaction} />
             </div>
-            <p className="mt-2 truncate text-sm font-semibold text-neutral-950">
-              {transaction.customerName ?? "Customer umum"}
-            </p>
-            <p className="mt-1 truncate text-xs text-[var(--muted)]">
-              {transaction.customerCode ??
-                transaction.customerPhone ??
-                "Tanpa data customer"}
-            </p>
-          </div>
-
-          <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50/70 p-3.5">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Item transaksi
-            </p>
-            <TransactionItemsPreview transaction={transaction} />
+            <div className="min-w-0 flex-1">
+              <p className="mb-1 text-xs font-semibold text-neutral-800">
+                {formatInteger(transaction.totalItems)} item
+              </p>
+              <TransactionItemsPreview transaction={transaction} />
+            </div>
           </div>
         </div>
 
-        <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50/70 p-3.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Payment & total
-          </p>
-          <div className="mt-2">
-            <PaymentStatusPill transaction={transaction} />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            <UserRound className="size-3.5" />
+            Customer
           </div>
-          <p className="mt-2 break-words text-xs leading-5 text-[var(--muted)]">
+          <p className="mt-2 truncate text-sm font-semibold text-neutral-950">
+            {transaction.customerName ?? "Customer umum"}
+          </p>
+          <p className="mt-1 truncate text-xs text-[var(--muted)]">
+            {customerReference}
+          </p>
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Payment
+          </p>
+          <p className="mt-2 break-words text-xs font-medium leading-5 text-neutral-800">
             {getPaymentMethodSummary(transaction)}
           </p>
-          <p className="mt-1 text-xs font-medium text-neutral-700">
+          <p className="mt-1 text-xs text-[var(--muted)]">
             Terbayar {formatMoney(transaction.paidAmount)}
           </p>
-          <div className="mt-3 border-t border-neutral-200 pt-3">
-            <p className="text-lg font-semibold text-neutral-950">
-              {formatMoney(transaction.totalAmount)}
-            </p>
-            {Number(transaction.discountAmount) > 0 ? (
-              <p className="mt-1 text-xs text-red-600">
-                Diskon {formatMoney(transaction.discountAmount)}
-              </p>
-            ) : null}
-          </div>
         </div>
-      </div>
 
-      <div className="mt-4 flex flex-col gap-2 border-t border-[var(--border)] pt-4 sm:flex-row sm:justify-end">
-        <Link
-          href={detailHref}
-          className={cn(
-            "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-semibold transition",
-            isSelected
-              ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-              : "border-[var(--border)] bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20",
-          )}
-        >
-          <Package className="size-3.5" />
-          Detail
-        </Link>
-        <a
-          href={`/api/sales/${transaction.id}/receipt-certificate`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-xs font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
-        >
-          <FileText className="size-3.5" />
-          Lihat Invoice
-        </a>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Total
+          </p>
+          <p className="mt-2 break-words text-base font-semibold tabular-nums text-neutral-950">
+            {formatMoney(transaction.totalAmount)}
+          </p>
+          {Number(transaction.discountAmount) > 0 ? (
+            <p className="mt-1 text-xs text-red-600">
+              Diskon {formatMoney(transaction.discountAmount)}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="hidden shrink-0 flex-col gap-2 xl:flex">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Aksi
+          </p>
+          <Link
+            href={detailHref}
+            className={cn(
+              "inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold transition",
+              isSelected
+                ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                : "border-[var(--border)] bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20",
+            )}
+          >
+            <Package className="size-3.5" />
+            Detail
+          </Link>
+          <a
+            href={`/api/sales/${transaction.id}/receipt-certificate`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-3 text-xs font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+          >
+            <FileText className="size-3.5" />
+            Invoice
+          </a>
+        </div>
+
+        <div className="col-span-full grid grid-cols-2 gap-2 border-t border-[var(--border)] pt-3 xl:hidden">
+          <Link
+            href={detailHref}
+            className={cn(
+              "inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold transition",
+              isSelected
+                ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                : "border-[var(--border)] bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20",
+            )}
+          >
+            <Package className="size-3.5" />
+            Detail
+          </Link>
+          <a
+            href={`/api/sales/${transaction.id}/receipt-certificate`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-3 text-xs font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
+          >
+            <FileText className="size-3.5" />
+            Lihat Invoice
+          </a>
+        </div>
       </div>
     </article>
   );
