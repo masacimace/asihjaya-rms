@@ -122,22 +122,6 @@ function formatShortDate(value: Date) {
   }).format(value);
 }
 
-function formatCompactNumber(value: number) {
-  if (value >= 1_000_000) {
-    return `${new Intl.NumberFormat("id-ID", {
-      maximumFractionDigits: value >= 10_000_000 ? 0 : 1,
-    }).format(value / 1_000_000)}Jt`;
-  }
-
-  if (value >= 1_000) {
-    return `${new Intl.NumberFormat("id-ID", {
-      maximumFractionDigits: value >= 10_000 ? 0 : 1,
-    }).format(value / 1_000)}Rb`;
-  }
-
-  return formatInteger(value);
-}
-
 function getTrendMax(points: ReportStockTrendPoint[]) {
   const maxValue = Math.max(
     ...points.map((point) =>
@@ -161,68 +145,6 @@ function buildStockReportUrl(
   const query = searchParams.toString();
 
   return query ? `/admin/laporan/stok?${query}` : "/admin/laporan/stok";
-}
-
-function StatCard({
-  title,
-  value,
-  helper,
-  icon,
-  tone = "default",
-}: {
-  title: string;
-  value: ReactNode;
-  helper: string;
-  icon: ReactNode;
-  tone?: "default" | "success" | "warning" | "danger" | "dark";
-}) {
-  return (
-    <article
-      className={cn(
-        "min-w-0 overflow-hidden rounded-2xl border p-5",
-        tone === "dark"
-          ? "border-neutral-800 bg-neutral-950 text-white"
-          : "border-[var(--border)] bg-white text-neutral-950",
-      )}
-    >
-      <div className="flex min-w-0 items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p
-            className={cn(
-              "text-xs font-semibold uppercase tracking-wide",
-              tone === "dark" ? "text-white/55" : "text-[var(--muted)]",
-            )}
-          >
-            {title}
-          </p>
-          <p className="mt-3 truncate text-2xl font-semibold tracking-tight">
-            {value}
-          </p>
-          <p
-            className={cn(
-              "mt-2 text-xs leading-5",
-              tone === "dark" ? "text-white/55" : "text-[var(--muted)]",
-            )}
-          >
-            {helper}
-          </p>
-        </div>
-        <div
-          className={cn(
-            "grid size-11 shrink-0 place-items-center rounded-xl",
-            tone === "dark" && "bg-white/10 text-white",
-            tone === "success" && "bg-emerald-50 text-emerald-600",
-            tone === "warning" && "bg-amber-50 text-amber-600",
-            tone === "danger" && "bg-red-50 text-red-600",
-            tone === "default" &&
-              "bg-[var(--accent-soft)] text-[var(--accent)]",
-          )}
-        >
-          {icon}
-        </div>
-      </div>
-    </article>
-  );
 }
 
 function StockReportFilter({ data }: { data: ReportStockData }) {
@@ -945,7 +867,6 @@ function MovementCompactRow({
 
 function MovementHistory({
   movements,
-  refreshHref,
 }: {
   movements: ReportStockMovementRow[];
   refreshHref: string;

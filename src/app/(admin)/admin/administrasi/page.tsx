@@ -5,7 +5,6 @@ import {
   MonitorSmartphone,
   ShieldCheck,
   Sparkles,
-  UserCheck,
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -19,40 +18,6 @@ import { hasPermission, requirePermission } from "@/lib/auth/session";
 export const metadata = {
   title: "Administrasi",
 };
-
-const summaryCards = [
-  {
-    key: "activeStaff",
-    label: "Staff aktif",
-    tone: "emerald",
-    icon: UserCheck,
-  },
-  {
-    key: "inactiveStaff",
-    label: "Staff nonaktif",
-    tone: "neutral",
-    icon: UsersRound,
-  },
-  {
-    key: "activeRoles",
-    label: "Role aktif",
-    tone: "amber",
-    icon: ShieldCheck,
-  },
-  {
-    key: "activeOutlets",
-    label: "Outlet aktif",
-    tone: "blue",
-    icon: Building2,
-  },
-] as const;
-
-const toneClassName = {
-  emerald: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  neutral: "bg-neutral-100 text-neutral-700 ring-neutral-200",
-  amber: "bg-[var(--accent-soft)] text-[var(--accent)] ring-amber-100",
-  blue: "bg-blue-50 text-blue-700 ring-blue-100",
-} as const;
 
 export default async function AdministrationPage() {
   const auth = await requirePermission("admin.access");
@@ -106,13 +71,6 @@ export default async function AdministrationPage() {
       helper: "POS & hardware hub",
     },
   ].filter((module) => hasPermission(auth, module.permission));
-
-  const summaryValues = {
-    activeStaff: overview.activeUsers,
-    inactiveStaff: overview.inactiveUsers,
-    activeRoles: overview.activeRoles,
-    activeOutlets: overview.activeOutlets,
-  } as const;
 
   return (
     <div className="space-y-6">

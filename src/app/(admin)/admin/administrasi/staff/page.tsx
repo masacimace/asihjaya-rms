@@ -86,7 +86,8 @@ function formatLastLogin(lastLoginAt: Date | null) {
 }
 
 function StaffCompactRow({ member }: { member: StaffListItem }) {
-  const hasCompleteAccess = member.roles.length > 0 && member.outlets.length > 0;
+  const hasCompleteAccess =
+    member.roles.length > 0 && member.outlets.length > 0;
 
   return (
     <article
@@ -242,15 +243,6 @@ export default async function StaffPage({ searchParams }: PageProps) {
   const visibleStaff = staff.slice(pageOffset, pageOffset + STAFF_PAGE_SIZE);
   const firstRow = staff.length === 0 ? 0 : pageOffset + 1;
   const lastRow = Math.min(pageOffset + STAFF_PAGE_SIZE, staff.length);
-
-  const activeStaff = staff.filter((member) => member.status === "active");
-  const inactiveStaff = staff.filter((member) => member.status === "inactive");
-  const suspendedStaff = staff.filter(
-    (member) => member.status === "suspended",
-  );
-  const assignedStaff = staff.filter(
-    (member) => member.roles.length > 0 && member.outlets.length > 0,
-  );
 
   return (
     <div className="space-y-6">

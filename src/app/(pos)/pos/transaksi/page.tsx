@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import Link from "next/link";
 import {
+  ChevronDown,
   Clock3,
   FileText,
   ImageIcon,
@@ -28,10 +29,8 @@ import { SalesTrendChart } from "@/components/admin/dashboard/sales-trend-chart"
 import { ImageLightbox } from "@/components/media/image-lightbox";
 import { PrintJobAutoRefresh } from "@/components/pos/print-job-auto-refresh";
 import { getPosMediaUrl } from "@/features/pos/catalog-state";
-import {
-  getPosTransactionDetailData,
-  getPosTransactionListData,
-} from "@/features/pos/queries";
+import { getPosTransactionDetailData } from "@/features/pos/queries";
+import { getPosTransactionHistoryPageData } from "@/features/pos/transaction-history-pagination";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
@@ -115,11 +114,13 @@ function buildTransactionsHref({
   range,
   detailId,
   shiftId,
+  page,
 }: {
   query: string;
   range: PosTransactionRange;
   detailId?: string | null;
   shiftId?: string | null;
+  page?: number | null;
 }) {
   const params = new URLSearchParams();
 
@@ -137,6 +138,10 @@ function buildTransactionsHref({
 
   if (shiftId) {
     params.set("shift", shiftId);
+  }
+
+  if (page && page > 1) {
+    params.set("page", String(page));
   }
 
   const queryString = params.toString();
@@ -489,82 +494,99 @@ function TransactionCard({
 }) {
   return (
     <article
+      data-transaction-layout="compact-row-card"
       className={cn(
-        "rounded-2xl border bg-white p-4 sm:hidden",
+        "min-w-0 overflow-hidden rounded-2xl border bg-white p-4 transition sm:p-5",
         isSelected
-          ? "border-[var(--accent)] ring-2 ring-[var(--accent-soft)]"
-          : "border-[var(--border)]",
+          ? "border-[var(--accent)] bg-[var(--accent-soft)]/25 ring-2 ring-[var(--accent-soft)]"
+          : "border-[var(--border)] hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20",
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-neutral-950">
+          <p className="truncate text-sm font-semibold text-neutral-950 sm:text-base">
             {transaction.invoiceNumber}
           </p>
-          <p className="mt-1 text-xs text-[var(--muted)]">
+          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
             {formatTransactionDate(
               transaction.completedAt ?? transaction.createdAt,
-            )}
+            )} · {transaction.registerName} · {transaction.cashierName}
           </p>
         </div>
         <PaymentStatusPill transaction={transaction} />
       </div>
 
-      <div className="mt-4 rounded-2xl bg-neutral-50 p-4">
-        <div className="text-center">
-          <p className="text-xs font-medium text-[var(--muted)]">Foto Produk</p>
-          <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">
-            Foto item pada transaksi ini.
+      <div className="mt-4 grid min-w-0 gap-3 lg:grid-cols-[180px_minmax(0,1fr)_minmax(240px,0.8fr)]">
+        <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50/70 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Foto produk
+          </p>
+          <div className="mt-3 min-w-0 overflow-hidden">
+            <TransactionImagesPreview transaction={transaction} />
+          </div>
+          <p className="mt-3 text-xs font-semibold text-neutral-800">
+            {formatInteger(transaction.totalItems)} item
           </p>
         </div>
-        <div className="mt-3 flex justify-center">
-          <TransactionImagesPreview
-            transaction={transaction}
-            variant="mobile"
-          />
-        </div>
-      </div>
 
-      <div className="mt-4 space-y-2 text-sm">
-        <div className="flex items-start justify-between gap-3">
-          <span className="text-[var(--muted)]">Customer</span>
-          <span className="min-w-0 text-right">
-            <span className="block truncate font-medium text-neutral-900">
+        <div className="min-w-0 space-y-3">
+          <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50/70 p-3.5">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              <UserRound className="size-3.5" />
+              Customer
+            </div>
+            <p className="mt-2 truncate text-sm font-semibold text-neutral-950">
               {transaction.customerName ?? "Customer umum"}
-            </span>
-            {transaction.customerCode ? (
-              <span className="mt-0.5 block truncate text-xs font-medium text-[var(--accent)]">
-                {transaction.customerCode}
-              </span>
-            ) : null}
-          </span>
+            </p>
+            <p className="mt-1 truncate text-xs text-[var(--muted)]">
+              {transaction.customerCode ??
+                transaction.customerPhone ??
+                "Tanpa data customer"}
+            </p>
+          </div>
+
+          <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50/70 p-3.5">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Item transaksi
+            </p>
+            <TransactionItemsPreview transaction={transaction} />
+          </div>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[var(--muted)]">Total</span>
-          <span className="font-semibold text-neutral-950">
-            {formatMoney(transaction.totalAmount)}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[var(--muted)]">Payment</span>
-          <span className="truncate font-medium text-neutral-900">
+
+        <div className="min-w-0 rounded-xl border border-[var(--border)] bg-neutral-50/70 p-3.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Payment & total
+          </p>
+          <div className="mt-2">
+            <PaymentStatusPill transaction={transaction} />
+          </div>
+          <p className="mt-2 break-words text-xs leading-5 text-[var(--muted)]">
             {getPaymentMethodSummary(transaction)}
-          </span>
+          </p>
+          <p className="mt-1 text-xs font-medium text-neutral-700">
+            Terbayar {formatMoney(transaction.paidAmount)}
+          </p>
+          <div className="mt-3 border-t border-neutral-200 pt-3">
+            <p className="text-lg font-semibold text-neutral-950">
+              {formatMoney(transaction.totalAmount)}
+            </p>
+            {Number(transaction.discountAmount) > 0 ? (
+              <p className="mt-1 text-xs text-red-600">
+                Diskon {formatMoney(transaction.discountAmount)}
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl bg-neutral-50 p-3">
-        <TransactionItemsPreview transaction={transaction} />
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-4 flex flex-col gap-2 border-t border-[var(--border)] pt-4 sm:flex-row sm:justify-end">
         <Link
           href={detailHref}
           className={cn(
-            "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold transition hover:bg-neutral-50",
+            "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-semibold transition",
             isSelected
-              ? "border-[var(--accent)] text-[var(--accent)]"
-              : "border-[var(--border)] text-neutral-700",
+              ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+              : "border-[var(--border)] bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20",
           )}
         >
           <Package className="size-3.5" />
@@ -574,7 +596,7 @@ function TransactionCard({
           href={`/api/sales/${transaction.id}/receipt-certificate`}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 text-xs font-semibold !text-white transition hover:bg-neutral-800 [&_svg]:!text-white"
         >
           <FileText className="size-3.5" />
           Lihat Invoice
@@ -981,6 +1003,11 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
   const range = normalizeRange(getSearchParam(resolvedSearchParams, "range"));
   const detailId = getSearchParam(resolvedSearchParams, "detail")?.trim() ?? "";
   const shiftId = getSearchParam(resolvedSearchParams, "shift")?.trim() ?? "";
+  const rawPage = Number.parseInt(
+    getSearchParam(resolvedSearchParams, "page") ?? "1",
+    10,
+  );
+  const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
   const feedbackMessage =
     getSearchParam(resolvedSearchParams, "feedbackMessage")?.trim() ?? "";
   const feedbackType = normalizeFeedbackType(
@@ -990,13 +1017,14 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
     auth.outlets.find((outlet) => outlet.isPrimary) ?? auth.outlets[0];
 
   const [data, selectedTransactionDetail] = await Promise.all([
-    getPosTransactionListData({
+    getPosTransactionHistoryPageData({
       organizationId: auth.organization.id,
       outletId: primaryOutlet?.id,
       query,
       range,
       shiftId,
       timeZone: auth.organization.timezone,
+      page,
     }),
     detailId
       ? getPosTransactionDetailData({
@@ -1010,13 +1038,28 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
     query: data.query,
     range: data.range,
     shiftId: data.shiftId,
+    page: data.pagination.page,
   });
   const detailCurrentHref = buildTransactionsHref({
     query: data.query,
     range: data.range,
     detailId,
     shiftId: data.shiftId,
+    page: data.pagination.page,
   });
+  const activeFilterCount = [
+    data.query || null,
+    data.range !== "today" ? data.range : null,
+    data.shiftId,
+  ].filter(Boolean).length;
+  const firstRow =
+    data.pagination.total === 0
+      ? 0
+      : (data.pagination.page - 1) * data.pagination.pageSize + 1;
+  const lastRow = Math.min(
+    data.pagination.page * data.pagination.pageSize,
+    data.pagination.total,
+  );
   const isOutletOnline = data.outlet?.hardwareStatus === "online";
   const salesChartInsights = getPosSalesChartInsights(data.analytics);
 
@@ -1146,67 +1189,122 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
         ) : null}
       </section>
 
-      <section className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-4">
-        <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-          <label className="flex h-11 min-w-0 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3">
-            <Search className="size-4 shrink-0 text-neutral-400" />
-            <input
-              type="search"
-              name="q"
-              defaultValue={data.query}
-              placeholder="Cari invoice, customer, SKU, barcode, nama item..."
-              className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
-            />
+      <details className="group mt-5 overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] sm:px-5 [&::-webkit-details-marker]:hidden">
+          <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-neutral-50 text-neutral-600">
+            <Search className="size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-neutral-950">
+                Filter transaksi
+              </p>
+              {activeFilterCount > 0 ? (
+                <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                  {activeFilterCount} filter aktif
+                </span>
+              ) : (
+                <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                  Opsional
+                </span>
+              )}
+              <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                {rangeLabels[data.range]}
+              </span>
+              {data.shiftId ? (
+                <span className="inline-flex rounded-full border border-[var(--accent)]/20 bg-[var(--accent-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--accent)]">
+                  Shift aktif
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
+              {data.query
+                ? `Pencarian “${data.query}”. Buka untuk mengubah kata kunci atau periode.`
+                : "Buka untuk mencari invoice, customer, SKU, barcode, nama item, atau mengubah periode."}
+            </p>
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <span className="hidden text-xs font-semibold text-neutral-500 sm:inline group-open:hidden">
+              Buka filter
+            </span>
+            <span className="hidden text-xs font-semibold text-neutral-500 sm:group-open:inline">
+              Tutup filter
+            </span>
+            <ChevronDown className="size-4 text-neutral-500 transition-transform duration-200 group-open:rotate-180" />
+          </div>
+        </summary>
+
+        <div className="border-t border-[var(--border)] p-4 sm:p-5">
+          <form className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto] lg:items-end">
+            <label className="grid min-w-0 gap-1.5 text-sm font-medium text-neutral-700">
+              <span>Cari transaksi</span>
+              <div className="flex h-11 min-w-0 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3 transition focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--accent-soft)]">
+                <Search className="size-4 shrink-0 text-neutral-400" />
+                <input
+                  type="search"
+                  name="q"
+                  defaultValue={data.query}
+                  placeholder="Invoice, customer, SKU, barcode, nama item..."
+                  className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
+                />
+              </div>
+            </label>
+
+            <label className="grid gap-1.5 text-sm font-medium text-neutral-700">
+              <span>Periode</span>
+              <select
+                name="range"
+                defaultValue={data.range}
+                className="h-11 min-w-0 rounded-xl border border-[var(--border)] bg-white px-3 text-sm text-neutral-950 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)]"
+              >
+                {(Object.keys(rangeLabels) as PosTransactionRange[]).map(
+                  (rangeValue) => (
+                    <option key={rangeValue} value={rangeValue}>
+                      {rangeLabels[rangeValue]}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+
             {data.shiftId ? (
               <input type="hidden" name="shift" value={data.shiftId} />
             ) : null}
-          </label>
 
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(rangeLabels) as PosTransactionRange[]).map(
-              (rangeValue) => (
-                <button
-                  key={rangeValue}
-                  type="submit"
-                  name="range"
-                  value={rangeValue}
-                  className={cn(
-                    "h-10 rounded-xl px-3 !text-xs !font-semibold transition",
-                    data.range === rangeValue
-                      ? "bg-[var(--accent)] text-white"
-                      : "border border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
-                  )}
+            <div className="flex gap-2">
+              {activeFilterCount > 0 ? (
+                <Link
+                  href="/pos/transaksi"
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
                 >
-                  {rangeLabels[rangeValue]}
-                </button>
-              ),
-            )}
-          </div>
-        </form>
+                  Reset
+                </Link>
+              ) : null}
+              <button
+                type="submit"
+                className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-neutral-950 px-5 text-sm font-semibold !text-white transition hover:bg-neutral-800 lg:flex-none"
+              >
+                Terapkan
+              </button>
+            </div>
+          </form>
 
-        {data.query ? (
-          <p className="mt-3 text-xs text-[var(--muted)]">
-            Search aktif: <span className="font-semibold">{data.query}</span>.
-            Kosongkan kolom pencarian lalu submit untuk kembali melihat semua
-            transaksi pada rentang ini.
-          </p>
-        ) : null}
-
-        {data.shiftId ? (
-          <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
-            Filter shift aktif sedang digunakan.{" "}
-            <Link
-              href={buildTransactionsHref({
-                query: data.query,
-                range: data.range,
-              })}
-              className="font-semibold text-[var(--accent)] hover:underline"
-            >
-              Hapus filter shift
-            </Link>
-          </p>
-        ) : null}
-      </section>
+          {data.shiftId ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-neutral-50 px-3 py-2.5 text-xs text-[var(--muted)]">
+              <span>Filter shift aktif sedang digunakan.</span>
+              <Link
+                href={buildTransactionsHref({
+                  query: data.query,
+                  range: data.range,
+                })}
+                className="font-semibold text-[var(--accent)] hover:underline"
+              >
+                Hapus filter shift
+              </Link>
+            </div>
+          ) : null}
+        </div>
+      </details>
 
       {feedbackMessage ? (
         <TransactionFeedbackNotice
@@ -1228,24 +1326,35 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
         </section>
       ) : null}
 
-      {data.transactions.length === 0 ? (
-        <section className="mt-5 grid min-h-72 place-items-center rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
-          <div>
-            <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
-              <ReceiptText className="size-7" />
-            </div>
-            <h2 className="mt-4 font-semibold text-neutral-950">
-              Transaksi belum ditemukan
-            </h2>
-            <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-              Belum ada transaksi completed untuk filter ini. Coba ubah rentang
-              waktu atau kata kunci pencarian.
+      <section className="mt-5 overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+        <div className="flex flex-col gap-3 border-b border-[var(--border)] p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
+          <div className="min-w-0">
+            <h2 className="font-semibold text-neutral-950">Riwayat transaksi</h2>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+              Invoice, customer, item, payment, dan total dalam compact row-card tanpa horizontal scroll.
             </p>
           </div>
-        </section>
-      ) : (
-        <>
-          <div className="mt-5 space-y-3 sm:hidden">
+          <span className="inline-flex w-fit rounded-full border border-[var(--border)] bg-neutral-50 px-3 py-1.5 text-xs font-semibold text-neutral-700">
+            {formatInteger(data.pagination.total)} transaksi
+          </span>
+        </div>
+
+        {data.transactions.length === 0 ? (
+          <div className="grid min-h-64 place-items-center p-8 text-center">
+            <div>
+              <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                <ReceiptText className="size-7" />
+              </div>
+              <h3 className="mt-4 font-semibold text-neutral-950">
+                Transaksi belum ditemukan
+              </h3>
+              <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
+                Belum ada transaksi completed untuk filter ini. Coba ubah periode atau kata kunci pencarian.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-3 p-3 sm:p-4">
             {data.transactions.map((transaction) => (
               <TransactionCard
                 key={transaction.id}
@@ -1255,136 +1364,63 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
                   range: data.range,
                   detailId: transaction.id,
                   shiftId: data.shiftId,
+                  page: data.pagination.page,
                 })}
                 isSelected={transaction.id === detailId}
               />
             ))}
           </div>
+        )}
 
-          <section className="mt-5 hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-white sm:block">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-                <thead className="bg-neutral-50 text-left text-xs uppercase text-[var(--muted)]">
-                  <tr>
-                    <th className="px-4 py-3 !font-medium">Invoice</th>
-                    <th className="px-4 py-3 !font-medium">Foto</th>
-                    <th className="px-4 py-3 !font-medium">Customer</th>
-                    <th className="px-4 py-3 !font-medium">Item</th>
-                    <th className="px-4 py-3 !font-medium">Payment</th>
-                    <th className="px-4 py-3 text-right !font-medium">Total</th>
-                    <th className="px-4 py-3 text-right font-semibold">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {data.transactions.map((transaction) => {
-                    const isSelected = transaction.id === detailId;
-
-                    return (
-                      <tr
-                        key={transaction.id}
-                        className={cn(
-                          "align-top",
-                          isSelected && "bg-[var(--accent-soft)]/30",
-                        )}
-                      >
-                        <td className="px-4 py-4">
-                          <p className="font-semibold text-neutral-950">
-                            {transaction.invoiceNumber}
-                          </p>
-                          <p className="mt-1 text-xs text-[var(--muted)]">
-                            {formatTransactionDate(
-                              transaction.completedAt ?? transaction.createdAt,
-                            )}
-                          </p>
-                          <p className="mt-1 text-xs text-[var(--muted)]">
-                            {transaction.registerName} ·{" "}
-                            {transaction.cashierName}
-                          </p>
-                        </td>
-                        <td className="px-4 py-4">
-                          <TransactionImagesPreview transaction={transaction} />
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-start gap-2">
-                            <UserRound className="mt-0.5 size-4 shrink-0 text-neutral-400" />
-                            <div className="min-w-0">
-                              <p className="font-medium text-neutral-900">
-                                {transaction.customerName ?? "Customer umum"}
-                              </p>
-                              {transaction.customerCode ? (
-                                <p className="mt-1 text-xs font-medium text-[var(--accent)]">
-                                  {transaction.customerCode}
-                                </p>
-                              ) : null}
-                              {transaction.customerPhone ? (
-                                <p className="mt-1 text-xs text-[var(--muted)]">
-                                  {transaction.customerPhone}
-                                </p>
-                              ) : null}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="max-w-[280px] px-4 py-4">
-                          <TransactionItemsPreview transaction={transaction} />
-                        </td>
-                        <td className="px-4 py-4">
-                          <PaymentStatusPill transaction={transaction} />
-                          <p className="mt-2 text-xs text-[var(--muted)]">
-                            {getPaymentMethodSummary(transaction)}
-                          </p>
-                          <p className="mt-1 text-xs font-medium text-neutral-800">
-                            Paid {formatMoney(transaction.paidAmount)}
-                          </p>
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <p className="font-semibold text-neutral-950">
-                            {formatMoney(transaction.totalAmount)}
-                          </p>
-                          {Number(transaction.discountAmount) > 0 ? (
-                            <p className="mt-1 text-xs text-red-600">
-                              Diskon {formatMoney(transaction.discountAmount)}
-                            </p>
-                          ) : null}
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <div className="inline-flex flex-col gap-2">
-                            <Link
-                              href={buildTransactionsHref({
-                                query: data.query,
-                                range: data.range,
-                                detailId: transaction.id,
-                                shiftId: data.shiftId,
-                              })}
-                              className={cn(
-                                "inline-flex h-9 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition",
-                                isSelected
-                                  ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                                  : "border border-[var(--border)] text-neutral-700 hover:bg-neutral-50",
-                              )}
-                            >
-                              <Package className="size-3.5" />
-                              Detail
-                            </Link>
-                            <a
-                              href={`/api/sales/${transaction.id}/receipt-certificate`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                            >
-                              <FileText className="size-3.5" />
-                              Lihat Invoice
-                            </a>
-                          </div>
-                        </td>
-                      </tr>
-                    );
+        {data.pagination.total > 0 ? (
+          <div className="border-t border-[var(--border)] p-4 sm:px-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-[var(--muted)]">
+                Menampilkan {firstRow}–{lastRow} dari {data.pagination.total} transaksi · Halaman {data.pagination.page} dari {data.pagination.pageCount}
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                <Link
+                  href={buildTransactionsHref({
+                    query: data.query,
+                    range: data.range,
+                    shiftId: data.shiftId,
+                    page: Math.max(1, data.pagination.page - 1),
                   })}
-                </tbody>
-              </table>
+                  aria-disabled={data.pagination.page <= 1}
+                  className={cn(
+                    "inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition",
+                    data.pagination.page <= 1
+                      ? "pointer-events-none opacity-40"
+                      : "hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20",
+                  )}
+                >
+                  ← Sebelumnya
+                </Link>
+                <Link
+                  href={buildTransactionsHref({
+                    query: data.query,
+                    range: data.range,
+                    shiftId: data.shiftId,
+                    page: Math.min(
+                      data.pagination.pageCount,
+                      data.pagination.page + 1,
+                    ),
+                  })}
+                  aria-disabled={data.pagination.page >= data.pagination.pageCount}
+                  className={cn(
+                    "inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition",
+                    data.pagination.page >= data.pagination.pageCount
+                      ? "pointer-events-none opacity-40"
+                      : "hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20",
+                  )}
+                >
+                  Berikutnya →
+                </Link>
+              </div>
             </div>
-          </section>
-        </>
-      )}
+          </div>
+        ) : null}
+      </section>
     </PosPageContainer>
   );
 }
