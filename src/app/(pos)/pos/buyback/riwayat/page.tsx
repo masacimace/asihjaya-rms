@@ -13,7 +13,10 @@ import { redirect } from "next/navigation";
 
 import { BuybackBankPayoutSnapshotCard } from "@/components/buybacks/buyback-bank-payout-snapshot";
 import { BuybackCompactHistoryPanel } from "@/components/buybacks/buyback-compact-history-panel";
-import { BuybackHistoryPanel } from "@/components/buybacks/buyback-history-panel";
+import {
+  BuybackHistoryPanel,
+  type BuybackProcessingQuickActionData,
+} from "@/components/buybacks/buyback-history-panel";
 import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
 import {
   buybackHistoryDateRanges,
@@ -28,6 +31,13 @@ import {
   normalizeBuybackHistoryProcessingFilter,
 } from "@/features/buybacks/history-filters";
 import { getBuybackHistoryData } from "@/features/buybacks/queries";
+import { getBuybackProcessingData } from "@/features/buybacks/processing-queries";
+import { getActiveGoldPriceRates } from "@/features/pricing/metal-price-rates";
+import {
+  getActiveProductMasterOptions,
+  getProductMasterCategoryOptions,
+} from "@/features/products/product-master-queries";
+import { getActiveProductColorPresetOptions } from "@/features/settings/product-color-presets";
 import { hasPermission, requirePermission } from "@/lib/auth/session";
 
 export const metadata = {
@@ -159,6 +169,48 @@ export default async function BuybackHistoryPage({
         range: dateRange,
       }),
     );
+  }
+
+  const canCreate = hasPermission(auth, "buybacks.create");
+  let processingQuickActions: BuybackProcessingQuickActionData | undefined;
+
+  if (
+    !historyData.detail &&
+    historyData.rows.some((row) => row.pendingProcessingCount > 0)
+  ) {
+    const [
+      processingData,
+      categories,
+      productMasters,
+      colorPresets,
+      activeSaleRates,
+    ] = await Promise.all([
+      getBuybackProcessingData({
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet.id,
+      }),
+      getProductMasterCategoryOptions(auth.organization.id),
+      getActiveProductMasterOptions(auth.organization.id),
+      getActiveProductColorPresetOptions(auth.organization.id),
+      getActiveGoldPriceRates({ organizationId: auth.organization.id }),
+    ]);
+    const visibleBuybackIds = new Set(historyData.rows.map((row) => row.id));
+
+    processingQuickActions = {
+      rows: processingData.rows.filter(
+        (row) =>
+          row.status === "pending" && visibleBuybackIds.has(row.buybackId),
+      ),
+      categories,
+      productMasters,
+      colorPresets,
+      priceRates: activeSaleRates.map((rate) => ({
+        purityKey: rate.purityKey,
+        purityPercent: rate.purityPercent,
+        ratePerGram: rate.ratePerGram,
+      })),
+      canProcess: canCreate,
+    };
   }
 
   const listHref = buildListHref({
@@ -371,6 +423,7 @@ export default async function BuybackHistoryPage({
               range: dateRange,
             }}
             historyBaseHref="/pos/buyback/riwayat"
+            processingQuickActions={processingQuickActions}
           />
         </div>
       )}

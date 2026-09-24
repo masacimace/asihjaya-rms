@@ -449,9 +449,7 @@ export function PosCatalogPanel({
                       </span>
                     </span>
 
-                    {isActive ? (
-                      <Check className="size-5 shrink-0" />
-                    ) : null}
+                    {isActive ? <Check className="size-5 shrink-0" /> : null}
                   </button>
                 );
               })}
@@ -502,9 +500,7 @@ export function PosCatalogPanel({
                   <span
                     className={cn(
                       "pointer-events-none absolute left-3 top-3 rounded-full bg-white/30 px-2 py-1 text-[10px] font-medium backdrop-blur",
-                      isInCart
-                        ? "text-[var(--accent)]"
-                        : "text-neutral-600",
+                      isInCart ? "text-[var(--accent)]" : "text-neutral-600",
                     )}
                   >
                     {isInCart ? "Di Keranjang" : "Tersedia"}
@@ -557,12 +553,12 @@ export function PosCatalogPanel({
                       <p className="hidden text-[10px] font-semibold uppercase text-[var(--muted)] sm:block">
                         Harga dasar saat ini
                       </p>
-                      <p className="truncate text-xs font-semibold text-neutral-950 sm:mt-1 sm:text-[15px]">
+                      <p className="text-xs font-semibold text-neutral-950 sm:mt-1 sm:text-[15px]">
                         {basePriceAmount
                           ? formatCurrency(basePriceAmount)
                           : "Harga dinamis"}
                       </p>
-                      <p className="mt-0.5 truncate text-[9px] font-medium text-[var(--muted)] sm:text-[10px]">
+                      <p className="mt-0.5 text-[9px] font-medium text-[var(--muted)] sm:text-[10px]">
                         {item.activePricePerGram
                           ? `Standar ${formatCurrency(item.activePricePerGram)} / gr`
                           : "Atur saat transaksi"}
@@ -603,8 +599,8 @@ export function PosCatalogPanel({
               Tidak ada item tersedia
             </h2>
             <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--muted)]">
-              Cek filter pencarian, kategori, atau pastikan item inventory
-              sudah berstatus tersedia di outlet aktif.
+              Cek filter pencarian, kategori, atau pastikan item inventory sudah
+              berstatus tersedia di outlet aktif.
             </p>
           </div>
         </div>

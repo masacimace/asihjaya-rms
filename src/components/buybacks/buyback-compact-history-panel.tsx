@@ -1,6 +1,8 @@
 import { FileText, PackageCheck, Store, UserRound } from "lucide-react";
 import Link from "next/link";
 
+import { BuybackProcessingQuickActions } from "@/components/buybacks/buyback-processing-quick-actions";
+import type { BuybackProcessingQuickActionData } from "@/components/buybacks/buyback-history-panel";
 import { ProductImage } from "@/components/media/product-image";
 import type {
   BuybackHistoryData,
@@ -144,13 +146,17 @@ function getPaginationTokens(
 export function BuybackCompactHistoryPanel({
   data,
   timeZone,
+  mode = "history",
   page = 1,
   pageSize = 10,
   filters,
   historyBaseHref,
+  feedback,
+  processingQuickActions,
 }: {
   data: BuybackHistoryData;
   timeZone: string;
+  mode?: "preview" | "history";
   page?: number;
   pageSize?: number;
   filters?: {
@@ -160,6 +166,11 @@ export function BuybackCompactHistoryPanel({
     range?: string;
   };
   historyBaseHref: string;
+  feedback?: {
+    type: "success" | "error" | "info";
+    message: string;
+  } | null;
+  processingQuickActions?: BuybackProcessingQuickActionData;
 }) {
   const totalPages = Math.max(1, Math.ceil(data.totalCount / pageSize));
   const firstRow = data.totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -200,11 +211,14 @@ export function BuybackCompactHistoryPanel({
       <div className="flex flex-col gap-3 border-b border-[var(--border)] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div>
           <h2 className="text-base font-semibold text-neutral-950">
-            Riwayat transaksi Buyback
+            {mode === "preview"
+              ? "Transaksi Buyback terbaru"
+              : "Riwayat transaksi Buyback"}
           </h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-            Tinjau customer, item, payout, total Buyback, dan status pemrosesan
-            tanpa horizontal scroll.
+            {mode === "preview"
+              ? "Menampilkan 5 transaksi terakhir dengan tampilan compact yang sama seperti riwayat lengkap."
+              : "Tinjau customer, item, payout, total Buyback, dan status pemrosesan tanpa horizontal scroll."}
           </p>
         </div>
         <div className="w-fit rounded-xl bg-neutral-50 px-3 py-2 text-xs font-semibold text-neutral-700">
@@ -212,9 +226,26 @@ export function BuybackCompactHistoryPanel({
         </div>
       </div>
 
+      {feedback ? (
+        <div
+          className={cn(
+            "m-3 rounded-xl border px-3 py-2 text-sm sm:m-4",
+            feedback.type === "error"
+              ? "border-red-200 bg-red-50 text-red-700"
+              : feedback.type === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-blue-200 bg-blue-50 text-blue-700",
+          )}
+        >
+          {feedback.message}
+        </div>
+      ) : null}
+
       {data.rows.length === 0 ? (
         <div className="p-8 text-center text-sm text-[var(--muted)]">
-          Tidak ada transaksi Buyback yang cocok dengan filter.
+          {mode === "preview"
+            ? "Belum ada transaksi Buyback pada outlet ini."
+            : "Tidak ada transaksi Buyback yang cocok dengan filter."}
         </div>
       ) : (
         <div className="grid gap-3 p-3 sm:p-4">
@@ -224,6 +255,17 @@ export function BuybackCompactHistoryPanel({
             const firstItem =
               row.imagePreviews[0]?.displayName ?? "Produk Buyback";
             const additionalItems = Math.max(row.itemCount - 1, 0);
+            const pendingProcessingRows =
+              processingQuickActions?.rows.filter(
+                (processingRow) => processingRow.buybackId === row.id,
+              ) ?? [];
+            const detailHref =
+              mode === "preview"
+                ? `/pos/buyback?detail=${row.id}`
+                : buildHistoryHref({
+                    targetPage: page,
+                    detailId: row.id,
+                  });
 
             return (
               <article
@@ -233,10 +275,7 @@ export function BuybackCompactHistoryPanel({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <Link
-                      href={buildHistoryHref({
-                        targetPage: page,
-                        detailId: row.id,
-                      })}
+                      href={detailHref}
                       className="break-all text-sm font-semibold text-neutral-950 transition hover:text-[var(--accent)] sm:break-normal"
                     >
                       {row.buybackNumber}
@@ -360,16 +399,33 @@ export function BuybackCompactHistoryPanel({
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs text-[var(--muted)]">
-                    Detail transaksi memuat snapshot item, payout, rekening
-                    transfer, nota, dan histori pemrosesan.
-                  </p>
+                <div className="mt-4 flex flex-col gap-3 border-t border-[var(--border)] pt-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="min-w-0">
+                    {pendingProcessingRows.length > 0 &&
+                    processingQuickActions ? (
+                      <div>
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                          Proses item
+                        </p>
+                        <BuybackProcessingQuickActions
+                          rows={pendingProcessingRows}
+                          categories={processingQuickActions.categories}
+                          productMasters={processingQuickActions.productMasters}
+                          colorPresets={processingQuickActions.colorPresets}
+                          priceRates={processingQuickActions.priceRates}
+                          canProcess={processingQuickActions.canProcess}
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[var(--muted)]">
+                        Detail transaksi memuat snapshot item, payout, rekening
+                        transfer, nota, dan histori pemrosesan.
+                      </p>
+                    )}
+                  </div>
+
                   <Link
-                    href={buildHistoryHref({
-                      targetPage: page,
-                      detailId: row.id,
-                    })}
+                    href={detailHref}
                     className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-xs font-semibold text-neutral-800 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
                   >
                     <FileText className="size-3.5" />
@@ -382,7 +438,22 @@ export function BuybackCompactHistoryPanel({
         </div>
       )}
 
-      {data.totalCount > 0 ? (
+      {mode === "preview" && data.totalCount > 0 ? (
+        <div className="flex flex-col gap-3 border-t border-[var(--border)] p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <p className="text-xs text-[var(--muted)]">
+            Menampilkan {data.rows.length} transaksi terbaru dari{" "}
+            {data.totalCount} transaksi.
+          </p>
+          <Link
+            href="/pos/buyback/riwayat"
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-neutral-950 px-4 text-xs font-semibold !text-white transition hover:bg-neutral-800"
+          >
+            Lihat semua riwayat →
+          </Link>
+        </div>
+      ) : null}
+
+      {mode === "history" && data.totalCount > 0 ? (
         <div className="border-t border-[var(--border)] p-4 sm:px-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <p className="text-center text-xs text-[var(--muted)] lg:text-left">

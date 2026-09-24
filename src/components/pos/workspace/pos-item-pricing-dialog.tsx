@@ -213,8 +213,7 @@ function PosItemPricingDialogContent({
                 {existingItem ? "Edit item transaksi" : "Tambahkan produk"}
               </h2>
               <p className="mt-2 text-xs leading-5 text-[var(--muted)] sm:text-sm sm:leading-6">
-                Timbang ulang bila diperlukan, lalu atur Harga / Gram. Perubahan
-                berat baru disimpan ke item setelah checkout berhasil.
+                Timbang ulang bila diperlukan, lalu atur Harga / Gram.
               </p>
             </div>
 
@@ -497,14 +496,14 @@ function PosItemPricingDialogContent({
           </div>
 
           {!hasItemPricingData ? (
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 !text-xs leading-6 text-amber-800">
               {!item.purityPercent
                 ? "Kadar Persen item belum diisi. Lengkapi data produk sebelum transaksi."
                 : "Isi Berat (Gram) hasil timbang sebelum melanjutkan."}
             </div>
           ) : null}
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+          <div className="mt-5 grid gap-4 grid-cols-3">
             <MoneyField
               label="Diskon"
               icon={<BadgePercent className="size-4" />}
@@ -583,21 +582,14 @@ function PosItemPricingDialogContent({
           ) : null}
         </div>
 
-        <footer className="grid shrink-0 grid-cols-[0.8fr_1.4fr] gap-2 border-t border-[var(--border)] px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-5">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex h-11 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-          >
-            Batal
-          </button>
+        <footer className="grid shrink-0 gap-2 border-t border-[var(--border)] px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-5">
           <button
             type="button"
             onClick={submit}
             disabled={!hasValidTransactionPrice || projectedFinalAmount <= 0}
-            className="flex h-11 items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent)]/90 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
+            className="flex h-11 items-center justify-center rounded-xl bg-[var(--accent)] px-4 !text-sm !font-semibold text-white transition hover:bg-[var(--accent)]/90 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
           >
-            {existingItem ? "Simpan Item" : "Tambahkan ke Keranjang"}
+            {existingItem ? "Simpan Item" : "Tambahkan Item"}
           </button>
         </footer>
       </section>
@@ -630,7 +622,7 @@ function MoneyField({
         inputMode="numeric"
         autoComplete="off"
         placeholder="0"
-        className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-semibold text-neutral-950 outline-none transition placeholder:font-normal placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
+        className="h-11 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-950 outline-none transition placeholder:font-normal placeholder:text-neutral-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
       />
       <p className="mt-1.5 text-[11px] leading-4 text-[var(--muted)]">
         {helper}

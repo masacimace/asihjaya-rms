@@ -69,8 +69,8 @@ export function BuybackProcessingQuickActions({
       <div
         className={cn(
           variant === "mobile"
-            ? "mt-4 grid gap-2 sm:grid-cols-2"
-            : "flex min-w-[142px] flex-col gap-2",
+            ? "mt-4 grid gap-2 sm:grid-cols-1"
+            : "min-w-[142px] grid sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-2",
         )}
       >
         {pendingByType.cleaning.length > 0 ? (
@@ -79,10 +79,10 @@ export function BuybackProcessingQuickActions({
             disabled={!canProcess}
             onClick={() => openFirstPending("cleaning")}
             className={cn(
-              "inline-flex items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40",
+              "inline-flex items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 !font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40",
               variant === "mobile"
-                ? "h-10 px-3 text-xs"
-                : "min-h-9 px-3 py-2 text-xs",
+                ? "h-10 px-3 !text-xs"
+                : "min-h-9 px-3 py-2 !text-xs",
             )}
           >
             <Sparkles className="size-3.5 shrink-0" />
@@ -99,10 +99,10 @@ export function BuybackProcessingQuickActions({
             disabled={!canProcess}
             onClick={() => openFirstPending("recondition")}
             className={cn(
-              "inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40",
+              "inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 !font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40",
               variant === "mobile"
-                ? "h-10 px-3 text-xs"
-                : "min-h-9 px-3 py-2 text-xs",
+                ? "h-10 px-3 !text-xs"
+                : "min-h-9 px-3 py-2 !text-xs",
             )}
           >
             <Wrench className="size-3.5 shrink-0" />

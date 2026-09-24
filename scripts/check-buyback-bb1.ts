@@ -16,6 +16,10 @@ const queries = read("src/features/buybacks/queries.ts");
 const page = read("src/app/(pos)/pos/buyback/page.tsx");
 const workspace = read("src/components/buybacks/buyback-workspace.tsx");
 const historyPanel = read("src/components/buybacks/buyback-history-panel.tsx");
+const compactHistoryPanel = read(
+  "src/components/buybacks/buyback-compact-history-panel.tsx",
+);
+const historyPage = read("src/app/(pos)/pos/buyback/riwayat/page.tsx");
 const processingWorkspace = read(
   "src/components/buybacks/buyback-processing-workspace.tsx",
 );
@@ -156,6 +160,18 @@ assert.match(page, /getBuybackProcessingData/);
 assert.match(page, /getActiveProductMasterOptions/);
 assert.match(page, /getActiveGoldPriceRates/);
 assert.match(page, /processingQuickActions=\{processingQuickActions\}/);
+assert.match(page, /BuybackCompactHistoryPanel/);
+assert.match(page, /mode="preview"/);
+assert.match(compactHistoryPanel, /data-history-layout="compact-row-card"/);
+assert.match(compactHistoryPanel, /Transaksi Buyback terbaru/);
+assert.match(compactHistoryPanel, /Riwayat transaksi Buyback/);
+assert.match(compactHistoryPanel, /BuybackProcessingQuickActions/);
+assert.match(compactHistoryPanel, /Lihat semua riwayat/);
+assert.doesNotMatch(compactHistoryPanel, /<table/);
+assert.match(historyPage, /getBuybackProcessingData/);
+assert.match(historyPage, /getActiveProductMasterOptions/);
+assert.match(historyPage, /getActiveGoldPriceRates/);
+assert.match(historyPage, /processingQuickActions=\{processingQuickActions\}/);
 assert.match(historyPanel, /BuybackProcessingQuickActions/);
 assert.match(processingQuickActions, /Proses Cuci/);
 assert.match(processingQuickActions, /Proses Rongsok/);
