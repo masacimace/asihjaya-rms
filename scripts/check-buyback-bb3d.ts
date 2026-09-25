@@ -27,7 +27,12 @@ const telegramOutboxContract = read(
 );
 
 // Reporting: Buyback cash payout is its own cash-out bucket and must reduce net cash.
+assert.match(reportsContracts, /buybackCashFunding: number/);
 assert.match(reportsContracts, /buybackCashPayouts: number/);
+assert.match(
+  reportsQueries,
+  /referenceType\} = 'buyback_funding' then \$\{cashMovements\.amount\}/,
+);
 assert.match(
   reportsQueries,
   /referenceType\} = 'buyback' then \$\{cashMovements\.amount\}/,
@@ -66,6 +71,8 @@ assert.match(
 );
 
 // Buyback cash payout must flow through normal shift cash reconciliation.
+assert.match(buybackService, /type: "cash_in"/);
+assert.match(buybackService, /referenceType: "buyback_funding"/);
 assert.match(buybackService, /type: "cash_out"/);
 assert.match(buybackService, /referenceType: "buyback"/);
 assert.match(cashReconciliation, /summary\.cashOut \+= amount/);
