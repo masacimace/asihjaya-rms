@@ -70,10 +70,15 @@ contains(reopenSource, 'to: "cancelled"', "unsent closing cancellation");
 contains(reopenSource, "supersededAt: now", "finance snapshot supersede");
 contains(reopenSource, 'status: "open"', "same shift reopen");
 contains(reopenSource, 'action: "shift.reopen"', "reopen audit");
+assert.equal(
+  reopenSource.includes('reportType: "shift_reopened"'),
+  false,
+  "Reopen tidak boleh mengirim correction message ke owner.",
+);
 contains(
   reopenSource,
-  'reportType: "shift_reopened"',
-  "reopen correction outbox",
+  '"not_required"',
+  "reopen notice tetap kompatibel tetapi selalu silent",
 );
 contains(controlsSource, "Lanjutkan Shift Hari Ini", "POS same-day continuation UI");
 contains(
@@ -421,23 +426,19 @@ async function checkDatabase() {
     requestMetadata: { ipAddress: null, userAgent: "reopen-test" },
   });
   assert.deepEqual(secondReopen.previouslySentReportTypes, ["closing_daily"]);
-  assert.ok(
-    secondReopen.reopenNoticeStatus === "enqueued" ||
-      secondReopen.reopenNoticeStatus === "integration_disabled",
-    `Unexpected reopen notice status ${secondReopen.reopenNoticeStatus}`,
+  assert.equal(secondReopen.reopenNoticeStatus, "not_required");
+  const [notice] = await db
+    .select()
+    .from(telegramDeliveryOutbox)
+    .where(
+      eq(telegramDeliveryOutbox.eventKey, `shift-reopened:${shiftId}:r2`),
+    )
+    .limit(1);
+  assert.equal(
+    notice,
+    undefined,
+    "Reopen setelah report terkirim tetap tidak boleh membuat pesan SHIFT DIBUKA KEMBALI.",
   );
-
-  if (secondReopen.reopenNoticeStatus === "enqueued") {
-    const [notice] = await db
-      .select()
-      .from(telegramDeliveryOutbox)
-      .where(
-        eq(telegramDeliveryOutbox.eventKey, `shift-reopened:${shiftId}:r2`),
-      )
-      .limit(1);
-    assert.equal(notice?.reportType, "shift_reopened");
-    assert.equal(notice?.status, "pending");
-  }
 
   const movementRows = await db
     .select({ type: cashMovements.type })
@@ -450,7 +451,7 @@ async function checkDatabase() {
   );
 
   console.log(
-    "Controlled shift reopen database contract passed: same shift, permission guard, cancellation, superseded snapshot, revision 2 closing, correction notice, dan cash continuity.",
+    "Controlled shift reopen database contract passed: same shift, permission guard, cancellation, superseded snapshot, revision 2 closing, silent reopen, dan cash continuity.",
   );
 }
 
