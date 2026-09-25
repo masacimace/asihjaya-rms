@@ -13,10 +13,7 @@ import {
 
 import { PosItemImage } from "@/components/pos/workspace/pos-item-image";
 import { formatPosItemDecimal } from "@/features/pos/catalog-state";
-import type {
-  PosCartItem,
-  PosCustomerOption,
-} from "@/features/pos/contracts";
+import type { PosCartItem, PosCustomerOption } from "@/features/pos/contracts";
 import {
   getCustomerCode,
   getCustomerContactLabel,
@@ -87,7 +84,6 @@ export function PosCartContent({
   const hasCartItems = cartItems.length > 0;
   const hasCustomers = customers.length > 0;
   const hasCustomerSearchQuery = customerQuery.trim().length > 0;
-
 
   return (
     <div className="flex min-h-full flex-col bg-white p-4 sm:p-5">
@@ -160,7 +156,14 @@ export function PosCartContent({
                         {formatCurrency(item.finalPriceAmount)}
                       </p>
                       <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">
-                        {item.priceSource === "manual_override" ? "Harga khusus" : "Harga standar"} {formatCurrency(item.pricePerGram)} / gr · {item.basePriceSource === "manual_override" ? "Dasar khusus" : "Dasar"} {formatCurrency(item.basePriceAmount)}
+                        {item.priceSource === "manual_override"
+                          ? "Harga khusus"
+                          : "Harga standar"}{" "}
+                        {formatCurrency(item.pricePerGram)} / gr ·{" "}
+                        {item.basePriceSource === "manual_override"
+                          ? "Dasar khusus"
+                          : "Dasar"}{" "}
+                        {formatCurrency(item.basePriceAmount)}
                         {Number(item.discountAmount) > 0
                           ? ` · Diskon -${formatCurrency(item.discountAmount)}`
                           : ""}
@@ -175,10 +178,10 @@ export function PosCartContent({
                     <button
                       type="button"
                       onClick={() => onEditItemPricing(item)}
-                      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-2.5 text-[11px] font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-2.5 !text-[11px] !font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
                     >
                       <PencilLine className="size-3.5" />
-                      Edit Item
+                      Edit
                     </button>
                   </div>
                 </div>
@@ -213,7 +216,7 @@ export function PosCartContent({
             <button
               type="button"
               onClick={onOpenQuickCustomer}
-              className="inline-flex items-center gap-1.5 !text-xs font-semibold text-[var(--accent)] transition hover:text-[var(--accent)]/80"
+              className="inline-flex items-center gap-1.5 !text-sm font-semibold text-[var(--accent)] transition hover:text-[var(--accent)]/80"
             >
               <Plus className="size-3.5" />
               Tambah baru
@@ -339,7 +342,7 @@ export function PosCartContent({
                 <button
                   type="button"
                   onClick={onClearCart}
-                  className="rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] font-medium text-neutral-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                  className="rounded-lg border border-[var(--border)] px-2 py-1 !text-[11px] !font-semibold text-neutral-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                 >
                   Reset
                 </button>
@@ -357,20 +360,31 @@ export function PosCartContent({
           <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-neutral-50 p-3">
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="text-[var(--muted)]">Diskon item</span>
-              <span className={cn("font-semibold", discountAmount > 0 ? "text-red-600" : "text-neutral-800")}>
-                {discountAmount > 0 ? `-${formatCurrency(discountAmount)}` : formatCurrency(0)}
+              <span
+                className={cn(
+                  "font-semibold",
+                  discountAmount > 0 ? "text-red-600" : "text-neutral-800",
+                )}
+              >
+                {discountAmount > 0
+                  ? `-${formatCurrency(discountAmount)}`
+                  : formatCurrency(0)}
               </span>
             </div>
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="text-[var(--muted)]">Ongkos</span>
               <span className="font-semibold text-neutral-800">
-                {laborAmount > 0 ? `+${formatCurrency(laborAmount)}` : formatCurrency(0)}
+                {laborAmount > 0
+                  ? `+${formatCurrency(laborAmount)}`
+                  : formatCurrency(0)}
               </span>
             </div>
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="text-[var(--muted)]">Round</span>
               <span className="font-semibold text-neutral-800">
-                {adjustmentAmount > 0 ? `+${formatCurrency(adjustmentAmount)}` : formatCurrency(0)}
+                {adjustmentAmount > 0
+                  ? `+${formatCurrency(adjustmentAmount)}`
+                  : formatCurrency(0)}
               </span>
             </div>
           </div>

@@ -419,10 +419,10 @@ export function ProcessingDrawer({
         <div className="shrink-0 flex items-start justify-between gap-4 border-b border-[var(--border)] bg-white px-4 py-4 sm:px-5 lg:px-6">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--accent)]">
+              <span className="rounded-full bg-[var(--accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--accent)]">
                 {processingLabel(row.processingType)}
               </span>
-              <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-700">
+              <span className="rounded-full bg-neutral-100 px-2 py-1 text-[10px] font-semibold text-neutral-700">
                 {row.buybackNumber}
               </span>
             </div>
@@ -447,381 +447,383 @@ export function ProcessingDrawer({
           </button>
         </div>
 
-        <form
-          action={formAction}
-          className="min-h-0 flex flex-1 flex-col"
-        >
+        <form action={formAction} className="min-h-0 flex flex-1 flex-col">
           <div
             data-processing-scroll-body="true"
             className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:p-6"
           >
-            <input type="hidden" name="payload" value={JSON.stringify(payload)} />
+            <input
+              type="hidden"
+              name="payload"
+              value={JSON.stringify(payload)}
+            />
 
-          {state.status === "error" ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {state.message}
-            </div>
-          ) : null}
+            {state.status === "error" ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {state.message}
+              </div>
+            ) : null}
 
-          <section className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-4">
-            <div className="mb-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Barang saat Buyback diterima
-              </p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)]">
-              {row.beforeImageUrl ? (
-                <ImageLightbox
-                  src={row.beforeImageUrl}
-                  alt={`Foto sebelum ${row.sourceDisplayName}`}
-                  caption={`Foto saat Buyback diterima · ${row.sourceDisplayName}`}
-                  triggerClassName="aspect-square overflow-hidden rounded-2xl border border-[var(--border)] bg-white"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+            <section className="rounded-2xl border border-[var(--border)] bg-neutral-50/70 p-4">
+              <div className="mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  Barang saat Buyback diterima
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)]">
+                {row.beforeImageUrl ? (
+                  <ImageLightbox
                     src={row.beforeImageUrl}
                     alt={`Foto sebelum ${row.sourceDisplayName}`}
-                    className="size-full object-cover"
-                  />
-                </ImageLightbox>
-              ) : (
-                <div className="grid aspect-square place-items-center overflow-hidden rounded-2xl border border-[var(--border)] bg-white text-xs text-[var(--muted)]">
-                  Foto tidak tersedia
-                </div>
-              )}
-              <div>
-                <h3 className="font-semibold text-neutral-950">
-                  {row.sourceDisplayName}
-                </h3>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  {row.sourceCategoryName} · {row.customerName}
-                </p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                  <div className="rounded-xl bg-white px-3 py-2">
-                    <p className="text-[11px] text-[var(--muted)]">
-                      Berat Sebelum
-                    </p>
-                    <p className="mt-1 text-sm font-semibold">
-                      {row.sourceWeightGram} gr
-                    </p>
+                    caption={`Foto saat Buyback diterima · ${row.sourceDisplayName}`}
+                    triggerClassName="aspect-square overflow-hidden rounded-2xl border border-[var(--border)] bg-white"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={row.beforeImageUrl}
+                      alt={`Foto sebelum ${row.sourceDisplayName}`}
+                      className="size-full object-cover"
+                    />
+                  </ImageLightbox>
+                ) : (
+                  <div className="grid aspect-square place-items-center overflow-hidden rounded-2xl border border-[var(--border)] bg-white text-xs text-[var(--muted)]">
+                    Foto tidak tersedia
                   </div>
-                  <div className="rounded-xl bg-white px-3 py-2">
-                    <p className="text-[11px] text-[var(--muted)]">Kadar</p>
-                    <p className="mt-1 text-sm font-semibold">
-                      {row.sourcePurityPercent}%
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-white px-3 py-2">
-                    <p className="text-[11px] text-[var(--muted)]">Warna</p>
-                    <p className="mt-1 text-sm font-semibold">
-                      {row.sourceColor}
-                    </p>
+                )}
+                <div>
+                  <h3 className="font-semibold text-neutral-950">
+                    {row.sourceDisplayName}
+                  </h3>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {row.sourceCategoryName} · {row.customerName}
+                  </p>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-xl bg-white px-3 py-2">
+                      <p className="text-[11px] text-[var(--muted)]">
+                        Berat Sebelum
+                      </p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {row.sourceWeightGram} gr
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2">
+                      <p className="text-[11px] text-[var(--muted)]">Kadar</p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {row.sourcePurityPercent}%
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2">
+                      <p className="text-[11px] text-[var(--muted)]">Warna</p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {row.sourceColor}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          <section>
-            <div className="mb-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
-                Hasil setelah {processingLabel(row.processingType)}
-              </p>
-              <h3 className="mt-1 font-semibold text-neutral-950">
-                Data Physical Item final
-              </h3>
-            </div>
+            <section>
+              <div className="mb-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
+                  Hasil setelah {processingLabel(row.processingType)}
+                </p>
+                <h3 className="mt-1 font-semibold text-neutral-950">
+                  Data Physical Item final
+                </h3>
+              </div>
 
-            <div
-              data-processing-layout="balanced-final-fields"
-              className="grid items-start gap-x-4 gap-y-4 lg:grid-cols-2"
-            >
-              <div>
-                <span className="mb-2 block text-sm font-medium text-neutral-800">
-                  Kategori *
-                </span>
-                <div className="flex gap-2">
-                  <select
-                    value={categoryId}
-                    onChange={(event) => {
-                      setCategoryId(event.target.value);
-                      setMasterId("");
-                    }}
-                    className={cn(inputClassName, "min-w-0 flex-1")}
-                  >
-                    <option value="">Pilih kategori hasil</option>
-                    {localCategories
-                      .filter((item) => item.isActive)
-                      .map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.label}
+              <div
+                data-processing-layout="balanced-final-fields"
+                className="grid items-start gap-x-4 gap-y-4 lg:grid-cols-2"
+              >
+                <div>
+                  <span className="mb-2 block text-sm font-medium text-neutral-800">
+                    Kategori *
+                  </span>
+                  <div className="flex gap-2">
+                    <select
+                      value={categoryId}
+                      onChange={(event) => {
+                        setCategoryId(event.target.value);
+                        setMasterId("");
+                      }}
+                      className={cn(inputClassName, "min-w-0 flex-1")}
+                    >
+                      <option value="">Pilih kategori hasil</option>
+                      {localCategories
+                        .filter((item) => item.isActive)
+                        .map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setQuickCategoryOpen(true)}
+                      className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)]"
+                      aria-label="Tambah Kategori"
+                      title="Tambah Kategori"
+                    >
+                      <Plus className="size-5" />
+                    </button>
+                  </div>
+                  {state.fieldErrors?.categoryId ? (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {state.fieldErrors.categoryId}
+                    </p>
+                  ) : null}
+                </div>
+                <div>
+                  <span className="mb-2 block text-sm font-medium text-neutral-800">
+                    Product Master *
+                  </span>
+                  <div className="flex gap-2">
+                    <select
+                      value={masterId}
+                      onChange={(event) => setMasterId(event.target.value)}
+                      className={cn(inputClassName, "min-w-0 flex-1")}
+                    >
+                      <option value="">Pilih Product Master</option>
+                      {availableMasters.map((master) => (
+                        <option key={master.id} value={master.id}>
+                          {master.code} · {master.name}
                         </option>
                       ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setQuickCategoryOpen(true)}
-                    className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)]"
-                    aria-label="Tambah Kategori"
-                    title="Tambah Kategori"
-                  >
-                    <Plus className="size-5" />
-                  </button>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setQuickMasterOpen(true)}
+                      disabled={!category}
+                      className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
+                      aria-label="Tambah Product Master"
+                      title={
+                        category
+                          ? "Tambah Product Master"
+                          : "Pilih kategori terlebih dahulu"
+                      }
+                    >
+                      <Plus className="size-5" />
+                    </button>
+                  </div>
+                  {state.fieldErrors?.productMasterId ? (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {state.fieldErrors.productMasterId}
+                    </p>
+                  ) : null}
                 </div>
-                {state.fieldErrors?.categoryId ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.categoryId}
-                  </p>
-                ) : null}
-              </div>
-              <div>
-                <span className="mb-2 block text-sm font-medium text-neutral-800">
-                  Product Master *
-                </span>
-                <div className="flex gap-2">
-                  <select
-                    value={masterId}
-                    onChange={(event) => setMasterId(event.target.value)}
-                    className={cn(inputClassName, "min-w-0 flex-1")}
-                  >
-                    <option value="">Pilih Product Master</option>
-                    {availableMasters.map((master) => (
-                      <option key={master.id} value={master.id}>
-                        {master.code} · {master.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setQuickMasterOpen(true)}
-                    disabled={!category}
-                    className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
-                    aria-label="Tambah Product Master"
-                    title={
-                      category
-                        ? "Tambah Product Master"
-                        : "Pilih kategori terlebih dahulu"
-                    }
-                  >
-                    <Plus className="size-5" />
-                  </button>
-                </div>
-                {state.fieldErrors?.productMasterId ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.productMasterId}
-                  </p>
-                ) : null}
-              </div>
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-neutral-800">
-                  Nama Produk *
-                </span>
-                <input
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
-                  maxLength={220}
-                  className={inputClassName}
-                />
-                {state.fieldErrors?.displayName ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.displayName}
-                  </p>
-                ) : null}
-              </label>
-              <div className="block">
-                <span className="mb-2 block text-sm font-medium text-neutral-800">
-                  Warna *
-                </span>
-                <div className="flex gap-2">
-                  <select
-                    value={color}
-                    onChange={(event) => setColor(event.target.value)}
-                    className={cn(inputClassName, "min-w-0 flex-1")}
-                  >
-                    <option value="">
-                      {localColorPresets.length > 0
-                        ? "Pilih warna hasil"
-                        : "Belum ada preset warna aktif"}
-                    </option>
-                    {localColorPresets.map((preset) => (
-                      <option key={preset.id} value={preset.name}>
-                        {preset.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setQuickColorOpen(true)}
-                    className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)]"
-                    aria-label="Tambah Warna"
-                    title="Tambah Warna"
-                  >
-                    <Plus className="size-5" />
-                  </button>
-                </div>
-                {localColorPresets.length === 0 ? (
-                  <p className="mt-1.5 text-xs leading-5 text-amber-700">
-                    Gunakan tombol + untuk membuat warna tanpa meninggalkan
-                    pemrosesan.
-                  </p>
-                ) : null}
-                {state.fieldErrors?.color ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.color}
-                  </p>
-                ) : null}
-              </div>
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-neutral-800">
-                  Berat Sesudah (gr) *
-                </span>
-                <input
-                  value={weightGram}
-                  onChange={(event) =>
-                    setWeightGram(formatPosWeightInput(event.target.value))
-                  }
-                  inputMode="decimal"
-                  className={inputClassName}
-                  placeholder="1,250"
-                />
-                {state.fieldErrors?.weightGram ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.weightGram}
-                  </p>
-                ) : null}
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-neutral-800">
-                  Kadar (%) *
-                </span>
-                <input
-                  value={purityPercent}
-                  onChange={(event) => {
-                    const nextValue = formatPosWeightInput(event.target.value);
-                    setPurityPercent(nextValue);
-                    if (!exchangePurityTouched) {
-                      setExchangePurityPercent(nextValue);
-                    }
-                    setPriceTouched(false);
-                  }}
-                  inputMode="decimal"
-                  className={inputClassName}
-                  placeholder="45"
-                />
-                {state.fieldErrors?.purityPercent ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.purityPercent}
-                  </p>
-                ) : null}
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-neutral-800">
-                  Kadar Tukaran *
-                </span>
-                <input
-                  value={exchangePurityPercent}
-                  onChange={(event) => {
-                    setExchangePurityTouched(true);
-                    setExchangePurityPercent(
-                      formatPosWeightInput(event.target.value),
-                    );
-                  }}
-                  inputMode="decimal"
-                  className={inputClassName}
-                  placeholder="35"
-                />
-                {state.fieldErrors?.exchangePurityPercent ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.exchangePurityPercent}
-                  </p>
-                ) : null}
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-neutral-800">
-                  Potongan / Gram *
-                </span>
-                <div className="relative">
-                  <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
-                    Rp
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-neutral-800">
+                    Nama Produk *
                   </span>
                   <input
-                    value={deductionPerGram}
-                    onChange={(event) =>
-                      setDeductionPerGram(
-                        formatRupiahInput(event.target.value) || "0",
-                      )
-                    }
-                    inputMode="numeric"
-                    className={cn(inputClassName, "pl-9")}
-                    placeholder="0"
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    maxLength={220}
+                    className={inputClassName}
                   />
+                  {state.fieldErrors?.displayName ? (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {state.fieldErrors.displayName}
+                    </p>
+                  ) : null}
+                </label>
+                <div className="block">
+                  <span className="mb-2 block text-sm font-medium text-neutral-800">
+                    Warna *
+                  </span>
+                  <div className="flex gap-2">
+                    <select
+                      value={color}
+                      onChange={(event) => setColor(event.target.value)}
+                      className={cn(inputClassName, "min-w-0 flex-1")}
+                    >
+                      <option value="">
+                        {localColorPresets.length > 0
+                          ? "Pilih warna hasil"
+                          : "Belum ada preset warna aktif"}
+                      </option>
+                      {localColorPresets.map((preset) => (
+                        <option key={preset.id} value={preset.name}>
+                          {preset.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setQuickColorOpen(true)}
+                      className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)]"
+                      aria-label="Tambah Warna"
+                      title="Tambah Warna"
+                    >
+                      <Plus className="size-5" />
+                    </button>
+                  </div>
+                  {localColorPresets.length === 0 ? (
+                    <p className="mt-1.5 text-xs leading-5 text-amber-700">
+                      Gunakan tombol + untuk membuat warna tanpa meninggalkan
+                      pemrosesan.
+                    </p>
+                  ) : null}
+                  {state.fieldErrors?.color ? (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {state.fieldErrors.color}
+                    </p>
+                  ) : null}
                 </div>
-                {state.fieldErrors?.deductionPerGram ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.deductionPerGram}
-                  </p>
-                ) : null}
-                <p className="mt-1.5 text-[11px] leading-4 text-[var(--muted)]">
-                  Disimpan pada Physical Item final dan tidak mengubah harga
-                  dasar hasil.
-                </p>
-              </label>
-              <div className="block lg:col-span-2">
-                <span className="mb-2 block text-sm font-medium text-neutral-800">
-                  Harga / Gram Hasil *
-                </span>
-                <div className="flex gap-2">
-                  <div className="relative min-w-0 flex-1">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-neutral-800">
+                    Berat Sesudah (gr) *
+                  </span>
+                  <input
+                    value={weightGram}
+                    onChange={(event) =>
+                      setWeightGram(formatPosWeightInput(event.target.value))
+                    }
+                    inputMode="decimal"
+                    className={inputClassName}
+                    placeholder="1,250"
+                  />
+                  {state.fieldErrors?.weightGram ? (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {state.fieldErrors.weightGram}
+                    </p>
+                  ) : null}
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-neutral-800">
+                    Kadar (%) *
+                  </span>
+                  <input
+                    value={purityPercent}
+                    onChange={(event) => {
+                      const nextValue = formatPosWeightInput(
+                        event.target.value,
+                      );
+                      setPurityPercent(nextValue);
+                      if (!exchangePurityTouched) {
+                        setExchangePurityPercent(nextValue);
+                      }
+                      setPriceTouched(false);
+                    }}
+                    inputMode="decimal"
+                    className={inputClassName}
+                    placeholder="45"
+                  />
+                  {state.fieldErrors?.purityPercent ? (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {state.fieldErrors.purityPercent}
+                    </p>
+                  ) : null}
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-neutral-800">
+                    Kadar Tukaran *
+                  </span>
+                  <input
+                    value={exchangePurityPercent}
+                    onChange={(event) => {
+                      setExchangePurityTouched(true);
+                      setExchangePurityPercent(
+                        formatPosWeightInput(event.target.value),
+                      );
+                    }}
+                    inputMode="decimal"
+                    className={inputClassName}
+                    placeholder="35"
+                  />
+                  {state.fieldErrors?.exchangePurityPercent ? (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {state.fieldErrors.exchangePurityPercent}
+                    </p>
+                  ) : null}
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-neutral-800">
+                    Potongan / Gram *
+                  </span>
+                  <div className="relative">
                     <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
                       Rp
                     </span>
                     <input
-                      value={pricePerGram}
-                      onChange={(event) => {
-                        setPriceTouched(true);
-                        setPricePerGramInput(
-                          formatRupiahInput(event.target.value),
-                        );
-                      }}
+                      value={deductionPerGram}
+                      onChange={(event) =>
+                        setDeductionPerGram(
+                          formatRupiahInput(event.target.value) || "0",
+                        )
+                      }
                       inputMode="numeric"
                       className={cn(inputClassName, "pl-9")}
-                      placeholder="1.250.000"
+                      placeholder="0"
                     />
                   </div>
-                  <QuickPriceRateControl
-                    kind="sale"
-                    purityPercent={purityPercent}
-                    ratePerGram={suggestedRate}
-                    onSaved={({ purityKey, ratePerGram }) => {
-                      setRateOverrides((current) => ({
-                        ...current,
-                        [purityKey]: ratePerGram,
-                      }));
-                      setPriceTouched(false);
-                    }}
-                  />
-                </div>
-                {state.fieldErrors?.pricePerGram ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.pricePerGram}
+                  {state.fieldErrors?.deductionPerGram ? (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {state.fieldErrors.deductionPerGram}
+                    </p>
+                  ) : null}
+                  <p className="mt-1.5 text-[11px] leading-4 text-[var(--muted)]">
+                    Disimpan pada Physical Item final dan tidak mengubah harga
+                    dasar hasil.
                   </p>
-                ) : null}
-                <p
-                  className={cn(
-                    "mt-1.5 text-[11px]",
-                    suggestedRate ? "text-emerald-700" : "text-amber-700",
-                  )}
-                >
-                  {suggestedRate
-                    ? `Rate Jual Global ${formatCurrency(Number(suggestedRate))}.`
-                    : "Rate Jual Global belum tersedia untuk kadar ini."}
-                </p>
-              </div>{" "}
-            </div>
-          </section>
+                </label>
+                <div className="block lg:col-span-2">
+                  <span className="mb-2 block text-sm font-medium text-neutral-800">
+                    Harga / Gram Hasil *
+                  </span>
+                  <div className="flex gap-2">
+                    <div className="relative min-w-0 flex-1">
+                      <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
+                        Rp
+                      </span>
+                      <input
+                        value={pricePerGram}
+                        onChange={(event) => {
+                          setPriceTouched(true);
+                          setPricePerGramInput(
+                            formatRupiahInput(event.target.value),
+                          );
+                        }}
+                        inputMode="numeric"
+                        className={cn(inputClassName, "pl-9")}
+                        placeholder="1.250.000"
+                      />
+                    </div>
+                    <QuickPriceRateControl
+                      kind="sale"
+                      purityPercent={purityPercent}
+                      ratePerGram={suggestedRate}
+                      onSaved={({ purityKey, ratePerGram }) => {
+                        setRateOverrides((current) => ({
+                          ...current,
+                          [purityKey]: ratePerGram,
+                        }));
+                        setPriceTouched(false);
+                      }}
+                    />
+                  </div>
+                  {state.fieldErrors?.pricePerGram ? (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {state.fieldErrors.pricePerGram}
+                    </p>
+                  ) : null}
+                  <p
+                    className={cn(
+                      "mt-1.5 text-[11px]",
+                      suggestedRate ? "text-emerald-700" : "text-amber-700",
+                    )}
+                  >
+                    {suggestedRate
+                      ? `Rate Jual Global ${formatCurrency(Number(suggestedRate))}.`
+                      : "Rate Jual Global belum tersedia untuk kadar ini."}
+                  </p>
+                </div>{" "}
+              </div>
+            </section>
 
-          <ResultImageInput error={state.fieldErrors?.resultImage} />
-
+            <ResultImageInput error={state.fieldErrors?.resultImage} />
           </div>
 
           <div

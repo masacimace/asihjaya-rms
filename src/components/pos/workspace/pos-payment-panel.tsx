@@ -56,7 +56,6 @@ export type PosPaymentPanelProps = {
   onFinalizePayment: () => void;
 };
 
-
 export function PosPaymentPanel({
   totalAmount,
   customerDepositUsedAmount,
@@ -112,14 +111,12 @@ export function PosPaymentPanel({
     paymentsCount: payments.length,
     customerDepositBalance,
     paymentProfiles,
-      selectedMethod,
+    selectedMethod,
     selectedProfileId,
     amountInput,
     isCheckoutPending,
     isAddingPayment,
   });
-
-
 
   return (
     <div className="flex min-h-full flex-col bg-white p-4 sm:p-5">
@@ -130,10 +127,10 @@ export function PosPaymentPanel({
           disabled={isCheckoutPending || isAddingPayment}
           className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-black px-3 py-1.5 !text-xs font-semibold text-white transition hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          ← Keranjang
+          ← Kembali ke Cart
         </button>
 
-        <div className="mt-4 flex items-start justify-between gap-3">
+        <div className="mt-2 flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase text-[var(--muted)]">
               Pembayaran
@@ -298,7 +295,6 @@ export function PosPaymentPanel({
         </div>
       ) : null}
 
-
       {remainingAmount > 0 ? (
         <>
           <div className="border-b border-[var(--border)] py-4">
@@ -319,7 +315,7 @@ export function PosPaymentPanel({
                   onClick={() => onMethodChange(config.method)}
                   disabled={isCheckoutPending || isAddingPayment}
                   className={cn(
-                    "h-7 rounded-lg border px-3 !text-xs !font-semibold transition",
+                    "h-7 rounded-lg border px-3 !text-sm !font-semibold transition",
                     selectedMethod === config.method
                       ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
                       : "border-[var(--border)] bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]",
@@ -442,7 +438,6 @@ export function PosPaymentPanel({
                   ) : null}
                 </div>
               ) : null}
-
 
               <label className="block text-sm">
                 <span className="mb-2 block font-medium text-neutral-800">

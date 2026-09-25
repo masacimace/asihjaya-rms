@@ -23,7 +23,7 @@ function getPanelTitle(mode: PosPanelMode) {
   }
 
   if (mode === "payment") {
-    return "Pembayaran Manual";
+    return "Transaksi Pembayaran";
   }
 
   return "Keranjang Penjualan";
