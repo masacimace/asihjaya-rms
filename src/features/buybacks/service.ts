@@ -329,6 +329,16 @@ export async function completeBuybackTransaction({
 
     const cashPayout =
       payload.payouts.find((payout) => payout.method === "cash")?.amount ?? 0;
+    const currentExpectedCash = Number(activeShift.expectedCash ?? 0);
+
+    if (!Number.isSafeInteger(currentExpectedCash)) {
+      throw new BuybackValidationError(
+        "Saldo kas shift tidak valid. Refresh halaman lalu hubungi manager/admin.",
+      );
+    }
+
+    const buybackFundingAmount =
+      cashPayout > 0 ? Math.max(0, cashPayout - currentExpectedCash) : 0;
 
     const existingItemIds = payload.items
       .filter((item) => item.source === "asihjaya")
@@ -910,6 +920,19 @@ export async function completeBuybackTransaction({
     );
 
     if (cashPayout > 0) {
+      if (buybackFundingAmount > 0) {
+        await transaction.insert(cashMovements).values({
+          shiftId: activeShift.id,
+          type: "cash_in",
+          amount: String(buybackFundingAmount),
+          referenceType: "buyback_funding",
+          referenceId: buyback.id,
+          reason: `Dana kas tambahan otomatis untuk payout Buyback ${buybackNumber}.`,
+          createdBy: auth.user.id,
+          createdAt: now,
+        });
+      }
+
       await transaction.insert(cashMovements).values({
         shiftId: activeShift.id,
         type: "cash_out",
@@ -924,7 +947,7 @@ export async function completeBuybackTransaction({
       await transaction
         .update(shifts)
         .set({
-          expectedCash: sql`coalesce(${shifts.expectedCash}, 0) - ${cashPayout}`,
+          expectedCash: sql`coalesce(${shifts.expectedCash}, 0) + ${buybackFundingAmount} - ${cashPayout}`,
           updatedAt: now,
         })
         .where(eq(shifts.id, activeShift.id));
