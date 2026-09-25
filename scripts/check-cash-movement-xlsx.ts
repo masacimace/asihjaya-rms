@@ -102,6 +102,7 @@ const data: AdminCashMovementListData = {
     cashSales: 2_700_000,
     manualCashIn: 0,
     manualCashOut: 0,
+    buybackCashFunding: 0,
     buybackCashPayouts: 500_000,
     cashRefunds: 0,
     customerDepositCashWithdrawals: 0,
