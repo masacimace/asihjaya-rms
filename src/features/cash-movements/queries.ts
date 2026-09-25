@@ -193,6 +193,7 @@ function createEmptyData(
       cashSales: 0,
       manualCashIn: 0,
       manualCashOut: 0,
+      buybackCashFunding: 0,
       buybackCashPayouts: 0,
       cashRefunds: 0,
       customerDepositCashWithdrawals: 0,
@@ -369,8 +370,9 @@ export async function getAdminCashMovementListData(
         totalMovements: count(),
         openingBalance: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'opening_balance' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         cashSales: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_sale' then ${cashMovements.amount}::numeric else 0 end), 0)`,
-        manualCashIn: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_in' then ${cashMovements.amount}::numeric else 0 end), 0)`,
+        manualCashIn: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_in' and coalesce(${cashMovements.referenceType}, '') <> 'buyback_funding' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         manualCashOut: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and coalesce(${cashMovements.referenceType}, '') not in ('customer_deposit_withdrawal', 'buyback') then ${cashMovements.amount}::numeric else 0 end), 0)`,
+        buybackCashFunding: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_in' and ${cashMovements.referenceType} = 'buyback_funding' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         buybackCashPayouts: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and ${cashMovements.referenceType} = 'buyback' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         cashRefunds: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_refund' then ${cashMovements.amount}::numeric else 0 end), 0)`,
         customerDepositCashWithdrawals: sql<string>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and ${cashMovements.referenceType} = 'customer_deposit_withdrawal' then ${cashMovements.amount}::numeric else 0 end), 0)`,
@@ -457,6 +459,7 @@ export async function getAdminCashMovementListData(
   const cashSales = parseAmount(summaryRow?.cashSales);
   const manualCashIn = parseAmount(summaryRow?.manualCashIn);
   const manualCashOut = parseAmount(summaryRow?.manualCashOut);
+  const buybackCashFunding = parseAmount(summaryRow?.buybackCashFunding);
   const buybackCashPayouts = parseAmount(summaryRow?.buybackCashPayouts);
   const cashRefunds = parseAmount(summaryRow?.cashRefunds);
   const customerDepositCashWithdrawals = parseAmount(
@@ -467,6 +470,7 @@ export async function getAdminCashMovementListData(
     openingBalance +
     cashSales +
     manualCashIn +
+    buybackCashFunding +
     closingAdjustments -
     manualCashOut -
     buybackCashPayouts -
@@ -483,7 +487,9 @@ export async function getAdminCashMovementListData(
     referenceLabel:
       row.saleInvoiceNumber ??
       row.buybackNumber ??
-      (row.referenceType === "customer_deposit_withdrawal"
+      (row.referenceType === "buyback_funding"
+        ? "Pendanaan Buyback"
+        : row.referenceType === "customer_deposit_withdrawal"
         ? "Penarikan Dana Titip"
         : row.referenceType === "shift"
           ? "Shift kasir"
@@ -519,6 +525,7 @@ export async function getAdminCashMovementListData(
       cashSales,
       manualCashIn,
       manualCashOut,
+      buybackCashFunding,
       buybackCashPayouts,
       cashRefunds,
       customerDepositCashWithdrawals,
