@@ -311,7 +311,7 @@ function SidebarContent({
       <Link
         href="/pos"
         onClick={onNavigate}
-        className="mb-6 flex items-center gap-2 rounded-2xl px-2 py-1.5 transition hover:bg-neutral-50"
+        className="mb-6 flex items-center gap-2 rounded-2xl px-1 py-1 transition hover:bg-neutral-50"
       >
         <span className="grid shrink-0 place-items-center">
           <Image
@@ -319,7 +319,7 @@ function SidebarContent({
             alt="Asihjaya"
             width={128}
             height={128}
-            className="h-16 mb-2 w-auto object-contain"
+            className="h-14 mb-2 w-auto object-contain"
           />
         </span>
 
@@ -452,7 +452,7 @@ function SidebarContent({
           <Link
             href="/admin"
             onClick={onNavigate}
-            className="group flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-3 transition-all hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
+            className="group flex items-center gap-3 rounded-2xl border border-[var(--accent)] bg-[var(--accent-soft)] p-3 transition-all hover:bg-[var(--accent-soft)]"
           >
             <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] transition-transform group-hover:scale-105">
               <LayoutDashboard className="size-5" />

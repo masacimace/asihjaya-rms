@@ -183,7 +183,7 @@ function AdminBrandLink({
           ? "gap-2 px-1 py-1"
           : iconOnly
             ? "justify-center p-1"
-            : "gap-2 px-2 py-1.5",
+            : "gap-2 px-1 py-1",
       )}
     >
       <span className="grid shrink-0 place-items-center">
@@ -194,7 +194,7 @@ function AdminBrandLink({
           height={isMobile ? 80 : 128}
           className={cn(
             "w-auto object-contain",
-            isMobile ? "mb-2 h-16" : iconOnly ? "h-10" : "mb-2 h-16",
+            isMobile ? "mb-2 h-14" : iconOnly ? "h-10" : "mb-2 h-14",
           )}
         />
       </span>
@@ -235,8 +235,8 @@ function PosAccessCard({
       onClick={onNavigate}
       title={collapsed ? "Buka Sistem POS" : undefined}
       className={cn(
-        "group flex items-center rounded-2xl border border-[var(--border)] bg-white transition-all hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]",
-        collapsed ? "justify-center p-2" : "gap-3 p-3",
+        "group flex items-center rounded-2xl border border-[var(--accent)] bg-[var(--accent-soft)] transition-all hover:bg-[var(--accent-soft)]",
+        collapsed ? "justify-center p-1" : "gap-3 p-3",
       )}
     >
       <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] transition-transform group-hover:scale-105">
@@ -273,7 +273,6 @@ type SidebarContentProps = {
   showBrand?: boolean;
   showPosCta?: boolean;
   collapsed?: boolean;
-  onToggleCollapsed?: () => void;
 };
 
 function isNavigationActive(pathname: string, href: string) {
@@ -296,7 +295,6 @@ function SidebarContent({
   showBrand = true,
   showPosCta = true,
   collapsed = false,
-  onToggleCollapsed,
 }: SidebarContentProps) {
   const [openFlyout, setOpenFlyout] = useState<{
     label: string;
@@ -333,31 +331,10 @@ function SidebarContent({
         <div
           className={cn(
             "mb-5 flex items-center",
-            collapsed ? "flex-col gap-2" : "justify-between gap-2",
+            collapsed ? "justify-center" : "justify-start",
           )}
         >
-          <AdminBrandLink
-            onNavigate={closeAndNavigate}
-            collapsed={collapsed}
-          />
-          {onToggleCollapsed ? (
-            <button
-              type="button"
-              onClick={() => {
-                setOpenFlyout(null);
-                onToggleCollapsed();
-              }}
-              title={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
-              aria-label={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
-              className="grid size-9 shrink-0 place-items-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-950"
-            >
-              {collapsed ? (
-                <PanelLeftOpen className="size-4" />
-              ) : (
-                <PanelLeftClose className="size-4" />
-              )}
-            </button>
-          ) : null}
+          <AdminBrandLink onNavigate={closeAndNavigate} collapsed={collapsed} />
         </div>
       ) : null}
 
@@ -407,7 +384,7 @@ function SidebarContent({
                       "flex min-h-11 w-full items-center justify-center rounded-xl text-sm font-medium transition-colors",
                       isChildActive
                         ? "bg-[var(--accent-soft)] text-neutral-950"
-                        : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
+                        : "text-neutral-900 hover:bg-neutral-100 hover:text-neutral-950",
                     )}
                   >
                     <Icon
@@ -448,7 +425,7 @@ function SidebarContent({
                                   "block rounded-xl px-3 py-2.5 text-sm transition-colors",
                                   isSubActive
                                     ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
-                                    : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
+                                    : "text-neutral-900 hover:bg-neutral-100 hover:text-neutral-950",
                                 )}
                               >
                                 {child.label}
@@ -484,7 +461,10 @@ function SidebarContent({
                 </summary>
                 <div className="mt-1 flex flex-col gap-1 pl-10 pr-3">
                   {visibleChildren.map((child) => {
-                    const isSubActive = isNavigationActive(pathname, child.href);
+                    const isSubActive = isNavigationActive(
+                      pathname,
+                      child.href,
+                    );
                     return (
                       <Link
                         key={child.href}
@@ -520,7 +500,7 @@ function SidebarContent({
                 collapsed ? "justify-center px-2" : "gap-3 px-3",
                 isActive
                   ? "bg-[var(--accent-soft)] text-neutral-950"
-                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
+                  : "text-neutral-900 hover:bg-neutral-100 hover:text-neutral-950",
               )}
             >
               <Icon
@@ -655,7 +635,6 @@ export function AdminShell({
           canAccessBuybacks={user.canAccessBuybacks}
           canAccessSettings={user.canAccessSettings}
           collapsed={isDesktopSidebarCollapsed}
-          onToggleCollapsed={toggleDesktopSidebar}
         />
       </aside>
 
@@ -680,7 +659,7 @@ export function AdminShell({
                 type="button"
                 aria-label="Tutup menu"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="ml-auto grid size-10 shrink-0 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
+                className="ml-auto grid size-10 shrink-0 place-items-center rounded-xl text-neutral-900 transition hover:bg-neutral-100 hover:text-neutral-950"
               >
                 <X className="size-5" />
               </button>
@@ -713,14 +692,32 @@ export function AdminShell({
 
       <div className="flex h-dvh min-h-0 min-w-0 max-w-full flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="relative z-50 flex h-20 w-full max-w-full min-w-0 shrink-0 items-center overflow-visible border-b border-[var(--border)] bg-white/95 px-1.5 backdrop-blur sm:px-6 lg:px-8">
+        <header className="relative z-50 flex h-20 w-full max-w-full min-w-0 shrink-0 items-center overflow-visible border-b border-[var(--border)] bg-white/95 px-1.5 backdrop-blur sm:px-4 lg:px-4">
           <button
             type="button"
             aria-label="Buka navigasi"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="grid size-7 shrink-0 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950 lg:hidden"
+            className="grid size-7 shrink-0 place-items-center rounded-xl text-neutral-900 transition hover:bg-neutral-100 hover:text-neutral-950 lg:hidden"
           >
             <Menu className="size-5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleDesktopSidebar}
+            title={
+              isDesktopSidebarCollapsed ? "Perluas sidebar" : "Ciutkan sidebar"
+            }
+            aria-label={
+              isDesktopSidebarCollapsed ? "Perluas sidebar" : "Ciutkan sidebar"
+            }
+            className="mr-3 hidden size-10 shrink-0 place-items-center rounded-xl bg-neutral-100 text-neutral-900 transition hover:bg-neutral-200 hover:text-neutral-950 lg:grid"
+          >
+            {isDesktopSidebarCollapsed ? (
+              <PanelLeftOpen className="size-4" />
+            ) : (
+              <PanelLeftClose className="size-4" />
+            )}
           </button>
 
           <label className="hidden h-11 w-full max-w-md items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-4 text-sm text-[var(--muted)] md:flex">
@@ -772,7 +769,7 @@ export function AdminShell({
               type="button"
               aria-label="Notifikasi"
               onClick={() => setIsNotificationOpen(true)}
-              className="relative grid size-9 place-items-center rounded-xl text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
+              className="relative grid size-9 place-items-center rounded-xl text-neutral-900 transition hover:bg-neutral-100 hover:text-neutral-950"
             >
               <Bell className="size-5" />
 
