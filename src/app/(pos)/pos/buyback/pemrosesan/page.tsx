@@ -102,6 +102,7 @@ export default async function BuybackProcessingPage() {
           ratePerGram: rate.ratePerGram,
         }))}
         canProcess={hasPermission(auth, "buybacks.create")}
+        canPrintLabel={hasPermission(auth, "inventory.print_label")}
       />
     </PosPageContainer>
   );
