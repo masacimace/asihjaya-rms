@@ -8,6 +8,8 @@ import {
   Gem,
   LayoutDashboard,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   ReceiptText,
   ScanBarcode,
   Search,
@@ -27,6 +29,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
@@ -137,22 +140,50 @@ const navigation: NavigationItem[] = [
   },
 ] as const;
 
+const ADMIN_SIDEBAR_COLLAPSED_KEY = "asihjaya:admin-sidebar-collapsed";
+const ADMIN_SIDEBAR_PREFERENCE_EVENT = "asihjaya:admin-sidebar-preference";
+
+function subscribeSidebarPreference(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener(ADMIN_SIDEBAR_PREFERENCE_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(ADMIN_SIDEBAR_PREFERENCE_EVENT, callback);
+  };
+}
+
+function getSidebarPreferenceSnapshot() {
+  return window.localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_KEY) === "1";
+}
+
+function getSidebarPreferenceServerSnapshot() {
+  return false;
+}
+
 function AdminBrandLink({
   onNavigate,
   variant = "desktop",
+  collapsed = false,
 }: {
   onNavigate?: () => void;
   variant?: "desktop" | "mobile";
+  collapsed?: boolean;
 }) {
   const isMobile = variant === "mobile";
+  const iconOnly = !isMobile && collapsed;
 
   return (
     <Link
       href="/admin"
       onClick={onNavigate}
+      title={iconOnly ? "Asihjaya Management Dashboard" : undefined}
       className={cn(
-        "flex min-w-0 items-center gap-2 rounded-2xl transition hover:bg-neutral-50",
-        isMobile ? "px-1 py-1" : "mb-6 px-2 py-1.5",
+        "flex min-w-0 items-center rounded-2xl transition hover:bg-neutral-50",
+        isMobile
+          ? "gap-2 px-1 py-1"
+          : iconOnly
+            ? "justify-center p-1"
+            : "gap-2 px-2 py-1.5",
       )}
     >
       <span className="grid shrink-0 place-items-center">
@@ -162,55 +193,69 @@ function AdminBrandLink({
           width={isMobile ? 80 : 128}
           height={isMobile ? 80 : 128}
           className={cn(
-            "mb-2 w-auto object-contain",
-            isMobile ? "h-16" : "h-16",
+            "w-auto object-contain",
+            isMobile ? "mb-2 h-16" : iconOnly ? "h-10" : "mb-2 h-16",
           )}
         />
       </span>
 
-      <span className="min-w-0">
-        <Image
-          src="/logo/asihjaya-brand-text.png"
-          alt="Asihjaya"
-          width={128}
-          height={128}
-          className="h-7 w-auto object-contain"
-        />
-        <span
-          className={cn(
-            "block truncate font-medium text-[var(--muted)]",
-            isMobile ? "text-[12px]" : "mt-0.5 text-xs",
-          )}
-        >
-          Management Dashboard
+      {!iconOnly ? (
+        <span className="min-w-0">
+          <Image
+            src="/logo/asihjaya-brand-text.png"
+            alt="Asihjaya"
+            width={128}
+            height={128}
+            className="h-7 w-auto object-contain"
+          />
+          <span
+            className={cn(
+              "block truncate font-medium text-[var(--muted)]",
+              isMobile ? "text-[12px]" : "mt-0.5 text-xs",
+            )}
+          >
+            Management Dashboard
+          </span>
         </span>
-      </span>
+      ) : null}
     </Link>
   );
 }
 
-function PosAccessCard({ onNavigate }: { onNavigate?: () => void }) {
+function PosAccessCard({
+  onNavigate,
+  collapsed = false,
+}: {
+  onNavigate?: () => void;
+  collapsed?: boolean;
+}) {
   return (
     <Link
       href="/pos"
       onClick={onNavigate}
-      className="group flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-3 transition-all hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
+      title={collapsed ? "Buka Sistem POS" : undefined}
+      className={cn(
+        "group flex items-center rounded-2xl border border-[var(--border)] bg-white transition-all hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]",
+        collapsed ? "justify-center p-2" : "gap-3 p-3",
+      )}
     >
       <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] transition-transform group-hover:scale-105">
         <ShoppingBag className="size-5" />
       </div>
 
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-neutral-950">
-          Buka Sistem POS
-        </p>
-
-        <p className="truncate text-xs text-[var(--muted)]">
-          kasir & transaksi
-        </p>
-      </div>
-
-      <ChevronRight className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
+      {!collapsed ? (
+        <>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-neutral-950">
+              Buka Sistem POS
+            </p>
+            <p className="truncate text-xs text-[var(--muted)]">
+              kasir & transaksi
+            </p>
+          </div>
+          <ChevronRight className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
+        </>
+      ) : null}
     </Link>
   );
 }
@@ -227,12 +272,15 @@ type SidebarContentProps = {
   onNavigate?: () => void;
   showBrand?: boolean;
   showPosCta?: boolean;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 };
 
 function isNavigationActive(pathname: string, href: string) {
-  return href === "/admin"
+  const hrefPath = href.split(/[?#]/, 1)[0] || href;
+  return hrefPath === "/admin"
     ? pathname === "/admin"
-    : pathname === href || pathname.startsWith(`${href}/`);
+    : pathname === hrefPath || pathname.startsWith(`${hrefPath}/`);
 }
 
 function SidebarContent({
@@ -247,34 +295,71 @@ function SidebarContent({
   onNavigate,
   showBrand = true,
   showPosCta = true,
+  collapsed = false,
+  onToggleCollapsed,
 }: SidebarContentProps) {
+  const [openFlyout, setOpenFlyout] = useState<{
+    label: string;
+    top: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!collapsed || !openFlyout) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenFlyout(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [collapsed, openFlyout]);
+
   const visibleNavigation = navigation.filter((item) => {
-    if (item.access === "administration") {
-      return canAccessAdministration;
-    }
-
-    if (item.access === "products") {
-      return canAccessProducts;
-    }
-
-    if (item.access === "inventory") {
-      return canAccessInventory;
-    }
-
-    if (item.access === "migration") {
-      return canAccessMigration;
-    }
-
-    if (item.access === "settings") {
-      return canAccessSettings;
-    }
-
+    if (item.access === "administration") return canAccessAdministration;
+    if (item.access === "products") return canAccessProducts;
+    if (item.access === "inventory") return canAccessInventory;
+    if (item.access === "migration") return canAccessMigration;
+    if (item.access === "settings") return canAccessSettings;
     return true;
   });
 
+  const closeAndNavigate = () => {
+    setOpenFlyout(null);
+    onNavigate?.();
+  };
+
   return (
     <>
-      {showBrand ? <AdminBrandLink onNavigate={onNavigate} /> : null}
+      {showBrand ? (
+        <div
+          className={cn(
+            "mb-5 flex items-center",
+            collapsed ? "flex-col gap-2" : "justify-between gap-2",
+          )}
+        >
+          <AdminBrandLink
+            onNavigate={closeAndNavigate}
+            collapsed={collapsed}
+          />
+          {onToggleCollapsed ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpenFlyout(null);
+                onToggleCollapsed();
+              }}
+              title={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
+              aria-label={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
+              className="grid size-9 shrink-0 place-items-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-950"
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="size-4" />
+              ) : (
+                <PanelLeftClose className="size-4" />
+              )}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <nav className="space-y-1">
         {visibleNavigation.map(({ label, href, icon: Icon, children }) => {
@@ -287,6 +372,96 @@ function SidebarContent({
             const isChildActive = visibleChildren.some((child) =>
               isNavigationActive(pathname, child.href),
             );
+
+            if (collapsed) {
+              const isOpen = openFlyout?.label === label;
+              return (
+                <div key={label}>
+                  <button
+                    type="button"
+                    title={label}
+                    aria-label={label}
+                    aria-expanded={isOpen}
+                    onClick={(event) => {
+                      if (isOpen) {
+                        setOpenFlyout(null);
+                        return;
+                      }
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      const estimatedHeight = Math.max(
+                        120,
+                        visibleChildren.length * 42 + 48,
+                      );
+                      setOpenFlyout({
+                        label,
+                        top: Math.max(
+                          12,
+                          Math.min(
+                            rect.top,
+                            window.innerHeight - estimatedHeight - 12,
+                          ),
+                        ),
+                      });
+                    }}
+                    className={cn(
+                      "flex min-h-11 w-full items-center justify-center rounded-xl text-sm font-medium transition-colors",
+                      isChildActive
+                        ? "bg-[var(--accent-soft)] text-neutral-950"
+                        : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "size-[18px]",
+                        isChildActive && "text-[var(--accent)]",
+                      )}
+                    />
+                  </button>
+
+                  {isOpen ? (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Tutup submenu"
+                        onClick={() => setOpenFlyout(null)}
+                        className="fixed inset-0 z-[55] cursor-default bg-transparent"
+                      />
+                      <div
+                        className="fixed left-[76px] z-[60] ml-2 w-60 rounded-2xl border border-[var(--border)] bg-white p-2 shadow-xl"
+                        style={{ top: openFlyout.top }}
+                      >
+                        <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                          {label}
+                        </p>
+                        <div className="space-y-1">
+                          {visibleChildren.map((child) => {
+                            const isSubActive = isNavigationActive(
+                              pathname,
+                              child.href,
+                            );
+                            return (
+                              <Link
+                                key={child.href}
+                                href={child.href}
+                                onClick={closeAndNavigate}
+                                className={cn(
+                                  "block rounded-xl px-3 py-2.5 text-sm transition-colors",
+                                  isSubActive
+                                    ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
+                                    : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
+                                )}
+                              >
+                                {child.label}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              );
+            }
 
             return (
               <details key={label} open={isChildActive} className="group">
@@ -309,15 +484,12 @@ function SidebarContent({
                 </summary>
                 <div className="mt-1 flex flex-col gap-1 pl-10 pr-3">
                   {visibleChildren.map((child) => {
-                    const isSubActive = isNavigationActive(
-                      pathname,
-                      child.href,
-                    );
+                    const isSubActive = isNavigationActive(pathname, child.href);
                     return (
                       <Link
                         key={child.href}
                         href={child.href}
-                        onClick={onNavigate}
+                        onClick={closeAndNavigate}
                         className={cn(
                           "block rounded-lg px-3 py-2 text-sm transition-colors",
                           isSubActive
@@ -340,10 +512,12 @@ function SidebarContent({
             <Link
               key={href}
               href={href!}
-              onClick={onNavigate}
+              onClick={closeAndNavigate}
               aria-current={isActive ? "page" : undefined}
+              title={collapsed ? label : undefined}
               className={cn(
-                "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
+                "flex min-h-11 items-center rounded-xl text-sm font-medium transition-colors",
+                collapsed ? "justify-center px-2" : "gap-3 px-3",
                 isActive
                   ? "bg-[var(--accent-soft)] text-neutral-950"
                   : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
@@ -355,8 +529,9 @@ function SidebarContent({
                   isActive && "text-[var(--accent)]",
                 )}
               />
-
-              <span className="min-w-0 flex-1">{label}</span>
+              {!collapsed ? (
+                <span className="min-w-0 flex-1">{label}</span>
+              ) : null}
             </Link>
           );
         })}
@@ -364,7 +539,7 @@ function SidebarContent({
 
       {canAccessPos && showPosCta ? (
         <div className="mt-auto pt-6">
-          <PosAccessCard onNavigate={onNavigate} />
+          <PosAccessCard onNavigate={closeAndNavigate} collapsed={collapsed} />
         </div>
       ) : null}
     </>
@@ -382,6 +557,20 @@ export function AdminShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const isDesktopSidebarCollapsed = useSyncExternalStore(
+    subscribeSidebarPreference,
+    getSidebarPreferenceSnapshot,
+    getSidebarPreferenceServerSnapshot,
+  );
+
+  const toggleDesktopSidebar = useCallback(() => {
+    const nextValue = !isDesktopSidebarCollapsed;
+    window.localStorage.setItem(
+      ADMIN_SIDEBAR_COLLAPSED_KEY,
+      nextValue ? "1" : "0",
+    );
+    window.dispatchEvent(new Event(ADMIN_SIDEBAR_PREFERENCE_EVENT));
+  }, [isDesktopSidebarCollapsed]);
   const refreshTimerRef = useRef<number | null>(null);
   const mainScrollRef = useRef<HTMLElement>(null);
   const previousPathnameRef = useRef(pathname);
@@ -438,10 +627,25 @@ export function AdminShell({
   }, []);
 
   return (
-    <div className="fixed inset-0 grid h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid-cols-[280px_minmax(0,1fr)]">
+    <div
+      className={cn(
+        "fixed inset-0 grid h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--background)]",
+        isDesktopSidebarCollapsed
+          ? "lg:grid-cols-[76px_minmax(0,1fr)]"
+          : "lg:grid-cols-[280px_minmax(0,1fr)]",
+      )}
+    >
       {/* Sidebar desktop */}
-      <aside className="hidden h-dvh min-h-0 flex-col overflow-y-auto border-r border-[var(--border)] bg-white p-5 lg:flex">
+      <aside
+        className={cn(
+          "relative z-[56] hidden h-dvh min-h-0 flex-col border-r border-[var(--border)] bg-white lg:flex",
+          isDesktopSidebarCollapsed
+            ? "overflow-visible p-3"
+            : "overflow-y-auto p-5",
+        )}
+      >
         <SidebarContent
+          key={pathname}
           pathname={pathname}
           canAccessPos={user.canAccessPos}
           canAccessAdministration={user.canAccessAdministration}
@@ -450,6 +654,8 @@ export function AdminShell({
           canAccessMigration={user.canAccessMigration}
           canAccessBuybacks={user.canAccessBuybacks}
           canAccessSettings={user.canAccessSettings}
+          collapsed={isDesktopSidebarCollapsed}
+          onToggleCollapsed={toggleDesktopSidebar}
         />
       </aside>
 
