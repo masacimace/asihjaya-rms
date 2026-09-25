@@ -53,6 +53,8 @@ export type BuybackProcessingQuickActionData = {
   colorPresets: ProductColorPresetOption[];
   priceRates: BuybackProcessingRateOption[];
   canProcess: boolean;
+  canPrintLabel: boolean;
+  canViewInventory: boolean;
 };
 
 function formatDateTime(value: Date | null, timeZone: string) {
@@ -384,6 +386,8 @@ export function BuybackHistoryPanel({
                     colorPresets={processingQuickActions.colorPresets}
                     priceRates={processingQuickActions.priceRates}
                     canProcess={processingQuickActions.canProcess}
+                    canPrintLabel={processingQuickActions.canPrintLabel}
+                    canViewInventory={processingQuickActions.canViewInventory}
                     variant="mobile"
                   />
                 ) : null}
@@ -477,6 +481,10 @@ export function BuybackHistoryPanel({
                             colorPresets={processingQuickActions.colorPresets}
                             priceRates={processingQuickActions.priceRates}
                             canProcess={processingQuickActions.canProcess}
+                            canPrintLabel={processingQuickActions.canPrintLabel}
+                            canViewInventory={processingQuickActions.canViewInventory}
+                    canPrintLabel={processingQuickActions.canPrintLabel}
+                    canViewInventory={processingQuickActions.canViewInventory}
                           />
                         ) : null}
                         <Link
