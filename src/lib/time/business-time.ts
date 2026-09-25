@@ -155,6 +155,37 @@ function shiftCalendarParts(
 }
 
 
+export function getBusinessDateTimeForKey(
+  value: string,
+  time: string,
+  timeZone: string,
+): Date | null {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  const timeMatch = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time.trim());
+
+  if (!dateMatch || !timeMatch) return null;
+
+  const year = Number(dateMatch[1]);
+  const month = Number(dateMatch[2]);
+  const day = Number(dateMatch[3]);
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  const validationDate = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    validationDate.getUTCFullYear() !== year ||
+    validationDate.getUTCMonth() + 1 !== month ||
+    validationDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return businessDateTimeToUtc(
+    { year, month, day, hour, minute, second: 0 },
+    timeZone,
+  );
+}
+
 export function getStartOfBusinessDateKey(
   value: string,
   timeZone: string,
