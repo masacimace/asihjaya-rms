@@ -483,8 +483,6 @@ export function BuybackHistoryPanel({
                             canProcess={processingQuickActions.canProcess}
                             canPrintLabel={processingQuickActions.canPrintLabel}
                             canViewInventory={processingQuickActions.canViewInventory}
-                    canPrintLabel={processingQuickActions.canPrintLabel}
-                    canViewInventory={processingQuickActions.canViewInventory}
                           />
                         ) : null}
                         <Link
