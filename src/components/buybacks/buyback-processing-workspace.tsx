@@ -16,6 +16,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 
@@ -571,13 +572,13 @@ export function ProcessingDrawer({
               >
                 Selesai
               </button>
-              <a
+              <Link
                 href={`/admin/inventaris/item/${state.result.productItemId}`}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-800 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
               >
                 Lihat Item
                 <ArrowUpRight className="size-4" />
-              </a>
+              </Link>
             </div>
           </div>
         </div>
