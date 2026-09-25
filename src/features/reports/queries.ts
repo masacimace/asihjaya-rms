@@ -624,6 +624,7 @@ export async function getReportSummaryData(
   const cashRefunds = cash?.cashRefunds ?? 0;
   const manualCashIn = cash?.manualCashIn ?? 0;
   const manualCashOut = cash?.manualCashOut ?? 0;
+  const buybackCashFunding = cash?.buybackCashFunding ?? 0;
   const buybackCashPayouts = cash?.buybackCashPayouts ?? 0;
   const customerDepositCashWithdrawals =
     cash?.customerDepositCashWithdrawals ?? 0;
@@ -649,6 +650,7 @@ export async function getReportSummaryData(
     cashRefunds,
     manualCashIn,
     manualCashOut,
+    buybackCashFunding,
     buybackCashPayouts,
     customerDepositCashWithdrawals,
     closingAdjustments,
@@ -664,6 +666,7 @@ export async function getReportSummaryData(
     netCashMovement:
       cashSales +
       manualCashIn +
+      buybackCashFunding +
       closingAdjustments -
       cashRefunds -
       manualCashOut -
