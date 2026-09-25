@@ -528,7 +528,10 @@ export function ProcessingDrawer({
               </h3>
             </div>
 
-            <div className="grid items-start gap-x-4 gap-y-5 lg:grid-cols-2">
+            <div
+              data-processing-layout="balanced-final-fields"
+              className="grid items-start gap-x-4 gap-y-4 lg:grid-cols-2"
+            >
               <div>
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Kategori *
@@ -624,6 +627,50 @@ export function ProcessingDrawer({
                 ) : null}
               </label>
 
+              <div className="block">
+                <span className="mb-2 block text-sm font-medium text-neutral-800">
+                  Warna *
+                </span>
+                <div className="flex gap-2">
+                  <select
+                    value={color}
+                    onChange={(event) => setColor(event.target.value)}
+                    className={cn(inputClassName, "min-w-0 flex-1")}
+                  >
+                    <option value="">
+                      {localColorPresets.length > 0
+                        ? "Pilih warna hasil"
+                        : "Belum ada preset warna aktif"}
+                    </option>
+                    {localColorPresets.map((preset) => (
+                      <option key={preset.id} value={preset.name}>
+                        {preset.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setQuickColorOpen(true)}
+                    className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)]"
+                    aria-label="Tambah Warna"
+                    title="Tambah Warna"
+                  >
+                    <Plus className="size-5" />
+                  </button>
+                </div>
+                {localColorPresets.length === 0 ? (
+                  <p className="mt-1.5 text-xs leading-5 text-amber-700">
+                    Gunakan tombol + untuk membuat warna tanpa meninggalkan
+                    pemrosesan.
+                  </p>
+                ) : null}
+                {state.fieldErrors?.color ? (
+                  <p className="mt-1.5 text-xs text-red-600">
+                    {state.fieldErrors.color}
+                  </p>
+                ) : null}
+              </div>
+
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Berat Sesudah (gr) *
@@ -692,174 +739,123 @@ export function ProcessingDrawer({
                 ) : null}
               </label>
 
-              <div className="block">
+              <label className="block">
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
-                  Warna *
+                  Potongan / Gram *
+                </span>
+                <div className="relative">
+                  <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
+                    Rp
+                  </span>
+                  <input
+                    value={deductionPerGram}
+                    onChange={(event) =>
+                      setDeductionPerGram(
+                        formatRupiahInput(event.target.value) || "0",
+                      )
+                    }
+                    inputMode="numeric"
+                    className={cn(inputClassName, "pl-9")}
+                    placeholder="0"
+                  />
+                </div>
+                {state.fieldErrors?.deductionPerGram ? (
+                  <p className="mt-1.5 text-xs text-red-600">
+                    {state.fieldErrors.deductionPerGram}
+                  </p>
+                ) : null}
+                <p className="mt-1.5 text-[11px] leading-4 text-[var(--muted)]">
+                  Disimpan pada Physical Item final dan tidak mengubah harga
+                  dasar hasil.
+                </p>
+              </label>
+
+              <div className="block lg:col-span-2">
+                <span className="mb-2 block text-sm font-medium text-neutral-800">
+                  Harga / Gram Hasil *
                 </span>
                 <div className="flex gap-2">
-                  <select
-                    value={color}
-                    onChange={(event) => setColor(event.target.value)}
-                    className={cn(inputClassName, "min-w-0 flex-1")}
-                  >
-                    <option value="">
-                      {localColorPresets.length > 0
-                        ? "Pilih warna hasil"
-                        : "Belum ada preset warna aktif"}
-                    </option>
-                    {localColorPresets.map((preset) => (
-                      <option key={preset.id} value={preset.name}>
-                        {preset.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setQuickColorOpen(true)}
-                    className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)]"
-                    aria-label="Tambah Warna"
-                    title="Tambah Warna"
-                  >
-                    <Plus className="size-5" />
-                  </button>
-                </div>
-                {localColorPresets.length === 0 ? (
-                  <p className="mt-1.5 text-xs leading-5 text-amber-700">
-                    Gunakan tombol + untuk membuat warna tanpa meninggalkan
-                    pemrosesan.
-                  </p>
-                ) : null}
-                {state.fieldErrors?.color ? (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {state.fieldErrors.color}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="grid gap-4">
-                <div className="block">
-                  <span className="mb-2 block text-sm font-medium text-neutral-800">
-                    Harga / Gram Hasil *
-                  </span>
-                  <div className="flex gap-2">
-                    <div className="relative min-w-0 flex-1">
-                      <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
-                        Rp
-                      </span>
-                      <input
-                        value={pricePerGram}
-                        onChange={(event) => {
-                          setPriceTouched(true);
-                          setPricePerGramInput(
-                            formatRupiahInput(event.target.value),
-                          );
-                        }}
-                        inputMode="numeric"
-                        className={cn(inputClassName, "pl-9")}
-                        placeholder="1.250.000"
-                      />
-                    </div>
-                    <QuickPriceRateControl
-                      kind="sale"
-                      purityPercent={purityPercent}
-                      ratePerGram={suggestedRate}
-                      onSaved={({ purityKey, ratePerGram }) => {
-                        setRateOverrides((current) => ({
-                          ...current,
-                          [purityKey]: ratePerGram,
-                        }));
-                        setPriceTouched(false);
-                      }}
-                    />
-                  </div>
-                  {state.fieldErrors?.pricePerGram ? (
-                    <p className="mt-1.5 text-xs text-red-600">
-                      {state.fieldErrors.pricePerGram}
-                    </p>
-                  ) : null}
-                  <p
-                    className={cn(
-                      "mt-1.5 text-[11px]",
-                      suggestedRate ? "text-emerald-700" : "text-amber-700",
-                    )}
-                  >
-                    {suggestedRate
-                      ? `Rate Jual Global ${formatCurrency(Number(suggestedRate))}.`
-                      : "Rate Jual Global belum tersedia untuk kadar ini."}
-                  </p>
-                </div>
-
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-neutral-800">
-                    Potongan / Gram *
-                  </span>
-                  <div className="relative">
+                  <div className="relative min-w-0 flex-1">
                     <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
                       Rp
                     </span>
                     <input
-                      value={deductionPerGram}
-                      onChange={(event) =>
-                        setDeductionPerGram(
-                          formatRupiahInput(event.target.value) || "0",
-                        )
-                      }
+                      value={pricePerGram}
+                      onChange={(event) => {
+                        setPriceTouched(true);
+                        setPricePerGramInput(
+                          formatRupiahInput(event.target.value),
+                        );
+                      }}
                       inputMode="numeric"
                       className={cn(inputClassName, "pl-9")}
-                      placeholder="0"
+                      placeholder="1.250.000"
                     />
                   </div>
-                  {state.fieldErrors?.deductionPerGram ? (
-                    <p className="mt-1.5 text-xs text-red-600">
-                      {state.fieldErrors.deductionPerGram}
-                    </p>
-                  ) : null}
-                  <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-                    Disimpan pada Physical Item final dan tidak mengubah harga
-                    dasar hasil (Berat × Harga / Gram).
+                  <QuickPriceRateControl
+                    kind="sale"
+                    purityPercent={purityPercent}
+                    ratePerGram={suggestedRate}
+                    onSaved={({ purityKey, ratePerGram }) => {
+                      setRateOverrides((current) => ({
+                        ...current,
+                        [purityKey]: ratePerGram,
+                      }));
+                      setPriceTouched(false);
+                    }}
+                  />
+                </div>
+                {state.fieldErrors?.pricePerGram ? (
+                  <p className="mt-1.5 text-xs text-red-600">
+                    {state.fieldErrors.pricePerGram}
                   </p>
-                </label>
-              </div>
-            </div>
+                ) : null}
+                <p
+                  className={cn(
+                    "mt-1.5 text-[11px]",
+                    suggestedRate ? "text-emerald-700" : "text-amber-700",
+                  )}
+                >
+                  {suggestedRate
+                    ? `Rate Jual Global ${formatCurrency(Number(suggestedRate))}.`
+                    : "Rate Jual Global belum tersedia untuk kadar ini."}
+                </p>
+              </div>            </div>
           </section>
 
           <ResultImageInput error={state.fieldErrors?.resultImage} />
 
-          <div className="flex flex-col-reverse gap-2 border-t border-[var(--border)] pt-4 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isPending}
-              className="h-11 rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 disabled:opacity-50"
-            >
-              Kembali
-            </button>
-            <button
-              type="submit"
-              disabled={
-                isPending ||
-                !categoryId ||
-                !masterId ||
-                !displayName.trim() ||
-                !weightGram ||
-                !purityPercent ||
-                !exchangePurityPercent ||
-                !color.trim() ||
-                !pricePerGram ||
-                !deductionPerGram
-              }
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {isPending ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="size-4" />
-              )}
-              {isPending
-                ? "Menyimpan hasil..."
-                : `Selesaikan ${processingLabel(row.processingType)}`}
-            </button>
-          </div>
+          <div
+            data-processing-action="sticky-submit"
+            className="sticky bottom-0 z-20 -mx-4 -mb-4 border-t border-[var(--border)] bg-white/95 px-4 py-4 backdrop-blur sm:-mx-5 sm:-mb-5 sm:px-5 lg:-mx-6 lg:-mb-6 lg:px-6"
+          >
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={
+                  isPending ||
+                  !categoryId ||
+                  !masterId ||
+                  !displayName.trim() ||
+                  !weightGram ||
+                  !purityPercent ||
+                  !exchangePurityPercent ||
+                  !color.trim() ||
+                  !pricePerGram ||
+                  !deductionPerGram
+                }
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:min-w-[220px]"
+              >
+                {isPending ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="size-4" />
+                )}
+                {isPending
+                  ? "Menyimpan hasil..."
+                  : `Selesaikan ${processingLabel(row.processingType)}`}
+              </button>
+            </div>          </div>
         </form>
       </div>
 

@@ -30,7 +30,9 @@ const posShell = read("src/components/layout/pos-shell.tsx");
 const posLayout = read("src/app/(pos)/pos/layout.tsx");
 const seed = read("src/db/seed.ts");
 const productMastersAction = read("src/app/actions/product-masters.ts");
-const inventoryItemPage = read("src/app/(admin)/admin/inventaris/item/[itemId]/page.tsx");
+const inventoryItemPage = read(
+  "src/app/(admin)/admin/inventaris/item/[itemId]/page.tsx",
+);
 const buybackPriceRates = read("src/features/pricing/buyback-price-rates.ts");
 
 assert.match(schema, /export const buybacks = pgTable\(/);
@@ -45,7 +47,10 @@ assert.match(schema, /buybacks_org_idempotency_uq/);
 assert.match(migration, /CREATE TABLE "buybacks"/);
 assert.match(migration, /CREATE TABLE "buyback_items"/);
 assert.match(migration, /CREATE TABLE "buyback_payouts"/);
-assert.match(migration, /inventory_movement_type" ADD VALUE IF NOT EXISTS 'buyback'/);
+assert.match(
+  migration,
+  /inventory_movement_type" ADD VALUE IF NOT EXISTS 'buyback'/,
+);
 assert.match(migration, /'buybacks\.view'/);
 assert.match(migration, /'buybacks\.create'/);
 assert.match(migration, /buybacks_org_idempotency_uq/);
@@ -67,7 +72,10 @@ assert.match(queries, /ilike\(itemBarcodes\.barcodeValue, pattern\)/);
 assert.match(queries, /inArray\(productItems\.id, barcodeItemIds\)/);
 assert.match(queries, /lastInvoiceNumber/);
 assert.match(queries, /finalPriceAmount: saleItems\.finalPriceAmount/);
-assert.match(queries, /lastSaleFinalPriceAmount: latestSale\?\.finalPriceAmount \?\? null/);
+assert.match(
+  queries,
+  /lastSaleFinalPriceAmount: latestSale\?\.finalPriceAmount \?\? null/,
+);
 assert.match(contracts, /lastSaleFinalPriceAmount: string \| null/);
 assert.doesNotMatch(
   contracts,
@@ -114,7 +122,10 @@ assert.match(service, /buyback_item\.processing_queued/);
 assert.match(service, /transaction\.insert\(buybackItemProcessings\)/);
 assert.match(service, /status: "pending"/);
 assert.match(service, /action: "buyback\.completed"/);
-assert.match(service, /expectedCash: sql`coalesce\(\$\{shifts\.expectedCash\}, 0\) - \$\{cashPayout\}`/);
+assert.match(
+  service,
+  /expectedCash: sql`coalesce\(\$\{shifts\.expectedCash\}, 0\) - \$\{cashPayout\}`/,
+);
 assert.match(service, /metalBuybackPriceRates/);
 assert.match(service, /normalizePurityKey\(item\.purityPercent\)/);
 assert.match(service, /calculateJewelryBasePrice\(\{/);
@@ -122,8 +133,14 @@ assert.match(service, /lte\(metalBuybackPriceRates\.effectiveFrom, now\)/);
 assert.match(service, /gt\(metalBuybackPriceRates\.effectiveUntil, now\)/);
 assert.match(service, /buybackPricePerGram,/);
 assert.match(service, /recommendedBuybackAmount/);
-assert.match(service, /buybackRecommendationSource: "server_active_buyback_rate"/);
-assert.match(service, /buybackRateStatus: buybackPricePerGram \? "available" : "missing"/);
+assert.match(
+  service,
+  /buybackRecommendationSource: "server_active_buyback_rate"/,
+);
+assert.match(
+  service,
+  /buybackRateStatus: buybackPricePerGram \? "available" : "missing"/,
+);
 assert.match(inventoryItemPage, /buyback: "Buyback"/);
 
 assert.match(page, /title="Buyback Pembelian"/);
@@ -166,7 +183,10 @@ assert.match(
   /existingSearchDebounceRef/,
   "Search produk internal Buyback wajib auto-search di mobile.",
 );
-assert.match(workspace, /setTimeout\(\(\) => \{[\s\S]{0,300}searchExisting\(trimmedQuery\)[\s\S]{0,100}\}, 350\)/);
+assert.match(
+  workspace,
+  /setTimeout\(\(\) => \{[\s\S]{0,300}searchExisting\(trimmedQuery\)[\s\S]{0,100}\}, 350\)/,
+);
 assert.match(workspace, /type="search"/);
 assert.match(workspace, /enterKeyHint="search"/);
 assert.match(
@@ -203,10 +223,65 @@ assert.match(processingQuickActions, /pendingByType\.recondition\.length > 1/);
 assert.match(processingQuickActions, /ProcessingDrawer/);
 assert.match(processingWorkspace, /export function ProcessingDrawer\(/);
 
-const buybackNavOccurrences = posShell.match(/href: "\/pos\/buyback"/g)?.length ?? 0;
-assert.ok(buybackNavOccurrences >= 2, "Buyback harus tersedia pada desktop dan Menu Lainnya mobile.");
+const finalPhysicalStart = processingWorkspace.indexOf(
+  'data-processing-layout="balanced-final-fields"',
+);
+const finalPhysicalEnd = processingWorkspace.indexOf(
+  "<ResultImageInput",
+  finalPhysicalStart,
+);
+assert.ok(
+  finalPhysicalStart >= 0 && finalPhysicalEnd > finalPhysicalStart,
+  "Layout final physical processing harus ditemukan.",
+);
+const finalPhysicalSection = processingWorkspace.slice(
+  finalPhysicalStart,
+  finalPhysicalEnd,
+);
+const finalPhysicalLabels = [
+  "Kategori *",
+  "Product Master *",
+  "Nama Produk *",
+  "Warna *",
+  "Berat Sesudah (gr) *",
+  "Kadar (%) *",
+  "Kadar Tukaran *",
+  "Potongan / Gram *",
+  "Harga / Gram Hasil *",
+];
+let previousFieldIndex = -1;
+for (const label of finalPhysicalLabels) {
+  const fieldIndex = finalPhysicalSection.indexOf(label);
+  assert.ok(
+    fieldIndex > previousFieldIndex,
+    "Urutan field physical final processing harus konsisten.",
+  );
+  previousFieldIndex = fieldIndex;
+}
+
+const stickyActionStart = processingWorkspace.indexOf(
+  'data-processing-action="sticky-submit"',
+);
+assert.ok(stickyActionStart >= 0, "Sticky submit processing harus tersedia.");
+const stickyActionSection = processingWorkspace.slice(
+  stickyActionStart,
+  stickyActionStart + 2200,
+);
+assert.match(stickyActionSection, /sticky bottom-0/);
+assert.match(stickyActionSection, /sm:w-auto sm:min-w-\[220px\]/);
+assert.doesNotMatch(stickyActionSection, />\s*Kembali\s*</);
+
+const buybackNavOccurrences =
+  posShell.match(/href: "\/pos\/buyback"/g)?.length ?? 0;
+assert.ok(
+  buybackNavOccurrences >= 2,
+  "Buyback harus tersedia pada desktop dan Menu Lainnya mobile.",
+);
 assert.match(posShell, /requiresBuybackAccess/);
-assert.match(posLayout, /canAccessBuybacks: hasPermission\(auth, "buybacks\.view"\)/);
+assert.match(
+  posLayout,
+  /canAccessBuybacks: hasPermission\(auth, "buybacks\.view"\)/,
+);
 
 assert.match(seed, /code: "buybacks\.view"/);
 assert.match(seed, /code: "buybacks\.create"/);

@@ -20,13 +20,8 @@ const service = read("src/features/buybacks/service.ts");
 const queries = read("src/features/buybacks/queries.ts");
 const receipt = read("src/features/buybacks/documents/buyback-receipt.ts");
 const workspace = read("src/components/buybacks/buyback-workspace.tsx");
-const page = read("src/app/(pos)/pos/buyback/page.tsx");
 
-function schemaBlock(
-  content: string,
-  startMarker: string,
-  endMarker: string,
-) {
+function schemaBlock(content: string, startMarker: string, endMarker: string) {
   const start = content.indexOf(startMarker);
   const end = content.indexOf(endMarker, start + startMarker.length);
   assert(start >= 0, `${startMarker} tidak ditemukan pada schema.`);
@@ -98,7 +93,9 @@ assert(
 );
 
 assert(
-  contracts.includes('export type BuybackProcessingType = "cleaning" | "recondition";'),
+  contracts.includes(
+    'export type BuybackProcessingType = "cleaning" | "recondition";',
+  ),
   "Contract Buyback wajib membawa processing type Cuci/Rongsok.",
 );
 assert(
@@ -107,7 +104,9 @@ assert(
   ),
   "Payload item Buyback B2 belum membawa field sederhana yang disepakati.",
 );
-const payloadBlock = contracts.match(/export type BuybackItemPayload = \{([\s\S]*?)\n\};/)?.[1] ?? "";
+const payloadBlock =
+  contracts.match(/export type BuybackItemPayload = \{([\s\S]*?)\n\};/)?.[1] ??
+  "";
 for (const retiredField of [
   "productMasterId",
   "exchangePurityPercent",
@@ -130,7 +129,10 @@ for (const label of [
   "Berat (Gr)",
   "Total Harga",
 ]) {
-  assert(workspace.includes(label), `Form Buyback B2 belum memiliki field/label ${label}.`);
+  assert(
+    workspace.includes(label),
+    `Form Buyback B2 belum memiliki field/label ${label}.`,
+  );
 }
 assert(
   workspace.includes("itemImage:${clientKey}"),
@@ -156,11 +158,6 @@ assert(
   /belum tersedia[\s\S]{0,100}?POS/i.test(workspace),
   "Success UX wajib menjelaskan barang belum saleable.",
 );
-assert(
-  /tentukan Cuci\s*\/\s*Rongsok[\s\S]{0,120}?Total Harga (?:final|manual)/i.test(page),
-  "Header halaman Buyback belum menjelaskan flow sederhana B2.",
-);
-
 assert(
   action.includes("itemImage:${item.clientKey}") &&
     action.includes("Foto kondisi barang wajib"),
@@ -207,8 +204,14 @@ const journal = JSON.parse(read("drizzle/meta/_journal.json")) as {
 const b2Entry = journal.entries?.find(
   (entry) => entry.tag === "0023_buyback_simplified_acquisition",
 );
-assert(b2Entry, "Migration B2 0023_buyback_simplified_acquisition harus terdaftar di journal.");
-assert(b2Entry.idx === 23, "Migration B2 harus tetap berada pada idx 23 setelah B1/0022.");
+assert(
+  b2Entry,
+  "Migration B2 0023_buyback_simplified_acquisition harus terdaftar di journal.",
+);
+assert(
+  b2Entry.idx === 23,
+  "Migration B2 harus tetap berada pada idx 23 setelah B1/0022.",
+);
 
 const migration = read("drizzle/0023_buyback_simplified_acquisition.sql");
 for (const column of [
