@@ -7,6 +7,8 @@ import {
   Clock3,
   LayoutDashboard,
   PackagePlus,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pause,
   Printer,
   ReceiptText,
@@ -22,9 +24,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -83,6 +87,26 @@ type PosShellNotification = {
 };
 
 const POS_SHELL_STATUS_POLL_INTERVAL_MS = 5_000;
+const POS_SIDEBAR_COLLAPSED_KEY = "asihjaya:pos-sidebar-collapsed";
+const POS_SIDEBAR_PREFERENCE_EVENT = "asihjaya:pos-sidebar-preference";
+
+function subscribePosSidebarPreference(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener(POS_SIDEBAR_PREFERENCE_EVENT, callback);
+
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(POS_SIDEBAR_PREFERENCE_EVENT, callback);
+  };
+}
+
+function getPosSidebarPreferenceSnapshot() {
+  return window.localStorage.getItem(POS_SIDEBAR_COLLAPSED_KEY) === "1";
+}
+
+function getPosSidebarPreferenceServerSnapshot() {
+  return false;
+}
 
 const fallbackStatus: PosShellStatus = {
   outletName: "Outlet belum dipilih",
@@ -175,6 +199,7 @@ type SidebarContentProps = {
   canCreateProducts: boolean;
   canAccessBuybacks: boolean;
   onNavigate?: () => void;
+  collapsed?: boolean;
 };
 
 function isNavigationActive(pathname: string, href: string) {
@@ -294,10 +319,28 @@ function SidebarContent({
   canCreateProducts,
   canAccessBuybacks,
   onNavigate,
+  collapsed = false,
 }: SidebarContentProps) {
   const [openNavigationGroups, setOpenNavigationGroups] = useState<
     Record<string, boolean>
   >({ "/pos/transaksi": true });
+  const [openFlyout, setOpenFlyout] = useState<{
+    href: string;
+    top: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!collapsed || !openFlyout) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenFlyout(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [collapsed, openFlyout]);
 
   function toggleNavigationGroup(href: string) {
     setOpenNavigationGroups((currentGroups) => ({
@@ -306,12 +349,33 @@ function SidebarContent({
     }));
   }
 
+  const closeAndNavigate = () => {
+    setOpenFlyout(null);
+    onNavigate?.();
+  };
+
+  const visibleNavigation = navigation.filter((item) => {
+    if ("requiresProductCreate" in item && item.requiresProductCreate) {
+      return canCreateProducts;
+    }
+
+    if ("requiresBuybackAccess" in item && item.requiresBuybackAccess) {
+      return canAccessBuybacks;
+    }
+
+    return true;
+  });
+
   return (
     <>
       <Link
         href="/pos"
-        onClick={onNavigate}
-        className="mb-6 flex items-center gap-2 rounded-2xl px-1 py-1 transition hover:bg-neutral-50"
+        onClick={closeAndNavigate}
+        title={collapsed ? "AsihJaya Retail Sales Applications" : undefined}
+        className={cn(
+          "mb-6 flex items-center rounded-2xl transition hover:bg-neutral-50",
+          collapsed ? "justify-center p-1" : "gap-2 px-1 py-1",
+        )}
       >
         <span className="grid shrink-0 place-items-center">
           <Image
@@ -319,155 +383,256 @@ function SidebarContent({
             alt="Asihjaya"
             width={128}
             height={128}
-            className="h-14 mb-2 w-auto object-contain"
+            className={cn(
+              "w-auto object-contain",
+              collapsed ? "h-10" : "mb-2 h-14",
+            )}
           />
         </span>
 
-        <span className="min-w-0">
-          <Image
-            src="/logo/asihjaya-brand-text.png"
-            alt="Asihjaya"
-            width={128}
-            height={128}
-            className="h-7 w-auto object-contain"
-          />
-          <span className="mt-0.5 block truncate text-xs font-medium text-[var(--muted)]">
-            Retail Sales Applications
+        {!collapsed ? (
+          <span className="min-w-0">
+            <Image
+              src="/logo/asihjaya-brand-text.png"
+              alt="Asihjaya"
+              width={128}
+              height={128}
+              className="h-7 w-auto object-contain"
+            />
+            <span className="mt-0.5 block truncate text-xs font-medium text-[var(--muted)]">
+              Retail Sales Applications
+            </span>
           </span>
-        </span>
+        ) : null}
       </Link>
+
       <nav className="space-y-1">
-        {navigation
-          .filter((item) => {
-            if ("requiresProductCreate" in item && item.requiresProductCreate) {
-              return canCreateProducts;
-            }
+        {visibleNavigation.map((item) => {
+          const Icon = item.icon;
+          const hasChildren = "children" in item;
+          const active = hasChildren
+            ? isTransactionNavigationActive(pathname)
+            : isNavigationActive(pathname, item.href);
+          const expanded = hasChildren
+            ? Boolean(openNavigationGroups[item.href])
+            : false;
 
-            if ("requiresBuybackAccess" in item && item.requiresBuybackAccess) {
-              return canAccessBuybacks;
-            }
-
-            return true;
-          })
-          .map((item) => {
-            const Icon = item.icon;
-            const hasChildren = "children" in item;
-            const active = hasChildren
-              ? isTransactionNavigationActive(pathname)
-              : isNavigationActive(pathname, item.href);
-            const expanded = hasChildren
-              ? Boolean(openNavigationGroups[item.href])
-              : false;
+          if (hasChildren && collapsed) {
+            const isOpen = openFlyout?.href === item.href;
 
             return (
               <div key={item.href}>
-                {hasChildren ? (
-                  <button
-                    type="button"
-                    onClick={() => toggleNavigationGroup(item.href)}
-                    aria-expanded={expanded}
+                <button
+                  type="button"
+                  title={item.label}
+                  aria-label={item.label}
+                  aria-expanded={isOpen}
+                  onClick={(event) => {
+                    if (isOpen) {
+                      setOpenFlyout(null);
+                      return;
+                    }
+
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const estimatedHeight = item.children.length * 42 + 48;
+
+                    setOpenFlyout({
+                      href: item.href,
+                      top: Math.max(
+                        12,
+                        Math.min(
+                          rect.top,
+                          window.innerHeight - estimatedHeight - 12,
+                        ),
+                      ),
+                    });
+                  }}
+                  className={cn(
+                    "flex min-h-11 w-full items-center justify-center rounded-xl transition-colors",
+                    active
+                      ? "bg-[var(--accent-soft)] text-neutral-950"
+                      : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
+                  )}
+                >
+                  <Icon
                     className={cn(
-                      "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left !text-sm !font-medium transition-colors",
-                      active
-                        ? "bg-[var(--accent-soft)] text-neutral-950"
-                        : "text-black hover:bg-neutral-100 hover:text-neutral-950",
+                      "size-[18px]",
+                      active && "text-[var(--accent)]",
                     )}
-                  >
-                    <Icon
-                      className={cn(
-                        "size-[18px] shrink-0",
-                        active && "text-[var(--accent)]",
-                      )}
+                  />
+                </button>
+
+                {isOpen ? (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Tutup submenu transaksi"
+                      onClick={() => setOpenFlyout(null)}
+                      className="fixed inset-0 z-[55] cursor-default bg-transparent"
                     />
+                    <div
+                      className="fixed left-[76px] z-[60] ml-2 w-60 rounded-2xl border border-[var(--border)] bg-white p-2 shadow-xl"
+                      style={{ top: openFlyout.top }}
+                    >
+                      <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                        {item.label}
+                      </p>
 
-                    <span className="min-w-0 flex-1">{item.label}</span>
+                      <div className="space-y-1">
+                        {item.children.map((child) => {
+                          const ChildIcon = child.icon;
+                          const childActive = isNavigationActive(
+                            pathname,
+                            child.href,
+                          );
 
-                    <ChevronRight
-                      className={cn(
-                        "size-4 shrink-0 text-neutral-400 transition-transform",
-                        expanded && "rotate-90",
-                        active && "text-[var(--accent)]",
-                      )}
-                    />
-                  </button>
-                ) : (
-                  <Link
-                    href={item.href}
-                    onClick={onNavigate}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
-                      active
-                        ? "bg-[var(--accent-soft)] text-neutral-950"
-                        : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
-                    )}
-                  >
-                    <Icon
-                      className={cn(
-                        "size-[18px] shrink-0",
-                        active && "text-[var(--accent)]",
-                      )}
-                    />
-
-                    <span className="min-w-0 flex-1">{item.label}</span>
-                  </Link>
-                )}
-
-                {hasChildren && expanded ? (
-                  <div className="ml-[22px] mt-1 space-y-1 border-l border-[var(--border)] pl-3">
-                    {item.children.map((child) => {
-                      const ChildIcon = child.icon;
-                      const childActive = isNavigationActive(
-                        pathname,
-                        child.href,
-                      );
-
-                      return (
-                        <Link
-                          key={child.href}
-                          href={child.href}
-                          onClick={onNavigate}
-                          aria-current={childActive ? "page" : undefined}
-                          className={cn(
-                            "flex min-h-9 items-center gap-2.5 rounded-lg px-3 text-xs font-semibold transition-colors",
-                            childActive
-                              ? "bg-white text-[var(--accent)] shadow-sm ring-1 ring-[var(--border)]"
-                              : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900",
-                          )}
-                        >
-                          <ChildIcon className="size-4 shrink-0" />
-                          <span>{child.label}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
+                          return (
+                            <Link
+                              key={child.href}
+                              href={child.href}
+                              onClick={closeAndNavigate}
+                              aria-current={childActive ? "page" : undefined}
+                              className={cn(
+                                "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                                childActive
+                                  ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
+                                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
+                              )}
+                            >
+                              <ChildIcon className="size-4 shrink-0" />
+                              <span>{child.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
                 ) : null}
               </div>
             );
-          })}
+          }
+
+          return (
+            <div key={item.href}>
+              {hasChildren ? (
+                <button
+                  type="button"
+                  onClick={() => toggleNavigationGroup(item.href)}
+                  aria-expanded={expanded}
+                  className={cn(
+                    "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left !text-sm !font-medium transition-colors",
+                    active
+                      ? "bg-[var(--accent-soft)] text-neutral-950"
+                      : "text-black hover:bg-neutral-100 hover:text-neutral-950",
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "size-[18px] shrink-0",
+                      active && "text-[var(--accent)]",
+                    )}
+                  />
+
+                  <span className="min-w-0 flex-1">{item.label}</span>
+
+                  <ChevronRight
+                    className={cn(
+                      "size-4 shrink-0 text-neutral-400 transition-transform",
+                      expanded && "rotate-90",
+                      active && "text-[var(--accent)]",
+                    )}
+                  />
+                </button>
+              ) : (
+                <Link
+                  href={item.href}
+                  onClick={closeAndNavigate}
+                  aria-current={active ? "page" : undefined}
+                  title={collapsed ? item.label : undefined}
+                  className={cn(
+                    "flex min-h-11 items-center rounded-xl text-sm font-medium transition-colors",
+                    collapsed ? "justify-center px-2" : "gap-3 px-3",
+                    active
+                      ? "bg-[var(--accent-soft)] text-neutral-950"
+                      : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "size-[18px] shrink-0",
+                      active && "text-[var(--accent)]",
+                    )}
+                  />
+
+                  {!collapsed ? (
+                    <span className="min-w-0 flex-1">{item.label}</span>
+                  ) : null}
+                </Link>
+              )}
+
+              {hasChildren && expanded ? (
+                <div className="ml-[22px] mt-1 space-y-1 border-l border-[var(--border)] pl-3">
+                  {item.children.map((child) => {
+                    const ChildIcon = child.icon;
+                    const childActive = isNavigationActive(
+                      pathname,
+                      child.href,
+                    );
+
+                    return (
+                      <Link
+                        key={child.href}
+                        href={child.href}
+                        onClick={closeAndNavigate}
+                        aria-current={childActive ? "page" : undefined}
+                        className={cn(
+                          "flex min-h-9 items-center gap-2.5 rounded-lg px-3 text-xs font-semibold transition-colors",
+                          childActive
+                            ? "bg-white text-[var(--accent)] shadow-sm ring-1 ring-[var(--border)]"
+                            : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900",
+                        )}
+                      >
+                        <ChildIcon className="size-4 shrink-0" />
+                        <span>{child.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </nav>
 
       {canAccessAdmin ? (
         <div className="mt-auto pt-6">
           <Link
             href="/admin"
-            onClick={onNavigate}
-            className="group flex items-center gap-3 rounded-2xl border border-[var(--accent)] bg-[var(--accent-soft)] p-3 transition-all hover:bg-[var(--accent-soft)]"
+            onClick={closeAndNavigate}
+            title={collapsed ? "Dashboard Admin" : undefined}
+            className={cn(
+              "group flex items-center rounded-2xl border border-[var(--accent)] bg-[var(--accent-soft)] transition-all hover:bg-[var(--accent-soft)]",
+              collapsed ? "justify-center p-1" : "gap-3 p-3",
+            )}
           >
             <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] transition-transform group-hover:scale-105">
               <LayoutDashboard className="size-5" />
             </div>
 
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-neutral-950">
-                Dashboard Admin
-              </p>
-              <p className="truncate text-xs text-[var(--muted)]">
-                Kelola operasional
-              </p>
-            </div>
+            {!collapsed ? (
+              <>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-neutral-950">
+                    Dashboard Admin
+                  </p>
+                  <p className="truncate text-xs text-[var(--muted)]">
+                    Kelola operasional
+                  </p>
+                </div>
 
-            <ChevronRight className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
+                <ChevronRight className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
+              </>
+            ) : null}
           </Link>
         </div>
       ) : null}
@@ -486,6 +651,21 @@ export function PosShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const isDesktopSidebarCollapsed = useSyncExternalStore(
+    subscribePosSidebarPreference,
+    getPosSidebarPreferenceSnapshot,
+    getPosSidebarPreferenceServerSnapshot,
+  );
+
+  const toggleDesktopSidebar = useCallback(() => {
+    const nextValue = !isDesktopSidebarCollapsed;
+    window.localStorage.setItem(
+      POS_SIDEBAR_COLLAPSED_KEY,
+      nextValue ? "1" : "0",
+    );
+    window.dispatchEvent(new Event(POS_SIDEBAR_PREFERENCE_EVENT));
+  }, [isDesktopSidebarCollapsed]);
+
   const [liveOperationalStatus, setLiveOperationalStatus] =
     useState<PosShellStatus | null>(null);
   const operationalStatus = liveOperationalStatus ?? status ?? fallbackStatus;
@@ -620,14 +800,30 @@ export function PosShell({
   }
 
   return (
-    <div className="h-dvh max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
+    <div
+      className={cn(
+        "h-dvh max-w-[100vw] overflow-hidden bg-[var(--background)] lg:grid",
+        isDesktopSidebarCollapsed
+          ? "lg:grid-cols-[76px_minmax(0,1fr)]"
+          : "lg:grid-cols-[272px_minmax(0,1fr)]",
+      )}
+    >
       {/* Sidebar desktop */}
-      <aside className="hidden h-dvh min-h-0 flex-col overflow-y-auto overflow-x-hidden border-r border-[var(--border)] bg-white p-5 lg:flex">
+      <aside
+        className={cn(
+          "relative z-[56] hidden h-dvh min-h-0 flex-col border-r border-[var(--border)] bg-white lg:flex",
+          isDesktopSidebarCollapsed
+            ? "overflow-visible p-3"
+            : "overflow-y-auto overflow-x-hidden p-5",
+        )}
+      >
         <SidebarContent
+          key={pathname}
           pathname={pathname}
           canAccessAdmin={user.canAccessAdmin}
           canCreateProducts={user.canCreateProducts}
           canAccessBuybacks={user.canAccessBuybacks}
+          collapsed={isDesktopSidebarCollapsed}
         />
       </aside>
 
@@ -751,7 +947,7 @@ export function PosShell({
 
       <div className="flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="sticky top-0 z-40 flex h-[72px] shrink-0 items-center gap-3 overflow-visible border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur sm:px-5 lg:px-6">
+        <header className="sticky top-0 z-40 flex h-[72px] shrink-0 items-center gap-3 overflow-visible border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur sm:px-4 lg:px-4">
           <Link
             href="/pos"
             className="flex min-w-0 items-center gap-2 lg:hidden"
@@ -779,6 +975,24 @@ export function PosShell({
               </span>
             </span>
           </Link>
+
+          <button
+            type="button"
+            onClick={toggleDesktopSidebar}
+            title={
+              isDesktopSidebarCollapsed ? "Perluas sidebar" : "Ciutkan sidebar"
+            }
+            aria-label={
+              isDesktopSidebarCollapsed ? "Perluas sidebar" : "Ciutkan sidebar"
+            }
+            className="hidden size-10 shrink-0 place-items-center rounded-xl bg-neutral-100 text-neutral-900 transition hover:bg-neutral-200 hover:text-neutral-950 lg:grid"
+          >
+            {isDesktopSidebarCollapsed ? (
+              <PanelLeftOpen className="size-4" />
+            ) : (
+              <PanelLeftClose className="size-4" />
+            )}
+          </button>
 
           <form
             onSubmit={handleTopbarSearchSubmit}
