@@ -63,6 +63,15 @@ assert(
   "Action destination/test/manual retry wajib tersedia.",
 );
 assert(
+  pageSource.includes('name="dailyReportNotBefore"') &&
+    pageSource.includes('name="dailyReportGraceMinutes"') &&
+    actionSource.includes("dailyReportNotBefore") &&
+    actionSource.includes("dailyReportGraceMinutes") &&
+    repositorySource.includes("dailyReportNotBefore") &&
+    repositorySource.includes("dailyReportGraceMinutes"),
+  "Finalisasi Daily Report wajib configurable dari Telegram Report Settings.",
+);
+assert(
   repositorySource.includes("manuallyRetryTelegramDelivery") &&
     repositorySource.includes('from: "failed"') &&
     repositorySource.includes('to: "retry"'),
