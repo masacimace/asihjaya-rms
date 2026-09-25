@@ -106,6 +106,15 @@ assert(
 );
 
 assert(
+  workspace.includes("QuickLabelPrintButton") &&
+    workspace.includes('fetch("/api/print-jobs"') &&
+    workspace.includes("Cetak Label") &&
+    workspace.includes("Cetak Lagi") &&
+    page.includes('hasPermission(auth, "inventory.print_label")'),
+  "Processing selesai wajib menyediakan quick print dengan permission label existing.",
+);
+
+assert(
   service.includes("calculateJewelryBasePrice({") &&
     !service.includes("pricePerGram: payload.pricePerGram -"),
   "Potongan/Gram metadata tidak boleh mengubah kalkulasi sellingAmount hasil.",
