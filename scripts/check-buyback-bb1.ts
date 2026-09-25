@@ -259,17 +259,51 @@ for (const label of finalPhysicalLabels) {
   previousFieldIndex = fieldIndex;
 }
 
-const stickyActionStart = processingWorkspace.indexOf(
-  'data-processing-action="sticky-submit"',
+const processingFormStart = processingWorkspace.indexOf(
+  'className="min-h-0 flex flex-1 flex-col"',
 );
-assert.ok(stickyActionStart >= 0, "Sticky submit processing harus tersedia.");
-const stickyActionSection = processingWorkspace.slice(
-  stickyActionStart,
-  stickyActionStart + 2200,
+const processingScrollBodyStart = processingWorkspace.indexOf(
+  'data-processing-scroll-body="true"',
 );
-assert.match(stickyActionSection, /sticky bottom-0/);
-assert.match(stickyActionSection, /sm:w-auto sm:min-w-\[220px\]/);
-assert.doesNotMatch(stickyActionSection, />\s*Kembali\s*</);
+const dockedActionStart = processingWorkspace.indexOf(
+  'data-processing-action="docked-submit"',
+);
+const processingFormEnd = processingWorkspace.indexOf(
+  "</form>",
+  dockedActionStart,
+);
+
+assert.ok(processingFormStart >= 0, "Form processing flex-column harus tersedia.");
+assert.ok(
+  processingScrollBodyStart > processingFormStart,
+  "Scrollable processing body harus berada di dalam form.",
+);
+assert.ok(
+  dockedActionStart > processingScrollBodyStart,
+  "Docked submit processing harus berada di luar scroll body.",
+);
+assert.ok(
+  processingFormEnd > dockedActionStart,
+  "Docked submit harus tetap berada di dalam form processing.",
+);
+
+const processingScrollSection = processingWorkspace.slice(
+  processingScrollBodyStart,
+  dockedActionStart,
+);
+assert.match(processingScrollSection, /min-h-0 flex-1[\s\S]{0,160}overflow-y-auto/);
+assert.match(processingScrollSection, /<ResultImageInput/);
+
+const dockedActionSection = processingWorkspace.slice(
+  dockedActionStart,
+  processingFormEnd,
+);
+assert.match(dockedActionSection, /shrink-0/);
+assert.match(dockedActionSection, /border-t/);
+assert.match(dockedActionSection, /bg-white/);
+assert.match(dockedActionSection, /sm:w-auto sm:min-w-\[220px\]/);
+assert.doesNotMatch(dockedActionSection, /sticky|bottom-0|-mb-|backdrop-blur/);
+assert.doesNotMatch(dockedActionSection, />\s*Kembali\s*</);
 
 const buybackNavOccurrences =
   posShell.match(/href: "\/pos\/buyback"/g)?.length ?? 0;

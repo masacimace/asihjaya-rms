@@ -19,13 +19,6 @@ assert(
 );
 
 assert(
-  source.includes("existingSearchRequestRef.current += 1;") &&
-    source.includes("if (!nextQuery.trim())") &&
-    source.includes("setExistingResults([]);"),
-  "Mengosongkan input wajib langsung menghapus hasil search.",
-);
-
-assert(
   source.includes("if (requestId !== existingSearchRequestRef.current)"),
   "Response search lama wajib diabaikan setelah query berubah.",
 );

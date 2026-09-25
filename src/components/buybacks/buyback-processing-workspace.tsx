@@ -449,9 +449,13 @@ export function ProcessingDrawer({
 
         <form
           action={formAction}
-          className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:p-6"
+          className="min-h-0 flex flex-1 flex-col"
         >
-          <input type="hidden" name="payload" value={JSON.stringify(payload)} />
+          <div
+            data-processing-scroll-body="true"
+            className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:p-6"
+          >
+            <input type="hidden" name="payload" value={JSON.stringify(payload)} />
 
           {state.status === "error" ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -570,7 +574,6 @@ export function ProcessingDrawer({
                   </p>
                 ) : null}
               </div>
-
               <div>
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Product Master *
@@ -609,7 +612,6 @@ export function ProcessingDrawer({
                   </p>
                 ) : null}
               </div>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Nama Produk *
@@ -626,7 +628,6 @@ export function ProcessingDrawer({
                   </p>
                 ) : null}
               </label>
-
               <div className="block">
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Warna *
@@ -670,7 +671,6 @@ export function ProcessingDrawer({
                   </p>
                 ) : null}
               </div>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Berat Sesudah (gr) *
@@ -690,7 +690,6 @@ export function ProcessingDrawer({
                   </p>
                 ) : null}
               </label>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Kadar (%) *
@@ -715,7 +714,6 @@ export function ProcessingDrawer({
                   </p>
                 ) : null}
               </label>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Kadar Tukaran *
@@ -738,7 +736,6 @@ export function ProcessingDrawer({
                   </p>
                 ) : null}
               </label>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Potongan / Gram *
@@ -769,7 +766,6 @@ export function ProcessingDrawer({
                   dasar hasil.
                 </p>
               </label>
-
               <div className="block lg:col-span-2">
                 <span className="mb-2 block text-sm font-medium text-neutral-800">
                   Harga / Gram Hasil *
@@ -820,14 +816,17 @@ export function ProcessingDrawer({
                     ? `Rate Jual Global ${formatCurrency(Number(suggestedRate))}.`
                     : "Rate Jual Global belum tersedia untuk kadar ini."}
                 </p>
-              </div>            </div>
+              </div>{" "}
+            </div>
           </section>
 
           <ResultImageInput error={state.fieldErrors?.resultImage} />
 
+          </div>
+
           <div
-            data-processing-action="sticky-submit"
-            className="sticky bottom-0 z-20 -mx-4 -mb-4 border-t border-[var(--border)] bg-white/95 px-4 py-4 backdrop-blur sm:-mx-5 sm:-mb-5 sm:px-5 lg:-mx-6 lg:-mb-6 lg:px-6"
+            data-processing-action="docked-submit"
+            className="shrink-0 border-t border-[var(--border)] bg-white px-4 py-3 sm:px-5 lg:px-6"
           >
             <div className="flex justify-end">
               <button
@@ -855,7 +854,8 @@ export function ProcessingDrawer({
                   ? "Menyimpan hasil..."
                   : `Selesaikan ${processingLabel(row.processingType)}`}
               </button>
-            </div>          </div>
+            </div>{" "}
+          </div>
         </form>
       </div>
 
