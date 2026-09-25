@@ -281,6 +281,8 @@ export async function saveTelegramDestinationAction(formData: FormData) {
           isActive,
           openingEnabled,
           closingDailyEnabled,
+          dailyReportNotBefore,
+          dailyReportGraceMinutes,
           weeklyEnabled,
           monthlyEnabled,
           timezone,
