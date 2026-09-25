@@ -23,6 +23,7 @@ import {
   loadTelegramReportSummary,
   type TelegramReportSummary,
 } from "@/server/integrations/telegram/telegram-report-summary";
+import { getBusinessDateTimeForKey } from "@/lib/time/business-time";
 
 export type FinalizeTelegramDailyFinanceInput = {
   integrationEnabled: boolean;
@@ -51,6 +52,28 @@ export type FinalizeTelegramDailyFinanceResult = {
     | { status: "enqueued"; deliveryId: string }
     | { status: "duplicate"; deliveryId: string };
 };
+
+function resolveDailyDeliveryAt(input: {
+  businessDate: string;
+  closedAt: Date;
+  timezone: string;
+  notBefore: string;
+  graceMinutes: number;
+}) {
+  const configuredNotBefore =
+    getBusinessDateTimeForKey(
+      input.businessDate,
+      input.notBefore,
+      input.timezone,
+    ) ?? input.closedAt;
+  const graceDeliveryAt = new Date(
+    input.closedAt.getTime() + input.graceMinutes * 60_000,
+  );
+
+  return new Date(
+    Math.max(configuredNotBefore.getTime(), graceDeliveryAt.getTime()),
+  );
+}
 
 function integerString(value: number): string {
   if (!Number.isSafeInteger(value)) {
@@ -402,6 +425,14 @@ export async function finalizeTelegramDailyFinanceInTransaction(
     destination.timezone,
     summary,
   );
+  const nextAttemptAt = resolveDailyDeliveryAt({
+    businessDate: persisted.snapshot.businessDate,
+    closedAt: persisted.snapshot.closedAt,
+    timezone: destination.timezone,
+    notBefore: destination.dailyReportNotBefore,
+    graceMinutes: destination.dailyReportGraceMinutes,
+  });
+
   const delivery = await enqueueTelegramDelivery(transaction, {
     organizationId: input.organizationId,
     eventKey: buildTelegramDailyFinanceEventKey(
@@ -416,6 +447,7 @@ export async function finalizeTelegramDailyFinanceInTransaction(
     payloadSnapshot: payload,
     messageText: formatTelegramDailyFinanceMessage(payload),
     maxAttempts: input.maxAttempts,
+    nextAttemptAt,
   });
 
   return {
