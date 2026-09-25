@@ -23,6 +23,8 @@ export function BuybackProcessingQuickActions({
   colorPresets,
   priceRates,
   canProcess,
+  canPrintLabel,
+  canViewInventory,
   variant = "desktop",
 }: {
   rows: BuybackProcessingQueueRow[];
@@ -31,6 +33,8 @@ export function BuybackProcessingQuickActions({
   colorPresets: ProductColorPresetOption[];
   priceRates: BuybackProcessingRateOption[];
   canProcess: boolean;
+  canPrintLabel: boolean;
+  canViewInventory: boolean;
   variant?: "mobile" | "desktop";
 }) {
   const router = useRouter();
@@ -124,9 +128,10 @@ export function BuybackProcessingQuickActions({
           priceRates={priceRates}
           onClose={() => setSelected(null)}
           onCompleted={() => {
-            setSelected(null);
             router.refresh();
           }}
+          canPrintLabel={canPrintLabel}
+          canViewInventory={canViewInventory}
         />
       ) : null}
     </>
