@@ -448,11 +448,11 @@ export default async function KasPage({ searchParams }: PageProps) {
 
       <FlashMessage type={query.type} message={query.message} />
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
         <SummaryCard
           title="Net Movement"
           value={formatSignedMoney(data.summary.netMovement)}
-          helper="Modal awal + cash sale + kas masuk - kas keluar/refund/Buyback/Dana Titip."
+          helper="Modal awal + cash sale + kas masuk + pendanaan Buyback - kas keluar/refund/Buyback/Dana Titip."
           icon={<WalletCards className="size-5" />}
           tone="dark"
         />
@@ -476,6 +476,13 @@ export default async function KasPage({ searchParams }: PageProps) {
           helper="Kas keluar langsung dari penarikan Dana Titip."
           icon={<MinusCircle className="size-5" />}
           tone="danger"
+        />
+        <SummaryCard
+          title="Dana Tambahan Buyback"
+          value={formatMoney(data.summary.buybackCashFunding)}
+          helper="Pendanaan otomatis saat saldo kas shift tidak cukup untuk payout Buyback."
+          icon={<PlusCircle className="size-5" />}
+          tone="success"
         />
         <SummaryCard
           title="Payout Buyback"
