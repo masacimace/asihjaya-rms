@@ -243,6 +243,7 @@ function createEmptyData(
       cashRefunds: 0,
       manualCashIn: 0,
       manualCashOut: 0,
+      buybackCashFunding: 0,
       buybackCashPayouts: 0,
       customerDepositCashWithdrawals: 0,
       closingAdjustments: 0,
@@ -451,8 +452,9 @@ export async function getReportSummaryData(
       .select({
         cashSales: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_sale' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         cashRefunds: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_refund' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
-        manualCashIn: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_in' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
+        manualCashIn: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_in' and coalesce(${cashMovements.referenceType}, '') <> 'buyback_funding' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         manualCashOut: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and coalesce(${cashMovements.referenceType}, '') not in ('customer_deposit_withdrawal', 'buyback') then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
+        buybackCashFunding: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_in' and ${cashMovements.referenceType} = 'buyback_funding' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         buybackCashPayouts: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and ${cashMovements.referenceType} = 'buyback' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         customerDepositCashWithdrawals: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'cash_out' and ${cashMovements.referenceType} = 'customer_deposit_withdrawal' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
         closingAdjustments: sql<number>`coalesce(sum(case when ${cashMovements.type} = 'closing_adjustment' then ${cashMovements.amount}::numeric else 0 end), 0)`.mapWith(Number),
