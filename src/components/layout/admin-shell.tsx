@@ -634,6 +634,7 @@ export function AdminShell({
         )}
       >
         <SidebarContent
+          key={pathname}
           pathname={pathname}
           canAccessPos={user.canAccessPos}
           canAccessAdministration={user.canAccessAdministration}
