@@ -22,7 +22,12 @@ const buybackActions = read("src/app/actions/buybacks.ts");
 // Core Buyback financial integration stays atomic and references Buyback explicitly.
 assert.match(service, /type: "cash_out"/);
 assert.match(service, /referenceType: "buyback"/);
-assert.match(service, /expectedCash: sql`coalesce\(\$\{shifts\.expectedCash\}, 0\) - \$\{cashPayout\}`/);
+assert.match(service, /referenceType: "buyback_funding"/);
+assert.match(service, /type: "cash_in"/);
+assert.match(
+  service,
+  /expectedCash: sql`coalesce\(\$\{shifts\.expectedCash\}, 0\) \+ \$\{buybackFundingAmount\} - \$\{cashPayout\}`/,
+);
 assert.match(service, /entryType: "deposit_in"/);
 assert.match(service, /direction: "credit"/);
 assert.match(service, /lockCustomerDepositBalance/);
@@ -36,7 +41,9 @@ assert.match(cashReconciliation, /if \(movement\.type === "cash_out"\)/);
 assert.match(cashReconciliation, /summary\.expectedCash =[\s\S]*summary\.cashOut/);
 
 // Admin cash reporting must not classify Buyback payout as manual cash out.
+assert.match(cashContracts, /buybackCashFunding: number/);
 assert.match(cashContracts, /buybackCashPayouts: number/);
+assert.match(cashQueries, /referenceType} = 'buyback_funding'/);
 assert.match(cashQueries, /referenceType} = 'buyback'/);
 assert.match(cashQueries, /not in \('customer_deposit_withdrawal', 'buyback'\)/);
 assert.match(cashQueries, /buybackNumber: buybacks\.buybackNumber/);
@@ -51,8 +58,11 @@ assert.match(stockPage, /buyback: "Buyback masuk"/);
 assert.match(reportExport, /buyback: "Buyback masuk"/);
 
 // General financial report separates Buyback payout from manual cash out.
+assert.match(reportContracts, /buybackCashFunding: number/);
 assert.match(reportContracts, /buybackCashPayouts: number/);
+assert.match(reportQueries, /buybackCashFunding:/);
 assert.match(reportQueries, /buybackCashPayouts:/);
+assert.match(reportQueries, /buybackCashFunding \+/);
 assert.match(reportQueries, /buybackCashPayouts -/);
 
 // BB3-A refinement: clearer payout UX and external image upload remains wired to persistence.
