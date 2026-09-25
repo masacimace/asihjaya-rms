@@ -161,6 +161,19 @@ assert.doesNotMatch(
   /showCamera=\{item\.source === "external"\}/,
   "Camera Buyback tidak boleh dibatasi hanya untuk produk external.",
 );
+assert.match(
+  workspace,
+  /existingSearchDebounceRef/,
+  "Search produk internal Buyback wajib auto-search di mobile.",
+);
+assert.match(workspace, /setTimeout\(\(\) => \{[\s\S]{0,300}searchExisting\(trimmedQuery\)[\s\S]{0,100}\}, 350\)/);
+assert.match(workspace, /type="search"/);
+assert.match(workspace, /enterKeyHint="search"/);
+assert.match(
+  workspace,
+  /function addExistingItem[\s\S]{0,1500}setExistingQuery\(""\);[\s\S]{0,300}setExistingResults\(\[\]\);/,
+  "Search dan hasil harus dibersihkan setelah produk internal berhasil dipilih.",
+);
 assert.match(historyPanel, /Snapshot Rate Buyback/);
 assert.match(historyPanel, /Rate saat transaksi/);
 assert.match(historyPanel, /Rekomendasi/);

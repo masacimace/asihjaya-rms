@@ -576,6 +576,9 @@ export function BuybackWorkspace({
     BuybackExistingItemOption[]
   >([]);
   const existingSearchRequestRef = useRef(0);
+  const existingSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const [isSearching, startSearchTransition] = useTransition();
   const [payouts, setPayouts] = useState<PayoutState>({
     cash: "",
@@ -810,17 +813,31 @@ export function BuybackWorkspace({
       setFeedback(`${item.sku} sudah ada di daftar Buyback.`);
       return;
     }
+
+    existingSearchRequestRef.current += 1;
+    if (existingSearchDebounceRef.current) {
+      clearTimeout(existingSearchDebounceRef.current);
+      existingSearchDebounceRef.current = null;
+    }
+
     setItems((current) => [
       ...current,
       mapExistingItem(item, localColorPresets),
     ]);
+    setExistingQuery("");
+    setExistingResults([]);
     setFeedback(
       `${item.sku} ditambahkan. Pilih Cuci/Rongsok, cek data fisik, isi Potongan, cek Total Harga otomatis, lalu ambil foto kondisi barang.`,
     );
   }
 
-  function searchExisting() {
-    const query = existingQuery.trim();
+  function searchExisting(queryOverride?: string) {
+    if (existingSearchDebounceRef.current) {
+      clearTimeout(existingSearchDebounceRef.current);
+      existingSearchDebounceRef.current = null;
+    }
+
+    const query = (queryOverride ?? existingQuery).trim();
     if (query.length < 2) {
       setFeedback(
         "Masukkan minimal 2 karakter SKU, barcode, QR, atau nama produk.",
@@ -1039,16 +1056,32 @@ export function BuybackWorkspace({
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-3.5 size-4 text-neutral-400" />
                 <input
+                  type="search"
+                  enterKeyHint="search"
+                  autoComplete="off"
                   value={existingQuery}
                   onChange={(event) => {
                     const nextQuery = event.target.value;
+                    const trimmedQuery = nextQuery.trim();
+
                     existingSearchRequestRef.current += 1;
                     setExistingQuery(nextQuery);
 
-                    if (!nextQuery.trim()) {
-                      setExistingResults([]);
-                      setFeedback(null);
+                    if (existingSearchDebounceRef.current) {
+                      clearTimeout(existingSearchDebounceRef.current);
+                      existingSearchDebounceRef.current = null;
                     }
+
+                    if (trimmedQuery.length < 2) {
+                      setExistingResults([]);
+                      if (!trimmedQuery) setFeedback(null);
+                      return;
+                    }
+
+                    existingSearchDebounceRef.current = setTimeout(() => {
+                      existingSearchDebounceRef.current = null;
+                      searchExisting(trimmedQuery);
+                    }, 350);
                   }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
@@ -1057,10 +1090,17 @@ export function BuybackWorkspace({
                     }
                   }}
                   placeholder="SKU, barcode, serial, atau nama produk"
-                  className={cn(inputClassName, "pl-10")}
+                  aria-label="Cari produk ASIHJAYA yang pernah dijual"
+                  className={cn(inputClassName, "pl-10 pr-10")}
                 />
+                {isSearching ? (
+                  <LoaderCircle className="pointer-events-none absolute right-3 top-3.5 size-4 animate-spin text-[var(--accent)]" />
+                ) : null}
               </div>
             </div>
+            <p className="mt-2 text-[11px] text-[var(--muted)]">
+              Ketik minimal 2 karakter. Hasil pencarian muncul otomatis.
+            </p>
 
             {existingResults.length > 0 ? (
               <>
