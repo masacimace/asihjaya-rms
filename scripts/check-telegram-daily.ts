@@ -59,6 +59,16 @@ assertContains(
   'reportType: "closing_daily"',
   "closing_daily destination guard",
 );
+assertContains(
+  serviceSource,
+  "getBusinessDateTimeForKey",
+  "configured daily report not-before resolver",
+);
+assertContains(
+  serviceSource,
+  "nextAttemptAt",
+  "daily report delayed delivery",
+);
 assert.equal(
   serviceSource.includes("sendMessage("),
   false,
@@ -203,6 +213,21 @@ for (const expected of [
   assert.ok(message.includes(expected), `Daily message kurang field: ${expected}`);
 }
 assert.ok(message.length <= 4096, "Daily finance message melebihi limit Telegram.");
+
+const revisedMessage = formatTelegramDailyFinanceMessage({
+  ...snapshot,
+  revision: 2,
+});
+assert.equal(
+  revisedMessage.includes("REVISI 2"),
+  false,
+  "Owner-facing daily report tidak boleh menampilkan nomor revision.",
+);
+assert.equal(
+  revisedMessage.includes("Laporan final setelah reopen"),
+  false,
+  "Owner-facing daily report tidak perlu mengekspos lifecycle reopen.",
+);
 
 const incompleteCost = buildTelegramDailyFinanceSnapshot({
   ...snapshot,
