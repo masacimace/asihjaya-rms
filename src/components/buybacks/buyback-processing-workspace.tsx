@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowUpRight,
   Camera,
   CheckCircle2,
   Clock3,
@@ -8,6 +9,7 @@ import {
   LoaderCircle,
   PackageCheck,
   Plus,
+  Printer,
   Search,
   Sparkles,
   Trash2,
@@ -79,6 +81,89 @@ function weightDifference(before: string, after: string | null) {
   if (!Number.isFinite(difference)) return null;
   const sign = difference > 0 ? "+" : "";
   return `${sign}${difference.toFixed(3)} gr`;
+}
+
+function QuickLabelPrintButton({
+  itemId,
+  compact = false,
+}: {
+  itemId: string;
+  compact?: boolean;
+}) {
+  const [status, setStatus] = useState<"idle" | "printing" | "success" | "error">(
+    "idle",
+  );
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function printLabel() {
+    setStatus("printing");
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/print-jobs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          itemId,
+          copies: 1,
+          requestId: crypto.randomUUID(),
+        }),
+      });
+      const payload = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Label belum dapat dikirim ke printer.");
+      }
+
+      setStatus("success");
+      setMessage("Label dikirim ke printer.");
+    } catch (error) {
+      setStatus("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Label belum dapat dikirim ke printer.",
+      );
+    }
+  }
+
+  return (
+    <div className={compact ? "min-w-0" : "w-full"}>
+      <button
+        type="button"
+        onClick={printLabel}
+        disabled={status === "printing"}
+        className={cn(
+          "inline-flex items-center justify-center gap-2 rounded-xl bg-neutral-950 font-semibold !text-white transition hover:bg-neutral-800 disabled:cursor-wait disabled:opacity-60",
+          compact ? "h-9 px-3 text-xs" : "h-11 w-full px-4 text-sm",
+        )}
+      >
+        {status === "printing" ? (
+          <LoaderCircle className="size-4 animate-spin" />
+        ) : (
+          <Printer className="size-4" />
+        )}
+        {status === "printing"
+          ? "Mengirim..."
+          : status === "success"
+            ? "Cetak Lagi"
+            : "Cetak Label"}
+      </button>
+      {message ? (
+        <p
+          className={cn(
+            "mt-1.5 text-xs",
+            status === "error" ? "text-red-700" : "text-emerald-700",
+          )}
+        >
+          {message}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 function ProcessingProductImage({
@@ -288,6 +373,7 @@ export function ProcessingDrawer({
   priceRates,
   onClose,
   onCompleted,
+  canPrintLabel,
 }: {
   row: BuybackProcessingQueueRow;
   categories: ProductMasterCategoryOption[];
@@ -296,11 +382,13 @@ export function ProcessingDrawer({
   priceRates: BuybackProcessingRateOption[];
   onClose: () => void;
   onCompleted: (message: string) => void;
+  canPrintLabel: boolean;
 }) {
   const [state, formAction, isPending] = useActionState(
     completeBuybackProcessingAction,
     initialBuybackProcessingActionState,
   );
+  const completionReportedRef = useRef(false);
   const router = useRouter();
   const initialMasterId =
     row.sourceProductMasterId &&
@@ -376,9 +464,9 @@ export function ProcessingDrawer({
   const pricePerGram = priceTouched ? pricePerGramInput : suggestedPricePerGram;
 
   useEffect(() => {
-    if (state.status === "success") {
-      onCompleted(state.message ?? "Pemrosesan Buyback selesai.");
-    }
+    if (state.status !== "success" || completionReportedRef.current) return;
+    completionReportedRef.current = true;
+    onCompleted(state.message ?? "Pemrosesan Buyback selesai.");
   }, [onCompleted, state.message, state.status]);
 
   const payload = useMemo<BuybackProcessingSubmitPayload>(
@@ -407,6 +495,95 @@ export function ProcessingDrawer({
       weightGram,
     ],
   );
+
+  if (state.status === "success" && state.result) {
+    return (
+      <div
+        className="fixed inset-0 z-[70] bg-black/35 lg:flex lg:justify-end"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="buyback-processing-success-title"
+      >
+        <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white lg:w-[min(560px,calc(100vw-48px))] lg:border-l lg:border-[var(--border)]">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[var(--border)] px-4 py-4 sm:px-5">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">
+                <CheckCircle2 className="size-3.5" />
+                Processing selesai
+              </span>
+              <h2
+                id="buyback-processing-success-title"
+                className="mt-2 text-lg font-semibold text-neutral-950"
+              >
+                Item siap dijual
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                Hasil {processingLabel(state.result.processingType)} sudah masuk
+                Inventory dan tersedia di POS.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid size-9 shrink-0 place-items-center rounded-xl text-neutral-500 hover:bg-neutral-100"
+              aria-label="Tutup"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto p-5 sm:p-6">
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5">
+              <div className="flex items-start gap-3">
+                <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">
+                  <PackageCheck className="size-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-neutral-950">
+                    {row.sourceDisplayName}
+                  </p>
+                  <p className="mt-1 text-xs text-neutral-600">
+                    SKU {state.result.sku}
+                  </p>
+                  <p className="mt-0.5 text-xs text-neutral-600">
+                    Barcode {state.result.barcode}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {canPrintLabel ? (
+              <div className="mt-5">
+                <QuickLabelPrintButton itemId={state.result.productItemId} />
+              </div>
+            ) : (
+              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+                Item sudah tersimpan. Akun ini belum memiliki permission cetak
+                label inventaris.
+              </div>
+            )}
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+              >
+                Selesai
+              </button>
+              <a
+                href={`/admin/inventaris/item/${state.result.productItemId}`}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-800 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
+              >
+                Lihat Item
+                <ArrowUpRight className="size-4" />
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -928,6 +1105,7 @@ export function BuybackProcessingWorkspace({
   colorPresets,
   priceRates,
   canProcess,
+  canPrintLabel,
 }: {
   data: BuybackProcessingData;
   categories: ProductMasterCategoryOption[];
@@ -935,6 +1113,7 @@ export function BuybackProcessingWorkspace({
   colorPresets: ProductColorPresetOption[];
   priceRates: BuybackProcessingRateOption[];
   canProcess: boolean;
+  canPrintLabel: boolean;
 }) {
   const router = useRouter();
   const [typeFilter, setTypeFilter] = useState<
@@ -1252,6 +1431,12 @@ export function BuybackProcessingWorkspace({
                             Proses {processingLabel(row.processingType)}
                           </button>
                         </div>
+                      ) : row.resultProductItemId && canPrintLabel ? (
+                        <div className="border-t border-[var(--border)] bg-neutral-50 p-3">
+                          <QuickLabelPrintButton
+                            itemId={row.resultProductItemId}
+                          />
+                        </div>
                       ) : null}
                     </article>
                   );
@@ -1396,9 +1581,17 @@ export function BuybackProcessingWorkspace({
                               Proses {processingLabel(row.processingType)}
                             </button>
                           ) : (
-                            <span className="text-xs text-[var(--muted)]">
-                              {formatDate(row.processedAt)}
-                            </span>
+                            <div className="space-y-2">
+                              <span className="block text-xs text-[var(--muted)]">
+                                {formatDate(row.processedAt)}
+                              </span>
+                              {row.resultProductItemId && canPrintLabel ? (
+                                <QuickLabelPrintButton
+                                  itemId={row.resultProductItemId}
+                                  compact
+                                />
+                              ) : null}
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -1429,9 +1622,9 @@ export function BuybackProcessingWorkspace({
           onClose={() => setSelected(null)}
           onCompleted={(message) => {
             setFeedback(message);
-            setSelected(null);
             router.refresh();
           }}
+          canPrintLabel={canPrintLabel}
         />
       ) : null}
     </>
