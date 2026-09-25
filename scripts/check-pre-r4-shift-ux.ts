@@ -60,7 +60,11 @@ contains(
   "satu shift per outlet/business date tetap dipertahankan",
 );
 contains(reopenSource, "supersededAt: now", "snapshot lama tetap superseded");
-contains(reopenSource, 'reportType: "shift_reopened"', "Telegram reopen correction tetap ada");
+assert.equal(
+  reopenSource.includes('reportType: "shift_reopened"'),
+  false,
+  "Telegram reopen correction tidak boleh dikirim ke owner.",
+);
 
 contains(controlsSource, "Lanjutkan Shift Hari Ini", "copy continuation baru");
 contains(controlsSource, "Toko masih beroperasi.", "quick reason continuation");
