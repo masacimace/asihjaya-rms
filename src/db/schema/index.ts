@@ -1783,6 +1783,12 @@ export const telegramReportSettings = pgTable(
     closingDailyEnabled: boolean("closing_daily_enabled")
       .default(false)
       .notNull(),
+    dailyReportNotBefore: varchar("daily_report_not_before", { length: 5 })
+      .default("16:30")
+      .notNull(),
+    dailyReportGraceMinutes: integer("daily_report_grace_minutes")
+      .default(10)
+      .notNull(),
     weeklyEnabled: boolean("weekly_enabled").default(false).notNull(),
     monthlyEnabled: boolean("monthly_enabled").default(false).notNull(),
     timezone: varchar("timezone", { length: 64 })
@@ -1798,6 +1804,1911 @@ export const telegramReportSettings = pgTable(
     check(
       "telegram_report_settings_timezone_not_blank_ck",
       sql`length(btrim(${table.timezone})) > 0 and ${table.timezone} = btrim(${table.timezone})`,
+    ),
+    check(
+      "telegram_report_settings_daily_not_before_ck",
+      sql`${table.dailyReportNotBefore} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]
+);
+
+export const telegramDeliveryOutbox = pgTable(
+  "telegram_delivery_outbox",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    eventKey: varchar("event_key", { length: 200 }).notNull(),
+    destinationId: uuid("destination_id")
+      .notNull()
+      .references(() => telegramDestinations.id, { onDelete: "restrict" }),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id, { onDelete: "restrict" }),
+    reportType: telegramReportTypeEnum("report_type").notNull(),
+    businessDate: date("business_date", { mode: "string" }),
+    periodStart: date("period_start", { mode: "string" }),
+    periodEnd: date("period_end", { mode: "string" }),
+    payloadSnapshotJson: jsonb("payload_snapshot_json")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    messageText: text("message_text").notNull(),
+    status: telegramDeliveryStatusEnum("status").default("pending").notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(5).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: varchar("locked_by", { length: 120 }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    telegramMessageId: varchar("telegram_message_id", { length: 64 }),
+    lastErrorCode: varchar("last_error_code", { length: 80 }),
+    lastErrorMessage: text("last_error_message"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("telegram_delivery_outbox_event_destination_uq").on(
+      table.eventKey,
+      table.destinationId,
+    ),
+    index("telegram_delivery_outbox_status_next_attempt_idx").on(
+      table.status,
+      table.nextAttemptAt,
+      table.createdAt,
+    ),
+    index("telegram_delivery_outbox_outlet_report_date_idx").on(
+      table.outletId,
+      table.reportType,
+      table.businessDate,
+      table.createdAt,
+    ),
+    index("telegram_delivery_outbox_destination_created_idx").on(
+      table.destinationId,
+      table.createdAt,
+    ),
+    check(
+      "telegram_delivery_outbox_event_key_not_blank_ck",
+      sql`length(btrim(${table.eventKey})) > 0 and ${table.eventKey} = btrim(${table.eventKey})`,
+    ),
+    check(
+      "telegram_delivery_outbox_message_not_blank_ck",
+      sql`length(${table.messageText}) > 0`,
+    ),
+    check(
+      "telegram_delivery_outbox_attempts_ck",
+      sql`${table.attemptCount} >= 0 and ${table.maxAttempts} > 0 and ${table.attemptCount} <= ${table.maxAttempts}`,
+    ),
+    check(
+      "telegram_delivery_outbox_lock_pair_ck",
+      sql`(${table.lockedAt} is null and ${table.lockedBy} is null)
+        or (${table.lockedAt} is not null and ${table.lockedBy} is not null)`,
+    ),
+    check(
+      "telegram_delivery_outbox_processing_lock_ck",
+      sql`${table.status} <> 'processing' or (${table.lockedAt} is not null and ${table.lockedBy} is not null)`,
+    ),
+    check(
+      "telegram_delivery_outbox_sent_state_ck",
+      sql`${table.status} <> 'sent' or (${table.sentAt} is not null and ${table.telegramMessageId} is not null)`,
+    ),
+    check(
+      "telegram_delivery_outbox_period_order_ck",
+      sql`${table.periodStart} is null or ${table.periodEnd} is null or ${table.periodEnd} >= ${table.periodStart}`,
+    ),
+  ],
+);
+
+export const telegramDeliveryAttempts = pgTable(
+  "telegram_delivery_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    deliveryId: uuid("delivery_id")
+      .notNull()
+      .references(() => telegramDeliveryOutbox.id, { onDelete: "cascade" }),
+    attemptNumber: integer("attempt_number").notNull(),
+    requestedAt: timestamp("requested_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    httpStatus: integer("http_status"),
+    telegramOk: boolean("telegram_ok"),
+    telegramErrorCode: integer("telegram_error_code"),
+    telegramErrorDescription: text("telegram_error_description"),
+    telegramMessageId: varchar("telegram_message_id", { length: 64 }),
+    durationMs: integer("duration_ms"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("telegram_delivery_attempts_delivery_number_uq").on(
+      table.deliveryId,
+      table.attemptNumber,
+    ),
+    index("telegram_delivery_attempts_delivery_requested_idx").on(
+      table.deliveryId,
+      table.requestedAt,
+    ),
+    check(
+      "telegram_delivery_attempts_number_positive_ck",
+      sql`${table.attemptNumber} > 0`,
+    ),
+    check(
+      "telegram_delivery_attempts_http_status_ck",
+      sql`${table.httpStatus} is null or ${table.httpStatus} between 100 and 599`,
+    ),
+    check(
+      "telegram_delivery_attempts_duration_nonnegative_ck",
+      sql`${table.durationMs} is null or ${table.durationMs} >= 0`,
+    ),
+    check(
+      "telegram_delivery_attempts_time_order_ck",
+      sql`${table.completedAt} is null or ${table.completedAt} >= ${table.requestedAt}`,
+    ),
+  ],
+);
+
+export const cashMovements = pgTable(
+  "cash_movements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => shifts.id),
+    type: cashMovementTypeEnum("type").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 0 }).notNull(),
+    referenceType: varchar("reference_type", { length: 80 }),
+    referenceId: uuid("reference_id"),
+    reason: text("reason"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("cash_movements_reference_guard_uq")
+      .on(table.type, table.referenceType, table.referenceId)
+      .where(
+        sql`${table.referenceType} is not null and ${table.referenceId} is not null`,
+      ),
+    index("cash_movements_shift_time_idx").on(table.shiftId, table.createdAt),
+    check(
+      "cash_movements_amount_ck",
+      sql`(
+        ${table.type} = 'opening_balance' and ${table.amount} >= 0
+      ) or (
+        ${table.type} <> 'opening_balance' and ${table.amount} > 0
+      )`,
+    ),
+    check(
+      "cash_movements_system_reference_ck",
+      sql`${table.type} not in ('opening_balance', 'cash_sale', 'cash_refund')
+        or (${table.referenceType} is not null and ${table.referenceId} is not null)`,
+    ),
+  ],
+);
+
+export const customers = pgTable(
+  "customers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    customerCode: varchar("customer_code", { length: 64 }),
+    fullName: varchar("full_name", { length: 180 }).notNull(),
+    phone: varchar("phone", { length: 32 }),
+    email: varchar("email", { length: 254 }),
+    address: text("address"),
+    notes: text("notes"),
+    isActive: boolean("is_active").default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("customers_org_code_uq").on(
+      table.organizationId,
+      table.customerCode,
+    ),
+    index("customers_org_phone_idx").on(table.organizationId, table.phone),
+  ],
+);
+
+export const customerHistoryCredentials = pgTable(
+  "customer_history_credentials",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    pinHash: text("pin_hash").notNull(),
+    credentialVersion: integer("credential_version").default(1).notNull(),
+    mustChangePin: boolean("must_change_pin").default(true).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    failedAttemptCount: integer("failed_attempt_count").default(0).notNull(),
+    failedWindowStartedAt: timestamp("failed_window_started_at", {
+      withTimezone: true,
+    }),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+    pinCreatedAt: timestamp("pin_created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    pinResetAt: timestamp("pin_reset_at", { withTimezone: true }),
+    pinCreatedByUserId: uuid("pin_created_by_user_id").references(
+      () => users.id,
+    ),
+    lastSuccessfulAccessAt: timestamp("last_successful_access_at", {
+      withTimezone: true,
+    }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("customer_history_credentials_customer_uq").on(
+      table.customerId,
+    ),
+    index("customer_history_credentials_org_active_idx").on(
+      table.organizationId,
+      table.isActive,
+    ),
+    check(
+      "customer_history_credentials_version_ck",
+      sql`${table.credentialVersion} > 0`,
+    ),
+    check(
+      "customer_history_credentials_failed_count_ck",
+      sql`${table.failedAttemptCount} >= 0`,
+    ),
+  ],
+);
+
+export const customerHistorySessions = pgTable(
+  "customer_history_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    credentialVersion: integer("credential_version").notNull(),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    requiresPinChange: boolean("requires_pin_change").default(false).notNull(),
+    absoluteExpiresAt: timestamp("absolute_expires_at", {
+      withTimezone: true,
+    }).notNull(),
+    idleExpiresAt: timestamp("idle_expires_at", {
+      withTimezone: true,
+    }).notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    ipAddress: varchar("ip_address", { length: 64 }),
+    userAgent: text("user_agent"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("customer_history_sessions_token_hash_uq").on(table.tokenHash),
+    index("customer_history_sessions_customer_expiry_idx").on(
+      table.customerId,
+      table.absoluteExpiresAt,
+    ),
+    index("customer_history_sessions_expiry_idx").on(
+      table.absoluteExpiresAt,
+      table.idleExpiresAt,
+    ),
+    check(
+      "customer_history_sessions_version_ck",
+      sql`${table.credentialVersion} > 0`,
+    ),
+  ],
+);
+
+export const customerHistoryIpRateLimits = pgTable(
+  "customer_history_ip_rate_limits",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    keyHash: varchar("key_hash", { length: 64 }).notNull(),
+    windowStartedAt: timestamp("window_started_at", {
+      withTimezone: true,
+    }).notNull(),
+    failureCount: integer("failure_count").default(0).notNull(),
+    blockedUntil: timestamp("blocked_until", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("customer_history_ip_rate_limits_key_uq").on(table.keyHash),
+    index("customer_history_ip_rate_limits_blocked_idx").on(table.blockedUntil),
+    check(
+      "customer_history_ip_rate_limits_failure_count_ck",
+      sql`${table.failureCount} >= 0`,
+    ),
+  ],
+);
+
+export const securityRateLimits = pgTable(
+  "security_rate_limits",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    scope: varchar("scope", { length: 80 }).notNull(),
+    keyHash: varchar("key_hash", { length: 64 }).notNull(),
+    windowStartedAt: timestamp("window_started_at", {
+      withTimezone: true,
+    }).notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    blockedUntil: timestamp("blocked_until", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("security_rate_limits_scope_key_uq").on(
+      table.scope,
+      table.keyHash,
+    ),
+    index("security_rate_limits_blocked_idx").on(table.blockedUntil),
+    index("security_rate_limits_updated_idx").on(table.updatedAt),
+    check(
+      "security_rate_limits_attempt_count_ck",
+      sql`${table.attemptCount} >= 0`,
+    ),
+  ],
+);
+
+export const posHeldCarts = pgTable(
+  "pos_held_carts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    registerId: uuid("register_id")
+      .notNull()
+      .references(() => registers.id),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => shifts.id),
+    customerId: uuid("customer_id").references(() => customers.id),
+    heldByUserId: uuid("held_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    holdNumber: varchar("hold_number", { length: 80 }).notNull(),
+    title: varchar("title", { length: 160 }),
+    note: text("note"),
+    status: posHeldCartStatusEnum("status").default("active").notNull(),
+    itemCount: integer("item_count").default(0).notNull(),
+    subtotalAmount: numeric("subtotal_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    discountAmount: numeric("discount_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    totalAmount: numeric("total_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    resumedAt: timestamp("resumed_at", { withTimezone: true }),
+    resumedByUserId: uuid("resumed_by_user_id").references(() => users.id),
+    canceledAt: timestamp("canceled_at", { withTimezone: true }),
+    canceledByUserId: uuid("canceled_by_user_id").references(() => users.id),
+    cancelReason: text("cancel_reason"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("pos_held_carts_org_hold_number_uq").on(
+      table.organizationId,
+      table.holdNumber,
+    ),
+    index("pos_held_carts_outlet_status_created_idx").on(
+      table.outletId,
+      table.status,
+      table.createdAt,
+    ),
+    index("pos_held_carts_register_status_idx").on(
+      table.registerId,
+      table.status,
+    ),
+    index("pos_held_carts_shift_status_idx").on(table.shiftId, table.status),
+    index("pos_held_carts_customer_idx").on(table.customerId),
+    index("pos_held_carts_held_by_idx").on(table.heldByUserId),
+    check(
+      "pos_held_carts_item_count_nonnegative_ck",
+      sql`${table.itemCount} >= 0`,
+    ),
+    check(
+      "pos_held_carts_subtotal_nonnegative_ck",
+      sql`${table.subtotalAmount} >= 0`,
+    ),
+    check(
+      "pos_held_carts_discount_nonnegative_ck",
+      sql`${table.discountAmount} >= 0`,
+    ),
+    check(
+      "pos_held_carts_total_nonnegative_ck",
+      sql`${table.totalAmount} >= 0`,
+    ),
+  ],
+);
+
+export const posHeldCartItems = pgTable(
+  "pos_held_cart_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    heldCartId: uuid("held_cart_id")
+      .notNull()
+      .references(() => posHeldCarts.id),
+    productItemId: uuid("product_item_id")
+      .notNull()
+      .references(() => productItems.id),
+    lineNumber: bigint("line_number", { mode: "number" }).notNull(),
+    listPriceAmount: numeric("list_price_amount", {
+      precision: 18,
+      scale: 0,
+    }).notNull(),
+    discountAmount: numeric("discount_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    finalPriceAmount: numeric("final_price_amount", {
+      precision: 18,
+      scale: 0,
+    }).notNull(),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("pos_held_cart_items_cart_item_uq").on(
+      table.heldCartId,
+      table.productItemId,
+    ),
+    uniqueIndex("pos_held_cart_items_cart_line_uq").on(
+      table.heldCartId,
+      table.lineNumber,
+    ),
+    uniqueIndex("pos_held_cart_items_active_item_uq")
+      .on(table.productItemId)
+      .where(sql`${table.isActive} = true`),
+    index("pos_held_cart_items_cart_active_idx").on(
+      table.heldCartId,
+      table.isActive,
+    ),
+    index("pos_held_cart_items_product_idx").on(table.productItemId),
+    check(
+      "pos_held_cart_items_list_price_nonnegative_ck",
+      sql`${table.listPriceAmount} >= 0`,
+    ),
+    check(
+      "pos_held_cart_items_discount_nonnegative_ck",
+      sql`${table.discountAmount} >= 0`,
+    ),
+    check(
+      "pos_held_cart_items_final_price_nonnegative_ck",
+      sql`${table.finalPriceAmount} >= 0`,
+    ),
+  ],
+);
+
+export const sales = pgTable(
+  "sales",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    registerId: uuid("register_id")
+      .notNull()
+      .references(() => registers.id),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => shifts.id),
+    customerId: uuid("customer_id").references(() => customers.id),
+    cashierId: uuid("cashier_id")
+      .notNull()
+      .references(() => users.id),
+    invoiceNumber: varchar("invoice_number", { length: 80 }).notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 120 }).notNull(),
+    checkoutFingerprint: varchar("checkout_fingerprint", { length: 64 }),
+    status: saleStatusEnum("status").default("draft").notNull(),
+    subtotalAmount: numeric("subtotal_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    discountAmount: numeric("discount_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    discountReason: text("discount_reason"),
+    additionalFeeAmount: numeric("additional_fee_amount", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    totalAmount: numeric("total_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("sales_org_invoice_uq").on(
+      table.organizationId,
+      table.invoiceNumber,
+    ),
+    uniqueIndex("sales_idempotency_uq").on(table.idempotencyKey),
+    index("sales_outlet_created_idx").on(table.outletId, table.createdAt),
+    index("sales_shift_idx").on(table.shiftId),
+    check("sales_subtotal_nonnegative_ck", sql`${table.subtotalAmount} >= 0`),
+    check("sales_discount_nonnegative_ck", sql`${table.discountAmount} >= 0`),
+    check(
+      "sales_additional_fee_nonnegative_ck",
+      sql`${table.additionalFeeAmount} >= 0`,
+    ),
+    check("sales_total_nonnegative_ck", sql`${table.totalAmount} >= 0`),
+    check(
+      "sales_discount_not_above_subtotal_ck",
+      sql`${table.discountAmount} <= ${table.subtotalAmount}`,
+    ),
+    check(
+      "sales_total_formula_ck",
+      sql`${table.totalAmount} = ${table.subtotalAmount} - ${table.discountAmount} + ${table.additionalFeeAmount}`,
+    ),
+    check(
+      "sales_completed_timestamp_ck",
+      sql`${table.status} <> 'completed' or ${table.completedAt} is not null`,
+    ),
+    check(
+      "sales_cancelled_timestamp_ck",
+      sql`${table.status} not in ('cancelled', 'voided', 'refunded') or ${table.cancelledAt} is not null`,
+    ),
+  ],
+);
+
+export const posCheckoutAttempts = pgTable(
+  "pos_checkout_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    registerId: uuid("register_id")
+      .notNull()
+      .references(() => registers.id),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => shifts.id),
+    cashierId: uuid("cashier_id")
+      .notNull()
+      .references(() => users.id),
+    idempotencyKey: varchar("idempotency_key", { length: 120 }).notNull(),
+    requestFingerprint: varchar("request_fingerprint", {
+      length: 64,
+    }).notNull(),
+    status: posCheckoutAttemptStatusEnum("status")
+      .default("processing")
+      .notNull(),
+    saleId: uuid("sale_id").references(() => sales.id, {
+      onDelete: "set null",
+    }),
+    attemptCount: integer("attempt_count").default(1).notNull(),
+    lastErrorCode: varchar("last_error_code", { length: 80 }),
+    lastErrorMessage: text("last_error_message"),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    failedAt: timestamp("failed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("pos_checkout_attempts_idempotency_uq").on(
+      table.idempotencyKey,
+    ),
+    index("pos_checkout_attempts_org_cashier_idx").on(
+      table.organizationId,
+      table.cashierId,
+      table.createdAt,
+    ),
+    index("pos_checkout_attempts_sale_idx").on(table.saleId),
+    check(
+      "pos_checkout_attempts_attempt_count_positive_ck",
+      sql`${table.attemptCount} > 0`,
+    ),
+    check(
+      "pos_checkout_attempts_completed_state_ck",
+      sql`${table.status} <> 'completed' or (${table.saleId} is not null and ${table.completedAt} is not null)`,
+    ),
+    check(
+      "pos_checkout_attempts_failed_state_ck",
+      sql`${table.status} <> 'failed' or ${table.failedAt} is not null`,
+    ),
+  ],
+);
+
+export const saleItems = pgTable(
+  "sale_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    saleId: uuid("sale_id")
+      .notNull()
+      .references(() => sales.id),
+    productItemId: uuid("product_item_id")
+      .notNull()
+      .references(() => productItems.id),
+    lineNumber: bigint("line_number", { mode: "number" }).notNull(),
+    listPriceAmount: numeric("list_price_amount", {
+      precision: 18,
+      scale: 0,
+    }).notNull(),
+    discountAmount: numeric("discount_amount", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    finalPriceAmount: numeric("final_price_amount", {
+      precision: 18,
+      scale: 0,
+    }).notNull(),
+    costAmountSnapshot: numeric("cost_amount_snapshot", {
+      precision: 18,
+      scale: 0,
+    }),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("sale_items_sale_item_uq").on(
+      table.saleId,
+      table.productItemId,
+    ),
+    uniqueIndex("sale_items_sale_line_uq").on(table.saleId, table.lineNumber),
+    check(
+      "sale_items_list_price_positive_ck",
+      sql`${table.listPriceAmount} > 0`,
+    ),
+    check(
+      "sale_items_discount_nonnegative_ck",
+      sql`${table.discountAmount} >= 0`,
+    ),
+    check(
+      "sale_items_discount_not_above_list_ck",
+      sql`${table.discountAmount} <= ${table.listPriceAmount}`,
+    ),
+    check(
+      "sale_items_final_price_formula_ck",
+      sql`${table.finalPriceAmount} = ${table.listPriceAmount} - ${table.discountAmount} + coalesce(nullif(${table.snapshot}->>'laborAmount', '')::numeric, 0) + coalesce(nullif(${table.snapshot}->>'adjustmentAmount', '')::numeric, 0)`,
+    ),
+    check(
+      "sale_items_final_price_positive_ck",
+      sql`${table.finalPriceAmount} > 0`,
+    ),
+    check(
+      "sale_items_cost_snapshot_nonnegative_ck",
+      sql`${table.costAmountSnapshot} is null or ${table.costAmountSnapshot} >= 0`,
+    ),
+  ],
+);
+
+export const manualPaymentProfiles = pgTable(
+  "manual_payment_profiles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    registerId: uuid("register_id").references(() => registers.id, {
+      onDelete: "set null",
+    }),
+    profileType: varchar("profile_type", { length: 24 }).notNull(),
+    code: varchar("code", { length: 40 }).notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    provider: varchar("provider", { length: 80 }).notNull(),
+    verificationSource: varchar("verification_source", {
+      length: 40,
+    }).notNull(),
+    merchantId: varchar("merchant_id", { length: 80 }),
+    terminalId: varchar("terminal_id", { length: 80 }),
+    destinationAccount: varchar("destination_account", { length: 120 }),
+    displayOrder: integer("display_order").default(0).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("manual_payment_profiles_org_outlet_code_uq").on(
+      table.organizationId,
+      table.outletId,
+      table.code,
+    ),
+    index("manual_payment_profiles_outlet_type_idx").on(
+      table.outletId,
+      table.profileType,
+      table.isActive,
+      table.displayOrder,
+    ),
+    index("manual_payment_profiles_register_idx").on(
+      table.registerId,
+      table.isActive,
+    ),
+    check(
+      "manual_payment_profiles_type_ck",
+      sql`${table.profileType} in ('qris', 'edc', 'bank_account')`,
+    ),
+    check(
+      "manual_payment_profiles_source_ck",
+      sql`${table.verificationSource} in ('merchant_app', 'edc_terminal', 'bank_app', 'bank_statement')`,
+    ),
+    check(
+      "manual_payment_profiles_fields_ck",
+      sql`(
+        (${table.profileType} = 'qris'
+          and ${table.verificationSource} in ('merchant_app', 'bank_app')
+          and ${table.merchantId} is not null
+          and btrim(${table.merchantId}) <> '')
+        or
+        (${table.profileType} = 'edc'
+          and ${table.verificationSource} = 'edc_terminal'
+          and ${table.terminalId} is not null
+          and btrim(${table.terminalId}) <> '')
+        or
+        (${table.profileType} = 'bank_account'
+          and ${table.verificationSource} in ('bank_app', 'bank_statement')
+          and ${table.destinationAccount} is not null
+          and btrim(${table.destinationAccount}) <> '')
+      )`,
+    ),
+    check(
+      "manual_payment_profiles_display_order_ck",
+      sql`${table.displayOrder} between 0 and 9999`,
+    ),
+  ],
+);
+
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    saleId: uuid("sale_id")
+      .notNull()
+      .references(() => sales.id),
+    method: paymentMethodEnum("method").notNull(),
+    provider: varchar("provider", { length: 80 }).default("manual").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 0 }).notNull(),
+    status: paymentStatusEnum("status").default("pending").notNull(),
+    providerReference: varchar("provider_reference", { length: 160 }),
+    manualPaymentProfileId: uuid("manual_payment_profile_id").references(
+      () => manualPaymentProfiles.id,
+      { onDelete: "set null" },
+    ),
+    verifiedBy: uuid("verified_by").references(() => users.id),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    index("payments_sale_status_idx").on(table.saleId, table.status),
+    index("payments_provider_reference_idx").on(
+      table.provider,
+      table.providerReference,
+    ),
+    index("payments_manual_profile_idx").on(
+      table.manualPaymentProfileId,
+      table.createdAt,
+    ),
+    check("payments_amount_positive_ck", sql`${table.amount} > 0`),
+    check(
+      "payments_paid_state_complete_ck",
+      sql`${table.status} <> 'paid' or (
+        ${table.verifiedBy} is not null
+        and ${table.verifiedAt} is not null
+        and ${table.paidAt} is not null
+      )`,
+    ),
+  ],
+);
+
+export const buybacks = pgTable(
+  "buybacks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    registerId: uuid("register_id")
+      .notNull()
+      .references(() => registers.id),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => shifts.id),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    processedBy: uuid("processed_by")
+      .notNull()
+      .references(() => users.id),
+    buybackNumber: varchar("buyback_number", { length: 80 }).notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 120 }).notNull(),
+    status: buybackStatusEnum("status").default("completed").notNull(),
+    totalAmount: numeric("total_amount", { precision: 18, scale: 0 }).notNull(),
+    notes: text("notes"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("buybacks_org_number_uq").on(
+      table.organizationId,
+      table.buybackNumber,
+    ),
+    uniqueIndex("buybacks_org_idempotency_uq").on(
+      table.organizationId,
+      table.idempotencyKey,
+    ),
+    index("buybacks_outlet_created_idx").on(table.outletId, table.createdAt),
+    index("buybacks_customer_created_idx").on(
+      table.customerId,
+      table.createdAt,
+    ),
+    index("buybacks_shift_idx").on(table.shiftId),
+    check("buybacks_total_positive_ck", sql`${table.totalAmount} > 0`),
+    check(
+      "buybacks_completed_timestamp_ck",
+      sql`${table.status} <> 'completed' or ${table.completedAt} is not null`,
+    ),
+    check(
+      "buybacks_cancelled_timestamp_ck",
+      sql`${table.status} <> 'cancelled' or ${table.cancelledAt} is not null`,
+    ),
+  ],
+);
+
+export const buybackItems = pgTable(
+  "buyback_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    buybackId: uuid("buyback_id")
+      .notNull()
+      .references(() => buybacks.id),
+    productItemId: uuid("product_item_id").references(() => productItems.id),
+    source: buybackItemSourceEnum("source").notNull(),
+    lineNumber: integer("line_number").notNull(),
+    weightGram: numeric("weight_gram", { precision: 12, scale: 3 }).notNull(),
+    purityPercent: numeric("purity_percent", { precision: 7, scale: 3 }).notNull(),
+    exchangePurityPercent: numeric("exchange_purity_percent", {
+      precision: 7,
+      scale: 3,
+    }),
+    buybackPricePerGram: numeric("buyback_price_per_gram", {
+      precision: 18,
+      scale: 0,
+    }),
+    deductionPerGram: numeric("deduction_per_gram", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    baseAmount: numeric("base_amount", { precision: 18, scale: 0 }).notNull(),
+    deductionAmount: numeric("deduction_amount", {
+      precision: 18,
+      scale: 0,
+    })
+      .default("0")
+      .notNull(),
+    finalAmount: numeric("final_amount", { precision: 18, scale: 0 }).notNull(),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("buyback_items_buyback_line_uq").on(
+      table.buybackId,
+      table.lineNumber,
+    ),
+    uniqueIndex("buyback_items_buyback_product_uq").on(
+      table.buybackId,
+      table.productItemId,
+    ),
+    index("buyback_items_product_idx").on(table.productItemId),
+    check("buyback_items_line_positive_ck", sql`${table.lineNumber} > 0`),
+    check("buyback_items_weight_positive_ck", sql`${table.weightGram} > 0`),
+    check(
+      "buyback_items_purity_range_ck",
+      sql`${table.purityPercent} > 0 and ${table.purityPercent} <= 100`,
+    ),
+    check(
+      "buyback_items_exchange_purity_range_ck",
+      sql`${table.exchangePurityPercent} is null or (${table.exchangePurityPercent} > 0 and ${table.exchangePurityPercent} <= 999.999)`,
+    ),
+    check(
+      "buyback_items_price_positive_ck",
+      sql`${table.buybackPricePerGram} is null or ${table.buybackPricePerGram} > 0`,
+    ),
+    check(
+      "buyback_items_deduction_nonnegative_ck",
+      sql`${table.deductionPerGram} >= 0 and ${table.deductionAmount} >= 0`,
+    ),
+    check(
+      "buyback_items_amount_formula_ck",
+      sql`${table.finalAmount} = ${table.baseAmount} - ${table.deductionAmount}`,
+    ),
+    check(
+      "buyback_items_final_positive_ck",
+      sql`${table.finalAmount} > 0 and ${table.deductionAmount} < ${table.baseAmount}`,
+    ),
+  ],
+);
+
+export const buybackItemProcessings = pgTable(
+  "buyback_item_processings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    buybackItemId: uuid("buyback_item_id")
+      .notNull()
+      .references(() => buybackItems.id),
+    processingType: buybackProcessingTypeEnum("processing_type").notNull(),
+    status: buybackProcessingStatusEnum("status").default("pending").notNull(),
+    resultProductItemId: uuid("result_product_item_id").references(
+      () => productItems.id,
+    ),
+    resultSnapshot: jsonb("result_snapshot").$type<
+      Record<string, unknown> | null
+    >(),
+    processedBy: uuid("processed_by").references(() => users.id),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("buyback_item_processings_buyback_item_uq").on(
+      table.buybackItemId,
+    ),
+    index("buyback_item_processings_status_type_created_idx").on(
+      table.status,
+      table.processingType,
+      table.createdAt,
+    ),
+    index("buyback_item_processings_result_item_idx").on(
+      table.resultProductItemId,
+    ),
+    check(
+      "buyback_item_processings_completion_ck",
+      sql`(
+        ${table.status} = 'pending'
+        and ${table.resultProductItemId} is null
+        and ${table.resultSnapshot} is null
+        and ${table.processedBy} is null
+        and ${table.processedAt} is null
+      ) or (
+        ${table.status} = 'completed'
+        and ${table.resultProductItemId} is not null
+        and ${table.resultSnapshot} is not null
+        and ${table.processedBy} is not null
+        and ${table.processedAt} is not null
+      )`,
+    ),
+    check(
+      "buyback_item_processings_processed_time_ck",
+      sql`${table.processedAt} is null or ${table.processedAt} >= ${table.createdAt}`,
+    ),
+  ],
+);
+
+export const buybackPayouts = pgTable(
+  "buyback_payouts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    buybackId: uuid("buyback_id")
+      .notNull()
+      .references(() => buybacks.id),
+    method: buybackPayoutMethodEnum("method").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 0 }).notNull(),
+    reference: varchar("reference", { length: 160 }),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("buyback_payouts_buyback_method_uq").on(
+      table.buybackId,
+      table.method,
+    ),
+    index("buyback_payouts_buyback_idx").on(table.buybackId),
+    check("buyback_payouts_amount_positive_ck", sql`${table.amount} > 0`),
+  ],
+);
+
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id").references(() => outlets.id),
+    actorUserId: uuid("actor_user_id").references(() => users.id),
+    action: varchar("action", { length: 120 }).notNull(),
+    entityType: varchar("entity_type", { length: 120 }).notNull(),
+    entityId: varchar("entity_id", { length: 160 }),
+    beforeData: jsonb("before_data").$type<Record<string, unknown> | null>(),
+    afterData: jsonb("after_data").$type<Record<string, unknown> | null>(),
+    reason: text("reason"),
+    requestId: varchar("request_id", { length: 120 }),
+    ipAddress: varchar("ip_address", { length: 64 }),
+    userAgent: text("user_agent"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("audit_logs_org_time_idx").on(table.organizationId, table.createdAt),
+    index("audit_logs_entity_idx").on(table.entityType, table.entityId),
+  ],
+);
+
+export const hardwareAgentStatusEnum = pgEnum("hardware_agent_status", [
+  "online",
+  "offline",
+  "disabled",
+]);
+
+export const hardwareJobStatusEnum = pgEnum("hardware_job_status", [
+  "pending",
+  "claimed",
+  "processing",
+  "printing",
+  "submitted",
+  "completed",
+  "failed",
+  "unknown_outcome",
+  "expired",
+  "cancelled",
+]);
+
+export const hardwareJobAttemptStatusEnum = pgEnum(
+  "hardware_job_attempt_status",
+  [
+    "claimed",
+    "processing",
+    "dispatching",
+    "submitted",
+    "acknowledged",
+    "failed_before_dispatch",
+    "unknown_after_dispatch",
+    "lease_expired",
+    "cancelled",
+  ],
+);
+
+export const hardwareJobResolutionTypeEnum = pgEnum(
+  "hardware_job_resolution_type",
+  ["confirmed_completed", "retry_authorized", "cancelled"],
+);
+
+export const hardwareJobTypeEnum = pgEnum("hardware_job_type", [
+  "print_label_sato",
+  "print_receipt_certificate",
+  "open_cash_drawer",
+  "test_label_printer",
+  "test_document_printer",
+  "test_cash_drawer",
+]);
+
+export const hardwareDeviceTypeEnum = pgEnum("hardware_device_type", [
+  "label_printer",
+  "document_printer",
+  "cash_drawer",
+  "other",
+]);
+
+export const hardwareAgents = pgTable(
+  "hardware_agents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    registerId: uuid("register_id")
+      .notNull()
+      .references(() => registers.id),
+    code: varchar("code", { length: 80 }).notNull(),
+    name: varchar("name", { length: 160 }).notNull(),
+    secretHash: text("secret_hash").notNull(),
+    status: hardwareAgentStatusEnum("status").default("offline").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    capabilities: jsonb("capabilities")
+      .$type<Record<string, unknown>>()
+      .default({}),
+    settings: jsonb("settings").$type<Record<string, unknown>>().default({}),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    lastIpAddress: varchar("last_ip_address", { length: 64 }),
+    lastUserAgent: text("last_user_agent"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("hardware_agents_org_code_uq").on(
+      table.organizationId,
+      table.code,
+    ),
+    uniqueIndex("hardware_agents_one_active_per_register_uq")
+      .on(table.registerId)
+      .where(sql`${table.isActive} = true`),
+    index("hardware_agents_register_idx").on(table.registerId, table.isActive),
+    index("hardware_agents_org_status_idx").on(
+      table.organizationId,
+      table.status,
+    ),
+  ],
+);
+
+export const hardwareJobAttempts = pgTable(
+  "hardware_job_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    jobId: uuid("job_id")
+      .notNull()
+      .references((): AnyPgColumn => hardwareJobs.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => hardwareAgents.id),
+    attemptNumber: integer("attempt_number").notNull(),
+    status: hardwareJobAttemptStatusEnum("status").default("claimed").notNull(),
+    leaseTokenHash: text("lease_token_hash").notNull(),
+    leaseExpiresAt: timestamp("lease_expires_at", {
+      withTimezone: true,
+    }).notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    eventSequence: integer("event_sequence").default(0).notNull(),
+    dispatchStartedAt: timestamp("dispatch_started_at", {
+      withTimezone: true,
+    }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    serverAcknowledgedAt: timestamp("server_acknowledged_at", {
+      withTimezone: true,
+    }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    errorCode: varchar("error_code", { length: 80 }),
+    errorMessage: text("error_message"),
+    retrySafe: boolean("retry_safe"),
+    result: jsonb("result")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("hardware_job_attempts_job_number_uq").on(
+      table.jobId,
+      table.attemptNumber,
+    ),
+    uniqueIndex("hardware_job_attempts_one_active_uq")
+      .on(table.jobId)
+      .where(
+        sql`${table.status} in ('claimed', 'processing', 'dispatching', 'submitted')`,
+      ),
+    index("hardware_job_attempts_agent_status_idx").on(
+      table.agentId,
+      table.status,
+      table.createdAt,
+    ),
+    index("hardware_job_attempts_lease_idx").on(
+      table.status,
+      table.leaseExpiresAt,
+    ),
+    check("hardware_job_attempts_number_ck", sql`${table.attemptNumber} > 0`),
+    check(
+      "hardware_job_attempts_event_sequence_ck",
+      sql`${table.eventSequence} >= 0`,
+    ),
+    check(
+      "hardware_job_attempts_payload_hash_ck",
+      sql`${table.payloadHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
+export const hardwareJobs = pgTable(
+  "hardware_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    registerId: uuid("register_id")
+      .notNull()
+      .references(() => registers.id),
+    // Legacy v1 claim owner. Protocol v2 uses currentAttemptId + attempt.agentId.
+    agentId: uuid("agent_id").references(() => hardwareAgents.id),
+    targetAgentId: uuid("target_agent_id").references(() => hardwareAgents.id),
+    currentAttemptId: uuid("current_attempt_id").references(
+      () => hardwareJobAttempts.id,
+      { onDelete: "set null" },
+    ),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    protocolVersion: integer("protocol_version").default(1).notNull(),
+    jobType: hardwareJobTypeEnum("job_type").notNull(),
+    deviceType: hardwareDeviceTypeEnum("device_type").notNull(),
+    requiredCapability: varchar("required_capability", { length: 80 }),
+    targetDevice: varchar("target_device", { length: 120 }),
+    status: hardwareJobStatusEnum("status").default("pending").notNull(),
+    priority: integer("priority").default(100).notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(3).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }),
+    result: jsonb("result").$type<Record<string, unknown>>().default({}),
+    error: text("error"),
+    lastErrorCode: varchar("last_error_code", { length: 80 }),
+    lastErrorMessage: text("last_error_message"),
+    idempotencyKey: varchar("idempotency_key", { length: 160 }),
+    sourceType: varchar("source_type", { length: 80 }),
+    sourceId: varchar("source_id", { length: 160 }),
+    availableAt: timestamp("available_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    processingAt: timestamp("processing_at", { withTimezone: true }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    failedAt: timestamp("failed_at", { withTimezone: true }),
+    unknownAt: timestamp("unknown_at", { withTimezone: true }),
+    expiredAt: timestamp("expired_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index("hardware_jobs_claim_idx").on(
+      table.organizationId,
+      table.outletId,
+      table.registerId,
+      table.status,
+      table.availableAt,
+    ),
+    index("hardware_jobs_v2_claim_idx").on(
+      table.organizationId,
+      table.outletId,
+      table.registerId,
+      table.protocolVersion,
+      table.status,
+      table.requiredCapability,
+      table.availableAt,
+      table.priority,
+    ),
+    index("hardware_jobs_agent_status_idx").on(table.agentId, table.status),
+    index("hardware_jobs_target_agent_idx").on(
+      table.targetAgentId,
+      table.status,
+      table.availableAt,
+    ),
+    index("hardware_jobs_expiry_idx")
+      .on(table.status, table.expiresAt)
+      .where(sql`${table.expiresAt} is not null`),
+    index("hardware_jobs_source_idx").on(table.sourceType, table.sourceId),
+    uniqueIndex("hardware_jobs_current_attempt_uq")
+      .on(table.currentAttemptId)
+      .where(sql`${table.currentAttemptId} is not null`),
+    uniqueIndex("hardware_jobs_idempotency_uq")
+      .on(table.organizationId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} is not null`),
+    check(
+      "hardware_jobs_protocol_version_ck",
+      sql`${table.protocolVersion} in (1, 2)`,
+    ),
+    check(
+      "hardware_jobs_attempts_ck",
+      sql`${table.protocolVersion} <> 2 or (${table.attempts} >= 0 and ${table.maxAttempts} > 0 and ${table.attempts} <= ${table.maxAttempts})`,
+    ),
+    check(
+      "hardware_jobs_required_capability_ck",
+      sql`${table.requiredCapability} is null or ${table.requiredCapability} in ('print_label_sato', 'print_document_pdf', 'open_cash_drawer')`,
+    ),
+    check(
+      "hardware_jobs_payload_hash_ck",
+      sql`${table.payloadHash} is null or ${table.payloadHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "hardware_jobs_v2_required_fields_ck",
+      sql`${table.protocolVersion} <> 2 or (${table.requiredCapability} is not null and ${table.payloadHash} is not null and ${table.expiresAt} is not null and ${table.idempotencyKey} is not null)`,
+    ),
+    check(
+      "hardware_jobs_v2_status_ck",
+      sql`${table.protocolVersion} <> 2 or ${table.status} <> 'printing'`,
+    ),
+    check(
+      "hardware_jobs_expiry_after_creation_ck",
+      sql`${table.expiresAt} is null or ${table.expiresAt} > ${table.createdAt}`,
+    ),
+  ],
+);
+
+export const hardwareJobResolutions = pgTable(
+  "hardware_job_resolutions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => hardwareJobs.id, { onDelete: "cascade" }),
+    attemptId: uuid("attempt_id").references(() => hardwareJobAttempts.id, {
+      onDelete: "set null",
+    }),
+    resolvedByUserId: uuid("resolved_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    resolutionType: hardwareJobResolutionTypeEnum("resolution_type").notNull(),
+    reason: text("reason").notNull(),
+    duplicateRiskAcknowledged: boolean("duplicate_risk_acknowledged")
+      .default(false)
+      .notNull(),
+    previousStatus: hardwareJobStatusEnum("previous_status").notNull(),
+    nextStatus: hardwareJobStatusEnum("next_status").notNull(),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("hardware_job_resolutions_job_time_idx").on(
+      table.jobId,
+      table.createdAt,
+    ),
+    index("hardware_job_resolutions_org_time_idx").on(
+      table.organizationId,
+      table.createdAt,
+    ),
+    check(
+      "hardware_job_resolutions_reason_ck",
+      sql`char_length(trim(${table.reason})) between 12 and 500`,
+    ),
+    check(
+      "hardware_job_resolutions_retry_ack_ck",
+      sql`${table.resolutionType} <> 'retry_authorized' or ${table.duplicateRiskAcknowledged} = true`,
+    ),
+    check(
+      "hardware_job_resolutions_status_ck",
+      sql`${table.previousStatus} = 'unknown_outcome' and ${table.nextStatus} in ('completed', 'pending', 'cancelled')`,
+    ),
+  ],
+);
+
+export const notificationCategoryEnum = pgEnum("notification_category", [
+  "sales",
+  "payment",
+  "cash_shift",
+  "inventory_return",
+  "hardware",
+  "security",
+  "system",
+  "approval_result",
+]);
+
+export const notificationRecipientStatusEnum = pgEnum(
+  "notification_recipient_status",
+  ["unread", "read", "acknowledged", "resolved", "archived"],
+);
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "sales",
+  "hardware",
+  "shift",
+  "cash",
+  "inventory",
+  "system",
+]);
+
+export const notificationSeverityEnum = pgEnum("notification_severity", [
+  "info",
+  "success",
+  "warning",
+  "critical",
+]);
+
+export const notificationEvents = pgTable(
+  "notification_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id").references(() => outlets.id),
+    category: notificationCategoryEnum("category").notNull(),
+    eventType: varchar("event_type", { length: 120 }).notNull(),
+    severity: notificationSeverityEnum("severity").default("info").notNull(),
+    title: varchar("title", { length: 160 }).notNull(),
+    summary: text("summary").notNull(),
+    entityType: varchar("entity_type", { length: 80 }),
+    entityId: varchar("entity_id", { length: 160 }),
+    actionUrl: varchar("action_url", { length: 300 }),
+    requiresAction: boolean("requires_action").default(false).notNull(),
+    payload: jsonb("payload")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    deduplicationKey: varchar("deduplication_key", { length: 220 }),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("notification_events_active_dedupe_uq")
+      .on(table.organizationId, table.deduplicationKey)
+      .where(
+        sql`${table.deduplicationKey} is not null and ${table.resolvedAt} is null`,
+      ),
+    index("notification_events_org_occurred_idx").on(
+      table.organizationId,
+      table.occurredAt,
+    ),
+    index("notification_events_org_category_idx").on(
+      table.organizationId,
+      table.category,
+      table.occurredAt,
+    ),
+    index("notification_events_outlet_idx").on(
+      table.outletId,
+      table.occurredAt,
+    ),
+    index("notification_events_entity_idx").on(
+      table.entityType,
+      table.entityId,
+    ),
+    index("notification_events_active_action_idx")
+      .on(table.organizationId, table.requiresAction, table.severity)
+      .where(sql`${table.resolvedAt} is null`),
+    check(
+      "notification_events_title_summary_ck",
+      sql`length(btrim(${table.title})) > 0 and length(btrim(${table.summary})) > 0`,
+    ),
+    check(
+      "notification_events_action_url_ck",
+      sql`${table.actionUrl} is null or left(${table.actionUrl}, 1) = '/'`,
+    ),
+    check(
+      "notification_events_resolved_time_ck",
+      sql`${table.resolvedAt} is null or ${table.resolvedAt} >= ${table.occurredAt}`,
+    ),
+  ],
+);
+
+export const notificationRecipients = pgTable(
+  "notification_recipients",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => notificationEvents.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: notificationRecipientStatusEnum("status")
+      .default("unread")
+      .notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("notification_recipients_event_user_uq").on(
+      table.eventId,
+      table.userId,
+    ),
+    index("notification_recipients_user_status_idx").on(
+      table.userId,
+      table.status,
+      table.createdAt,
+    ),
+    index("notification_recipients_event_status_idx").on(
+      table.eventId,
+      table.status,
+    ),
+    check(
+      "notification_recipients_read_time_ck",
+      sql`${table.status} <> 'read' or ${table.readAt} is not null`,
+    ),
+    check(
+      "notification_recipients_ack_time_ck",
+      sql`${table.status} <> 'acknowledged' or ${table.acknowledgedAt} is not null`,
+    ),
+    check(
+      "notification_recipients_resolved_time_ck",
+      sql`${table.status} <> 'resolved' or ${table.resolvedAt} is not null`,
+    ),
+    check(
+      "notification_recipients_archived_time_ck",
+      sql`${table.status} <> 'archived' or ${table.archivedAt} is not null`,
+    ),
+  ],
+);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id").references(() => outlets.id),
+    userId: uuid("user_id").references(() => users.id),
+    type: notificationTypeEnum("type").notNull(),
+    severity: notificationSeverityEnum("severity").default("info").notNull(),
+    title: varchar("title", { length: 160 }).notNull(),
+    message: text("message").notNull(),
+    entityType: varchar("entity_type", { length: 80 }),
+    entityId: varchar("entity_id", { length: 160 }),
+    actionUrl: varchar("action_url", { length: 300 }),
+    isRead: boolean("is_read").default(false).notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    index("notifications_org_unread_idx").on(
+      table.organizationId,
+      table.isRead,
+      table.createdAt,
+    ),
+    index("notifications_org_type_idx").on(table.organizationId, table.type),
+    index("notifications_outlet_idx").on(table.outletId, table.createdAt),
+    index("notifications_user_idx").on(table.userId, table.isRead),
+    index("notifications_entity_idx").on(table.entityType, table.entityId),
+  ],
+);
+
+export const customerDepositLedger = pgTable(
+  "customer_deposit_ledger",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    saleId: uuid("sale_id").references(() => sales.id, {
+      onDelete: "set null",
+    }),
+    paymentId: uuid("payment_id").references(() => payments.id, {
+      onDelete: "set null",
+    }),
+    cashMovementId: uuid("cash_movement_id").references(
+      () => cashMovements.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    entryType: customerDepositLedgerEntryTypeEnum("entry_type").notNull(),
+    direction: customerDepositLedgerDirectionEnum("direction").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 0 }).notNull(),
+    balanceAfter: numeric("balance_after", { precision: 18, scale: 0 })
+      .default("0")
+      .notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 160 }),
+    referenceType: varchar("reference_type", { length: 80 }),
+    referenceId: uuid("reference_id"),
+    description: text("description"),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("customer_deposit_ledger_scope_time_idx").on(
+      table.organizationId,
+      table.outletId,
+      table.customerId,
+      table.occurredAt,
+    ),
+    index("customer_deposit_ledger_sale_idx").on(table.saleId),
+    index("customer_deposit_ledger_reference_idx").on(
+      table.referenceType,
+      table.referenceId,
+    ),
+    uniqueIndex("customer_deposit_ledger_idempotency_uq")
+      .on(table.organizationId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} is not null`),
+    check(
+      "customer_deposit_ledger_amount_positive_ck",
+      sql`${table.amount} > 0`,
+    ),
+    check(
+      "customer_deposit_ledger_balance_nonnegative_ck",
+      sql`${table.balanceAfter} >= 0`,
+    ),
+    check(
+      "customer_deposit_ledger_direction_ck",
+      sql`(
+        (${table.entryType} = 'deposit_in' and ${table.direction} = 'credit')
+        or (${table.entryType} in ('deposit_used', 'deposit_withdrawal') and ${table.direction} = 'debit')
+        or (${table.entryType} = 'adjustment' and ${table.direction} in ('credit', 'debit'))
+      )`,
+    ),
+    check(
+      "customer_deposit_ledger_reference_pair_ck",
+      sql`(${table.referenceType} is null and ${table.referenceId} is null)
+        or (${table.referenceType} is not null and ${table.referenceId} is not null)`,
+    ),
+  ],
+);
+
+export const paymentRefunds = pgTable(
+  "payment_refunds",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    saleId: uuid("sale_id")
+      .notNull()
+      .references(() => sales.id),
+    paymentId: uuid("payment_id")
+      .notNull()
+      .references(() => payments.id),
+    originalShiftId: uuid("original_shift_id")
+      .notNull()
+      .references(() => shifts.id),
+    refundShiftId: uuid("refund_shift_id").references(() => shifts.id),
+    amount: numeric("amount", { precision: 18, scale: 0 }).notNull(),
+    method: paymentMethodEnum("method").notNull(),
+    provider: varchar("provider", { length: 80 }).default("manual").notNull(),
+    providerReference: varchar("provider_reference", { length: 160 }),
+    destinationMasked: varchar("destination_masked", { length: 160 }),
+    evidenceKey: text("evidence_key"),
+    reason: text("reason").notNull(),
+    status: paymentRefundStatusEnum("status").default("requested").notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 160 }).notNull(),
+    requestedBy: uuid("requested_by")
+      .notNull()
+      .references(() => users.id),
+    approvedBy: uuid("approved_by").references(() => users.id),
+    executedBy: uuid("executed_by").references(() => users.id),
+    confirmedBy: uuid("confirmed_by").references(() => users.id),
+    requestedAt: timestamp("requested_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    executedAt: timestamp("executed_at", { withTimezone: true }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    failureCode: varchar("failure_code", { length: 120 }),
+    failureMessage: text("failure_message"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("payment_refunds_org_idempotency_uq").on(
+      table.organizationId,
+      table.idempotencyKey,
+    ),
+    index("payment_refunds_sale_status_idx").on(table.saleId, table.status),
+    index("payment_refunds_payment_status_idx").on(
+      table.paymentId,
+      table.status,
+    ),
+    index("payment_refunds_refund_shift_idx").on(table.refundShiftId),
+    index("payment_refunds_provider_reference_idx").on(
+      table.provider,
+      table.providerReference,
+    ),
+    check("payment_refunds_amount_positive_ck", sql`${table.amount} > 0`),
+    check(
+      "payment_refunds_confirmed_state_ck",
+      sql`${table.status} <> 'confirmed' or ${table.confirmedAt} is not null`,
+    ),
+    check(
+      "payment_refunds_cash_shift_ck",
+      sql`not (${table.method} = 'cash' and ${table.status} = 'confirmed')
+        or ${table.refundShiftId} is not null`,
+    ),
+  ],
+);
+
+export const saleReturnCases = pgTable(
+  "sale_return_cases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    saleId: uuid("sale_id")
+      .notNull()
+      .references(() => sales.id),
+    status: saleReturnCaseStatusEnum("status")
+      .default("awaiting_receipt")
+      .notNull(),
+    expectedItemCount: integer("expected_item_count").notNull(),
+    receivedItemCount: integer("received_item_count").default(0).notNull(),
+    inspectedItemCount: integer("inspected_item_count").default(0).notNull(),
+    notes: text("notes"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("sale_return_cases_sale_uq").on(table.saleId),
+    index("sale_return_cases_outlet_status_idx").on(
+      table.outletId,
+      table.status,
+    ),
+    check(
+      "sale_return_cases_counts_ck",
+      sql`${table.expectedItemCount} > 0
+        and ${table.receivedItemCount} >= 0
+        and ${table.inspectedItemCount} >= 0
+        and ${table.receivedItemCount} <= ${table.expectedItemCount}
+        and ${table.inspectedItemCount} <= ${table.receivedItemCount}`,
+    ),
+    check(
+      "sale_return_cases_completed_state_ck",
+      sql`${table.status} not in ('completed', 'rejected') or ${table.completedAt} is not null`,
+    ),
+    check(
+      "sale_return_cases_cancelled_state_ck",
+      sql`${table.status} <> 'cancelled' or ${table.cancelledAt} is not null`,
+    ),
+  ],
+);
+
+export const saleReturnItems = pgTable(
+  "sale_return_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    outletId: uuid("outlet_id")
+      .notNull()
+      .references(() => outlets.id),
+    returnCaseId: uuid("return_case_id")
+      .notNull()
+      .references(() => saleReturnCases.id),
+    saleItemId: uuid("sale_item_id")
+      .notNull()
+      .references(() => saleItems.id),
+    productItemId: uuid("product_item_id")
+      .notNull()
+      .references(() => productItems.id),
+    status: saleReturnItemStatusEnum("status")
+      .default("awaiting_receipt")
+      .notNull(),
+    expectedSku: varchar("expected_sku", { length: 80 }).notNull(),
+    expectedBarcode: varchar("expected_barcode", { length: 120 }).notNull(),
+    expectedSerialNumber: varchar("expected_serial_number", { length: 120 }),
+    expectedWeightGram: numeric("expected_weight_gram", {
+      precision: 12,
+      scale: 3,
+    }),
+    receivedCode: varchar("received_code", { length: 160 }),
+    actualWeightGram: numeric("actual_weight_gram", {
+      precision: 12,
+      scale: 3,
+    }),
+    identityConfirmed: boolean("identity_confirmed"),
+    certificateComplete: boolean("certificate_complete"),
+    packagingComplete: boolean("packaging_complete"),
+    conditionGood: boolean("condition_good"),
+    decision: returnInspectionDecisionEnum("decision"),
+    inspectionNotes: text("inspection_notes"),
+    photoKey: text("photo_key"),
+    receivedBy: uuid("received_by").references(() => users.id),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    inspectedBy: uuid("inspected_by").references(() => users.id),
+    inspectedAt: timestamp("inspected_at", { withTimezone: true }),
+    decidedBy: uuid("decided_by").references(() => users.id),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("sale_return_items_case_sale_item_uq").on(
+      table.returnCaseId,
+      table.saleItemId,
+    ),
+    uniqueIndex("sale_return_items_case_product_item_uq").on(
+      table.returnCaseId,
+      table.productItemId,
+    ),
+    index("sale_return_items_case_status_idx").on(
+      table.returnCaseId,
+      table.status,
+    ),
+    index("sale_return_items_product_status_idx").on(
+      table.productItemId,
+      table.status,
+    ),
+    check(
+      "sale_return_items_weight_positive_ck",
+      sql`${table.actualWeightGram} is null or ${table.actualWeightGram} > 0`,
+    ),
+    check(
+      "sale_return_items_received_state_ck",
+      sql`${table.status} = 'awaiting_receipt' or (${table.receivedBy} is not null and ${table.receivedAt} is not null)`,
+    ),
+    check(
+      "sale_return_items_inspected_state_ck",
+      sql`${table.status} in ('awaiting_receipt', 'pending_inspection') or (
+        ${table.inspectedBy} is not null
+        and ${table.inspectedAt} is not null
+        and ${table.decidedBy} is not null
+        and ${table.decidedAt} is not null
+        and ${table.decision} is not null
+      )`,
+    ),
+  ],
+);
+`,
+    ),
+    check(
+      "telegram_report_settings_daily_grace_minutes_ck",
+      sql`${table.dailyReportGraceMinutes} between 0 and 120`,
     ),
   ],
 );
