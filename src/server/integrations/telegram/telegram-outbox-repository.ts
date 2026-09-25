@@ -112,6 +112,8 @@ export async function findEnabledTelegramDestinationForOutlet(
       timezone: telegramReportSettings.timezone,
       openingEnabled: telegramReportSettings.openingEnabled,
       closingDailyEnabled: telegramReportSettings.closingDailyEnabled,
+      dailyReportNotBefore: telegramReportSettings.dailyReportNotBefore,
+      dailyReportGraceMinutes: telegramReportSettings.dailyReportGraceMinutes,
       weeklyEnabled: telegramReportSettings.weeklyEnabled,
       monthlyEnabled: telegramReportSettings.monthlyEnabled,
     })
@@ -150,6 +152,8 @@ export async function findEnabledTelegramDestinationForOutlet(
     destinationId: row.destinationId,
     chatId: row.chatId,
     timezone: row.timezone,
+    dailyReportNotBefore: row.dailyReportNotBefore,
+    dailyReportGraceMinutes: row.dailyReportGraceMinutes,
   };
 }
 
