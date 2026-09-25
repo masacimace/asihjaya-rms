@@ -375,6 +375,7 @@ export function ProcessingDrawer({
   onClose,
   onCompleted,
   canPrintLabel,
+  canViewInventory,
 }: {
   row: BuybackProcessingQueueRow;
   categories: ProductMasterCategoryOption[];
@@ -384,6 +385,7 @@ export function ProcessingDrawer({
   onClose: () => void;
   onCompleted: (message: string) => void;
   canPrintLabel: boolean;
+  canViewInventory: boolean;
 }) {
   const [state, formAction, isPending] = useActionState(
     completeBuybackProcessingAction,
@@ -564,7 +566,7 @@ export function ProcessingDrawer({
               </div>
             )}
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <div className={cn("mt-4 grid gap-2", canViewInventory && "sm:grid-cols-2")}>
               <button
                 type="button"
                 onClick={onClose}
@@ -572,13 +574,15 @@ export function ProcessingDrawer({
               >
                 Selesai
               </button>
-              <Link
-                href={`/admin/inventaris/item/${state.result.productItemId}`}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-800 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
-              >
-                Lihat Item
-                <ArrowUpRight className="size-4" />
-              </Link>
+              {canViewInventory ? (
+                <Link
+                  href={`/admin/inventaris/item/${state.result.productItemId}`}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-800 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
+                >
+                  Lihat Item
+                  <ArrowUpRight className="size-4" />
+                </Link>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1107,6 +1111,7 @@ export function BuybackProcessingWorkspace({
   priceRates,
   canProcess,
   canPrintLabel,
+  canViewInventory,
 }: {
   data: BuybackProcessingData;
   categories: ProductMasterCategoryOption[];
@@ -1115,6 +1120,7 @@ export function BuybackProcessingWorkspace({
   priceRates: BuybackProcessingRateOption[];
   canProcess: boolean;
   canPrintLabel: boolean;
+  canViewInventory: boolean;
 }) {
   const router = useRouter();
   const [typeFilter, setTypeFilter] = useState<
@@ -1626,6 +1632,7 @@ export function BuybackProcessingWorkspace({
             router.refresh();
           }}
           canPrintLabel={canPrintLabel}
+          canViewInventory={canViewInventory}
         />
       ) : null}
     </>
