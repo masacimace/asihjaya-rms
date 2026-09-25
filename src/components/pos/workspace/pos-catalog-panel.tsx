@@ -509,7 +509,7 @@ export function PosCatalogPanel({
 
                 <div className="space-y-2.5 p-2.5 sm:space-y-3 sm:p-4">
                   <div className="space-y-2">
-                    <p className="line-clamp-3 text-xs font-semibold leading-5 text-neutral-950 sm:line-clamp-2 sm:min-h-10 sm:text-[15px]">
+                    <p className="line-clamp-3 text-[13px] font-semibold leading-5 text-neutral-950 sm:line-clamp-2 sm:min-h-10 sm:text-[15px]">
                       {item.productName}
                     </p>
 

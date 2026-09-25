@@ -133,8 +133,13 @@ const navigation = [
 
 const mobilePrimaryNavigation = [
   { label: "Kasir", href: "/pos", icon: ShoppingBag },
-  { label: "Transaksi", href: "/pos/transaksi", icon: ReceiptText },
-  { label: "Customer", href: "/pos/pelanggan", icon: UsersRound },
+  {
+    label: "Pembelian",
+    href: "/pos/buyback",
+    icon: RefreshCcw,
+    requiresBuybackAccess: true,
+  },
+  { label: "Riwayat", href: "/pos/transaksi", icon: ReceiptText },
 ] as const;
 
 const mobileMoreNavigation = [
@@ -145,10 +150,9 @@ const mobileMoreNavigation = [
     requiresProductCreate: true,
   },
   {
-    label: "Buyback Pembelian",
-    href: "/pos/buyback",
-    icon: RefreshCcw,
-    requiresBuybackAccess: true,
+    label: "Daftar Customer",
+    href: "/pos/pelanggan",
+    icon: UsersRound,
   },
   { label: "Transaksi Ditahan", href: "/pos/ditahan", icon: Pause },
   { label: "Operasional Kasir", href: "/pos/shift", icon: Clock3 },
@@ -970,7 +974,7 @@ export function PosShell({
           </span>
         </div>
 
-        <nav className="grid h-[72px] grid-cols-4 pb-[env(safe-area-inset-bottom)]">
+        <nav className="grid h-[62px] grid-cols-4 pb-[env(safe-area-inset-bottom)]">
           {mobilePrimaryNavigation.map(({ label, href, icon: Icon }) => {
             const active =
               href === "/pos/transaksi"

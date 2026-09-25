@@ -1,11 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import {
-  RefreshCcw,
-  Store,
-  WalletCards,
-  Wrench,
-} from "lucide-react";
+import { RefreshCcw, Store, WalletCards, Wrench } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -100,19 +95,22 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
     !historyData.detail &&
     historyData.rows.some((row) => row.pendingProcessingCount > 0)
   ) {
-    const [processingData, productMasters, activeSaleRates] = await Promise.all([
-      getBuybackProcessingData({
-        organizationId: auth.organization.id,
-        outletId: primaryOutlet.id,
-      }),
-      getActiveProductMasterOptions(auth.organization.id),
-      getActiveGoldPriceRates({ organizationId: auth.organization.id }),
-    ]);
+    const [processingData, productMasters, activeSaleRates] = await Promise.all(
+      [
+        getBuybackProcessingData({
+          organizationId: auth.organization.id,
+          outletId: primaryOutlet.id,
+        }),
+        getActiveProductMasterOptions(auth.organization.id),
+        getActiveGoldPriceRates({ organizationId: auth.organization.id }),
+      ],
+    );
     const recentBuybackIds = new Set(historyData.rows.map((row) => row.id));
 
     processingQuickActions = {
       rows: processingData.rows.filter(
-        (row) => row.status === "pending" && recentBuybackIds.has(row.buybackId),
+        (row) =>
+          row.status === "pending" && recentBuybackIds.has(row.buybackId),
       ),
       categories,
       productMasters,
@@ -153,7 +151,7 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
       <PosPageHeader
         eyebrow="Transaksi barang masuk dari customer"
         title="Buyback Pembelian"
-        description="Catat barang yang dibeli kembali, tentukan Cuci/Rongsok, lalu masukkan Total Harga final. Barang belum tersedia di inventory dan POS sampai pemrosesan rekondisi selesai di proses."
+        description="Barang belum tersedia di inventory dan POS sampai pemrosesan rekondisi selesai di proses."
         icon={<RefreshCcw className="size-5" />}
         actions={
           <div className="w-full rounded-[22px] border border-[var(--border)] bg-neutral-50 p-4 sm:p-5 lg:w-[560px] xl:w-[500px]">

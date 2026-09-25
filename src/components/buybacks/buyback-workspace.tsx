@@ -1060,19 +1060,6 @@ export function BuybackWorkspace({
                   className={cn(inputClassName, "pl-10")}
                 />
               </div>
-              <button
-                type="button"
-                onClick={searchExisting}
-                disabled={isSearching}
-                className="inline-flex h-11 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-neutral-700 disabled:opacity-60"
-              >
-                {isSearching ? (
-                  <LoaderCircle className="size-4 animate-spin" />
-                ) : (
-                  <Search className="size-4" />
-                )}
-                Cari
-              </button>
             </div>
 
             {existingResults.length > 0 ? (
@@ -1138,378 +1125,385 @@ export function BuybackWorkspace({
                 deductionAmount >= previousSaleAmount;
 
               return (
-              <article
-                key={item.clientKey}
-                className="rounded-2xl border border-[var(--border)] p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--accent)]">
-                        Item {index + 1}
-                      </span>
-                      <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-700">
-                        {item.source === "asihjaya"
-                          ? `ASIHJAYA${item.sku ? ` · ${item.sku}` : ""}`
-                          : "Barang Luar"}
-                      </span>
+                <article
+                  key={item.clientKey}
+                  className="rounded-2xl border border-[var(--border)] p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--accent)]">
+                          Item {index + 1}
+                        </span>
+                        <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-700">
+                          {item.source === "asihjaya"
+                            ? `ASIHJAYA${item.sku ? ` · ${item.sku}` : ""}`
+                            : "Barang Luar"}
+                        </span>
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.clientKey)}
+                      className="grid size-9 shrink-0 place-items-center rounded-xl text-red-600 hover:bg-red-50"
+                      aria-label="Hapus item"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.clientKey)}
-                    className="grid size-9 shrink-0 place-items-center rounded-xl text-red-600 hover:bg-red-50"
-                    aria-label="Hapus item"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                </div>
 
-                <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                  <label className="block text-sm lg:col-span-2">
-                    <span className="mb-2 block font-medium text-neutral-800">
-                      Nama Produk *
-                    </span>
-                    <input
-                      value={item.displayName}
-                      onChange={(event) =>
-                        updateItem(item.clientKey, {
-                          displayName: event.target.value,
-                        })
-                      }
-                      maxLength={220}
-                      className={inputClassName}
-                      placeholder="Contoh: Cincin Emas Customer"
-                    />
-                  </label>
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    <label className="block text-sm lg:col-span-2">
+                      <span className="mb-2 block font-medium text-neutral-800">
+                        Nama Produk *
+                      </span>
+                      <input
+                        value={item.displayName}
+                        onChange={(event) =>
+                          updateItem(item.clientKey, {
+                            displayName: event.target.value,
+                          })
+                        }
+                        maxLength={220}
+                        className={inputClassName}
+                        placeholder="Contoh: Cincin Emas Customer"
+                      />
+                    </label>
 
-                  <div className="lg:col-span-2">
-                    <span className="mb-2 block text-sm font-medium text-neutral-800">
-                      Status / Kondisi Produk *
-                    </span>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {(
-                        ["cleaning", "recondition"] as BuybackProcessingType[]
-                      ).map((processingType) => {
-                        const selected = item.processingType === processingType;
-                        const Icon =
-                          processingType === "cleaning" ? Sparkles : Wrench;
-                        return (
-                          <button
-                            key={processingType}
-                            type="button"
-                            onClick={() =>
-                              updateItem(item.clientKey, { processingType })
+                    <div className="lg:col-span-2">
+                      <span className="mb-2 block text-sm font-medium text-neutral-800">
+                        Status / Kondisi Produk *
+                      </span>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {(
+                          ["cleaning", "recondition"] as BuybackProcessingType[]
+                        ).map((processingType) => {
+                          const selected =
+                            item.processingType === processingType;
+                          const Icon =
+                            processingType === "cleaning" ? Sparkles : Wrench;
+                          return (
+                            <button
+                              key={processingType}
+                              type="button"
+                              onClick={() =>
+                                updateItem(item.clientKey, { processingType })
+                              }
+                              className={cn(
+                                "flex min-h-16 items-center gap-3 rounded-2xl border px-4 py-3 text-left transition",
+                                selected
+                                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                                  : "border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
+                              )}
+                            >
+                              <Icon className="size-5 shrink-0" />
+                              <span>
+                                <span className="block text-sm font-semibold">
+                                  {processingLabels[processingType]}
+                                </span>
+                                <span className="mt-0.5 block text-[11px] opacity-75">
+                                  {processingType === "cleaning"
+                                    ? "Cleaning / servis ringan sebelum dijual lagi"
+                                    : "Perlu rekondisi/repair lebih besar"}
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="block text-sm">
+                      <span className="mb-2 block font-medium text-neutral-800">
+                        Kategori *
+                      </span>
+                      <div className="flex gap-2">
+                        <select
+                          value={item.categoryId}
+                          onChange={(event) =>
+                            updateItem(item.clientKey, {
+                              categoryId: event.target.value,
+                            })
+                          }
+                          className={cn(inputClassName, "min-w-0 flex-1")}
+                        >
+                          <option value="">Pilih kategori</option>
+                          {localCategories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setQuickCategoryItemKey(item.clientKey)
+                          }
+                          disabled={!canCreate}
+                          className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
+                          aria-label="Tambah Kategori"
+                          title="Tambah Kategori"
+                        >
+                          <Plus className="size-5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="block text-sm">
+                      <span className="mb-2 block font-medium text-neutral-800">
+                        Warna *
+                      </span>
+                      <div className="flex gap-2">
+                        <select
+                          value={item.color}
+                          onChange={(event) =>
+                            updateItem(item.clientKey, {
+                              color: event.target.value,
+                            })
+                          }
+                          className={cn(inputClassName, "min-w-0 flex-1")}
+                        >
+                          <option value="">
+                            {localColorPresets.length > 0
+                              ? "Pilih warna"
+                              : "Belum ada preset warna aktif"}
+                          </option>
+                          {item.source === "asihjaya" &&
+                          item.color &&
+                          !localColorPresets.some(
+                            (preset) =>
+                              normalizeColorKey(preset.name) ===
+                              normalizeColorKey(item.color),
+                          ) ? (
+                            <option value={item.color}>
+                              {item.color} (warna item saat ini)
+                            </option>
+                          ) : null}
+                          {localColorPresets.map((preset) => (
+                            <option key={preset.id} value={preset.name}>
+                              {preset.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setQuickColorItemKey(item.clientKey)}
+                          disabled={!canCreate}
+                          className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
+                          aria-label="Tambah Warna"
+                          title="Tambah Warna"
+                        >
+                          <Plus className="size-5" />
+                        </button>
+                      </div>
+                      {localColorPresets.length === 0 ? (
+                        <p className="mt-1.5 text-xs leading-5 text-amber-700">
+                          Gunakan tombol + untuk membuat warna tanpa
+                          meninggalkan Buyback.
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <label className="block text-sm">
+                      <span className="mb-2 block font-medium text-neutral-800">
+                        Kadar % *
+                      </span>
+                      <input
+                        value={item.purityPercent}
+                        onChange={(event) =>
+                          updateItem(item.clientKey, {
+                            purityPercent: formatPosWeightInput(
+                              event.target.value,
+                            ),
+                          })
+                        }
+                        inputMode="decimal"
+                        className={inputClassName}
+                        placeholder="40"
+                      />
+                    </label>
+
+                    <label className="block text-sm">
+                      <span className="mb-2 block font-medium text-neutral-800">
+                        Berat (Gr) *
+                      </span>
+                      <input
+                        value={item.weightGram}
+                        onChange={(event) =>
+                          updateItem(item.clientKey, {
+                            weightGram: formatPosWeightInput(
+                              event.target.value,
+                            ),
+                          })
+                        }
+                        inputMode="decimal"
+                        className={inputClassName}
+                        placeholder="1,000"
+                      />
+                    </label>
+
+                    {item.source === "asihjaya" ? (
+                      <>
+                        <label className="block text-sm">
+                          <span className="mb-2 block font-medium text-neutral-800">
+                            Harga Jual Sebelumnya
+                          </span>
+                          <input
+                            value={
+                              previousSaleAmount > 0
+                                ? formatCurrency(previousSaleAmount)
+                                : "Tidak tersedia"
                             }
+                            readOnly
                             className={cn(
-                              "flex min-h-16 items-center gap-3 rounded-2xl border px-4 py-3 text-left transition",
-                              selected
-                                ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                                : "border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
+                              inputClassName,
+                              "cursor-default bg-neutral-50 font-semibold text-neutral-700",
+                            )}
+                            aria-label="Harga jual sebelumnya"
+                          />
+                          <p
+                            className={cn(
+                              "mt-1 text-[11px]",
+                              previousSaleAmount > 0
+                                ? "text-[var(--muted)]"
+                                : "font-medium text-red-700",
                             )}
                           >
-                            <Icon className="size-5 shrink-0" />
-                            <span>
-                              <span className="block text-sm font-semibold">
-                                {processingLabels[processingType]}
-                              </span>
-                              <span className="mt-0.5 block text-[11px] opacity-75">
-                                {processingType === "cleaning"
-                                  ? "Cleaning / servis ringan sebelum dijual lagi"
-                                  : "Perlu rekondisi/repair lebih besar"}
-                              </span>
+                            {previousSaleAmount > 0
+                              ? [
+                                  item.lastInvoiceNumber
+                                    ? `Invoice ${item.lastInvoiceNumber}`
+                                    : null,
+                                  formatPreviousSaleDate(item.soldAt, timeZone),
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")
+                              : "Riwayat penjualan terakhir belum tersedia. Item ini belum dapat diproses sebagai Buyback internal."}
+                          </p>
+                        </label>
+
+                        <label className="block text-sm">
+                          <span className="mb-2 block font-medium text-neutral-800">
+                            Potongan
+                          </span>
+                          <div className="relative">
+                            <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
+                              Rp
                             </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                            <input
+                              value={item.deductionAmount}
+                              onChange={(event) =>
+                                updateItem(item.clientKey, {
+                                  deductionAmount: formatRupiahInput(
+                                    event.target.value,
+                                  ),
+                                })
+                              }
+                              inputMode="numeric"
+                              className={cn(inputClassName, "pl-9")}
+                              placeholder="0"
+                            />
+                          </div>
+                          <p
+                            className={cn(
+                              "mt-1 text-[11px]",
+                              deductionTooLarge
+                                ? "font-medium text-red-700"
+                                : "text-[var(--muted)]",
+                            )}
+                          >
+                            {deductionTooLarge
+                              ? "Potongan harus lebih kecil dari Harga Jual Sebelumnya."
+                              : "Dikurangkan langsung dari Harga Jual Sebelumnya."}
+                          </p>
+                        </label>
 
-                  <div className="block text-sm">
-                    <span className="mb-2 block font-medium text-neutral-800">
-                      Kategori *
-                    </span>
-                    <div className="flex gap-2">
-                      <select
-                        value={item.categoryId}
-                        onChange={(event) =>
-                          updateItem(item.clientKey, {
-                            categoryId: event.target.value,
-                          })
-                        }
-                        className={cn(inputClassName, "min-w-0 flex-1")}
-                      >
-                        <option value="">Pilih kategori</option>
-                        {localCategories.map((category) => (
-                          <option key={category.id} value={category.id}>
-                            {category.label}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => setQuickCategoryItemKey(item.clientKey)}
-                        disabled={!canCreate}
-                        className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
-                        aria-label="Tambah Kategori"
-                        title="Tambah Kategori"
-                      >
-                        <Plus className="size-5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="block text-sm">
-                    <span className="mb-2 block font-medium text-neutral-800">
-                      Warna *
-                    </span>
-                    <div className="flex gap-2">
-                      <select
-                        value={item.color}
-                        onChange={(event) =>
-                          updateItem(item.clientKey, {
-                            color: event.target.value,
-                          })
-                        }
-                        className={cn(inputClassName, "min-w-0 flex-1")}
-                      >
-                        <option value="">
-                          {localColorPresets.length > 0
-                            ? "Pilih warna"
-                            : "Belum ada preset warna aktif"}
-                        </option>
-                        {item.source === "asihjaya" &&
-                        item.color &&
-                        !localColorPresets.some(
-                          (preset) =>
-                            normalizeColorKey(preset.name) ===
-                            normalizeColorKey(item.color),
-                        ) ? (
-                          <option value={item.color}>
-                            {item.color} (warna item saat ini)
-                          </option>
-                        ) : null}
-                        {localColorPresets.map((preset) => (
-                          <option key={preset.id} value={preset.name}>
-                            {preset.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => setQuickColorItemKey(item.clientKey)}
-                        disabled={!canCreate}
-                        className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--accent)] bg-white text-[var(--accent)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-neutral-300"
-                        aria-label="Tambah Warna"
-                        title="Tambah Warna"
-                      >
-                        <Plus className="size-5" />
-                      </button>
-                    </div>
-                    {localColorPresets.length === 0 ? (
-                      <p className="mt-1.5 text-xs leading-5 text-amber-700">
-                        Gunakan tombol + untuk membuat warna tanpa meninggalkan
-                        Buyback.
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <label className="block text-sm">
-                    <span className="mb-2 block font-medium text-neutral-800">
-                      Kadar % *
-                    </span>
-                    <input
-                      value={item.purityPercent}
-                      onChange={(event) =>
-                        updateItem(item.clientKey, {
-                          purityPercent: formatPosWeightInput(
-                            event.target.value,
-                          ),
-                        })
-                      }
-                      inputMode="decimal"
-                      className={inputClassName}
-                      placeholder="40"
-                    />
-                  </label>
-
-                  <label className="block text-sm">
-                    <span className="mb-2 block font-medium text-neutral-800">
-                      Berat (Gr) *
-                    </span>
-                    <input
-                      value={item.weightGram}
-                      onChange={(event) =>
-                        updateItem(item.clientKey, {
-                          weightGram: formatPosWeightInput(event.target.value),
-                        })
-                      }
-                      inputMode="decimal"
-                      className={inputClassName}
-                      placeholder="1,000"
-                    />
-                  </label>
-
-                  {item.source === "asihjaya" ? (
-                    <>
-                      <label className="block text-sm">
-                        <span className="mb-2 block font-medium text-neutral-800">
-                          Harga Jual Sebelumnya
-                        </span>
-                        <input
-                          value={
-                            previousSaleAmount > 0
-                              ? formatCurrency(previousSaleAmount)
-                              : "Tidak tersedia"
-                          }
-                          readOnly
-                          className={cn(
-                            inputClassName,
-                            "cursor-default bg-neutral-50 font-semibold text-neutral-700",
-                          )}
-                          aria-label="Harga jual sebelumnya"
-                        />
-                        <p
-                          className={cn(
-                            "mt-1 text-[11px]",
-                            previousSaleAmount > 0
-                              ? "text-[var(--muted)]"
-                              : "font-medium text-red-700",
-                          )}
-                        >
-                          {previousSaleAmount > 0
-                            ? [
-                                item.lastInvoiceNumber
-                                  ? `Invoice ${item.lastInvoiceNumber}`
-                                  : null,
-                                formatPreviousSaleDate(item.soldAt, timeZone),
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")
-                            : "Riwayat penjualan terakhir belum tersedia. Item ini belum dapat diproses sebagai Buyback internal."}
-                        </p>
-                      </label>
-
-                      <label className="block text-sm">
-                        <span className="mb-2 block font-medium text-neutral-800">
-                          Potongan
-                        </span>
-                        <div className="relative">
-                          <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
-                            Rp
+                        <label className="block text-sm lg:col-span-2">
+                          <span className="mb-2 block font-medium text-neutral-800">
+                            Total Harga Buyback *
                           </span>
                           <input
-                            value={item.deductionAmount}
-                            onChange={(event) =>
-                              updateItem(item.clientKey, {
-                                deductionAmount: formatRupiahInput(
-                                  event.target.value,
-                                ),
-                              })
+                            value={
+                              previousSaleAmount > 0
+                                ? formatCurrency(itemAmount)
+                                : "Tidak tersedia"
                             }
-                            inputMode="numeric"
-                            className={cn(inputClassName, "pl-9")}
-                            placeholder="0"
+                            readOnly
+                            className={cn(
+                              inputClassName,
+                              "cursor-default bg-neutral-50 font-semibold",
+                              itemAmount > 0
+                                ? "text-neutral-800"
+                                : "text-red-700",
+                            )}
+                            aria-label="Total harga Buyback internal"
                           />
-                        </div>
-                        <p
-                          className={cn(
-                            "mt-1 text-[11px]",
-                            deductionTooLarge
-                              ? "font-medium text-red-700"
-                              : "text-[var(--muted)]",
-                          )}
-                        >
-                          {deductionTooLarge
-                            ? "Potongan harus lebih kecil dari Harga Jual Sebelumnya."
-                            : "Dikurangkan langsung dari Harga Jual Sebelumnya."}
-                        </p>
-                      </label>
-
-                      <label className="block text-sm lg:col-span-2">
-                        <span className="mb-2 block font-medium text-neutral-800">
-                          Total Harga Buyback *
-                        </span>
-                        <input
-                          value={
-                            previousSaleAmount > 0
-                              ? formatCurrency(itemAmount)
-                              : "Tidak tersedia"
-                          }
-                          readOnly
-                          className={cn(
-                            inputClassName,
-                            "cursor-default bg-neutral-50 font-semibold",
-                            itemAmount > 0
-                              ? "text-neutral-800"
-                              : "text-red-700",
-                          )}
-                          aria-label="Total harga Buyback internal"
+                          <p className="mt-1 text-[11px] text-[var(--muted)]">
+                            Otomatis: Harga Jual Sebelumnya - Potongan.
+                          </p>
+                        </label>
+                      </>
+                    ) : (
+                      <>
+                        <BuybackRecommendation
+                          purityPercent={item.purityPercent}
+                          weightGram={item.weightGram}
+                          priceRates={localBuybackPriceRates}
+                          onRateSaved={handleBuybackRateSaved}
                         />
-                        <p className="mt-1 text-[11px] text-[var(--muted)]">
-                          Otomatis: Harga Jual Sebelumnya - Potongan.
-                        </p>
-                      </label>
-                    </>
-                  ) : (
-                    <>
-                      <BuybackRecommendation
-                        purityPercent={item.purityPercent}
-                        weightGram={item.weightGram}
-                        priceRates={localBuybackPriceRates}
-                        onRateSaved={handleBuybackRateSaved}
+
+                        <label className="block text-sm">
+                          <span className="mb-2 block font-medium text-neutral-800">
+                            Total Harga Buyback *
+                          </span>
+                          <div className="relative">
+                            <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
+                              Rp
+                            </span>
+                            <input
+                              value={item.totalAmount}
+                              onChange={(event) =>
+                                updateItem(item.clientKey, {
+                                  totalAmount: formatRupiahInput(
+                                    event.target.value,
+                                  ),
+                                })
+                              }
+                              inputMode="numeric"
+                              className={cn(inputClassName, "pl-9")}
+                              placeholder="500.000"
+                            />
+                          </div>
+                          <p className="mt-1 text-[11px] text-[var(--muted)]">
+                            Nominal final ditentukan manual oleh staff.
+                          </p>
+                        </label>
+                      </>
+                    )}
+
+                    <div className="lg:col-span-2">
+                      <BuybackImageInput
+                        clientKey={item.clientKey}
+                        showCamera
+                        error={
+                          state.fieldErrors?.[`items.${item.clientKey}.image`]
+                        }
+                        onSelectionChange={(imageSelected) =>
+                          updateItem(item.clientKey, { imageSelected })
+                        }
                       />
-
-                      <label className="block text-sm">
-                        <span className="mb-2 block font-medium text-neutral-800">
-                          Total Harga Buyback *
-                        </span>
-                        <div className="relative">
-                          <span className="absolute left-3 top-3 text-xs font-semibold text-neutral-500">
-                            Rp
-                          </span>
-                          <input
-                            value={item.totalAmount}
-                            onChange={(event) =>
-                              updateItem(item.clientKey, {
-                                totalAmount: formatRupiahInput(event.target.value),
-                              })
-                            }
-                            inputMode="numeric"
-                            className={cn(inputClassName, "pl-9")}
-                            placeholder="500.000"
-                          />
-                        </div>
-                        <p className="mt-1 text-[11px] text-[var(--muted)]">
-                          Nominal final ditentukan manual oleh staff.
-                        </p>
-                      </label>
-                    </>
-                  )}
-
-                  <div className="lg:col-span-2">
-                    <BuybackImageInput
-                      clientKey={item.clientKey}
-                      showCamera
-                      error={
-                        state.fieldErrors?.[`items.${item.clientKey}.image`]
-                      }
-                      onSelectionChange={(imageSelected) =>
-                        updateItem(item.clientKey, { imageSelected })
-                      }
-                    />
+                    </div>
                   </div>
-                </div>
 
-                <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-neutral-950 px-4 py-3 text-white">
-                  <span className="text-xs text-white/60">
-                    Total item Buyback
-                  </span>
-                  <span className="text-base font-bold">
-                    {formatCurrency(itemAmount)}
-                  </span>
-                </div>
-              </article>
+                  <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-neutral-950 px-4 py-3 text-white">
+                    <span className="text-xs text-white/60">
+                      Total item Buyback
+                    </span>
+                    <span className="text-base font-bold">
+                      {formatCurrency(itemAmount)}
+                    </span>
+                  </div>
+                </article>
               );
             })}
           </div>

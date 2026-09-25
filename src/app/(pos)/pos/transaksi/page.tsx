@@ -1231,7 +1231,7 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
                   Opsional
                 </span>
               )}
-              <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+              <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
                 {rangeLabels[data.range]}
               </span>
               {data.shiftId ? (
@@ -1243,7 +1243,7 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
               {data.query
                 ? `Pencarian “${data.query}”. Buka untuk mengubah kata kunci atau periode.`
-                : "Buka untuk mencari invoice, customer, SKU, barcode, nama item, atau mengubah periode."}
+                : "Buka untuk mencari invoice, customer, SKU, barcode atau nama item."}
             </p>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -1356,8 +1356,8 @@ export default async function PosTransactionsPage({ searchParams }: PageProps) {
               Riwayat transaksi
             </h2>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Invoice, customer, item, payment, dan total dalam compact row-card
-              tanpa horizontal scroll.
+              Invoice, customer, item, payment dan total penjualan berdasarkan
+              periode.
             </p>
           </div>
           <span className="inline-flex w-fit rounded-full border border-[var(--border)] bg-neutral-50 px-3 py-1.5 text-xs font-semibold text-neutral-700">
