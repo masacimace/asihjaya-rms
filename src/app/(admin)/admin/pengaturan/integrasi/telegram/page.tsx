@@ -57,7 +57,8 @@ function formatDateTime(value: Date | null, timezone: string) {
 }
 
 function statusClassName(status: keyof typeof statusLabels) {
-  if (status === "sent") return "bg-emerald-50 text-emerald-700 ring-emerald-100";
+  if (status === "sent")
+    return "bg-emerald-50 text-emerald-700 ring-emerald-100";
   if (status === "failed") return "bg-red-50 text-red-700 ring-red-100";
   if (status === "retry") return "bg-amber-50 text-amber-800 ring-amber-100";
   if (status === "processing") return "bg-blue-50 text-blue-700 ring-blue-100";
@@ -117,8 +118,9 @@ export default async function TelegramIntegrationPage({
               Telegram Reporting
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Mapping private group per outlet, report schedule, test message, dan delivery audit.
-              Bot token tetap hanya berada di environment server dan tidak pernah ditampilkan di browser.
+              Mapping private group per outlet, report schedule, test message,
+              dan delivery audit. Bot token tetap hanya berada di environment
+              server dan tidak pernah ditampilkan di browser.
             </p>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
@@ -127,7 +129,8 @@ export default async function TelegramIntegrationPage({
               Permission: settings.manage
             </p>
             <p className="mt-1 max-w-sm text-xs leading-5">
-              POS sales tidak memiliki akses ke halaman ini. Telegram commands, webhook, dan input dari Telegram tetap non-scope.
+              POS sales tidak memiliki akses ke halaman ini. Telegram commands,
+              webhook, dan input dari Telegram tetap non-scope.
             </p>
           </div>
         </div>
@@ -152,12 +155,17 @@ export default async function TelegramIntegrationPage({
               <Settings2 className="size-5" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase text-[var(--muted)]">Global integration</p>
-              <p className="font-semibold text-neutral-950">{runtime.enabled ? "Enabled" : "Disabled"}</p>
+              <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+                Global integration
+              </p>
+              <p className="font-semibold text-neutral-950">
+                {runtime.enabled ? "Enabled" : "Disabled"}
+              </p>
             </div>
           </div>
           <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
-            Flag global berasal dari environment server. Test message admin tetap dapat digunakan saat flag OFF untuk rollout aman.
+            Flag global berasal dari environment server. Test message admin
+            tetap dapat digunakan saat flag OFF untuk rollout aman.
           </p>
         </article>
 
@@ -167,11 +175,17 @@ export default async function TelegramIntegrationPage({
               <Bot className="size-5" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase text-[var(--muted)]">Bot status</p>
-              <p className="font-semibold text-neutral-950">{botStatus.username ?? botStatus.state.replaceAll("_", " ")}</p>
+              <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+                Bot status
+              </p>
+              <p className="font-semibold text-neutral-950">
+                {botStatus.username ?? botStatus.state.replaceAll("_", " ")}
+              </p>
             </div>
           </div>
-          <p className="mt-3 text-xs leading-5 text-[var(--muted)]">{botStatus.message}</p>
+          <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
+            {botStatus.message}
+          </p>
         </article>
 
         <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
@@ -180,24 +194,22 @@ export default async function TelegramIntegrationPage({
               <History className="size-5" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase text-[var(--muted)]">Delivery queue</p>
-              <p className="font-semibold text-neutral-950">{pendingBacklog} pending / retry</p>
+              <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+                Delivery queue
+              </p>
+              <p className="font-semibold text-neutral-950">
+                {pendingBacklog} pending / retry
+              </p>
             </div>
           </div>
           <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
-            Failed: {overview.statusCounts.failed ?? 0} · Sent: {overview.statusCounts.sent ?? 0}
+            Failed: {overview.statusCounts.failed ?? 0} · Sent:{" "}
+            {overview.statusCounts.sent ?? 0}
           </p>
         </article>
       </section>
 
       <section className="space-y-4">
-        <div>
-          <h2 className="text-xl font-semibold text-neutral-950">Destination per outlet</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Fase pertama mengizinkan satu destination aktif per outlet. Gunakan private Telegram group development selama development.
-          </p>
-        </div>
-
         {overview.destinations.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-6 text-sm text-[var(--muted)]">
             Belum ada outlet aktif yang dapat dikonfigurasi.
@@ -205,40 +217,91 @@ export default async function TelegramIntegrationPage({
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
             {overview.destinations.map((destination) => (
-              <article key={destination.outletId} className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
+              <article
+                key={destination.outletId}
+                className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6"
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase text-[var(--muted)]">{destination.outletCode}</p>
-                    <h3 className="mt-1 text-lg font-semibold text-neutral-950">{destination.outletName}</h3>
+                    <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+                      {destination.outletCode}
+                    </p>
+                    <h3 className="mt-1 text-lg font-semibold text-neutral-950">
+                      {destination.outletName}
+                    </h3>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${destination.isActive && destination.id ? "bg-emerald-50 text-emerald-700 ring-emerald-100" : "bg-neutral-100 text-neutral-600 ring-neutral-200"}`}>
-                    {destination.id ? (destination.isActive ? "Aktif" : "Nonaktif") : "Belum disimpan"}
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${destination.isActive && destination.id ? "bg-emerald-50 text-emerald-700 ring-emerald-100" : "bg-neutral-100 text-neutral-600 ring-neutral-200"}`}
+                  >
+                    {destination.id
+                      ? destination.isActive
+                        ? "Aktif"
+                        : "Nonaktif"
+                      : "Belum disimpan"}
                   </span>
                 </div>
 
-                <form action={saveTelegramDestinationAction} className="mt-5 space-y-4">
-                  {destination.id ? <input type="hidden" name="destinationId" value={destination.id} /> : null}
-                  <input type="hidden" name="outletId" value={destination.outletId} />
+                <form
+                  action={saveTelegramDestinationAction}
+                  className="mt-5 space-y-4"
+                >
+                  {destination.id ? (
+                    <input
+                      type="hidden"
+                      name="destinationId"
+                      value={destination.id}
+                    />
+                  ) : null}
+                  <input
+                    type="hidden"
+                    name="outletId"
+                    value={destination.outletId}
+                  />
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label>
                       <span className={labelClassName}>Nama destination</span>
-                      <input name="name" required maxLength={160} defaultValue={destination.name} className={inputClassName} />
+                      <input
+                        name="name"
+                        required
+                        maxLength={160}
+                        defaultValue={destination.name}
+                        className={inputClassName}
+                      />
                     </label>
                     <label>
-                      <span className={labelClassName}>Private group Chat ID</span>
-                      <input name="chatId" required maxLength={32} defaultValue={destination.chatId} placeholder="-1001234567890" className={inputClassName} />
+                      <span className={labelClassName}>
+                        Private group Chat ID
+                      </span>
+                      <input
+                        name="chatId"
+                        required
+                        maxLength={32}
+                        defaultValue={destination.chatId}
+                        placeholder="-1001234567890"
+                        className={inputClassName}
+                      />
                     </label>
                   </div>
 
                   <label className="block">
                     <span className={labelClassName}>Timezone report</span>
-                    <input name="timezone" required maxLength={64} defaultValue={destination.timezone || auth.organization.timezone} className={inputClassName} />
+                    <input
+                      name="timezone"
+                      required
+                      maxLength={64}
+                      defaultValue={
+                        destination.timezone || auth.organization.timezone
+                      }
+                      className={inputClassName}
+                    />
                   </label>
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label>
-                      <span className={labelClassName}>Laporan harian paling awal</span>
+                      <span className={labelClassName}>
+                        Laporan harian paling awal
+                      </span>
                       <input
                         type="time"
                         name="dailyReportNotBefore"
@@ -247,11 +310,14 @@ export default async function TelegramIntegrationPage({
                         className={inputClassName}
                       />
                       <span className="mt-1.5 block text-xs text-[var(--muted)]">
-                        Closing sebelum jam ini ditahan agar salah closing tidak langsung terkirim.
+                        Closing sebelum jam ini ditahan agar salah closing tidak
+                        langsung terkirim.
                       </span>
                     </label>
                     <label>
-                      <span className={labelClassName}>Grace period setelah closing</span>
+                      <span className={labelClassName}>
+                        Grace period setelah closing
+                      </span>
                       <div className="relative">
                         <input
                           type="number"
@@ -275,25 +341,57 @@ export default async function TelegramIntegrationPage({
 
                   <div className="grid gap-2 sm:grid-cols-2">
                     {[
-                      ["openingEnabled", "Opening shift", destination.openingEnabled],
-                      ["closingDailyEnabled", "Closing + daily", destination.closingDailyEnabled],
-                      ["weeklyEnabled", "Weekly Senin–Minggu", destination.weeklyEnabled],
-                      ["monthlyEnabled", "Monthly kalender", destination.monthlyEnabled],
+                      [
+                        "openingEnabled",
+                        "Opening shift",
+                        destination.openingEnabled,
+                      ],
+                      [
+                        "closingDailyEnabled",
+                        "Closing + daily",
+                        destination.closingDailyEnabled,
+                      ],
+                      [
+                        "weeklyEnabled",
+                        "Weekly Senin–Minggu",
+                        destination.weeklyEnabled,
+                      ],
+                      [
+                        "monthlyEnabled",
+                        "Monthly kalender",
+                        destination.monthlyEnabled,
+                      ],
                     ].map(([name, label, checked]) => (
-                      <label key={String(name)} className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-neutral-50 px-3 py-3 text-sm font-medium text-neutral-800">
-                        <input type="checkbox" name={String(name)} defaultChecked={Boolean(checked)} className="size-4 accent-[var(--accent)]" />
+                      <label
+                        key={String(name)}
+                        className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-neutral-50 px-3 py-3 text-sm font-medium text-neutral-800"
+                      >
+                        <input
+                          type="checkbox"
+                          name={String(name)}
+                          defaultChecked={Boolean(checked)}
+                          className="size-4 accent-[var(--accent)]"
+                        />
                         {String(label)}
                       </label>
                     ))}
                   </div>
 
                   <label className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-3 py-3 text-sm font-medium text-neutral-800">
-                    <input type="checkbox" name="isActive" defaultChecked={destination.isActive} className="size-4 accent-[var(--accent)]" />
+                    <input
+                      type="checkbox"
+                      name="isActive"
+                      defaultChecked={destination.isActive}
+                      className="size-4 accent-[var(--accent)]"
+                    />
                     Destination aktif
                   </label>
 
                   <div className="flex flex-wrap gap-2">
-                    <button type="submit" className="inline-flex h-10 items-center justify-center rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800">
+                    <button
+                      type="submit"
+                      className="inline-flex h-10 items-center justify-center rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
+                    >
                       Simpan konfigurasi
                     </button>
                   </div>
@@ -301,7 +399,11 @@ export default async function TelegramIntegrationPage({
 
                 {destination.id ? (
                   <form action={sendTelegramTestMessageAction} className="mt-3">
-                    <input type="hidden" name="destinationId" value={destination.id} />
+                    <input
+                      type="hidden"
+                      name="destinationId"
+                      value={destination.id}
+                    />
                     <button
                       type="submit"
                       disabled={!destination.isActive}
@@ -460,10 +562,7 @@ export default async function TelegramIntegrationPage({
 
                   {overview.deliveries.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={9}
-                        className="px-4 py-12 text-center"
-                      >
+                      <td colSpan={9} className="px-4 py-12 text-center">
                         <div className="mx-auto grid size-11 place-items-center rounded-2xl bg-neutral-100 text-neutral-500">
                           <History className="size-5" />
                         </div>

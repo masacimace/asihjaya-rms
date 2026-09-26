@@ -43,34 +43,44 @@ assert(
 assert(
   pageSource.includes("TelegramDeliveryHistoryCard") &&
     pageSource.includes('id="delivery-history"') === false,
-  "Disclosure history harus memakai shared client card; anchor ID dimiliki component.",
+  "Disclosure history harus memakai shared card; anchor ID dimiliki component.",
 );
 
 assert(
-  cardSource.includes('"use client"') &&
-    cardSource.includes("useSyncExternalStore") &&
-    cardSource.includes("asihjaya:telegram-delivery-history-expanded") &&
-    cardSource.includes("aria-expanded={isExpanded}") &&
-    cardSource.includes("Collapse") &&
-    cardSource.includes("Expand"),
-  "Delivery History card harus persistent dan accessible untuk expand/collapse.",
+  cardSource.includes("<details") &&
+    cardSource.includes("<summary") &&
+    cardSource.includes("group-open:hidden") &&
+    cardSource.includes("sm:group-open:inline") &&
+    cardSource.includes("group-open:rotate-180") &&
+    cardSource.includes("Buka history") &&
+    cardSource.includes("Tutup history"),
+  "Delivery History harus memakai disclosure native yang konsisten dengan Filter pelanggan.",
 );
 
 assert(
-  cardSource.includes("Total history") &&
-    cardSource.includes("Queue") &&
-    cardSource.includes("Terkirim") &&
-    cardSource.includes("Failed"),
-  "Collapsed card harus tetap menampilkan ringkasan status utama.",
+  !cardSource.includes('"use client"') &&
+    !cardSource.includes("useSyncExternalStore") &&
+    !cardSource.includes("localStorage") &&
+    !cardSource.includes("bg-gradient") &&
+    !cardSource.includes("shadow-"),
+  "Header Delivery History harus sederhana tanpa client persistence, gradient, atau shadow.",
+);
+
+assert(
+  !cardSource.includes("Total history") &&
+    !cardSource.includes(">Queue<") &&
+    !cardSource.includes(">Terkirim<") &&
+    !cardSource.includes(">Failed<"),
+  "Empat overview mini-card Delivery History harus dihapus.",
 );
 
 assert(
   pageSource.includes("delivery.destinationName") &&
     pageSource.includes("Detail") &&
     pageSource.includes("hover:bg-neutral-50/70"),
-  "Table history harus menampilkan destination context dan polished row interaction.",
+  "Table history dan detail CTA harus tetap dipertahankan.",
 );
 
 console.log(
-  "Batch 2.1 Telegram Delivery History UX contract passed: 20/page server pagination, total count, persistent disclosure, status summary, dan polished table.",
+  "Batch 2.1 Delivery History refinement passed: native disclosure, simple header, no overview cards, no gradient/shadow, pagination preserved.",
 );
