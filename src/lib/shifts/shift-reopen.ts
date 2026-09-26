@@ -11,18 +11,8 @@ import {
 } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/session";
 import { getBusinessDateKey } from "@/lib/time/business-time";
-import {
-  enqueueTelegramDelivery,
-  findEnabledTelegramDestinationForOutlet,
-  transitionTelegramDelivery,
-} from "@/server/integrations/telegram/telegram-outbox-repository";
-import { getTelegramRuntimeOutboxConfig } from "@/server/integrations/telegram/telegram-runtime-config";
-import {
-  buildTelegramShiftReopenedEventKey,
-  buildTelegramShiftReopenedSnapshot,
-  formatTelegramShiftReopenedMessage,
-  type SupersededTelegramReportType,
-} from "@/server/integrations/telegram/telegram-shift-reopen-report";
+import { transitionTelegramDelivery } from "@/server/integrations/telegram/telegram-outbox-repository";
+import type { SupersededTelegramReportType } from "@/server/integrations/telegram/telegram-shift-reopen-report";
 
 export class ShiftReopenError extends Error {
   constructor(message: string) {
@@ -89,8 +79,6 @@ export async function reopenClosedShift({
   const normalizedReason = normalizeReason(reason);
   const accessibleOutletIds = new Set(auth.outlets.map((outlet) => outlet.id));
   const currentBusinessDate = getBusinessDateKey(now, auth.organization.timezone);
-  const telegramConfig = getTelegramRuntimeOutboxConfig();
-
   return db.transaction(async (transaction) => {
     const [shift] = await transaction
       .select({
@@ -269,60 +257,8 @@ export async function reopenClosedShift({
       );
     }
 
-    let reopenNoticeStatus: ReopenShiftResult["reopenNoticeStatus"] = "not_required";
-
-    if (previouslySentReportTypes.length > 0) {
-      if (!telegramConfig.enabled) {
-        reopenNoticeStatus = "integration_disabled";
-      } else {
-        const destination = await findEnabledTelegramDestinationForOutlet(transaction, {
-          organizationId: auth.organization.id,
-          outletId: shift.outletId,
-          reportType: "shift_reopened",
-        });
-
-        if (!destination) {
-          reopenNoticeStatus = "destination_unavailable";
-        } else {
-          const payload = buildTelegramShiftReopenedSnapshot({
-            shiftId: shift.id,
-            closingRevision: financeSnapshot.revision,
-            outlet: {
-              id: shift.outletId,
-              code: shift.outletCode,
-              name: shift.outletName,
-            },
-            businessDate: shift.businessDate,
-            previousClosedAt: shift.closedAt,
-            reopenedAt: now,
-            reopenedBy: {
-              id: auth.user.id,
-              name: auth.user.fullName,
-            },
-            reason: normalizedReason,
-            timezone: destination.timezone,
-            supersededReportTypes: previouslySentReportTypes,
-          });
-
-          const delivery = await enqueueTelegramDelivery(transaction, {
-            organizationId: auth.organization.id,
-            eventKey: buildTelegramShiftReopenedEventKey(
-              shift.id,
-              financeSnapshot.revision,
-            ),
-            destinationId: destination.destinationId,
-            outletId: shift.outletId,
-            reportType: "shift_reopened",
-            businessDate: shift.businessDate,
-            payloadSnapshot: payload,
-            messageText: formatTelegramShiftReopenedMessage(payload),
-            maxAttempts: telegramConfig.maxAttempts,
-          });
-
-          reopenNoticeStatus = delivery.created ? "enqueued" : "duplicate";
-        }
-      }
-    }
+    const reopenNoticeStatus: ReopenShiftResult["reopenNoticeStatus"] =
+      "not_required";
 
     await transaction.insert(auditLogs).values({
       organizationId: auth.organization.id,

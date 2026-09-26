@@ -1783,6 +1783,12 @@ export const telegramReportSettings = pgTable(
     closingDailyEnabled: boolean("closing_daily_enabled")
       .default(false)
       .notNull(),
+    dailyReportNotBefore: varchar("daily_report_not_before", { length: 5 })
+      .default("16:30")
+      .notNull(),
+    dailyReportGraceMinutes: integer("daily_report_grace_minutes")
+      .default(10)
+      .notNull(),
     weeklyEnabled: boolean("weekly_enabled").default(false).notNull(),
     monthlyEnabled: boolean("monthly_enabled").default(false).notNull(),
     timezone: varchar("timezone", { length: 64 })
@@ -1798,6 +1804,14 @@ export const telegramReportSettings = pgTable(
     check(
       "telegram_report_settings_timezone_not_blank_ck",
       sql`length(btrim(${table.timezone})) > 0 and ${table.timezone} = btrim(${table.timezone})`,
+    ),
+    check(
+      "telegram_report_settings_daily_not_before_ck",
+      sql`${table.dailyReportNotBefore} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,
+    ),
+    check(
+      "telegram_report_settings_daily_grace_minutes_ck",
+      sql`${table.dailyReportGraceMinutes} between 0 and 120`,
     ),
   ],
 );

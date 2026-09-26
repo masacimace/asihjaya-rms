@@ -318,7 +318,6 @@ export function formatTelegramDailyFinanceMessage(
   const timeZone = normalizeBusinessTimeZone(snapshot.timezone);
   const summary = snapshot.summary;
   const hasVariance = BigInt(snapshot.cash.variance) !== BIGINT_ZERO;
-  const revisionLabel = snapshot.revision > 1 ? ` · REVISI ${snapshot.revision}` : "";
 
   const bankLines = summary.banks.length
     ? summary.banks.slice(0, 6).map(
@@ -352,7 +351,7 @@ export function formatTelegramDailyFinanceMessage(
       : ["Tidak ada transaksi Buyback"];
 
   const lines = [
-    `🔴 ${telegramBold(`LAPORAN HARIAN${revisionLabel}`)}`,
+    `🔴 ${telegramBold("LAPORAN HARIAN")}`,
     telegramBold(snapshot.outlet.name),
     formatBusinessDate(snapshot.businessDate),
     "",
@@ -392,8 +391,6 @@ export function formatTelegramDailyFinanceMessage(
 
   if (hasVariance) {
     lines.push("", `⚠️ ${telegramBold("Selisih kas perlu diperiksa")}`);
-  } else if (snapshot.revision > 1) {
-    lines.push("", `✅ ${telegramBold("Laporan final setelah reopen")}`);
   }
 
   return lines.join("\n");

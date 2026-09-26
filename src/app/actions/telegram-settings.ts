@@ -24,6 +24,7 @@ const TELEGRAM_ADMIN_PATH = "/admin/pengaturan/integrasi/telegram";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CHAT_ID_PATTERN = /^-\d{5,31}$/;
+const REPORT_TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 function readText(formData: FormData, name: string, maxLength: number) {
   return String(formData.get(name) ?? "")
@@ -93,6 +94,11 @@ export async function saveTelegramDestinationAction(formData: FormData) {
   const isActive = formData.get("isActive") === "on";
   const openingEnabled = formData.get("openingEnabled") === "on";
   const closingDailyEnabled = formData.get("closingDailyEnabled") === "on";
+  const dailyReportNotBefore =
+    readText(formData, "dailyReportNotBefore", 5) || "16:30";
+  const dailyReportGraceMinutes = Number(
+    readText(formData, "dailyReportGraceMinutes", 3) || "10",
+  );
   const weeklyEnabled = formData.get("weeklyEnabled") === "on";
   const monthlyEnabled = formData.get("monthlyEnabled") === "on";
 
@@ -113,6 +119,19 @@ export async function saveTelegramDestinationAction(formData: FormData) {
   }
   if (!isValidTimeZone(timezone)) {
     redirectWithMessage("error", "Timezone Telegram harus berupa IANA timezone yang valid.");
+  }
+  if (!REPORT_TIME_PATTERN.test(dailyReportNotBefore)) {
+    redirectWithMessage("error", "Waktu laporan harian harus dalam format HH:mm.");
+  }
+  if (
+    !Number.isInteger(dailyReportGraceMinutes) ||
+    dailyReportGraceMinutes < 0 ||
+    dailyReportGraceMinutes > 120
+  ) {
+    redirectWithMessage(
+      "error",
+      "Grace period laporan harian harus 0 sampai 120 menit.",
+    );
   }
 
   const [outlet] = await db
@@ -217,6 +236,8 @@ export async function saveTelegramDestinationAction(formData: FormData) {
           destinationId: savedDestination.id,
           openingEnabled,
           closingDailyEnabled,
+          dailyReportNotBefore,
+          dailyReportGraceMinutes,
           weeklyEnabled,
           monthlyEnabled,
           timezone,
@@ -229,6 +250,8 @@ export async function saveTelegramDestinationAction(formData: FormData) {
           set: {
             openingEnabled,
             closingDailyEnabled,
+            dailyReportNotBefore,
+            dailyReportGraceMinutes,
             weeklyEnabled,
             monthlyEnabled,
             timezone,
@@ -258,6 +281,8 @@ export async function saveTelegramDestinationAction(formData: FormData) {
           isActive,
           openingEnabled,
           closingDailyEnabled,
+          dailyReportNotBefore,
+          dailyReportGraceMinutes,
           weeklyEnabled,
           monthlyEnabled,
           timezone,

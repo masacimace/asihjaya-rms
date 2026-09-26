@@ -19,6 +19,8 @@ export type TelegramAdminDestination = {
   isActive: boolean;
   openingEnabled: boolean;
   closingDailyEnabled: boolean;
+  dailyReportNotBefore: string;
+  dailyReportGraceMinutes: number;
   weeklyEnabled: boolean;
   monthlyEnabled: boolean;
   timezone: string;
@@ -73,6 +75,8 @@ export async function getTelegramAdminOverview(organizationId: string) {
           createdAt: telegramDestinations.createdAt,
           openingEnabled: telegramReportSettings.openingEnabled,
           closingDailyEnabled: telegramReportSettings.closingDailyEnabled,
+          dailyReportNotBefore: telegramReportSettings.dailyReportNotBefore,
+          dailyReportGraceMinutes: telegramReportSettings.dailyReportGraceMinutes,
           weeklyEnabled: telegramReportSettings.weeklyEnabled,
           monthlyEnabled: telegramReportSettings.monthlyEnabled,
           timezone: telegramReportSettings.timezone,
@@ -146,6 +150,8 @@ export async function getTelegramAdminOverview(organizationId: string) {
       isActive: destination?.isActive ?? true,
       openingEnabled: destination?.openingEnabled ?? false,
       closingDailyEnabled: destination?.closingDailyEnabled ?? false,
+      dailyReportNotBefore: destination?.dailyReportNotBefore ?? "16:30",
+      dailyReportGraceMinutes: destination?.dailyReportGraceMinutes ?? 10,
       weeklyEnabled: destination?.weeklyEnabled ?? false,
       monthlyEnabled: destination?.monthlyEnabled ?? false,
       timezone: destination?.timezone ?? "Asia/Jakarta",

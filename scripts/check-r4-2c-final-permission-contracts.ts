@@ -47,9 +47,13 @@ assert.match(
 );
 
 // Reopen sebagai BUSINESS EVENT tetap dipertahankan; yang retired hanya permission
-// khususnya. Snapshot supersede dan Telegram correction tidak boleh hilang.
+// khususnya. Snapshot supersede tetap ada, tetapi Telegram owner notification dibuat silent.
 assert.match(reopen, /action: "shift\.reopen"/, "audit event reopen tetap ada");
-assert.match(reopen, /reportType: "shift_reopened"/, "Telegram correction tetap ada");
+assert.doesNotMatch(
+  reopen,
+  /reportType: "shift_reopened"/,
+  "Telegram correction reopen tidak boleh dikirim ke owner",
+);
 assert.match(reopen, /supersededAt: now/, "finance snapshot supersede tetap ada");
 
 // Approval workflow sudah retired sejak R4.2A, sehingga finance closing snapshot

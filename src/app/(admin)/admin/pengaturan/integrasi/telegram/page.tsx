@@ -219,6 +219,43 @@ export default async function TelegramIntegrationPage({
                     <input name="timezone" required maxLength={64} defaultValue={destination.timezone || auth.organization.timezone} className={inputClassName} />
                   </label>
 
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label>
+                      <span className={labelClassName}>Laporan harian paling awal</span>
+                      <input
+                        type="time"
+                        name="dailyReportNotBefore"
+                        required
+                        defaultValue={destination.dailyReportNotBefore}
+                        className={inputClassName}
+                      />
+                      <span className="mt-1.5 block text-xs text-[var(--muted)]">
+                        Closing sebelum jam ini ditahan agar salah closing tidak langsung terkirim.
+                      </span>
+                    </label>
+                    <label>
+                      <span className={labelClassName}>Grace period setelah closing</span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          name="dailyReportGraceMinutes"
+                          min={0}
+                          max={120}
+                          step={1}
+                          required
+                          defaultValue={destination.dailyReportGraceMinutes}
+                          className={inputClassName}
+                        />
+                        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-[var(--muted)]">
+                          menit
+                        </span>
+                      </div>
+                      <span className="mt-1.5 block text-xs text-[var(--muted)]">
+                        Memberi waktu untuk reopen sebelum report final dikirim.
+                      </span>
+                    </label>
+                  </div>
+
                   <div className="grid gap-2 sm:grid-cols-2">
                     {[
                       ["openingEnabled", "Opening shift", destination.openingEnabled],

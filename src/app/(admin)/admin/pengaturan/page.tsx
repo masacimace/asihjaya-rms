@@ -106,8 +106,8 @@ export default async function SettingsHubPage() {
               Permission: settings.manage
             </p>
             <p className="mt-1 max-w-sm text-xs leading-5 text-[var(--muted)]">
-              Hanya user dengan akses pengaturan yang dapat membuka dan
-              mengubah konfigurasi di bawah ini.
+              Hanya user dengan akses pengaturan yang dapat membuka dan mengubah
+              konfigurasi di bawah ini.
             </p>
           </div>
         </div>
@@ -117,7 +117,7 @@ export default async function SettingsHubPage() {
         {settingsGroups.map((group) => (
           <section
             key={group.title}
-            className="flex h-full min-w-0 flex-col rounded-3xl border border-[var(--border)] bg-neutral-50/60 p-4 sm:p-5"
+            className="flex h-full min-w-0 flex-col rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5"
           >
             <div className="min-h-[88px]">
               <div className="flex items-start justify-between gap-3">
@@ -145,7 +145,7 @@ export default async function SettingsHubPage() {
                     key={item.href}
                     href={item.href}
                     scroll={false}
-                    className="group flex min-h-[178px] flex-col rounded-2xl border border-[var(--border)] bg-white p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--accent)] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
+                    className="group flex min-h-[178px] flex-col rounded-2xl border border-[var(--border)] bg-neutral-100/75 p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--accent)] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
                   >
                     <div className="flex items-start gap-4">
                       <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
