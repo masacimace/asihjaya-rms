@@ -4,7 +4,7 @@ import {
   Bot,
   CheckCircle2,
   Clock3,
-  ExternalLink,
+  ChevronRight,
   History,
   MessageSquareText,
   Send,
@@ -449,137 +449,157 @@ export default async function TelegramIntegrationPage({
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-[var(--border)] bg-neutral-50/90 text-[11px] uppercase tracking-wide text-[var(--muted)]">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Dibuat</th>
-                    <th className="px-4 py-3 font-semibold">Outlet</th>
-                    <th className="px-4 py-3 font-semibold">Report</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold">Attempt</th>
-                    <th className="px-4 py-3 font-semibold">Terkirim</th>
-                    <th className="px-4 py-3 font-semibold">Telegram ID</th>
-                    <th className="px-4 py-3 font-semibold">Error</th>
-                    <th className="px-4 py-3 font-semibold">
-                      <span className="sr-only">Action</span>
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-[var(--border)] bg-white">
-                  {overview.deliveries.map((delivery) => (
-                    <tr
-                      key={delivery.id}
-                      className="align-top transition-colors hover:bg-neutral-50/70"
-                    >
-                      <td className="whitespace-nowrap px-4 py-3.5 text-xs font-medium text-neutral-700">
+          {overview.deliveries.length > 0 ? (
+            <div className="grid gap-3">
+              {overview.deliveries.map((delivery) => (
+                <Link
+                  key={delivery.id}
+                  href={`/admin/pengaturan/integrasi/telegram/delivery/${delivery.id}`}
+                  data-telegram-layout="compact-delivery-row"
+                  className="group block min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-3.5 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] sm:p-4"
+                >
+                  <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-5 text-neutral-950 transition group-hover:text-[var(--accent)]">
+                        {reportLabels[delivery.reportType]}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-neutral-500 sm:text-xs">
                         {formatDateTime(
                           delivery.createdAt,
                           auth.organization.timezone,
-                        )}
-                      </td>
+                        )}{" "}
+                        · ID {delivery.id.slice(0, 8).toUpperCase()}
+                      </p>
+                    </div>
 
-                      <td className="min-w-44 px-4 py-3.5">
-                        <p className="font-semibold text-neutral-950">
-                          {delivery.outletName}
-                        </p>
-                        <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
-                          {delivery.destinationName}
-                        </p>
-                      </td>
+                    <div className="flex shrink-0 flex-wrap gap-1.5 sm:justify-end">
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusClassName(delivery.status)}`}
+                      >
+                        {statusLabels[delivery.status]}
+                      </span>
+                      <span className="inline-flex rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[11px] font-medium tabular-nums text-neutral-600">
+                        Attempt {delivery.attemptCount} / {delivery.maxAttempts}
+                      </span>
+                    </div>
+                  </div>
 
-                      <td className="whitespace-nowrap px-4 py-3.5">
-                        <span className="inline-flex rounded-lg bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
-                          {reportLabels[delivery.reportType]}
-                        </span>
-                      </td>
+                  <div className="mt-3 grid gap-x-4 gap-y-3 border-t border-[var(--border)] pt-3 sm:grid-cols-2 lg:grid-cols-[minmax(190px,1fr)_minmax(160px,0.8fr)_minmax(180px,0.9fr)] xl:grid-cols-[minmax(210px,1.05fr)_minmax(180px,0.85fr)_minmax(190px,0.9fr)_minmax(260px,1.25fr)_minmax(130px,0.6fr)]">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                        Outlet / Destination
+                      </p>
+                      <p className="mt-1 truncate text-sm font-semibold text-neutral-950">
+                        {delivery.outletName}
+                      </p>
+                      <p
+                        title={delivery.destinationName}
+                        className="mt-0.5 truncate text-[11px] text-[var(--muted)]"
+                      >
+                        {delivery.destinationName}
+                      </p>
+                    </div>
 
-                      <td className="whitespace-nowrap px-4 py-3.5">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(delivery.status)}`}
-                        >
-                          {statusLabels[delivery.status]}
-                        </span>
-                      </td>
-
-                      <td className="whitespace-nowrap px-4 py-3.5 text-xs font-medium tabular-nums text-neutral-700">
-                        {delivery.attemptCount} / {delivery.maxAttempts}
-                      </td>
-
-                      <td className="whitespace-nowrap px-4 py-3.5 text-xs text-neutral-600">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                        Pengiriman
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-950">
+                        {delivery.sentAt ? "Terkirim" : "Belum terkirim"}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-[var(--muted)]">
                         {formatDateTime(
                           delivery.sentAt,
                           auth.organization.timezone,
                         )}
-                      </td>
+                      </p>
+                    </div>
 
-                      <td className="max-w-40 px-4 py-3.5">
-                        {delivery.telegramMessageId ? (
-                          <span
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                        Telegram
+                      </p>
+                      {delivery.telegramMessageId ? (
+                        <>
+                          <p className="mt-1 text-sm font-semibold text-neutral-950">
+                            Message ID
+                          </p>
+                          <p
                             title={delivery.telegramMessageId}
-                            className="block truncate font-mono text-xs text-neutral-600"
+                            className="mt-0.5 truncate font-mono text-[11px] text-[var(--muted)]"
                           >
                             {delivery.telegramMessageId}
-                          </span>
-                        ) : (
-                          <span className="text-neutral-400">—</span>
-                        )}
-                      </td>
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="mt-1 text-sm font-semibold text-neutral-500">
+                            Belum ada ID
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                            Menunggu hasil Telegram
+                          </p>
+                        </>
+                      )}
+                    </div>
 
-                      <td className="max-w-xs px-4 py-3.5 text-xs text-neutral-600">
-                        {delivery.lastErrorCode ? (
-                          <div>
-                            <span className="font-semibold text-red-700">
-                              {delivery.lastErrorCode}
-                            </span>
-                            {delivery.lastErrorMessage ? (
-                              <p
-                                title={delivery.lastErrorMessage}
-                                className="mt-1 line-clamp-2 leading-5"
-                              >
-                                {delivery.lastErrorMessage}
-                              </p>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <span className="text-neutral-400">—</span>
-                        )}
-                      </td>
+                    <div className="min-w-0 sm:col-span-2 lg:col-span-3 xl:col-span-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                        Error
+                      </p>
+                      {delivery.lastErrorCode ? (
+                        <>
+                          <p className="mt-1 truncate text-sm font-semibold text-red-700">
+                            {delivery.lastErrorCode}
+                          </p>
+                          <p
+                            title={delivery.lastErrorMessage ?? undefined}
+                            className="mt-0.5 line-clamp-2 text-[11px] leading-5 text-[var(--muted)]"
+                          >
+                            {delivery.lastErrorMessage ?? "Detail error tidak tersedia."}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="mt-1 text-sm font-semibold text-neutral-700">
+                            Tidak ada error
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                            Delivery tidak memiliki error terakhir.
+                          </p>
+                        </>
+                      )}
+                    </div>
 
-                      <td className="whitespace-nowrap px-4 py-3.5 text-right">
-                        <Link
-                          href={`/admin/pengaturan/integrasi/telegram/delivery/${delivery.id}`}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-2.5 text-xs font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
-                        >
-                          Detail
-                          <ExternalLink className="size-3" />
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {overview.deliveries.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="px-4 py-12 text-center">
-                        <div className="mx-auto grid size-11 place-items-center rounded-2xl bg-neutral-100 text-neutral-500">
-                          <History className="size-5" />
-                        </div>
-                        <p className="mt-3 text-sm font-semibold text-neutral-900">
-                          Belum ada delivery Telegram
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          History akan muncul setelah report atau test message
-                          diproses.
-                        </p>
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                        Detail
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-950">
+                        Audit delivery
+                      </p>
+                      <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--accent)]">
+                        Detail delivery
+                        <ChevronRight className="size-3.5" />
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
             </div>
-          </div>
+          ) : (
+            <div className="grid place-items-center rounded-2xl border border-[var(--border)] px-6 py-12 text-center">
+              <div className="grid size-11 place-items-center rounded-2xl bg-neutral-100 text-neutral-500">
+                <History className="size-5" />
+              </div>
+              <p className="mt-3 text-sm font-semibold text-neutral-900">
+                Belum ada delivery Telegram
+              </p>
+              <p className="mt-1 max-w-md text-xs leading-5 text-[var(--muted)]">
+                History akan muncul setelah report atau test message diproses.
+              </p>
+            </div>
+          )}
 
           {(overview.statusCounts.failed ?? 0) > 0 ? (
             <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">

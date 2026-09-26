@@ -37,13 +37,13 @@ assert(
     pageSource.includes("deliveryPagination.to") &&
     pageSource.includes("Previous") &&
     pageSource.includes("Next"),
-  "Telegram admin page harus memakai query-string pagination dengan range dan navigation.",
+  "Telegram admin page harus mempertahankan server pagination.",
 );
 
 assert(
   pageSource.includes("TelegramDeliveryHistoryCard") &&
     pageSource.includes('id="delivery-history"') === false,
-  "Disclosure history harus memakai shared card; anchor ID dimiliki component.",
+  "Disclosure history harus tetap memakai shared card.",
 );
 
 assert(
@@ -54,7 +54,7 @@ assert(
     cardSource.includes("group-open:rotate-180") &&
     cardSource.includes("Buka history") &&
     cardSource.includes("Tutup history"),
-  "Delivery History harus memakai disclosure native yang konsisten dengan Filter pelanggan.",
+  "Delivery History harus tetap memakai native disclosure.",
 );
 
 assert(
@@ -63,24 +63,35 @@ assert(
     !cardSource.includes("localStorage") &&
     !cardSource.includes("bg-gradient") &&
     !cardSource.includes("shadow-"),
-  "Header Delivery History harus sederhana tanpa client persistence, gradient, atau shadow.",
+  "Header Delivery History harus tetap sederhana tanpa gradient/shadow.",
 );
 
 assert(
-  !cardSource.includes("Total history") &&
-    !cardSource.includes(">Queue<") &&
-    !cardSource.includes(">Terkirim<") &&
-    !cardSource.includes(">Failed<"),
-  "Empat overview mini-card Delivery History harus dihapus.",
+  pageSource.includes('data-telegram-layout="compact-delivery-row"') &&
+    pageSource.includes("Outlet / Destination") &&
+    pageSource.includes("Pengiriman") &&
+    pageSource.includes("Telegram") &&
+    pageSource.includes("Error") &&
+    pageSource.includes("Detail delivery"),
+  "Delivery History harus menggunakan compact responsive row layout.",
+);
+
+assert(
+  !pageSource.includes("<table") &&
+    !pageSource.includes("overflow-x-auto"),
+  "Classic table dan horizontal scroll harus sudah dihapus dari Telegram history.",
 );
 
 assert(
   pageSource.includes("delivery.destinationName") &&
-    pageSource.includes("Detail") &&
-    pageSource.includes("hover:bg-neutral-50/70"),
-  "Table history dan detail CTA harus tetap dipertahankan.",
+    pageSource.includes("delivery.telegramMessageId") &&
+    pageSource.includes("delivery.lastErrorCode") &&
+    pageSource.includes("delivery.lastErrorMessage") &&
+    pageSource.includes("delivery.attemptCount") &&
+    pageSource.includes("delivery.maxAttempts"),
+  "Compact row harus mempertahankan seluruh data audit penting.",
 );
 
 console.log(
-  "Batch 2.1 Delivery History refinement passed: native disclosure, simple header, no overview cards, no gradient/shadow, pagination preserved.",
+  "Batch 2.1 Telegram compact history contract passed: responsive row cards, no classic table/horizontal scroll, pagination and disclosure preserved.",
 );
