@@ -17,6 +17,7 @@ import {
   saveTelegramDestinationAction,
   sendTelegramTestMessageAction,
 } from "@/app/actions/telegram-settings";
+import { TelegramDeliveryHistoryCard } from "@/components/admin/telegram/telegram-delivery-history-card";
 import { getTelegramAdminOverview } from "@/features/telegram/admin-queries";
 import { requirePermission } from "@/lib/auth/session";
 import { getTelegramAdminBotStatus } from "@/server/integrations/telegram/telegram-admin-service";
@@ -63,22 +64,38 @@ function statusClassName(status: keyof typeof statusLabels) {
   return "bg-neutral-100 text-neutral-700 ring-neutral-200";
 }
 
+function buildHistoryPageHref(page: number) {
+  return `/admin/pengaturan/integrasi/telegram?historyPage=${page}#delivery-history`;
+}
+
 export default async function TelegramIntegrationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; message?: string }>;
+  searchParams: Promise<{
+    type?: string;
+    message?: string;
+    historyPage?: string;
+  }>;
 }) {
   const auth = await requirePermission("settings.manage");
-  const [overview, botStatus, params] = await Promise.all([
-    getTelegramAdminOverview(auth.organization.id),
+  const params = await searchParams;
+  const parsedHistoryPage = Number(params.historyPage);
+  const historyPage =
+    Number.isSafeInteger(parsedHistoryPage) && parsedHistoryPage > 0
+      ? parsedHistoryPage
+      : 1;
+
+  const [overview, botStatus] = await Promise.all([
+    getTelegramAdminOverview(auth.organization.id, { historyPage }),
     getTelegramAdminBotStatus(),
-    searchParams,
   ]);
   const runtime = getTelegramRuntimeOutboxConfig();
   const message = params.message?.slice(0, 240) ?? null;
   const messageType = params.type === "error" ? "error" : "success";
   const pendingBacklog =
     (overview.statusCounts.pending ?? 0) + (overview.statusCounts.retry ?? 0);
+  const historyQueueCount =
+    pendingBacklog + (overview.statusCounts.processing ?? 0);
 
   return (
     <div className="space-y-6">
@@ -301,74 +318,232 @@ export default async function TelegramIntegrationPage({
         )}
       </section>
 
-      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-neutral-950">Delivery history</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">50 delivery terbaru, termasuk admin test message dan attempt audit.</p>
+      {/* Delivery history */}
+      <TelegramDeliveryHistoryCard
+        totalCount={overview.deliveryPagination.totalRows}
+        queueCount={historyQueueCount}
+        sentCount={overview.statusCounts.sent ?? 0}
+        failedCount={overview.statusCounts.failed ?? 0}
+        timezone={auth.organization.timezone}
+        pageSize={overview.deliveryPagination.pageSize}
+      >
+        <div className="p-4 sm:p-6">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-neutral-950">
+                Riwayat pengiriman
+              </p>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Menampilkan {overview.deliveryPagination.from}–
+                {overview.deliveryPagination.to} dari{" "}
+                {overview.deliveryPagination.totalRows} delivery.
+              </p>
+            </div>
+
+            <div className="inline-flex w-fit items-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs font-semibold text-neutral-600">
+              <Clock3 className="size-3.5" />
+              Halaman {overview.deliveryPagination.page} /{" "}
+              {overview.deliveryPagination.totalPages}
+            </div>
           </div>
-          <div className="inline-flex items-center gap-2 text-xs text-[var(--muted)]">
-            <Clock3 className="size-4" />
-            Timezone tampilan: {auth.organization.timezone}
+
+          <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-[var(--border)] bg-neutral-50/90 text-[11px] uppercase tracking-wide text-[var(--muted)]">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Dibuat</th>
+                    <th className="px-4 py-3 font-semibold">Outlet</th>
+                    <th className="px-4 py-3 font-semibold">Report</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Attempt</th>
+                    <th className="px-4 py-3 font-semibold">Terkirim</th>
+                    <th className="px-4 py-3 font-semibold">Telegram ID</th>
+                    <th className="px-4 py-3 font-semibold">Error</th>
+                    <th className="px-4 py-3 font-semibold">
+                      <span className="sr-only">Action</span>
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-[var(--border)] bg-white">
+                  {overview.deliveries.map((delivery) => (
+                    <tr
+                      key={delivery.id}
+                      className="align-top transition-colors hover:bg-neutral-50/70"
+                    >
+                      <td className="whitespace-nowrap px-4 py-3.5 text-xs font-medium text-neutral-700">
+                        {formatDateTime(
+                          delivery.createdAt,
+                          auth.organization.timezone,
+                        )}
+                      </td>
+
+                      <td className="min-w-44 px-4 py-3.5">
+                        <p className="font-semibold text-neutral-950">
+                          {delivery.outletName}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
+                          {delivery.destinationName}
+                        </p>
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-3.5">
+                        <span className="inline-flex rounded-lg bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
+                          {reportLabels[delivery.reportType]}
+                        </span>
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-3.5">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(delivery.status)}`}
+                        >
+                          {statusLabels[delivery.status]}
+                        </span>
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-3.5 text-xs font-medium tabular-nums text-neutral-700">
+                        {delivery.attemptCount} / {delivery.maxAttempts}
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-3.5 text-xs text-neutral-600">
+                        {formatDateTime(
+                          delivery.sentAt,
+                          auth.organization.timezone,
+                        )}
+                      </td>
+
+                      <td className="max-w-40 px-4 py-3.5">
+                        {delivery.telegramMessageId ? (
+                          <span
+                            title={delivery.telegramMessageId}
+                            className="block truncate font-mono text-xs text-neutral-600"
+                          >
+                            {delivery.telegramMessageId}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-400">—</span>
+                        )}
+                      </td>
+
+                      <td className="max-w-xs px-4 py-3.5 text-xs text-neutral-600">
+                        {delivery.lastErrorCode ? (
+                          <div>
+                            <span className="font-semibold text-red-700">
+                              {delivery.lastErrorCode}
+                            </span>
+                            {delivery.lastErrorMessage ? (
+                              <p
+                                title={delivery.lastErrorMessage}
+                                className="mt-1 line-clamp-2 leading-5"
+                              >
+                                {delivery.lastErrorMessage}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-neutral-400">—</span>
+                        )}
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-3.5 text-right">
+                        <Link
+                          href={`/admin/pengaturan/integrasi/telegram/delivery/${delivery.id}`}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-2.5 text-xs font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                        >
+                          Detail
+                          <ExternalLink className="size-3" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {overview.deliveries.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        className="px-4 py-12 text-center"
+                      >
+                        <div className="mx-auto grid size-11 place-items-center rounded-2xl bg-neutral-100 text-neutral-500">
+                          <History className="size-5" />
+                        </div>
+                        <p className="mt-3 text-sm font-semibold text-neutral-900">
+                          Belum ada delivery Telegram
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">
+                          History akan muncul setelah report atau test message
+                          diproses.
+                        </p>
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {(overview.statusCounts.failed ?? 0) > 0 ? (
+            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <p>
+                Delivery failed harus diperiksa detail attempt-nya sebelum
+                manual retry. Ambiguous stale delivery tidak di-retry otomatis
+                untuk mencegah duplicate message.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-50/70 px-3 py-2.5 text-xs font-medium text-emerald-700">
+              <CheckCircle2 className="size-4" />
+              Tidak ada failed delivery pada history saat ini.
+            </div>
+          )}
+
+          <div className="mt-5 flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-[var(--muted)]">
+              {overview.deliveryPagination.pageSize} delivery per halaman ·{" "}
+              {overview.deliveryPagination.totalRows} total
+            </p>
+
+            <div className="flex items-center gap-2">
+              {overview.deliveryPagination.page > 1 ? (
+                <Link
+                  href={buildHistoryPageHref(
+                    overview.deliveryPagination.page - 1,
+                  )}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-950"
+                >
+                  ← Previous
+                </Link>
+              ) : (
+                <span className="inline-flex h-9 cursor-not-allowed items-center justify-center rounded-xl border border-[var(--border)] bg-neutral-50 px-3 text-xs font-semibold text-neutral-400">
+                  ← Previous
+                </span>
+              )}
+
+              <span className="inline-flex h-9 min-w-20 items-center justify-center rounded-xl bg-neutral-950 px-3 text-xs font-semibold tabular-nums text-white">
+                {overview.deliveryPagination.page} /{" "}
+                {overview.deliveryPagination.totalPages}
+              </span>
+
+              {overview.deliveryPagination.page <
+              overview.deliveryPagination.totalPages ? (
+                <Link
+                  href={buildHistoryPageHref(
+                    overview.deliveryPagination.page + 1,
+                  )}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-950"
+                >
+                  Next →
+                </Link>
+              ) : (
+                <span className="inline-flex h-9 cursor-not-allowed items-center justify-center rounded-xl border border-[var(--border)] bg-neutral-50 px-3 text-xs font-semibold text-neutral-400">
+                  Next →
+                </span>
+              )}
+            </div>
           </div>
         </div>
-
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-[var(--border)] text-xs uppercase text-[var(--muted)]">
-              <tr>
-                <th className="px-3 py-3 font-semibold">Created</th>
-                <th className="px-3 py-3 font-semibold">Outlet</th>
-                <th className="px-3 py-3 font-semibold">Report</th>
-                <th className="px-3 py-3 font-semibold">Status</th>
-                <th className="px-3 py-3 font-semibold">Attempts</th>
-                <th className="px-3 py-3 font-semibold">Sent</th>
-                <th className="px-3 py-3 font-semibold">Message ID</th>
-                <th className="px-3 py-3 font-semibold">Last error</th>
-                <th className="px-3 py-3 font-semibold">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {overview.deliveries.map((delivery) => (
-                <tr key={delivery.id} className="align-top">
-                  <td className="whitespace-nowrap px-3 py-3 text-neutral-700">{formatDateTime(delivery.createdAt, auth.organization.timezone)}</td>
-                  <td className="whitespace-nowrap px-3 py-3 font-medium text-neutral-950">{delivery.outletName}</td>
-                  <td className="whitespace-nowrap px-3 py-3 text-neutral-700">{reportLabels[delivery.reportType]}</td>
-                  <td className="px-3 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(delivery.status)}`}>{statusLabels[delivery.status]}</span>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-neutral-700">{delivery.attemptCount}/{delivery.maxAttempts}</td>
-                  <td className="whitespace-nowrap px-3 py-3 text-neutral-700">{formatDateTime(delivery.sentAt, auth.organization.timezone)}</td>
-                  <td className="px-3 py-3 font-mono text-xs text-neutral-600">{delivery.telegramMessageId ?? "—"}</td>
-                  <td className="max-w-xs px-3 py-3 text-xs text-neutral-600">
-                    {delivery.lastErrorCode ? <span className="font-semibold text-red-700">{delivery.lastErrorCode}</span> : "—"}
-                    {delivery.lastErrorMessage ? <p className="mt-1 line-clamp-2">{delivery.lastErrorMessage}</p> : null}
-                  </td>
-                  <td className="px-3 py-3">
-                    <Link href={`/admin/pengaturan/integrasi/telegram/delivery/${delivery.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:underline">
-                      View <ExternalLink className="size-3" />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-              {overview.deliveries.length === 0 ? (
-                <tr><td colSpan={9} className="px-3 py-8 text-center text-sm text-[var(--muted)]">Belum ada delivery Telegram.</td></tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-
-        {(overview.statusCounts.failed ?? 0) > 0 ? (
-          <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <p>Delivery failed harus diperiksa detail attempt-nya sebelum manual retry. Ambiguous stale delivery tidak di-retry otomatis untuk mencegah duplicate message.</p>
-          </div>
-        ) : (
-          <div className="mt-4 flex items-center gap-2 text-xs text-emerald-700">
-            <CheckCircle2 className="size-4" /> Tidak ada failed delivery pada history saat ini.
-          </div>
-        )}
-      </section>
+      </TelegramDeliveryHistoryCard>
     </div>
   );
 }

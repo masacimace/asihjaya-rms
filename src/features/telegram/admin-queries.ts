@@ -47,8 +47,36 @@ export type TelegramDeliveryHistoryRow = {
   lastErrorMessage: string | null;
 };
 
-export async function getTelegramAdminOverview(organizationId: string) {
-  const [outletRows, destinationRows, deliveryRows, statusRows] =
+export const TELEGRAM_DELIVERY_HISTORY_PAGE_SIZE = 20;
+
+export type TelegramDeliveryHistoryOptions = {
+  historyPage?: number;
+  historyPageSize?: number;
+};
+
+function normalizePositiveInteger(
+  value: number | undefined,
+  fallback: number,
+) {
+  return Number.isSafeInteger(value) && (value ?? 0) > 0
+    ? Number(value)
+    : fallback;
+}
+
+export async function getTelegramAdminOverview(
+  organizationId: string,
+  options: TelegramDeliveryHistoryOptions = {},
+) {
+  const requestedPage = normalizePositiveInteger(options.historyPage, 1);
+  const pageSize = Math.min(
+    normalizePositiveInteger(
+      options.historyPageSize,
+      TELEGRAM_DELIVERY_HISTORY_PAGE_SIZE,
+    ),
+    100,
+  );
+
+  const [outletRows, destinationRows, statusRows, deliveryCountRows] =
     await Promise.all([
       db
         .select({
@@ -95,38 +123,49 @@ export async function getTelegramAdminOverview(organizationId: string) {
 
       db
         .select({
-          id: telegramDeliveryOutbox.id,
-          createdAt: telegramDeliveryOutbox.createdAt,
-          outletName: outlets.name,
-          destinationName: telegramDestinations.name,
-          reportType: telegramDeliveryOutbox.reportType,
-          status: telegramDeliveryOutbox.status,
-          attemptCount: telegramDeliveryOutbox.attemptCount,
-          maxAttempts: telegramDeliveryOutbox.maxAttempts,
-          sentAt: telegramDeliveryOutbox.sentAt,
-          telegramMessageId: telegramDeliveryOutbox.telegramMessageId,
-          lastErrorCode: telegramDeliveryOutbox.lastErrorCode,
-          lastErrorMessage: telegramDeliveryOutbox.lastErrorMessage,
-        })
-        .from(telegramDeliveryOutbox)
-        .innerJoin(outlets, eq(outlets.id, telegramDeliveryOutbox.outletId))
-        .innerJoin(
-          telegramDestinations,
-          eq(telegramDestinations.id, telegramDeliveryOutbox.destinationId),
-        )
-        .where(eq(telegramDeliveryOutbox.organizationId, organizationId))
-        .orderBy(desc(telegramDeliveryOutbox.createdAt))
-        .limit(50),
-
-      db
-        .select({
           status: telegramDeliveryOutbox.status,
           total: count(),
         })
         .from(telegramDeliveryOutbox)
         .where(eq(telegramDeliveryOutbox.organizationId, organizationId))
         .groupBy(telegramDeliveryOutbox.status),
+
+      db
+        .select({ total: count() })
+        .from(telegramDeliveryOutbox)
+        .where(eq(telegramDeliveryOutbox.organizationId, organizationId)),
     ]);
+
+  const totalRows = Number(deliveryCountRows[0]?.total ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const offset = (page - 1) * pageSize;
+
+  const deliveryRows = await db
+    .select({
+      id: telegramDeliveryOutbox.id,
+      createdAt: telegramDeliveryOutbox.createdAt,
+      outletName: outlets.name,
+      destinationName: telegramDestinations.name,
+      reportType: telegramDeliveryOutbox.reportType,
+      status: telegramDeliveryOutbox.status,
+      attemptCount: telegramDeliveryOutbox.attemptCount,
+      maxAttempts: telegramDeliveryOutbox.maxAttempts,
+      sentAt: telegramDeliveryOutbox.sentAt,
+      telegramMessageId: telegramDeliveryOutbox.telegramMessageId,
+      lastErrorCode: telegramDeliveryOutbox.lastErrorCode,
+      lastErrorMessage: telegramDeliveryOutbox.lastErrorMessage,
+    })
+    .from(telegramDeliveryOutbox)
+    .innerJoin(outlets, eq(outlets.id, telegramDeliveryOutbox.outletId))
+    .innerJoin(
+      telegramDestinations,
+      eq(telegramDestinations.id, telegramDeliveryOutbox.destinationId),
+    )
+    .where(eq(telegramDeliveryOutbox.organizationId, organizationId))
+    .orderBy(desc(telegramDeliveryOutbox.createdAt))
+    .limit(pageSize)
+    .offset(offset);
 
   const latestDestinationByOutlet = new Map<
     string,
@@ -166,6 +205,14 @@ export async function getTelegramAdminOverview(organizationId: string) {
     destinations,
     deliveries: deliveryRows satisfies TelegramDeliveryHistoryRow[],
     statusCounts,
+    deliveryPagination: {
+      page,
+      pageSize,
+      totalRows,
+      totalPages,
+      from: totalRows === 0 ? 0 : offset + 1,
+      to: totalRows === 0 ? 0 : offset + deliveryRows.length,
+    },
   };
 }
 
