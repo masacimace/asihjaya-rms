@@ -21,6 +21,7 @@ const compactHistory = read(
 );
 const contracts = read("src/features/buybacks/processing-contracts.ts");
 const printRoute = read("src/app/api/print-jobs/route.ts");
+const processingAction = read("src/app/actions/buyback-processing.ts");
 
 // Existing completion result is the source of truth.
 // Batch 4 must not invent a second barcode or item identity.
@@ -105,6 +106,24 @@ assert.match(
 );
 assert.match(quickActions, /onClose=\{closeSelected\}/);
 
+// Server action must not invalidate /pos/buyback immediately.
+// Next.js can stream the newly revalidated RSC tree as part of the action
+// response, which would remove the pending-only quick-action parent before the
+// success drawer can render.
+assert.doesNotMatch(
+  processingAction,
+  /revalidatePath\("\/pos\/buyback"\);/,
+  "Server action tidak boleh revalidate /pos/buyback saat completion.",
+);
+assert.match(
+  processingAction,
+  /revalidatePath\("\/pos\/buyback\/pemrosesan"\);/,
+);
+assert.match(
+  processingAction,
+  /client me-refresh page saat drawer ditutup/,
+);
+
 // Opening a new pending action resets any previous deferred refresh flag.
 assert.match(
   quickActions,
@@ -125,5 +144,5 @@ assert.match(
 );
 
 console.log(
-  "Batch 4 Quick Print contract passed: success drawer survives quick-action completion, refresh is deferred until close, secure SATO printing and re-print fallback remain intact.",
+  "Batch 4 Quick Print contract passed: success drawer survives both client and server refresh paths, /pos/buyback refresh is deferred until close, secure SATO printing and re-print fallback remain intact.",
 );

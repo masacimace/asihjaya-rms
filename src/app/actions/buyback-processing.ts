@@ -237,7 +237,9 @@ export async function completeBuybackProcessingAction(
     }
 
     revalidatePath("/pos");
-    revalidatePath("/pos/buyback");
+    // /pos/buyback sengaja tidak direvalidate di sini.
+    // Quick-action flow menjaga success drawer tetap mounted untuk Cetak Label,
+    // lalu client me-refresh page saat drawer ditutup.
     revalidatePath("/pos/buyback/pemrosesan");
     revalidatePath("/admin/inventaris");
 
