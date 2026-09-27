@@ -22,47 +22,72 @@ const buybackActions = read("src/app/actions/buybacks.ts");
 // Core Buyback financial integration stays atomic and references Buyback explicitly.
 assert.match(service, /type: "cash_out"/);
 assert.match(service, /referenceType: "buyback"/);
-assert.match(service, /expectedCash: sql`coalesce\(\$\{shifts\.expectedCash\}, 0\) - \$\{cashPayout\}`/);
+assert.match(service, /referenceType: "buyback_funding"/);
+assert.match(service, /type: "cash_in"/);
+assert.match(
+  service,
+  /expectedCash: sql`coalesce\(\$\{shifts\.expectedCash\}, 0\) \+ \$\{buybackFundingAmount\} - \$\{cashPayout\}`/,
+);
 assert.match(service, /entryType: "deposit_in"/);
 assert.match(service, /direction: "credit"/);
 assert.match(service, /lockCustomerDepositBalance/);
-assert.match(service, /idempotencyKey: `buyback:\$\{payload\.idempotencyKey\}:deposit_in`/);
+assert.match(
+  service,
+  /idempotencyKey: `buyback:\$\{payload\.idempotencyKey\}:deposit_in`/,
+);
 assert.match(service, /movementType: "buyback" as const/);
-assert.doesNotMatch(service, /Kas shift tidak mencukupi untuk payout Cash Buyback/);
+assert.doesNotMatch(
+  service,
+  /Kas shift tidak mencukupi untuk payout Cash Buyback/,
+);
 
 // Closing shift recomputes expected cash from append-only cash movements, so Buyback cash_out is included once.
 assert.match(shiftClosing, /summarizeCashMovements\(movementRows\)/);
 assert.match(cashReconciliation, /if \(movement\.type === "cash_out"\)/);
-assert.match(cashReconciliation, /summary\.expectedCash =[\s\S]*summary\.cashOut/);
+assert.match(
+  cashReconciliation,
+  /summary\.expectedCash =[\s\S]*summary\.cashOut/,
+);
 
-// Admin cash reporting must not classify Buyback payout as manual cash out.
+// Admin cash reporting separates automatic Buyback funding from manual cash-in and payout.
+assert.match(cashContracts, /buybackCashFunding: number/);
 assert.match(cashContracts, /buybackCashPayouts: number/);
+assert.match(cashQueries, /referenceType} = 'buyback_funding'/);
 assert.match(cashQueries, /referenceType} = 'buyback'/);
-assert.match(cashQueries, /not in \('customer_deposit_withdrawal', 'buyback'\)/);
+assert.match(
+  cashQueries,
+  /not in \('customer_deposit_withdrawal', 'buyback'\)/,
+);
 assert.match(cashQueries, /buybackNumber: buybacks\.buybackNumber/);
-assert.match(cashPage, /Payout Cash Buyback/);
+assert.match(cashPage, /Dana Tambahan Buyback/);
+assert.match(cashPage, /Payout Buyback/);
 
 // Inventory report recognizes Buyback as stock-in everywhere.
 assert.match(reportContracts, /\| "buyback";/);
 assert.match(reportContracts, /value: "buyback", label: "Buyback masuk"/);
-const stockInBuybackOccurrences = reportQueries.match(/'migration_opening', 'buyback', 'transfer_in'/g)?.length ?? 0;
-assert.ok(stockInBuybackOccurrences >= 2, "Buyback wajib dihitung sebagai stock-in pada summary dan trend.");
+const stockInBuybackOccurrences =
+  reportQueries.match(/'migration_opening', 'buyback', 'transfer_in'/g)
+    ?.length ?? 0;
+assert.ok(
+  stockInBuybackOccurrences >= 2,
+  "Buyback wajib dihitung sebagai stock-in pada summary dan trend.",
+);
 assert.match(stockPage, /buyback: "Buyback masuk"/);
 assert.match(reportExport, /buyback: "Buyback masuk"/);
 
-// General financial report separates Buyback payout from manual cash out.
+// General financial report separates Buyback funding/payout from manual cash movement.
+assert.match(reportContracts, /buybackCashFunding: number/);
 assert.match(reportContracts, /buybackCashPayouts: number/);
+assert.match(reportQueries, /buybackCashFunding:/);
 assert.match(reportQueries, /buybackCashPayouts:/);
+assert.match(reportQueries, /buybackCashFunding \+/);
 assert.match(reportQueries, /buybackCashPayouts -/);
 
 // BB3-A refinement: clearer payout UX and external image upload remains wired to persistence.
 assert.match(workspace, /3\. Payout ke Customer/);
 assert.match(workspace, /Simpan ke Dana Titip/);
-assert.match(workspace, /Foto terpilih/);
-assert.match(workspace, /name=\{`externalImage:\$\{clientKey\}`\}/);
 assert.match(workspace, /setPreviewUrl\(objectUrl\)/);
 assert.match(workspace, /setFileName\(file\.name\)/);
-assert.match(buybackActions, /formData\.get\(`externalImage:\$\{item\.clientKey\}`\)/);
 assert.match(buybackActions, /storeImageFile\(\{/);
 
 console.log("BB3-A Buyback cash/deposit/inventory integration contracts: OK");

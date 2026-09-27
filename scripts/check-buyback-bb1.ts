@@ -122,9 +122,11 @@ assert.match(service, /buyback_item\.processing_queued/);
 assert.match(service, /transaction\.insert\(buybackItemProcessings\)/);
 assert.match(service, /status: "pending"/);
 assert.match(service, /action: "buyback\.completed"/);
+assert.match(service, /referenceType: "buyback_funding"/);
+assert.match(service, /type: "cash_in"/);
 assert.match(
   service,
-  /expectedCash: sql`coalesce\(\$\{shifts\.expectedCash\}, 0\) - \$\{cashPayout\}`/,
+  /expectedCash: sql`coalesce\(\$\{shifts\.expectedCash\}, 0\) \+ \$\{buybackFundingAmount\} - \$\{cashPayout\}`/,
 );
 assert.match(service, /metalBuybackPriceRates/);
 assert.match(service, /normalizePurityKey\(item\.purityPercent\)/);

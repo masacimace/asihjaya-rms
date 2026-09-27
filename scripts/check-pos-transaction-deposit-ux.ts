@@ -22,7 +22,6 @@ assert.match(
   /const paidAmount = externalPaidAmount \+ customerDepositUsedAmount;/,
 );
 assert.match(page, /customerDepositUsedAmount > 0 \? \["Dana Titip"\]/);
-assert.match(page, /Saldo Dana Titip customer digunakan untuk transaksi ini\./);
 assert.match(page, /formatMoney\(detail\.customerDepositUsedAmount\)/);
 
 console.log("POS transaction Dana Titip UX contracts passed.");

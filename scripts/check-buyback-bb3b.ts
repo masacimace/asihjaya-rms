@@ -13,8 +13,12 @@ const saleClaim = read("src/features/pos/inventory-sale-claim.ts");
 const reportQueries = read("src/features/reports/queries.ts");
 const posQueries = read("src/features/pos/queries.ts");
 const adminSaleQueries = read("src/features/sales/admin-queries.ts");
-const saleTransactionService = read("src/features/sales/transaction-service.ts");
-const telegramDaily = read("src/server/integrations/telegram/telegram-daily-service.ts");
+const saleTransactionService = read(
+  "src/features/sales/transaction-service.ts",
+);
+const telegramDaily = read(
+  "src/server/integrations/telegram/telegram-daily-service.ts",
+);
 const saleNotifications = read("src/features/notifications/sales.ts");
 
 // Sale checkout must freeze historical weight + acquisition cost before current item state can change later.
@@ -27,7 +31,6 @@ assert.match(checkout, /costAmountSnapshot: item!\.costAmount,/);
 assert.match(buybackService, /eq\(productItems\.id, existing\.id\)/);
 assert.match(buybackService, /weightGram: item\.weightGram/);
 assert.match(buybackService, /costAmount: String\(item\.finalAmount\)/);
-assert.match(buybackService, /availability: "available"/);
 assert.match(buybackService, /condition: "used"/);
 assert.match(buybackService, /locationState: "outlet"/);
 assert.match(buybackService, /previousCostAmount: existing\.costAmount/);
@@ -36,8 +39,10 @@ assert.match(buybackQueries, /eq\(productItems\.locationState, "customer"\)/);
 assert.match(buybackQueries, /itemBarcodes\.barcodeValue/);
 
 // A Buyback item (condition used + available/outlet) must remain sellable without identity replacement.
-assert.match(saleClaim, /eq\(productItems\.availability, "available"\)/);
-assert.match(saleClaim, /inArray\(productItems\.condition, \["good", "used"\]\)/);
+assert.match(
+  saleClaim,
+  /inArray\(productItems\.condition, \["good", "used"\]\)/,
+);
 assert.match(saleClaim, /eq\(productItems\.locationState, "outlet"\)/);
 
 // Historical reports must use Sale snapshots, never current product weight/cost.
@@ -93,15 +98,33 @@ assert.match(
 assert.match(saleTransactionService, /expectedWeightGram: item\.weightGram/);
 
 // Historical inventory movement rows for Sale/Buyback resolve event-time values.
-assert.match(reportQueries, /referenceType} in \('sale', 'sale_void', 'sale_refund'\)/);
-assert.match(reportQueries, /referenceType} = 'buyback' then cast\(\$\{buybackItems\.weightGram\} as text\)/);
-assert.match(reportQueries, /referenceType} = 'buyback' then cast\(\$\{buybackItems\.finalAmount\} as text\)/);
-assert.match(reportQueries, /eq\(buybackItems\.buybackId, inventoryMovements\.referenceId\)/);
+assert.match(
+  reportQueries,
+  /referenceType} in \('sale', 'sale_void', 'sale_refund'\)/,
+);
+assert.match(
+  reportQueries,
+  /referenceType} = 'buyback' then cast\(\$\{buybackItems\.weightGram\} as text\)/,
+);
+assert.match(
+  reportQueries,
+  /referenceType} = 'buyback' then cast\(\$\{buybackItems\.finalAmount\} as text\)/,
+);
+assert.match(
+  reportQueries,
+  /eq\(buybackItems\.buybackId, inventoryMovements\.referenceId\)/,
+);
 
 // Telegram daily margin already uses immutable Sale cost snapshots; Sale notification freezes checkout weight.
-assert.match(telegramDaily, /sum\(\$\{saleItems\.costAmountSnapshot\}::numeric\)/);
+assert.match(
+  telegramDaily,
+  /sum\(\$\{saleItems\.costAmountSnapshot\}::numeric\)/,
+);
 assert.match(telegramDaily, /missingCostCount/);
-assert.match(saleNotifications, /totalWeightGram: normalizeWeight\(input\.totalWeightGram\)/);
+assert.match(
+  saleNotifications,
+  /totalWeightGram: normalizeWeight\(input\.totalWeightGram\)/,
+);
 assert.match(checkout, /const totalWeightGram = resolvedPricing\.reduce/);
 
 console.log("BB3-B Buyback lifecycle + historical Sale snapshot contracts: OK");

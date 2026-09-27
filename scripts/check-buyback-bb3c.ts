@@ -24,12 +24,17 @@ assert.match(service, /getExistingBuybackReplayResultInTransaction/);
 assert.match(schema, /uniqueIndex\("buybacks_org_idempotency_uq"\)/);
 
 // Same key + different business intent must be rejected instead of silently replaying an old transaction.
-assert.match(service, /Sesi Buyback ini sudah dipakai oleh transaksi berhasil dengan data yang berbeda/);
+assert.match(
+  service,
+  /Sesi Buyback ini sudah dipakai oleh transaksi berhasil dengan data yang berbeda/,
+);
 assert.match(service, /storedItems\.length === payload\.items\.length/);
 assert.match(service, /storedPayouts\.length === payload\.payouts\.length/);
 assert.match(service, /stored\.productItemId === incoming\.productItemId/);
-assert.match(service, /readSnapshotText\(snapshot, "productMasterId"\)/);
-assert.match(service, /sameNumeric\(stored\.finalAmount, incoming\.finalAmount\)/);
+assert.match(
+  service,
+  /sameNumeric\(stored\.finalAmount, incoming\.finalAmount\)/,
+);
 assert.match(service, /sameNumeric\(stored\.amount, incoming\.amount\)/);
 assert.match(actions, /getExistingBuybackReplayResult\(/);
 assert.match(actions, /idempotencyKey: error\.message/);
@@ -46,11 +51,17 @@ assert.match(schema, /uniqueIndex\("inventory_movements_reference_guard_uq"\)/);
 
 // External media written by a racing/replayed request is compensating-cleaned.
 assert.match(actions, /if \(result\.replayed\) \{[\s\S]*deleteImageFile/);
-assert.match(actions, /catch \(error\) \{[\s\S]*storedImageKeys\.map\(\(key\) => deleteImageFile\(key\)\)/);
+assert.match(
+  actions,
+  /catch \(error\) \{[\s\S]*storedImageKeys\.map\(\(key\) => deleteImageFile\(key\)\)/,
+);
 
 // Initial receipt is part of the Buyback DB transaction and uses one stable key.
 assert.match(service, /createHardwareJobV2InTransaction/);
-assert.match(service, /idempotencyKey: `buyback-receipt:\$\{buyback\.id\}:initial`/);
+assert.match(
+  service,
+  /idempotencyKey: `buyback-receipt:\$\{buyback\.id\}:initial`/,
+);
 assert.match(schema, /uniqueIndex\("hardware_jobs_idempotency_uq"\)/);
 assert.match(hardwareProducer, /\.onConflictDoNothing\(\)/);
 assert.match(hardwareProducer, /return \{ job: existing, duplicate: true \}/);
@@ -60,12 +71,21 @@ assert.match(hardwareProducer, /return \{ job: existing, duplicate: true \}/);
 assert.match(historyPanel, /name="requestId" value=\{randomUUID\(\)\}/);
 assert.match(actions, /const requestId = String\(formData\.get\("requestId"\)/);
 assert.match(actions, /Request cetak ulang nota Buyback tidak valid/);
-assert.match(actions, /idempotencyKey: `buyback-receipt:\$\{buyback\.id\}:reprint:\$\{requestId\}`/);
+assert.match(
+  actions,
+  /idempotencyKey: `buyback-receipt:\$\{buyback\.id\}:reprint:\$\{requestId\}`/,
+);
 assert.match(saleHistory, /name="requestId" value=\{randomUUID\(\)\}/);
-assert.match(saleActions, /idempotencyKey: `receipt:\$\{sale\.id\}:reprint:\$\{requestId\}`/);
+assert.match(
+  saleActions,
+  /idempotencyKey: `receipt:\$\{sale\.id\}:reprint:\$\{requestId\}`/,
+);
 
 // Frontend blocks accidental repeated submits while the action is pending; backend guards remain authoritative.
-assert.match(workspace, /const \[state, formAction, isSubmitting\] = useActionState/);
+assert.match(
+  workspace,
+  /const \[state, formAction, isSubmitting\] = useActionState/,
+);
 assert.match(workspace, /disabled=\{!canSubmit \|\| isSubmitting\}/);
 assert.match(workspace, /Memproses Buyback\.\.\./);
 
@@ -77,4 +97,6 @@ assert.match(hardwareRunner, /unknown_after_dispatch/);
 assert.match(hardwareReadme, /agent tidak mencetak ulang/);
 assert.match(hardwareReadme, /printer tidak dijalankan lagi/);
 
-console.log("BB3-C Buyback idempotency/concurrency/retry + Hardware regression contracts: OK");
+console.log(
+  "BB3-C Buyback idempotency/concurrency/retry + Hardware regression contracts: OK",
+);

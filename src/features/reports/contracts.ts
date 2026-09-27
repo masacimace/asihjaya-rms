@@ -115,6 +115,7 @@ export type ReportCashSnapshot = {
   cashRefunds: number;
   manualCashIn: number;
   manualCashOut: number;
+  buybackCashFunding: number;
   buybackCashPayouts: number;
   customerDepositCashWithdrawals: number;
   closingAdjustments: number;

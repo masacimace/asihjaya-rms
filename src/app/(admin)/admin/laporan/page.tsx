@@ -663,6 +663,11 @@ function CashSnapshot({ data }: { data: ReportSummaryData }) {
       tone: "text-emerald-700",
     },
     {
+      label: "Pendanaan Buyback",
+      value: data.cashSnapshot.buybackCashFunding,
+      tone: "text-emerald-700",
+    },
+    {
       label: "Kas keluar manual",
       value: -data.cashSnapshot.manualCashOut,
       tone: "text-red-700",

@@ -26,8 +26,13 @@ const telegramOutboxContract = read(
   "src/server/integrations/telegram/telegram-outbox-contract.ts",
 );
 
-// Reporting: Buyback cash payout is its own cash-out bucket and must reduce net cash.
+// Reporting: automatic Buyback funding and payout are separate cash buckets.
+assert.match(reportsContracts, /buybackCashFunding: number/);
 assert.match(reportsContracts, /buybackCashPayouts: number/);
+assert.match(
+  reportsQueries,
+  /referenceType\} = 'buyback_funding' then \$\{cashMovements\.amount\}/,
+);
 assert.match(
   reportsQueries,
   /referenceType\} = 'buyback' then \$\{cashMovements\.amount\}/,
@@ -36,6 +41,7 @@ assert.match(
   reportsQueries,
   /netCashMovement:[\s\S]*-\s*buybackCashPayouts\s*-/,
 );
+assert.match(reportsPage, /Pendanaan Buyback/);
 assert.match(reportsPage, /Payout cash Buyback/);
 
 // Inventory reporting: Buyback is stock-in, filterable/exportable, and its movement
@@ -65,7 +71,9 @@ assert.match(
   /availableCostValue:[^\n]*productItems\.costAmount/,
 );
 
-// Buyback cash payout must flow through normal shift cash reconciliation.
+// Buyback cash funding + payout must flow through normal shift cash reconciliation.
+assert.match(buybackService, /type: "cash_in"/);
+assert.match(buybackService, /referenceType: "buyback_funding"/);
 assert.match(buybackService, /type: "cash_out"/);
 assert.match(buybackService, /referenceType: "buyback"/);
 assert.match(cashReconciliation, /summary\.cashOut \+= amount/);

@@ -102,6 +102,10 @@ function getCashMovementTypeLabel(
     return "Payout Buyback";
   }
 
+  if (row.type === "cash_in" && row.referenceType === "buyback_funding") {
+    return "Dana Tambahan Buyback";
+  }
+
   return cashMovementTypeLabels[row.type];
 }
 
