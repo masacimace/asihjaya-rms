@@ -11,8 +11,6 @@ import {
   Clock3,
   Download,
   Landmark,
-  MinusCircle,
-  PlusCircle,
   ReceiptText,
   RefreshCw,
   Search,
@@ -21,8 +19,6 @@ import {
   WalletCards,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
-
 import { CashMovementForm } from "@/components/cash-movements/cash-movement-form";
 import {
   parseAdminCashMovementFilters,
@@ -211,76 +207,6 @@ function FlashMessage({
   );
 }
 
-function SummaryCard({
-  title,
-  value,
-  helper,
-  icon,
-  tone = "default",
-}: {
-  title: string;
-  value: ReactNode;
-  helper: string;
-  icon: ReactNode;
-  tone?: "default" | "success" | "danger" | "dark";
-}) {
-  return (
-    <article
-      className={cn(
-        "relative overflow-hidden rounded-2xl border p-5",
-        tone === "dark"
-          ? "border-neutral-800 bg-neutral-950 text-white"
-          : "border-[var(--border)] bg-white text-neutral-950",
-      )}
-    >
-      <div
-        className={cn(
-          "absolute -right-8 -top-8 size-24 rounded-full opacity-40 blur-2xl",
-          tone === "success" && "bg-emerald-100",
-          tone === "danger" && "bg-red-100",
-          tone === "dark" && "bg-white/20",
-          tone === "default" && "bg-[var(--accent-soft)]",
-        )}
-      />
-      <div className="relative flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p
-            className={cn(
-              "text-xs font-semibold uppercase",
-              tone === "dark" ? "text-white/55" : "text-[var(--muted)]",
-            )}
-          >
-            {title}
-          </p>
-          <p className="mt-3 truncate text-sm font-semibold tracking-tight">
-            {value}
-          </p>
-          <p
-            className={cn(
-              "mt-2 text-xs leading-5",
-              tone === "dark" ? "text-white/55" : "text-[var(--muted)]",
-            )}
-          >
-            {helper}
-          </p>
-        </div>
-        <div
-          className={cn(
-            "grid size-11 shrink-0 place-items-center rounded-xl",
-            tone === "success" && "bg-emerald-50 text-emerald-600",
-            tone === "danger" && "bg-red-50 text-red-600",
-            tone === "dark" && "bg-white/10 text-white",
-            tone === "default" &&
-              "bg-[var(--accent-soft)] text-[var(--accent)]",
-          )}
-        >
-          {icon}
-        </div>
-      </div>
-    </article>
-  );
-}
-
 function MovementBadge({ movement }: { movement: AdminCashMovementRow }) {
   const tone = getMovementTone(movement.type);
   const Icon = tone.icon;
@@ -455,144 +381,226 @@ export default async function KasPage({ searchParams }: PageProps) {
 
       <FlashMessage type={query.type} message={query.message} />
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-        <SummaryCard
-          title="Net Movement"
-          value={formatSignedMoney(data.summary.netMovement)}
-          helper="Modal awal + cash sale + kas masuk + pendanaan Buyback - kas keluar/refund/Buyback/Dana Titip."
-          icon={<WalletCards className="size-5" />}
-          tone="dark"
-        />
-        <SummaryCard
-          title="Cash Sale"
-          value={formatMoney(data.summary.cashSales)}
-          helper="Pembayaran tunai dari transaksi POS pada periode ini."
-          icon={<ReceiptText className="size-5" />}
-          tone="success"
-        />
-        <SummaryCard
-          title="Deposit Saldo"
-          value={formatMoney(data.customerDepositSummary.depositIn)}
-          helper="Penambahan saldo Dana Titip customer pada periode ini."
-          icon={<PlusCircle className="size-5" />}
-          tone="success"
-        />
-        <SummaryCard
-          title="Tarik Dana Titip"
-          value={formatMoney(data.summary.customerDepositCashWithdrawals)}
-          helper="Kas keluar langsung dari penarikan Dana Titip."
-          icon={<MinusCircle className="size-5" />}
-          tone="danger"
-        />
-        <SummaryCard
-          title="Dana Tambahan Buyback"
-          value={formatMoney(data.summary.buybackCashFunding)}
-          helper="Pendanaan otomatis saat saldo kas shift tidak cukup untuk payout Buyback."
-          icon={<PlusCircle className="size-5" />}
-          tone="success"
-        />
-        <SummaryCard
-          title="Payout Buyback"
-          value={formatMoney(data.summary.buybackCashPayouts)}
-          helper="Kas keluar untuk pembayaran transaksi Buyback."
-          icon={<MinusCircle className="size-5" />}
-          tone="danger"
-        />
-        <SummaryCard
-          title="Kas Keluar Manual"
-          value={formatMoney(data.summary.manualCashOut)}
-          helper="Kas keluar operasional non-Dana Titip dan non-Buyback."
-          icon={<MinusCircle className="size-5" />}
-          tone="danger"
-        />
-      </section>
-
-      <section className="rounded-[1.75rem] border border-[var(--border)] bg-white p-5 sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-              <WalletCards className="size-3.5" />
-              Liability Dana Titip
+      <section
+        data-cash-summary-layout="two-column-compact"
+        className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] xl:items-stretch"
+      >
+        <article className="rounded-[1.75rem] border border-[var(--border)] bg-white p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
+                <Banknote className="size-3.5" />
+                Arus Kas Fisik
+              </div>
+              <h2 className="mt-3 text-lg font-semibold text-neutral-950">
+                Ringkasan Kas
+              </h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Arus kas fisik outlet pada periode terpilih.
+              </p>
             </div>
-            <h2 className="mt-3 text-lg font-semibold text-neutral-950">
-              Rekap Dana Titip periode ini
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Saldo ini adalah kewajiban outlet ke customer, bukan omzet.
-              Deposit Saldo menambah liability, sedangkan Gunakan saldo dan
-              penarikan tunai mengurangi liability.
-            </p>
-          </div>
-          <div className="rounded-2xl bg-neutral-950 px-5 py-4 text-white lg:min-w-64 lg:text-right">
-            <p className="text-xs font-semibold uppercase text-white/55">
-              Saldo akhir Dana Titip
-            </p>
-            <p className="mt-2 text-2xl font-semibold tracking-tight text-[#f1ce80]">
-              {formatMoney(data.customerDepositSummary.closingBalance)}
-            </p>
-          </div>
-        </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          <div className="rounded-2xl bg-neutral-50 p-4">
-            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-              Saldo awal
-            </p>
-            <p className="mt-2 font-semibold text-neutral-950">
-              {formatMoney(data.customerDepositSummary.openingBalance)}
-            </p>
+            <div className="rounded-2xl bg-neutral-950 px-5 py-4 text-white sm:min-w-52 sm:text-right">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
+                Net Movement
+              </p>
+              <p
+                className={cn(
+                  "mt-2 text-2xl font-semibold tracking-tight",
+                  data.summary.netMovement > 0
+                    ? "text-emerald-300"
+                    : data.summary.netMovement < 0
+                      ? "text-red-300"
+                      : "text-white",
+                )}
+              >
+                {formatSignedMoney(data.summary.netMovement)}
+              </p>
+            </div>
           </div>
-          <div className="rounded-2xl bg-emerald-50 p-4">
-            <p className="text-xs font-semibold uppercase text-emerald-700">
-              Deposit Saldo
-            </p>
-            <p className="mt-2 font-semibold text-emerald-700">
-              +{formatMoney(data.customerDepositSummary.depositIn)}
-            </p>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                Cash Sale
+              </p>
+              <p className="mt-2 text-lg font-semibold text-neutral-950">
+                {formatMoney(data.summary.cashSales)}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                  Buyback
+                </p>
+                <span className="text-[11px] font-semibold text-neutral-500">
+                  Net{" "}
+                  {formatSignedMoney(
+                    data.summary.buybackCashFunding -
+                      data.summary.buybackCashPayouts,
+                  )}
+                </span>
+              </div>
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-neutral-600">Pendanaan</span>
+                  <span className="font-semibold text-emerald-700">
+                    +{formatMoney(data.summary.buybackCashFunding)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-neutral-600">Payout</span>
+                  <span className="font-semibold text-red-700">
+                    -{formatMoney(data.summary.buybackCashPayouts)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--border)] bg-neutral-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                  Kas Manual
+                </p>
+                <span className="text-[11px] font-semibold text-neutral-500">
+                  Net{" "}
+                  {formatSignedMoney(
+                    data.summary.manualCashIn - data.summary.manualCashOut,
+                  )}
+                </span>
+              </div>
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-neutral-600">Masuk</span>
+                  <span className="font-semibold text-emerald-700">
+                    +{formatMoney(data.summary.manualCashIn)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-neutral-600">Keluar</span>
+                  <span className="font-semibold text-red-700">
+                    -{formatMoney(data.summary.manualCashOut)}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="rounded-2xl bg-red-50 p-4">
-            <p className="text-xs font-semibold uppercase text-red-700">
-              Gunakan saldo
-            </p>
-            <p className="mt-2 font-semibold text-red-700">
-              -{formatMoney(data.customerDepositSummary.depositUsed)}
-            </p>
+
+          <div className="mt-4 grid gap-x-5 gap-y-2 border-t border-[var(--border)] pt-4 text-xs sm:grid-cols-3">
+            <div className="flex items-center justify-between gap-3 sm:block">
+              <span className="text-[var(--muted)]">Modal awal</span>
+              <p className="font-semibold text-neutral-800 sm:mt-1">
+                {formatMoney(data.summary.openingBalance)}
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-3 sm:block">
+              <span className="text-[var(--muted)]">Refund cash</span>
+              <p className="font-semibold text-red-700 sm:mt-1">
+                -{formatMoney(data.summary.cashRefunds)}
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-3 sm:block">
+              <span className="text-[var(--muted)]">Koreksi closing</span>
+              <p
+                className={cn(
+                  "font-semibold sm:mt-1",
+                  data.summary.closingAdjustments >= 0
+                    ? "text-emerald-700"
+                    : "text-red-700",
+                )}
+              >
+                {formatSignedMoney(data.summary.closingAdjustments)}
+              </p>
+            </div>
           </div>
-          <div className="rounded-2xl bg-red-50 p-4">
-            <p className="text-xs font-semibold uppercase text-red-700">
-              Tarik tunai
-            </p>
-            <p className="mt-2 font-semibold text-red-700">
-              -{formatMoney(data.customerDepositSummary.depositWithdrawals)}
-            </p>
+        </article>
+
+        <article className="rounded-[1.75rem] border border-[var(--border)] bg-white p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between xl:flex-col 2xl:flex-row">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                <WalletCards className="size-3.5" />
+                Liability Dana Titip
+              </div>
+              <h2 className="mt-3 text-lg font-semibold text-neutral-950">
+                Rekap Dana Titip
+              </h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Saldo titipan customer adalah liability outlet, bukan omzet.
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-neutral-950 px-5 py-4 text-white sm:min-w-52 sm:text-right xl:w-full xl:text-left 2xl:w-auto 2xl:text-right">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
+                Saldo Akhir
+              </p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight text-[#f1ce80]">
+                {formatMoney(data.customerDepositSummary.closingBalance)}
+              </p>
+            </div>
           </div>
-          <div className="rounded-2xl bg-amber-50 p-4">
-            <p className="text-xs font-semibold uppercase text-amber-700">
-              Adjustment
-            </p>
-            <p className="mt-2 font-semibold text-amber-700">
-              {formatSignedMoney(
-                data.customerDepositSummary.adjustmentIn -
-                  data.customerDepositSummary.adjustmentOut,
-              )}
-            </p>
+
+          <div className="mt-5 divide-y divide-neutral-100 rounded-2xl border border-[var(--border)] px-4">
+            <div className="flex items-center justify-between gap-4 py-3">
+              <span className="text-sm text-neutral-600">Saldo awal</span>
+              <span className="text-sm font-semibold text-neutral-950">
+                {formatMoney(data.customerDepositSummary.openingBalance)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 py-3">
+              <span className="text-sm text-neutral-600">Deposit saldo</span>
+              <span className="text-sm font-semibold text-emerald-700">
+                +{formatMoney(data.customerDepositSummary.depositIn)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 py-3">
+              <span className="text-sm text-neutral-600">Gunakan saldo</span>
+              <span className="text-sm font-semibold text-red-700">
+                -{formatMoney(data.customerDepositSummary.depositUsed)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 py-3">
+              <span className="text-sm text-neutral-600">Tarik tunai</span>
+              <span className="text-sm font-semibold text-red-700">
+                -{formatMoney(data.customerDepositSummary.depositWithdrawals)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 py-3">
+              <span className="text-sm text-neutral-600">Adjustment</span>
+              <span
+                className={cn(
+                  "text-sm font-semibold",
+                  data.customerDepositSummary.adjustmentIn -
+                    data.customerDepositSummary.adjustmentOut >=
+                  0
+                    ? "text-emerald-700"
+                    : "text-red-700",
+                )}
+              >
+                {formatSignedMoney(
+                  data.customerDepositSummary.adjustmentIn -
+                    data.customerDepositSummary.adjustmentOut,
+                )}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 py-3">
+              <span className="text-sm font-semibold text-neutral-950">
+                Net change
+              </span>
+              <span
+                className={cn(
+                  "text-sm font-semibold",
+                  data.customerDepositSummary.netChange >= 0
+                    ? "text-emerald-700"
+                    : "text-red-700",
+                )}
+              >
+                {formatSignedMoney(data.customerDepositSummary.netChange)}
+              </span>
+            </div>
           </div>
-          <div className="rounded-2xl bg-neutral-50 p-4">
-            <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-              Net change
-            </p>
-            <p
-              className={cn(
-                "mt-2 font-semibold",
-                data.customerDepositSummary.netChange >= 0
-                  ? "text-emerald-700"
-                  : "text-red-700",
-              )}
-            >
-              {formatSignedMoney(data.customerDepositSummary.netChange)}
-            </p>
-          </div>
-        </div>
+        </article>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px] xl:items-start">
