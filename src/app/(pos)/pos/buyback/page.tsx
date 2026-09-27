@@ -121,6 +121,13 @@ export default async function PosBuybackPage({ searchParams }: PageProps) {
         ratePerGram: rate.ratePerGram,
       })),
       canProcess: canCreate,
+      canPrintLabel: hasPermission(auth, "inventory.print_label"),
+      canViewInventory:
+        hasPermission(auth, "inventory.view") ||
+        hasPermission(auth, "inventory.receive") ||
+        hasPermission(auth, "inventory.adjust") ||
+        hasPermission(auth, "inventory.transfer") ||
+        hasPermission(auth, "inventory.manage"),
     };
   }
 

@@ -414,6 +414,8 @@ export function BuybackCompactHistoryPanel({
                           colorPresets={processingQuickActions.colorPresets}
                           priceRates={processingQuickActions.priceRates}
                           canProcess={processingQuickActions.canProcess}
+                          canPrintLabel={processingQuickActions.canPrintLabel}
+                          canViewInventory={processingQuickActions.canViewInventory}
                         />
                       </div>
                     ) : (
