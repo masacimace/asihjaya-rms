@@ -482,7 +482,9 @@ export function BuybackHistoryPanel({
                             priceRates={processingQuickActions.priceRates}
                             canProcess={processingQuickActions.canProcess}
                             canPrintLabel={processingQuickActions.canPrintLabel}
-                            canViewInventory={processingQuickActions.canViewInventory}
+                            canViewInventory={
+                              processingQuickActions.canViewInventory
+                            }
                           />
                         ) : null}
                         <Link
@@ -604,7 +606,7 @@ function BuybackDetailPanel({
               <input type="hidden" name="requestId" value={randomUUID()} />
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-neutral-950 px-3 py-2 text-xs font-semibold text-white"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-neutral-950 px-3 py-2 !text-xs font-semibold text-white"
               >
                 <Printer className="size-3.5" />
                 Cetak Ulang Nota

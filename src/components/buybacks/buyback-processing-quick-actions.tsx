@@ -1,7 +1,7 @@
 "use client";
 
 import { Sparkles, Wrench } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { ProcessingDrawer } from "@/components/buybacks/buyback-processing-workspace";
@@ -38,6 +38,7 @@ export function BuybackProcessingQuickActions({
   variant?: "mobile" | "desktop";
 }) {
   const router = useRouter();
+  const refreshOnCloseRef = useRef(false);
   const [selected, setSelected] = useState<BuybackProcessingQueueRow | null>(
     null,
   );
@@ -65,7 +66,20 @@ export function BuybackProcessingQuickActions({
 
   function openFirstPending(type: "cleaning" | "recondition") {
     const row = pendingByType[type][0];
-    if (row) setSelected(row);
+    if (!row) return;
+
+    refreshOnCloseRef.current = false;
+    setSelected(row);
+  }
+
+  function closeSelected() {
+    const shouldRefresh = refreshOnCloseRef.current;
+    refreshOnCloseRef.current = false;
+    setSelected(null);
+
+    if (shouldRefresh) {
+      router.refresh();
+    }
   }
 
   return (
@@ -126,9 +140,9 @@ export function BuybackProcessingQuickActions({
           productMasters={productMasters}
           colorPresets={colorPresets}
           priceRates={priceRates}
-          onClose={() => setSelected(null)}
+          onClose={closeSelected}
           onCompleted={() => {
-            router.refresh();
+            refreshOnCloseRef.current = true;
           }}
           canPrintLabel={canPrintLabel}
           canViewInventory={canViewInventory}

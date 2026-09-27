@@ -91,9 +91,9 @@ function QuickLabelPrintButton({
   itemId: string;
   compact?: boolean;
 }) {
-  const [status, setStatus] = useState<"idle" | "printing" | "success" | "error">(
-    "idle",
-  );
+  const [status, setStatus] = useState<
+    "idle" | "printing" | "success" | "error"
+  >("idle");
   const [message, setMessage] = useState<string | null>(null);
 
   async function printLabel() {
@@ -116,7 +116,9 @@ function QuickLabelPrintButton({
       };
 
       if (!response.ok || !payload.success) {
-        throw new Error(payload.error || "Label belum dapat dikirim ke printer.");
+        throw new Error(
+          payload.error || "Label belum dapat dikirim ke printer.",
+        );
       }
 
       setStatus("success");
@@ -535,7 +537,7 @@ export function ProcessingDrawer({
             </button>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto p-5 sm:p-6">
+          <div className="flex min-h-0 flex-1 flex-col justify-start overflow-y-auto p-5 sm:p-6">
             <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5">
               <div className="flex items-start gap-3">
                 <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">

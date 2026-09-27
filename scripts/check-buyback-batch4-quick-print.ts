@@ -75,12 +75,40 @@ for (const source of [processingPage, buybackPage, historyPage]) {
   assert.match(source, /inventory\.view/);
 }
 
-// Quick-action component opened from history must preserve success drawer.
-assert.match(quickActions, /canPrintLabel: boolean/);
-assert.match(quickActions, /canViewInventory: boolean/);
+// Quick-action lifecycle:
+// completing from /pos/buyback or /pos/buyback/riwayat must NOT refresh the
+// server component immediately, otherwise its pending-only data disappears and
+// unmounts the success drawer before the user can print.
+assert.match(quickActions, /useRef/);
+assert.match(quickActions, /const refreshOnCloseRef = useRef\(false\)/);
+assert.match(
+  quickActions,
+  /onCompleted=\{\(\) => \{\s*refreshOnCloseRef\.current = true;\s*\}\}/,
+);
 assert.doesNotMatch(
   quickActions,
-  /onCompleted=\{\(\) => \{\s*setSelected\(null\)/,
+  /onCompleted=\{\(\) => \{[\s\S]{0,160}router\.refresh\(\)/,
+  "Quick action tidak boleh router.refresh() langsung saat completion.",
+);
+
+// Refresh happens only after the user is done with the success drawer.
+assert.match(quickActions, /function closeSelected\(\)/);
+assert.match(
+  quickActions,
+  /const shouldRefresh = refreshOnCloseRef\.current;/,
+);
+assert.match(quickActions, /refreshOnCloseRef\.current = false;/);
+assert.match(quickActions, /setSelected\(null\);/);
+assert.match(
+  quickActions,
+  /if \(shouldRefresh\) \{\s*router\.refresh\(\);\s*\}/,
+);
+assert.match(quickActions, /onClose=\{closeSelected\}/);
+
+// Opening a new pending action resets any previous deferred refresh flag.
+assert.match(
+  quickActions,
+  /refreshOnCloseRef\.current = false;\s*setSelected\(row\);/,
 );
 
 // Both history renderers propagate permissions.
@@ -97,5 +125,5 @@ assert.match(
 );
 
 console.log(
-  "Batch 4 Quick Print contract passed: existing item identity + secure SATO endpoint, success drawer, permission guards, re-print fallback, and no processing rollback.",
+  "Batch 4 Quick Print contract passed: success drawer survives quick-action completion, refresh is deferred until close, secure SATO printing and re-print fallback remain intact.",
 );
