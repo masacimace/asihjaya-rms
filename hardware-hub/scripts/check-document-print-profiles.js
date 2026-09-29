@@ -3,6 +3,7 @@ const assert = require("assert");
 const {
   DOCUMENT_PRINT_PROFILES,
   EPSON_L3251_PRINT_PROFILE_A4_V1,
+  EPSON_L3251_PRINT_PROFILE_A5_PREPRINTED_V1,
   LEGACY_RECEIPT_PRINT_PROFILE_A5_V1,
   buildSumatraPdfCommand,
   resolveDocumentPrintProfile,
@@ -21,12 +22,22 @@ function createSyntheticPdf(width, height) {
 }
 
 const a4 = DOCUMENT_PRINT_PROFILES[EPSON_L3251_PRINT_PROFILE_A4_V1];
-const a5 = DOCUMENT_PRINT_PROFILES[LEGACY_RECEIPT_PRINT_PROFILE_A5_V1];
+const legacyA5 = DOCUMENT_PRINT_PROFILES[LEGACY_RECEIPT_PRINT_PROFILE_A5_V1];
+const preprintedA5 =
+  DOCUMENT_PRINT_PROFILES[EPSON_L3251_PRINT_PROFILE_A5_PREPRINTED_V1];
 assert.equal(a4.paper, "A4");
 assert.equal(a4.orientation, "landscape");
 assert.deepEqual(a4.printSettings, [
   "paper=A4",
   "fit",
+  "color",
+  "simplex",
+  "ignore-pdf-print-settings",
+]);
+assert.equal(legacyA5.scaleMode, "fit");
+assert.deepEqual(preprintedA5.printSettings, [
+  "paper=A5",
+  "noscale",
   "color",
   "simplex",
   "ignore-pdf-print-settings",
@@ -52,9 +63,56 @@ assert.deepEqual(command.args, [
 ]);
 assert.equal(command.profile.id, EPSON_L3251_PRINT_PROFILE_A4_V1);
 
+const a5OverlayCommand = buildSumatraPdfCommand({
+  executable: "C:\\Program Files\\SumatraPDF\\SumatraPDF.exe",
+  printerName: "EPSON L3250 Series",
+  filePath: "C:\\HardwareHub\\receipt-a5-overlay.pdf",
+  payload: {
+    documentProfileId: "receipt_a5_landscape_v1",
+    printProfileId: LEGACY_RECEIPT_PRINT_PROFILE_A5_V1,
+    copies: 1,
+    metadata: {
+      renderMode: "preprinted_overlay",
+    },
+  },
+});
+assert.deepEqual(a5OverlayCommand.args, [
+  "-print-to",
+  "EPSON L3250 Series",
+  "-print-settings",
+  "paper=A5,noscale,color,simplex,ignore-pdf-print-settings",
+  "-silent",
+  "C:\\HardwareHub\\receipt-a5-overlay.pdf",
+]);
+assert.equal(
+  a5OverlayCommand.requestedPrintProfileId,
+  LEGACY_RECEIPT_PRINT_PROFILE_A5_V1,
+);
+assert.equal(
+  a5OverlayCommand.profile.id,
+  EPSON_L3251_PRINT_PROFILE_A5_PREPRINTED_V1,
+);
+
 assert.equal(
   resolveDocumentPrintProfile({}).profile.id,
   LEGACY_RECEIPT_PRINT_PROFILE_A5_V1,
+);
+assert.equal(
+  resolveDocumentPrintProfile({
+    documentProfileId: "receipt_a5_landscape_v1",
+    printProfileId: LEGACY_RECEIPT_PRINT_PROFILE_A5_V1,
+    metadata: { renderMode: "full_design" },
+  }).profile.id,
+  LEGACY_RECEIPT_PRINT_PROFILE_A5_V1,
+);
+assert.throws(
+  () =>
+    resolveDocumentPrintProfile({
+      documentProfileId: "receipt_a5_landscape_v1",
+      printProfileId: EPSON_L3251_PRINT_PROFILE_A5_PREPRINTED_V1,
+      metadata: { renderMode: "full_design" },
+    }),
+  (error) => error.code === "PRINT_PROFILE_RENDER_MODE_MISMATCH",
 );
 assert.throws(
   () =>
@@ -68,7 +126,8 @@ assert.throws(
 const a4Contract = validatePdfBuffer(createSyntheticPdf(841.89, 595.28), a4);
 assert.equal(a4Contract.pageCount, 1);
 assert.equal(a4Contract.pageSize, "A4 landscape");
-validatePdfBuffer(createSyntheticPdf(595.28, 419.53), a5);
+validatePdfBuffer(createSyntheticPdf(595.28, 419.53), legacyA5);
+validatePdfBuffer(createSyntheticPdf(595.28, 419.53), preprintedA5);
 assert.throws(
   () => validatePdfBuffer(createSyntheticPdf(595.28, 419.53), a4),
   (error) => error.code === "PDF_PAGE_SIZE_MISMATCH",

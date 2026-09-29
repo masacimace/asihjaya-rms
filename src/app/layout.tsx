@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import "../features/sales/documents/receipt-certificate-front-client.css";
 import "../features/sales/documents/receipt-certificate-back-client.css";
+import "../features/sales/documents/receipt-certificate-overlay-client.css";
 
 export const metadata: Metadata = {
   title: {

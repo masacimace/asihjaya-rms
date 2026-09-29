@@ -4,6 +4,9 @@ const RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1 = "receipt_a4_landscape_v1";
 const LEGACY_RECEIPT_PRINT_PROFILE_A5_V1 = "receipt_a5_v1";
 const TRANSITIONAL_RECEIPT_PRINT_PROFILE_A4_V1 = "receipt_a4_v1";
 const EPSON_L3251_PRINT_PROFILE_A4_V1 = "epson_l3251_a4_v1";
+const EPSON_L3251_PRINT_PROFILE_A5_PREPRINTED_V1 =
+  "epson_l3251_a5_preprinted_v1";
+const PREPRINTED_OVERLAY_RENDER_MODE = "preprinted_overlay";
 
 const DOCUMENT_PRINT_PROFILES = Object.freeze({
   [LEGACY_RECEIPT_PRINT_PROFILE_A5_V1]: Object.freeze({
@@ -20,6 +23,25 @@ const DOCUMENT_PRINT_PROFILES = Object.freeze({
     printSettings: Object.freeze([
       "paper=A5",
       "fit",
+      "color",
+      "simplex",
+      "ignore-pdf-print-settings",
+    ]),
+  }),
+  [EPSON_L3251_PRINT_PROFILE_A5_PREPRINTED_V1]: Object.freeze({
+    id: EPSON_L3251_PRINT_PROFILE_A5_PREPRINTED_V1,
+    label: "Epson EcoTank L3251 A5 Pre-printed Overlay",
+    engine: "sumatrapdf",
+    documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
+    paper: "A5",
+    orientation: "landscape",
+    colorMode: "color",
+    duplex: "simplex",
+    scaleMode: "noscale",
+    expectedPdfPoints: Object.freeze({ width: 595.28, height: 419.53 }),
+    printSettings: Object.freeze([
+      "paper=A5",
+      "noscale",
       "color",
       "simplex",
       "ignore-pdf-print-settings",
@@ -78,13 +100,22 @@ function getDocumentPrintProfile(printProfileId) {
 }
 
 function resolveDocumentPrintProfile(payload = {}) {
-  const printProfileId = payload.printProfileId || LEGACY_RECEIPT_PRINT_PROFILE_A5_V1;
-  const profile = getDocumentPrintProfile(printProfileId);
-  const documentProfileId = payload.documentProfileId || profile.documentProfileId;
+  const requestedPrintProfileId =
+    payload.printProfileId || LEGACY_RECEIPT_PRINT_PROFILE_A5_V1;
+  const requestedProfile = getDocumentPrintProfile(requestedPrintProfileId);
+  const documentProfileId = payload.documentProfileId || requestedProfile.documentProfileId;
+  const isA5PreprintedOverlay =
+    documentProfileId === RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1 &&
+    requestedPrintProfileId === LEGACY_RECEIPT_PRINT_PROFILE_A5_V1 &&
+    payload.metadata?.renderMode === PREPRINTED_OVERLAY_RENDER_MODE;
+  const effectivePrintProfileId = isA5PreprintedOverlay
+    ? EPSON_L3251_PRINT_PROFILE_A5_PREPRINTED_V1
+    : requestedPrintProfileId;
+  const profile = getDocumentPrintProfile(effectivePrintProfileId);
 
   if (documentProfileId !== profile.documentProfileId) {
     const error = new Error(
-      `Document profile ${documentProfileId} tidak cocok dengan print profile ${printProfileId}.`,
+      `Document profile ${documentProfileId} tidak cocok dengan print profile ${effectivePrintProfileId}.`,
     );
     error.code = "PRINT_PROFILE_DOCUMENT_MISMATCH";
     error.category = "validation";
@@ -92,7 +123,24 @@ function resolveDocumentPrintProfile(payload = {}) {
     throw error;
   }
 
-  return { profile, documentProfileId };
+  if (
+    effectivePrintProfileId === EPSON_L3251_PRINT_PROFILE_A5_PREPRINTED_V1 &&
+    payload.metadata?.renderMode !== PREPRINTED_OVERLAY_RENDER_MODE
+  ) {
+    const error = new Error(
+      `Print profile ${EPSON_L3251_PRINT_PROFILE_A5_PREPRINTED_V1} hanya untuk preprinted overlay.`,
+    );
+    error.code = "PRINT_PROFILE_RENDER_MODE_MISMATCH";
+    error.category = "validation";
+    error.retrySafe = false;
+    throw error;
+  }
+
+  return {
+    profile,
+    documentProfileId,
+    requestedPrintProfileId,
+  };
 }
 
 function buildSumatraPdfCommand({ executable, printerName, filePath, payload = {} }) {
@@ -103,7 +151,8 @@ function buildSumatraPdfCommand({ executable, printerName, filePath, payload = {
     error.retrySafe = false;
     throw error;
   }
-  const { profile, documentProfileId } = resolveDocumentPrintProfile(payload);
+  const { profile, documentProfileId, requestedPrintProfileId } =
+    resolveDocumentPrintProfile(payload);
   const copies = Math.max(1, Math.min(Math.round(Number(payload.copies) || 1), 10));
   const printSettings = [...profile.printSettings];
   if (copies > 1) printSettings.unshift(`${copies}x`);
@@ -120,6 +169,7 @@ function buildSumatraPdfCommand({ executable, printerName, filePath, payload = {
     ],
     profile,
     documentProfileId,
+    requestedPrintProfileId,
     copies,
   };
 }
@@ -127,6 +177,7 @@ function buildSumatraPdfCommand({ executable, printerName, filePath, payload = {
 module.exports = {
   DOCUMENT_PRINT_PROFILES,
   EPSON_L3251_PRINT_PROFILE_A4_V1,
+  EPSON_L3251_PRINT_PROFILE_A5_PREPRINTED_V1,
   LEGACY_RECEIPT_PRINT_PROFILE_A5_V1,
   RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1,
   RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,

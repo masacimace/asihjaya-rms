@@ -1,0 +1,55 @@
+/*
+ * Physical pre-printed receipt overlay guard.
+ *
+ * Client artwork overrides intentionally use !important for the digital/full
+ * design. This file is loaded after those overrides so the physical overlay
+ * remains transaction-data-only when printing onto vendor pre-printed paper.
+ */
+
+
+[data-aj-receipt-render-mode="preprinted_overlay"] .aj-receipt-front-design {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-info-strip,
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-products-card,
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-payment-support,
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-signature-card,
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-total-card,
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-qr-card {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-product-body,
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-qr-box,
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-total-box {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-total-breakdown {
+  border-bottom-color: transparent !important;
+}
