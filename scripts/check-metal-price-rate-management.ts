@@ -23,6 +23,19 @@ const settingsHub = read("src/app/(admin)/admin/pengaturan/page.tsx");
 const goldReferencePanel = read(
   "src/components/pricing/gold-reference-rate-panel.tsx",
 );
+const quickActions = read("src/app/actions/quick-price-rates.ts");
+const quickControl = read("src/components/pricing/quick-price-rate-control.tsx");
+const productCreateForm = read("src/components/inventory/product-item-form.tsx");
+const productEditForm = read("src/components/inventory/product-item-edit-form.tsx");
+const buybackWorkspace = read("src/components/buybacks/buyback-workspace.tsx");
+const buybackProcessing = read(
+  "src/components/buybacks/buyback-processing-workspace.tsx",
+);
+const seed = read("src/db/seed.ts");
+const cashierPricingMigration = read(
+  "drizzle/0028_cashier_pricing_manage.sql",
+);
+const adminLayout = read("src/app/(admin)/admin/layout.tsx");
 
 assert.match(query, /ne\(productItems\.availability, "sold"\)/);
 assert.match(actions, /export async function retireMetalPriceRateAction/);
@@ -100,6 +113,44 @@ assert.match(page, /getBuybackPriceRateSettingsData/);
 assert.match(page, /saleRows=\{saleRows\}/);
 assert.match(page, /buybackRows=\{buybackRows\}/);
 assert.match(settingsHub, /Rate Jual dan Rate Buyback/);
+
+const cashierPermissionBlock =
+  seed.match(/cashier:\s*\[([\s\S]*?)\n\s*\],\n\n\s*stock_admin:/)?.[1] ?? "";
+assert.match(cashierPermissionBlock, /"pricing\.manage"/);
+assert.match(cashierPermissionBlock, /"buybacks\.view"/);
+assert.match(cashierPermissionBlock, /"buybacks\.create"/);
+assert.doesNotMatch(cashierPermissionBlock, /"admin\.access"/);
+assert.doesNotMatch(cashierPermissionBlock, /"settings\.manage"/);
+assert.match(
+  cashierPricingMigration,
+  /JOIN "permissions" p ON p\."code" = 'pricing\.manage'/,
+);
+assert.match(cashierPricingMigration, /WHERE r\."code" = 'cashier'/);
+assert.match(
+  cashierPricingMigration,
+  /ON CONFLICT \("role_id", "permission_id"\) DO NOTHING/,
+);
+assert.match(migrationJournal, /0028_cashier_pricing_manage/);
+assert.match(adminLayout, /requirePermission\("admin\.access"\)/);
+
+assert.match(quickActions, /export async function retireQuickPriceRateAction/);
+assert.match(quickActions, /retireMetalPriceRateAction\(purityKey\)/);
+assert.match(quickActions, /retireBuybackPriceRateAction\(purityKey\)/);
+assert.match(quickActions, /hasPermission\(auth, "pricing\.manage"\)/);
+assert.match(quickControl, /Nonaktifkan Rate/);
+assert.match(quickControl, /Ya, Nonaktifkan/);
+assert.match(quickControl, /confirmingRetire/);
+assert.match(quickControl, /onRetired\?/);
+assert.doesNotMatch(quickControl, /window\.confirm/);
+
+for (const consumer of [
+  productCreateForm,
+  productEditForm,
+  buybackWorkspace,
+  buybackProcessing,
+]) {
+  assert.match(consumer, /onRetired=/);
+}
 
 console.log(
   "Metal Price Rate management contracts: OK — sale and buyback rate domains are separated, historical, and auditable.",
