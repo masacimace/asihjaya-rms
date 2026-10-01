@@ -425,7 +425,7 @@ function PosItemPricingDialogContent({
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-[var(--border)] bg-white p-3">
               <p className="text-xs text-[var(--muted)]">
-                Harga Standar Kadar {item.purityPercent ?? "-"}%
+                Harga Standar Kadar {formatPercentDisplay(item.purityPercent)}
               </p>
               <p className="mt-1 text-base font-semibold text-neutral-950">
                 {item.activePricePerGram
