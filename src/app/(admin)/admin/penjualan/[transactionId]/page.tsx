@@ -24,6 +24,8 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { formatDecimalDisplay } from "@/lib/decimal-presentation";
+
 import { getSaleSensitiveCapabilities } from "@/features/sales/sensitive-permissions";
 import { RETURN_VIEW_PERMISSION } from "@/features/returns/authorization";
 import { getSaleReturnCaseSummary } from "@/features/returns/queries";
@@ -204,19 +206,8 @@ function formatDateOnly(value: Date | null) {
 }
 
 function formatDecimal(value: string | null, suffix: string) {
-  if (!value) {
-    return "-";
-  }
-
-  const numberValue = Number(value);
-
-  if (!Number.isFinite(numberValue)) {
-    return "-";
-  }
-
-  return `${new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 3,
-  }).format(numberValue)}${suffix}`;
+  const formatted = formatDecimalDisplay(value);
+  return formatted ? `${formatted}${suffix}` : "-";
 }
 
 function buildDownloadHref(href: string) {
