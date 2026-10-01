@@ -32,6 +32,7 @@ import { getPosMediaUrl } from "@/features/pos/catalog-state";
 import { getPosTransactionDetailData } from "@/features/pos/queries";
 import { getPosTransactionHistoryPageData } from "@/features/pos/transaction-history-pagination";
 import { requirePermission } from "@/lib/auth/session";
+import { formatDecimalDisplay } from "@/lib/decimal-presentation";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -214,19 +215,12 @@ function formatShiftOpenedAt(value: Date | null) {
 }
 
 function formatItemSpec(value: string | null, suffix: string) {
-  if (!value) {
+  const formatted = formatDecimalDisplay(value);
+  if (!formatted) {
     return null;
   }
 
-  const parsedValue = Number(value);
-
-  if (!Number.isFinite(parsedValue)) {
-    return null;
-  }
-
-  return `${new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 3,
-  }).format(parsedValue)} ${suffix}`;
+  return suffix === "%" ? `${formatted}%` : `${formatted} ${suffix}`;
 }
 
 function getPaymentMethodSummary(transaction: PosTransactionListItem) {
