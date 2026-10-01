@@ -40,6 +40,7 @@ import { BuybackExistingItemImage } from "@/components/buybacks/buyback-existing
 import { CameraCaptureModal } from "@/components/media/camera-capture-modal";
 import {
   QuickPriceRateControl,
+  type QuickPriceRateRetiredValue,
   type QuickPriceRateSavedValue,
 } from "@/components/pricing/quick-price-rate-control";
 import { QuickProductCategoryDialog } from "@/components/products/quick-product-category-dialog";
@@ -67,6 +68,7 @@ import {
 } from "@/features/pos/payment-draft";
 import { formatPosWeightInput } from "@/features/pos/transaction-pricing";
 import { usePosCustomer } from "@/features/pos/use-pos-customer";
+import { formatDecimalInput } from "@/lib/decimal-presentation";
 import { cn } from "@/lib/utils";
 
 const inputClassName =
@@ -159,11 +161,13 @@ function BuybackRecommendation({
   weightGram,
   priceRates,
   onRateSaved,
+  onRateRetired,
 }: {
   purityPercent: string;
   weightGram: string;
   priceRates: BuybackPriceRateOption[];
   onRateSaved: (value: QuickPriceRateSavedValue) => void;
+  onRateRetired: (value: QuickPriceRateRetiredValue) => void;
 }) {
   const purityKey = normalizePurityKey(purityPercent);
   const activeRate = purityKey
@@ -216,6 +220,7 @@ function BuybackRecommendation({
           purityPercent={purityPercent}
           ratePerGram={activeRate?.ratePerGram ?? null}
           onSaved={onRateSaved}
+          onRetired={onRateRetired}
         />
       </div>
       <p className={helperClassName}>{helper}</p>
@@ -478,8 +483,8 @@ function mapExistingItem(
     soldAt: item.soldAt,
     lastInvoiceNumber: item.lastInvoiceNumber,
     lastSaleFinalPriceAmount: item.lastSaleFinalPriceAmount,
-    weightGram: item.weightGram ?? "",
-    purityPercent: item.purityPercent ?? "",
+    weightGram: formatDecimalInput(item.weightGram),
+    purityPercent: formatDecimalInput(item.purityPercent),
     color: activeColor ?? item.color ?? "",
     deductionAmount: "",
     totalAmount: "",
@@ -793,6 +798,13 @@ export function BuybackWorkspace({
       ].sort((left, right) => Number(left.purityKey) - Number(right.purityKey));
     });
     setFeedback(`Rate Buyback ${saved.purityKey}% berhasil diperbarui.`);
+  }
+
+  function handleBuybackRateRetired(retired: QuickPriceRateRetiredValue) {
+    setLocalBuybackPriceRates((current) =>
+      current.filter((rate) => rate.purityKey !== retired.purityKey),
+    );
+    setFeedback(`Rate Buyback ${retired.purityKey}% berhasil dinonaktifkan.`);
   }
 
   function addExternalItem() {
@@ -1490,6 +1502,7 @@ export function BuybackWorkspace({
                           weightGram={item.weightGram}
                           priceRates={localBuybackPriceRates}
                           onRateSaved={handleBuybackRateSaved}
+                          onRateRetired={handleBuybackRateRetired}
                         />
 
                         <label className="block text-sm">
