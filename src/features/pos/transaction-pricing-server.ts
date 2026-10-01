@@ -263,7 +263,7 @@ export async function resolvePosTransactionPricing({
     } else {
       if (!activePricePerGram) {
         throw new PosTransactionPricingError(
-          `Harga standar untuk kadar ${item.purityPercent}% belum tersedia. Edit Harga / Gram pada item ini agar penjualan tetap bisa dilanjutkan.`,
+          `Harga standar untuk kadar ${purityKey}% belum tersedia. Edit Harga / Gram pada item ini agar penjualan tetap bisa dilanjutkan.`,
         );
       }
 
