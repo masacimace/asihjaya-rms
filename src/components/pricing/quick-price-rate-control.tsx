@@ -299,12 +299,7 @@ export function QuickPriceRateControl({
                     </p>
                   ) : null}
 
-                  <div
-                    className={cn(
-                      "mt-5 flex flex-col gap-2 sm:flex-row sm:items-center",
-                      hasRate ? "sm:justify-between" : "sm:justify-end",
-                    )}
-                  >
+                  <div className="mt-5 flex flex-col gap-3">
                     {hasRate ? (
                       <button
                         type="button"
@@ -313,7 +308,7 @@ export function QuickPriceRateControl({
                           setConfirmingRetire(true);
                         }}
                         disabled={busy}
-                        className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50 sm:w-auto"
+                        className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
                       >
                         <Power className="size-4 shrink-0" />
                         Nonaktifkan Rate
@@ -324,7 +319,7 @@ export function QuickPriceRateControl({
                       type="button"
                       onClick={() => void save()}
                       disabled={busy || !normalizeDigits(rateInput)}
-                      className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                      className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isSaving ? (
                         <LoaderCircle className="size-4 shrink-0 animate-spin" />
