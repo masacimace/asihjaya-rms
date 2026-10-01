@@ -301,7 +301,7 @@ export function QuickPriceRateControl({
 
                   <div
                     className={cn(
-                      "mt-5 flex flex-col-reverse gap-2 sm:flex-row",
+                      "mt-5 flex flex-col gap-2 sm:flex-row sm:items-center",
                       hasRate ? "sm:justify-between" : "sm:justify-end",
                     )}
                   >
@@ -313,38 +313,28 @@ export function QuickPriceRateControl({
                           setConfirmingRetire(true);
                         }}
                         disabled={busy}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                        className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50 sm:w-auto"
                       >
-                        <Power className="size-4" />
+                        <Power className="size-4 shrink-0" />
                         Nonaktifkan Rate
                       </button>
                     ) : null}
 
-                    <div className="flex flex-col-reverse gap-2 sm:flex-row">
-                      <button
-                        type="button"
-                        onClick={() => setOpen(false)}
-                        disabled={busy}
-                        className="h-10 rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-neutral-700 disabled:opacity-50"
-                      >
-                        Batal
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void save()}
-                        disabled={busy || !normalizeDigits(rateInput)}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isSaving ? (
-                          <LoaderCircle className="size-4 animate-spin" />
-                        ) : hasRate ? (
-                          <Pencil className="size-4" />
-                        ) : (
-                          <Plus className="size-4" />
-                        )}
-                        {isSaving ? "Menyimpan..." : "Simpan Rate"}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void save()}
+                      disabled={busy || !normalizeDigits(rateInput)}
+                      className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                    >
+                      {isSaving ? (
+                        <LoaderCircle className="size-4 shrink-0 animate-spin" />
+                      ) : hasRate ? (
+                        <Pencil className="size-4 shrink-0" />
+                      ) : (
+                        <Plus className="size-4 shrink-0" />
+                      )}
+                      {isSaving ? "Menyimpan..." : "Simpan Rate"}
+                    </button>
                   </div>
                 </>
               )}
