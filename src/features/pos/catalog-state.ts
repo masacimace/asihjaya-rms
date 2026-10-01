@@ -2,6 +2,7 @@ import type {
   PosAvailableItem,
   PosCategoryOption,
 } from "@/features/pos/contracts";
+import { formatDecimalDisplay } from "@/lib/decimal-presentation";
 
 const POS_ITEM_BACKGROUNDS = [
   "bg-amber-50",
@@ -12,21 +13,16 @@ const POS_ITEM_BACKGROUNDS = [
 ] as const;
 
 export function formatPosItemDecimal(value: string | null, suffix: string) {
-  if (!value) {
+  const formatted = formatDecimalDisplay(value);
+  if (!formatted) {
     return null;
   }
 
-  const parsedValue = Number(value);
-
-  if (!Number.isFinite(parsedValue)) {
-    return null;
+  if (!suffix) {
+    return formatted;
   }
 
-  const formatted = new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 3,
-  }).format(parsedValue);
-
-  return suffix ? `${formatted} ${suffix}` : formatted;
+  return suffix === "%" ? `${formatted}%` : `${formatted} ${suffix}`;
 }
 
 export function getPosItemBackground(item: PosAvailableItem) {
