@@ -66,6 +66,21 @@ assert(
 );
 
 assert(
+  workspace.includes('data-processing-toolbar="filters-search"') &&
+    workspace.includes("lg:flex-row lg:items-center lg:justify-between") &&
+    workspace.includes('placeholder="Cari Buyback, customer, produk..."'),
+  "Search processing wajib berada pada toolbar bawah bersama filter, bukan di header judul.",
+);
+
+assert(
+  workspace.includes('compact ? "w-full sm:w-auto" : "w-full"') &&
+    workspace.includes(
+      '"h-10 w-full px-4 text-xs sm:h-9 sm:w-auto sm:px-3"',
+    ),
+  "Quick Cetak Label wajib full-width dan centered pada mobile, lalu kembali compact mulai sm.",
+);
+
+assert(
   page.includes("COMPLETED_PAGE_SIZE = 10") &&
     page.includes("paginateCompleted: true") &&
     page.includes('filters.status === "pending" ? null : undefined'),

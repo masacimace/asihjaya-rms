@@ -142,14 +142,16 @@ function QuickLabelPrintButton({
   }
 
   return (
-    <div className={compact ? "min-w-0" : "w-full"}>
+    <div className={compact ? "w-full sm:w-auto" : "w-full"}>
       <button
         type="button"
         onClick={printLabel}
         disabled={status === "printing"}
         className={cn(
           "inline-flex items-center justify-center gap-2 rounded-xl bg-neutral-950 font-semibold !text-white transition hover:bg-neutral-800 disabled:cursor-wait disabled:opacity-60",
-          compact ? "h-9 px-3 text-xs" : "h-11 w-full px-4 text-sm",
+          compact
+            ? "h-10 w-full px-4 text-xs sm:h-9 sm:w-auto sm:px-3"
+            : "h-11 w-full px-4 text-sm",
         )}
       >
         {status === "printing" ? (
@@ -1297,24 +1299,89 @@ export function BuybackProcessingWorkspace({
           className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white"
         >
           <div className="space-y-4 border-b border-[var(--border)] p-4 sm:p-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base font-semibold text-neutral-950">
-                    Pemrosesan Cuci / Rongsok
-                  </h2>
-                  <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-600">
-                    {data.filteredCount} item
-                  </span>
-                </div>
-                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                  Tampilan compact tanpa horizontal scroll. Selesaikan pekerjaan
-                  fisik lalu submit hasil agar item langsung tersedia di POS.
-                </p>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold text-neutral-950">
+                  Pemrosesan Cuci / Rongsok
+                </h2>
+                <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-600">
+                  {data.filteredCount} item
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                Tampilan compact tanpa horizontal scroll. Selesaikan pekerjaan
+                fisik lalu submit hasil agar item langsung tersedia di POS.
+              </p>
+            </div>
+
+            <div
+              data-processing-toolbar="filters-search"
+              className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                {(
+                  [
+                    ["all", "Semua"],
+                    ["cleaning", "Cuci"],
+                    ["recondition", "Rongsok"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={filters.processingType === value}
+                    onClick={() => navigate({ processingType: value, page: 1 })}
+                    className={cn(
+                      "rounded-xl px-3 py-2 !text-xs !font-semibold",
+                      filters.processingType === value
+                        ? "bg-neutral-950 text-white"
+                        : "border border-[var(--border)] bg-white text-neutral-700",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+
+                <span className="mx-1 hidden h-8 w-px bg-[var(--border)] sm:block" />
+
+                {(
+                  [
+                    ["pending", "Belum Diproses"],
+                    ["completed", "Selesai"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={filters.status === value}
+                    onClick={() => navigate({ status: value, page: 1 })}
+                    className={cn(
+                      "rounded-xl px-3 py-2 !text-xs !font-semibold",
+                      filters.status === value
+                        ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                        : "border border-[var(--border)] bg-white text-neutral-700",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+
+                {filters.search ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery("");
+                      navigate({ search: "", page: 1 });
+                    }}
+                    className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold text-neutral-500 transition hover:bg-neutral-50"
+                  >
+                    Hapus pencarian
+                  </button>
+                ) : null}
               </div>
 
               <form
-                className="flex w-full gap-2 lg:w-auto"
+                className="flex w-full gap-2 lg:w-auto lg:shrink-0"
                 onSubmit={(event) => {
                   event.preventDefault();
                   navigate({ search: query.trim(), page: 1 });
@@ -1336,68 +1403,6 @@ export function BuybackProcessingWorkspace({
                   Cari
                 </button>
               </form>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {(
-                [
-                  ["all", "Semua"],
-                  ["cleaning", "Cuci"],
-                  ["recondition", "Rongsok"],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={filters.processingType === value}
-                  onClick={() => navigate({ processingType: value, page: 1 })}
-                  className={cn(
-                    "rounded-xl px-3 py-2 !text-xs !font-semibold",
-                    filters.processingType === value
-                      ? "bg-neutral-950 text-white"
-                      : "border border-[var(--border)] bg-white text-neutral-700",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-
-              <span className="mx-1 hidden h-8 w-px bg-[var(--border)] sm:block" />
-
-              {(
-                [
-                  ["pending", "Belum Diproses"],
-                  ["completed", "Selesai"],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={filters.status === value}
-                  onClick={() => navigate({ status: value, page: 1 })}
-                  className={cn(
-                    "rounded-xl px-3 py-2 !text-xs !font-semibold",
-                    filters.status === value
-                      ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                      : "border border-[var(--border)] bg-white text-neutral-700",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-
-              {filters.search ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQuery("");
-                    navigate({ search: "", page: 1 });
-                  }}
-                  className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold text-neutral-500 transition hover:bg-neutral-50"
-                >
-                  Hapus pencarian
-                </button>
-              ) : null}
             </div>
           </div>
 
