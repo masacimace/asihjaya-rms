@@ -133,7 +133,7 @@ export function ProductItemForm({
   const [purityPercent, setPurityPercent] = useState("");
   const [weightGram, setWeightGram] = useState("");
   const [deductionPerGram, setDeductionPerGram] = useState("0");
-  const [rateOverrides, setRateOverrides] = useState<Record<string, string>>({});
+  const [rateOverrides, setRateOverrides] = useState<Record<string, string | null>>({});
 
   const [state, formAction] = useActionState(
     createProductItemAction,
@@ -154,7 +154,9 @@ export function ProductItemForm({
   );
   const purityKey = normalizePurityKey(purityPercent);
   const activeRate = purityKey
-    ? rateOverrides[purityKey] ?? rateMap.get(purityKey) ?? null
+    ? Object.prototype.hasOwnProperty.call(rateOverrides, purityKey)
+      ? rateOverrides[purityKey] ?? null
+      : rateMap.get(purityKey) ?? null
     : null;
   const estimatedBasePrice = useMemo(() => {
     const weight = Number(weightGram.replace(",", "."));
@@ -405,6 +407,12 @@ export function ProductItemForm({
                     setRateOverrides((current) => ({
                       ...current,
                       [savedKey]: ratePerGram,
+                    }))
+                  }
+                  onRetired={({ purityKey: retiredKey }) =>
+                    setRateOverrides((current) => ({
+                      ...current,
+                      [retiredKey]: null,
                     }))
                   }
                 />
