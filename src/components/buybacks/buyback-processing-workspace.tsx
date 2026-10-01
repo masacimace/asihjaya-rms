@@ -1427,8 +1427,9 @@ export function BuybackProcessingWorkspace({
                               </p>
                               <p className="mt-0.5 text-[10px] text-neutral-600">
                                 Kadar Tukaran{" "}
-                                {row.resultExchangePurityPercent ?? "-"}
-                                {row.resultExchangePurityPercent ? "%" : ""} ·
+                                {formatPercentDisplay(
+                                  row.resultExchangePurityPercent,
+                                )} ·
                                 Potongan/Gr{" "}
                                 {formatCurrency(
                                   Number(row.resultDeductionPerGram ?? 0),
