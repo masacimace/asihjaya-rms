@@ -44,6 +44,12 @@ import {
   formatRupiahInput,
 } from "@/features/pos/payment-draft";
 import { formatPosWeightInput } from "@/features/pos/transaction-pricing";
+import {
+  formatDecimalDisplay,
+  formatDecimalInput,
+  formatGramDisplay,
+  formatPercentDisplay,
+} from "@/lib/decimal-presentation";
 import { cn } from "@/lib/utils";
 
 const inputClassName =
@@ -81,7 +87,8 @@ function weightDifference(before: string, after: string | null) {
   const difference = Number(after) - Number(before);
   if (!Number.isFinite(difference)) return null;
   const sign = difference > 0 ? "+" : "";
-  return `${sign}${difference.toFixed(3)} gr`;
+  const formatted = formatDecimalDisplay(difference);
+  return formatted ? `${sign}${formatted} gr` : null;
 }
 
 function QuickLabelPrintButton({
@@ -421,10 +428,16 @@ export function ProcessingDrawer({
     [categoryId, localMasters],
   );
   const [displayName, setDisplayName] = useState(row.sourceDisplayName);
-  const [weightGram, setWeightGram] = useState(row.sourceWeightGram);
-  const [purityPercent, setPurityPercent] = useState(row.sourcePurityPercent);
-  const [exchangePurityPercent, setExchangePurityPercent] = useState(
-    row.sourceExchangePurityPercent ?? row.sourcePurityPercent,
+  const [weightGram, setWeightGram] = useState(() =>
+    formatDecimalInput(row.sourceWeightGram),
+  );
+  const [purityPercent, setPurityPercent] = useState(() =>
+    formatDecimalInput(row.sourcePurityPercent),
+  );
+  const [exchangePurityPercent, setExchangePurityPercent] = useState(() =>
+    formatDecimalInput(
+      row.sourceExchangePurityPercent ?? row.sourcePurityPercent,
+    ),
   );
   const [exchangePurityTouched, setExchangePurityTouched] = useState(false);
   const initialColor = colorPresets.find(
@@ -437,9 +450,9 @@ export function ProcessingDrawer({
   const [deductionPerGram, setDeductionPerGram] = useState(() =>
     formatRupiahInput(row.sourceDeductionPerGram ?? "0"),
   );
-  const [rateOverrides, setRateOverrides] = useState<Record<string, string>>(
-    {},
-  );
+  const [rateOverrides, setRateOverrides] = useState<
+    Record<string, string | null>
+  >({});
   const [quickMasterOpen, setQuickMasterOpen] = useState(false);
   const [quickCategoryOpen, setQuickCategoryOpen] = useState(false);
   const [quickColorOpen, setQuickColorOpen] = useState(false);
@@ -456,11 +469,9 @@ export function ProcessingDrawer({
   const suggestedRate = useMemo(() => {
     const key = normalizePurityKey(purityPercent);
     if (!key) return null;
-    return (
-      rateOverrides[key] ??
-      priceRates.find((rate) => rate.purityKey === key)?.ratePerGram ??
-      null
-    );
+    return Object.prototype.hasOwnProperty.call(rateOverrides, key)
+      ? rateOverrides[key] ?? null
+      : priceRates.find((rate) => rate.purityKey === key)?.ratePerGram ?? null;
   }, [priceRates, purityPercent, rateOverrides]);
 
   const suggestedPricePerGram = suggestedRate
@@ -692,13 +703,13 @@ export function ProcessingDrawer({
                         Berat Sebelum
                       </p>
                       <p className="mt-1 text-sm font-semibold">
-                        {row.sourceWeightGram} gr
+                        {formatGramDisplay(row.sourceWeightGram)}
                       </p>
                     </div>
                     <div className="rounded-xl bg-white px-3 py-2">
                       <p className="text-[11px] text-[var(--muted)]">Kadar</p>
                       <p className="mt-1 text-sm font-semibold">
-                        {row.sourcePurityPercent}%
+                        {formatPercentDisplay(row.sourcePurityPercent)}
                       </p>
                     </div>
                     <div className="rounded-xl bg-white px-3 py-2">
@@ -988,6 +999,13 @@ export function ProcessingDrawer({
                         setRateOverrides((current) => ({
                           ...current,
                           [purityKey]: ratePerGram,
+                        }));
+                        setPriceTouched(false);
+                      }}
+                      onRetired={({ purityKey }) => {
+                        setRateOverrides((current) => ({
+                          ...current,
+                          [purityKey]: null,
                         }));
                         setPriceTouched(false);
                       }}
@@ -1337,7 +1355,7 @@ export function BuybackProcessingWorkspace({
                             </p>
                             <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
                               {row.sourceCategoryName} · Kadar{" "}
-                              {row.sourcePurityPercent}% · {row.sourceColor}
+                              {formatPercentDisplay(row.sourcePurityPercent)} · {row.sourceColor}
                             </p>
                             {row.sourceSku ? (
                               <p className="mt-1 truncate text-[11px] font-medium text-neutral-500">
@@ -1377,9 +1395,9 @@ export function BuybackProcessingWorkspace({
                                   Berat
                                 </p>
                                 <p className="mt-1 text-xs font-semibold text-neutral-900">
-                                  {row.sourceWeightGram} gr
+                                  {formatGramDisplay(row.sourceWeightGram)}
                                   {row.resultWeightGram
-                                    ? ` → ${row.resultWeightGram} gr`
+                                    ? ` → ${formatGramDisplay(row.resultWeightGram)}`
                                     : ""}
                                 </p>
                               </div>
@@ -1510,7 +1528,7 @@ export function BuybackProcessingWorkspace({
                             </p>
                             <p className="mt-1 text-xs text-[var(--muted)]">
                               {row.sourceCategoryName} · Kadar{" "}
-                              {row.sourcePurityPercent}%
+                              {formatPercentDisplay(row.sourcePurityPercent)}
                             </p>
                             {row.status === "completed" &&
                             row.resultDisplayName ? (
@@ -1520,8 +1538,9 @@ export function BuybackProcessingWorkspace({
                                 </p>
                                 <p className="mt-1 text-[11px] text-neutral-500">
                                   Tukaran{" "}
-                                  {row.resultExchangePurityPercent ?? "-"}
-                                  {row.resultExchangePurityPercent ? "%" : ""} ·
+                                  {formatPercentDisplay(
+                                    row.resultExchangePurityPercent,
+                                  )} ·
                                   Pot/Gr{" "}
                                   {formatCurrency(
                                     Number(row.resultDeductionPerGram ?? 0),
@@ -1545,9 +1564,9 @@ export function BuybackProcessingWorkspace({
                         </td>
                         <td className="px-4 py-4">
                           <p className="whitespace-nowrap font-medium">
-                            {row.sourceWeightGram} gr
+                            {formatGramDisplay(row.sourceWeightGram)}
                             {row.resultWeightGram
-                              ? ` → ${row.resultWeightGram} gr`
+                              ? ` → ${formatGramDisplay(row.resultWeightGram)}`
                               : ""}
                           </p>
                           {weightDifference(
