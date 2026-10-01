@@ -204,6 +204,13 @@
       "when": 1790830800000,
       "tag": "0028_cashier_pricing_manage",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790834400000,
+      "tag": "0029_cashier_inventory_print_label",
+      "breakpoints": true
     }
   ]
 }

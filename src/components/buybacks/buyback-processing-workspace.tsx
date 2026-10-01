@@ -471,8 +471,9 @@ export function ProcessingDrawer({
     const key = normalizePurityKey(purityPercent);
     if (!key) return null;
     return Object.prototype.hasOwnProperty.call(rateOverrides, key)
-      ? rateOverrides[key] ?? null
-      : priceRates.find((rate) => rate.purityKey === key)?.ratePerGram ?? null;
+      ? (rateOverrides[key] ?? null)
+      : (priceRates.find((rate) => rate.purityKey === key)?.ratePerGram ??
+          null);
   }, [priceRates, purityPercent, rateOverrides]);
 
   const suggestedPricePerGram = suggestedRate
@@ -1187,9 +1188,7 @@ function buildProcessingHref({
   if (status === "completed" && page > 1) params.set("page", String(page));
 
   const query = params.toString();
-  return query
-    ? `/pos/buyback/pemrosesan?${query}`
-    : "/pos/buyback/pemrosesan";
+  return query ? `/pos/buyback/pemrosesan?${query}` : "/pos/buyback/pemrosesan";
 }
 
 export function BuybackProcessingWorkspace({
@@ -1332,7 +1331,7 @@ export function BuybackProcessingWorkspace({
                 </label>
                 <button
                   type="submit"
-                  className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-neutral-950 px-4 text-xs font-semibold !text-white transition hover:bg-neutral-800"
+                  className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-neutral-950 px-4 !text-xs !font-semibold !text-white transition hover:bg-neutral-800"
                 >
                   Cari
                 </button>
@@ -1351,9 +1350,7 @@ export function BuybackProcessingWorkspace({
                   key={value}
                   type="button"
                   aria-pressed={filters.processingType === value}
-                  onClick={() =>
-                    navigate({ processingType: value, page: 1 })
-                  }
+                  onClick={() => navigate({ processingType: value, page: 1 })}
                   className={cn(
                     "rounded-xl px-3 py-2 !text-xs !font-semibold",
                     filters.processingType === value
@@ -1513,7 +1510,8 @@ export function BuybackProcessingWorkspace({
                             Berat {formatGramDisplay(row.sourceWeightGram)}
                           </span>
                           <span className="inline-flex rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600">
-                            Kadar {formatPercentDisplay(row.sourcePurityPercent)}
+                            Kadar{" "}
+                            {formatPercentDisplay(row.sourcePurityPercent)}
                           </span>
                           <span className="inline-flex rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600">
                             Warna {row.sourceColor}
@@ -1650,8 +1648,8 @@ export function BuybackProcessingWorkspace({
             <div className="border-t border-[var(--border)] p-4 sm:px-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <p className="text-center text-xs text-[var(--muted)] lg:text-left">
-                  Menampilkan {firstRow}-{lastRow} dari {pagination.total} item ·
-                  Halaman {pagination.page} dari {pagination.pageCount}
+                  Menampilkan {firstRow}-{lastRow} dari {pagination.total} item
+                  · Halaman {pagination.page} dari {pagination.pageCount}
                 </p>
 
                 <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-center">
@@ -1706,10 +1704,7 @@ export function BuybackProcessingWorkspace({
                   <Link
                     href={buildProcessingHref({
                       ...filters,
-                      page: Math.min(
-                        pagination.pageCount,
-                        pagination.page + 1,
-                      ),
+                      page: Math.min(pagination.pageCount, pagination.page + 1),
                     })}
                     aria-disabled={pagination.page >= pagination.pageCount}
                     className={cn(

@@ -344,6 +344,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "pos.access",
     "products.view",
     "inventory.view",
+    "inventory.print_label",
     "sales.view",
     "sales.create",
     "buybacks.view",

@@ -22,6 +22,12 @@ const workspace = read(
 );
 const page = read("src/app/(pos)/pos/buyback/pemrosesan/page.tsx");
 const buybackPage = read("src/app/(pos)/pos/buyback/page.tsx");
+const seed = read("src/db/seed.ts");
+const cashierPrintLabelMigration = read(
+  "drizzle/0029_cashier_inventory_print_label.sql",
+);
+const migrationJournal = read("drizzle/meta/_journal.json");
+const adminLayout = read("src/app/(admin)/admin/layout.tsx");
 
 assert(
   query.includes("buybackItemProcessings") &&
@@ -112,6 +118,43 @@ assert(
     workspace.includes("Cetak Lagi") &&
     page.includes('hasPermission(auth, "inventory.print_label")'),
   "Processing selesai wajib menyediakan quick print dengan permission label existing.",
+);
+
+const cashierPermissionBlock =
+  seed.match(/cashier:\s*\[([\s\S]*?)\n\s*\],\n\n\s*stock_admin:/)?.[1] ?? "";
+
+assert(
+  /"inventory\.print_label"/.test(cashierPermissionBlock) &&
+    /"buybacks\.view"/.test(cashierPermissionBlock) &&
+    /"buybacks\.create"/.test(cashierPermissionBlock),
+  "Role cashier wajib membawa inventory.print_label untuk workflow hasil Buyback di POS.",
+);
+
+assert(
+  !/"admin\.access"/.test(cashierPermissionBlock) &&
+    !/"settings\.manage"/.test(cashierPermissionBlock),
+  "Permission cetak label cashier tidak boleh membuka akses Admin/Settings.",
+);
+
+assert(
+  /JOIN "permissions" p ON p\."code" = 'inventory\.print_label'/.test(
+    cashierPrintLabelMigration,
+  ) &&
+    /WHERE r\."code" = 'cashier'/.test(cashierPrintLabelMigration) &&
+    /ON CONFLICT \("role_id", "permission_id"\) DO NOTHING/.test(
+      cashierPrintLabelMigration,
+    ),
+  "Migration cashier print label wajib idempotent dan hanya menarget role cashier.",
+);
+
+assert(
+  migrationJournal.includes("0029_cashier_inventory_print_label"),
+  "Migration journal wajib mendaftarkan 0029_cashier_inventory_print_label.",
+);
+
+assert(
+  adminLayout.includes('requirePermission("admin.access")'),
+  "Admin layout harus tetap diproteksi admin.access setelah cashier mendapat permission cetak label.",
 );
 
 assert(
