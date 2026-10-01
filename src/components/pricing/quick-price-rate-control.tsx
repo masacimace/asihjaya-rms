@@ -348,7 +348,6 @@ export function QuickPriceRateControl({
                   </div>
                 </>
               )}
-              </div>
             </div>
           </div>,
           document.body,
