@@ -17,6 +17,8 @@ const page = read("src/app/(pos)/pos/buyback/pemrosesan/page.tsx");
 const workspace = read(
   "src/components/buybacks/buyback-processing-workspace.tsx",
 );
+const query = read("src/features/buybacks/processing-queries.ts");
+const contracts = read("src/features/buybacks/processing-contracts.ts");
 
 assert(
   page.includes(
@@ -41,43 +43,61 @@ assert(
 );
 
 assert(
-  /<th className="whitespace-nowrap px-4 py-3">\s*Berat\s*<\/th>/.test(
-    workspace,
-  ) &&
-    /<th className="whitespace-nowrap px-4 py-3">\s*Status\s*<\/th>/.test(
-      workspace,
-    ) &&
-    /<th className="whitespace-nowrap px-4 py-3 sm:px-5">\s*Aksi\s*<\/th>/.test(
-      workspace,
-    ),
-  "Header Berat/Status/Aksi wajib nowrap.",
+  workspace.includes('data-processing-layout="compact-row-card"') &&
+    workspace.includes("hover:border-[var(--accent)]") &&
+    !workspace.includes("<table"),
+  "Summary Pemrosesan wajib memakai compact row-card tanpa classic table.",
 );
 
 assert(
-  workspace.includes('<p className="whitespace-nowrap font-medium">'),
-  "Nilai Berat wajib tetap satu baris.",
+  workspace.includes("Foto produk") &&
+    workspace.includes("Customer") &&
+    workspace.includes("Ringkasan Pemrosesan") &&
+    workspace.includes("Hasil Pemrosesan"),
+  "Compact row-card wajib membawa foto, customer, dan ringkasan hasil processing.",
 );
 
 assert(
-  workspace.includes(
-    'inline-flex whitespace-nowrap rounded-full bg-red-50',
-  ) &&
-    workspace.includes(
-      'inline-flex whitespace-nowrap rounded-full bg-emerald-50',
-    ),
-  "Badge Status wajib tetap satu baris.",
-);
-
-assert(
-  workspace.includes(
-    'inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3',
-  ) &&
-    workspace.includes('row.processingType === "cleaning"') &&
+  workspace.includes("Proses {processingLabel(row.processingType)}") &&
+    workspace.includes("QuickLabelPrintButton") &&
     workspace.includes("border-blue-200 bg-blue-50") &&
     workspace.includes("border-amber-200 bg-amber-50"),
-  "Button Proses Cuci/Rongsok wajib tetap satu baris dan mempertahankan treatment per jenis proses.",
+  "Action Cuci/Rongsok dan quick label wajib tetap tersedia pada compact card.",
+);
+
+assert(
+  page.includes("COMPLETED_PAGE_SIZE = 10") &&
+    page.includes("paginateCompleted: true") &&
+    page.includes('filters.status === "pending" ? null : undefined'),
+  "Tab Selesai wajib memakai server-side pagination 10 item dan pending queue tidak dipaginasi.",
+);
+
+assert(
+  workspace.includes("getPaginationTokens") &&
+    workspace.includes("← Sebelumnya") &&
+    workspace.includes("Berikutnya →") &&
+    workspace.includes("pagination.pageCount") &&
+    workspace.includes('filters.status === "completed"'),
+  "Pagination Pemrosesan selesai wajib match pola Riwayat Buyback.",
+);
+
+assert(
+  contracts.includes("BuybackProcessingPagination") &&
+    contracts.includes("filteredCount: number") &&
+    query.includes("filteredCountRows") &&
+    query.includes("offset(offset)") &&
+    query.includes("paginateCompleted"),
+  "Contract/query processing wajib menyediakan count + offset server-side pagination.",
+);
+
+assert(
+  query.includes("buybacks.buybackNumber") &&
+    query.includes("customers.fullName") &&
+    query.includes("buybackItems.snapshot") &&
+    query.includes("processingType"),
+  "Search/filter processing wajib dieksekusi pada query server sebelum pagination.",
 );
 
 console.log(
-  "OK: Processing page refinement V2 valid — matched header + nowrap summary.",
+  "OK: Processing page refinement V3 valid — compact cards + completed server pagination.",
 );

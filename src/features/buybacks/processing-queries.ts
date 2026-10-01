@@ -1,4 +1,13 @@
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  ilike,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -7,6 +16,10 @@ import {
   buybacks,
   customers,
 } from "@/db/schema";
+import type {
+  BuybackProcessingStatus,
+  BuybackProcessingType,
+} from "@/features/buybacks/contracts";
 import type {
   BuybackProcessingData,
   BuybackProcessingQueueRow,
@@ -23,44 +36,72 @@ function readSnapshotText(
   return normalized || null;
 }
 
+function normalizePositiveInteger(value: number, fallback: number) {
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
 export async function getBuybackProcessingData({
   organizationId,
   outletId,
   limit = 180,
+  search = "",
+  status,
+  processingType = "all",
+  page = 1,
+  pageSize = 10,
+  paginateCompleted = false,
 }: {
   organizationId: string;
   outletId: string;
-  limit?: number;
+  limit?: number | null;
+  search?: string;
+  status?: BuybackProcessingStatus;
+  processingType?: "all" | BuybackProcessingType;
+  page?: number;
+  pageSize?: number;
+  paginateCompleted?: boolean;
 }): Promise<BuybackProcessingData> {
-  const baseCondition = and(
+  const baseConditions: SQL[] = [
     eq(buybacks.organizationId, organizationId),
     eq(buybacks.outletId, outletId),
     eq(buybacks.status, "completed"),
-  );
+  ];
+  const rowConditions: SQL[] = [...baseConditions];
 
-  const [rows, groupedCounts] = await Promise.all([
+  if (status) {
+    rowConditions.push(eq(buybackItemProcessings.status, status));
+  }
+
+  if (processingType !== "all") {
+    rowConditions.push(
+      eq(buybackItemProcessings.processingType, processingType),
+    );
+  }
+
+  const normalizedSearch = search.trim().slice(0, 160);
+  if (normalizedSearch) {
+    const pattern = `%${normalizedSearch}%`;
+    const searchCondition = or(
+      ilike(buybacks.buybackNumber, pattern),
+      ilike(customers.fullName, pattern),
+      ilike(customers.customerCode, pattern),
+      sql`${buybackItems.snapshot}->>'displayName' ilike ${pattern}`,
+      sql`${buybackItems.snapshot}->>'originalDisplayName' ilike ${pattern}`,
+      sql`${buybackItems.snapshot}->>'originalProductMasterName' ilike ${pattern}`,
+      sql`${buybackItems.snapshot}->>'sku' ilike ${pattern}`,
+      sql`${buybackItems.snapshot}->>'barcode' ilike ${pattern}`,
+      sql`${buybackItems.snapshot}->>'categoryName' ilike ${pattern}`,
+      sql`${buybackItems.snapshot}->>'originalCategoryName' ilike ${pattern}`,
+    );
+    if (searchCondition) rowConditions.push(searchCondition);
+  }
+
+  const rowCondition = and(...rowConditions);
+  const baseCondition = and(...baseConditions);
+
+  const [filteredCountRows, groupedCounts] = await Promise.all([
     db
-      .select({
-        id: buybackItemProcessings.id,
-        buybackItemId: buybackItems.id,
-        buybackId: buybacks.id,
-        buybackNumber: buybacks.buybackNumber,
-        buybackCompletedAt: buybacks.completedAt,
-        customerName: customers.fullName,
-        customerCode: customers.customerCode,
-        source: buybackItems.source,
-        lineNumber: buybackItems.lineNumber,
-        sourceProductItemId: buybackItems.productItemId,
-        sourceSnapshot: buybackItems.snapshot,
-        sourceWeightGram: buybackItems.weightGram,
-        sourcePurityPercent: buybackItems.purityPercent,
-        processingType: buybackItemProcessings.processingType,
-        status: buybackItemProcessings.status,
-        resultProductItemId: buybackItemProcessings.resultProductItemId,
-        resultSnapshot: buybackItemProcessings.resultSnapshot,
-        processedAt: buybackItemProcessings.processedAt,
-        createdAt: buybackItemProcessings.createdAt,
-      })
+      .select({ total: count() })
       .from(buybackItemProcessings)
       .innerJoin(
         buybackItems,
@@ -68,12 +109,7 @@ export async function getBuybackProcessingData({
       )
       .innerJoin(buybacks, eq(buybackItems.buybackId, buybacks.id))
       .innerJoin(customers, eq(buybacks.customerId, customers.id))
-      .where(baseCondition)
-      .orderBy(
-        sql`case when ${buybackItemProcessings.status} = 'pending' then 0 else 1 end`,
-        desc(buybackItemProcessings.createdAt),
-      )
-      .limit(Math.max(20, Math.min(300, limit))),
+      .where(rowCondition),
     db
       .select({
         status: buybackItemProcessings.status,
@@ -92,6 +128,65 @@ export async function getBuybackProcessingData({
         buybackItemProcessings.processingType,
       ),
   ]);
+
+  const filteredCount = Number(filteredCountRows[0]?.total ?? 0);
+  const normalizedPageSize = Math.min(
+    50,
+    normalizePositiveInteger(pageSize, 10),
+  );
+  const shouldPaginate = paginateCompleted && status === "completed";
+  const pageCount = shouldPaginate
+    ? Math.max(1, Math.ceil(filteredCount / normalizedPageSize))
+    : 1;
+  const requestedPage = normalizePositiveInteger(page, 1);
+  const currentPage = shouldPaginate
+    ? Math.min(requestedPage, pageCount)
+    : 1;
+  const offset = shouldPaginate
+    ? (currentPage - 1) * normalizedPageSize
+    : 0;
+
+  const rowQuery = db
+    .select({
+      id: buybackItemProcessings.id,
+      buybackItemId: buybackItems.id,
+      buybackId: buybacks.id,
+      buybackNumber: buybacks.buybackNumber,
+      buybackCompletedAt: buybacks.completedAt,
+      customerName: customers.fullName,
+      customerCode: customers.customerCode,
+      source: buybackItems.source,
+      lineNumber: buybackItems.lineNumber,
+      sourceProductItemId: buybackItems.productItemId,
+      sourceSnapshot: buybackItems.snapshot,
+      sourceWeightGram: buybackItems.weightGram,
+      sourcePurityPercent: buybackItems.purityPercent,
+      processingType: buybackItemProcessings.processingType,
+      status: buybackItemProcessings.status,
+      resultProductItemId: buybackItemProcessings.resultProductItemId,
+      resultSnapshot: buybackItemProcessings.resultSnapshot,
+      processedAt: buybackItemProcessings.processedAt,
+      createdAt: buybackItemProcessings.createdAt,
+    })
+    .from(buybackItemProcessings)
+    .innerJoin(
+      buybackItems,
+      eq(buybackItemProcessings.buybackItemId, buybackItems.id),
+    )
+    .innerJoin(buybacks, eq(buybackItems.buybackId, buybacks.id))
+    .innerJoin(customers, eq(buybacks.customerId, customers.id))
+    .where(rowCondition)
+    .orderBy(
+      sql`case when ${buybackItemProcessings.status} = 'pending' then 0 else 1 end`,
+      desc(buybackItemProcessings.processedAt),
+      desc(buybackItemProcessings.createdAt),
+    );
+
+  const rows = shouldPaginate
+    ? await rowQuery.limit(normalizedPageSize).offset(offset)
+    : limit === null
+      ? await rowQuery
+      : await rowQuery.limit(Math.max(20, Math.min(300, limit)));
 
   const mappedRows: BuybackProcessingQueueRow[] = rows.map((row) => {
     const sourceSnapshot = row.sourceSnapshot ?? {};
@@ -197,5 +292,14 @@ export async function getBuybackProcessingData({
     completedCount,
     cleaningPendingCount,
     reconditionPendingCount,
+    filteredCount,
+    pagination: shouldPaginate
+      ? {
+          page: currentPage,
+          pageSize: normalizedPageSize,
+          total: filteredCount,
+          pageCount,
+        }
+      : null,
   };
 }

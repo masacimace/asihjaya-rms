@@ -52,12 +52,27 @@ export type BuybackProcessingQueueRow = {
   createdAt: Date;
 };
 
+export type BuybackProcessingListFilters = {
+  search: string;
+  processingType: "all" | BuybackProcessingType;
+  status: BuybackProcessingStatus;
+};
+
+export type BuybackProcessingPagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  pageCount: number;
+};
+
 export type BuybackProcessingData = {
   rows: BuybackProcessingQueueRow[];
   pendingCount: number;
   completedCount: number;
   cleaningPendingCount: number;
   reconditionPendingCount: number;
+  filteredCount: number;
+  pagination: BuybackProcessingPagination | null;
 };
 
 export type BuybackProcessingSubmitPayload = {

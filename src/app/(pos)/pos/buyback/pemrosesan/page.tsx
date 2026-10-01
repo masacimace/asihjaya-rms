@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 
 import { BuybackProcessingWorkspace } from "@/components/buybacks/buyback-processing-workspace";
 import { PosPageContainer, PosPageHeader } from "@/components/layout/pos-page";
+import type {
+  BuybackProcessingListFilters,
+} from "@/features/buybacks/processing-contracts";
 import { getBuybackProcessingData } from "@/features/buybacks/processing-queries";
 import { getActiveGoldPriceRates } from "@/features/pricing/metal-price-rates";
 import {
@@ -19,8 +22,62 @@ export const metadata = {
 
 export const runtime = "nodejs";
 
-export default async function BuybackProcessingPage() {
-  const auth = await requirePermission("buybacks.view");
+const COMPLETED_PAGE_SIZE = 10;
+
+type PageProps = {
+  searchParams: Promise<{
+    page?: string;
+    q?: string;
+    status?: string;
+    type?: string;
+  }>;
+};
+
+function normalizePage(value: string | undefined) {
+  const parsed = Number.parseInt(value ?? "1", 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function normalizeStatus(value: string | undefined) {
+  return value === "completed" ? "completed" : "pending";
+}
+
+function normalizeProcessingType(value: string | undefined) {
+  return value === "cleaning" || value === "recondition" ? value : "all";
+}
+
+function buildProcessingHref({
+  page,
+  search,
+  status,
+  processingType,
+}: {
+  page: number;
+  search: string;
+  status: BuybackProcessingListFilters["status"];
+  processingType: BuybackProcessingListFilters["processingType"];
+}) {
+  const params = new URLSearchParams();
+
+  if (search) params.set("q", search);
+  if (processingType !== "all") params.set("type", processingType);
+  if (status === "completed") params.set("status", status);
+  if (status === "completed" && page > 1) params.set("page", String(page));
+
+  const query = params.toString();
+  return query
+    ? `/pos/buyback/pemrosesan?${query}`
+    : "/pos/buyback/pemrosesan";
+}
+
+export default async function BuybackProcessingPage({
+  searchParams,
+}: PageProps) {
+  const [auth, query] = await Promise.all([
+    requirePermission("buybacks.view"),
+    searchParams,
+  ]);
+
   if (!hasPermission(auth, "pos.access")) {
     redirect("/akses-ditolak");
   }
@@ -32,16 +89,46 @@ export default async function BuybackProcessingPage() {
     redirect("/akses-ditolak");
   }
 
-  const [data, categories, productMasters, activeRates, colorPresets] = await Promise.all([
-    getBuybackProcessingData({
-      organizationId: auth.organization.id,
-      outletId: primaryOutlet.id,
-    }),
-    getProductMasterCategoryOptions(auth.organization.id),
-    getActiveProductMasterOptions(auth.organization.id),
-    getActiveGoldPriceRates({ organizationId: auth.organization.id }),
-    getActiveProductColorPresetOptions(auth.organization.id),
-  ]);
+  const filters: BuybackProcessingListFilters = {
+    search: String(query.q ?? "").trim().slice(0, 160),
+    status: normalizeStatus(query.status),
+    processingType: normalizeProcessingType(query.type),
+  };
+  const requestedPage = normalizePage(query.page);
+
+  const [data, categories, productMasters, activeRates, colorPresets] =
+    await Promise.all([
+      getBuybackProcessingData({
+        organizationId: auth.organization.id,
+        outletId: primaryOutlet.id,
+        search: filters.search,
+        status: filters.status,
+        processingType: filters.processingType,
+        page: requestedPage,
+        pageSize: COMPLETED_PAGE_SIZE,
+        paginateCompleted: true,
+        limit: filters.status === "pending" ? null : undefined,
+      }),
+      getProductMasterCategoryOptions(auth.organization.id),
+      getActiveProductMasterOptions(auth.organization.id),
+      getActiveGoldPriceRates({ organizationId: auth.organization.id }),
+      getActiveProductColorPresetOptions(auth.organization.id),
+    ]);
+
+  if (
+    filters.status === "completed" &&
+    data.pagination &&
+    data.pagination.page !== requestedPage
+  ) {
+    redirect(
+      buildProcessingHref({
+        page: data.pagination.page,
+        search: filters.search,
+        status: filters.status,
+        processingType: filters.processingType,
+      }),
+    );
+  }
 
   return (
     <PosPageContainer>
@@ -92,7 +179,9 @@ export default async function BuybackProcessingPage() {
       />
 
       <BuybackProcessingWorkspace
+        key={`processing:${filters.status}:${filters.processingType}:${filters.search}:${data.pagination?.page ?? 1}`}
         data={data}
+        filters={filters}
         categories={categories}
         productMasters={productMasters}
         colorPresets={colorPresets}

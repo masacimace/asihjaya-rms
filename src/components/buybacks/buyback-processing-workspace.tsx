@@ -30,6 +30,7 @@ import { QuickProductMasterDialog } from "@/components/products/quick-product-ma
 import {
   initialBuybackProcessingActionState,
   type BuybackProcessingData,
+  type BuybackProcessingListFilters,
   type BuybackProcessingQueueRow,
   type BuybackProcessingRateOption,
   type BuybackProcessingSubmitPayload,
@@ -1128,8 +1129,72 @@ export function ProcessingDrawer({
   );
 }
 
+type PaginationToken = number | "ellipsis-left" | "ellipsis-right";
+
+function getPaginationTokens(
+  page: number,
+  pageCount: number,
+): PaginationToken[] {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
+  }
+
+  const visiblePages = new Set<number>([
+    1,
+    pageCount,
+    page - 1,
+    page,
+    page + 1,
+  ]);
+
+  if (page <= 4) {
+    [2, 3, 4, 5].forEach((value) => visiblePages.add(value));
+  }
+
+  if (page >= pageCount - 3) {
+    [pageCount - 4, pageCount - 3, pageCount - 2, pageCount - 1].forEach(
+      (value) => visiblePages.add(value),
+    );
+  }
+
+  const pages = [...visiblePages]
+    .filter((value) => value >= 1 && value <= pageCount)
+    .sort((left, right) => left - right);
+  const tokens: PaginationToken[] = [];
+
+  pages.forEach((value, index) => {
+    const previous = pages[index - 1];
+    if (previous && value - previous > 1) {
+      tokens.push(index === 1 ? "ellipsis-left" : "ellipsis-right");
+    }
+    tokens.push(value);
+  });
+
+  return tokens;
+}
+
+function buildProcessingHref({
+  search,
+  status,
+  processingType,
+  page = 1,
+}: BuybackProcessingListFilters & { page?: number }) {
+  const params = new URLSearchParams();
+
+  if (search.trim()) params.set("q", search.trim());
+  if (processingType !== "all") params.set("type", processingType);
+  if (status === "completed") params.set("status", status);
+  if (status === "completed" && page > 1) params.set("page", String(page));
+
+  const query = params.toString();
+  return query
+    ? `/pos/buyback/pemrosesan?${query}`
+    : "/pos/buyback/pemrosesan";
+}
+
 export function BuybackProcessingWorkspace({
   data,
+  filters,
   categories,
   productMasters,
   colorPresets,
@@ -1139,6 +1204,7 @@ export function BuybackProcessingWorkspace({
   canViewInventory,
 }: {
   data: BuybackProcessingData;
+  filters: BuybackProcessingListFilters;
   categories: ProductMasterCategoryOption[];
   productMasters: ProductMasterOption[];
   colorPresets: ProductColorPresetOption[];
@@ -1148,40 +1214,36 @@ export function BuybackProcessingWorkspace({
   canViewInventory: boolean;
 }) {
   const router = useRouter();
-  const [typeFilter, setTypeFilter] = useState<
-    "all" | BuybackProcessingQueueRow["processingType"]
-  >("all");
-  const [statusFilter, setStatusFilter] = useState<"pending" | "completed">(
-    "pending",
-  );
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(filters.search);
   const [selected, setSelected] = useState<BuybackProcessingQueueRow | null>(
     null,
   );
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const rows = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+  const pagination = data.pagination;
+  const paginationTokens = pagination
+    ? getPaginationTokens(pagination.page, pagination.pageCount)
+    : [];
+  const firstRow =
+    pagination && pagination.total > 0
+      ? (pagination.page - 1) * pagination.pageSize + 1
+      : 0;
+  const lastRow = pagination
+    ? Math.min(pagination.page * pagination.pageSize, pagination.total)
+    : data.filteredCount;
 
-    return data.rows.filter((row) => {
-      if (row.status !== statusFilter) return false;
-      if (typeFilter !== "all" && row.processingType !== typeFilter) {
-        return false;
-      }
-      if (!normalizedQuery) return true;
-
-      return [
-        row.buybackNumber,
-        row.customerName,
-        row.customerCode,
-        row.sourceDisplayName,
-        row.sourceSku,
-        row.sourceBarcode,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+  function navigate(
+    next: Partial<BuybackProcessingListFilters> & { page?: number },
+  ) {
+    const href = buildProcessingHref({
+      search: next.search ?? filters.search,
+      status: next.status ?? filters.status,
+      processingType: next.processingType ?? filters.processingType,
+      page: next.page ?? 1,
     });
-  }, [data.rows, query, statusFilter, typeFilter]);
+
+    router.push(href, { scroll: false });
+  }
 
   return (
     <>
@@ -1231,30 +1293,53 @@ export function BuybackProcessingWorkspace({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-[var(--border)] bg-white">
+        <section
+          data-processing-layout="compact-row-card"
+          className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white"
+        >
           <div className="space-y-4 border-b border-[var(--border)] p-4 sm:p-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="font-semibold text-neutral-950">
-                  Pemrosesan Cuci / Rongsok
-                </h2>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  Satu langkah setelah pekerjaan fisik selesai. Submit hasil
-                  langsung membuat item tersedia di POS.
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-semibold text-neutral-950">
+                    Pemrosesan Cuci / Rongsok
+                  </h2>
+                  <span className="inline-flex rounded-full border border-[var(--border)] bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-600">
+                    {data.filteredCount} item
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Tampilan compact tanpa horizontal scroll. Selesaikan pekerjaan
+                  fisik lalu submit hasil agar item langsung tersedia di POS.
                 </p>
               </div>
-              <div className="relative w-full lg:w-80">
-                <Search className="pointer-events-none absolute left-3 top-3.5 size-4 text-neutral-400" />
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  className={cn(inputClassName, "pl-10")}
-                  placeholder="Cari Buyback, customer, produk..."
-                />
-              </div>
+
+              <form
+                className="flex w-full gap-2 lg:w-auto"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  navigate({ search: query.trim(), page: 1 });
+                }}
+              >
+                <label className="relative min-w-0 flex-1 lg:w-80 lg:flex-none">
+                  <Search className="pointer-events-none absolute left-3 top-3.5 size-4 text-neutral-400" />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    className={cn(inputClassName, "pl-10")}
+                    placeholder="Cari Buyback, customer, produk..."
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-neutral-950 px-4 text-xs font-semibold !text-white transition hover:bg-neutral-800"
+                >
+                  Cari
+                </button>
+              </form>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {(
                 [
                   ["all", "Semua"],
@@ -1265,10 +1350,13 @@ export function BuybackProcessingWorkspace({
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setTypeFilter(value)}
+                  aria-pressed={filters.processingType === value}
+                  onClick={() =>
+                    navigate({ processingType: value, page: 1 })
+                  }
                   className={cn(
                     "rounded-xl px-3 py-2 !text-xs !font-semibold",
-                    typeFilter === value
+                    filters.processingType === value
                       ? "bg-neutral-950 text-white"
                       : "border border-[var(--border)] bg-white text-neutral-700",
                   )}
@@ -1276,7 +1364,9 @@ export function BuybackProcessingWorkspace({
                   {label}
                 </button>
               ))}
+
               <span className="mx-1 hidden h-8 w-px bg-[var(--border)] sm:block" />
+
               {(
                 [
                   ["pending", "Belum Diproses"],
@@ -1286,10 +1376,11 @@ export function BuybackProcessingWorkspace({
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setStatusFilter(value)}
+                  aria-pressed={filters.status === value}
+                  onClick={() => navigate({ status: value, page: 1 })}
                   className={cn(
                     "rounded-xl px-3 py-2 !text-xs !font-semibold",
-                    statusFilter === value
+                    filters.status === value
                       ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                       : "border border-[var(--border)] bg-white text-neutral-700",
                   )}
@@ -1297,264 +1388,163 @@ export function BuybackProcessingWorkspace({
                   {label}
                 </button>
               ))}
+
+              {filters.search ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery("");
+                    navigate({ search: "", page: 1 });
+                  }}
+                  className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold text-neutral-500 transition hover:bg-neutral-50"
+                >
+                  Hapus pencarian
+                </button>
+              ) : null}
             </div>
           </div>
 
-          {rows.length === 0 ? (
+          {data.rows.length === 0 ? (
             <div className="p-10 text-center text-sm text-[var(--muted)]">
               Tidak ada item yang cocok dengan filter ini.
             </div>
           ) : (
-            <>
-              <div className="space-y-3 p-3 sm:p-4 md:hidden">
-                {rows.map((row) => {
-                  const difference = weightDifference(
-                    row.sourceWeightGram,
-                    row.resultWeightGram,
-                  );
+            <div className="grid gap-3 p-3 sm:p-4">
+              {data.rows.map((row) => {
+                const difference = weightDifference(
+                  row.sourceWeightGram,
+                  row.resultWeightGram,
+                );
 
-                  return (
-                    <article
-                      key={row.id}
-                      className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white"
-                    >
-                      <div className="p-3.5">
-                        <div className="flex items-start gap-3">
-                          <ProcessingProductImage
-                            src={row.beforeImageUrl}
-                            alt={`Foto ${row.sourceDisplayName} saat Buyback diterima`}
-                            label="Foto masuk"
-                            className="size-24 shrink-0 sm:size-28"
-                          />
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span
-                                className={cn(
-                                  "rounded-full px-2 py-1 text-[10px] font-semibold",
-                                  row.processingType === "cleaning"
-                                    ? "bg-blue-50 text-blue-700"
-                                    : "bg-amber-50 text-amber-800",
-                                )}
-                              >
-                                {processingLabel(row.processingType)}
-                              </span>
-                              {row.status === "pending" ? (
-                                <span className="rounded-full bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700">
-                                  Belum Diproses
-                                </span>
-                              ) : (
-                                <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
-                                  Selesai
-                                </span>
-                              )}
-                            </div>
-
-                            <p className="mt-2 truncate text-sm font-bold text-neutral-950">
-                              {row.sourceDisplayName}
-                            </p>
-                            <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
-                              {row.sourceCategoryName} · Kadar{" "}
-                              {formatPercentDisplay(row.sourcePurityPercent)} · {row.sourceColor}
-                            </p>
-                            {row.sourceSku ? (
-                              <p className="mt-1 truncate text-[11px] font-medium text-neutral-500">
-                                SKU {row.sourceSku}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-neutral-50 p-3">
-                          <div className="min-w-0">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                              Buyback
-                            </p>
-                            <p className="mt-1 truncate text-xs font-semibold text-neutral-900">
-                              {row.buybackNumber}
-                            </p>
-                            <p className="mt-0.5 text-[10px] text-[var(--muted)]">
-                              {formatDate(row.buybackCompletedAt)}
-                            </p>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                              Customer
-                            </p>
-                            <p className="mt-1 truncate text-xs font-semibold text-neutral-900">
-                              {row.customerName}
-                            </p>
-                            <p className="mt-0.5 truncate text-[10px] text-[var(--muted)]">
-                              {row.customerCode ?? "-"}
-                            </p>
-                          </div>
-                          <div className="col-span-2 border-t border-[var(--border)] pt-2.5">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                                  Berat
-                                </p>
-                                <p className="mt-1 text-xs font-semibold text-neutral-900">
-                                  {formatGramDisplay(row.sourceWeightGram)}
-                                  {row.resultWeightGram
-                                    ? ` → ${formatGramDisplay(row.resultWeightGram)}`
-                                    : ""}
-                                </p>
-                              </div>
-                              {difference ? (
-                                <span className="shrink-0 rounded-lg bg-white px-2 py-1 text-[10px] font-semibold text-neutral-600">
-                                  Selisih {difference}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-
-                        {row.status === "completed" && row.resultDisplayName ? (
-                          <div className="mt-3 flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-2.5">
-                            <ProcessingProductImage
-                              src={row.resultImageUrl}
-                              alt={`Foto hasil pemrosesan ${row.resultDisplayName}`}
-                              label="Foto hasil"
-                              className="size-16 shrink-0"
-                            />
-                            <div className="min-w-0">
-                              <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-                                Hasil Pemrosesan
-                              </p>
-                              <p className="mt-1 truncate text-xs font-semibold text-neutral-900">
-                                {row.resultDisplayName}
-                              </p>
-                              <p className="mt-0.5 text-[10px] text-neutral-600">
-                                Kadar Tukaran{" "}
-                                {formatPercentDisplay(
-                                  row.resultExchangePurityPercent,
-                                )} ·
-                                Potongan/Gr{" "}
-                                {formatCurrency(
-                                  Number(row.resultDeductionPerGram ?? 0),
-                                )}
-                              </p>
-                              <p className="mt-0.5 text-[10px] text-neutral-500">
-                                Selesai {formatDate(row.processedAt)}
-                              </p>
-                            </div>
-                          </div>
-                        ) : null}
+                return (
+                  <article
+                    key={row.id}
+                    className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20 sm:p-5"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="break-all text-sm font-semibold text-neutral-950 sm:break-normal">
+                          {row.buybackNumber}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">
+                          {formatDate(row.buybackCompletedAt)}
+                        </p>
                       </div>
 
-                      {row.status === "pending" ? (
-                        <div className="border-t border-[var(--border)] bg-neutral-50 p-3">
-                          <button
-                            type="button"
-                            disabled={!canProcess}
-                            onClick={() => setSelected(row)}
-                            className={cn(
-                              "inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40",
-                              row.processingType === "cleaning"
-                                ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                                : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
-                            )}
-                          >
-                            {row.processingType === "cleaning" ? (
-                              <Sparkles className="size-4" />
-                            ) : (
-                              <Wrench className="size-4" />
-                            )}
-                            Proses {processingLabel(row.processingType)}
-                          </button>
-                        </div>
-                      ) : row.resultProductItemId && canPrintLabel ? (
-                        <div className="border-t border-[var(--border)] bg-neutral-50 p-3">
-                          <QuickLabelPrintButton
-                            itemId={row.resultProductItemId}
-                          />
-                        </div>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </div>
+                      <div className="flex flex-wrap gap-2 sm:justify-end">
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+                            row.processingType === "cleaning"
+                              ? "border-blue-200 bg-blue-50 text-blue-700"
+                              : "border-amber-200 bg-amber-50 text-amber-800",
+                          )}
+                        >
+                          {processingLabel(row.processingType)}
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+                            row.status === "pending"
+                              ? "border-red-200 bg-red-50 text-red-700"
+                              : "border-emerald-200 bg-emerald-50 text-emerald-700",
+                          )}
+                        >
+                          {row.status === "pending"
+                            ? "Belum Diproses"
+                            : "Selesai"}
+                        </span>
+                      </div>
+                    </div>
 
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[1050px] text-left text-sm">
-                  <thead className="bg-neutral-50 text-xs uppercase text-[var(--muted)]">
-                    <tr>
-                      <th className="px-4 py-3 sm:px-5">No. Buyback</th>
-                      <th className="px-4 py-3">Foto</th>
-                      <th className="px-4 py-3">Customer</th>
-                      <th className="px-4 py-3">Produk</th>
-                      <th className="px-4 py-3">Proses</th>
-                      <th className="whitespace-nowrap px-4 py-3">Berat</th>
-                      <th className="whitespace-nowrap px-4 py-3">Status</th>
-                      <th className="whitespace-nowrap px-4 py-3 sm:px-5">
-                        Aksi
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border)]">
-                    {rows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="align-top hover:bg-neutral-50/60"
-                      >
-                        <td className="px-4 py-4 sm:px-5">
-                          <p className="font-semibold text-neutral-950">
-                            {row.buybackNumber}
-                          </p>
-                          <p className="mt-1 text-xs text-[var(--muted)]">
-                            {formatDate(row.buybackCompletedAt)}
-                          </p>
-                        </td>
-                        <td className="px-4 py-4">
-                          <ProcessingProductImage
-                            src={row.beforeImageUrl}
-                            alt={`Foto ${row.sourceDisplayName} saat Buyback diterima`}
-                            label="Masuk"
-                            className="size-14 shrink-0"
-                          />
-                        </td>
-                        <td className="px-4 py-4">
-                          <p className="font-medium text-neutral-900">
-                            {row.customerName}
-                          </p>
-                          <p className="mt-1 text-xs text-[var(--muted)]">
-                            {row.customerCode ?? "-"}
-                          </p>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="min-w-[220px]">
-                            <p className="max-w-[220px] truncate font-medium text-neutral-900">
-                              {row.sourceDisplayName}
+                    <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[220px_minmax(0,1fr)_minmax(270px,0.9fr)] lg:items-start">
+                      <div className="min-w-0 rounded-2xl border border-[var(--border)] bg-neutral-50/60 p-3">
+                        <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                          Foto produk
+                        </p>
+                        <ProcessingProductImage
+                          src={row.beforeImageUrl}
+                          alt={`Foto ${row.sourceDisplayName} saat Buyback diterima`}
+                          label="Foto masuk"
+                          className="size-20 shrink-0 sm:size-24"
+                        />
+                        <p className="mt-3 line-clamp-2 text-sm font-semibold leading-5 text-neutral-900">
+                          {row.sourceDisplayName}
+                        </p>
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
+                          {row.sourceCategoryName} · Kadar{" "}
+                          {formatPercentDisplay(row.sourcePurityPercent)}
+                        </p>
+                      </div>
+
+                      <div className="min-w-0 space-y-3">
+                        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+                          <div className="min-w-0 rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
+                            <p className="text-xs font-medium text-neutral-500">
+                              Customer
                             </p>
-                            <p className="mt-1 text-xs text-[var(--muted)]">
-                              {row.sourceCategoryName} · Kadar{" "}
-                              {formatPercentDisplay(row.sourcePurityPercent)}
+                            <p className="mt-2 break-words text-sm font-semibold text-neutral-950">
+                              {row.customerName}
                             </p>
-                            {row.status === "completed" &&
-                            row.resultDisplayName ? (
-                              <>
-                                <p className="mt-1 text-xs font-medium text-emerald-700">
-                                  Hasil: {row.resultDisplayName}
-                                </p>
-                                <p className="mt-1 text-[11px] text-neutral-500">
-                                  Tukaran{" "}
-                                  {formatPercentDisplay(
-                                    row.resultExchangePurityPercent,
-                                  )} ·
-                                  Pot/Gr{" "}
-                                  {formatCurrency(
-                                    Number(row.resultDeductionPerGram ?? 0),
-                                  )}
-                                </p>
-                              </>
+                            <p className="mt-1 break-words text-xs text-[var(--muted)]">
+                              {row.customerCode ?? "Tanpa kode customer"}
+                            </p>
+                          </div>
+
+                          <div className="min-w-0 rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
+                            <p className="text-xs font-medium text-neutral-500">
+                              Produk
+                            </p>
+                            <p className="mt-2 break-words text-sm font-semibold text-neutral-950">
+                              {row.sourceCategoryName}
+                            </p>
+                            <p className="mt-1 break-words text-xs text-[var(--muted)]">
+                              {row.sourceSku
+                                ? `SKU ${row.sourceSku}`
+                                : row.sourceBarcode
+                                  ? `Barcode ${row.sourceBarcode}`
+                                  : "Tanpa SKU / barcode"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <span className="inline-flex rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600">
+                            Berat {formatGramDisplay(row.sourceWeightGram)}
+                          </span>
+                          <span className="inline-flex rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600">
+                            Kadar {formatPercentDisplay(row.sourcePurityPercent)}
+                          </span>
+                          <span className="inline-flex rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600">
+                            Warna {row.sourceColor}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="min-w-0 rounded-2xl border border-neutral-200 bg-neutral-50/70 p-3.5">
+                        <p className="text-xs font-medium text-neutral-500">
+                          {row.status === "completed"
+                            ? "Hasil Pemrosesan"
+                            : "Ringkasan Pemrosesan"}
+                        </p>
+
+                        <div className="mt-2 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-neutral-950">
+                              Berat {formatGramDisplay(row.sourceWeightGram)}
+                              {row.resultWeightGram
+                                ? ` → ${formatGramDisplay(row.resultWeightGram)}`
+                                : ""}
+                            </p>
+                            {difference ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                Selisih {difference}
+                              </p>
                             ) : null}
                           </div>
-                        </td>
-                        <td className="px-4 py-4">
                           <span
                             className={cn(
-                              "rounded-full px-2.5 py-1 text-xs font-semibold",
+                              "shrink-0 rounded-lg px-2 py-1 text-[10px] font-semibold",
                               row.processingType === "cleaning"
                                 ? "bg-blue-50 text-blue-700"
                                 : "bg-amber-50 text-amber-800",
@@ -1562,79 +1552,179 @@ export function BuybackProcessingWorkspace({
                           >
                             {processingLabel(row.processingType)}
                           </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <p className="whitespace-nowrap font-medium">
-                            {formatGramDisplay(row.sourceWeightGram)}
-                            {row.resultWeightGram
-                              ? ` → ${formatGramDisplay(row.resultWeightGram)}`
-                              : ""}
-                          </p>
-                          {weightDifference(
-                            row.sourceWeightGram,
-                            row.resultWeightGram,
-                          ) ? (
-                            <p className="mt-1 text-xs text-[var(--muted)]">
-                              Selisih{" "}
-                              {weightDifference(
-                                row.sourceWeightGram,
-                                row.resultWeightGram,
-                              )}
-                            </p>
-                          ) : null}
-                        </td>
-                        <td className="px-4 py-4">
-                          {row.status === "pending" ? (
-                            <span className="inline-flex whitespace-nowrap rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
-                              Belum Diproses
-                            </span>
-                          ) : (
-                            <span className="inline-flex whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                              Selesai
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 sm:px-5">
-                          {row.status === "pending" ? (
-                            <button
-                              type="button"
-                              disabled={!canProcess}
-                              onClick={() => setSelected(row)}
-                              className={cn(
-                                "inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40",
-                                row.processingType === "cleaning"
-                                  ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                                  : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
-                              )}
-                            >
-                              {row.processingType === "cleaning" ? (
-                                <Sparkles className="size-3.5" />
-                              ) : (
-                                <Wrench className="size-3.5" />
-                              )}
-                              Proses {processingLabel(row.processingType)}
-                            </button>
-                          ) : (
-                            <div className="space-y-2">
-                              <span className="block text-xs text-[var(--muted)]">
-                                {formatDate(row.processedAt)}
-                              </span>
-                              {row.resultProductItemId && canPrintLabel ? (
-                                <QuickLabelPrintButton
-                                  itemId={row.resultProductItemId}
-                                  compact
+                        </div>
+
+                        {row.status === "completed" ? (
+                          <div className="mt-3 border-t border-neutral-200 pt-3">
+                            {row.resultDisplayName ? (
+                              <div className="flex items-start gap-3">
+                                <ProcessingProductImage
+                                  src={row.resultImageUrl}
+                                  alt={`Foto hasil pemrosesan ${row.resultDisplayName}`}
+                                  label="Foto hasil"
+                                  className="size-16 shrink-0"
                                 />
-                              ) : null}
-                            </div>
+                                <div className="min-w-0">
+                                  <p className="line-clamp-2 text-xs font-semibold leading-5 text-neutral-900">
+                                    {row.resultDisplayName}
+                                  </p>
+                                  <p className="mt-1 text-[11px] leading-5 text-neutral-600">
+                                    Kadar Tukaran{" "}
+                                    {formatPercentDisplay(
+                                      row.resultExchangePurityPercent,
+                                    )}
+                                    {" · "}Potongan/Gr{" "}
+                                    {formatCurrency(
+                                      Number(row.resultDeductionPerGram ?? 0),
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-[var(--muted)]">
+                                Snapshot hasil pemrosesan belum tersedia.
+                              </p>
+                            )}
+                            <p className="mt-2 text-[11px] text-neutral-500">
+                              Selesai {formatDate(row.processedAt)}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="mt-3 border-t border-neutral-200 pt-3 text-xs leading-5 text-[var(--muted)]">
+                            Menunggu pekerjaan fisik selesai. Buka proses untuk
+                            mencatat berat, kadar, harga, potongan, warna, dan
+                            foto hasil.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-col gap-3 border-t border-[var(--border)] pt-4 lg:flex-row lg:items-end lg:justify-between">
+                      <p className="min-w-0 text-xs leading-5 text-[var(--muted)]">
+                        {row.status === "pending"
+                          ? "Submit hasil akan mengubah item menjadi saleable dan langsung tersedia di POS."
+                          : row.resultSku
+                            ? `Hasil tersimpan sebagai SKU ${row.resultSku}.`
+                            : "Hasil pemrosesan sudah tersimpan dan tersedia di inventory."}
+                      </p>
+
+                      {row.status === "pending" ? (
+                        <button
+                          type="button"
+                          disabled={!canProcess}
+                          onClick={() => setSelected(row)}
+                          className={cn(
+                            "inline-flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40",
+                            row.processingType === "cleaning"
+                              ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                              : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+                        >
+                          {row.processingType === "cleaning" ? (
+                            <Sparkles className="size-3.5" />
+                          ) : (
+                            <Wrench className="size-3.5" />
+                          )}
+                          Proses {processingLabel(row.processingType)}
+                        </button>
+                      ) : row.resultProductItemId && canPrintLabel ? (
+                        <QuickLabelPrintButton
+                          itemId={row.resultProductItemId}
+                          compact
+                        />
+                      ) : (
+                        <span className="text-xs text-[var(--muted)]">
+                          Label tidak tersedia untuk akun ini.
+                        </span>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           )}
+
+          {filters.status === "completed" &&
+          pagination &&
+          pagination.total > 0 ? (
+            <div className="border-t border-[var(--border)] p-4 sm:px-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <p className="text-center text-xs text-[var(--muted)] lg:text-left">
+                  Menampilkan {firstRow}-{lastRow} dari {pagination.total} item ·
+                  Halaman {pagination.page} dari {pagination.pageCount}
+                </p>
+
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-center">
+                  <Link
+                    href={buildProcessingHref({
+                      ...filters,
+                      page: Math.max(1, pagination.page - 1),
+                    })}
+                    aria-disabled={pagination.page <= 1}
+                    className={cn(
+                      "inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition",
+                      pagination.page <= 1
+                        ? "pointer-events-none opacity-40"
+                        : "hover:bg-neutral-50",
+                    )}
+                  >
+                    ← Sebelumnya
+                  </Link>
+
+                  <div className="hidden items-center gap-1.5 md:flex">
+                    {paginationTokens.map((token) =>
+                      typeof token === "number" ? (
+                        <Link
+                          key={token}
+                          href={buildProcessingHref({
+                            ...filters,
+                            page: token,
+                          })}
+                          aria-current={
+                            token === pagination.page ? "page" : undefined
+                          }
+                          className={cn(
+                            "inline-flex size-10 items-center justify-center rounded-xl border text-xs font-semibold transition",
+                            token === pagination.page
+                              ? "border-neutral-950 bg-neutral-950 !text-white"
+                              : "border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50",
+                          )}
+                        >
+                          {token}
+                        </Link>
+                      ) : (
+                        <span
+                          key={token}
+                          className="inline-flex size-10 items-center justify-center text-xs font-semibold text-neutral-400"
+                        >
+                          …
+                        </span>
+                      ),
+                    )}
+                  </div>
+
+                  <Link
+                    href={buildProcessingHref({
+                      ...filters,
+                      page: Math.min(
+                        pagination.pageCount,
+                        pagination.page + 1,
+                      ),
+                    })}
+                    aria-disabled={pagination.page >= pagination.pageCount}
+                    className={cn(
+                      "inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-neutral-700 transition",
+                      pagination.page >= pagination.pageCount
+                        ? "pointer-events-none opacity-40"
+                        : "hover:bg-neutral-50",
+                    )}
+                  >
+                    Berikutnya →
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {!canProcess ? (
             <div className="border-t border-[var(--border)] bg-amber-50 px-4 py-3 text-xs text-amber-800 sm:px-5">
