@@ -35,6 +35,7 @@ import {
   normalizePurityKey,
 } from "@/features/pricing/metal-price-rates";
 import { hasPermission, requireAnyPermission } from "@/lib/auth/session";
+import { formatDecimalDisplay } from "@/lib/decimal-presentation";
 import { getImageUrl } from "@/lib/storage/image-storage";
 import { cn } from "@/lib/utils";
 
@@ -141,19 +142,12 @@ function formatMoney(value: string | number | null) {
 }
 
 function formatDecimal(value: string | null, suffix: string) {
-  if (!value) {
+  const formatted = formatDecimalDisplay(value);
+  if (!formatted) {
     return "Belum diisi";
   }
 
-  const amount = Number(value);
-
-  if (!Number.isFinite(amount)) {
-    return "Belum diisi";
-  }
-
-  return `${new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 3,
-  }).format(amount)} ${suffix}`;
+  return suffix === "%" ? `${formatted}%` : `${formatted} ${suffix}`;
 }
 
 function formatDateTime(value: Date) {

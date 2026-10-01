@@ -1176,7 +1176,7 @@ function formatGram(value: string | null | undefined) {
     return "-";
   }
 
-  return `${amount.toLocaleString("id-ID", { maximumFractionDigits: 2 })} g`;
+  return `${amount.toLocaleString("id-ID", { maximumFractionDigits: 3 })} g`;
 }
 
 function formatPercent(value: string | null | undefined) {
@@ -1186,7 +1186,7 @@ function formatPercent(value: string | null | undefined) {
     return "-";
   }
 
-  return `${amount.toLocaleString("id-ID", { maximumFractionDigits: 2 })}%`;
+  return `${amount.toLocaleString("id-ID", { maximumFractionDigits: 3 })}%`;
 }
 
 function buildProductMeta(item: ReceiptCertificateData["items"][number]) {

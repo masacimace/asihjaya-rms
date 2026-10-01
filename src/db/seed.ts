@@ -348,6 +348,7 @@ const rolePermissionMap: Record<string, readonly string[]> = {
     "sales.create",
     "buybacks.view",
     "buybacks.create",
+    "pricing.manage",
     "payments.manage",
     "returns.view",
     "returns.receive",

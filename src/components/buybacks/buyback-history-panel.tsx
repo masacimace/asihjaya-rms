@@ -34,6 +34,10 @@ import type {
 } from "@/features/products/product-master-queries";
 import type { ProductColorPresetOption } from "@/features/settings/product-color-presets";
 import { formatCurrency } from "@/features/pos/payment-draft";
+import {
+  formatGramDisplay,
+  formatPercentDisplay,
+} from "@/lib/decimal-presentation";
 
 const payoutLabels: Record<BuybackPayoutMethod, string> = {
   cash: "Cash",
@@ -756,10 +760,10 @@ function BuybackDetailPanel({
                       </span>
                     ) : null}
                     <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
-                      Berat {item.weightGram} gr
+                      Berat {formatGramDisplay(item.weightGram)}
                     </span>
                     <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
-                      Kadar {item.purityPercent}%
+                      Kadar {formatPercentDisplay(item.purityPercent)}
                     </span>
                     {color ? (
                       <span className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
@@ -792,7 +796,7 @@ function BuybackDetailPanel({
                         </div>
                       ) : (
                         <p className="mt-2 text-xs leading-5 text-amber-700">
-                          Rate Buyback {item.purityPercent}% tidak tersedia saat
+                          Rate Buyback {formatPercentDisplay(item.purityPercent)} tidak tersedia saat
                           transaksi. Total final tetap ditentukan manual oleh
                           staff.
                         </p>

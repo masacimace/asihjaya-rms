@@ -14,6 +14,12 @@ import {
 } from "@/features/pos/catalog-state";
 import type { PosAvailableItem, PosCategoryOption } from "@/features/pos/contracts";
 import { calculatePosBasePrice } from "@/features/pos/transaction-pricing";
+import {
+  formatDecimalDisplay,
+  formatDecimalInput,
+  formatGramDisplay,
+  formatPercentDisplay,
+} from "@/lib/decimal-presentation";
 
 const contractsSource = readFileSync(
   resolve("src/features/pos/contracts.ts"),
@@ -41,6 +47,26 @@ const scannerHookSource = readFileSync(
 );
 const posShellSource = readFileSync(
   resolve("src/components/layout/pos-shell.tsx"),
+  "utf8",
+);
+const productEditSource = readFileSync(
+  resolve("src/components/inventory/product-item-edit-form.tsx"),
+  "utf8",
+);
+const posPricingDialogSource = readFileSync(
+  resolve("src/components/pos/workspace/pos-item-pricing-dialog.tsx"),
+  "utf8",
+);
+const buybackHistorySource = readFileSync(
+  resolve("src/components/buybacks/buyback-history-panel.tsx"),
+  "utf8",
+);
+const buybackProcessingSource = readFileSync(
+  resolve("src/components/buybacks/buyback-processing-workspace.tsx"),
+  "utf8",
+);
+const receiptHtmlSource = readFileSync(
+  resolve("src/features/sales/documents/receipt-certificate-html.tsx"),
   "utf8",
 );
 
@@ -89,9 +115,9 @@ function createItem(overrides: Partial<PosAvailableItem> = {}): PosAvailableItem
     productName: "Cincin Emas Kuning",
     categoryId: "category-ring",
     categoryName: "Cincin",
-    weightGram: "2.5",
-    purityPercent: "70",
-    exchangePurityPercent: "375",
+    weightGram: "2.500",
+    purityPercent: "70.000",
+    exchangePurityPercent: "375.000",
     size: "17",
     color: "Kuning",
     gemstone: "Zircon",
@@ -120,8 +146,32 @@ assert.deepEqual(filterPosCatalogItems({ items, activeCategoryId: "category-ring
 assert.deepEqual(filterPosCatalogItems({ items, activeCategoryId: "all", searchQuery: "899000000001" }), [ring]);
 assert.equal(getPosActiveCategoryLabel({ categories, activeCategoryId: "category-bracelet" }), "Gelang");
 assert.equal(formatPosItemDecimal("2.500", "gr"), "2,5 gr");
-assert.equal(getPosItemDetail(ring), "2,5 gr · Kadar 70 %");
-assert.deepEqual(getPosItemSpecChips(ring), ["2,5 gr", "Kadar 70 %", "Tukaran 375", "Uk. 17", "Kuning", "Zircon"]);
+assert.equal(formatPosItemDecimal("70.000", "%"), "70%");
+assert.equal(getPosItemDetail(ring), "2,5 gr · Kadar 70%");
+assert.deepEqual(getPosItemSpecChips(ring), ["2,5 gr", "Kadar 70%", "Tukaran 375", "Uk. 17", "Kuning", "Zircon"]);
+
+assert.equal(formatDecimalDisplay("50.000"), "50");
+assert.equal(formatDecimalDisplay("50.500"), "50,5");
+assert.equal(formatDecimalDisplay("50.050"), "50,05");
+assert.equal(formatDecimalDisplay("50.125"), "50,125");
+assert.equal(formatDecimalDisplay("1.800"), "1,8");
+assert.equal(formatDecimalDisplay("18.300"), "18,3");
+assert.equal(formatDecimalDisplay("18.375"), "18,375");
+assert.equal(formatDecimalInput("1.800"), "1,8");
+assert.equal(formatDecimalInput("68.125"), "68,125");
+assert.equal(formatGramDisplay("1.825"), "1,825 gr");
+assert.equal(formatPercentDisplay("68.125"), "68,125%");
+
+assert.match(productEditSource, /formatDecimalInput\(item\.purityPercent\)/);
+assert.match(productEditSource, /formatDecimalInput\(item\.weightGram\)/);
+assert.doesNotMatch(productEditSource, /useState\(item\.purityPercent \?\? ""\)/);
+assert.doesNotMatch(posPricingDialogSource, /item\.purityPercent \?\? "-"/);
+assert.doesNotMatch(buybackHistorySource, /Berat \{item\.weightGram\} gr/);
+assert.doesNotMatch(
+  buybackProcessingSource,
+  /\{row\.sourceWeightGram\} gr/,
+);
+assert.match(receiptHtmlSource, /maximumFractionDigits: 3/);
 assert.equal(calculatePosBasePrice({ weightGram: ring.weightGram, pricePerGram: ring.activePricePerGram }), 2_500_000);
 assert.equal(getPosMediaUrl(" items / sku cincin-001.jpg "), "/media/items/sku%20cincin-001.jpg");
 assert.equal(getPosItemImageUrl(ring), "/media/items/sku%20cincin-001.jpg");

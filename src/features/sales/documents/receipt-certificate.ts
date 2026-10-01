@@ -3,6 +3,10 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { createPublicHistoryVerificationUrl } from "@/features/sales/verification/receipt-token";
 import {
+  formatGramDisplay,
+  formatPercentDisplay,
+} from "@/lib/decimal-presentation";
+import {
   customerDepositLedger,
   customers,
   organizations,
@@ -638,8 +642,10 @@ function buildPdfBuffer(content: string) {
 function getItemDescription(snapshot: SaleItemSnapshot) {
   const details = [
     snapshot.categoryName,
-    snapshot.weightGram ? `${snapshot.weightGram} gr` : null,
-    snapshot.exchangePurityPercent ? `Kadar ${snapshot.exchangePurityPercent}%` : null,
+    snapshot.weightGram ? formatGramDisplay(snapshot.weightGram) : null,
+    snapshot.exchangePurityPercent
+      ? `Kadar ${formatPercentDisplay(snapshot.exchangePurityPercent)}`
+      : null,
     snapshot.size ? `Size ${snapshot.size}` : null,
     snapshot.gemstone,
   ].filter(Boolean);

@@ -2,8 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 
-import { saveBuybackPriceRatesAction } from "@/app/actions/buyback-price-rates";
-import { saveMetalPriceRatesAction } from "@/app/actions/metal-price-rates";
+import {
+  retireBuybackPriceRateAction,
+  saveBuybackPriceRatesAction,
+} from "@/app/actions/buyback-price-rates";
+import {
+  retireMetalPriceRateAction,
+  saveMetalPriceRatesAction,
+} from "@/app/actions/metal-price-rates";
 import {
   initialMetalPriceRateActionState,
   type MetalPriceRateActionState,
@@ -141,5 +147,73 @@ export async function saveQuickPriceRateAction(
         : `Rate Buyback Global ${purityKey}% berhasil diperbarui.`,
     purityKey,
     ratePerGram,
+  };
+}
+
+
+export async function retireQuickPriceRateAction(
+  input: Pick<QuickPriceRateInput, "kind" | "purityPercent">,
+): Promise<QuickPriceRateResult> {
+  const auth = await getCurrentAuth();
+
+  if (!auth) {
+    return {
+      status: "error",
+      message: "Sesi login sudah tidak aktif. Login ulang lalu coba kembali.",
+    };
+  }
+
+  if (!hasPermission(auth, "pricing.manage")) {
+    return {
+      status: "error",
+      message:
+        "Akun ini tidak memiliki permission untuk mengubah Harga / Gram Global.",
+    };
+  }
+
+  if (input.kind !== "sale" && input.kind !== "buyback") {
+    return { status: "error", message: "Jenis rate global tidak valid." };
+  }
+
+  const purityKey = normalizePurityKey(input.purityPercent);
+  if (!purityKey) {
+    return {
+      status: "error",
+      message: "Kadar harus berada di atas 0 dan maksimal 100%.",
+    };
+  }
+
+  let result: MetalPriceRateActionState;
+  try {
+    result =
+      input.kind === "sale"
+        ? await retireMetalPriceRateAction(purityKey)
+        : await retireBuybackPriceRateAction(purityKey);
+  } catch (error) {
+    console.error("Gagal menonaktifkan quick Harga/Gram global", error);
+    return {
+      status: "error",
+      message:
+        "Harga / Gram Global belum bisa dinonaktifkan karena terjadi kendala sistem.",
+    };
+  }
+
+  if (result.status !== "success") {
+    return {
+      status: "error",
+      message:
+        result.message ?? "Harga / Gram Global belum bisa dinonaktifkan.",
+    };
+  }
+
+  revalidateQuickRateConsumers();
+
+  return {
+    status: "success",
+    message:
+      input.kind === "sale"
+        ? `Rate Jual Global ${purityKey}% berhasil dinonaktifkan.`
+        : `Rate Buyback Global ${purityKey}% berhasil dinonaktifkan.`,
+    purityKey,
   };
 }

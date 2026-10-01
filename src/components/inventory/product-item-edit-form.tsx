@@ -8,6 +8,7 @@ import { useFormStatus } from "react-dom";
 import { updateProductItemAction } from "@/app/actions/product-items";
 import { SingleImageInput } from "@/components/media/single-image-input";
 import { QuickPriceRateControl } from "@/components/pricing/quick-price-rate-control";
+import { formatDecimalInput } from "@/lib/decimal-presentation";
 import {
   initialProductItemActionState,
   type ProductItemActionState,
@@ -153,12 +154,16 @@ export function ProductItemEditForm({
     initialProductItemActionState,
   );
 
-  const [purityPercent, setPurityPercent] = useState(item.purityPercent ?? "");
-  const [weightGram, setWeightGram] = useState(item.weightGram ?? "");
+  const [purityPercent, setPurityPercent] = useState(() =>
+    formatDecimalInput(item.purityPercent),
+  );
+  const [weightGram, setWeightGram] = useState(() =>
+    formatDecimalInput(item.weightGram),
+  );
   const [deductionPerGram, setDeductionPerGram] = useState(
     item.deductionPerGram ?? "0",
   );
-  const [rateOverrides, setRateOverrides] = useState<Record<string, string>>({});
+  const [rateOverrides, setRateOverrides] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     if (state.status === "success") {
@@ -172,7 +177,9 @@ export function ProductItemEditForm({
   );
   const purityKey = normalizePurityKey(purityPercent);
   const activeRate = purityKey
-    ? rateOverrides[purityKey] ?? rateMap.get(purityKey) ?? null
+    ? Object.prototype.hasOwnProperty.call(rateOverrides, purityKey)
+      ? rateOverrides[purityKey] ?? null
+      : rateMap.get(purityKey) ?? null
     : null;
   const estimatedBasePrice = useMemo(() => {
     const weight = Number(weightGram.replace(",", "."));
@@ -299,7 +306,7 @@ export function ProductItemEditForm({
               name="exchangePurityPercent"
               required
               inputMode="decimal"
-              defaultValue={item.exchangePurityPercent ?? ""}
+              defaultValue={formatDecimalInput(item.exchangePurityPercent)}
               disabled={!canEdit}
               className={inputClassName}
               placeholder="Contoh: 375"
@@ -330,6 +337,12 @@ export function ProductItemEditForm({
                   setRateOverrides((current) => ({
                     ...current,
                     [savedKey]: ratePerGram,
+                  }))
+                }
+                onRetired={({ purityKey: retiredKey }) =>
+                  setRateOverrides((current) => ({
+                    ...current,
+                    [retiredKey]: null,
                   }))
                 }
               />

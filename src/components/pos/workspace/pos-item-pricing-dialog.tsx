@@ -26,6 +26,11 @@ import {
   formatRupiahInput,
   parsePaymentAmountInput,
 } from "@/features/pos/payment-draft";
+import {
+  formatDecimalInput,
+  formatGramDisplay,
+  formatPercentDisplay,
+} from "@/lib/decimal-presentation";
 import { cn } from "@/lib/utils";
 
 export type PosItemPricingDialogProps = {
@@ -64,7 +69,7 @@ function PosItemPricingDialogContent({
     existingItem?.deductionPerGram ?? item.deductionPerGram ?? "0";
 
   const [transactionWeightInput, setTransactionWeightInput] = useState(() =>
-    formatPosWeightInput(
+    formatDecimalInput(
       existingItem?.transactionWeightGram ?? item.weightGram ?? "",
     ),
   );
@@ -245,10 +250,12 @@ function PosItemPricingDialogContent({
               </p>
               <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium text-neutral-700">
                 <span className="rounded-full bg-white px-2.5 py-1 ring-1 ring-[var(--border)]">
-                  Kadar {item.purityPercent ?? "-"}%
+                  Kadar {formatPercentDisplay(item.purityPercent)}
                 </span>
                 <span className="rounded-full bg-white px-2.5 py-1 ring-1 ring-[var(--border)]">
-                  {transactionWeightGram ?? item.weightGram ?? "-"} gr
+                  {formatGramDisplay(
+                    transactionWeightGram ?? item.weightGram,
+                  )}
                 </span>
                 <span className="rounded-full bg-white px-2.5 py-1 ring-1 ring-[var(--border)]">
                   {item.color ?? "Warna -"}
@@ -275,7 +282,7 @@ function PosItemPricingDialogContent({
               <div className="text-right text-[11px] text-[var(--muted)]">
                 <p>Berat tersimpan</p>
                 <p className="mt-0.5 font-semibold text-neutral-800">
-                  {item.weightGram ? `${item.weightGram} gr` : "Belum tersedia"}
+                  {formatGramDisplay(item.weightGram, "Belum tersedia")}
                 </p>
               </div>
             </div>
@@ -316,7 +323,7 @@ function PosItemPricingDialogContent({
               item.weightGram &&
               transactionWeightGram ? (
                 <span className="text-[var(--muted)]">
-                  Sebelumnya {item.weightGram} gr
+                  Sebelumnya {formatGramDisplay(item.weightGram)}
                 </span>
               ) : null}
             </div>
@@ -418,7 +425,7 @@ function PosItemPricingDialogContent({
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-[var(--border)] bg-white p-3">
               <p className="text-xs text-[var(--muted)]">
-                Harga Standar Kadar {item.purityPercent ?? "-"}%
+                Harga Standar Kadar {formatPercentDisplay(item.purityPercent)}
               </p>
               <p className="mt-1 text-base font-semibold text-neutral-950">
                 {item.activePricePerGram
