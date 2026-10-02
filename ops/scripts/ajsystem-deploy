@@ -227,6 +227,21 @@ container_environment_value() {
     | tail -n 1
 }
 
+dump_candidate_diagnostics() {
+  [[ -n "$CANDIDATE_CONTAINER" ]] || return 0
+  docker inspect "$CANDIDATE_CONTAINER" >/dev/null 2>&1 || return 0
+
+  printf '\n--- Candidate diagnostics: %s ---\n' "$CANDIDATE_CONTAINER" >&2
+  docker inspect "$CANDIDATE_CONTAINER" \
+    --format 'state={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}} oom={{.State.OOMKilled}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}' \
+    >&2 2>/dev/null || true
+  printf '%s\n' 'Port binding:' >&2
+  docker port "$CANDIDATE_CONTAINER" 3000/tcp >&2 2>/dev/null || true
+  printf '%s\n' 'Last 200 candidate log lines:' >&2
+  docker logs --tail 200 "$CANDIDATE_CONTAINER" >&2 2>/dev/null || true
+  printf '%s\n\n' '--- End candidate diagnostics ---' >&2
+}
+
 cleanup_candidate() {
   if [[ -n "$RELEASE_ENV_TEMP" ]]; then
     rm -f -- "$RELEASE_ENV_TEMP"
@@ -246,6 +261,7 @@ finish_failure() {
   local exit_code="$1"
   trap - ERR HUP INT TERM
   set +e
+  dump_candidate_diagnostics
   cleanup_candidate
   if [[ -n "$CANDIDATE_FILE" && -s "$CANDIDATE_FILE" && -n "$OPERATIONS_IMAGE" ]]; then
     run_operations_state fail \

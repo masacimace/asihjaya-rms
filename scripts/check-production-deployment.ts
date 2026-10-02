@@ -94,6 +94,18 @@ assert(
   deploymentScript.includes("Candidate image gagal health check; application lama tetap aktif."),
   "Candidate failure wajib mempertahankan application lama.",
 );
+assert(
+  deploymentScript.includes("dump_candidate_diagnostics()") &&
+    deploymentScript.includes("Last 200 candidate log lines:") &&
+    deploymentScript.includes('docker logs --tail 200 "$CANDIDATE_CONTAINER"') &&
+    deploymentScript.includes('oom={{.State.OOMKilled}}'),
+  "Candidate failure wajib mencetak state, OOM status, dan tail log sebelum cleanup.",
+);
+assert(
+  deploymentScript.indexOf("dump_candidate_diagnostics") <
+    deploymentScript.indexOf("cleanup_candidate", deploymentScript.indexOf("finish_failure()")),
+  "Diagnostic candidate wajib dijalankan sebelum container candidate dihapus.",
+);
 const healthFunctionStart = deploymentScript.indexOf("run_health_check() {");
 const healthFunctionEnd = deploymentScript.indexOf("\ncontainer_environment_value()", healthFunctionStart);
 assert(healthFunctionStart >= 0 && healthFunctionEnd > healthFunctionStart, "Function health check tidak dapat diperiksa.");

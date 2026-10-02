@@ -55,6 +55,13 @@ assert(
   "Runtime image wajib menyiapkan direktori upload dan Next.js cache yang writable.",
 );
 assert(
+  dockerfile.includes(
+    "COPY --from=builder --chown=nextjs:nodejs /app/public ./public",
+  ) &&
+    dockerfile.includes("chmod -R a+rX /app/public"),
+  "Public assets production wajib owned/readable oleh runtime nextjs agar umask host tidak menyebabkan EACCES.",
+);
+assert(
   dockerfile.includes("HEALTHCHECK") &&
     dockerfile.includes("http://127.0.0.1:3000/api/health"),
   "Docker image wajib memiliki liveness health check internal.",

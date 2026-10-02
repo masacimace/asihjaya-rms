@@ -183,7 +183,7 @@ RUN groupadd --system --gid 10001 nodejs \
         --home-dir /home/nextjs \
         nextjs
 
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
@@ -193,7 +193,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/playwright ./node_modules/playwright
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/playwright-core ./node_modules/playwright-core
 
-RUN mkdir -p /app/.data/uploads /app/.next/cache \
+RUN chmod -R a+rX /app/public \
+    && mkdir -p /app/.data/uploads /app/.next/cache \
     && chown -R nextjs:nodejs /app/.data /app/.next/cache
 
 USER nextjs
