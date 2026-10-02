@@ -1,6 +1,13 @@
 "use client";
 
-import { Download, Laptop, RefreshCw, Settings2, ShieldOff, X } from "lucide-react";
+import {
+  Download,
+  Laptop,
+  RefreshCw,
+  Settings2,
+  ShieldOff,
+  X,
+} from "lucide-react";
 import { useActionState, useRef } from "react";
 
 import {
@@ -68,7 +75,8 @@ function CredentialResult({
         Akses Hardware Hub diperbarui
       </h2>
       <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-        Credential lama sudah tidak berlaku. Download konfigurasi sementara untuk Mini PC yang akan digunakan.
+        Credential lama sudah tidak berlaku. Download konfigurasi sementara
+        untuk Mini PC yang akan digunakan.
       </p>
       <button
         type="button"
@@ -115,7 +123,7 @@ export function HardwareHubManageDialog({ agent }: { agent: Agent }) {
         className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-neutral-700 hover:border-[var(--accent)] hover:text-[var(--accent)]"
       >
         <Settings2 className="size-4" />
-        Kelola
+        Configuration
       </button>
 
       <dialog
@@ -149,7 +157,8 @@ export function HardwareHubManageDialog({ agent }: { agent: Agent }) {
             </div>
 
             <div className="grid gap-3 p-5 sm:p-6">
-              {(rotateState.status === "error" || replaceState.status === "error") ? (
+              {rotateState.status === "error" ||
+              replaceState.status === "error" ? (
                 <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {rotateState.status === "error"
                     ? rotateState.message
@@ -163,9 +172,12 @@ export function HardwareHubManageDialog({ agent }: { agent: Agent }) {
                 <div className="flex gap-3">
                   <Laptop className="mt-0.5 size-5 text-neutral-500" />
                   <div>
-                    <p className="font-semibold text-neutral-950">Ganti Mini PC</p>
+                    <p className="font-semibold text-neutral-950">
+                      Ganti Mini PC
+                    </p>
                     <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                      Nonaktifkan identity perangkat lama dan buat identity baru untuk Mini PC pengganti.
+                      Nonaktifkan identity perangkat lama dan buat identity baru
+                      untuk Mini PC pengganti.
                     </p>
                   </div>
                 </div>
@@ -173,13 +185,20 @@ export function HardwareHubManageDialog({ agent }: { agent: Agent }) {
                   action={replaceAction}
                   className="mt-3"
                   onSubmit={(event) => {
-                    if (!window.confirm("Ganti Mini PC sekarang? Agent lama akan dinonaktifkan.")) {
+                    if (
+                      !window.confirm(
+                        "Ganti Mini PC sekarang? Agent lama akan dinonaktifkan.",
+                      )
+                    ) {
                       event.preventDefault();
                     }
                   }}
                 >
                   <input type="hidden" name="agentId" value={agent.id} />
-                  <FormSubmitButton className="w-full" pendingText="Mengganti...">
+                  <FormSubmitButton
+                    className="w-full"
+                    pendingText="Mengganti..."
+                  >
                     <Laptop className="size-4" />
                     Ganti Mini PC
                   </FormSubmitButton>
@@ -190,9 +209,12 @@ export function HardwareHubManageDialog({ agent }: { agent: Agent }) {
                 <div className="flex gap-3">
                   <RefreshCw className="mt-0.5 size-5 text-neutral-500" />
                   <div>
-                    <p className="font-semibold text-neutral-950">Perbarui Akses</p>
+                    <p className="font-semibold text-neutral-950">
+                      Perbarui Akses
+                    </p>
                     <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                      Gunakan jika credential perangkat perlu diganti tanpa mengganti Mini PC.
+                      Gunakan jika credential perangkat perlu diganti tanpa
+                      mengganti Mini PC.
                     </p>
                   </div>
                 </div>
@@ -200,13 +222,20 @@ export function HardwareHubManageDialog({ agent }: { agent: Agent }) {
                   action={rotateAction}
                   className="mt-3"
                   onSubmit={(event) => {
-                    if (!window.confirm("Perbarui akses sekarang? Credential lama langsung tidak berlaku.")) {
+                    if (
+                      !window.confirm(
+                        "Perbarui akses sekarang? Credential lama langsung tidak berlaku.",
+                      )
+                    ) {
                       event.preventDefault();
                     }
                   }}
                 >
                   <input type="hidden" name="agentId" value={agent.id} />
-                  <FormSubmitButton className="w-full" pendingText="Memperbarui...">
+                  <FormSubmitButton
+                    className="w-full"
+                    pendingText="Memperbarui..."
+                  >
                     <RefreshCw className="size-4" />
                     Perbarui Akses
                   </FormSubmitButton>
@@ -217,9 +246,12 @@ export function HardwareHubManageDialog({ agent }: { agent: Agent }) {
                 <div className="flex gap-3">
                   <ShieldOff className="mt-0.5 size-5 text-red-700" />
                   <div>
-                    <p className="font-semibold text-red-950">Nonaktifkan Hardware Hub</p>
+                    <p className="font-semibold text-red-950">
+                      Nonaktifkan Hardware Hub
+                    </p>
                     <p className="mt-1 text-xs leading-5 text-red-800">
-                      Mini PC tidak akan dapat mengambil job baru sampai diaktifkan kembali.
+                      Mini PC tidak akan dapat mengambil job baru sampai
+                      diaktifkan kembali.
                     </p>
                   </div>
                 </div>

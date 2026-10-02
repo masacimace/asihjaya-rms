@@ -61,16 +61,25 @@ assert(
 );
 assert(
   page.includes("data-hardware-header-actions") &&
+    page.includes("data-hardware-installer-card") &&
     page.includes('href="/api/hardware/installer/download"') &&
     page.includes("Download Installer") &&
     page.includes("Installer Belum Tersedia"),
   "Header Hardware Hub wajib menyediakan quick download installer dengan disabled fallback saat asset belum dipublish.",
 );
 assert(
-  page.includes("flex w-full flex-col gap-2 sm:flex-row") &&
-    page.includes("w-full items-center justify-center") &&
-    page.includes("sm:w-auto"),
-  "Action header Hardware Hub wajib full-width pada mobile dan compact pada viewport lebih besar.",
+  page.includes("lg:grid-cols-[minmax(0,1fr)_23rem]") &&
+    page.includes("border-emerald-200 bg-emerald-50") &&
+    page.includes("Installer Hardware Hub siap") &&
+    page.includes("Download Setup.exe resmi terbaru") &&
+    page.includes("mt-4 inline-flex min-h-11 w-full"),
+  "Header Hardware Hub wajib mengikuti pola info-card kanan seperti header Import Produk Legacy dan tetap full-width pada mobile.",
+);
+assert(
+  page.includes("border-amber-200 bg-amber-50") &&
+    page.includes("Installer belum dipublish") &&
+    page.includes("HARDWARE_HUB_INSTALLER_DOWNLOAD_URL"),
+  "Installer yang belum tersedia wajib memakai warning card yang jelas tanpa menghilangkan setup flow.",
 );
 assert(
   page.includes("Diagnostik Lanjutan"),

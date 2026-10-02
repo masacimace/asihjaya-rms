@@ -224,7 +224,7 @@ function AgentCard({
 
   return (
     <article className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
-      <div className="flex flex-col gap-4 border-b border-[var(--border)] p-5 lg:flex-row lg:items-start lg:justify-between lg:p-6">
+      <div className="flex flex-col gap-4 border-b border-[var(--border)] p-5 lg:flex-row lg:items-end lg:justify-between lg:p-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold text-neutral-950">
@@ -232,7 +232,9 @@ function AgentCard({
             </h2>
             <StatusPill status={agent.displayStatus} />
           </div>
-          <p className="mt-1 text-sm text-[var(--muted)]">{agent.outlet.name}</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            {agent.outlet.name}
+          </p>
         </div>
 
         {canManageAgents && !isDisabled ? (
@@ -253,7 +255,9 @@ function AgentCard({
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
             Mini PC
           </p>
-          <p className="mt-2 text-base font-semibold text-neutral-950">{hostname}</p>
+          <p className="mt-2 text-base font-semibold text-neutral-950">
+            {hostname}
+          </p>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
             Terakhir terhubung {formatDateTime(agent.lastSeenAt)}
           </p>
@@ -316,7 +320,8 @@ function AgentCard({
 
       {agent.diagnostics.configWarnings.length > 0 ? (
         <div className="border-t border-amber-200 bg-amber-50 px-5 py-3 text-xs leading-5 text-amber-900">
-          Konfigurasi Mini PC perlu diperiksa. Buka Diagnostik Lanjutan untuk detail.
+          Konfigurasi Mini PC perlu diperiksa. Buka Diagnostik Lanjutan untuk
+          detail.
         </div>
       ) : null}
     </article>
@@ -331,8 +336,9 @@ function JobStatusPill({ status }: { status: HardwareJobSummary["status"] }) {
         status === "completed" && "bg-emerald-50 text-emerald-700",
         status === "failed" && "bg-red-50 text-red-700",
         status === "unknown_outcome" && "bg-orange-50 text-orange-800",
-        ["pending", "claimed", "processing", "printing", "submitted"].includes(status) &&
-          "bg-amber-50 text-amber-800",
+        ["pending", "claimed", "processing", "printing", "submitted"].includes(
+          status,
+        ) && "bg-amber-50 text-amber-800",
         (status === "cancelled" || status === "expired") &&
           "bg-neutral-100 text-neutral-500",
       )}
@@ -357,7 +363,8 @@ function RecentActivity({ jobs }: { jobs: HardwareJobSummary[] }) {
             Aktivitas Hardware
           </h2>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Ringkasan lima aktivitas terbaru. Detail teknis tetap tersedia saat dibutuhkan.
+            Ringkasan lima aktivitas terbaru. Detail teknis tetap tersedia saat
+            dibutuhkan.
           </p>
         </div>
       </div>
@@ -381,10 +388,13 @@ function RecentActivity({ jobs }: { jobs: HardwareJobSummary[] }) {
                   <JobStatusPill status={job.status} />
                 </div>
                 <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                  {job.outlet.name} · {job.register.name} · {formatDateTime(job.createdAt)}
+                  {job.outlet.name} · {job.register.name} ·{" "}
+                  {formatDateTime(job.createdAt)}
                 </p>
                 {job.error ? (
-                  <p className="mt-1 line-clamp-1 text-xs text-red-700">{job.error}</p>
+                  <p className="mt-1 line-clamp-1 text-xs text-red-700">
+                    {job.error}
+                  </p>
                 ) : null}
               </div>
 
@@ -454,59 +464,97 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <header className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-7">
-        <Link
-          href="/admin"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-500 transition hover:text-[var(--accent)]"
-        >
-          <ArrowLeft className="size-4" />
-          Kembali ke Dashboard
-        </Link>
+      <header className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
+        <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:p-7">
+          <div>
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-2 bg-white px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:text-[var(--accent)]"
+            >
+              <ArrowLeft className="size-4" />
+              Kembali ke Dashboard
+            </Link>
 
-        <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-3">
-              <div className="grid size-11 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
+            <div className="mt-4 flex items-center gap-3">
+              <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]">
                 <MonitorCog className="size-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
                   Hardware Hub
                 </h1>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  Hubungkan Mini PC outlet untuk mencetak label dan nota secara otomatis.
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+                  Hubungkan Mini PC outlet untuk mencetak label dan nota secara
+                  otomatis.
                 </p>
               </div>
             </div>
           </div>
 
           {canManageAgents ? (
-            <div
-              data-hardware-header-actions
-              className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:shrink-0 lg:justify-end"
-            >
-              {installerDownloadAvailable ? (
-                <a
-                  href="/api/hardware/installer/download"
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] sm:w-auto"
+            <div data-hardware-header-actions className="grid w-full gap-3">
+              <div
+                data-hardware-installer-card
+                className={cn(
+                  "rounded-2xl border p-4",
+                  installerDownloadAvailable
+                    ? "border-emerald-200 bg-emerald-50"
+                    : "border-amber-200 bg-amber-50",
+                )}
+              >
+                <p
+                  className={cn(
+                    "flex items-center gap-2 text-sm font-semibold",
+                    installerDownloadAvailable
+                      ? "text-emerald-900"
+                      : "text-amber-950",
+                  )}
                 >
-                  <Download className="size-4" />
-                  Download Installer
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  title="Publish installer dan atur HARDWARE_HUB_INSTALLER_DOWNLOAD_URL terlebih dahulu."
-                  className="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-neutral-50 px-4 py-2.5 text-sm font-semibold text-neutral-400 sm:w-auto"
+                  {installerDownloadAvailable ? (
+                    <CheckCircle2 className="size-4" />
+                  ) : (
+                    <AlertTriangle className="size-4" />
+                  )}
+                  {installerDownloadAvailable
+                    ? "Installer Hardware Hub siap"
+                    : "Installer belum dipublish"}
+                </p>
+                <p
+                  className={cn(
+                    "mt-2 text-sm leading-6",
+                    installerDownloadAvailable
+                      ? "text-emerald-800"
+                      : "text-amber-900",
+                  )}
                 >
-                  <Download className="size-4" />
-                  Installer Belum Tersedia
-                </button>
-              )}
+                  {installerDownloadAvailable
+                    ? "Download Setup.exe resmi terbaru untuk instalasi atau update Hardware Hub pada Mini PC outlet."
+                    : "Publish installer resmi dan atur HARDWARE_HUB_INSTALLER_DOWNLOAD_URL sebelum digunakan di outlet."}
+                </p>
+
+                {installerDownloadAvailable ? (
+                  <a
+                    href="/api/hardware/installer/download"
+                    className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold !text-white transition hover:bg-emerald-800"
+                  >
+                    <Download className="size-4" />
+                    Download Installer
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    title="Publish installer dan atur HARDWARE_HUB_INSTALLER_DOWNLOAD_URL terlebih dahulu."
+                    className="mt-4 inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white/70 px-4 py-2.5 text-sm font-semibold text-amber-500"
+                  >
+                    <Download className="size-4" />
+                    Installer Belum Tersedia
+                  </button>
+                )}
+              </div>
 
               {provisioningOptions.some((option) => !option.activeAgent) ? (
-                <div className="w-full sm:w-auto [&>button]:w-full sm:[&>button]:w-auto">
+                <div className="w-full [&>button]:w-full">
                   <HardwareHubSetupDialog options={provisioningOptions} />
                 </div>
               ) : null}
@@ -535,9 +583,11 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
             Hardware Hub belum disiapkan
           </h2>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--muted)]">
-            Hubungkan Mini PC outlet agar POS dapat mencetak label dan nota secara otomatis tanpa setup teknis di halaman utama.
+            Hubungkan Mini PC outlet agar POS dapat mencetak label dan nota
+            secara otomatis tanpa setup teknis di halaman utama.
           </p>
-          {canManageAgents && provisioningOptions.some((option) => !option.activeAgent) ? (
+          {canManageAgents &&
+          provisioningOptions.some((option) => !option.activeAgent) ? (
             <div className="mt-5 flex justify-center">
               <HardwareHubSetupDialog options={provisioningOptions} />
             </div>
@@ -593,7 +643,9 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
               <Settings2 className="size-5" />
             </div>
             <div>
-              <h2 className="font-semibold text-neutral-950">Diagnostik Lanjutan</h2>
+              <h2 className="font-semibold text-neutral-950">
+                Diagnostik Lanjutan
+              </h2>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
                 Informasi teknis, maintenance job, dan riwayat perangkat.
               </p>
@@ -610,25 +662,33 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
         <div className="space-y-6 border-t border-[var(--border)] p-5 lg:p-6">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Status</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Status
+              </p>
               <p className="mt-2 text-lg font-semibold text-neutral-950">
                 {dashboard.observability.status}
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Unknown outcome</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Unknown outcome
+              </p>
               <p className="mt-2 text-lg font-semibold text-neutral-950">
                 {dashboard.observability.metrics.unknownOutcomeJobs}
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Job aktif</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Job aktif
+              </p>
               <p className="mt-2 text-lg font-semibold text-neutral-950">
                 {dashboard.totals.pendingJobs}
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Success 24 jam</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Success 24 jam
+              </p>
               <p className="mt-2 text-lg font-semibold text-neutral-950">
                 {dashboard.observability.metrics.successRateLast24Hours === null
                   ? "-"
@@ -655,9 +715,12 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
               <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-800" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-amber-950">Peringatan Konfigurasi</p>
+                  <p className="font-semibold text-amber-950">
+                    Peringatan Konfigurasi
+                  </p>
                   <p className="mt-1 text-xs leading-5 text-amber-900">
-                    Detail berikut berasal langsung dari heartbeat Hardware Hub aktif.
+                    Detail berikut berasal langsung dari heartbeat Hardware Hub
+                    aktif.
                   </p>
                   <div className="mt-3 space-y-2">
                     {configurationWarnings.map((item) => (
@@ -683,9 +746,12 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
             <div className="flex items-start gap-3">
               <ShieldAlert className="mt-0.5 size-5 text-neutral-500" />
               <div>
-                <p className="font-semibold text-neutral-950">Maintenance Job</p>
+                <p className="font-semibold text-neutral-950">
+                  Maintenance Job
+                </p>
                 <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                  Recovery ini hanya untuk compatibility job lama. Protocol v2 melakukan lease recovery sendiri.
+                  Recovery ini hanya untuk compatibility job lama. Protocol v2
+                  melakukan lease recovery sendiri.
                 </p>
               </div>
             </div>
@@ -717,7 +783,9 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-semibold text-neutral-950">Riwayat Job</p>
-                <p className="mt-1 text-xs text-[var(--muted)]">30 job terbaru untuk troubleshooting.</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  30 job terbaru untuk troubleshooting.
+                </p>
               </div>
               <Link
                 href="/admin/operasional/hardware/setup-guide"
@@ -743,13 +811,15 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                         <JobStatusPill status={job.status} />
                       </div>
                       <p className="mt-1 text-xs text-[var(--muted)]">
-                        {job.agent?.name ?? "Belum diklaim"} · {formatDateTime(job.createdAt)}
+                        {job.agent?.name ?? "Belum diklaim"} ·{" "}
+                        {formatDateTime(job.createdAt)}
                       </p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
                       {job.status === "failed" ||
-                      (job.protocolVersion === 1 && job.status === "cancelled") ? (
+                      (job.protocolVersion === 1 &&
+                        job.status === "cancelled") ? (
                         <form action={retryHardwareJobAction}>
                           <input type="hidden" name="jobId" value={job.id} />
                           <button className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700">
@@ -786,9 +856,13 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
               <div className="flex items-start gap-3">
                 <Server className="mt-0.5 size-5 text-neutral-500" />
                 <div>
-                  <p className="font-semibold text-neutral-950">Riwayat Perangkat</p>
+                  <p className="font-semibold text-neutral-950">
+                    Riwayat Perangkat
+                  </p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    Agent nonaktif tetap disimpan untuk audit. Perangkat hanya dapat dihapus permanen jika tidak lagi memiliki dependency job, attempt, atau enrollment.
+                    Agent nonaktif tetap disimpan untuk audit. Perangkat hanya
+                    dapat dihapus permanen jika tidak lagi memiliki dependency
+                    job, attempt, atau enrollment.
                   </p>
                 </div>
               </div>
@@ -797,16 +871,23 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                 {disabledAgents.map((agent) => {
                   const activePeer =
                     activeAgents.find(
-                      (candidate) => candidate.register.id === agent.register.id,
+                      (candidate) =>
+                        candidate.register.id === agent.register.id,
                     ) ?? null;
 
                   return (
-                    <div key={agent.id} className="rounded-xl border border-[var(--border)] p-3">
+                    <div
+                      key={agent.id}
+                      className="rounded-xl border border-[var(--border)] p-3"
+                    >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
-                          <p className="text-sm font-semibold text-neutral-950">{agent.name}</p>
+                          <p className="text-sm font-semibold text-neutral-950">
+                            {agent.name}
+                          </p>
                           <p className="mt-1 text-xs text-[var(--muted)]">
-                            {agent.outlet.name} · {agent.register.name} · {agent.code}
+                            {agent.outlet.name} · {agent.register.name} ·{" "}
+                            {agent.code}
                           </p>
                         </div>
                         <StatusPill status="disabled" />
