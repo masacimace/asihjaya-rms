@@ -55,6 +55,24 @@ assert(
   "Setup Hardware Hub wajib dibatasi permission hardware.agents.manage.",
 );
 assert(
+  page.includes("resolveHardwareInstallerDownloadUrl(process.env)") &&
+    page.includes("installerDownloadAvailable"),
+  "Header Hardware Hub wajib mengecek availability installer dari shared server-side environment policy.",
+);
+assert(
+  page.includes("data-hardware-header-actions") &&
+    page.includes('href="/api/hardware/installer/download"') &&
+    page.includes("Download Installer") &&
+    page.includes("Installer Belum Tersedia"),
+  "Header Hardware Hub wajib menyediakan quick download installer dengan disabled fallback saat asset belum dipublish.",
+);
+assert(
+  page.includes("flex w-full flex-col gap-2 sm:flex-row") &&
+    page.includes("w-full items-center justify-center") &&
+    page.includes("sm:w-auto"),
+  "Action header Hardware Hub wajib full-width pada mobile dan compact pada viewport lebih besar.",
+);
+assert(
   page.includes("Diagnostik Lanjutan"),
   "Informasi teknis wajib tetap berada di area Diagnostik Lanjutan.",
 );

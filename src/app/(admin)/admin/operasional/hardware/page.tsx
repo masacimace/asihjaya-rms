@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   BookOpenCheck,
   CheckCircle2,
+  Download,
   FileText,
   MonitorCog,
   RefreshCw,
@@ -41,6 +42,7 @@ import type {
 import { getHardwareHubProvisioningOptions } from "@/features/hardware/provisioning-options";
 import { getHardwareHubDashboard } from "@/features/hardware/queries";
 import { requirePermission } from "@/lib/auth/session";
+import { resolveHardwareInstallerDownloadUrl } from "@/lib/hardware-installer-environment";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -416,6 +418,9 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
   const canManageAgents = auth.permissionCodes.includes(
     "hardware.agents.manage",
   );
+  const installerDownloadAvailable =
+    canManageAgents &&
+    resolveHardwareInstallerDownloadUrl(process.env) !== null;
 
   const [dashboard, provisioningOptions] = await Promise.all([
     getHardwareHubDashboard(auth),
@@ -475,8 +480,37 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          {canManageAgents && provisioningOptions.some((option) => !option.activeAgent) ? (
-            <HardwareHubSetupDialog options={provisioningOptions} />
+          {canManageAgents ? (
+            <div
+              data-hardware-header-actions
+              className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:shrink-0 lg:justify-end"
+            >
+              {installerDownloadAvailable ? (
+                <a
+                  href="/api/hardware/installer/download"
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] sm:w-auto"
+                >
+                  <Download className="size-4" />
+                  Download Installer
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  title="Publish installer dan atur HARDWARE_HUB_INSTALLER_DOWNLOAD_URL terlebih dahulu."
+                  className="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-neutral-50 px-4 py-2.5 text-sm font-semibold text-neutral-400 sm:w-auto"
+                >
+                  <Download className="size-4" />
+                  Installer Belum Tersedia
+                </button>
+              )}
+
+              {provisioningOptions.some((option) => !option.activeAgent) ? (
+                <div className="w-full sm:w-auto [&>button]:w-full sm:[&>button]:w-auto">
+                  <HardwareHubSetupDialog options={provisioningOptions} />
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </header>
