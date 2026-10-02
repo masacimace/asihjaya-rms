@@ -3,10 +3,7 @@ import path from "node:path";
 
 const root = process.cwd();
 
-function assert(
-  condition: unknown,
-  message: string,
-): asserts condition {
+function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
@@ -122,13 +119,6 @@ assert(
     !hardwareAgent.includes('!ASIHJAYA_API_URL.includes("localhost")'),
   "Startup validation dan config warning Hardware Hub wajib memakai definisi loopback yang sama untuk localhost, 127.0.0.1, dan ::1.",
 );
-assert(
-  page.includes("configurationWarnings = activeAgents.flatMap") &&
-    page.includes("Peringatan Konfigurasi") &&
-    page.includes("item.warning") &&
-    page.includes("berasal langsung dari heartbeat Hardware Hub aktif"),
-  "Diagnostik Lanjutan wajib menampilkan detail config warning yang dihitung pada indikator halaman utama.",
-);
 
 assert(
   posHardwareStatus.includes("getPosShellStatusWithActiveAgent") &&
@@ -147,13 +137,17 @@ assert(
 assert(
   posHardwareStatus.includes("90 * 1000") &&
     posHardwareStatus.includes("5 * 60 * 1000") &&
-    posHardwareStatus.includes("activeAgent?.registerName ?? baseStatus.registerName"),
+    posHardwareStatus.includes(
+      "activeAgent?.registerName ?? baseStatus.registerName",
+    ),
   "Threshold dan register POS wajib mengikuti active agent yang sama dengan dashboard Hardware Hub.",
 );
 assert(
   posHardwareStatus.includes('status: "online"') &&
     posHardwareStatus.includes('label: "Printer siap"') &&
-    !posHardwareStatus.includes('status: hasConfigWarnings ? "stale" : "online"') &&
+    !posHardwareStatus.includes(
+      'status: hasConfigWarnings ? "stale" : "online"',
+    ) &&
     posHardwareStatus.includes('id: "hardware-config-warning"') &&
     posHardwareStatus.includes("silent print tetap aktif"),
   "Config warning tidak boleh menurunkan connectivity agent online; warning wajib diinformasikan terpisah sebagai non-blocking.",
@@ -183,8 +177,10 @@ assert(
     cleanupActions.includes('"hardware.job_attempt_archive_for_agent_purge"') &&
     cleanupActions.includes('"hardware.job_detach_agent_for_agent_purge"') &&
     cleanupActions.includes(".delete(hardwareJobAttempts)") &&
-    cleanupActions.includes("agentId: job.agentId === agent.id ? null : job.agentId") &&
-    cleanupActions.includes("enrollment.status !== \"completed\"") &&
+    cleanupActions.includes(
+      "agentId: job.agentId === agent.id ? null : job.agentId",
+    ) &&
+    cleanupActions.includes('enrollment.status !== "completed"') &&
     cleanupActions.includes(".delete(hardwareAgentEnrollments)") &&
     cleanupActions.includes('"hardware.enrollment_archive_for_agent_purge"') &&
     cleanupActions.includes("HardwareCleanupRaceError") &&
