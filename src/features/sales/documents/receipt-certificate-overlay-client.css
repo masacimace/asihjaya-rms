@@ -171,3 +171,101 @@
 ) .aj-receipt-front-design .aj-total-amount {
   line-height: 1 !important;
 }
+
+/*
+ * Vendor-paper header metadata contract v1.
+ *
+ * The labels and colon marks are already printed on the physical vendor
+ * stock. Keep the existing JSX labels (and their exact widths) intact instead
+ * of rebuilding/reprinting the artwork. Lock only the five row tracks shared
+ * by vendor_static_artwork and preprinted_overlay. In particular, a wrapped
+ * No. Order MUST NOT push Item/Tanggal/Sales/Outlet downwards.
+ *
+ * Vendor artwork reference (top edges, from paper top, approximate):
+ * No. Order 9.8mm; Item 15.3mm; Tanggal 20.9mm;
+ * Sales 26.4mm; Outlet 32.0mm. Pitch: ~5.55mm.
+ *
+ * The first value is raised about 3mm to fit the normal three-line invoice
+ * above the fixed Item row; the other values remain aligned to the labels.
+ * Both modes share the exact same x/y grid. full_design is deliberately
+ * excluded to preserve its existing flexible/digital layout.
+ */
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-certificate-card {
+  align-content: center !important;
+  padding: 0 1.1mm 0 2mm !important;
+}
+
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-summary-lines {
+  display: grid !important;
+  grid-template-rows: repeat(5, 5.55mm) !important;
+  gap: 0 !important;
+  align-content: start !important;
+}
+
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-summary-row {
+  display: grid !important;
+  grid-template-columns: 14.8mm minmax(0, 1fr) !important;
+  column-gap: 1mm !important;
+  align-items: start !important;
+  min-height: 0 !important;
+}
+
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-summary-value {
+  min-width: 0 !important;
+  font-size: 7.35pt !important;
+  line-height: 2.65mm !important;
+  font-weight: 700 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
+  overflow: visible !important;
+}
+
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-summary-row:first-child .aj-summary-value {
+  position: relative !important;
+  top: -3mm !important;
+  font-size: 6.8pt !important;
+  line-height: 2.65mm !important;
+}
+
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-summary-row:first-child .aj-summary-value {
+  max-width: 20mm !important;
+}
+
+/*
+ * Header metadata value optical alignment (vendor paper v1).
+ *
+ * Label line box: 8.35pt * 1.4 ~= 4.12mm.
+ * Value line box: 2.65mm. Both used to start at the row top, leaving their
+ * vertical centers ~0.74mm apart. Offset ONLY the 4 single-line/multi-line
+ * values below No. Order; do not move vendor labels, row tracks, or the
+ * three-line invoice block with its separate -3mm position.
+ *
+ * Keep this rule in BOTH modes so the PDF geometry contract measures the
+ * same coordinates. The vendor-static dynamic values remain invisible.
+ */
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-summary-row:not(:first-child) .aj-summary-value {
+  position: relative !important;
+  top: 0.74mm !important;
+}

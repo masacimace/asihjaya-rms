@@ -253,6 +253,130 @@ async function readPaymentGeometry(page: Page): Promise<PaymentGeometry> {
   };
 }
 
+type HeaderMetadataRow = {
+  label: string;
+  value: string;
+  labelBox: MediaGeometry;
+  valueBox: MediaGeometry;
+};
+
+const VENDOR_HEADER_LABELS = [
+  "No. Order :",
+  "Item :",
+  "Tanggal :",
+  "Sales :",
+  "Outlet :",
+] as const;
+
+async function readHeaderMetadata(page: Page): Promise<HeaderMetadataRow[]> {
+  const rows = firstFrontPage(page).locator(".aj-certificate-card .aj-summary-row");
+  assert.equal(await rows.count(), VENDOR_HEADER_LABELS.length,
+    "Vendor header must contain exactly five fixed metadata rows.");
+  const result: HeaderMetadataRow[] = [];
+  for (let index = 0; index < VENDOR_HEADER_LABELS.length; index += 1) {
+    const row = rows.nth(index);
+    const label = row.locator(".aj-static-artwork");
+    const value = row.locator(".aj-dynamic-print");
+    const [labelText, valueText, labelBox, valueBox] = await Promise.all([
+      label.textContent(),
+      value.textContent(),
+      requireBoundingBox(label, `Header row ${index + 1} label`),
+      requireBoundingBox(value, `Header row ${index + 1} value`),
+    ]);
+    assert.equal(normalizeText(labelText), VENDOR_HEADER_LABELS[index],
+      `Header label ${index + 1} differs from physical vendor-paper wording.`);
+    result.push({
+      label: normalizeText(labelText),
+      value: normalizeText(valueText),
+      labelBox,
+      valueBox,
+    });
+  }
+  return result;
+}
+
+function verticalCenter(box: MediaGeometry) {
+  return box.y + box.height / 2;
+}
+
+async function checkHeaderMetadataOverlay(
+  browser: Browser,
+  Component: RenderComponent,
+) {
+  const profile = RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1;
+  const longInvoice = buildSingleItemFixture();
+  longInvoice.sale.invoiceNumber = "AJ-TOKO-BG-20261006-D91E4AA6";
+  longInvoice.outlet.name = "Pasar Bantar Gebang";
+  const shortInvoice = structuredClone(longInvoice);
+  shortInvoice.sale.invoiceNumber = "AJ-BG-1";
+
+  const vendor = await withRenderPage(browser, Component, profile,
+    RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK, longInvoice,
+    readHeaderMetadata);
+  const overlay = await withRenderPage(browser, Component, profile,
+    RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY, longInvoice,
+    readHeaderMetadata);
+  const short = await withRenderPage(browser, Component, profile,
+    RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY, shortInvoice,
+    readHeaderMetadata);
+
+  assert.equal(overlay[0]?.value, longInvoice.sale.invoiceNumber,
+    "Invoice number was truncated/changed in overlay data.");
+  assert.equal(short[0]?.value, shortInvoice.sale.invoiceNumber,
+    "Short invoice number changed in overlay data.");
+  for (let index = 0; index < overlay.length; index += 1) {
+    const vendorRow = vendor[index]!;
+    const actualRow = overlay[index]!;
+    const shortRow = short[index]!;
+    // Exact same five tracks, despite invoice/brand/date differences.
+    approx(actualRow.labelBox.x, vendorRow.labelBox.x,
+      `Header ${actualRow.label}: vendor/overlay X`);
+    approx(verticalCenter(actualRow.labelBox), verticalCenter(vendorRow.labelBox),
+      `Header ${actualRow.label}: vendor/overlay label Y`);
+    approx(actualRow.valueBox.x, vendorRow.valueBox.x,
+      `Header ${actualRow.label}: vendor/overlay value X`);
+    if (index > 0) {
+      // Values use a 2.65mm line box; labels use an approximately 4.12mm
+      // line box. Compare the FIRST value line to the vendor label, not the
+      // entire span center (Outlet wraps to two lines in this fixture).
+      const firstValueLineCenter = actualRow.valueBox.y +
+        Math.min(actualRow.valueBox.height, 2.65 * MM_TO_PX) / 2;
+      approx(firstValueLineCenter, verticalCenter(vendorRow.labelBox),
+        `Header ${actualRow.label}: first value line against preprinted label`);
+      if (index === 4) {
+        approx(actualRow.valueBox.height, 5.3 * MM_TO_PX,
+          "Header Outlet: expected exactly two 2.65mm lines");
+      }
+      approx(actualRow.valueBox.y, shortRow.valueBox.y,
+        `Header ${actualRow.label}: shorter invoice must not shift row`);
+    }
+  }
+  // A three-line normal POS invoice may begin above the No. Order label,
+  // but must finish before the independently anchored Item value.
+  const first = overlay[0]!.valueBox;
+  const second = overlay[1]!.valueBox;
+  assert.ok(first.y < overlay[0]!.labelBox.y,
+    "No. Order should use the reserved three-line space above its label.");
+  const invoiceHeightMm = first.height / MM_TO_PX;
+  assert.ok(invoiceHeightMm >= 7.75 && invoiceHeightMm <= 8.2,
+    `Normal POS invoice must wrap into exactly three lines; got ${invoiceHeightMm.toFixed(2)}mm.`);
+  assert.ok(first.y + first.height <= second.y + 0.3 * MM_TO_PX,
+    "No. Order text collides with the fixed Item amount; inspect invoice wrap/font sizing.");
+
+  const labelPitchMm = (verticalCenter(vendor[4]!.labelBox) -
+    verticalCenter(vendor[0]!.labelBox)) / (4 * MM_TO_PX);
+  assert.ok(Math.abs(labelPitchMm - 5.55) <= 0.2,
+    `Header vendor-paper pitch should be 5.55mm, got ${labelPitchMm.toFixed(2)}mm.`);
+
+  await withRenderPage(browser, Component, profile,
+    RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN, longInvoice,
+    async (page) => {
+      const digital = await readHeaderMetadata(page);
+      assert.equal(digital[0]?.value, longInvoice.sale.invoiceNumber,
+        "Full-design receipt must preserve complete invoice data.");
+    });
+}
+
 async function readMediaSlotGeometry(page: Page, selector: string): Promise<MediaGeometry> {
   return requireBoundingBox(firstFrontPage(page).locator(selector),
     `Vendor media slot (${selector})`);
@@ -503,11 +627,13 @@ async function main() {
       data, totalItems, outputDir);
     await checkPaymentOverlay(browser, ReceiptCertificateHtmlDocument, data);
     await checkSingleItemOverlay(browser, ReceiptCertificateHtmlDocument);
+    await checkHeaderMetadataOverlay(browser, ReceiptCertificateHtmlDocument);
 
     console.log("PASS: PDF A4/A5 landscape & mode page counts.");
     console.log("PASS: A5 overlay exactly 4 payment rows; discount/multi-item unchanged in full_design.");
     console.log("PASS: Vendor label/overlay nominal alignment and TOTAL ITEM collision guard.");
     console.log("PASS: QR/photo vendor slot geometry, QR quiet zone, and A5 hardware payload contract.");
+    console.log("PASS: Fixed vendor header rows, 3-line invoice clearance, and stable item/date/sales/outlet positions.");
     console.log("NOTE: Font brand di-stub khusus test; verifikasi visual/scan/print fisik tetap diperlukan.");
     if (KEEP_OUTPUT) console.log(`PDF tersedia di: ${outputDir}`);
   } finally {
