@@ -12,6 +12,58 @@
   box-shadow: none !important;
 }
 
+/*
+ * Pre-printed media-slot alignment contract.
+ *
+ * The vendor paper already contains the dashed photo/QR frames. Dynamic media
+ * must occupy the exact same CSS border-box when Hardware Hub prints the A5
+ * overlay with `noscale`.
+ *
+ * Photo:
+ * - fill the complete 25mm x 25mm slot
+ * - no inner padding
+ * - cover the slot without distortion
+ *
+ * QR:
+ * - fill the complete 19mm x 19mm canvas
+ * - no extra CSS padding
+ * - keep the QR generator's intrinsic 4-module quiet zone for scan reliability
+ */
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-thumb {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-thumb
+  img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+}
+
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-qr-box {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-qr-box
+  img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
 [data-aj-receipt-render-mode="preprinted_overlay"]
   .aj-receipt-front-design
   .aj-info-strip,
