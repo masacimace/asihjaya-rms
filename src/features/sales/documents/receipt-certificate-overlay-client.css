@@ -105,3 +105,69 @@
   .aj-total-breakdown {
   border-bottom-color: transparent !important;
 }
+
+/*
+ * Vendor-paper payment contract (4 fixed rows + separate total amount).
+ * These coordinates apply equally to the static vendor PDF and transaction
+ * overlay. Full-design (digital) receipts keep their detailed flow layout.
+ *
+ * Row 1  Dana Titip        3.7mm
+ * Row 2  Gunakan Saldo     3.7mm
+ * Row 3  Harga Item        3.7mm
+ * Row 4  Total Pembayaran  3.7mm
+ * The vendor rule is drawn at the bottom of the breakdown after row 4.
+ * The TOTAL ITEM label gets its own 3.2mm track, with the amount below it.
+ */
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-total-card {
+  display: grid !important;
+  grid-template-rows: 3.7mm 3.7mm 7.4mm minmax(0, 1fr) !important;
+  align-content: stretch !important;
+  padding: 2.8mm 3.1mm !important;
+  overflow: hidden !important;
+}
+
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-total-detail-row {
+  min-height: 0 !important;
+  align-items: center !important;
+  line-height: 1.15 !important;
+}
+
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-total-breakdown {
+  display: grid !important;
+  grid-template-rows: 3.7mm 3.7mm !important;
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-total-box {
+  display: grid !important;
+  grid-template-rows: 3.2mm min-content !important;
+  align-content: start !important;
+  gap: 0 !important;
+  margin: 4mm 0 0 !important;
+  padding: 0 !important;
+}
+
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-total-label,
+:is(
+  [data-aj-receipt-render-mode="vendor_static_artwork"],
+  [data-aj-receipt-render-mode="preprinted_overlay"]
+) .aj-receipt-front-design .aj-total-amount {
+  line-height: 1 !important;
+}

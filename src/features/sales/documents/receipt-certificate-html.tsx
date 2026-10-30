@@ -1680,10 +1680,10 @@ export function ReceiptCertificateHtmlDocument({
                         <div className="aj-total-detail-row">
                           <span className="aj-static-artwork">Harga Item</span>
                           <strong className="aj-dynamic-print">
-                            {formatAmount(itemSubtotalAmount)}
+                            {formatAmount(isPreprintedOverlay ? item.finalPriceAmount : itemSubtotalAmount)}
                           </strong>
                         </div>
-                        {itemDiscountAmount > 0 ? (
+                        {!isPreprintedOverlay && !isVendorStaticArtwork && itemDiscountAmount > 0 ? (
                           <div className="aj-total-detail-row aj-total-row-discount">
                             <span className="aj-static-artwork">
                               Diskon Item
@@ -1693,7 +1693,7 @@ export function ReceiptCertificateHtmlDocument({
                             </strong>
                           </div>
                         ) : null}
-                        {pageCount > 1 ? (
+                        {!isPreprintedOverlay && !isVendorStaticArtwork && pageCount > 1 ? (
                           <div className="aj-total-detail-row">
                             <span className="aj-static-artwork">
                               Total Order
