@@ -93,6 +93,8 @@
     "check-r4-2a-retired-payment-schema.ts",
     "check-r4-2b-retired-legacy-workflow.ts",
     "check-r4-2c-final-permission-contracts.ts",
+    "check-receipt-overlay-payment.tsx",
+    "check-receipt-print-plan-b.ts",
     "check-receipt-token.ts",
     "check-routes.ts",
     "check-sale-correction.ts",
