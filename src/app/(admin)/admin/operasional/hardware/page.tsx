@@ -33,6 +33,7 @@ import {
   PurgeInactiveHardwareAgentButton,
 } from "@/components/hardware/hardware-cleanup-buttons";
 import { HardwareHubManageDialog } from "@/components/hardware/hardware-hub-manage-dialog";
+import { ReceiptPrintSettingsPanel } from "@/components/hardware/receipt-print-settings-panel";
 import { HardwareHubSetupDialog } from "@/components/hardware/hardware-hub-setup-dialog";
 import type {
   HardwareAgentDisplayStatus,
@@ -41,6 +42,7 @@ import type {
 } from "@/features/hardware/contracts";
 import { getHardwareHubProvisioningOptions } from "@/features/hardware/provisioning-options";
 import { getHardwareHubDashboard } from "@/features/hardware/queries";
+import { getOutletReceiptPrintModeDashboard } from "@/features/hardware/receipt-print-settings";
 import { requirePermission } from "@/lib/auth/session";
 import { resolveHardwareInstallerDownloadUrl } from "@/lib/hardware-installer-environment";
 import { cn } from "@/lib/utils";
@@ -432,11 +434,12 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
     canManageAgents &&
     resolveHardwareInstallerDownloadUrl(process.env) !== null;
 
-  const [dashboard, provisioningOptions] = await Promise.all([
+  const [dashboard, provisioningOptions, printSettings] = await Promise.all([
     getHardwareHubDashboard(auth),
     canManageAgents
       ? getHardwareHubProvisioningOptions(auth)
       : Promise.resolve([]),
+    getOutletReceiptPrintModeDashboard(auth.organization.id, auth.outlets.map((outlet) => outlet.id)),
   ]);
 
   const activeAgents = dashboard.agents.filter(
@@ -575,6 +578,16 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
           {message}
         </div>
       ) : null}
+
+      <ReceiptPrintSettingsPanel
+        canManage={canManageAgents}
+        outlets={auth.outlets.map((outlet) => ({
+          id: outlet.id,
+          name: outlet.name,
+          mode: printSettings[outlet.id]!.mode,
+          pendingJobs: printSettings[outlet.id]!.pendingJobs,
+        }))}
+      />
 
       {activeAgents.length === 0 ? (
         <section className="rounded-3xl border border-dashed border-[var(--border)] bg-white p-8 text-center sm:p-12">

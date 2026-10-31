@@ -7,6 +7,7 @@ import {
 import {
   RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
   RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+  RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY,
 } from "@/features/sales/documents/receipt-certificate-render-modes";
 import type { HardwareJobType } from "@/lib/hardware/job-protocol-v2";
 
@@ -26,7 +27,8 @@ export const DEFAULT_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 export type HardwareReceiptRenderMode =
   | typeof RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN
-  | typeof RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY;
+  | typeof RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY
+  | typeof RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY;
 
 
 export type HardwareLabelPayloadV2 = {
@@ -392,10 +394,12 @@ function validateDocumentPayload(payload: Record<string, unknown>) {
       payload.metadata.renderMode !==
         RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN &&
       payload.metadata.renderMode !==
-        RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY
+        RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY &&
+      payload.metadata.renderMode !==
+        RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY
     ) {
       throw new TypeError(
-        "Document metadata renderMode hanya mendukung full design atau preprinted overlay.",
+        "Document metadata renderMode tidak didukung.",
       );
     }
   }

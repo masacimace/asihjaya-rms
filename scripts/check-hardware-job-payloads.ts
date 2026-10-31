@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1 } from "@/features/sales/documents/receipt-document-profiles";
-import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
+import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY, RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY } from "@/features/sales/documents/receipt-certificate-render-modes";
 import {
   assertHardwareJobPayloadV2,
   buildBuybackReceiptDocumentPayloadV2,
@@ -101,7 +101,7 @@ const adminSalesActionsSource = readFileSync(
   "utf8",
 );
 
-function assertPhysicalReceiptCallUsesOverlay(
+function assertPhysicalReceiptCallUsesOutletMode(
   source: string,
   requestSource: string,
 ) {
@@ -123,17 +123,38 @@ function assertPhysicalReceiptCallUsesOverlay(
   const callSource = source.slice(callStart, callEnd);
   assert.match(
     callSource,
-    /renderMode:\s*RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY/,
-    `${requestSource} wajib mencetak overlay pada kertas nota preprinted.`,
+    /renderMode:\s*(?:await\s+getOutletReceiptPrintMode|receiptPrintMode)/,
+    `${requestSource} wajib menggunakan mode cetak yang dipilih outlet.`,
   );
 }
 
-assertPhysicalReceiptCallUsesOverlay(posActionsSource, "pos.checkout");
-assertPhysicalReceiptCallUsesOverlay(posActionsSource, "pos.transaction_detail");
-assertPhysicalReceiptCallUsesOverlay(
+assertPhysicalReceiptCallUsesOutletMode(posActionsSource, "pos.checkout");
+assertPhysicalReceiptCallUsesOutletMode(posActionsSource, "pos.transaction_detail");
+assertPhysicalReceiptCallUsesOutletMode(
   adminSalesActionsSource,
   "admin.sales.detail",
 );
+
+const plainReceiptPayload = buildReceiptDocumentPayloadV2({
+  saleId, invoiceNumber: "INV-2026-0001",
+  requestSource: "check.hardware.job-payloads.plain", reprint: false,
+  requestedAt: new Date("2026-07-16T10:00:00.000Z"),
+  documentProfileId: "receipt_a5_landscape_v1",
+  renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY,
+});
+assert.equal(plainReceiptPayload.printProfileId, "receipt_a5_v1");
+assert.equal(plainReceiptPayload.metadata.renderMode, RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY);
+assertHardwareJobPayloadV2("print_receipt_certificate", plainReceiptPayload);
+
+const plainBuybackPayload = buildBuybackReceiptDocumentPayloadV2({
+  buybackId, buybackNumber: "AJ-BB-BG-20260825-TEST",
+  requestSource: "check.hardware.job-payloads.buyback.plain", reprint: false,
+  requestedAt: new Date("2026-08-25T00:00:00.000Z"),
+  documentProfileId: "receipt_a5_landscape_v1",
+  renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY,
+});
+assert.equal(plainBuybackPayload.printProfileId, "receipt_a5_v1");
+assertHardwareJobPayloadV2("print_receipt_certificate", plainBuybackPayload);
 
 const testDocumentPayload = buildHardwareTestPayloadV2({
   jobType: "test_document_printer",

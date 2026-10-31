@@ -3,11 +3,14 @@ export const RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK =
   "vendor_static_artwork";
 export const RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY =
   "preprinted_overlay";
+export const RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY =
+  "full_design_front_only";
 
 export const RECEIPT_CERTIFICATE_RENDER_MODES = [
   RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
   RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
   RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+  RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY,
 ] as const;
 
 export type ReceiptCertificateRenderMode =
@@ -40,6 +43,12 @@ export function getReceiptCertificateRenderModeLabel(
 
   if (mode === RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY) {
     return "Pre-printed overlay";
+  }
+
+  // ASCII-only: this label is also emitted in the X-Receipt-Render-Mode-Label
+  // HTTP response header, which must be representable as a ByteString.
+  if (mode === RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY) {
+    return "Full design - front only";
   }
 
   return "Full design";

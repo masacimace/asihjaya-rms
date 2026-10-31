@@ -115,7 +115,8 @@ import {
 } from "@/features/notifications/sales";
 import { requirePermission } from "@/lib/auth/session";
 import { isPostgresUniqueViolation } from "@/lib/db/postgres-errors";
-import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
+import { getOutletReceiptPrintMode } from "@/features/hardware/receipt-print-settings";
+import { RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1 } from "@/features/sales/documents/receipt-document-profiles";
 import { buildReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import {
   createHardwareJobV2,
@@ -3472,7 +3473,8 @@ export async function completePosCheckoutAction(
             saleId: sale.id,
             invoiceNumber,
             requestSource: "pos.checkout",
-            renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+            documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
+            renderMode: await getOutletReceiptPrintMode(auth.organization.id, primaryOutlet.id, transaction),
             reprint: false,
             requestedAt: now,
           }),
@@ -3704,7 +3706,8 @@ export async function reprintPosReceiptCertificateAction(formData: FormData) {
         saleId: sale.id,
         invoiceNumber: sale.invoiceNumber,
         requestSource: "pos.transaction_detail",
-        renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+        documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
+        renderMode: await getOutletReceiptPrintMode(auth.organization.id, sale.outletId),
         reprint: true,
         requestedAt: now,
       }),

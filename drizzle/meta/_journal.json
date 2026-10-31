@@ -211,6 +211,13 @@
       "when": 1790834400000,
       "tag": "0029_cashier_inventory_print_label",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793480000000,
+      "tag": "0030_receipt_print_mode",
+      "breakpoints": true
     }
   ]
 }

@@ -32,6 +32,7 @@ import {
 import {
   RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
   RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+  RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY,
   RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
   type ReceiptCertificateRenderMode,
 } from "@/features/sales/documents/receipt-certificate-render-modes";
@@ -577,6 +578,14 @@ function checkHardwarePayload() {
   assert.equal(a5.metadata.renderMode, RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY);
   assert.equal(a5.download.path,
     `/api/sales/${id}/receipt-certificate?profile=receipt_a5_landscape_v1&mode=preprinted_overlay`);
+  const front = buildReceiptDocumentPayloadV2({
+    ...base, documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
+    renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY,
+  });
+  assert.equal(front.printProfileId, RECEIPT_PRINT_PROFILE_A5_V1);
+  assert.equal(front.metadata.renderMode, RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY);
+  assert.equal(front.download.path,
+    `/api/sales/${id}/receipt-certificate?profile=receipt_a5_landscape_v1&mode=full_design_front_only`);
 }
 
 async function main() {
@@ -621,6 +630,10 @@ async function main() {
       RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
       RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
       data, 2, outputDir);
+    await renderPdfAndCheck(browser, ReceiptCertificateHtmlDocument,
+      RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
+      RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY,
+      data, totalItems, outputDir);
     await renderPdfAndCheck(browser, ReceiptCertificateHtmlDocument,
       RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
       RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,

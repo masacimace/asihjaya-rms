@@ -30,7 +30,8 @@ import {
   calculateJewelryBasePrice,
   normalizePurityKey,
 } from "@/features/pricing/metal-price-rates";
-import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
+import { getOutletReceiptPrintMode } from "@/features/hardware/receipt-print-settings";
+import { RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1 } from "@/features/sales/documents/receipt-document-profiles";
 import { buildBuybackReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2InTransaction } from "@/lib/hardware/job-producer-v2";
 
@@ -1087,9 +1088,10 @@ export async function completeBuybackTransaction({
         buybackId: buyback.id,
         buybackNumber,
         requestSource: "pos.buyback",
+        documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
         reprint: false,
         requestedAt: now,
-        renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+        renderMode: await getOutletReceiptPrintMode(auth.organization.id, primaryOutlet.id, transaction),
       }),
       idempotencyKey: `buyback-receipt:${buyback.id}:initial`,
       sourceType: "buyback",

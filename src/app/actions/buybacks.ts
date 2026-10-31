@@ -32,7 +32,8 @@ import {
   getExistingBuybackReplayResult,
   type BuybackItemArtifact,
 } from "@/features/buybacks/service";
-import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
+import { getOutletReceiptPrintMode } from "@/features/hardware/receipt-print-settings";
+import { RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1 } from "@/features/sales/documents/receipt-document-profiles";
 import {
   getActiveProductColorPresetMap,
   normalizeProductColorKey,
@@ -603,9 +604,10 @@ export async function reprintBuybackReceiptAction(formData: FormData) {
         buybackId: buyback.id,
         buybackNumber: buyback.buybackNumber,
         requestSource: "pos.buyback.detail",
+        documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
         reprint: true,
         requestedAt: now,
-        renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+        renderMode: await getOutletReceiptPrintMode(auth.organization.id, buyback.outletId),
       }),
       idempotencyKey: `buyback-receipt:${buyback.id}:reprint:${requestId}`,
       sourceType: "buyback",

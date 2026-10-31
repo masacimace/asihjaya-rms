@@ -333,12 +333,14 @@ export const outlets = pgTable(
     address: text("address"),
     phone: varchar("phone", { length: 32 }),
     googleMapsEmbedUrl: text("google_maps_embed_url"),
+    receiptPrintMode: varchar("receipt_print_mode", { length: 40 }),
     isActive: boolean("is_active").default(true).notNull(),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("outlets_org_code_uq").on(table.organizationId, table.code),
     index("outlets_org_idx").on(table.organizationId),
+    check("outlets_receipt_print_mode_ck", sql`${table.receiptPrintMode} is null or ${table.receiptPrintMode} in ('preprinted_overlay', 'full_design_front_only')`),
   ],
 );
 

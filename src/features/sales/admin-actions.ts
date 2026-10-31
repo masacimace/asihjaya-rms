@@ -19,7 +19,8 @@ import {
 } from "@/db/schema";
 import { getClientIp } from "@/lib/http/client-ip";
 import { requireAnyPermission, requirePermission } from "@/lib/auth/session";
-import { RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY } from "@/features/sales/documents/receipt-certificate-render-modes";
+import { getOutletReceiptPrintMode } from "@/features/hardware/receipt-print-settings";
+import { RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1 } from "@/features/sales/documents/receipt-document-profiles";
 import { buildReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
 import {
@@ -332,6 +333,7 @@ export async function reprintAdminReceiptCertificateAction(
 
   try {
     const requestMetadata = await getAdminRequestMetadata();
+    const receiptPrintMode = await getOutletReceiptPrintMode(auth.organization.id, sale.outletId);
     const result = await createHardwareJobV2({
       organizationId: auth.organization.id,
       outletId: sale.outletId,
@@ -343,9 +345,10 @@ export async function reprintAdminReceiptCertificateAction(
         saleId: sale.id,
         invoiceNumber: sale.invoiceNumber,
         requestSource: "admin.sales.detail",
+        documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
         reprint: true,
         requestedAt: now,
-        renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+        renderMode: receiptPrintMode,
       }),
       idempotencyKey: `receipt:${sale.id}:reprint:${requestId}`,
       sourceType: "sale",
@@ -356,7 +359,7 @@ export async function reprintAdminReceiptCertificateAction(
         requestId,
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
-        reason: `Cetak ulang nota ${sale.invoiceNumber} memakai overlay kertas custom.`,
+        reason: `Cetak ulang nota ${sale.invoiceNumber} dengan mode cetak outlet ${receiptPrintMode}.`,
       },
     });
 
@@ -376,13 +379,13 @@ export async function reprintAdminReceiptCertificateAction(
         hardwareJobId: result.job.id,
         duplicate: result.duplicate,
         queueState,
-        renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+        renderMode: receiptPrintMode,
       },
       metadata: {
         source: "admin.sales.detail",
         jobType: "print_receipt_certificate",
         documentMode: "one_page_per_item",
-        renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+        renderMode: receiptPrintMode,
       },
       createdAt: now,
     });

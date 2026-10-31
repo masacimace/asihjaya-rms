@@ -5,6 +5,7 @@ import type { ReceiptCertificateData } from "./receipt-certificate";
 import {
   RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
   RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+  RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY,
   RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
   type ReceiptCertificateRenderMode,
 } from "./receipt-certificate-render-modes";
@@ -1416,7 +1417,8 @@ export function ReceiptCertificateHtmlDocument({
     ? data.items.slice(0, 1)
     : data.items;
   const pageCount = Math.max(certificateItems.length, 1);
-  const shouldRenderBackPage = !isPreprintedOverlay;
+  const shouldRenderBackPage =
+    !isPreprintedOverlay && renderMode !== RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY;
   const totalPdfPages = pageCount + (shouldRenderBackPage ? 1 : 0);
   const customerDepositUsedAmount = toNumber(data.customerDeposit.usedAmount);
   const customerDepositInAmount = toNumber(data.customerDeposit.inAmount);

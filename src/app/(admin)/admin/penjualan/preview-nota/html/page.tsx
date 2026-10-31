@@ -16,6 +16,7 @@ import {
   isReceiptCertificateRenderMode,
   RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
   RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+  RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY,
   RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
   resolveReceiptCertificateRenderMode,
 } from "@/features/sales/documents/receipt-certificate-render-modes";
@@ -138,7 +139,7 @@ export default async function ReceiptCertificateHtmlPreviewPage({
             </Link>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Link
               href={`/admin/penjualan/preview-nota/html?profile=${documentProfileId}&mode=${RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN}`}
               className={`rounded-xl border px-3 py-2 text-center text-xs font-semibold transition ${
@@ -169,6 +170,16 @@ export default async function ReceiptCertificateHtmlPreviewPage({
               }`}
             >
               Overlay
+            </Link>
+            <Link
+              href={`/admin/penjualan/preview-nota/html?profile=${documentProfileId}&mode=${RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY}`}
+              className={`rounded-xl border px-3 py-2 text-center text-xs font-semibold transition ${
+                renderMode === RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                  : "border-[var(--border)] bg-white text-neutral-700 hover:bg-neutral-50"
+              }`}
+            >
+              Front Only
             </Link>
           </div>
 
