@@ -289,7 +289,7 @@
   .aj-thumb.aj-dynamic-print {
   width: 28.4mm !important;
   height: 28.4mm !important;
-  transform: translate(2.7mm, 0.8mm) !important;
+  transform: translate(2.4mm, 0.4mm) !important;
 }
 
 /* 2/4: QR canvas right and down; keep image size + intrinsic quiet zone. */
