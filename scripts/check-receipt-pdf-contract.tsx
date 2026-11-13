@@ -59,12 +59,12 @@ const VENDOR_PAYMENT_LABELS = [
 const MM_TO_PX = 96 / 25.4;
 const POSITION_TOLERANCE_PX = 0.6 * MM_TO_PX;
 
-// Vendor paper v2.4: provisional physical-stock offsets from real UAT photos.
+// Vendor paper v2.5: provisional physical-stock offsets from real UAT photos.
 // These offsets are intentional for preprinted_overlay only, not for artwork
 // or full-design modes. Confirm final millimetres with a ruler on paper.
 const PHOTO_SIZE_MM = 26.2;
-const PHOTO_X_MM = 2.6;
-const PHOTO_Y_MM = 0.4;
+const PHOTO_X_MM = 2.2;
+const PHOTO_Y_MM = 0.8;
 const QR_X_MM = 1;
 const QR_Y_MM = 0.9;
 const TOTAL_AMOUNT_X_MM = 4;
