@@ -63,8 +63,8 @@ const POSITION_TOLERANCE_PX = 0.6 * MM_TO_PX;
 // These offsets are intentional for preprinted_overlay only, not for artwork
 // or full-design modes. Confirm final millimetres with a ruler on paper.
 const PHOTO_SIZE_MM = 26.2;
-const PHOTO_X_MM = 1.9;
-const PHOTO_Y_MM = 0.5;
+const PHOTO_X_MM = 3;
+const PHOTO_Y_MM = 0.9;
 const QR_X_MM = 1;
 const QR_Y_MM = 0.9;
 const TOTAL_AMOUNT_X_MM = 4;
