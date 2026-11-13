@@ -551,6 +551,14 @@ async function checkPaymentOverlay(
       );
       assert.equal(photoPadding, "0px", "Foto preprinted harus full-fill tanpa padding.");
 
+      // Keep only PRODUCT name/meta away from the enlarged vendor-paper photo.
+      // The front-design baseline is 0.7mm; overlay adds 1.5mm inside its own column.
+      const productCopyPaddingLeft = Number.parseFloat(await page.evaluate(
+        String.raw`getComputedStyle(document.querySelector('article[data-aj-receipt-page="front"] .aj-product-body .aj-product-copy')).paddingLeft`,
+      ));
+      approx(productCopyPaddingLeft, 2.2 * MM_TO_PX,
+        "Overlay PRODUCT summary must have 2.2mm left padding.");
+
       const qr = firstFrontPage(page).locator(".aj-qr-box img");
       assert.equal(await qr.count(), 1, "QR dinamis harus ada pada overlay.");
       const qrBox = await requireBoundingBox(qr, "QR image");

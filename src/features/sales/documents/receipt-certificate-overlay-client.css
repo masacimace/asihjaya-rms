@@ -292,6 +292,14 @@
   transform: translate(2.4mm, 0.4mm) !important;
 }
 
+/* PRODUCT text only: add 1.5mm breathing room after the enlarged photo.
+ * Keep the product grid tracks, photo and static vendor header unchanged. */
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-product-body .aj-product-copy {
+  padding-left: 2.2mm !important;
+}
+
 /* 2/4: QR canvas right and down; keep image size + intrinsic quiet zone. */
 [data-aj-receipt-render-mode="preprinted_overlay"]
   .aj-receipt-front-design
