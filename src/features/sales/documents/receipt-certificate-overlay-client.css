@@ -280,14 +280,16 @@
  *
  * These are deliberately local optical translations, not a page-wide scale
  * or offset: other printed fields already align acceptably with vendor stock.
- * No dimensions, image crop rules, QR quiet zone, or row tracks are changed.
+ * v2.2 enlarges only the overlay photo; QR, crop, and row tracks stay fixed.
  */
 
-/* 1/4: Center the 25mm product image inside the printed vendor dash frame. */
+/* 1/4: Enlarge the physical overlay photo without touching vendor artwork. */
 [data-aj-receipt-render-mode="preprinted_overlay"]
   .aj-receipt-front-design
   .aj-thumb.aj-dynamic-print {
-  transform: translateX(1.5mm) !important;
+  width: 26.2mm !important;
+  height: 26.2mm !important;
+  transform: translate(1.9mm, 0.5mm) !important;
 }
 
 /* 2/4: QR canvas right and down; keep image size + intrinsic quiet zone. */
@@ -297,21 +299,27 @@
   transform: translate(1mm, 0.9mm) !important;
 }
 
-/* 3/4: Nominal only; vendor's TOTAL ITEM caption must stay in its place. */
+/* 3/4: Larger nominal only; vendor's TOTAL ITEM caption stays fixed. */
 [data-aj-receipt-render-mode="preprinted_overlay"]
   .aj-receipt-front-design
   .aj-total-amount.aj-dynamic-print {
-  transform: translate(2.5mm, 1mm) !important;
+  font-size: 12.25pt !important;
+  transform: translate(4mm, 2mm) !important;
 }
 
 /*
- * 4/4: Lower the five data values as a group, but do NOT move the paper's
- * No. Order / Item / Tanggal / Sales / Outlet label anchors. Preserves the
- * -3mm three-line invoice offset, the other values' +0.74mm optical offset,
- * and the fixed 5.55mm row pitch.
+ * 4/4: Separate the three-line invoice offset from four other values.
+ * Keep vendor paper labels fixed, preserve the invoice's -3mm top offset,
+ * the remaining values' +0.74mm optical offset, and the 5.55mm row pitch.
  */
 [data-aj-receipt-render-mode="preprinted_overlay"]
   .aj-receipt-front-design
-  .aj-summary-row .aj-summary-value.aj-dynamic-print {
-  transform: translateY(2.7mm) !important;
+  .aj-summary-row:first-child .aj-summary-value.aj-dynamic-print {
+  transform: translateY(3.2mm) !important;
+}
+
+[data-aj-receipt-render-mode="preprinted_overlay"]
+  .aj-receipt-front-design
+  .aj-summary-row:not(:first-child) .aj-summary-value.aj-dynamic-print {
+  transform: translateY(3.9mm) !important;
 }

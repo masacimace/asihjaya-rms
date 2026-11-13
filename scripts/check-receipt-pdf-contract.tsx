@@ -59,15 +59,19 @@ const VENDOR_PAYMENT_LABELS = [
 const MM_TO_PX = 96 / 25.4;
 const POSITION_TOLERANCE_PX = 0.6 * MM_TO_PX;
 
-// Vendor paper v2.1: measured visually from the real-stock UAT photo.
+// Vendor paper v2.2: provisional physical-stock offsets from real UAT photos.
 // These offsets are intentional for preprinted_overlay only, not for artwork
 // or full-design modes. Confirm final millimetres with a ruler on paper.
-const PHOTO_X_MM = 1.5;
+const PHOTO_SIZE_MM = 26.2;
+const PHOTO_X_MM = 1.9;
+const PHOTO_Y_MM = 0.5;
 const QR_X_MM = 1;
 const QR_Y_MM = 0.9;
-const TOTAL_AMOUNT_X_MM = 2.5;
-const TOTAL_AMOUNT_Y_MM = 1;
-const HEADER_VALUES_Y_MM = 2.7;
+const TOTAL_AMOUNT_X_MM = 4;
+const TOTAL_AMOUNT_Y_MM = 2;
+const TOTAL_AMOUNT_FONT_SIZE_PT = 12.25;
+const HEADER_INVOICE_Y_MM = 3.2;
+const HEADER_VALUES_Y_MM = 3.9;
 
 function getExecutablePath() {
   const configured = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
@@ -350,8 +354,9 @@ async function checkHeaderMetadataOverlay(
       `Header ${actualRow.label}: vendor/overlay label Y`);
     approx(actualRow.valueBox.x, vendorRow.valueBox.x,
       `Header ${actualRow.label}: vendor/overlay value X`);
+    const headerOffsetMm = index === 0 ? HEADER_INVOICE_Y_MM : HEADER_VALUES_Y_MM;
     approx(actualRow.valueBox.y,
-      vendorRow.valueBox.y + HEADER_VALUES_Y_MM * MM_TO_PX,
+      vendorRow.valueBox.y + headerOffsetMm * MM_TO_PX,
       `Header ${actualRow.label}: physical stock value Y offset`);
     if (index > 0) {
       // Values use a 2.65mm line box; labels use an approximately 4.12mm
@@ -369,12 +374,12 @@ async function checkHeaderMetadataOverlay(
         `Header ${actualRow.label}: shorter invoice must not shift row`);
     }
   }
-  // A three-line normal POS invoice may begin above the No. Order label,
-  // but must finish before the independently anchored Item value.
+  // The three-line invoice may start close to the No. Order label after
+  // physical-stock calibration; it must still finish before Item.
   const first = overlay[0]!.valueBox;
   const second = overlay[1]!.valueBox;
-  assert.ok(first.y < overlay[0]!.labelBox.y,
-    "No. Order should use the reserved three-line space above its label.");
+  assert.ok(first.y <= overlay[0]!.labelBox.y + 0.5 * MM_TO_PX,
+    "No. Order first line starts too low relative to its vendor label.");
   const invoiceHeightMm = first.height / MM_TO_PX;
   assert.ok(invoiceHeightMm >= 7.75 && invoiceHeightMm <= 8.2,
     `Normal POS invoice must wrap into exactly three lines; got ${invoiceHeightMm.toFixed(2)}mm.`);
@@ -512,6 +517,12 @@ async function checkPaymentOverlay(
       approx(overlay.amount.top,
         artwork.payment.amount.top + TOTAL_AMOUNT_Y_MM * MM_TO_PX,
         "TOTAL ITEM: physical paper amount Y offset");
+      const totalAmountFontSizePx = Number.parseFloat(await page.evaluate(
+        String.raw`getComputedStyle(document.querySelector('article[data-aj-receipt-page="front"] .aj-total-amount')).fontSize`,
+      ));
+      assert.ok(Number.isFinite(totalAmountFontSizePx) &&
+        Math.abs(totalAmountFontSizePx - TOTAL_AMOUNT_FONT_SIZE_PT * 96 / 72) < 0.2,
+        "TOTAL ITEM overlay font size must match the 12.25pt physical-stock contract.");
 
       const qrSlot = await readMediaSlotGeometry(page, ".aj-qr-box");
       approx(qrSlot.x, artwork.qr.x + QR_X_MM * MM_TO_PX, "Posisi X QR vendor/overlay");
@@ -519,11 +530,18 @@ async function checkPaymentOverlay(
       approx(qrSlot.width, artwork.qr.width, "Lebar QR vendor/overlay");
       approx(qrSlot.height, artwork.qr.height, "Tinggi QR vendor/overlay");
       const photoSlot = await readMediaSlotGeometry(page, ".aj-thumb");
-      approx(photoSlot.x, artwork.photo.x + PHOTO_X_MM * MM_TO_PX,
-        "Posisi X foto vendor/overlay");
-      approx(photoSlot.y, artwork.photo.y, "Posisi Y foto vendor/overlay");
-      approx(photoSlot.width, artwork.photo.width, "Lebar foto vendor/overlay");
-      approx(photoSlot.height, artwork.photo.height, "Tinggi foto vendor/overlay");
+      // The 26.2mm photo grows around its grid-centered position; compare
+      // centers rather than the top-left corners of unequal-sized boxes.
+      approx(photoSlot.x + photoSlot.width / 2,
+        artwork.photo.x + artwork.photo.width / 2 + PHOTO_X_MM * MM_TO_PX,
+        "Posisi center X foto vendor/overlay");
+      approx(photoSlot.y + photoSlot.height / 2,
+        artwork.photo.y + artwork.photo.height / 2 + PHOTO_Y_MM * MM_TO_PX,
+        "Posisi center Y foto vendor/overlay");
+      approx(photoSlot.width, PHOTO_SIZE_MM * MM_TO_PX,
+        "Lebar foto overlay harus 26.2mm");
+      approx(photoSlot.height, PHOTO_SIZE_MM * MM_TO_PX,
+        "Tinggi foto overlay harus 26.2mm");
       const photo = firstFrontPage(page).locator(".aj-thumb");
       assert.equal(await photo.count(), 1, "Photo slot is missing or duplicated.");
       // Evaluate only a plain CSS expression, never a callback arrow function.
