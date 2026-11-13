@@ -283,13 +283,13 @@
  * v2.2 enlarges only the overlay photo; QR, crop, and row tracks stay fixed.
  */
 
-/* 1/4: Align physical-stock photo center; preserve 27.8mm size and crop. */
+/* 1/4: Align physical-stock photo center; preserve 28.4mm size and crop. */
 [data-aj-receipt-render-mode="preprinted_overlay"]
   .aj-receipt-front-design
   .aj-thumb.aj-dynamic-print {
-  width: 27.8mm !important;
-  height: 27.8mm !important;
-  transform: translate(2.2mm, 0.8mm) !important;
+  width: 28.4mm !important;
+  height: 28.4mm !important;
+  transform: translate(2.7mm, 0.8mm) !important;
 }
 
 /* 2/4: QR canvas right and down; keep image size + intrinsic quiet zone. */

@@ -59,11 +59,11 @@ const VENDOR_PAYMENT_LABELS = [
 const MM_TO_PX = 96 / 25.4;
 const POSITION_TOLERANCE_PX = 0.6 * MM_TO_PX;
 
-// Vendor paper v2.6: provisional physical-stock offsets from real UAT photos.
+// Vendor paper v2.7: provisional physical-stock offsets from real UAT photos.
 // These offsets are intentional for preprinted_overlay only, not for artwork
 // or full-design modes. Confirm final millimetres with a ruler on paper.
-const PHOTO_SIZE_MM = 27.8;
-const PHOTO_X_MM = 2.2;
+const PHOTO_SIZE_MM = 28.4;
+const PHOTO_X_MM = 2.7;
 const PHOTO_Y_MM = 0.8;
 const QR_X_MM = 1;
 const QR_Y_MM = 0.9;
@@ -530,7 +530,7 @@ async function checkPaymentOverlay(
       approx(qrSlot.width, artwork.qr.width, "Lebar QR vendor/overlay");
       approx(qrSlot.height, artwork.qr.height, "Tinggi QR vendor/overlay");
       const photoSlot = await readMediaSlotGeometry(page, ".aj-thumb");
-      // The 27.8mm photo grows around its grid-centered position; compare
+      // The 28.4mm photo grows around its grid-centered position; compare
       // centers rather than the top-left corners of unequal-sized boxes.
       approx(photoSlot.x + photoSlot.width / 2,
         artwork.photo.x + artwork.photo.width / 2 + PHOTO_X_MM * MM_TO_PX,
@@ -539,9 +539,9 @@ async function checkPaymentOverlay(
         artwork.photo.y + artwork.photo.height / 2 + PHOTO_Y_MM * MM_TO_PX,
         "Posisi center Y foto vendor/overlay");
       approx(photoSlot.width, PHOTO_SIZE_MM * MM_TO_PX,
-        "Lebar foto overlay harus 27.8mm");
+        "Lebar foto overlay harus 28.4mm");
       approx(photoSlot.height, PHOTO_SIZE_MM * MM_TO_PX,
-        "Tinggi foto overlay harus 27.8mm");
+        "Tinggi foto overlay harus 28.4mm");
       const photo = firstFrontPage(page).locator(".aj-thumb");
       assert.equal(await photo.count(), 1, "Photo slot is missing or duplicated.");
       // Evaluate only a plain CSS expression, never a callback arrow function.
