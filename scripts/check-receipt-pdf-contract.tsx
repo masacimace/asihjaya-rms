@@ -59,6 +59,16 @@ const VENDOR_PAYMENT_LABELS = [
 const MM_TO_PX = 96 / 25.4;
 const POSITION_TOLERANCE_PX = 0.6 * MM_TO_PX;
 
+// Vendor paper v2.1: measured visually from the real-stock UAT photo.
+// These offsets are intentional for preprinted_overlay only, not for artwork
+// or full-design modes. Confirm final millimetres with a ruler on paper.
+const PHOTO_X_MM = 1.5;
+const QR_X_MM = 1;
+const QR_Y_MM = 0.9;
+const TOTAL_AMOUNT_X_MM = 2.5;
+const TOTAL_AMOUNT_Y_MM = 1;
+const HEADER_VALUES_Y_MM = 2.7;
+
 function getExecutablePath() {
   const configured = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
   if (configured) return configured;
@@ -158,7 +168,7 @@ type PaymentGeometry = {
   card: { x: number; y: number; width: number; height: number };
   rows: Array<{ label: string; labelY: number; valueY: number }>;
   label: { top: number; bottom: number };
-  amount: { top: number; bottom: number };
+  amount: { left: number; top: number; bottom: number };
 };
 
 type MediaGeometry = { x: number; y: number; width: number; height: number };
@@ -250,7 +260,11 @@ async function readPaymentGeometry(page: Page): Promise<PaymentGeometry> {
     card: cardBox,
     rows,
     label: { top: totalLabel.y, bottom: totalLabel.y + totalLabel.height },
-    amount: { top: totalAmount.y, bottom: totalAmount.y + totalAmount.height },
+    amount: {
+      left: totalAmount.x,
+      top: totalAmount.y,
+      bottom: totalAmount.y + totalAmount.height,
+    },
   };
 }
 
@@ -336,13 +350,16 @@ async function checkHeaderMetadataOverlay(
       `Header ${actualRow.label}: vendor/overlay label Y`);
     approx(actualRow.valueBox.x, vendorRow.valueBox.x,
       `Header ${actualRow.label}: vendor/overlay value X`);
+    approx(actualRow.valueBox.y,
+      vendorRow.valueBox.y + HEADER_VALUES_Y_MM * MM_TO_PX,
+      `Header ${actualRow.label}: physical stock value Y offset`);
     if (index > 0) {
       // Values use a 2.65mm line box; labels use an approximately 4.12mm
       // line box. Compare the FIRST value line to the vendor label, not the
       // entire span center (Outlet wraps to two lines in this fixture).
       const firstValueLineCenter = actualRow.valueBox.y +
         Math.min(actualRow.valueBox.height, 2.65 * MM_TO_PX) / 2;
-      approx(firstValueLineCenter, verticalCenter(vendorRow.labelBox),
+      approx(firstValueLineCenter, verticalCenter(vendorRow.labelBox) + HEADER_VALUES_Y_MM * MM_TO_PX,
         `Header ${actualRow.label}: first value line against preprinted label`);
       if (index === 4) {
         approx(actualRow.valueBox.height, 5.3 * MM_TO_PX,
@@ -489,13 +506,21 @@ async function checkPaymentOverlay(
       assert.ok(overlay.amount.bottom <= overlay.card.y + overlay.card.height + POSITION_TOLERANCE_PX,
         "Nominal besar keluar dari card pembayaran.");
 
+      approx(overlay.amount.left,
+        artwork.payment.amount.left + TOTAL_AMOUNT_X_MM * MM_TO_PX,
+        "TOTAL ITEM: physical paper amount X offset");
+      approx(overlay.amount.top,
+        artwork.payment.amount.top + TOTAL_AMOUNT_Y_MM * MM_TO_PX,
+        "TOTAL ITEM: physical paper amount Y offset");
+
       const qrSlot = await readMediaSlotGeometry(page, ".aj-qr-box");
-      approx(qrSlot.x, artwork.qr.x, "Posisi X QR vendor/overlay");
-      approx(qrSlot.y, artwork.qr.y, "Posisi Y QR vendor/overlay");
+      approx(qrSlot.x, artwork.qr.x + QR_X_MM * MM_TO_PX, "Posisi X QR vendor/overlay");
+      approx(qrSlot.y, artwork.qr.y + QR_Y_MM * MM_TO_PX, "Posisi Y QR vendor/overlay");
       approx(qrSlot.width, artwork.qr.width, "Lebar QR vendor/overlay");
       approx(qrSlot.height, artwork.qr.height, "Tinggi QR vendor/overlay");
       const photoSlot = await readMediaSlotGeometry(page, ".aj-thumb");
-      approx(photoSlot.x, artwork.photo.x, "Posisi X foto vendor/overlay");
+      approx(photoSlot.x, artwork.photo.x + PHOTO_X_MM * MM_TO_PX,
+        "Posisi X foto vendor/overlay");
       approx(photoSlot.y, artwork.photo.y, "Posisi Y foto vendor/overlay");
       approx(photoSlot.width, artwork.photo.width, "Lebar foto vendor/overlay");
       approx(photoSlot.height, artwork.photo.height, "Tinggi foto vendor/overlay");

@@ -33,7 +33,7 @@ git status --short
 git add .
 git commit -m "fix: deskripsi perubahan"
 git push origin main
-git rev-parse HEAD
+
 ```
 
 Catat exact SHA dari `git rev-parse HEAD`.
