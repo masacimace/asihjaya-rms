@@ -452,6 +452,7 @@ const styles = String.raw`
     grid-template-rows: minmax(0, 1fr);
     width: 28mm;
     height: 28mm;
+    aspect-ratio: 1 / 1;
     overflow: hidden;
     place-items: center;
     justify-self: center;
@@ -471,7 +472,7 @@ const styles = String.raw`
     min-height: 0;
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    object-fit: cover;
     object-position: center;
   }
 

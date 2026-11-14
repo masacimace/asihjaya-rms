@@ -115,11 +115,11 @@ assert.match(
   "Track label TOTAL ITEM dan nominal besar belum dipisah.",
 );
 
-// 7. Product photos remain complete; QR keeps its intrinsic quiet zone.
-assert.match(overlayCss, /\.aj-thumb\s+img\s*\{[^}]*object-fit:\s*contain\s*!important/);
+// 7. Product photos fill the square slot; QR keeps its intrinsic quiet zone.
+assert.match(overlayCss, /\.aj-thumb\s+img\s*\{[^}]*object-fit:\s*cover\s*!important/);
 assert.match(overlayCss, /\.aj-qr-box\s+img\s*\{[^}]*object-fit:\s*contain\s*!important/);
 
 console.log("PASS: A5 vendor payment source/CSS contract (4 fixed rows).");
 console.log("PASS: Discount and multi-item detail remain in full_design.");
-console.log("PASS: Product photo and QR contain rules preserved.");
+console.log("PASS: Square product-photo crop and QR contain rules preserved.");
 console.log("NOTE: Ini static regression check, bukan hasil render PDF / print fisik.");

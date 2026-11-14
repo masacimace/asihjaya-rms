@@ -543,15 +543,24 @@ async function checkProductPhotos(
         assert.ok(style.loaded, `${prefix}: gambar harus benar-benar dimuat.`);
         assert.equal(style.naturalWidth, width);
         assert.equal(style.naturalHeight, height);
-        assert.equal(style.fit, "contain", `${prefix}: foto harus utuh dan proporsional.`);
+        assert.equal(style.fit, "cover", `${prefix}: foto harus memenuhi kotak dengan crop proporsional.`);
         assert.equal(style.position, "50% 50%", `${prefix}: foto harus di tengah slot.`);
         assert.equal(style.radius, "0px", `${prefix}: sudut foto tidak boleh dipotong.`);
         assert.equal(style.border, "0px", `${prefix}: foto tidak memakai border tambahan.`);
         assert.equal(style.shadow, "none", `${prefix}: foto tidak memakai bayangan.`);
         const imageBox = await requireBoundingBox(photo, `${prefix} image`);
         const slotBox = await requireBoundingBox(photo.locator(".."), `${prefix} slot`);
+        assert.ok(Math.abs(imageBox.width - imageBox.height) <= 0.5,
+          `${prefix}: aspect ratio foto harus 1:1 untuk semua orientasi sumber.`);
+        assert.ok(Math.abs(slotBox.width - slotBox.height) <= 0.5,
+          `${prefix}: slot foto harus tetap persegi.`);
         assert.ok(imageBox.width <= slotBox.width + 0.5 && imageBox.height <= slotBox.height + 0.5,
           `${prefix}: gambar tidak boleh melampaui slot.`);
+        if (KEEP_OUTPUT) {
+          await photo.screenshot({
+            path: path.join(outputDir, `${documentProfileId}-${renderMode}-photo-${index + 1}.png`),
+          });
+        }
       }
     } finally {
       await page.close();
@@ -847,7 +856,7 @@ async function main() {
     console.log("PASS: A5 overlay exactly 4 payment rows; discount/multi-item unchanged in full_design.");
     console.log("PASS: Vendor label/overlay nominal alignment and TOTAL ITEM collision guard.");
     console.log("PASS: QR/photo vendor slot geometry, QR quiet zone, and A5 hardware payload contract.");
-    console.log("PASS: Landscape, portrait and square photos remain complete, centered and unframed in full-design and overlay modes.");
+    console.log("PASS: Landscape, portrait and square source photos fill a centered square crop without frames in full-design and overlay modes.");
     console.log("PASS: Fixed vendor header rows, 3-line invoice clearance, and stable item/date/sales/outlet positions.");
     console.log("NOTE: Font brand di-stub khusus test; verifikasi visual/scan/print fisik tetap diperlukan.");
     if (KEEP_OUTPUT) console.log(`PDF tersedia di: ${outputDir}`);

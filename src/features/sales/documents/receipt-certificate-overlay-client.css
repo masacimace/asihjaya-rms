@@ -22,7 +22,7 @@
  * Photo:
  * - keep the calibrated 28.4mm x 28.4mm slot
  * - no inner padding
- * - center the complete photo without cropping or distortion
+ * - fill the square slot with a centered crop, without distortion
  *
  * QR:
  * - fill the complete 19mm x 19mm canvas
@@ -43,7 +43,7 @@
   display: block !important;
   width: 100% !important;
   height: 100% !important;
-  object-fit: contain !important;
+  object-fit: cover !important;
   object-position: center !important;
 }
 
