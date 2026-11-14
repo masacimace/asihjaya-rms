@@ -136,6 +136,7 @@ const previewRouteSource = await readFile(
 assert.ok(rendererSource.includes("PDF_RENDER_MAX_QUEUE"));
 assert.ok(rendererSource.includes("external_request_blocked"));
 assert.ok(rendererSource.includes("PDF_RENDER_TOKEN_HEADER"));
+assert.ok(rendererSource.includes('waitUntil: "load"') && rendererSource.includes("await waitForReceiptPrintReady(page)"));
 assert.ok(!rendererSource.includes("cookieHeader"));
 assert.ok(!rendererSource.includes('"x-hardware-agent-secret"'));
 assert.ok(!saleRouteSource.includes("cookieHeader"));

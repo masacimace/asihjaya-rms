@@ -192,7 +192,7 @@ if (fakeEnabled) {
   }
 }
 
-const pollInterval = getNumber("POLL_INTERVAL_MS", 2000);
+const pollInterval = getNumber("POLL_INTERVAL_MS", 1000);
 if (pollInterval < 1000) errors.push("POLL_INTERVAL_MS minimal 1000 ms.");
 const heartbeatInterval = getNumber("HEARTBEAT_INTERVAL_MS", 30000);
 if (heartbeatInterval < 5000) {

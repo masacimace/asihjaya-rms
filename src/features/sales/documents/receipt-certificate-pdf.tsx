@@ -10,6 +10,7 @@ import {
 } from "./receipt-document-profiles";
 import type { ReceiptCertificateRenderMode } from "./receipt-certificate-render-modes";
 import { validateReceiptPdfBuffer } from "./receipt-pdf-contract";
+import { waitForReceiptPrintReady } from "./receipt-certificate-print-ready";
 import { serverEnv } from "@/lib/env";
 
 type PdfRoute = {
@@ -22,6 +23,7 @@ type PdfRoute = {
 
 type PdfBrowserPage = {
   close: () => Promise<void>;
+  evaluate: (expression: string) => Promise<unknown>;
   emulateMedia: (options: { media: "screen" | "print" }) => Promise<void>;
   goto: (
     url: string,
@@ -449,6 +451,7 @@ export async function generateReceiptCertificatePdf({
   });
   const allowedOrigin = renderUrl.origin;
   const pageRef: { current: PdfBrowserPage | null } = { current: null };
+  const timings: Record<string, number> = {};
 
   logPdfRender("info", "render_started", {
     renderId: capability.renderId,
@@ -460,12 +463,14 @@ export async function generateReceiptCertificatePdf({
 
   try {
     const renderOperation = (async () => {
+      const browserStartedAt = Date.now();
       const browser = await getBrowser();
       const page = await browser.newPage({
         deviceScaleFactor: 1,
         viewport: profile.viewport,
       });
       pageRef.current = page;
+      timings.browserMs = Date.now() - browserStartedAt;
       page.setDefaultTimeout(PDF_RENDER_TIMEOUT_MS);
       page.setDefaultNavigationTimeout(PDF_RENDER_TIMEOUT_MS);
 
@@ -495,12 +500,18 @@ export async function generateReceiptCertificatePdf({
         [PDF_RENDER_TOKEN_HEADER]: capability.token,
       });
 
+      await page.emulateMedia({ media: "print" });
+      const navigationStartedAt = Date.now();
       await page.goto(renderUrl.toString(), {
         timeout: PDF_RENDER_TIMEOUT_MS,
-        waitUntil: "networkidle",
+        waitUntil: "load",
       });
-      await page.emulateMedia({ media: "print" });
+      timings.navigationMs = Date.now() - navigationStartedAt;
+      const assetsStartedAt = Date.now();
+      await waitForReceiptPrintReady(page);
+      timings.assetsReadyMs = Date.now() - assetsStartedAt;
 
+      const pdfStartedAt = Date.now();
       const pdfBuffer = await page.pdf({
         margin: {
           top: "0mm",
@@ -511,6 +522,7 @@ export async function generateReceiptCertificatePdf({
         preferCSSPageSize: true,
         printBackground: true,
       });
+      timings.pdfMs = Date.now() - pdfStartedAt;
 
       const contract = validateReceiptPdfBuffer(pdfBuffer, profile);
 
@@ -528,6 +540,7 @@ export async function generateReceiptCertificatePdf({
       scope: access.scope,
       durationMs: Date.now() - startedAt,
       queueWaitMs,
+      timings,
       pageCount: result.contract.pageCount,
     });
 
@@ -547,6 +560,7 @@ export async function generateReceiptCertificatePdf({
       scope: access.scope,
       durationMs: Date.now() - startedAt,
       queueWaitMs,
+      timings,
       errorName: error instanceof Error ? error.name : "UnknownError",
     });
     throw error;

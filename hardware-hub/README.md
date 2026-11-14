@@ -4,6 +4,18 @@ Hardware Hub Agent berjalan pada Mini PC Windows outlet. Agent melakukan heartbe
 
 Protocol v2 dirancang agar restart agent atau putus internet setelah printer menerima command tidak menyebabkan automatic reprint.
 
+## Auto print v0.9.4
+
+Saat idle, Hub mengecek antrean setiap 1 detik (`POLL_INTERVAL_MS=1000`). Setelah satu job selesai, Hub langsung memulihkan ACK/journal dan mengambil job berikutnya tanpa menunggu timer berikutnya. Hanya satu job dieksekusi pada satu waktu. Antrean kosong, error jaringan, dan recovery yang belum selesai mengembalikan kontrol ke timer idle; tidak ada loop retry cepat tanpa batas.
+
+Token lease cukup didekripsi sekali selama satu execution aktif, sehingga empat event tidak lagi meluncurkan PowerShell/DPAPI berulang kali. Referensi token memori dilepas pada akhir execution termasuk jalur error; journal tetap menyimpan token terenkripsi dan recovery membuka ulang token dari journal.
+
+Installer v0.9.4 memperbarui polling instalasi lama menjadi 1000 ms, membuat backup konfigurasi, dan mempertahankan credential terenkripsi, journal, serta pilihan printer. Jalankan upgrade memakai Windows account instalasi semula.
+
+Durasi download PDF tersedia sebagai `deviceResult.downloadDurationMs`; event `dispatching` mencatat `prepareDurationMs` dan event `submitted` mencatat `dispatchDurationMs`. RMS mencatat `browserMs`, `navigationMs`, `assetsReadyMs`, dan `pdfMs` pada log `receipt-pdf-renderer`. Optimasi PDF memerlukan deployment aplikasi RMS, sedangkan perubahan polling/antrean memerlukan upgrade Hub.
+
+Build installer di GitHub Actions **Build Hardware Hub Installer**. `workflow_dispatch` menghasilkan artifact untuk UAT. Setelah smoke test dan integrasi ke `main`, push tag `hardware-hub-v0.9.4` yang cocok dengan versi package untuk menerbitkan GitHub Release berisi Setup.exe dan SHA-256. Workflow memvalidasi seluruh Hub checks sebelum build dan menolak overwrite release yang sudah ada.
+
 ## Runtime
 
 Protocol v2 memakai built-in `node:sqlite` dan membutuhkan:

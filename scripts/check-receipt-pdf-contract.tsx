@@ -38,6 +38,7 @@ import {
 } from "@/features/sales/documents/receipt-certificate-render-modes";
 import { receiptCertificateSampleData } from "@/features/sales/documents/receipt-certificate-sample-data";
 import { validateReceiptPdfBuffer } from "@/features/sales/documents/receipt-pdf-contract";
+import { waitForReceiptPrintReady } from "@/features/sales/documents/receipt-certificate-print-ready";
 import {
   EPSON_L3251_PRINT_PROFILE_A4_V1,
   RECEIPT_PRINT_PROFILE_A5_V1,
@@ -499,12 +500,78 @@ async function withRenderPage<T>(
     deviceScaleFactor: 1,
   });
   try {
+    await page.route("https://receipt-assets.test/logo/**", async (route) => {
+      const pathname = new URL(route.request().url()).pathname;
+      assert.match(pathname, /^\/logo\/[a-zA-Z0-9/_.-]+\.(png|svg)$/);
+      await route.fulfill({
+        contentType: pathname.endsWith(".svg") ? "image/svg+xml" : "image/png",
+        body: fs.readFileSync(path.join("public", pathname)),
+      });
+    });
     await page.emulateMedia({ media: "print" });
-    await page.setContent(buildHtml(Component, { data, documentProfileId, renderMode }), {
+    const html = buildHtml(Component, { data, documentProfileId, renderMode })
+      .replace("<head>", '<head><base href="https://receipt-assets.test/">');
+    await page.setContent(html, {
       waitUntil: "load",
     });
+    await waitForReceiptPrintReady(page);
     return await fn(page);
   } finally {
+    await page.close();
+  }
+}
+
+async function checkPrintReadiness(browser: Browser) {
+  const page = await browser.newPage();
+  let releaseImage!: () => void;
+  let releaseFont!: () => void;
+  let releaseBackground!: () => void;
+  const imageGate = new Promise<void>((resolve) => { releaseImage = resolve; });
+  const fontGate = new Promise<void>((resolve) => { releaseFont = resolve; });
+  const backgroundGate = new Promise<void>((resolve) => { releaseBackground = resolve; });
+  try {
+    await page.route("https://receipt-ready.test/**", async (route) => {
+      const url = route.request().url();
+      if (url.endsWith("/font.ttf")) {
+        await fontGate;
+        await route.fulfill({ contentType: "font/ttf",
+          body: fs.readFileSync("src/features/sales/documents/fonts/benguiat-bold.ttf") });
+      } else if (url.endsWith("/photo.svg")) {
+        await imageGate;
+        await route.fulfill({ contentType: "image/svg+xml",
+          body: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="gold"/></svg>' });
+      } else {
+        await backgroundGate;
+        await route.fulfill({ body: "ok" });
+      }
+    });
+    await page.emulateMedia({ media: "print" });
+    const imageRequested = page.waitForRequest("https://receipt-ready.test/photo.svg");
+    const fontRequested = page.waitForRequest("https://receipt-ready.test/font.ttf");
+    await page.setContent(`<html><head><base href="https://receipt-ready.test/">
+      <style>@font-face {font-family: ReadyFont;src:url('/font.ttf')} body {font-family:ReadyFont}</style>
+      </head><body><div data-aj-receipt-stage="true">Nota <img src="/photo.svg" loading="lazy"></div>
+      <script>fetch('/background')</script></body></html>`, { waitUntil: "domcontentloaded" });
+    let ready = false;
+    const readiness = waitForReceiptPrintReady(page).then(() => { ready = true; });
+    await Promise.all([imageRequested, fontRequested]);
+    assert.equal(ready, false, "PDF must wait for delayed photo and font.");
+    releaseImage();
+    await page.waitForFunction("document.images[0].naturalWidth === 40");
+    assert.equal(ready, false, "Photo alone must not bypass font readiness.");
+    releaseFont();
+    await readiness;
+    assert.equal(ready, true, "Unrelated background requests must not delay PDF readiness.");
+    releaseBackground();
+    await page.setContent('<div data-aj-receipt-stage="true"><img src="data:image/png;base64,broken"></div>');
+    await assert.rejects(waitForReceiptPrintReady(page), /decode|decoded|EncodingError/i,
+      "An unreadable photo/QR must fail instead of silently printing incomplete media.");
+    await page.setContent('<div data-aj-receipt-stage="true" style="font-family:BrokenFont">Nota</div><style>@font-face {font-family:BrokenFont;src:url(data:font/ttf;base64,broken)}</style>');
+    await assert.rejects(waitForReceiptPrintReady(page), /Font nota gagal/);
+    await page.setContent("<p>Halaman error</p>");
+    await assert.rejects(waitForReceiptPrintReady(page), /Halaman nota belum tersedia/);
+  } finally {
+    releaseImage(); releaseFont(); releaseBackground();
     await page.close();
   }
 }
@@ -956,6 +1023,7 @@ async function main() {
       RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
       RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
       data, totalItems, outputDir);
+    await checkPrintReadiness(browser);
     await checkPaymentOverlay(browser, ReceiptCertificateHtmlDocument, data);
     await checkSingleItemOverlay(browser, ReceiptCertificateHtmlDocument);
     await checkHeaderMetadataOverlay(browser, ReceiptCertificateHtmlDocument);
@@ -967,6 +1035,7 @@ async function main() {
     console.log("PASS: Ongkos appears below the category only for items with positive historical labor, without changing prices or totals.");
     console.log("PASS: HARGA and Harga Item use each item's base price in every mode; payment totals cover the full transaction, discounts, fees and customer deposits.");
     console.log("PASS: PDF A4/A5 landscape & mode page counts.");
+    console.log("PASS: Print readiness waits for photos, QR and fonts without network-idle delay; broken assets fail before PDF.");
     console.log("PASS: A5 overlay exactly 4 payment rows; discount/multi-item unchanged in full_design.");
     console.log("PASS: Vendor label/overlay nominal alignment and TOTAL ITEM collision guard.");
     console.log("PASS: QR/photo vendor slot geometry, QR quiet zone, and A5 hardware payload contract.");

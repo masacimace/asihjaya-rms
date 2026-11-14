@@ -53,6 +53,7 @@ class HardwareProtocolV2Runner {
     this.recoveryLimit = recoveryLimit;
     this.now = now;
     this.activeAttemptId = null;
+    this.activeLeaseToken = null;
   }
 
   getBaseResult(record) {
@@ -66,7 +67,16 @@ class HardwareProtocolV2Runner {
   }
 
   getLeaseToken(record) {
-    return this.secretProtector.unprotect(record.leaseTokenProtected);
+    if (this.activeLeaseToken?.attemptId === record.attemptId) {
+      return this.activeLeaseToken.value;
+    }
+    const value = this.secretProtector.unprotect(record.leaseTokenProtected);
+    if (this.activeAttemptId === record.attemptId) {
+      // DPAPI launches PowerShell. Reuse only during this execution; the journal
+      // stays encrypted and finally releases the in-memory reference on all paths.
+      this.activeLeaseToken = { attemptId: record.attemptId, value };
+    }
+    return value;
   }
 
   async claim(supportedCapabilities) {
@@ -408,6 +418,7 @@ class HardwareProtocolV2Runner {
         return current;
       }
 
+      const prepareStartedAt = Date.now();
       try {
         prepared = await this.prepareHardwareJob({
           job: {
@@ -436,6 +447,7 @@ class HardwareProtocolV2Runner {
             adapter: prepared.adapter,
             target: prepared.target || null,
             preparedAt: this.now().toISOString(),
+            prepareDurationMs: Date.now() - prepareStartedAt,
           },
         });
       }
@@ -454,6 +466,7 @@ class HardwareProtocolV2Runner {
       stopRenewal = null;
 
       let deviceResult;
+      const dispatchStartedAt = Date.now();
       try {
         deviceResult = await prepared.dispatch();
       } catch (error) {
@@ -470,6 +483,7 @@ class HardwareProtocolV2Runner {
           adapter: prepared.adapter,
           target: prepared.target || null,
           deviceResult,
+          dispatchDurationMs: Date.now() - dispatchStartedAt,
         },
       });
 
@@ -505,6 +519,7 @@ class HardwareProtocolV2Runner {
         }
       }
       this.activeAttemptId = null;
+      this.activeLeaseToken = null;
     }
   }
 }

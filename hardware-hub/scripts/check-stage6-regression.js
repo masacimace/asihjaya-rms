@@ -162,6 +162,10 @@ function main() {
       powershellExecutable,
     });
     fs.appendFileSync(first.envPath, "\nSTAGE6_PRESERVE_SENTINEL=keep-me\n", "utf8");
+    fs.writeFileSync(first.envPath,
+      fs.readFileSync(first.envPath, "utf8").replace(/^POLL_INTERVAL_MS=.*$/m, "POLL_INTERVAL_MS=2000"));
+    const credentialPath = path.join(stateDir, "agent-credential.json");
+    fs.writeFileSync(credentialPath, "existing-encrypted-credential");
 
     const second = configureInstaller({
       appRoot,
@@ -176,12 +180,17 @@ function main() {
     });
     const env = parseEnv(fs.readFileSync(second.envPath, "utf8"));
     assert.equal(env.STAGE6_PRESERVE_SENTINEL, "keep-me");
+    assert.equal(env.POLL_INTERVAL_MS, "1000", "Upgrade wajib memperbarui polling lama menjadi 1 detik.");
+    assert.equal(env.LABEL_PRINTER_NAME, "SATO CG408");
+    assert.equal(env.DOCUMENT_PRINTER_NAME, "EPSON L3251 Series");
+    assert.equal(fs.readFileSync(credentialPath, "utf8"), "existing-encrypted-credential");
     assert.equal(env.HARDWARE_AGENT_ID, "");
     assert.equal(env.HARDWARE_AGENT_SECRET, "");
     assert.equal(path.normalize(env.SATO_LABEL_FONT_PATH), path.normalize(bundledFontPath));
     assert.equal(path.normalize(second.satoLabelFontPath), path.normalize(bundledFontPath));
     assert.ok(second.backupPath, "Repair configure wajib membuat backup config existing.");
     assert.ok(fs.existsSync(second.backupPath), "Backup config repair wajib benar-benar ada.");
+    assert.equal(parseEnv(fs.readFileSync(second.backupPath, "utf8")).POLL_INTERVAL_MS, "2000");
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

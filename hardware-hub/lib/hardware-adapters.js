@@ -257,6 +257,7 @@ function prepareRawWindowsJob(
 }
 
 function downloadFile(config, urlString, destination, options = {}) {
+  const downloadStartedAt = Date.now();
   return new Promise((resolve, reject) => {
     const base = new URL(config.apiUrl);
     const url = new URL(urlString, base);
@@ -371,7 +372,7 @@ function downloadFile(config, urlString, destination, options = {}) {
               return;
             }
             settled = true;
-            resolve({ bytes, sha256, contentType });
+            resolve({ bytes, sha256, contentType, downloadDurationMs: Date.now() - downloadStartedAt });
           });
         });
       },

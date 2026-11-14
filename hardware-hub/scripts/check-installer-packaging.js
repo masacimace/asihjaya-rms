@@ -135,6 +135,7 @@ async function main() {
     assert.equal(env.HARDWARE_AGENT_ID, "");
     assert.equal(env.HARDWARE_AGENT_SECRET, "");
     assert.equal(env.HARDWARE_AGENT_REQUEST_AUTH_MODE, "signed");
+    assert.equal(env.POLL_INTERVAL_MS, "1000");
     assert.equal(env.LABEL_PRINTER_ADAPTER, "real");
     assert.equal(env.DOCUMENT_PRINTER_ADAPTER, "real");
     assert.equal(env.CASH_DRAWER_ADAPTER, "fake");

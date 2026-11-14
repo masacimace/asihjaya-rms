@@ -11,7 +11,7 @@ try {
   // dotenv optional agar agent tetap bisa dijalankan lewat environment variable OS.
 }
 
-const AGENT_VERSION = "2.5.0-request-signing";
+const AGENT_VERSION = "2.5.1-fast-print";
 const { createOperationalLogger } = require("./lib/operational-logger");
 const operationalLogger = createOperationalLogger({
   logDir: path.resolve(__dirname, process.env.HARDWARE_LOG_DIR?.trim() || "logs"),
@@ -162,7 +162,7 @@ const CASH_DRAWER_PRINTER_NAME = process.env.CASH_DRAWER_PRINTER_NAME?.trim() ||
 const PDF_PRINT_EXECUTABLE = process.env.PDF_PRINT_EXECUTABLE?.trim() || "";
 const PDF_PRINT_ARGS_JSON = process.env.PDF_PRINT_ARGS_JSON?.trim() || "";
 const PDF_PRINT_COMMAND = process.env.PDF_PRINT_COMMAND?.trim() || "";
-const POLL_INTERVAL_MS = optionalNumber("POLL_INTERVAL_MS", 2000);
+const POLL_INTERVAL_MS = optionalNumber("POLL_INTERVAL_MS", 1000);
 const HEARTBEAT_INTERVAL_MS = optionalNumber("HEARTBEAT_INTERVAL_MS", 30000);
 const REQUEST_TIMEOUT_MS = optionalNumber("REQUEST_TIMEOUT_MS", 15000);
 const PRINT_COMMAND_TIMEOUT_MS = optionalNumber("PRINT_COMMAND_TIMEOUT_MS", 60000);
@@ -776,7 +776,7 @@ async function pollOnce() {
             }
             operationalHealth.pollSuccess();
             operationalHealth.updateJournal(journal?.getStats() || null);
-            return;
+            return true;
           }
         } catch (error) {
           const v2Unavailable =
@@ -792,7 +792,12 @@ async function pollOnce() {
 
     if (HARDWARE_PROTOCOL_MODE !== "v2-only") {
       const response = await requestJson("/api/hardware-jobs/claim", { body: {} });
-      if (response.job) await processV1Job(response.job);
+      if (response.job) {
+        await processV1Job(response.job);
+        operationalHealth.pollSuccess();
+        operationalHealth.updateJournal(journal?.getStats() || null);
+        return true;
+      }
     }
     operationalHealth.pollSuccess();
     operationalHealth.updateJournal(journal?.getStats() || null);
@@ -813,7 +818,11 @@ async function pollOnce() {
 
 function claimAndProcessJob() {
   if (currentPollPromise) return currentPollPromise;
-  currentPollPromise = pollOnce().finally(() => {
+  currentPollPromise = (async () => {
+    // Drain serially. Every claim still passes through recovery/ACK first.
+    // Empty queues, pending recovery and errors return to the idle poll timer.
+    while (!isShuttingDown && await pollOnce()) {}
+  })().finally(() => {
     currentPollPromise = null;
   });
   return currentPollPromise;
@@ -885,10 +894,10 @@ async function startAgent() {
   }
 
   await heartbeat("online");
-  await claimAndProcessJob();
   heartbeatTimer = setInterval(() => heartbeat("online"), HEARTBEAT_INTERVAL_MS);
   pollTimer = setInterval(claimAndProcessJob, POLL_INTERVAL_MS);
   logPruneTimer = setInterval(() => operationalLogger.prune(), HARDWARE_LOG_PRUNE_INTERVAL_MS);
+  await claimAndProcessJob();
 }
 
 startAgent().catch((error) => {

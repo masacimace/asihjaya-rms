@@ -5,6 +5,7 @@ const fs = require("fs");
 const http = require("http");
 const os = require("os");
 const path = require("path");
+const vm = require("node:vm");
 
 const { hashCanonicalJson } = require("../lib/canonical-json");
 const { ExecutionJournal } = require("../lib/execution-journal");
@@ -282,6 +283,113 @@ async function claimAndProcess(runtime, capabilities) {
   return { response, result: await runtime.runner.processClaim(response) };
 }
 
+function createAgentPoller(runner, overrides = {}) {
+  // Exercise the real agent loop without starting hardware, timers or a service.
+  const source = fs.readFileSync(path.join(__dirname, "..", "agent.js"), "utf8");
+  const start = source.indexOf("async function pollOnce()");
+  const end = source.indexOf("async function shutdown(", start);
+  assert(start >= 0 && end > start);
+  const context = vm.createContext({
+    isShuttingDown: false,
+    protocolV2Runner: runner,
+    journal: { getStats: () => ({}) },
+    getSupportedCapabilities: () => ["print_label_sato", "print_document_pdf", "open_cash_drawer"],
+    HARDWARE_PROTOCOL_MODE: "v2-only",
+    FAKE_EXIT_ON_CRASH: false,
+    console: { ...QUIET_LOGGER },
+    operationalHealth: {
+      pollAttempt() {}, pollSuccess() {}, pollFailure() {}, updateJournal() {},
+      startJob() {}, finishJob() {},
+    },
+    ...overrides,
+  });
+  vm.runInContext(`let isPolling = false; let currentPollPromise = null;\n${source.slice(start, end)}`, context);
+  return context;
+}
+
+async function checkQueueDrain({ suiteRoot, apiUrl, results }) {
+  const root = path.join(suiteRoot, "queue-drain");
+  const outputDir = path.join(root, "artifacts");
+  fs.mkdirSync(root, { recursive: true });
+  const cloud = new FakeCloud();
+  for (const kind of ["label", "document", "drawer"]) cloud.addJob(createJob("queue-drain", kind, apiUrl));
+  const runtime = createRuntime({ root, cloud, agentId: "drain-agent", scenario: "success", apiUrl, outputDir });
+  try {
+    const claim = runtime.runner.claim.bind(runtime.runner);
+    let claimCalls = 0;
+    runtime.runner.claim = async (capabilities) => {
+      // No next claim until the previous attempt has been acknowledged.
+      assert.equal(runtime.journal.countRecoverable(), 0);
+      assert(cloud.jobs.every((job) => !["processing", "dispatching", "submitted"].includes(job.status)));
+      claimCalls++;
+      return claim(capabilities);
+    };
+    const poller = createAgentPoller(runtime.runner);
+    const draining = poller.claimAndProcessJob();
+    assert.equal(poller.claimAndProcessJob(), draining, "Concurrent ticks must share one drain.");
+    await draining;
+    assert.equal(claimCalls, 4, "One drain must process all three jobs then stop on empty queue.");
+    assert(cloud.jobs.every((job) => job.status === "completed"));
+    assert.equal(countFiles(outputDir, "label.sbpl"), 1);
+    assert.equal(countFiles(outputDir, "document.pdf"), 1);
+    assert.equal(countFiles(outputDir, "drawer.json"), 1);
+    results.push({ name: "immediate-serial-queue-drain", passed: true });
+  } finally { runtime.journal.close(); }
+
+  let claims = 0;
+  const blocked = createAgentPoller({
+    recover: async () => ({ remaining: 1 }),
+    claim: async () => { claims++; },
+  });
+  await blocked.claimAndProcessJob();
+  assert.equal(claims, 0, "Unresolved recovery must block new claims.");
+
+  const failing = createAgentPoller({
+    recover: async () => ({ remaining: 0 }),
+    claim: async () => { claims++; throw new Error("network unavailable"); },
+  });
+  await failing.claimAndProcessJob();
+  assert.equal(claims, 1, "Network errors must stop draining, without a busy retry loop.");
+
+  const legacyJobs = [{ id: "v1-a" }, { id: "v1-b" }];
+  const legacyProcessed = [];
+  const legacy = createAgentPoller(null, {
+    HARDWARE_PROTOCOL_MODE: "v1-only",
+    requestJson: async () => ({ job: legacyJobs.shift() || null }),
+    processV1Job: async (job) => { legacyProcessed.push(job.id); },
+  });
+  await legacy.claimAndProcessJob();
+  assert.deepEqual(legacyProcessed, ["v1-a", "v1-b"]);
+
+  let shutdownClaims = 0;
+  const stopping = createAgentPoller({
+    recover: async () => ({ remaining: 0 }),
+    claim: async () => ({ job: { id: ++shutdownClaims } }),
+    processClaim: async () => { stopping.isShuttingDown = true; },
+  });
+  await stopping.claimAndProcessJob();
+  assert.equal(shutdownClaims, 1, "Shutdown must stop claiming after the active job.");
+  results.push({ name: "queue-empty-error-recovery-legacy-shutdown-guards", passed: true });
+
+  const ackRoot = path.join(suiteRoot, "queue-ack-loss");
+  fs.mkdirSync(ackRoot, { recursive: true });
+  const ackCloud = new FakeCloud();
+  for (const kind of ["label", "drawer"]) ackCloud.addJob(createJob("queue-ack-loss", kind, apiUrl));
+  const ackRuntime = createRuntime({ root: ackRoot, cloud: ackCloud, agentId: "ack-drain-agent",
+    scenario: "success_then_ack_lost", apiUrl, outputDir: path.join(ackRoot, "artifacts") });
+  try {
+    const poller = createAgentPoller(ackRuntime.runner);
+    await poller.claimAndProcessJob();
+    assert.equal(ackCloud.claimCounter, 1, "Lost ACK must stop the current drain.");
+    await poller.claimAndProcessJob();
+    await poller.claimAndProcessJob();
+    assert(ackCloud.jobs.every((job) => job.status === "completed"));
+    assert.equal(countFiles(path.join(ackRoot, "artifacts"), "label.sbpl"), 1);
+    assert.equal(countFiles(path.join(ackRoot, "artifacts"), "drawer.json"), 1);
+    results.push({ name: "queue-ack-recovery-without-reprint", passed: true });
+  } finally { ackRuntime.journal.close(); }
+}
+
 async function withPdfServer(callback) {
   const server = http.createServer((req, res) => {
     const requestUrl = new URL(req.url || "/", "http://127.0.0.1");
@@ -342,6 +450,7 @@ async function main() {
   const results = [];
 
   await withPdfServer(async (apiUrl) => {
+    await checkQueueDrain({ suiteRoot, apiUrl, results });
     const success = await runScenarioCase({
       suiteRoot,
       apiUrl,

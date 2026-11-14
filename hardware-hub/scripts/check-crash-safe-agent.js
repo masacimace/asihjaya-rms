@@ -141,6 +141,7 @@ async function testLostSubmittedAckDoesNotReprint() {
     () => runner.processClaim(claim),
     /Simulated lost HTTP response/,
   );
+  assert.equal(runner.activeLeaseToken, null, "Lost ACK must release the cached lease token.");
   assert.equal(dispatchCounter.count, 1, "physical dispatch harus terjadi tepat sekali");
   let record = context.journal.get(claim.attempt.id);
   assert.equal(record.state, "submitted");
@@ -199,10 +200,46 @@ async function testPayloadHashMismatchStopsDispatch() {
   fs.rmSync(context.root, { recursive: true, force: true });
 }
 
+async function testLeaseTokenReuseIsLimitedToActiveExecution() {
+  const context = createTempContext("lease-token-reuse");
+  try {
+    let decryptCalls = 0;
+    const unprotect = context.secretProtector.unprotect.bind(context.secretProtector);
+    context.secretProtector.unprotect = (value) => { decryptCalls++; return unprotect(value); };
+    const client = new FakeProtocolClient();
+    const sendEvent = client.sendEvent.bind(client);
+    const expectedTokens = new Map();
+    client.sendEvent = async (event) => {
+      assert.equal(event.leaseToken, expectedTokens.get(event.attemptId));
+      return sendEvent(event);
+    };
+    const dispatchCounter = { count: 0 };
+    const runner = createRunner({ ...context, client, dispatchCounter });
+    for (const suffix of ["4", "5"]) {
+      const claim = createClaim(suffix);
+      expectedTokens.set(claim.attempt.id, claim.attempt.leaseToken);
+      await runner.processClaim(claim);
+      assert.equal(runner.activeLeaseToken, null, "Completed attempts must release the cached token.");
+      const record = context.journal.get(claim.attempt.id);
+      assert.equal(record.state, "acknowledged");
+      assert.notEqual(record.leaseTokenProtected, claim.attempt.leaseToken);
+      assert.ok(!JSON.stringify(record).includes(claim.attempt.leaseToken), "The journal must never contain plaintext lease tokens.");
+      assert.equal(typeof record.result.prepareDurationMs, "number");
+      assert.equal(typeof record.result.dispatchDurationMs, "number");
+    }
+    assert.equal(decryptCalls, 2, "Each four-event execution must decrypt once, without reuse across attempts.");
+    assert.equal(dispatchCounter.count, 2);
+  } finally {
+    context.journal.close();
+    fs.rmSync(context.root, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   await testLostSubmittedAckDoesNotReprint();
   await testCrashAfterDispatchBecomesUnknown();
   await testPayloadHashMismatchStopsDispatch();
+  await testLeaseTokenReuseIsLimitedToActiveExecution();
   console.log("OK: Hardware Hub v2 crash-safe journal and recovery checks passed.");
 }
 

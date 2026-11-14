@@ -39,11 +39,9 @@ jobs:
       - name: Install Hardware Hub dependencies
         run: npm ci --prefix hardware-hub --omit=dev
 
-      - name: Validate SATO freeze and installer regression contracts
+      - name: Validate Hardware Hub, queue recovery and installer contracts
         run: |
-          npm --prefix hardware-hub run check:sato
-          npm --prefix hardware-hub run check:installer
-          npm --prefix hardware-hub run check:stage6
+          npm --prefix hardware-hub run check:ci
 
       - name: Install Inno Setup 7
         shell: pwsh
@@ -154,12 +152,17 @@ jobs:
             exit 1
           fi
 
+          notes="hardware-hub/installer/release-notes/${HARDWARE_HUB_VERSION}.md"
+          test -f "$notes"
+          cp "$notes" release/RELEASE_NOTES.md
+          printf '\nBuilt from commit `%s` with RMS API https://ajsystem.id.\n' "$GITHUB_SHA" >> release/RELEASE_NOTES.md
+
           gh release create "$GITHUB_REF_NAME" \
             "release/ASIHJAYA-Hardware-Hub-Setup.exe" \
             "release/ASIHJAYA-Hardware-Hub-Setup.sha256.txt" \
             --verify-tag \
             --title "ASIHJAYA Hardware Hub v${HARDWARE_HUB_VERSION}" \
-            --notes "Production Hardware Hub installer built from commit ${GITHUB_SHA} with RMS API https://ajsystem.id. Verify ASIHJAYA-Hardware-Hub-Setup.sha256.txt before distribution."
+            --notes-file release/RELEASE_NOTES.md
 
   build-local-uat:
     if: github.event_name == 'push' && github.ref_name == 'feat/hardware-hub-polishing-regression-stage6'
@@ -177,11 +180,9 @@ jobs:
       - name: Install Hardware Hub dependencies
         run: npm ci --prefix hardware-hub --omit=dev
 
-      - name: Validate SATO freeze and installer regression contracts
+      - name: Validate Hardware Hub, queue recovery and installer contracts
         run: |
-          npm --prefix hardware-hub run check:sato
-          npm --prefix hardware-hub run check:installer
-          npm --prefix hardware-hub run check:stage6
+          npm --prefix hardware-hub run check:ci
 
       - name: Install Inno Setup 7
         shell: pwsh

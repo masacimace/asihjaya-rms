@@ -10,7 +10,7 @@ import {
 const root = process.cwd();
 
 function read(relativePath: string): string {
-  return readFileSync(path.join(root, relativePath), "utf8");
+  return readFileSync(path.join(root, relativePath), "utf8").replace(/\r\n/g, "\n");
 }
 
 const workflow = read(".github/workflows/build-hardware-hub-installer.yml");
@@ -27,6 +27,8 @@ assert(
 );
 const releaseTag = `hardware-hub-v${packageJson.version}`;
 const validReleaseUrl = `https://github.com/masacimace/asihjaya-rms/releases/download/${releaseTag}/ASIHJAYA-Hardware-Hub-Setup.exe`;
+assert.ok(read(`hardware-hub/installer/release-notes/${packageJson.version}.md`).trim(),
+  "Setiap versi installer wajib membawa release notes yang sesuai.");
 
 assert(
   workflow.includes('tags:\n      - "hardware-hub-v*"') &&
@@ -63,6 +65,9 @@ assert(
     workflow.includes("ASIHJAYA-Hardware-Hub-Setup.sha256.txt"),
   "Temporary Actions artifact tetap wajib tersedia untuk review dan membawa checksum.",
 );
+assert.ok(workflow.includes("npm --prefix hardware-hub run check:ci") &&
+  workflow.includes("--notes-file release/RELEASE_NOTES.md"),
+  "Build installer wajib menjalankan seluruh Hub checks dan menyertakan release notes versi tersebut.");
 assert(
   workflow.includes(
     "Release $GITHUB_REF_NAME already exists; refusing to overwrite immutable production assets.",

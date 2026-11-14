@@ -277,6 +277,22 @@ jobs:
       - name: Run Hardware Hub CI checks
         run: npm --prefix hardware-hub run check:ci
 
+  receipt-pdf:
+    name: Receipt PDF & Print Readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Install Chromium for receipt regression tests
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Verify receipt PDFs and photo/font readiness
+        run: npm run check:receipt-pdf
+
   financial-concurrency:
     name: Financial & Concurrency Tests
     runs-on: ubuntu-latest
