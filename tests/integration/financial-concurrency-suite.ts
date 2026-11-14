@@ -992,6 +992,22 @@ test("trade-in payment keeps full receipt value, exposes portal breakdown and re
   assert.equal(refundedTradeIn.amount, "2000000");
 });
 
+test("receipt preserves per-item historical labor and leaves legacy items empty", async ({ organizationA }) => {
+  const sale = await createSale(organizationA, { totalAmount: 2_050_000 });
+  await pool.query(`update sales set subtotal_amount = 2000000, additional_fee_amount = 50000 where id = $1`, [sale.saleId]);
+  await pool.query(`insert into sale_items (sale_id, product_item_id, line_number, list_price_amount, discount_amount, final_price_amount, snapshot)
+    values ($1, $2, 1, 1000000, 0, 1050000, '{"laborAmount":50000}'::jsonb),
+           ($1, $3, 2, 1000000, 0, 1000000, '{}'::jsonb)`,
+    [sale.saleId, organizationA.itemIds[0], organizationA.itemIds[1]]);
+  const receipt = await getReceiptCertificateData({ saleId: sale.saleId, organizationId: organizationA.organizationId });
+  assert.ok(receipt);
+  assert.equal(receipt.items[0]!.snapshot.laborAmount, "50000");
+  assert.equal(receipt.items[1]!.snapshot.laborAmount, null);
+  assert.equal(receipt.items[0]!.listPriceAmount, "1000000");
+  assert.equal(receipt.sale.totalAmount, "2050000");
+  assert.equal(receipt.customerDeposit.externalPaymentDueAmount, "2050000");
+});
+
 export async function runFinancialConcurrencySuite() {
   const startedAt = Date.now();
   let passed = 0;

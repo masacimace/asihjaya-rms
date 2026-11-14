@@ -149,6 +149,7 @@ function buildDiscountedMultiItemFixture(): ReceiptCertificateData {
   data.items[0]!.discountAmount = "500";
   data.items[0]!.finalPriceAmount = "3684500";
   data.items[1]!.finalPriceAmount = "2175000";
+  data.items[1]!.snapshot.laborAmount = "20000";
   data.sale.discountAmount = "500";
   data.sale.additionalFeeAmount = "25000";
   data.sale.totalAmount = "7209500";
@@ -506,6 +507,78 @@ async function withRenderPage<T>(
   } finally {
     await page.close();
   }
+}
+
+async function checkLaborSummary(
+  browser: Browser,
+  Component: RenderComponent,
+  outputDir: string,
+) {
+  const data = structuredClone(receiptCertificateSampleData);
+  data.items[0]!.snapshot.itemDisplayName = "GELANG KRC OVAL KB HATI MPAD K.SAM 1X MULUS 6K/300";
+  data.items[0]!.snapshot.masterProductName = "Gelang Keroncong 6K";
+  data.items[0]!.snapshot.laborAmount = "50000";
+  data.items[0]!.finalPriceAmount = "3735000";
+  data.items[1]!.snapshot.laborAmount = "0";
+  delete data.items[2]!.snapshot.laborAmount;
+  data.sale.additionalFeeAmount = "50000";
+  data.sale.totalAmount = "7235000";
+  data.customerDeposit.externalPaymentDueAmount = "6985000";
+  data.payments[0]!.amount = "6985000";
+
+  for (const [profile, mode] of [
+    [RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1, RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN],
+    [RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1, RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN],
+    [RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1, RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY],
+    [RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1, RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY],
+  ] as const) {
+    await withRenderPage(browser, Component, profile, mode, data, async (page) => {
+      const fronts = page.locator(FRONT_SELECTOR);
+      assert.equal(await fronts.count(), data.items.length);
+      const first = fronts.first();
+      const labor = first.locator(".aj-product-labor");
+      assert.equal(await labor.count(), 1);
+      assert.equal(normalizeText(await labor.textContent()), `Ongkos: ${formatRupiah("50000")}`);
+      const categoryBox = await requireBoundingBox(first.locator(".aj-product-meta:not(.aj-product-labor)"), "Product category");
+      const laborBox = await requireBoundingBox(labor, "Product labor summary");
+      const copyBox = await requireBoundingBox(first.locator(".aj-product-copy"), "Product copy");
+      assert.ok(laborBox.y >= categoryBox.y + categoryBox.height - 0.5, "Ongkos harus berada di bawah kategori.");
+      assert.ok(Math.abs(laborBox.x - categoryBox.x) <= 0.5, "Ongkos harus rata kiri dengan kategori.");
+      assert.ok(laborBox.x + laborBox.width <= copyBox.x + copyBox.width + 0.5 &&
+        laborBox.y + laborBox.height <= copyBox.y + copyBox.height + 0.5,
+        "Ringkasan ongkos tidak boleh keluar dari kolom PRODUCT.");
+      for (const index of [1, 2]) {
+        const copy = fronts.nth(index).locator(".aj-product-copy");
+        assert.equal(await copy.locator(".aj-product-labor").count(), 0,
+          "Ongkos nol atau snapshot lama tanpa ongkos harus menyembunyikan seluruh baris.");
+        assert.ok(!(await copy.textContent())?.includes("Ongkos:"));
+      }
+      for (const [index, item] of data.items.entries()) {
+        const front = fronts.nth(index);
+        assert.equal(normalizeText(await front.locator(".aj-price").textContent()), formatRupiah(item.listPriceAmount));
+        assert.equal(normalizeText(await front.locator(".aj-total-row-external strong").textContent()), formatRupiah("6985000"));
+        assert.equal(normalizeText(await front.locator(".aj-total-amount").textContent()), formatRupiah("6985000"),
+          "Ringkasan ongkos hanya menampilkan biaya yang sudah dihitung; total tidak boleh bertambah lagi.");
+      }
+      if (KEEP_OUTPUT) {
+        await first.locator(".aj-products-card").screenshot({ path: path.join(outputDir, `${profile}-${mode}-labor.png`) });
+      }
+    });
+  }
+  for (const laborAmount of ["", null, undefined, "-1", "invalid"]) {
+    const empty = buildSingleItemFixture();
+    empty.items[0]!.snapshot.laborAmount = laborAmount;
+    const html = buildHtml(Component, {
+      data: empty, documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
+      renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
+    });
+    assert.doesNotMatch(html, /<div class="[^"]*aj-product-labor/);
+  }
+  const artwork = buildHtml(Component, {
+    data, documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
+    renderMode: RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK,
+  });
+  assert.doesNotMatch(artwork, /<div class="[^"]*aj-product-labor/);
 }
 
 async function checkProductPhotos(
@@ -882,9 +955,11 @@ async function main() {
     await checkSingleItemOverlay(browser, ReceiptCertificateHtmlDocument);
     await checkHeaderMetadataOverlay(browser, ReceiptCertificateHtmlDocument);
     await checkProductPhotos(browser, ReceiptCertificateHtmlDocument, outputDir);
+    await checkLaborSummary(browser, ReceiptCertificateHtmlDocument, outputDir);
 
     console.log("PASS: Sale/Buyback Kadar uses product purity, including decimals and missing snapshots, across receipt modes.");
     console.log("PASS: Trade-in receipts retain full HARGA, Total Pembayaran and TOTAL ITEM in every print mode.");
+    console.log("PASS: Ongkos appears below the category only for items with positive historical labor, without changing prices or totals.");
     console.log("PASS: HARGA uses each item's base price; payment totals cover the full transaction, discounts, fees and customer deposits.");
     console.log("PASS: PDF A4/A5 landscape & mode page counts.");
     console.log("PASS: A5 overlay exactly 4 payment rows; discount/multi-item unchanged in full_design.");

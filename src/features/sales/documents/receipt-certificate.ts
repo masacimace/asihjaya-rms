@@ -54,6 +54,7 @@ type SaleItemSnapshot = {
   gemstone?: string | null;
   sellingAmount?: string | null;
   deductionPerGram?: string | null;
+  laborAmount?: string | null;
   buybackPricePerGram?: string | null;
   imageKey?: string | null;
   productImageKey?: string | null;
@@ -151,6 +152,7 @@ function toSafeSnapshot(value: Record<string, unknown>): SaleItemSnapshot {
     gemstone: readString("gemstone"),
     sellingAmount: readString("sellingAmount"),
     deductionPerGram: readString("deductionPerGram"),
+    laborAmount: readString("laborAmount"),
     buybackPricePerGram: readString("buybackPricePerGram"),
     imageKey: readString("imageKey"),
     productImageKey: readString("productImageKey"),

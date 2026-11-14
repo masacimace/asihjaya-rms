@@ -1452,6 +1452,7 @@ export function ReceiptCertificateHtmlDocument({
           const pageNumber = itemIndex + 1;
           const itemSubtotalAmount = toNumber(item.listPriceAmount);
           const itemDiscountAmount = toNumber(item.discountAmount);
+          const itemLaborAmount = toNumber(item.snapshot.laborAmount);
 
           return (
             <article
@@ -1592,6 +1593,11 @@ export function ReceiptCertificateHtmlDocument({
                           <div className="aj-product-meta aj-dynamic-print">
                             {buildProductMeta(item)}
                           </div>
+                          {!isVendorStaticArtwork && itemLaborAmount > 0 ? (
+                            <div className="aj-product-meta aj-product-labor aj-dynamic-print">
+                              Ongkos: {formatAmount(itemLaborAmount)}
+                            </div>
+                          ) : null}
                         </div>
                         <div className="aj-kadar aj-dynamic-print">
                           {formatPercent(item.snapshot.purityPercent)}
