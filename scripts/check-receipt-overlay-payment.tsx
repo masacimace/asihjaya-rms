@@ -68,12 +68,12 @@ assert.match(card, /className="aj-total-detail-row aj-total-row-discount"/);
 assert.match(card, />\s*Diskon Item\s*</);
 assert.match(card, />\s*Total Order\s*</);
 
-// 4. Overlay Harga Item is the final per-item amount, including discount and
-//    any adjustments already accounted for by backend. Digital keeps list price.
+// 4. Harga Item uses the original per-item price in every mode, before discount,
+//    labor and adjustments. Payment totals retain the backend settlement amount.
 assert.match(
   card,
-  /formatAmount\(\s*isPreprintedOverlay\s*\?\s*item\.finalPriceAmount\s*:\s*itemSubtotalAmount\s*\)/,
-  "Harga Item overlay harus memakai finalPriceAmount, bukan listPrice.",
+  /Harga Item<\/span>\s*<strong className="aj-dynamic-print">\s*\{formatAmount\(itemSubtotalAmount\)\}/,
+  "Harga Item harus memakai listPriceAmount pada overlay maupun full design.",
 );
 assert.match(
   component,

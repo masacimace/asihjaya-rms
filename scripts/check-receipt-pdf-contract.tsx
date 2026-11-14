@@ -556,6 +556,8 @@ async function checkLaborSummary(
       for (const [index, item] of data.items.entries()) {
         const front = fronts.nth(index);
         assert.equal(normalizeText(await front.locator(".aj-price").textContent()), formatRupiah(item.listPriceAmount));
+        assert.equal(normalizeText(await front.locator(".aj-total-breakdown .aj-total-detail-row").first().locator("strong").textContent()),
+          formatRupiah(item.listPriceAmount), "Harga Item harus tetap harga asli meskipun ada ongkos.");
         assert.equal(normalizeText(await front.locator(".aj-total-row-external strong").textContent()), formatRupiah("6985000"));
         assert.equal(normalizeText(await front.locator(".aj-total-amount").textContent()), formatRupiah("6985000"),
           "Ringkasan ongkos hanya menampilkan biaya yang sudah dihitung; total tidak boleh bertambah lagi.");
@@ -692,6 +694,9 @@ async function renderPdfAndCheck(
           assert.equal(normalizeText(await front.locator(".aj-price").textContent()),
             formatRupiah(item.listPriceAmount),
             `${documentProfileId}/${renderMode}: HARGA item ${index + 1} harus harga dasar sebelum diskon, ongkos, dan penyesuaian.`);
+          assert.equal(normalizeText(await front.locator(".aj-total-breakdown .aj-total-detail-row").first().locator("strong").textContent()),
+            formatRupiah(item.listPriceAmount),
+            `${documentProfileId}/${renderMode}: Harga Item pada ringkasan harus sama dengan harga asli item ${index + 1}.`);
           const expectedPayment = formatRupiah(data.customerDeposit.externalPaymentDueAmount);
           assert.equal(normalizeText(await front.locator(".aj-total-row-external strong").textContent()),
             expectedPayment, "Total Pembayaran harus mencakup seluruh transaksi dan Dana Titip/saldo.");
@@ -745,8 +750,8 @@ async function checkPaymentOverlay(
       const rows = await readPaymentRows(page);
       assert.deepEqual(rows.map((row) => row.label), VENDOR_PAYMENT_LABELS,
         "Overlay harus mempunyai tepat empat baris tanpa Diskon Item/Total Order.");
-      assert.equal(normalizeText(rows[2]?.amount), formatRupiah(data.items[0]!.finalPriceAmount),
-        "Harga Item overlay harus finalPriceAmount setelah diskon.");
+      assert.equal(normalizeText(rows[2]?.amount), formatRupiah(data.items[0]!.listPriceAmount),
+        "Harga Item overlay harus harga asli sebelum diskon, ongkos, dan penyesuaian.");
       assert.equal(normalizeText(rows[3]?.amount),
         formatRupiah(data.customerDeposit.externalPaymentDueAmount),
         "Total Pembayaran harus mengambil nilai backend.");
@@ -856,7 +861,7 @@ async function checkSingleItemOverlay(
       assert.deepEqual(rows.map((row) => row.label), VENDOR_PAYMENT_LABELS,
         "Overlay single-item tanpa diskon juga harus tepat empat baris.");
       assert.equal(await page.locator(FRONT_SELECTOR).count(), 1);
-      assert.equal(normalizeText(rows[2]?.amount), formatRupiah(data.items[0]!.finalPriceAmount));
+      assert.equal(normalizeText(rows[2]?.amount), formatRupiah(data.items[0]!.listPriceAmount));
       assert.equal(normalizeText(rows[3]?.amount),
         formatRupiah(data.customerDeposit.externalPaymentDueAmount));
     });
@@ -960,7 +965,7 @@ async function main() {
     console.log("PASS: Sale/Buyback Kadar uses product purity, including decimals and missing snapshots, across receipt modes.");
     console.log("PASS: Trade-in receipts retain full HARGA, Total Pembayaran and TOTAL ITEM in every print mode.");
     console.log("PASS: Ongkos appears below the category only for items with positive historical labor, without changing prices or totals.");
-    console.log("PASS: HARGA uses each item's base price; payment totals cover the full transaction, discounts, fees and customer deposits.");
+    console.log("PASS: HARGA and Harga Item use each item's base price in every mode; payment totals cover the full transaction, discounts, fees and customer deposits.");
     console.log("PASS: PDF A4/A5 landscape & mode page counts.");
     console.log("PASS: A5 overlay exactly 4 payment rows; discount/multi-item unchanged in full_design.");
     console.log("PASS: Vendor label/overlay nominal alignment and TOTAL ITEM collision guard.");

@@ -1694,7 +1694,7 @@ export function ReceiptCertificateHtmlDocument({
                         <div className="aj-total-detail-row">
                           <span className="aj-static-artwork">Harga Item</span>
                           <strong className="aj-dynamic-print">
-                            {formatAmount(isPreprintedOverlay ? item.finalPriceAmount : itemSubtotalAmount)}
+                            {formatAmount(itemSubtotalAmount)}
                           </strong>
                         </div>
                         {!isPreprintedOverlay && !isVendorStaticArtwork && itemDiscountAmount > 0 ? (
