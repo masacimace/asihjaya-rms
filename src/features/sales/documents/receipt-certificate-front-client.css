@@ -268,6 +268,10 @@
   margin-left: 1.9mm !important;
 }
 
+.aj-receipt-front-design .aj-product-labor {
+  color: #171717 !important;
+}
+
 /* Footer cards */
 .aj-receipt-front-design .aj-footer {
   grid-template-columns: 68mm 43mm 52mm 26mm !important;
