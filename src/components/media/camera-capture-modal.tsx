@@ -3,6 +3,8 @@
 import { Camera, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { getSquareCameraCrop } from "./camera-capture-geometry";
+
 const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
   audio: false,
   video: {
@@ -105,7 +107,7 @@ function buildCameraFileName() {
 
 function CameraCaptureDialog({
   title = "Ambil Foto",
-  description = "Posisikan produk di dalam frame lalu tekan tombol kamera.",
+  description = "Foto akan disimpan persegi sesuai area bidik.",
   onClose,
   onCapture,
 }: CameraCaptureDialogProps) {
@@ -222,24 +224,31 @@ function CameraCaptureDialog({
     setError(null);
 
     try {
-      const sourceWidth = video.videoWidth;
-      const sourceHeight = video.videoHeight;
-      const scale = Math.min(
-        1,
-        MAX_CAPTURE_DIMENSION / Math.max(sourceWidth, sourceHeight),
+      const { sourceX, sourceY, sourceSize, outputSize } = getSquareCameraCrop(
+        video.videoWidth,
+        video.videoHeight,
+        MAX_CAPTURE_DIMENSION,
       );
-      const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
-      const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
       const canvas = document.createElement("canvas");
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
+      canvas.width = outputSize;
+      canvas.height = outputSize;
 
       const context = canvas.getContext("2d");
       if (!context) {
         throw new Error("Canvas kamera tidak tersedia.");
       }
 
-      context.drawImage(video, 0, 0, targetWidth, targetHeight);
+      context.drawImage(
+        video,
+        sourceX,
+        sourceY,
+        sourceSize,
+        sourceSize,
+        0,
+        0,
+        outputSize,
+        outputSize,
+      );
       const blob = await canvasToJpegBlob(canvas);
       const file = new File([blob], buildCameraFileName(), {
         type: "image/jpeg",
@@ -258,7 +267,12 @@ function CameraCaptureDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex min-h-dvh flex-col bg-black text-white">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      className="fixed inset-0 z-[80] flex min-h-dvh flex-col bg-black text-white"
+    >
       <div className="relative z-20 flex items-center justify-between gap-3 bg-black/80 px-4 py-3 backdrop-blur-sm sm:px-5">
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold">{title}</h2>
@@ -277,25 +291,45 @@ function CameraCaptureDialog({
         </button>
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-hidden bg-neutral-950">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          disablePictureInPicture
-          onPlaying={() => setIsCameraReady(true)}
-          className="size-full object-contain"
-        />
+      <div
+        className="relative grid min-h-0 flex-1 place-items-center overflow-hidden bg-neutral-950"
+        style={{ containerType: "size" }}
+      >
+        <div
+          data-camera-preview="square"
+          className="relative aspect-square overflow-hidden bg-black"
+          style={{ width: "min(100cqw, 100cqh)" }}
+        >
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            disablePictureInPicture
+            onPlaying={() => setIsCameraReady(true)}
+            className="size-full object-cover object-center"
+          />
 
-        {!error ? (
-          <div className="pointer-events-none absolute inset-5 rounded-3xl border border-white/35 sm:inset-8">
-            <span className="absolute left-0 top-0 size-9 rounded-tl-3xl border-l-2 border-t-2 border-white" />
-            <span className="absolute right-0 top-0 size-9 rounded-tr-3xl border-r-2 border-t-2 border-white" />
-            <span className="absolute bottom-0 left-0 size-9 rounded-bl-3xl border-b-2 border-l-2 border-white" />
-            <span className="absolute bottom-0 right-0 size-9 rounded-br-3xl border-b-2 border-r-2 border-white" />
-          </div>
-        ) : null}
+          {!error ? (
+            <div
+              data-camera-guide="square"
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 border border-white/40"
+            >
+              <span className="absolute inset-y-0 left-1/3 border-l border-white/20" />
+              <span className="absolute inset-y-0 left-2/3 border-l border-white/20" />
+              <span className="absolute inset-x-0 top-1/3 border-t border-white/20" />
+              <span className="absolute inset-x-0 top-2/3 border-t border-white/20" />
+              <span className="absolute left-0 top-0 size-8 border-l-2 border-t-2 border-white" />
+              <span className="absolute right-0 top-0 size-8 border-r-2 border-t-2 border-white" />
+              <span className="absolute bottom-0 left-0 size-8 border-b-2 border-l-2 border-white" />
+              <span className="absolute bottom-0 right-0 size-8 border-b-2 border-r-2 border-white" />
+              <span className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">
+                Foto 1:1
+              </span>
+            </div>
+          ) : null}
+        </div>
 
         {!error && !isCameraReady ? (
           <div className="absolute inset-0 grid place-items-center bg-black/60 px-6 text-center text-sm font-medium text-white">
@@ -321,7 +355,10 @@ function CameraCaptureDialog({
         ) : null}
       </div>
 
-      <div className="relative z-20 flex min-h-28 items-center justify-center bg-black px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      <div className="relative z-20 flex min-h-32 flex-col items-center justify-center gap-3 bg-black px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <p className="text-center text-xs text-white/70">
+          Posisikan seluruh produk di dalam kotak.
+        </p>
         <button
           type="button"
           onClick={capturePhoto}
