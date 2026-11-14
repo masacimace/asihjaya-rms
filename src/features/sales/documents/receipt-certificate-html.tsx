@@ -448,6 +448,8 @@ const styles = String.raw`
 
   .aj-thumb {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     width: 28mm;
     height: 28mm;
     overflow: hidden;
@@ -455,7 +457,9 @@ const styles = String.raw`
     justify-self: center;
     padding: 1.5mm;
     color: var(--gold);
-    border-radius: 2.4mm;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
     font-size: 5.7pt;
     font-weight: 900;
     text-align: center;
@@ -463,8 +467,12 @@ const styles = String.raw`
 
   .aj-thumb img {
     display: block;
+    min-width: 0;
+    min-height: 0;
     width: 100%;
     height: 100%;
+    object-fit: contain;
+    object-position: center;
   }
 
   .aj-thumb-fallback {
@@ -1397,9 +1405,6 @@ export function ReceiptCertificateHtmlDocument({
   overlayCalibration?: ReceiptOverlayCalibration;
   renderMode?: ReceiptCertificateRenderMode;
 }) {
-  // documentKind hanya menentukan semantics data transaksi. Presentation
-  // receipt Buyback sengaja menggunakan layout/wording receipt pembelian.
-  const isBuybackDocument = data.documentKind === "buyback";
   const customerName = data.customer?.fullName ?? "Pelanggan Umum";
   const customerPhone = data.customer?.phone ?? "-";
   const completedDate = formatDate(
@@ -1584,11 +1589,7 @@ export function ReceiptCertificateHtmlDocument({
                           </div>
                         </div>
                         <div className="aj-kadar aj-dynamic-print">
-                          {formatPercent(
-                            isBuybackDocument
-                              ? item.snapshot.purityPercent
-                              : item.snapshot.exchangePurityPercent,
-                          )}
+                          {formatPercent(item.snapshot.purityPercent)}
                         </div>
                         <div className="aj-gram aj-dynamic-print">
                           {formatGram(item.snapshot.weightGram)}
@@ -1614,7 +1615,7 @@ export function ReceiptCertificateHtmlDocument({
                           {formatDiscountAmount(itemDiscountAmount)}
                         </div>
                         <div className="aj-price aj-dynamic-print">
-                          {formatAmount(item.finalPriceAmount)}
+                          {formatAmount(itemSubtotalAmount)}
                         </div>
                       </div>
                     </div>

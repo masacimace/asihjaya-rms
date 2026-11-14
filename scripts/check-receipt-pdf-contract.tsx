@@ -144,14 +144,51 @@ function buildSingleItemFixture(): ReceiptCertificateData {
 function buildDiscountedMultiItemFixture(): ReceiptCertificateData {
   const data = structuredClone(receiptCertificateSampleData);
   assert.ok(data.items.length > 1, "Fixture perlu lebih dari satu item.");
-  // Consistent financial example: 7,185,000 subtotal - 500 discount =
-  // 7,184,500 total, then deposit used 500,000 and deposit in 250,000.
+  // 7,185,000 subtotal - 500 discount + 20,000 labor + 5,000 adjustment =
+  // 7,209,500 total, then deposit used 500,000 and deposit in 250,000.
   data.items[0]!.discountAmount = "500";
   data.items[0]!.finalPriceAmount = "3684500";
+  data.items[1]!.finalPriceAmount = "2175000";
   data.sale.discountAmount = "500";
-  data.sale.totalAmount = "7184500";
-  data.customerDeposit.externalPaymentDueAmount = "6934500";
+  data.sale.additionalFeeAmount = "25000";
+  data.sale.totalAmount = "7209500";
+  data.customerDeposit.externalPaymentDueAmount = "6959500";
   return data;
+}
+
+function checkProductPurity(Component: RenderComponent) {
+  const cases = [
+    { purityPercent: "75.000", expected: "75%" },
+    { purityPercent: "68.125", expected: "68,125%" },
+    { purityPercent: null, expected: "-" },
+  ];
+  const documentKinds = [undefined, "sale", "buyback"] as const;
+  const modes = [
+    RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
+    RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY,
+    RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+  ] as const;
+
+  for (const documentKind of documentKinds) {
+    for (const renderMode of modes) {
+      for (const { purityPercent, expected } of cases) {
+        const data = buildSingleItemFixture();
+        data.documentKind = documentKind;
+        data.items[0]!.snapshot.purityPercent = purityPercent;
+        data.items[0]!.snapshot.exchangePurityPercent = "375.000";
+        const html = buildHtml(Component, {
+          data,
+          documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
+          renderMode,
+        });
+        const values = Array.from(html.matchAll(
+          /<div class="aj-kadar aj-dynamic-print">([^<]*)<\/div>/g,
+        ), (match) => match[1]);
+        assert.deepEqual(values, [expected],
+          `${documentKind ?? "default sale"}/${renderMode}: Kadar harus memakai kadar produk dari snapshot transaksi, termasuk saat kosong.`);
+      }
+    }
+  }
 }
 
 function normalizeText(value: string | null | undefined) {
@@ -176,6 +213,17 @@ type PaymentGeometry = {
 };
 
 type MediaGeometry = { x: number; y: number; width: number; height: number };
+
+type ProductPhotoStyle = {
+  loaded: boolean;
+  naturalWidth: number;
+  naturalHeight: number;
+  fit: string;
+  position: string;
+  radius: string;
+  border: string;
+  shadow: string;
+};
 
 /**
  * Read DOM values using Playwright's locator APIs instead of evaluate/evaluateAll.
@@ -428,6 +476,89 @@ async function withRenderPage<T>(
   }
 }
 
+async function checkProductPhotos(
+  browser: Browser,
+  Component: RenderComponent,
+  outputDir: string,
+) {
+  const dimensions = [[600, 300], [300, 600], [400, 400]] as const;
+  const data = structuredClone(receiptCertificateSampleData);
+  assert.equal(data.items.length, dimensions.length);
+  for (const [index, item] of data.items.entries()) {
+    item.snapshot.imageKey = `receipt-photo-${index}.svg`;
+  }
+  const cases = [
+    [RECEIPT_DOCUMENT_PROFILE_A4_LANDSCAPE_V1, RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN],
+    [RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1, RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN],
+    [RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1, RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY],
+    [RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1, RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY],
+  ] as const;
+
+  for (const [documentProfileId, renderMode] of cases) {
+    const page = await browser.newPage({
+      viewport: receiptDocumentProfiles[documentProfileId].viewport,
+      deviceScaleFactor: 1,
+    });
+    try {
+      await page.route("https://receipt-photo.test/**", async (route) => {
+        const match = /\/media\/receipt-photo-(\d)\.svg$/.exec(route.request().url());
+        const size = match ? dimensions[Number(match[1])] : undefined;
+        if (!size) return route.abort();
+        const [width, height] = size;
+        await route.fulfill({
+          contentType: "image/svg+xml",
+          body: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#faf7ef"/><rect x="8" y="8" width="${width - 16}" height="${height - 16}" fill="none" stroke="#a87324" stroke-width="16"/><ellipse cx="${width / 2}" cy="${height / 2}" rx="${width * 0.36}" ry="${height * 0.36}" fill="none" stroke="#a87324" stroke-width="24"/></svg>`,
+        });
+      });
+      await page.emulateMedia({ media: "print" });
+      const html = buildHtml(Component, { data, documentProfileId, renderMode })
+        .replace("<head>", '<head><base href="https://receipt-photo.test/">');
+      await page.setContent(html, { waitUntil: "load" });
+      const photos = page.locator(`${FRONT_SELECTOR} .aj-thumb img`);
+      assert.equal(await photos.count(), dimensions.length);
+      if (KEEP_OUTPUT) {
+        await firstFrontPage(page).locator(".aj-products-card").screenshot({
+          path: path.join(outputDir, `${documentProfileId}-${renderMode}-photo.png`),
+        });
+      }
+      const styles = await page.evaluate<ProductPhotoStyle[]>(String.raw`
+        Array.from(document.querySelectorAll('article[data-aj-receipt-page="front"] .aj-thumb img')).map(function(img) {
+          const slotStyle = getComputedStyle(img.parentElement);
+          const imageStyle = getComputedStyle(img);
+          return {
+            loaded: img.complete && img.naturalWidth > 0,
+            naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+            fit: imageStyle.objectFit, position: imageStyle.objectPosition,
+            radius: slotStyle.borderRadius, border: slotStyle.borderWidth,
+            shadow: slotStyle.boxShadow,
+          };
+        })
+      `);
+      for (const [index, [width, height]] of dimensions.entries()) {
+        const photo = photos.nth(index);
+        const prefix = `${documentProfileId}/${renderMode}/photo ${index + 1}`;
+        assert.equal(await photo.getAttribute("src"), `/media/receipt-photo-${index}.svg`);
+        const style = styles[index];
+        assert.ok(style, `${prefix}: computed style harus tersedia.`);
+        assert.ok(style.loaded, `${prefix}: gambar harus benar-benar dimuat.`);
+        assert.equal(style.naturalWidth, width);
+        assert.equal(style.naturalHeight, height);
+        assert.equal(style.fit, "contain", `${prefix}: foto harus utuh dan proporsional.`);
+        assert.equal(style.position, "50% 50%", `${prefix}: foto harus di tengah slot.`);
+        assert.equal(style.radius, "0px", `${prefix}: sudut foto tidak boleh dipotong.`);
+        assert.equal(style.border, "0px", `${prefix}: foto tidak memakai border tambahan.`);
+        assert.equal(style.shadow, "none", `${prefix}: foto tidak memakai bayangan.`);
+        const imageBox = await requireBoundingBox(photo, `${prefix} image`);
+        const slotBox = await requireBoundingBox(photo.locator(".."), `${prefix} slot`);
+        assert.ok(imageBox.width <= slotBox.width + 0.5 && imageBox.height <= slotBox.height + 0.5,
+          `${prefix}: gambar tidak boleh melampaui slot.`);
+      }
+    } finally {
+      await page.close();
+    }
+  }
+}
+
 async function renderPdfAndCheck(
   browser: Browser,
   Component: RenderComponent,
@@ -439,6 +570,21 @@ async function renderPdfAndCheck(
 ) {
   return withRenderPage(browser, Component, documentProfileId, renderMode, data,
     async (page) => {
+      if (renderMode !== RECEIPT_CERTIFICATE_RENDER_MODE_VENDOR_STATIC_ARTWORK) {
+        const fronts = page.locator(FRONT_SELECTOR);
+        assert.equal(await fronts.count(), data.items.length);
+        for (const [index, item] of data.items.entries()) {
+          const front = fronts.nth(index);
+          assert.equal(normalizeText(await front.locator(".aj-price").textContent()),
+            formatRupiah(item.listPriceAmount),
+            `${documentProfileId}/${renderMode}: HARGA item ${index + 1} harus harga dasar sebelum diskon, ongkos, dan penyesuaian.`);
+          const expectedPayment = formatRupiah(data.customerDeposit.externalPaymentDueAmount);
+          assert.equal(normalizeText(await front.locator(".aj-total-row-external strong").textContent()),
+            expectedPayment, "Total Pembayaran harus mencakup seluruh transaksi dan Dana Titip/saldo.");
+          assert.equal(normalizeText(await front.locator(".aj-total-amount").textContent()),
+            expectedPayment, "TOTAL ITEM harus sama dengan total pembayaran seluruh transaksi.");
+        }
+      }
       const pdf = await page.pdf({
         printBackground: true,
         preferCSSPageSize: true,
@@ -549,7 +695,7 @@ async function checkPaymentOverlay(
       const photoPadding = await page.evaluate(
         String.raw`getComputedStyle(document.querySelector('article[data-aj-receipt-page="front"] .aj-thumb')).padding`,
       );
-      assert.equal(photoPadding, "0px", "Foto preprinted harus full-fill tanpa padding.");
+      assert.equal(photoPadding, "0px", "Slot foto preprinted harus mempertahankan ukuran tanpa padding tambahan.");
 
       // Keep only PRODUCT name/meta away from the enlarged vendor-paper photo.
       // The front-design baseline is 0.7mm; overlay adds 1.5mm inside its own column.
@@ -646,6 +792,7 @@ async function main() {
   const { ReceiptCertificateHtmlDocument } = await import(
     "@/features/sales/documents/receipt-certificate-html"
   );
+  checkProductPurity(ReceiptCertificateHtmlDocument);
   const data = buildDiscountedMultiItemFixture();
   const outputDir = KEEP_OUTPUT
     ? path.resolve(".data/receipt-contract-output")
@@ -692,11 +839,15 @@ async function main() {
     await checkPaymentOverlay(browser, ReceiptCertificateHtmlDocument, data);
     await checkSingleItemOverlay(browser, ReceiptCertificateHtmlDocument);
     await checkHeaderMetadataOverlay(browser, ReceiptCertificateHtmlDocument);
+    await checkProductPhotos(browser, ReceiptCertificateHtmlDocument, outputDir);
 
+    console.log("PASS: Sale/Buyback Kadar uses product purity, including decimals and missing snapshots, across receipt modes.");
+    console.log("PASS: HARGA uses each item's base price; payment totals cover the full transaction, discounts, fees and customer deposits.");
     console.log("PASS: PDF A4/A5 landscape & mode page counts.");
     console.log("PASS: A5 overlay exactly 4 payment rows; discount/multi-item unchanged in full_design.");
     console.log("PASS: Vendor label/overlay nominal alignment and TOTAL ITEM collision guard.");
     console.log("PASS: QR/photo vendor slot geometry, QR quiet zone, and A5 hardware payload contract.");
+    console.log("PASS: Landscape, portrait and square photos remain complete, centered and unframed in full-design and overlay modes.");
     console.log("PASS: Fixed vendor header rows, 3-line invoice clearance, and stable item/date/sales/outlet positions.");
     console.log("NOTE: Font brand di-stub khusus test; verifikasi visual/scan/print fisik tetap diperlukan.");
     if (KEEP_OUTPUT) console.log(`PDF tersedia di: ${outputDir}`);

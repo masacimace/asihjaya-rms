@@ -18,24 +18,15 @@ const receiptHtml = read(
 );
 
 assert(
-  receiptHtml.includes('const isBuybackDocument = data.documentKind === "buyback";'),
-  "Receipt renderer wajib mengenali documentKind Buyback.",
+  /formatPercent\(item\.snapshot\.purityPercent\)/.test(receiptHtml),
+  "Kolom Kadar wajib memakai purityPercent untuk Sale dan Buyback.",
 );
 
 assert(
-  /formatPercent\(\s*isBuybackDocument\s*\?\s*item\.snapshot\.purityPercent\s*:\s*item\.snapshot\.exchangePurityPercent,\s*\)/m.test(
-    receiptHtml,
-  ),
-  "Kolom Kadar wajib memakai purityPercent untuk Buyback dan mempertahankan exchangePurityPercent untuk Sale.",
-);
-
-assert(
-  !/\{formatPercent\(item\.snapshot\.exchangePurityPercent\)\}/.test(
-    receiptHtml,
-  ),
-  "Renderer lama yang selalu memakai exchangePurityPercent masih ditemukan.",
+  !receiptHtml.includes("item.snapshot.exchangePurityPercent"),
+  "Nota tidak boleh menampilkan Kadar Tukaran sebagai Kadar Persen produk.",
 );
 
 console.log(
-  "OK: B2 receipt Kadar memakai purityPercent untuk Buyback tanpa mengubah behavior Sale.",
+  "OK: receipt Kadar memakai purityPercent untuk Sale dan Buyback.",
 );

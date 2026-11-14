@@ -237,11 +237,12 @@
   width: 25mm !important;
   height: 25mm !important;
   padding: 0.6mm !important;
-  border-radius: 2.1mm !important;
+  border-radius: 0 !important;
 }
 
 .aj-receipt-front-design .aj-vendor-photo-frame {
   border: 0.18mm dashed rgba(177, 144, 48, 0.58) !important;
+  border-radius: 2.1mm !important;
   background: #fff !important;
 }
 

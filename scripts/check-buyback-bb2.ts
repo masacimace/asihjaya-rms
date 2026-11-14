@@ -77,13 +77,8 @@ assert.match(receiptType, /buybackPricePerGram\?: string \| null/);
 
 assert.match(
   receiptHtml,
-  /const isBuybackDocument = data\.documentKind === "buyback"/,
-  "Buyback receipt wajib mempertahankan document semantics untuk mapping data.",
-);
-assert.match(
-  receiptHtml,
-  /isBuybackDocument\s+\? item\.snapshot\.purityPercent\s+: item\.snapshot\.exchangePurityPercent/,
-  "Kadar Buyback wajib membaca purityPercent tanpa mengubah presentation receipt.",
+  /formatPercent\(item\.snapshot\.purityPercent\)/,
+  "Kadar Sale dan Buyback wajib membaca purityPercent tanpa mengubah presentation receipt.",
 );
 assert.match(
   receiptData,

@@ -20,9 +20,9 @@
  * overlay with `noscale`.
  *
  * Photo:
- * - fill the complete 25mm x 25mm slot
+ * - keep the calibrated 28.4mm x 28.4mm slot
  * - no inner padding
- * - cover the slot without distortion
+ * - center the complete photo without cropping or distortion
  *
  * QR:
  * - fill the complete 19mm x 19mm canvas
@@ -43,7 +43,7 @@
   display: block !important;
   width: 100% !important;
   height: 100% !important;
-  object-fit: cover !important;
+  object-fit: contain !important;
   object-position: center !important;
 }
 
@@ -280,10 +280,10 @@
  *
  * These are deliberately local optical translations, not a page-wide scale
  * or offset: other printed fields already align acceptably with vendor stock.
- * v2.2 enlarges only the overlay photo; QR, crop, and row tracks stay fixed.
+ * v2.2 enlarges only the overlay photo slot; QR and row tracks stay fixed.
  */
 
-/* 1/4: Align physical-stock photo center; preserve 28.4mm size and crop. */
+/* 1/4: Align physical-stock photo center; preserve the 28.4mm slot. */
 [data-aj-receipt-render-mode="preprinted_overlay"]
   .aj-receipt-front-design
   .aj-thumb.aj-dynamic-print {
