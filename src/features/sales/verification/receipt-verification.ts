@@ -84,6 +84,7 @@ function getPaymentSummary(methods: string[]) {
     credit_card: "Credit Card",
     debit_card: "Debit Card",
     qris_manual: "QRIS",
+    trade_in: "Tukar Tambah",
     qris_gateway: "QRIS",
   };
 

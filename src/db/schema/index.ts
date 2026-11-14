@@ -269,6 +269,7 @@ export const customerDepositLedgerDirectionEnum = pgEnum(
 
 export const paymentMethodEnum = pgEnum("payment_method", [
   "cash",
+  "trade_in",
   "debit_card",
   "credit_card",
   "bank_transfer",

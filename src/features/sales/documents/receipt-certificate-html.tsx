@@ -1428,6 +1428,10 @@ export function ReceiptCertificateHtmlDocument({
   const totalPdfPages = pageCount + (shouldRenderBackPage ? 1 : 0);
   const customerDepositUsedAmount = toNumber(data.customerDeposit.usedAmount);
   const customerDepositInAmount = toNumber(data.customerDeposit.inAmount);
+  const receiptPaymentTotalAmount =
+    data.documentKind !== "buyback" && data.payments.some((payment) => payment.method === "trade_in")
+      ? data.sale.totalAmount
+      : data.customerDeposit.externalPaymentDueAmount;
   const verificationQrImage = createQrSvgDataUri(data.verification.url);
 
   return (
@@ -1713,7 +1717,7 @@ export function ReceiptCertificateHtmlDocument({
                           </span>
                           <strong className="aj-dynamic-print">
                             {formatAmount(
-                              data.customerDeposit.externalPaymentDueAmount,
+                              receiptPaymentTotalAmount,
                             )}
                           </strong>
                         </div>
@@ -1724,7 +1728,7 @@ export function ReceiptCertificateHtmlDocument({
                         </span>
                         <strong className="aj-total-amount aj-dynamic-print">
                           {formatAmount(
-                            data.customerDeposit.externalPaymentDueAmount,
+                            receiptPaymentTotalAmount,
                           )}
                         </strong>
                       </div>

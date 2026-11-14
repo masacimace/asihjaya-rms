@@ -64,9 +64,14 @@ Metode pembayaran checkout POS yang aktif:
 Cash
 EDC
 Transfer
+Tukar Tambah
 ```
 
 Terminal EDC dan rekening transfer dikelola melalui Settings Hub sehingga outlet dapat menentukan profile pembayaran manual yang tersedia pada POS.
+
+Tukar Tambah mencatat nominal barang tukaran sebagai bagian pelunasan penjualan dan wajib terikat ke pelanggan terdaftar. Tambahan pembayaran dapat dilunasi melalui Cash, EDC, atau Transfer. Tahap ini hanya mencatat nominal; penerimaan barang lama, Buyback, dan Cuci/Rongsok tetap ditangani melalui alurnya masing-masing.
+
+Nota Tukar Tambah mempertahankan harga barang dan total penjualan penuh. Rincian nominal per metode tersedia di detail transaksi dan customer portal melalui QR Nota. Nilai Tukar Tambah tidak menambah kas dan tidak dapat digunakan untuk membuat Dana Titip baru. Lihat [panduan Tukar Tambah](docs/development/pos-trade-in.md).
 
 Dana Titip pelanggan memiliki ledger terpisah dan tidak diperlakukan sebagai payment gateway.
 

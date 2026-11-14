@@ -12,6 +12,7 @@ export const adminSaleStatuses = [
 
 export const adminPaymentMethods = [
   "cash",
+  "trade_in",
   "debit_card",
   "credit_card",
   "bank_transfer",
@@ -34,6 +35,7 @@ export type AdminPaymentMethod = (typeof adminPaymentMethods)[number];
 
 export const activeAdminPaymentMethodOptions = [
   "cash",
+  "trade_in",
   "debit_card",
   "bank_transfer",
 ] as const satisfies readonly AdminPaymentMethod[];

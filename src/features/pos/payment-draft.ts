@@ -79,6 +79,19 @@ export const paymentMethodConfigs: PaymentMethodConfig[] = [
     requiresReference: false,
     allowOverpayment: false,
   },
+  {
+    method: "trade_in",
+    label: "Tukar Tambah",
+    shortLabel: "Tukar Tambah",
+    description: "Nilai barang tukaran sebagai pelunasan. Tambahan pembayaran dapat melalui Cash, EDC, atau Transfer.",
+    amountLabel: "Nominal Tukar Tambah",
+    providerLabel: null,
+    providerPlaceholder: null,
+    referenceLabel: null,
+    referencePlaceholder: null,
+    requiresReference: false,
+    allowOverpayment: false,
+  },
 ];
 
 const defaultPaymentMethodConfig = paymentMethodConfigs[0]!;
@@ -216,8 +229,12 @@ export function getPaymentDraftValidationMessage({
       continue;
     }
 
-    if (payment.receivedAmount !== null || payment.changeAmount > 0) {
+    if (payment.receivedAmount !== null || payment.changeAmount !== 0) {
       return "Kembalian hanya boleh tercatat untuk pembayaran cash.";
+    }
+
+    if (payment.method === "trade_in") {
+      continue;
     }
 
     if (!payment.manualPaymentProfileId || !payment.manualPaymentProfileName) {

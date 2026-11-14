@@ -34,6 +34,7 @@ export type ReportSaleStatus =
 
 export type ReportPaymentMethod =
   | "cash"
+  | "trade_in"
   | "debit_card"
   | "credit_card"
   | "bank_transfer"

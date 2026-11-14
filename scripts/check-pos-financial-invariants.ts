@@ -43,3 +43,15 @@ expectFailure(
 );
 
 console.log("POS checkout financial invariant checks passed.");
+const tradeInSale = {
+  subtotalAmount: 5_000_000, discountAmount: 0, additionalFeeAmount: 0,
+  customerDepositUsedAmount: 0, customerDepositInAmount: 0,
+};
+expectSuccess({ ...tradeInSale, tradeInAmount: 2_000_000, paymentAmounts: [2_000_000, 3_000_000] },
+  { totalAmount: 5_000_000, totalPaidAmount: 5_000_000, externalPaymentDueAmount: 5_000_000 });
+expectSuccess({ ...tradeInSale, tradeInAmount: 5_000_000, paymentAmounts: [5_000_000] },
+  { totalAmount: 5_000_000, totalPaidAmount: 5_000_000, externalPaymentDueAmount: 5_000_000 });
+expectFailure({ ...tradeInSale, customerDepositInAmount: 1_000_000, tradeInAmount: 6_000_000, paymentAmounts: [6_000_000] }, "trade_in_exceeds_total");
+expectFailure({ ...tradeInSale, customerDepositUsedAmount: 1_000_000, tradeInAmount: 5_000_000, paymentAmounts: [5_000_000] }, "trade_in_exceeds_total");
+expectFailure({ ...tradeInSale, tradeInAmount: -1, paymentAmounts: [5_000_000] }, "invalid_amount");
+console.log("Tukar Tambah mixed/full settlement preserves sale total and cannot fund new deposits.");

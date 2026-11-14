@@ -395,7 +395,13 @@ export function PosPaymentPanel({
                 </div>
               ) : null}
 
-              {selectedMethod !== "cash" ? (
+              {selectedMethod === "trade_in" && !selectedCustomer ? (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  Pilih customer terdaftar agar rincian Tukar Tambah dapat dilihat melalui QR Nota.
+                </p>
+              ) : null}
+
+              {selectedMethod !== "cash" && selectedMethod !== "trade_in" ? (
                 <div>
                   <label className="block text-sm">
                     <span className="mb-2 flex items-center justify-between gap-3 font-medium text-neutral-800">

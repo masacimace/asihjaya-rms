@@ -57,6 +57,7 @@ const paymentMethodLabels: Record<AdminPaymentMethod, string> = {
   credit_card: "Credit",
   bank_transfer: "Transfer",
   qris_manual: "QRIS Manual",
+  trade_in: "Tukar Tambah",
   qris_gateway: "QRIS Gateway",
   other: "Lainnya",
 };

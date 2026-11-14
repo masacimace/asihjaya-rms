@@ -6,6 +6,9 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { customerDepositLedger } from "@/db/schema";
 import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
+import { getPublicCustomerHistoryData } from "@/features/customers/public-history";
+import { getReceiptCertificateData } from "@/features/sales/documents/receipt-certificate";
+import { createPublicHistoryVerificationUrl } from "@/features/sales/verification/receipt-token";
 import {
   claimPosCheckoutAttempt,
   getPosCheckoutAttemptByKey,
@@ -941,6 +944,52 @@ test("checkout recovery repairs committed sale and hides it from another tenant"
   const attempt = await getPosCheckoutAttemptByKey(idempotencyKey);
   assert.equal(attempt?.status, "completed");
   assert.equal(attempt?.saleId, sale.saleId);
+});
+
+test("trade-in payment keeps full receipt value, exposes portal breakdown and refunds only actual cash", async ({ organizationA, organizationB }) => {
+  const sale = await createSale(organizationA, { totalAmount: 5_000_000 });
+  const itemId = organizationA.itemIds[0]!;
+  await pool.query(`update product_items set availability = 'sold', location_state = 'customer' where id = $1`, [itemId]);
+  await pool.query(`insert into sale_items (sale_id, product_item_id, line_number, list_price_amount, discount_amount, final_price_amount, snapshot)
+    values ($1, $2, 1, 5000000, 0, 5000000, $3::jsonb)`,
+    [sale.saleId, itemId, JSON.stringify({ productName: "Produk Tukar Tambah", purityPercent: "75", weightGram: "5" })]);
+  for (const [method, amount] of [["trade_in", 2_000_000], ["cash", 3_000_000]] as const) {
+    await pool.query(`insert into payments (sale_id, method, amount, status, verified_by, verified_at, paid_at)
+      values ($1, $2, $3, 'paid', $4, $5, $5)`, [sale.saleId, method, amount, organizationA.makerId, TEST_NOW]);
+  }
+  await pool.query(`insert into cash_movements (shift_id, type, amount, reference_type, reference_id, reason, created_by)
+    values ($1, 'cash_sale', 3000000, 'sale', $2, 'Cash after trade-in', $3)`,
+    [organizationA.shiftId, sale.saleId, organizationA.makerId]);
+  await pool.query(`update shifts set expected_cash = 3000000 where id = $1`, [organizationA.shiftId]);
+
+  const receipt = await getReceiptCertificateData({ saleId: sale.saleId, organizationId: organizationA.organizationId });
+  assert.ok(receipt);
+  assert.equal(receipt.sale.totalAmount, "5000000");
+  assert.equal(receipt.items[0]!.listPriceAmount, "5000000");
+  assert.equal(receipt.customerDeposit.externalPaymentDueAmount, "5000000");
+  const { token } = createPublicHistoryVerificationUrl({ transactionKind: "sale", transactionId: sale.saleId });
+  const history = await getPublicCustomerHistoryData(token, organizationA.customerId);
+  assert.equal(history.status, "valid");
+  if (history.status !== "valid" || history.scannedTransaction.kind !== "sale") throw new Error("Expected sale history.");
+  assert.equal(history.scannedTransaction.totalAmount, "5000000");
+  assert.deepEqual(history.scannedTransaction.paymentBreakdown?.map(({ label, amount }) => ({ label, amount })), [
+    { label: "Tukar Tambah", amount: "2000000" }, { label: "Cash", amount: "3000000" },
+  ]);
+  assert.equal((await getPublicCustomerHistoryData(token, organizationB.customerId)).status, "invalid");
+  assert.equal(await queryCount("buybacks"), 0);
+  assert.equal(await queryCount("customer_deposit_ledger"), 0);
+
+  await executeSaleReversal({
+    kind: "refund", saleId: sale.saleId, organizationId: organizationA.organizationId,
+    accessibleOutletIds: [organizationA.outletId], actor: { id: organizationA.executorId, fullName: "A executor" },
+    executionNote: "Refund trade-in test; goods settlement handled manually",
+    requestMetadata: { ipAddress: "127.0.0.1", userAgent: "financial-test" },
+    now: new Date(TEST_NOW.getTime() + 5_000),
+  });
+  const cashOut = await queryOne<{ amount: string }>(`select sum(amount)::text as amount from cash_movements where type = 'cash_refund' and reference_id = $1`, [sale.saleId]);
+  assert.equal(cashOut.amount, "3000000");
+  const refundedTradeIn = await queryOne<{ amount: string }>(`select amount::text as amount from payment_refunds where sale_id = $1 and method = 'trade_in'`, [sale.saleId]);
+  assert.equal(refundedTradeIn.amount, "2000000");
 });
 
 export async function runFinancialConcurrencySuite() {

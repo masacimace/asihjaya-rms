@@ -84,13 +84,15 @@ assert.match(
   /const itemDiscountAmount\s*=\s*toNumber\(item\.discountAmount\)/,
 );
 
-// 5. The amount billed still comes from existing backend data in both
-//    the fourth payment line and the large amount below TOTAL ITEM.
+// 5. Trade-in receipts show the full sale value in both total fields.
+//    Other receipts preserve the existing backend amount after Dana Titip.
 assert.equal(
-  (card.match(/data\.customerDeposit\.externalPaymentDueAmount/g) ?? []).length,
+  (card.match(/receiptPaymentTotalAmount/g) ?? []).length,
   2,
-  "Total Pembayaran dan nominal besar harus memakai externalPaymentDueAmount dari backend.",
+  "Total Pembayaran dan nominal besar harus memakai total receipt yang sama.",
 );
+assert.match(component, /data\.payments\.some\(\(payment\) => payment\.method === "trade_in"\)/);
+assert.match(component, /\? data\.sale\.totalAmount\s*:\s*data\.customerDeposit\.externalPaymentDueAmount/);
 assert.match(card, /className="aj-total-label aj-static-artwork"/);
 assert.match(card, /className="aj-total-amount aj-dynamic-print"/);
 assert.match(card, />\s*Total Item\s*</);

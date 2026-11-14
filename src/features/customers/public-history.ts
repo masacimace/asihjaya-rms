@@ -74,6 +74,11 @@ export type PublicCustomerHistorySaleTransaction =
     subtotalAmount: string;
     discountAmount: string;
     paymentMethods: string[];
+    paymentBreakdown?: Array<{
+      method: string;
+      label: string;
+      amount: string;
+    }>;
   };
 
 export type PublicCustomerHistoryBuybackTransaction =
@@ -303,6 +308,7 @@ function getPaymentMethodLabel(method: string) {
     credit_card: "Credit EDC",
     debit_card: "Debit EDC",
     other: "Pembayaran Lain",
+    trade_in: "Tukar Tambah",
     qris_gateway: "QRIS",
     qris_manual: "QRIS",
   };
@@ -741,6 +747,7 @@ export async function getPublicCustomerHistoryData(
             saleId: payments.saleId,
             method: payments.method,
             status: payments.status,
+            amount: payments.amount,
           })
           .from(payments)
           .where(inArray(payments.saleId, saleIds))
@@ -982,6 +989,13 @@ export async function getPublicCustomerHistoryData(
             item.productMasterImageKey,
         })),
         paymentMethods,
+        paymentBreakdown: (paymentsBySaleId.get(sale.id) ?? [])
+          .filter((payment) => payment.status === "paid" || payment.status === "refunded")
+          .map((payment) => ({
+            method: payment.method,
+            label: getPaymentMethodLabel(payment.method),
+            amount: payment.amount,
+          })),
         customerDeposit: {
           usedAmount: String(customerDepositUsedAmount),
           inAmount: String(customerDepositInAmount),

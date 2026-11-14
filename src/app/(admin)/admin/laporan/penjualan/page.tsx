@@ -47,6 +47,7 @@ const paymentMethodLabels: Record<ReportPaymentMethod, string> = {
   credit_card: "Credit Card",
   bank_transfer: "Transfer Bank",
   qris_manual: "QRIS Manual",
+  trade_in: "Tukar Tambah",
   qris_gateway: "QRIS Gateway",
   other: "Lainnya",
 };

@@ -511,6 +511,19 @@ function TransactionAccordion({
                       : "Tercatat"}
                   </dd>
                 </div>
+                {!isBuyback && transaction.paymentBreakdown && transaction.paymentBreakdown.length > 0 ? (
+                  <div className="border-t border-white/70 pt-3">
+                    <dt className="mb-2 font-bold text-neutral-950">Rincian Pelunasan</dt>
+                    <dd className="space-y-2">
+                      {transaction.paymentBreakdown.map((payment, index) => (
+                        <div key={`${payment.method}-${index}`} className="flex items-center justify-between gap-3">
+                          <span className="text-neutral-600">{payment.label}</span>
+                          <span className="font-bold text-neutral-950">{formatAmount(payment.amount)}</span>
+                        </div>
+                      ))}
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between gap-3 border-t border-white/70 pt-3">
                   <dt className="font-bold text-neutral-950">
                     {isBuyback ? "Total Buyback" : "Total Pembelian"}

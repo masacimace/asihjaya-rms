@@ -216,7 +216,7 @@ export type PosScanLookupResult =
       message: string;
     };
 
-export type PosManualPaymentMethod = "cash" | "debit_card" | "bank_transfer";
+export type PosManualPaymentMethod = "cash" | "debit_card" | "bank_transfer" | "trade_in";
 
 export type PosManualPaymentVerificationSource =
   "merchant_app" | "edc_terminal" | "bank_app" | "bank_statement";

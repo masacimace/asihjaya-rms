@@ -433,6 +433,7 @@ function getPaymentLabel(method: string) {
     debit_card: "Debit EDC",
     credit_card: "Credit EDC",
     bank_transfer: "Transfer Bank",
+    trade_in: "Tukar Tambah",
     qris_gateway: "QRIS Gateway",
     other: "Lainnya",
   };

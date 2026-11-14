@@ -544,7 +544,21 @@ export function PosWorkspace({
       return;
     }
 
-    if (selectedMethod !== "cash" && !selectedProfile) {
+    if (selectedMethod === "trade_in") {
+      if (!selectedCustomer) {
+        setPaymentFeedback("Pilih customer terdaftar agar rincian Tukar Tambah tersedia di portal pelanggan.");
+        return;
+      }
+      const tradeInAlreadyAdded = payments
+        .filter((payment) => payment.method === "trade_in")
+        .reduce((total, payment) => total + payment.amount, 0);
+      if (inputAmount > Math.max(totalAmount - customerDepositUsedAmount - tradeInAlreadyAdded, 0)) {
+        setPaymentFeedback("Nilai Tukar Tambah tidak boleh melebihi total belanja setelah penggunaan saldo.");
+        return;
+      }
+    }
+
+    if (selectedMethod !== "cash" && selectedMethod !== "trade_in" && !selectedProfile) {
       setPaymentFeedback(
         selectedMethod === "bank_transfer"
           ? "Pilih rekening Transfer yang sudah dikonfigurasi."
@@ -596,7 +610,7 @@ export function PosWorkspace({
           evidenceKey: null,
           evidenceFileName: null,
           verificationDetails:
-            selectedMethod === "cash"
+            selectedMethod === "cash" || selectedMethod === "trade_in"
               ? {}
               : {
                   terminalId: selectedProfile?.terminalId ?? null,
@@ -605,7 +619,7 @@ export function PosWorkspace({
         },
       ]);
 
-      resetPaymentForm(selectedMethod);
+      resetPaymentForm(selectedMethod === "trade_in" ? "cash" : selectedMethod);
 
       if (nextRemainingAmount > 0) {
         setPaymentAmountInput(formatRupiahInput(nextRemainingAmount));
@@ -628,6 +642,10 @@ export function PosWorkspace({
   }
 
   function finalizePayment() {
+    if (payments.some((payment) => payment.method === "trade_in") && !selectedCustomer) {
+      setPaymentFeedback("Pilih customer terdaftar untuk transaksi Tukar Tambah.");
+      return;
+    }
     const paymentValidationMessage = getPaymentDraftValidationMessage({
       payments,
       totalAmount: externalPaymentDueAmount,

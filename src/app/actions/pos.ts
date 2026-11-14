@@ -2350,6 +2350,10 @@ export async function completePosCheckoutAction(
 
   const submittedPayments = payload.payments ?? [];
 
+  if (submittedPayments.some((payment) => payment.method === "trade_in") && !customerId) {
+    fieldErrors.customerId = "Tukar Tambah wajib terikat ke customer terdaftar agar rincian tersedia di portal pelanggan.";
+  }
+
   if (submittedPayments.length === 0 && customerDepositUsedAmount <= 0) {
     fieldErrors.payments = "Tambahkan minimal satu pembayaran atau gunakan Dana Titip customer.";
   }
@@ -2369,7 +2373,7 @@ export async function completePosCheckoutAction(
   const submittedProfileIds = Array.from(
     new Set(
       submittedPayments
-        .filter((payment) => payment.method !== "cash")
+        .filter((payment) => payment.method === "debit_card" || payment.method === "bank_transfer")
         .map((payment) => String(payment.manualPaymentProfileId ?? "").trim())
         .filter((profileId) => UUID_PATTERN.test(profileId)),
     ),
@@ -3004,6 +3008,9 @@ export async function completePosCheckoutAction(
         customerDepositUsedAmount,
         customerDepositInAmount,
         paymentAmounts: normalizedPayments.map((payment) => payment.amount),
+        tradeInAmount: normalizedPayments
+          .filter((payment) => payment.method === "trade_in")
+          .reduce((total, payment) => total + payment.amount, 0),
       });
 
       if (!financialReconciliation.ok) {
@@ -3022,6 +3029,12 @@ export async function completePosCheckoutAction(
         if (financialReconciliation.code === "payment_mismatch") {
           throw new CheckoutValidationError(
             `Total pembayaran eksternal harus sama dengan ${formatServerCurrency(financialReconciliation.expectedAmount ?? 0)} setelah Dana Titip.`,
+          );
+        }
+
+        if (financialReconciliation.code === "trade_in_exceeds_total") {
+          throw new CheckoutValidationError(
+            "Nilai Tukar Tambah tidak boleh melebihi total belanja setelah penggunaan saldo. Dana Titip baru harus dibayar melalui Cash, EDC, atau Transfer.",
           );
         }
 

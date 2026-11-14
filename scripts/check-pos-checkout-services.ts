@@ -48,6 +48,24 @@ assert.deepEqual(
 );
 
 assert.equal(isManualPaymentMethod("cash"), true);
+assert.equal(isManualPaymentMethod("trade_in"), true);
+const tradeIn = normalizeCheckoutPayments({
+  submittedPayments: [{ method: "trade_in", amount: 2_000_000, note: "Barang lama pelanggan" }],
+  paymentProfilesById: new Map(),
+})[0]!;
+assert.equal(tradeIn.method, "trade_in");
+assert.equal(tradeIn.amount, 2_000_000);
+assert.equal(tradeIn.manualPaymentProfileId, null);
+assert.equal(tradeIn.receivedAmount, null);
+assert.equal(tradeIn.changeAmount, 0);
+for (const invalid of [
+  { method: "trade_in" as const, amount: 0 },
+  { method: "trade_in" as const, amount: -1 },
+  { method: "trade_in" as const, amount: 2_000_000, receivedAmount: 2_000_000 },
+  { method: "trade_in" as const, amount: 2_000_000, changeAmount: 100 },
+]) {
+  assert.throws(() => normalizeCheckoutPayments({ submittedPayments: [invalid], paymentProfilesById: new Map() }), CheckoutValidationError);
+}
 assert.equal(isManualPaymentMethod("transfer"), false);
 assert.equal(getPaymentProvider({ method: "cash", provider: null }), "cash");
 assert.equal(

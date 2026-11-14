@@ -2,6 +2,7 @@ export type CheckoutFinancialInvariantCode =
   | "invalid_amount"
   | "non_positive_total"
   | "deposit_exceeds_total"
+  | "trade_in_exceeds_total"
   | "invalid_external_due"
   | "payment_mismatch";
 
@@ -25,6 +26,7 @@ export type ReconcileCheckoutFinancialsInput = {
   additionalFeeAmount: number;
   customerDepositUsedAmount: number;
   customerDepositInAmount: number;
+  tradeInAmount?: number;
   paymentAmounts: readonly number[];
 };
 
@@ -43,6 +45,7 @@ export function reconcileCheckoutFinancials({
   additionalFeeAmount,
   customerDepositUsedAmount,
   customerDepositInAmount,
+  tradeInAmount = 0,
   paymentAmounts,
 }: ReconcileCheckoutFinancialsInput): CheckoutFinancialReconciliation {
   if (
@@ -51,6 +54,7 @@ export function reconcileCheckoutFinancials({
     !isNonNegativeSafeInteger(additionalFeeAmount) ||
     !isNonNegativeSafeInteger(customerDepositUsedAmount) ||
     !isNonNegativeSafeInteger(customerDepositInAmount) ||
+    !isNonNegativeSafeInteger(tradeInAmount) ||
     paymentAmounts.some(
       (amount) => !Number.isSafeInteger(amount) || amount <= 0,
     )
@@ -66,6 +70,10 @@ export function reconcileCheckoutFinancials({
 
   if (customerDepositUsedAmount > totalAmount) {
     return { ok: false, code: "deposit_exceeds_total" };
+  }
+
+  if (tradeInAmount > totalAmount - customerDepositUsedAmount) {
+    return { ok: false, code: "trade_in_exceeds_total" };
   }
 
   const externalPaymentDueAmount =

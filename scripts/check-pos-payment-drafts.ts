@@ -33,7 +33,7 @@ const edcProfile: PosManualPaymentProfile = {
 
 assert.deepEqual(
   paymentMethodConfigs.map((config) => config.method),
-  ["cash", "debit_card", "bank_transfer"],
+  ["cash", "debit_card", "bank_transfer", "trade_in"],
 );
 assert.equal(getPaymentConfig("cash").allowOverpayment, true);
 assert.equal(getPaymentConfig("debit_card").requiresReference, false);
@@ -125,6 +125,24 @@ assert.equal(
 );
 
 assert.equal(isStoredCheckoutPayment(cashDraft), true);
+const tradeInDraft: PosPaymentDraft = {
+  ...cashDraft,
+  method: "trade_in",
+  methodLabel: "Tukar Tambah",
+  amount: 2_000_000,
+  receivedAmount: null,
+  changeAmount: 0,
+};
+assert.equal(isStoredCheckoutPayment(tradeInDraft), true);
+assert.equal(getPaymentConfig("trade_in").allowOverpayment, false);
+assert.equal(getPaymentDraftValidationMessage({
+  payments: [tradeInDraft, { ...cashDraft, amount: 3_000_000, receivedAmount: 3_000_000, changeAmount: 0 }],
+  totalAmount: 5_000_000,
+}), null);
+assert.equal(getPaymentDraftValidationMessage({ payments: [tradeInDraft], totalAmount: 2_000_000 }), null);
+assert.equal(getPaymentDraftValidationMessage({
+  payments: [{ ...tradeInDraft, changeAmount: 100 }], totalAmount: 2_000_000,
+}), "Kembalian hanya boleh tercatat untuk pembayaran cash.");
 assert.equal(
   isStoredCheckoutPayment({ ...cashDraft, verificationDetails: null }),
   false,

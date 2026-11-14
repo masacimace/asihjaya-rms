@@ -57,6 +57,7 @@ const rangeLabels: Record<PosTransactionRange, string> = {
 const paymentMethodLabels: Record<string, string> = {
   cash: "Cash",
   qris_manual: "QRIS",
+  trade_in: "Tukar Tambah",
   qris_gateway: "QRIS Gateway",
   debit_card: "Debit",
   credit_card: "Credit",

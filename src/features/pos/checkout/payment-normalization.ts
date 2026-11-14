@@ -111,6 +111,29 @@ export function normalizeCheckoutPayments({
       );
     }
 
+    if (method === "trade_in") {
+      return {
+        method,
+        amount,
+        receivedAmount: null,
+        changeAmount: 0,
+        provider: null,
+        reference: null,
+        note,
+        verificationSource: null,
+        providerPaidAt: null,
+        providerPaidAtIso: null,
+        evidenceKey: null,
+        manualPaymentProfileId: null,
+        manualPaymentProfileName: null,
+        manualPaymentProfileCode: null,
+        manualPaymentProfileRegisterId: null,
+        verificationDetails: {},
+        normalizedProvider: null,
+        normalizedReference: null,
+      };
+    }
+
     const profileId = String(payment.manualPaymentProfileId ?? "").trim();
 
     if (!UUID_PATTERN.test(profileId)) {

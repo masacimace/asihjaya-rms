@@ -5,6 +5,7 @@ export const manualPaymentMethodLabels: Record<
   string
 > = {
   cash: "Cash",
+  trade_in: "Tukar Tambah",
   debit_card: "EDC",
   bank_transfer: "Transfer",
 };

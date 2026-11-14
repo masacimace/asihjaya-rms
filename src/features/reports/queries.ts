@@ -795,7 +795,8 @@ function isReportPaymentMethod(value: string): value is ReportPaymentMethod {
     value === "bank_transfer" ||
     value === "qris_manual" ||
     value === "qris_gateway" ||
-    value === "other"
+    value === "other" ||
+    value === "trade_in"
   );
 }
 

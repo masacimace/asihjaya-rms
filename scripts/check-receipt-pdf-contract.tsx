@@ -195,6 +195,38 @@ function normalizeText(value: string | null | undefined) {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function checkTradeInReceipt(Component: RenderComponent) {
+  for (const usedAmount of ["0", "1000000"]) {
+    const data = buildSingleItemFixture();
+    data.items[0]!.listPriceAmount = "5000000";
+    data.items[0]!.finalPriceAmount = "5000000";
+    data.sale.subtotalAmount = "5000000";
+    data.sale.totalAmount = "5000000";
+    data.customerDeposit.usedAmount = usedAmount;
+    data.customerDeposit.externalPaymentDueAmount = String(5_000_000 - Number(usedAmount));
+    const template = data.payments[0]!;
+    data.payments = [
+      { ...template, method: "trade_in", amount: "2000000" },
+      { ...template, method: "cash", amount: String(3_000_000 - Number(usedAmount)) },
+    ];
+    for (const renderMode of [
+      RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN,
+      RECEIPT_CERTIFICATE_RENDER_MODE_FULL_DESIGN_FRONT_ONLY,
+      RECEIPT_CERTIFICATE_RENDER_MODE_PREPRINTED_OVERLAY,
+    ] as const) {
+      const html = buildHtml(Component, { data, documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1, renderMode });
+      for (const expression of [
+        /class="aj-price aj-dynamic-print">([^<]*)</,
+        /class="aj-total-detail-row aj-total-row-external">[\s\S]*?<strong class="aj-dynamic-print">([^<]*)</,
+        /class="aj-total-amount aj-dynamic-print">([^<]*)</,
+      ]) {
+        assert.equal(normalizeText(expression.exec(html)?.[1]), formatRupiah("5000000"),
+          `${renderMode}: Nota Tukar Tambah harus menampilkan nominal penuh, termasuk saat memakai saldo.`);
+      }
+    }
+  }
+}
+
 function formatRupiah(value: string | number) {
   return normalizeText(new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -802,6 +834,7 @@ async function main() {
     "@/features/sales/documents/receipt-certificate-html"
   );
   checkProductPurity(ReceiptCertificateHtmlDocument);
+  checkTradeInReceipt(ReceiptCertificateHtmlDocument);
   const data = buildDiscountedMultiItemFixture();
   const outputDir = KEEP_OUTPUT
     ? path.resolve(".data/receipt-contract-output")
@@ -851,6 +884,7 @@ async function main() {
     await checkProductPhotos(browser, ReceiptCertificateHtmlDocument, outputDir);
 
     console.log("PASS: Sale/Buyback Kadar uses product purity, including decimals and missing snapshots, across receipt modes.");
+    console.log("PASS: Trade-in receipts retain full HARGA, Total Pembayaran and TOTAL ITEM in every print mode.");
     console.log("PASS: HARGA uses each item's base price; payment totals cover the full transaction, discounts, fees and customer deposits.");
     console.log("PASS: PDF A4/A5 landscape & mode page counts.");
     console.log("PASS: A5 overlay exactly 4 payment rows; discount/multi-item unchanged in full_design.");
