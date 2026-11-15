@@ -15,6 +15,7 @@ import {
   type ParsedLegacyProductRow,
   type ParsedLegacyProductWorkbook,
 } from "@/features/legacy-migration/contracts";
+import { readLegacyStockStatus } from "@/features/legacy-migration/sync-policy";
 
 type LegacyColumnKey =
   | "sourceSequence"
@@ -643,6 +644,10 @@ export function parseLegacyProductWorkbook(
     };
 
     validateBaseRow(row);
+    if (readLegacyStockStatus(rawData) === "unknown") addIssue(row, {
+      severity: "warning", code: "STOCK_STATUS_UNKNOWN", field: "stockStatus",
+      message: "Status stok kosong atau tidak dikenali; baris akan ditunda saat sinkronisasi.",
+    });
     rows.push(row);
   }
 
@@ -747,7 +752,8 @@ export function parseLegacyProductWorkbook(
       imageUrlCount: finalizedRows.filter((row) => row.legacyImageUrl).length,
       validationCodeCounts,
       sourceWarnings: [
-        "Semua baris workbook diimport langsung sebagai item aktif. Warning dan data kurang lengkap tidak memblokir import, tetapi tetap ditandai agar dapat dirapikan sambil operasional berjalan.",
+        "Produk lama dikenali tanpa dibuat ulang. Produk baru mengikuti status stok Excel; barcode ganda, identitas tidak lengkap, dan status tidak dikenal ditunda otomatis.",
+        "Workbook lama tanpa kolom status dianggap berisi stok tersedia. Status operasional yang sudah berjalan di RMS tidak diaktifkan kembali oleh Excel.",
         "Harga/Gram legacy hanya disimpan sebagai referensi historis. Harga jual POS memakai Harga/Gram aktif berdasarkan Kadar Persen.",
         "Foto legacy disalin ke internal storage setelah item aktif. URL kosong atau download gagal tidak memblokir item di POS.",
       ],

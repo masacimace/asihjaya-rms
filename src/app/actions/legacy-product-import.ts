@@ -22,6 +22,7 @@ import {
 import {
   importLegacyBatchDirectlyToInventory,
   LegacyDirectImportError,
+  type LegacyDirectImportResult,
 } from "@/features/legacy-migration/direct-import-service";
 import { syncNextLegacyImageBatch } from "@/features/legacy-migration/image-sync-service";
 import { collectLegacyMasterMappingSeeds } from "@/features/legacy-migration/master-mapping";
@@ -35,6 +36,12 @@ import { getClientIp } from "@/lib/http/client-ip";
 
 const IMPORT_PATH = "/admin/migrasi-produk";
 const INSERT_CHUNK_SIZE = 250;
+
+function syncResultMessage(result: LegacyDirectImportResult) {
+  if (result.syncVersion !== 1) return `${result.importedItemCount.toLocaleString("id-ID")} produk sudah diimport sebelumnya.`;
+  const count = (value: number | undefined) => (value ?? 0).toLocaleString("id-ID");
+  return `${count(result.importedItemCount)} produk baru ditambahkan · ${count(result.existingItemCount)} produk sudah ada · ${count(result.deferredRowCount)} baris ditunda. ${count(result.updatedStockCount)} status stok diperbarui. Foto produk baru disalin otomatis.`;
+}
 
 function readText(formData: FormData, name: string, maxLength: number): string {
   return String(formData.get(name) ?? "")
@@ -317,7 +324,7 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
           uniqueMasterCount: parsed.summary.uniqueMasterCount,
         },
         reason:
-          "Workbook legacy diunggah untuk direct import. Warning sumber tidak memblokir aktivasi item.",
+          "Workbook legacy diunggah untuk sinkronisasi otomatis. Baris ambigu ditunda tanpa memblokir produk lainnya.",
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
       });
@@ -375,7 +382,7 @@ export async function uploadLegacyProductWorkbookAction(formData: FormData) {
   redirectBatch(
     createdBatchId,
     "success",
-    `${result.importedItemCount.toLocaleString("id-ID")} item berhasil diimport dan langsung aktif. ${result.cleanupItemCount.toLocaleString("id-ID")} item ditandai untuk dirapikan sambil berjalan. Foto legacy akan disalin otomatis di halaman ini.`,
+    syncResultMessage(result),
   );
 }
 
@@ -411,7 +418,7 @@ export async function retryLegacyProductImportBatchAction(formData: FormData) {
   redirectBatch(
     batchId,
     "success",
-    `${result.importedItemCount.toLocaleString("id-ID")} item berhasil diimport dan langsung aktif.`,
+    syncResultMessage(result),
   );
 }
 

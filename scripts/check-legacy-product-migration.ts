@@ -51,7 +51,7 @@ for (const required of [
 }
 
 for (const required of [
-  'availability: "available"',
+  'availability: stockStatus === "sold" ? "sold" : "available"',
   'condition: "good"',
   'movementType: "migration_opening"',
   'source: "legacy_import"',
@@ -83,8 +83,8 @@ for (const retiredSegment of [
   );
 }
 assert.ok(!migrationUiSource.includes("MigrationControlCenter"));
-assert.ok(mainPageSource.includes("Import XLSX ke Inventaris"));
-assert.ok(mainPageSource.includes("Semua row tetap masuk"));
+assert.ok(mainPageSource.includes("Sinkronkan Produk"));
+assert.ok(mainPageSource.includes("Produk lama tidak dibuat ulang"));
 assert.ok(detailPageSource.includes("Data sumber & cleanup"));
 
 console.log("Legacy direct-import contract checks passed.");

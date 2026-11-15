@@ -336,3 +336,6 @@ jobs:
 
       - name: Run financial and concurrency integration suite
         run: npm run test:financial
+
+      - name: Verify repeat legacy imports and stock synchronization
+        run: npm run test:migration:sync

@@ -74,8 +74,10 @@ process.env.PDF_RENDER_TOKEN_SECRET ??=
 process.env.HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY ??=
   "test-agent-encryption-key-000000000000000000000000000000000";
 
-const { runLegacyBarcodePosSuite } = await import(
-  "../tests/integration/legacy-barcode-pos-suite"
-);
-
-await runLegacyBarcodePosSuite();
+if (process.argv.includes("--sync")) {
+  const { runLegacyProductSyncSuite } = await import("../tests/integration/legacy-product-sync-suite");
+  await runLegacyProductSyncSuite();
+} else {
+  const { runLegacyBarcodePosSuite } = await import("../tests/integration/legacy-barcode-pos-suite");
+  await runLegacyBarcodePosSuite();
+}

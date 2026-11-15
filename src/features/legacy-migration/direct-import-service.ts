@@ -23,6 +23,8 @@ import {
   normalizeLegacyCategoryName,
   normalizeLegacyLabel,
 } from "@/features/legacy-migration/master-mapping";
+import { planLegacyInventorySync } from "@/features/legacy-migration/inventory-sync";
+import { legacySyncLabel, readLegacyStockStatus, readLegacySyncOutcomes, type LegacySyncOutcome } from "@/features/legacy-migration/sync-policy";
 import {
   calculateJewelryBasePrice,
   getActiveGoldPriceRates,
@@ -48,6 +50,15 @@ export type LegacyDirectImportResult = {
   systemOnlyBarcodeCount: number;
   imagePendingCount: number;
   imageMissingCount: number;
+  syncVersion?: 1;
+  processedRowCount?: number;
+  existingItemCount?: number;
+  updatedStockCount?: number;
+  deferredRowCount?: number;
+  availableItemCount?: number;
+  soldItemCount?: number;
+  soldSourceRowCount?: number;
+  rowOutcomes?: LegacySyncOutcome[];
 };
 
 
@@ -61,7 +72,7 @@ function readDirectImportResultData(
 
   const data = value as Record<string, unknown>;
   const importedItemCount = Number(data.importedItemCount ?? 0);
-  if (!Number.isFinite(importedItemCount) || importedItemCount <= 0) {
+  if (!Number.isFinite(importedItemCount) || importedItemCount < 0 || importedItemCount === 0 && data.syncVersion !== 1) {
     return null;
   }
 
@@ -76,6 +87,17 @@ function readDirectImportResultData(
     systemOnlyBarcodeCount: Number(data.systemOnlyBarcodeCount ?? 0),
     imagePendingCount: Number(data.imagePendingCount ?? 0),
     imageMissingCount: Number(data.imageMissingCount ?? 0),
+    ...(data.syncVersion === 1 ? {
+      syncVersion: 1 as const,
+      processedRowCount: Number(data.processedRowCount ?? 0),
+      existingItemCount: Number(data.existingItemCount ?? 0),
+      updatedStockCount: Number(data.updatedStockCount ?? 0),
+      deferredRowCount: Number(data.deferredRowCount ?? 0),
+      availableItemCount: Number(data.availableItemCount ?? 0),
+      soldItemCount: Number(data.soldItemCount ?? 0),
+      soldSourceRowCount: Number(data.soldSourceRowCount ?? 0),
+      rowOutcomes: readLegacySyncOutcomes({ directImport: data }),
+    } : {}),
   };
 }
 
@@ -244,7 +266,7 @@ function masterGroupingKey(row: {
   legacyItemName: string | null;
 }) {
   const code = normalizeMasterCode(row.legacyMasterCode);
-  if (code) return `CODE:${code}`;
+  if (code) return JSON.stringify(["CODE", code, legacySyncLabel(row.legacyCategory), legacySyncLabel(row.legacyMasterName)]);
 
   const category = getCategoryName(row.legacyCategory).toLocaleUpperCase("id-ID");
   const name = compactText(row.legacyMasterName, 200)
@@ -330,6 +352,11 @@ export async function importLegacyBatchDirectlyToInventory({
 
   try {
     return await db.transaction(async (transaction) => {
+      // Different uploads for one organization must also serialize. A batch-only
+      // lock cannot prevent two refreshed workbooks from creating the same SKU.
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`legacy-inventory-sync:${auth.organization.id}`}))`,
+      );
       await transaction.execute(
         sql`select pg_advisory_xact_lock(hashtext(${`legacy-direct-import:${auth.organization.id}:${batchId}`}))`,
       );
@@ -391,6 +418,7 @@ export async function importLegacyBatchDirectlyToInventory({
           validationStatus: legacyProductRows.validationStatus,
           validationIssues: legacyProductRows.validationIssues,
           rowFingerprint: legacyProductRows.rowFingerprint,
+          rawData: legacyProductRows.rawData,
         })
         .from(legacyProductRows)
         .where(eq(legacyProductRows.batchId, batchId))
@@ -421,6 +449,24 @@ export async function importLegacyBatchDirectlyToInventory({
             sql`${productItems.attributes}->'legacyImport'->>'batchId' = ${batchId}`,
           ),
         );
+
+      if (storedResult?.syncVersion === 1) {
+        const outcomes = storedResult.rowOutcomes ?? [];
+        const expected = new Set(rows.map(row => row.id));
+        const created = outcomes.filter(row => row.kind === "created");
+        const byRow = new Map(created.map(row => [row.rowId, row.itemId]));
+        const consistent = batch.status === "ready" &&
+          storedResult.processedRowCount === rows.length && outcomes.length === rows.length &&
+          new Set(outcomes.map(row => row.rowId)).size === rows.length &&
+          outcomes.every(row => expected.has(row.rowId)) &&
+          created.length === storedResult.importedItemCount &&
+          outcomes.filter(row => row.kind === "deferred").length === storedResult.deferredRowCount &&
+          outcomes.filter(row => row.kind === "existing" || row.kind === "stock_updated").length === storedResult.existingItemCount &&
+          existingImportedItems.length === created.length &&
+          existingImportedItems.every(item => byRow.get(readLegacyImportMetadata(item.attributes)?.rowId ?? "") === item.id);
+        if (!consistent) throw directImportError("SYNC_RESULT_INCONSISTENT", "Hasil sinkronisasi sebelumnya tidak konsisten. Proses dihentikan agar tidak membuat item ganda.", 409);
+        return storedResult;
+      }
 
       if (existingImportedItems.length > 0) {
         const expectedRowIds = new Set(rows.map((row) => row.id));
@@ -579,8 +625,14 @@ export async function importLegacyBatchDirectlyToInventory({
         );
       }
 
-      const [categoryRows, existingMasters, existingAliases, existingItemBarcodes] = await Promise.all([
-        transaction
+      const sync = await planLegacyInventorySync(transaction, {
+        organizationId: auth.organization.id, outletId: batch.outletId, batchId,
+        actorUserId: auth.user.id, now, rows,
+      });
+      const rowsToCreate = sync.newRows;
+      const outcomeByRowId = new Map(sync.outcomes.map(outcome => [outcome.rowId, outcome]));
+
+      const categoryRows = await transaction
           .select({
             id: productCategories.id,
             code: productCategories.code,
@@ -588,18 +640,19 @@ export async function importLegacyBatchDirectlyToInventory({
             isActive: productCategories.isActive,
           })
           .from(productCategories)
-          .where(eq(productCategories.organizationId, auth.organization.id)),
-        transaction
+          .where(eq(productCategories.organizationId, auth.organization.id));
+      const existingMasters = await transaction
           .select({
             id: productMasters.id,
             code: productMasters.code,
             name: productMasters.name,
             categoryId: productMasters.categoryId,
             status: productMasters.status,
+            attributes: productMasters.attributes,
           })
           .from(productMasters)
-          .where(eq(productMasters.organizationId, auth.organization.id)),
-        transaction
+          .where(eq(productMasters.organizationId, auth.organization.id));
+      const existingAliases = await transaction
           .select({ barcodeValue: itemBarcodes.barcodeValue })
           .from(itemBarcodes)
           .where(
@@ -607,12 +660,11 @@ export async function importLegacyBatchDirectlyToInventory({
               eq(itemBarcodes.organizationId, auth.organization.id),
               eq(itemBarcodes.isActive, true),
             ),
-          ),
-        transaction
+          );
+      const existingItemBarcodes = await transaction
           .select({ barcode: productItems.barcode })
           .from(productItems)
-          .where(eq(productItems.organizationId, auth.organization.id)),
-      ]);
+          .where(eq(productItems.organizationId, auth.organization.id));
 
       const categoryByCode = new Map(
         categoryRows.map((row) => [row.code.toLocaleUpperCase("id-ID"), row]),
@@ -626,7 +678,7 @@ export async function importLegacyBatchDirectlyToInventory({
       let createdCategoryCount = 0;
 
       const categoryIdByLegacyName = new Map<string, string>();
-      for (const row of rows) {
+      for (const row of rowsToCreate) {
         const legacyName = getCategoryName(row.legacyCategory);
         const categoryKey = legacyName.toLocaleUpperCase("id-ID");
         if (categoryIdByLegacyName.has(categoryKey)) continue;
@@ -678,6 +730,13 @@ export async function importLegacyBatchDirectlyToInventory({
           master,
         ]),
       );
+      const masterKey = (code: string, categoryId: string, name: string | null) =>
+        JSON.stringify([legacySyncLabel(code), categoryId, legacySyncLabel(name)]);
+      const masterByIdentity = new Map(existingMasters.map(master => {
+        const metadata = master.attributes?.legacyImport as Record<string, unknown> | undefined;
+        const sourceCode = typeof metadata?.legacyMasterCode === "string" ? metadata.legacyMasterCode : master.code;
+        return [masterKey(sourceCode, master.categoryId, master.name), master];
+      }));
       const masterIdByGroup = new Map<string, string>();
       const masterResolutionByLegacyCode = new Map<
         string,
@@ -686,7 +745,7 @@ export async function importLegacyBatchDirectlyToInventory({
       let createdMasterCount = 0;
       let reusedMasterCount = 0;
 
-      for (const row of rows) {
+      for (const row of rowsToCreate) {
         const groupKey = masterGroupingKey(row);
         if (masterIdByGroup.has(groupKey)) continue;
 
@@ -704,10 +763,10 @@ export async function importLegacyBatchDirectlyToInventory({
 
         const legacyCode = normalizeMasterCode(row.legacyMasterCode);
         const existing = legacyCode
-          ? existingMasterByCode.get(legacyCode.toLocaleUpperCase("id-ID"))
+          ? masterByIdentity.get(masterKey(legacyCode, categoryId, row.legacyMasterName)) ?? existingMasterByCode.get(legacyCode.toLocaleUpperCase("id-ID"))
           : null;
 
-        if (existing && existing.categoryId === categoryId) {
+        if (existing && existing.categoryId === categoryId && legacySyncLabel(existing.name) === legacySyncLabel(row.legacyMasterName)) {
           if (existing.status !== "active") {
             await transaction
               .update(productMasters)
@@ -754,13 +813,16 @@ export async function importLegacyBatchDirectlyToInventory({
           status: "active",
         });
 
-        existingMasterByCode.set(code.toLocaleUpperCase("id-ID"), {
+        const createdMaster = {
           id,
           code,
           name,
           categoryId,
-          status: "active",
-        });
+          status: "active" as const,
+          attributes: { legacyImport: { legacyMasterCode: row.legacyMasterCode } },
+        };
+        existingMasterByCode.set(code.toLocaleUpperCase("id-ID"), createdMaster);
+        if (legacyCode) masterByIdentity.set(masterKey(legacyCode, categoryId, row.legacyMasterName), createdMaster);
         masterIdByGroup.set(groupKey, id);
         createdMasterCount += 1;
         if (legacyCode) {
@@ -800,11 +862,11 @@ export async function importLegacyBatchDirectlyToInventory({
           .where(eq(legacyProductMasterMappings.id, mapping.id));
       }
 
-      const sequenceValues = await getNextProductItemIdentifierBatch(
+      const sequenceValues = rowsToCreate.length ? await getNextProductItemIdentifierBatch(
         (query) => transaction.execute(query),
-        rows.length,
-      );
-      if (sequenceValues.length !== rows.length) {
+        rowsToCreate.length,
+      ) : [];
+      if (sequenceValues.length !== rowsToCreate.length) {
         throw directImportError(
           "IDENTIFIER_ALLOCATION_FAILED",
           "Jumlah identitas item yang dialokasikan tidak sesuai jumlah baris import.",
@@ -826,9 +888,11 @@ export async function importLegacyBatchDirectlyToInventory({
       const aliasValues: Array<typeof itemBarcodes.$inferInsert> = [];
       const movementValues: Array<typeof inventoryMovements.$inferInsert> = [];
 
-      for (const [index, row] of rows.entries()) {
+      for (const [index, row] of rowsToCreate.entries()) {
         const identifiers = formatProductItemIdentifiers(sequenceValues[index]!);
         const itemId = randomUUID();
+        outcomeByRowId.get(row.id)!.itemId = itemId;
+        const stockStatus = readLegacyStockStatus(row.rawData);
         const groupKey = masterGroupingKey(row);
         const productMasterId = masterIdByGroup.get(groupKey);
         if (!productMasterId) {
@@ -907,9 +971,9 @@ export async function importLegacyBatchDirectlyToInventory({
           sellingAmount: basePrice === null ? null : String(basePrice),
           pricePerGram: activeRate,
           deductionPerGram,
-          availability: "available",
+          availability: stockStatus === "sold" ? "sold" : "available",
           condition: "good",
-          locationState: "outlet",
+          locationState: stockStatus === "sold" ? "customer" : "outlet",
           locationCode: null,
           imageKey: null,
           attributes: importAttributes({
@@ -956,7 +1020,7 @@ export async function importLegacyBatchDirectlyToInventory({
           createdBy: auth.user.id,
         });
 
-        movementValues.push({
+        if (stockStatus === "available") movementValues.push({
           organizationId: auth.organization.id,
           itemId,
           movementType: "migration_opening",
@@ -999,6 +1063,15 @@ export async function importLegacyBatchDirectlyToInventory({
         systemOnlyBarcodeCount,
         imagePendingCount,
         imageMissingCount,
+        syncVersion: 1,
+        processedRowCount: rows.length,
+        existingItemCount: sync.outcomes.filter(row => row.kind === "existing" || row.kind === "stock_updated").length,
+        updatedStockCount: sync.outcomes.filter(row => row.kind === "stock_updated").length,
+        deferredRowCount: sync.outcomes.filter(row => row.kind === "deferred").length,
+        availableItemCount: rowsToCreate.filter(row => readLegacyStockStatus(row.rawData) === "available").length,
+        soldItemCount: rowsToCreate.filter(row => readLegacyStockStatus(row.rawData) === "sold").length,
+        soldSourceRowCount: sync.outcomes.filter(row => row.stockStatus === "sold").length,
+        rowOutcomes: sync.outcomes,
       };
 
       const previousSummary =
@@ -1034,7 +1107,7 @@ export async function importLegacyBatchDirectlyToInventory({
         entityId: batchId,
         afterData: result,
         reason:
-          "Semua baris XLSX legacy diimport langsung sebagai item tersedia tanpa stock opname, review, migration hold, reconciliation, atau cutover.",
+          "Sinkronisasi XLSX legacy: produk lama dikenali, produk baru ditambahkan sesuai status, dan baris ambigu ditunda. Transaksi RMS tetap dipertahankan.",
         ipAddress: requestMetadata.ipAddress ?? null,
         userAgent: requestMetadata.userAgent?.slice(0, 500) ?? null,
       });

@@ -15,6 +15,7 @@ import { notFound } from "next/navigation";
 
 import { retryLegacyProductImportBatchAction } from "@/app/actions/legacy-product-import";
 import { LegacyImageSyncRunner } from "@/features/legacy-migration/components/legacy-image-sync-runner";
+import { LEGACY_SYNC_REASONS } from "@/features/legacy-migration/sync-policy";
 import {
   getLegacyMigrationBatchDetail,
   type LegacyRowStatusFilter,
@@ -66,7 +67,7 @@ function formatDateTime(value: Date | null, timeZone: string) {
 }
 
 function readStatus(value: string | undefined): LegacyRowStatusFilter {
-  return value === "valid" || value === "warning" || value === "invalid"
+  return value === "valid" || value === "warning" || value === "invalid" || value === "deferred"
     ? value
     : "all";
 }
@@ -141,6 +142,7 @@ function readDirectImportSummary(value: Record<string, unknown>) {
     : {};
 
   return {
+    isSync: data.syncVersion === 1,
     importedItemCount: Number(data.importedItemCount ?? 0),
     createdMasterCount: Number(data.createdMasterCount ?? 0),
     reusedMasterCount: Number(data.reusedMasterCount ?? 0),
@@ -148,6 +150,11 @@ function readDirectImportSummary(value: Record<string, unknown>) {
     cleanupItemCount: Number(data.cleanupItemCount ?? 0),
     legacyBarcodeAliasCount: Number(data.legacyBarcodeAliasCount ?? 0),
     systemOnlyBarcodeCount: Number(data.systemOnlyBarcodeCount ?? 0),
+    existingItemCount: Number(data.existingItemCount ?? 0),
+    updatedStockCount: Number(data.updatedStockCount ?? 0),
+    deferredRowCount: Number(data.deferredRowCount ?? 0),
+    soldSourceRowCount: Number(data.soldSourceRowCount ?? 0),
+    availableItemCount: Number(data.availableItemCount ?? 0),
   };
 }
 
@@ -191,10 +198,10 @@ export default async function LegacyProductBatchPage({
   const directImport = readDirectImportSummary(data.batch.validationSummary);
   const validationCodeCounts = getValidationCodeCounts(data.batch.validationSummary);
   const cleanupCount = data.batch.warningRows + data.batch.invalidRows;
-  const importedCount = directImport.importedItemCount || (data.batch.status === "ready" ? data.batch.totalRows : 0);
+  const importedCount = directImport.isSync ? directImport.importedItemCount : directImport.importedItemCount || (data.batch.status === "ready" ? data.batch.totalRows : 0);
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 max-w-full space-y-6 overflow-x-clip">
       {flashMessage(query.type, query.message)}
 
       <section className="rounded-3xl border border-[var(--border)] bg-white p-6 lg:p-7">
@@ -206,8 +213,8 @@ export default async function LegacyProductBatchPage({
           Kembali ke import produk
         </Link>
 
-        <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_24rem] lg:items-end">
-          <div>
+        <div className="mt-5 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:items-end">
+          <div className="min-w-0">
             <p className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
               <FileSpreadsheet className="size-3.5" />
               Import legacy · {data.batch.worksheetName}
@@ -222,7 +229,7 @@ export default async function LegacyProductBatchPage({
 
           <div
             className={cn(
-              "rounded-2xl border p-4 text-sm leading-6",
+              "min-w-0 break-words rounded-2xl border p-4 text-sm leading-6",
               data.batch.status === "ready"
                 ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                 : data.batch.status === "failed"
@@ -246,7 +253,9 @@ export default async function LegacyProductBatchPage({
             </p>
             <p className="mt-1">
               {data.batch.status === "ready"
-                ? "Item sudah aktif di inventaris/POS. Data warning dapat dirapikan sambil operasional berjalan."
+                ? directImport.isSync
+                  ? `${formatNumber(importedCount)} produk baru · ${formatNumber(directImport.existingItemCount)} sudah ada · ${formatNumber(directImport.deferredRowCount)} ditunda. ${formatNumber(directImport.updatedStockCount)} status stok diperbarui.`
+                  : "Produk dari import sebelumnya sudah tercatat di inventaris."
                 : data.batch.errorMessage ?? "Tidak ada item parsial yang diaktifkan sebelum commit selesai."}
             </p>
             {data.batch.status === "failed" && canImport ? (
@@ -269,22 +278,26 @@ export default async function LegacyProductBatchPage({
         <div className="rounded-3xl border border-[var(--border)] bg-white p-5">
           <PackageCheck className="size-5 text-emerald-600" />
           <p className="mt-3 text-2xl font-semibold text-neutral-950">{formatNumber(importedCount)}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">Item aktif</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Produk baru ditambahkan</p>
+          {directImport.isSync ? <p className="mt-1 text-xs text-[var(--muted)]">{formatNumber(directImport.availableItemCount)} masuk stok tersedia</p> : null}
         </div>
         <div className="rounded-3xl border border-[var(--border)] bg-white p-5">
           <PackageSearch className="size-5 text-neutral-600" />
-          <p className="mt-3 text-2xl font-semibold text-neutral-950">{formatNumber(data.batch.uniqueMasterCount)}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">Product Master</p>
+          <p className="mt-3 text-2xl font-semibold text-neutral-950">{formatNumber(directImport.existingItemCount)}</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Produk sudah ada</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">Tidak dibuat ulang</p>
         </div>
         <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5">
           <AlertTriangle className="size-5 text-amber-700" />
-          <p className="mt-3 text-2xl font-semibold text-amber-950">{formatNumber(directImport.cleanupItemCount || cleanupCount)}</p>
-          <p className="mt-1 text-sm text-amber-800">Perlu dirapikan</p>
+          <p className="mt-3 text-2xl font-semibold text-amber-950">{formatNumber(directImport.isSync ? directImport.deferredRowCount : directImport.cleanupItemCount || cleanupCount)}</p>
+          <p className="mt-1 text-sm text-amber-800">{directImport.isSync ? "Baris ditunda" : "Perlu dirapikan"}</p>
+          {directImport.deferredRowCount > 0 ? <Link href={pageHref({batchId:data.batch.id,page:1,status:"deferred",search:""})} className="mt-2 inline-block text-xs font-semibold text-amber-900 underline">Lihat baris yang perlu diperiksa</Link> : null}
         </div>
         <div className="rounded-3xl border border-[var(--border)] bg-white p-5">
           <ImageIcon className="size-5 text-neutral-600" />
-          <p className="mt-3 text-2xl font-semibold text-neutral-950">{formatNumber(data.batch.imageUrlCount)}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">URL foto sumber</p>
+          <p className="mt-3 text-2xl font-semibold text-neutral-950">{formatNumber(directImport.soldSourceRowCount)}</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Habis/terjual di Excel</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">Status sumber, termasuk baris yang ditunda</p>
         </div>
       </section>
 
@@ -370,7 +383,7 @@ export default async function LegacyProductBatchPage({
           <div>
             <h2 className="font-semibold text-neutral-950">Data sumber & cleanup</h2>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Semua row tetap diimport. Tabel ini hanya membantu mencari data yang ingin dirapikan setelahnya.
+              Lihat hasil pencocokan setiap baris. Baris ditunda dapat diperbaiki di Excel lalu diunggah kembali.
             </p>
           </div>
 
@@ -378,6 +391,7 @@ export default async function LegacyProductBatchPage({
             <label className="relative block">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
               <input
+                key={`search-${data.filters.search}`}
                 name="search"
                 defaultValue={data.filters.search}
                 placeholder="Cari barcode, master, atau produk"
@@ -385,11 +399,13 @@ export default async function LegacyProductBatchPage({
               />
             </label>
             <select
+              key={`status-${data.filters.status}`}
               name="status"
               defaultValue={data.filters.status}
               className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--accent)]"
             >
               <option value="all">Semua data</option>
+              <option value="deferred">Ditunda ({data.statusCounts.deferred})</option>
               <option value="valid">Bersih ({data.statusCounts.valid})</option>
               <option value="warning">Perlu dicek ({data.statusCounts.warning})</option>
               <option value="invalid">Perlu dirapikan ({data.statusCounts.invalid})</option>
@@ -411,7 +427,8 @@ export default async function LegacyProductBatchPage({
                   <th className="px-3 py-3 font-semibold">Produk</th>
                   <th className="px-3 py-3 font-semibold">Spesifikasi</th>
                   <th className="px-3 py-3 font-semibold">Data legacy</th>
-                  <th className="px-3 py-3 font-semibold">Cleanup</th>
+                  <th className="px-3 py-3 font-semibold">Validasi sumber</th>
+                  <th className="px-3 py-3 font-semibold">Hasil sinkronisasi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
@@ -447,8 +464,18 @@ export default async function LegacyProductBatchPage({
                           {row.validationIssues.length > 4 ? <li className="font-medium text-neutral-800">+{row.validationIssues.length - 4} catatan lain</li> : null}
                         </ul>
                       ) : (
-                        <p className="mt-2 text-xs text-emerald-700">Tidak ada anomali otomatis.</p>
+                        <p className="mt-2 text-xs text-emerald-700">Kolom sumber lengkap.</p>
                       )}
+                    </td>
+                    <td className="min-w-56 max-w-sm px-3 py-4 text-xs leading-5">
+                      {row.syncOutcome ? <>
+                        <p className={cn("font-semibold", row.syncOutcome.kind === "deferred" ? "text-amber-800" : "text-emerald-800")}>
+                          {row.syncOutcome.kind === "created" ? "Produk baru" : row.syncOutcome.kind === "deferred" ? "Ditunda" : row.syncOutcome.kind === "stock_updated" ? "Status diperbarui" : "Sudah ada"}
+                        </p>
+                        <p className="mt-1 text-neutral-600">{LEGACY_SYNC_REASONS[row.syncOutcome.reason]}</p>
+                        <p className="mt-1 text-[var(--muted)]">Status Excel: {row.stockStatus === "sold" ? "Habis/terjual" : row.stockStatus === "available" ? "Tersedia" : "Tidak dikenali"}</p>
+                        {row.syncOutcome.itemId ? <Link href={`/admin/inventaris/item/${row.syncOutcome.itemId}`} className="mt-2 inline-block font-semibold text-neutral-900 underline">Lihat produk di inventaris</Link> : null}
+                      </> : <p className="text-[var(--muted)]">{data.batch.status === "ready" ? "Import sebelumnya" : "Belum diproses"}</p>}
                     </td>
                   </tr>
                 ))}

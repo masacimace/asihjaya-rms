@@ -113,13 +113,13 @@ export default async function LegacyProductMigrationPage({
     },
     {
       label: "Item diimport",
-      helper: "Langsung aktif di inventaris",
+      helper: "Produk baru dari hasil import",
       value: data.totals.importedRows,
       Icon: PackageCheck,
     },
     {
-      label: "Perlu dirapikan",
-      helper: "Tidak memblokir operasional",
+      label: "Baris ditunda",
+      helper: "Akumulasi hasil seluruh batch",
       value: data.totals.cleanupRows,
       Icon: AlertTriangle,
     },
@@ -149,21 +149,19 @@ export default async function LegacyProductMigrationPage({
               Import Produk Legacy
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Upload XLSX dari sistem lama dan seluruh baris langsung dibuat
-              sebagai Product Item aktif. Tidak ada stock opname, review,
-              migration hold, reconciliation, atau cutover.
+              Upload Excel dari sistem lama, pilih outlet, lalu klik Sinkronkan
+              Produk. Produk yang sudah ada dikenali otomatis agar tidak ganda.
             </p>
           </div>
 
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
             <p className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
               <CheckCircle2 className="size-4" />
-              Import dibuat non-blocking
+              Sekali upload, otomatis dicocokkan
             </p>
             <p className="mt-2 text-sm leading-6 text-emerald-800">
-              Data yang kurang rapi tetap masuk. Warning dicatat untuk cleanup
-              sambil berjalan, sedangkan foto disalin otomatis setelah item
-              aktif.
+              Produk baru ditambahkan sesuai status stok Excel. Baris yang
+              ambigu ditunda dan dapat diperiksa setelah proses selesai.
             </p>
           </div>
         </div>
@@ -239,22 +237,23 @@ export default async function LegacyProductMigrationPage({
             </div>
 
             <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
-              <p className="font-semibold">Sekali upload langsung aktif</p>
+              <p className="font-semibold">Tanpa mencocokkan produk satu per satu</p>
               <p className="mt-1">
-                Kategori dan Product Master dipetakan/dibuat otomatis, identitas
-                internal dibuat aman, barcode legacy tetap dapat dipindai jika
-                unik, dan semua item masuk ke status Tersedia. Harga legacy
-                hanya disimpan sebagai referensi; POS tetap memakai Harga/Gram
-                aktif berdasarkan Kadar %.
+                Produk lama tidak dibuat ulang. Produk baru mengikuti status
+                stok Excel, dan transaksi yang sudah berjalan tetap
+                dipertahankan. Foto produk baru disalin otomatis.
+              </p>
+              <p className="mt-2 text-xs">
+                Excel lama tanpa kolom status dianggap berisi stok tersedia.
               </p>
             </div>
 
             <FormSubmitButton
-              pendingText="Mengimport produk..."
+              pendingText="Menyinkronkan produk..."
               className="mt-6 w-full bg-neutral-950 hover:bg-neutral-800"
             >
               <FileSpreadsheet className="size-4" />
-              Import XLSX ke Inventaris
+              Sinkronkan Produk
             </FormSubmitButton>
           </form>
         ) : (
@@ -265,30 +264,30 @@ export default async function LegacyProductMigrationPage({
             </h2>
             <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
               Permission <strong>migration.import</strong> diperlukan untuk
-              direct import.
+              sinkronisasi produk.
             </p>
           </section>
         )}
 
         <section className="rounded-3xl border border-[var(--border)] bg-white p-5 lg:p-6">
-          <h2 className="font-semibold text-neutral-950">Aturan import baru</h2>
+          <h2 className="font-semibold text-neutral-950">Sistem mengerjakan otomatis</h2>
           <div className="mt-5 grid gap-3">
             {[
               [
-                "Semua row tetap masuk",
-                "Warning/invalid hanya menjadi penanda cleanup.",
+                "Produk sudah ada",
+                "Dikenali dan tidak dibuat ulang.",
               ],
               [
-                "Langsung Tersedia",
-                "Tidak ada verification session atau stock opname.",
+                "Produk baru",
+                "Ditambahkan mengikuti status stok dari Excel.",
               ],
               [
-                "Barcode duplicate-safe",
-                "Barcode legacy yang bentrok tidak memblokir item; item tetap punya barcode internal unik.",
+                "Data yang bentrok",
+                "Ditunda otomatis; produk lainnya tetap diproses.",
               ],
               [
-                "Foto non-blocking",
-                "URL foto disalin ke storage internal setelah commit. Gagal download tidak mematikan item.",
+                "Transaksi tetap aman",
+                "Status operasional di sistem baru tidak diaktifkan kembali oleh Excel.",
               ],
             ].map(([title, description]) => (
               <div key={title} className="rounded-2xl bg-neutral-50 p-4">
@@ -343,8 +342,7 @@ export default async function LegacyProductMigrationPage({
                     {formatNumber(batch.uniqueMasterCount)} master
                   </p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    {formatNumber(batch.warningRows + batch.invalidRows)} perlu
-                    dirapikan · oleh {batch.uploadedByName}
+                    {batch.syncSummary.syncVersion === 1 ? `${formatNumber(Number(batch.syncSummary.importedItemCount ?? 0))} baru · ${formatNumber(Number(batch.syncSummary.existingItemCount ?? 0))} sudah ada · ${formatNumber(Number(batch.syncSummary.deferredRowCount ?? 0))} ditunda` : `${formatNumber(batch.warningRows + batch.invalidRows)} perlu dirapikan`} · oleh {batch.uploadedByName}
                   </p>
                 </div>
                 <div className="text-xs text-[var(--muted)] md:text-right">

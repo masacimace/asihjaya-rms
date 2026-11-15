@@ -108,9 +108,9 @@ export function LegacyImageSyncRunner({
             Foto produk legacy
           </p>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            Item sudah aktif tanpa menunggu foto. URL legacy disalin bertahap ke
-            internal storage selama halaman batch ini terbuka. Foto yang gagal
-            tidak memblokir POS dan dapat ditambahkan manual nanti.
+            Data produk sudah tersimpan tanpa menunggu foto. Foto produk baru
+            disalin otomatis saat halaman ini dibuka oleh staff berizin.
+            Foto yang gagal dapat ditambahkan manual nanti.
           </p>
         </div>
 

@@ -20,9 +20,10 @@ import {
 } from "@/db/schema";
 import { isLegacyMigrationUuid } from "@/features/legacy-migration/safety";
 import { getLegacyImageSyncSummary } from "@/features/legacy-migration/image-sync-service";
+import { readLegacyStockStatus, readLegacySyncOutcomes } from "@/features/legacy-migration/sync-policy";
 import type { AuthContext } from "@/lib/auth/session";
 
-export type LegacyRowStatusFilter = "all" | "valid" | "warning" | "invalid";
+export type LegacyRowStatusFilter = "all" | "valid" | "warning" | "invalid" | "deferred";
 
 export async function getLegacyMigrationOverview(auth: AuthContext) {
   const outletIds = auth.outlets.map((outlet) => outlet.id);
@@ -58,6 +59,7 @@ export async function getLegacyMigrationOverview(auth: AuthContext) {
         outletCode: outlets.code,
         outletName: outlets.name,
         uploadedByName: users.fullName,
+        syncSummary: sql<Record<string, unknown>>`coalesce(${legacyProductImportBatches.validationSummary}->'directImport', '{}'::jsonb) - 'rowOutcomes'`,
       })
       .from(legacyProductImportBatches)
       .innerJoin(outlets, eq(legacyProductImportBatches.outletId, outlets.id))
@@ -78,11 +80,11 @@ export async function getLegacyMigrationOverview(auth: AuthContext) {
       .select({
         batchCount: count(),
         importedRows:
-          sql<number>`coalesce(sum(${legacyProductImportBatches.totalRows}), 0)::int`.mapWith(
+          sql<number>`coalesce(sum(coalesce((${legacyProductImportBatches.validationSummary}->'directImport'->>'importedItemCount')::int, ${legacyProductImportBatches.totalRows})), 0)::int`.mapWith(
             Number,
           ),
         cleanupRows:
-          sql<number>`coalesce(sum(${legacyProductImportBatches.warningRows} + ${legacyProductImportBatches.invalidRows}), 0)::int`.mapWith(
+          sql<number>`coalesce(sum(coalesce((${legacyProductImportBatches.validationSummary}->'directImport'->>'deferredRowCount')::int, 0)), 0)::int`.mapWith(
             Number,
           ),
         imageUrlRows:
@@ -179,8 +181,13 @@ export async function getLegacyMigrationBatchDetail(
   if (!batch) return null;
 
   const conditions: SQL[] = [eq(legacyProductRows.batchId, batch.id)];
+  const syncOutcomes = readLegacySyncOutcomes(batch.validationSummary);
+  const outcomeByRow = new Map(syncOutcomes.map(outcome => [outcome.rowId, outcome]));
+  const deferredIds = syncOutcomes.filter(outcome => outcome.kind === "deferred").map(outcome => outcome.rowId);
 
-  if (input.status !== "all") {
+  if (input.status === "deferred") {
+    conditions.push(deferredIds.length ? inArray(legacyProductRows.id, deferredIds) : sql`false`);
+  } else if (input.status !== "all") {
     conditions.push(eq(legacyProductRows.validationStatus, input.status));
   }
 
@@ -242,6 +249,7 @@ export async function getLegacyMigrationBatchDetail(
       legacyImageUrl: legacyProductRows.legacyImageUrl,
       validationStatus: legacyProductRows.validationStatus,
       validationIssues: legacyProductRows.validationIssues,
+      rawData: legacyProductRows.rawData,
     })
     .from(legacyProductRows)
     .where(where)
@@ -253,6 +261,7 @@ export async function getLegacyMigrationBatchDetail(
     valid: 0,
     warning: 0,
     invalid: 0,
+    deferred: deferredIds.length,
   };
   for (const row of issueRows) {
     statusCounts[row.status] = Number(row.total);
@@ -273,7 +282,7 @@ export async function getLegacyMigrationBatchDetail(
   return {
     batch,
     imageSync,
-    rows,
+    rows: rows.map(row => ({...row, syncOutcome: outcomeByRow.get(row.id), stockStatus: readLegacyStockStatus(row.rawData)})),
     pagination: {
       page,
       pageSize,

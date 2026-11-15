@@ -396,10 +396,6 @@ test("non-sellable items are found but never returned as POS-ready", async () =>
       options: { legacyBarcode: "005003", outletId: fixture.otherOutletId },
     },
     {
-      barcode: "005004",
-      options: { legacyBarcode: "005004", sellingAmount: null },
-    },
-    {
       barcode: "005005",
       options: { legacyBarcode: "005005", condition: "damaged" },
     },
@@ -421,6 +417,17 @@ test("non-sellable items are found but never returned as POS-ready", async () =>
     const result = await lookup(fixture, entry.barcode);
     assert.equal(result.status, "unavailable", entry.barcode);
   }
+});
+
+test("available legacy items without a stored selling amount can use POS transaction pricing", async () => {
+  const fixture = await createBaseFixture();
+  const item = await createItem(fixture, { legacyBarcode: "005004", sellingAmount: null });
+  const result = await lookup(fixture, "005004");
+  assert.equal(result.status, "found");
+  if (result.status !== "found") return;
+  assert.equal(result.item.id, item.id);
+  assert.equal(result.item.sellingAmount, null);
+  assert.match(result.message, /Pricing Item/);
 });
 
 test("active barcode namespace rejects duplicate values across two items", async () => {
