@@ -339,3 +339,6 @@ jobs:
 
       - name: Verify repeat legacy imports and stock synchronization
         run: npm run test:migration:sync
+
+      - name: Verify legacy barcode catalog search and product lifecycle
+        run: npm run test:migration:legacy-barcode && npm run test:products:lifecycle

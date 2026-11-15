@@ -378,6 +378,7 @@ export async function getRecentProductItems(
       condition: productItems.condition,
       imageKey: productItems.imageKey,
       outletName: outlets.name,
+      isActive: productItems.isActive,
     })
     .from(productItems)
     .leftJoin(outlets, eq(productItems.currentOutletId, outlets.id))

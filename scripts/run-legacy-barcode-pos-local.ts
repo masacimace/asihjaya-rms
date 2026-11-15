@@ -92,7 +92,7 @@ try {
   run("npm", ["run", "db:migrate"]);
 
   console.log("Menjalankan legacy barcode POS integration suite...");
-  run("npm", ["run", process.argv.includes("--sync") ? "test:migration:sync" : "test:migration:legacy-barcode"]);
+  run("npm", ["run", process.argv.includes("--lifecycle") ? "test:products:lifecycle" : process.argv.includes("--sync") ? "test:migration:sync" : "test:migration:legacy-barcode"]);
 } finally {
   console.log("Menghapus PostgreSQL legacy-barcode-test beserta volume sementara...");
   run(

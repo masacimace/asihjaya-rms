@@ -130,6 +130,7 @@ function mapScannedRowToAvailableItem(
     id: row.id,
     sku: row.sku,
     barcode: row.barcode,
+    searchBarcodes: row.searchBarcodes,
     qrValue: row.qrValue,
     serialNumber: row.serialNumber,
     productId: row.productId,
@@ -160,6 +161,16 @@ function activeHeldItemNotExistsCondition() {
     from ${posHeldCartItems}
     where ${posHeldCartItems.productItemId} = ${productItems.id}
       and ${posHeldCartItems.isActive} = true
+  )`;
+}
+
+function activeCatalogBarcodes() {
+  return sql<string[]>`array(
+    select search_barcode.barcode_value from item_barcodes search_barcode
+    where search_barcode.organization_id = ${productItems.organizationId}
+      and search_barcode.item_id = ${productItems.id}
+      and search_barcode.is_active = true
+    order by search_barcode.barcode_value
   )`;
 }
 
@@ -379,6 +390,7 @@ export async function getPosInitialData({
           id: productItems.id,
           sku: productItems.sku,
           barcode: productItems.barcode,
+          searchBarcodes: activeCatalogBarcodes(),
           qrValue: productItems.qrValue,
           serialNumber: productItems.serialNumber,
           weightGram: productItems.weightGram,
@@ -689,7 +701,7 @@ export async function getPosCatalogPage({
   }
 
   if (normalizedSearch) {
-    const searchPattern = `%${normalizedSearch}%`;
+    const searchPattern = `%${normalizedSearch.replace(/[\\%_]/g, "\\$&")}%`;
     const searchCondition = or(
       ilike(productItems.sku, searchPattern),
       ilike(productItems.barcode, searchPattern),
@@ -699,6 +711,13 @@ export async function getPosCatalogPage({
       ilike(productMasters.code, searchPattern),
       ilike(productMasters.name, searchPattern),
       ilike(productCategories.name, searchPattern),
+      sql`exists (
+        select 1 from item_barcodes search_barcode
+        where search_barcode.organization_id = ${productItems.organizationId}
+          and search_barcode.item_id = ${productItems.id}
+          and search_barcode.is_active = true
+          and search_barcode.barcode_value ilike ${searchPattern}
+      )`,
     );
 
     if (searchCondition) {
@@ -731,6 +750,7 @@ export async function getPosCatalogPage({
       id: productItems.id,
       sku: productItems.sku,
       barcode: productItems.barcode,
+      searchBarcodes: activeCatalogBarcodes(),
       qrValue: productItems.qrValue,
       serialNumber: productItems.serialNumber,
       weightGram: productItems.weightGram,
@@ -872,6 +892,7 @@ export async function lookupPosItemByScanValue({
       id: productItems.id,
       sku: productItems.sku,
       barcode: productItems.barcode,
+      searchBarcodes: activeCatalogBarcodes(),
       qrValue: productItems.qrValue,
       serialNumber: productItems.serialNumber,
       weightGram: productItems.weightGram,

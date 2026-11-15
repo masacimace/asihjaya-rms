@@ -228,7 +228,8 @@ export default async function ProductCatalogPage({
     hasPermission(auth, "inventory.receive") ||
     hasPermission(auth, "inventory.manage");
   const canBatchImport = hasPermission(auth, "products.batch_import");
-  const filters = parseProductListFilters(await searchParams);
+  const query = await searchParams;
+  const filters = parseProductListFilters(query);
 
   const [overview, categoryOptions, productList, createCategoryOptions] =
     await Promise.all([
@@ -247,6 +248,7 @@ export default async function ProductCatalogPage({
 
   return (
     <div className="space-y-6">
+      {query.lifecycle === "deleted" ? <p role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">Master produk yang belum digunakan berhasil dihapus.</p> : null}
       <section className="rounded-3xl border border-[var(--border)] bg-white p-5 sm:p-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
           <div className="min-w-0">

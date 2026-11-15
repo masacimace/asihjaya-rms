@@ -31,6 +31,7 @@ import {
   normalizePurityKey,
 } from "@/features/pricing/metal-price-rates";
 import type { AuthContext } from "@/lib/auth/session";
+import { isProductLifecycleArchived } from "@/features/products/lifecycle-contracts";
 
 const INSERT_CHUNK_SIZE = 250;
 
@@ -629,7 +630,7 @@ export async function importLegacyBatchDirectlyToInventory({
         organizationId: auth.organization.id, outletId: batch.outletId, batchId,
         actorUserId: auth.user.id, now, rows,
       });
-      const rowsToCreate = sync.newRows;
+      let rowsToCreate = sync.newRows;
       const outcomeByRowId = new Map(sync.outcomes.map(outcome => [outcome.rowId, outcome]));
 
       const categoryRows = await transaction
@@ -665,6 +666,25 @@ export async function importLegacyBatchDirectlyToInventory({
           .select({ barcode: productItems.barcode })
           .from(productItems)
           .where(eq(productItems.organizationId, auth.organization.id));
+
+      rowsToCreate = rowsToCreate.filter(row => {
+        const category = categoryRows.find(candidate => candidate.code.toLocaleUpperCase("id-ID") === normalizeCategoryCode(row.legacyCategory).toLocaleUpperCase("id-ID"))
+          ?? categoryRows.find(candidate => legacySyncLabel(candidate.name) === legacySyncLabel(getCategoryName(row.legacyCategory)));
+        if (!category) return true;
+        const matchingCode = existingMasters.filter(master => {
+          const metadata = master.attributes?.legacyImport as Record<string, unknown> | undefined;
+          const sourceCode = typeof metadata?.legacyMasterCode === "string" ? metadata.legacyMasterCode : master.code;
+          return master.categoryId === category.id && normalizeMasterCode(sourceCode) === normalizeMasterCode(row.legacyMasterCode);
+        });
+        const activeMatch = matchingCode.some(master => !isProductLifecycleArchived(master.attributes) && legacySyncLabel(master.name) === legacySyncLabel(row.legacyMasterName));
+        if (!activeMatch && matchingCode.some(master => isProductLifecycleArchived(master.attributes))) {
+          const outcome = outcomeByRowId.get(row.id)!;
+          outcome.kind = "deferred";
+          outcome.reason = "master_archived";
+          return false;
+        }
+        return true;
+      });
 
       const categoryByCode = new Map(
         categoryRows.map((row) => [row.code.toLocaleUpperCase("id-ID"), row]),

@@ -29,6 +29,7 @@ export type PosAvailableItem = {
   id: string;
   sku: string;
   barcode: string;
+  searchBarcodes?: string[];
   qrValue: string | null;
   serialNumber: string | null;
   productId: string;

@@ -60,6 +60,8 @@ Summary `validation_summary.directImport` memakai `syncVersion=1`, mencatat juml
 
 ## Foto
 
+Item yang sengaja diarsipkan di RMS tetap dikenali tanpa diaktifkan kembali. SKU baru pada master yang diarsipkan ditunda dengan alasan `master_archived`; pemulihan dilakukan melalui detail master sebelum file diunggah kembali.
+
 Produk baru menyimpan URL sumber dan foto disalin setelah commit. Gagal download tidak menggagalkan sinkronisasi. Produk lama mempertahankan foto RMS, dan baris ditunda tidak menjalankan download.
 
 ## Validasi

@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ProductLifecycleControls } from "@/components/products/product-lifecycle-controls";
+import { canManageProductLifecycle, getProductLifecycleState } from "@/features/products/lifecycle-service";
 
 import { ProductImage } from "@/components/media/product-image";
 import { getProductItemDetail } from "@/features/inventory/product-item-queries";
@@ -316,6 +318,9 @@ export default async function ProductItemDetailPage({
   if (!item) {
     notFound();
   }
+  const canManageLifecycle = canManageProductLifecycle(auth, "item") && auth.outlets.length > 0 &&
+    (!item.currentOutletId || auth.outlets.some(outlet => outlet.id === item.currentOutletId));
+  const lifecycleState = canManageLifecycle ? await getProductLifecycleState(auth, "item", item.id) : null;
 
   const activePriceRates = await getActiveGoldPriceRateMap(auth.organization.id);
   const purityKey = normalizePurityKey(item.purityPercent);
@@ -326,6 +331,7 @@ export default async function ProductItemDetailPage({
     ratePerGram: currentPricePerGram,
   });
   const canEdit =
+    item.isActive &&
     ["draft", "available"].includes(item.availability) &&
     ["inventory.receive", "inventory.adjust", "inventory.manage"].some(
       (permission) => hasPermission(auth, permission),
@@ -378,6 +384,7 @@ export default async function ProductItemDetailPage({
             ) : null}
 
             {canPrintLabel ? <PrintLabelButton itemId={item.id} /> : null}
+            {lifecycleState ? <ProductLifecycleControls entity="item" id={item.id} state={lifecycleState}/> : null}
 
             <Link
               href={`/admin/produk/${item.productId}`}

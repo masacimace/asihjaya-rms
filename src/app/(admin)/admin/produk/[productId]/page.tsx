@@ -14,6 +14,8 @@ import { ProductImage } from "@/components/media/product-image";
 import { notFound } from "next/navigation";
 
 import { ProductMasterForm } from "@/components/products/product-master-form";
+import { ProductLifecycleControls } from "@/components/products/product-lifecycle-controls";
+import { getProductLifecycleState } from "@/features/products/lifecycle-service";
 import { getRecentProductItems } from "@/features/inventory/product-item-queries";
 import { getProductInventoryAccess } from "@/features/products/access";
 import { getProductMasterCategoryOptions } from "@/features/products/product-master-queries";
@@ -118,6 +120,7 @@ export default async function ProductDetailPage({
   if (!product) {
     notFound();
   }
+  const lifecycleState = canManage ? await getProductLifecycleState(auth, "master", product.id) : null;
 
   const categoryOptions = canManage
     ? await getProductMasterCategoryOptions(
@@ -235,6 +238,7 @@ export default async function ProductDetailPage({
                   Tambah Produk
                 </Link>
               ) : null}
+              {lifecycleState ? <ProductLifecycleControls entity="master" id={product.id} state={lifecycleState}/> : null}
             </div>
           </div>
         </div>
@@ -359,10 +363,10 @@ export default async function ProductDetailPage({
                         <span
                           className={cn(
                             "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
-                            getAvailabilityClass(item.availability),
+                            item.isActive ? getAvailabilityClass(item.availability) : "bg-neutral-100 text-neutral-600",
                           )}
                         >
-                          {availabilityLabels[item.availability]}
+                          {item.isActive ? availabilityLabels[item.availability] : "Diarsipkan"}
                         </span>
                         <p className="mt-2 text-xs text-[var(--muted)]">
                           {item.condition === "used"
@@ -446,10 +450,10 @@ export default async function ProductDetailPage({
                             <span
                               className={cn(
                                 "rounded-full border px-2 py-1 text-[11px] font-semibold",
-                                getAvailabilityClass(item.availability),
+                                item.isActive ? getAvailabilityClass(item.availability) : "bg-neutral-100 text-neutral-600",
                               )}
                             >
-                              {availabilityLabels[item.availability]}
+                              {item.isActive ? availabilityLabels[item.availability] : "Diarsipkan"}
                             </span>
                             <span className="text-xs text-[var(--muted)]">
                               {item.condition === "used"
@@ -611,7 +615,7 @@ export default async function ProductDetailPage({
         </aside>
       </section>
 
-      {canManage ? (
+      {canManage && lifecycleState?.operation !== "restore" ? (
         <details className="group rounded-2xl border border-[var(--border)] bg-white">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 marker:content-none sm:px-5 [&::-webkit-details-marker]:hidden">
             <div className="min-w-0">

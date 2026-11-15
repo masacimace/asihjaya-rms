@@ -299,7 +299,8 @@ export default async function InventoryPage({
     "inventory.transfer",
     "inventory.manage",
   ]);
-  const filters = parseProductItemListFilters(await searchParams);
+  const query = await searchParams;
+  const filters = parseProductItemListFilters(query);
   const [overview, outletOptions, itemList, activePriceRateMap] =
     await Promise.all([
       getProductItemOverview(auth.organization.id),
@@ -331,6 +332,7 @@ export default async function InventoryPage({
 
   return (
     <div className="space-y-6">
+      {query.lifecycle === "deleted" ? <p role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">Produk yang belum digunakan berhasil dihapus.</p> : null}
       <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white">
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_23rem] lg:items-end lg:p-7">
           <div>

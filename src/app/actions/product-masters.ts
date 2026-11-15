@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -19,13 +19,13 @@ import {
   type QuickProductMasterActionState,
 } from "@/features/products/product-master-contracts";
 import type { ProductStatus } from "@/features/products/contracts";
+import { isProductLifecycleArchived } from "@/features/products/lifecycle-contracts";
 import { getClientIp } from "@/lib/http/client-ip";
 import { requirePermission } from "@/lib/auth/session";
 
 const PRODUCT_CODE_PATTERN = /^[A-Z0-9][A-Z0-9_\/-]{1,63}$/;
-const OPERATIONAL_ITEM_AVAILABILITIES: Array<
-  "draft" | "migration_hold" | "available" | "reserved"
-> = ["draft", "migration_hold", "available", "reserved"];
+const OPERATIONAL_ITEM_AVAILABILITIES: Array<typeof productItems.$inferSelect.availability> =
+  ["draft", "migration_hold", "processing", "available", "reserved", "inspection"];
 
 function failure(
   message: string,
@@ -501,6 +501,7 @@ export async function updateProductMasterAction(
   if (!existing) {
     return failure("Produk tidak ditemukan.");
   }
+  if (isProductLifecycleArchived(existing.attributes)) return failure("Pulihkan master produk dari arsip terlebih dahulu sebelum mengedit.");
 
   const name = readText(formData, "name");
   const categoryId = readText(formData, "categoryId");
@@ -553,7 +554,7 @@ export async function updateProductMasterAction(
     });
   }
 
-  if (existing.status === "active" && status === "inactive") {
+  if (status === "inactive") {
     const operationalItemRows = await db
       .select({ total: count() })
       .from(productItems)
@@ -582,7 +583,15 @@ export async function updateProductMasterAction(
 
   try {
     await db.transaction(async (transaction) => {
-      await transaction
+      const [liveMaster] = await transaction.select({attributes:productMasters.attributes}).from(productMasters)
+        .where(and(eq(productMasters.id,productId),eq(productMasters.organizationId,auth.organization.id))).for("update");
+      if (!liveMaster || isProductLifecycleArchived(liveMaster.attributes)) throw new Error("Master sudah diarsipkan atau tidak tersedia.");
+      if (status === "inactive") {
+        const [operational] = await transaction.select({total:count()}).from(productItems)
+          .where(and(eq(productItems.productMasterId,productId),eq(productItems.isActive,true),inArray(productItems.availability,OPERATIONAL_ITEM_AVAILABILITIES)));
+        if (Number(operational?.total)>0) throw new Error("Master masih memiliki item operasional aktif.");
+      }
+      const updated = await transaction
         .update(productMasters)
         .set({
           categoryId,
@@ -597,8 +606,10 @@ export async function updateProductMasterAction(
           and(
             eq(productMasters.id, productId),
             eq(productMasters.organizationId, auth.organization.id),
+            sql`coalesce(${productMasters.attributes}->'productLifecycle'->>'archived', 'false') <> 'true'`,
           ),
-        );
+        ).returning({id:productMasters.id});
+      if (!updated.length) throw new Error("Master produk diarsipkan selama proses edit. Muat ulang halaman.");
 
       await transaction.insert(auditLogs).values({
         organizationId: auth.organization.id,

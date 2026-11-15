@@ -5,7 +5,8 @@ import { sql } from "drizzle-orm";
 
 import { db, pool } from "@/db";
 import { claimProductItemsForSale } from "@/features/pos/inventory-sale-claim";
-import { lookupPosItemByScanValue } from "@/features/pos/queries";
+import { getPosCatalogPage, getPosInitialData, lookupPosItemByScanValue } from "@/features/pos/queries";
+import { filterPosCatalogItems } from "@/features/pos/catalog-state";
 
 const TEST_CASES: Array<{ name: string; run: () => Promise<void> }> = [];
 
@@ -43,7 +44,7 @@ type ItemOptions = {
   serialNumber?: string | null;
   outletId?: string;
   masterId?: string;
-  availability?: "draft" | "migration_hold" | "available" | "reserved" | "inspection" | "sold";
+  availability?: "draft" | "migration_hold" | "processing" | "available" | "reserved" | "inspection" | "sold";
   condition?: "good" | "damaged" | "lost" | "returned";
   locationState?: "outlet" | "warehouse" | "in_transit" | "customer" | "repair";
   sellingAmount?: string | null;
@@ -66,7 +67,7 @@ async function queryOne<T extends Record<string, unknown>>(
   return result.rows[0]!;
 }
 
-async function assertDisposablePostgres17() {
+export async function assertDisposablePostgres17() {
   const result = await queryOne<{
     version_number: string;
     database_name: string;
@@ -88,7 +89,7 @@ async function assertDisposablePostgres17() {
   );
 }
 
-async function resetPublicTables() {
+export async function resetPublicTables() {
   const result = await pool.query<{ tablename: string }>(
     `select tablename
        from pg_tables
@@ -104,7 +105,7 @@ async function resetPublicTables() {
   }
 }
 
-async function createBaseFixture(): Promise<BaseFixture> {
+export async function createBaseFixture(): Promise<BaseFixture> {
   const fixture: BaseFixture = {
     organizationId: id(),
     outletId: id(),
@@ -195,7 +196,7 @@ async function createBaseFixture(): Promise<BaseFixture> {
   return fixture;
 }
 
-async function createItem(
+export async function createItem(
   fixture: BaseFixture,
   options: ItemOptions = {},
 ): Promise<CreatedItem> {
@@ -539,6 +540,47 @@ test("legacy barcode lookup feeds a completed sale claim and movement smoke flow
 
   const secondLookup = await lookup(fixture, "008888");
   assert.equal(secondLookup.status, "unavailable");
+});
+
+test("catalog search supports full and partial legacy barcodes with leading zeroes", async () => {
+  const fixture = await createBaseFixture();
+  await pool.query("update product_masters set code='CATALOG-MASTER' where id=$1",[fixture.masterId]);
+  const item = await createItem(fixture,{legacyBarcode:"003037",sku:"CATALOG-ONE",internalBarcode:"AJCATALOGONE"});
+  for (const searchQuery of ["003037","3037"," 003037 "]) {
+    const page = await getPosCatalogPage({organizationId:fixture.organizationId,outletId:fixture.outletId,searchQuery});
+    assert.deepEqual(page.items.map(row=>row.id),[item.id]);
+    assert(page.items[0]!.searchBarcodes!.includes("003037"));
+    assert.equal(filterPosCatalogItems({items:page.items,activeCategoryId:"all",searchQuery}).length,1);
+  }
+  const initial = await getPosInitialData({organizationId:fixture.organizationId,outletId:fixture.outletId,timezone:"Asia/Jakarta"});
+  assert(initial.items.find(row=>row.id===item.id)!.searchBarcodes!.includes("003037"));
+  const scanned = await lookup(fixture,"003037");
+  assert.equal(scanned.status,"found");
+  if(scanned.status === "found") assert(scanned.item.searchBarcodes!.includes("003037"));
+});
+
+test("catalog alias search keeps outlet, organization, active alias and sellable stock restrictions", async () => {
+  const fixture = await createBaseFixture();
+  await createItem(fixture,{legacyBarcode:"998801",legacyBarcodeActive:false});
+  await createItem(fixture,{legacyBarcode:"998802",availability:"sold",locationState:"customer"});
+  await createItem(fixture,{legacyBarcode:"998803",isActive:false});
+  await createItem(fixture,{legacyBarcode:"998804",outletId:fixture.otherOutletId});
+  const other = await createBaseFixture();
+  await createItem(other,{legacyBarcode:"998805"});
+  for(const searchQuery of ["998801","998802","998803","998804","998805"]) {
+    const page = await getPosCatalogPage({organizationId:fixture.organizationId,outletId:fixture.outletId,searchQuery});
+    assert.equal(page.items.length,0,searchQuery);
+  }
+});
+
+test("multiple matching barcode aliases do not duplicate catalog rows or pagination", async () => {
+  const fixture = await createBaseFixture();
+  const item = await createItem(fixture,{legacyBarcode:"003037"});
+  await pool.query("insert into item_barcodes(organization_id,item_id,barcode_value,source,is_active,is_primary) values($1,$2,'003038','manual',true,false)",[fixture.organizationId,item.id]);
+  const page = await getPosCatalogPage({organizationId:fixture.organizationId,outletId:fixture.outletId,searchQuery:"00303"});
+  assert.deepEqual(page.items.map(row=>row.id),[item.id]);assert.equal(page.hasMore,false);
+  const literal = await getPosCatalogPage({organizationId:fixture.organizationId,outletId:fixture.outletId,searchQuery:"%"});
+  assert.equal(literal.items.length,0);
 });
 
 export async function runLegacyBarcodePosSuite() {

@@ -11,6 +11,7 @@ import { readLegacyStockStatus } from "@/features/legacy-migration/sync-policy";
 import { parseLegacyProductWorkbook } from "@/features/legacy-migration/xlsx-parser";
 import { claimProductItemsForSale } from "@/features/pos/inventory-sale-claim";
 import type { AuthContext } from "@/lib/auth/session";
+import { changeProductLifecycle } from "@/features/products/lifecycle-service";
 
 type Source = { barcode:string; name?:string; master?:string; masterName?:string; status?:string; price?:number; weight?:number };
 const headers = ["No","Kode Produk","Kategori (*)","Kode Master Produk (*)","Nama Master Produk (*)","Nama Produk Per SKU (*)","Kadar Persen (*)","Kadar Tukaran (*)","Harga (*)","Potongan / Gram (*)","Berat / Gram (*)","Warna (*)","Foto (*)"];
@@ -206,6 +207,20 @@ test("new item insert failure rolls back status updates and every row can be ret
   assert.equal((await items(auth))[0]!.availability,"available");assert.equal((await counts()).adjustments,0);
   const retry=await importLegacyBatchDirectlyToInventory({auth,batchId});
   assert.equal(retry.importedItemCount,1);assert.equal(retry.updatedStockCount,1);assert.equal((await items(auth)).length,2);
+});
+
+test("repeat legacy imports respect archived items and defer new SKUs under archived masters",async()=>{
+  const base=await fixture(),auth={...base,permissionCodes:[...base.permissionCodes,"inventory.adjust","products.manage"]};
+  await sync(auth,[{barcode:"003037"}]);
+  const item=(await items(auth))[0]!;
+  await changeProductLifecycle({auth,entity:"item",id:item.id,operation:"archive"});
+  await changeProductLifecycle({auth,entity:"master",id:item.productMasterId,operation:"archive"});
+  const result=await sync(auth,[{barcode:"003037"},{barcode:"005555"}]);
+  assert.equal(result.importedItemCount,0);assert.equal(result.existingItemCount,1);
+  assert.equal(result.rowOutcomes!.find(row=>row.reason==="master_archived")?.kind,"deferred");
+  assert.equal((await items(auth))[0]!.isActive,false);
+  await changeProductLifecycle({auth,entity:"master",id:item.productMasterId,operation:"restore"});
+  const resumed=await sync(auth,[{barcode:"005555"}]);assert.equal(resumed.importedItemCount,1);
 });
 
 export async function runLegacyProductSyncSuite() {

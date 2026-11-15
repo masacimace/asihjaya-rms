@@ -23,6 +23,7 @@ import {
   normalizePurityKey,
 } from "@/features/pricing/metal-price-rates";
 import type { AuthContext } from "@/lib/auth/session";
+import { isProductLifecycleArchived } from "@/features/products/lifecycle-contracts";
 import {
   deleteImageFileStrict,
   storeImageBuffer,
@@ -889,6 +890,9 @@ async function commitBusinessData({
 
   return db.transaction(async (transaction) => {
     await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`legacy-inventory-sync:${plan.organizationId}`}))`,
+    );
+    await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtext(${`product-batch-import-session:${plan.sessionId}`}))`,
     );
     if (plan.templateVersion === 2) {
@@ -1024,6 +1028,7 @@ async function commitBusinessData({
             code: productMasters.code,
             name: productMasters.name,
             status: productMasters.status,
+            attributes: productMasters.attributes,
           })
           .from(productMasters)
           .where(eq(productMasters.organizationId, plan.organizationId))
@@ -1147,6 +1152,9 @@ async function commitBusinessData({
         let code: string;
         const existingMaster = masterCandidates[0] ?? null;
         if (existingMaster) {
+          if (isProductLifecycleArchived(existingMaster.attributes)) throw commitError(
+            "PRODUCT_MASTER_ARCHIVED", `Master ${masterName} sudah diarsipkan. Pulihkan master terlebih dahulu sebelum mengimport produk baru.`, 409,
+          );
           productMasterId = existingMaster.id;
           code = existingMaster.code;
           if (existingMaster.status !== "active") {
@@ -1221,6 +1229,7 @@ async function commitBusinessData({
             code,
             name: masterName,
             status: "active",
+            attributes: {},
           });
           createdMasterCount += 1;
 

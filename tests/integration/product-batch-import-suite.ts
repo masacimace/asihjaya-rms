@@ -33,6 +33,7 @@ import {
   PRODUCT_BATCH_IMPORT_METADATA_HEADERS,
   PRODUCT_BATCH_IMPORT_LEGACY_TEMPLATE_VERSION,
   PRODUCT_BATCH_IMPORT_LEGACY_TYPE,
+  PRODUCT_BATCH_IMPORT_V2_HEADERS,
 } from "@/features/product-batch-import/contracts";
 import { printProductBatchImportLabels } from "@/features/product-batch-import/label-service";
 import { getProductBatchImportPreview } from "@/features/product-batch-import/preview-queries";
@@ -42,6 +43,7 @@ import {
   ProductBatchImportDuplicateError,
 } from "@/features/product-batch-import/session-service";
 import { lookupPosItemByScanValue } from "@/features/pos/queries";
+import { changeProductLifecycle } from "@/features/products/lifecycle-service";
 import { buildXlsxBuffer, type ExportCell } from "@/lib/export-files";
 import type { AuthContext } from "@/lib/auth/session";
 
@@ -1007,6 +1009,25 @@ test("concurrent double commit produces exactly one completed batch", async () =
   assert.equal(await queryCount("product_masters", "where organization_id = $1", [fixture.organizationId]), 1);
   assert.equal(await queryCount("product_items", "where organization_id = $1", [fixture.organizationId]), 1);
   assert.equal(await queryCount("item_barcodes", "where organization_id = $1", [fixture.organizationId]), 1);
+});
+
+test("v2 commit refuses a master archived after staging instead of automatically reactivating it", async () => {
+  const fixture = await createOrganizationFixture("ARCHIVE");
+  const masterId = id();
+  await db.insert(productMasters).values({id:masterId,organizationId:fixture.organizationId,categoryId:fixture.categoryId,code:"ARCHIVED-MASTER",name:"Cincin Riwayat",status:"active"});
+  const workbook = buildXlsxBuffer([{name:"PRODUCTS",columns:[...PRODUCT_BATCH_IMPORT_V2_HEADERS],rows:[[
+    fixture.categoryCode,"Cincin Riwayat","Cincin Test",fixture.outletCode,1.5,75,80,"Poles","good",25000,"","",
+  ]]}]);
+  const embedded = buildInCellImageWorkbookFixture(workbook,[{sheetName:"PRODUCTS",rowNumber:2,columnIndex:10,data:VALID_PNG,extension:".png"}]);
+  const session = await createSession(fixture,embedded,"archive-master.xlsx");
+  assert.equal(session.status,"ready");
+  const auth = {...fixture.auth,permissionCodes:[...fixture.auth.permissionCodes,"products.manage"]};
+  await changeProductLifecycle({auth,entity:"master",id:masterId,operation:"archive"});
+  await assert.rejects(()=>commitProductBatchImportSession({auth:fixture.auth,sessionId:session.id}),
+    (error:unknown)=>error instanceof ProductBatchImportCommitError && error.code === "PRODUCT_MASTER_ARCHIVED");
+  const [master] = await db.select({status:productMasters.status}).from(productMasters).where(eq(productMasters.id,masterId));
+  assert.equal(master!.status,"inactive");
+  assert.equal((await pool.query("select count(*)::int count from product_items where organization_id=$1",[fixture.organizationId])).rows[0].count,0);
 });
 
 export async function runProductBatchImportIntegrationSuite() {

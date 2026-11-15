@@ -61,6 +61,7 @@ export const LEGACY_SYNC_REASONS = {
   status_preserved: "Status yang sudah berjalan di sistem baru dipertahankan. Item tidak diaktifkan kembali.",
   stock_updated: "Status stok diperbarui menjadi habis/terjual sesuai Excel. Tidak ada transaksi penjualan baru.",
   created: "Produk baru ditambahkan sesuai status stok Excel.",
+  master_archived: "Master produk sudah diarsipkan di RMS. Pulihkan master terlebih dahulu jika produk ini masih akan digunakan.",
 } as const;
 
 export type LegacySyncReason = keyof typeof LEGACY_SYNC_REASONS;

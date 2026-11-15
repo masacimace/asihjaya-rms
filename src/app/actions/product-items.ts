@@ -6,6 +6,8 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { changeProductLifecycleAction } from "@/app/actions/product-lifecycle";
+import { isProductLifecycleArchived } from "@/features/products/lifecycle-contracts";
 
 import { db } from "@/db";
 import {
@@ -451,6 +453,11 @@ export async function createProductItemAction(
 
   try {
     await db.transaction(async (transaction) => {
+      const [currentMaster] = await transaction.select({status:productMasters.status,attributes:productMasters.attributes})
+        .from(productMasters).where(and(eq(productMasters.id,productId),eq(productMasters.organizationId,auth.organization.id))).for("share");
+      if (!currentMaster || isProductLifecycleArchived(currentMaster.attributes) || currentMaster.status === "inactive" || targetAvailability === "available" && currentMaster.status !== "active") {
+        throw new Error("Master produk tidak lagi tersedia untuk penambahan item. Muat ulang halaman.");
+      }
       const identifiers = await getNextProductItemIdentifiers((query) =>
         transaction.execute(query),
       );
@@ -845,7 +852,7 @@ export async function updateProductItemAction(
 
   try {
     await db.transaction(async (transaction) => {
-      await transaction
+      const updated = await transaction
         .update(productItems)
         .set({
           displayName,
@@ -872,8 +879,11 @@ export async function updateProductItemAction(
           and(
             eq(productItems.id, itemId),
             eq(productItems.organizationId, auth.organization.id),
+            eq(productItems.isActive, true),
+            eq(productItems.availability, existing.availability),
           ),
-        );
+        ).returning({id:productItems.id});
+      if (!updated.length) throw new Error("Status item berubah. Muat ulang halaman sebelum mengedit.");
 
       if (isActivation && finalOutlet) {
         await transaction.insert(inventoryMovements).values({
@@ -969,85 +979,13 @@ export async function updateProductItemAction(
 export async function archiveProductItemAction(
   itemId: string,
 ): Promise<ProductItemActionState> {
-  const auth = await requireAnyPermission(["inventory.manage"]);
-
-  try {
-    await db.transaction(async (tx) => {
-      const [updated] = await tx
-        .update(productItems)
-        .set({ isActive: false, updatedAt: new Date() })
-        .where(
-          and(
-            eq(productItems.id, itemId),
-            eq(productItems.organizationId, auth.organization.id),
-          ),
-        )
-        .returning({ id: productItems.id });
-
-      if (!updated) {
-        throw new Error("Item tidak ditemukan atau tidak dapat diakses.");
-      }
-
-      await tx.insert(auditLogs).values({
-        organizationId: auth.organization.id,
-        actorUserId: auth.user.id,
-        action: "archive",
-        entityType: "product_item",
-        entityId: itemId,
-        reason: "Item diarsipkan oleh admin",
-      });
-    });
-
-    revalidatePath("/admin/inventaris");
-    revalidatePath(`/admin/inventaris/item/${itemId}`);
-    revalidatePath(`/admin/inventaris/item/${itemId}/edit`);
-
-    return success("Item fisik berhasil diarsipkan.");
-  } catch (error) {
-    console.error("Gagal mengarsipkan item:", error);
-    return failure("Gagal mengarsipkan item. Silakan coba kembali.");
-  }
+  const result = await changeProductLifecycleAction("item", itemId, "archive");
+  return {status:result.status,message:result.message};
 }
 
 export async function restoreProductItemAction(
   itemId: string,
 ): Promise<ProductItemActionState> {
-  const auth = await requireAnyPermission(["inventory.manage"]);
-
-  try {
-    await db.transaction(async (tx) => {
-      const [updated] = await tx
-        .update(productItems)
-        .set({ isActive: true, updatedAt: new Date() })
-        .where(
-          and(
-            eq(productItems.id, itemId),
-            eq(productItems.organizationId, auth.organization.id),
-          ),
-        )
-        .returning({ id: productItems.id });
-
-      if (!updated) {
-        throw new Error("Item tidak ditemukan atau tidak dapat diakses.");
-      }
-
-      await tx.insert(auditLogs).values({
-        organizationId: auth.organization.id,
-        actorUserId: auth.user.id,
-        action: "restore",
-        entityType: "product_item",
-        entityId: itemId,
-        reason: "Item dipulihkan dari arsip oleh admin",
-      });
-    });
-
-    revalidatePath("/admin/inventaris");
-    revalidatePath(`/admin/inventaris/item/${itemId}`);
-    revalidatePath(`/admin/inventaris/item/${itemId}/edit`);
-
-    return success("Item fisik berhasil dipulihkan.");
-  } catch (error) {
-    console.error("Gagal memulihkan item:", error);
-    return failure("Gagal memulihkan item. Silakan coba kembali.");
-  }
+  const result = await changeProductLifecycleAction("item", itemId, "restore");
+  return {status:result.status,message:result.message};
 }

@@ -109,6 +109,7 @@ export function filterPosCatalogItems({
     return [
       item.sku,
       item.barcode,
+      ...(item.searchBarcodes ?? []),
       item.qrValue,
       item.serialNumber,
       item.productCode,
