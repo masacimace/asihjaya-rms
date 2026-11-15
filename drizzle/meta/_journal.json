@@ -225,6 +225,13 @@
       "when": 1794637915031,
       "tag": "0031_pos_trade_in",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794716602375,
+      "tag": "0032_hardware_installer_download_url",
+      "breakpoints": true
     }
   ]
 }

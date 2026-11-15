@@ -51,6 +51,8 @@ Gunakan exact SHA agar release yang dipasang tidak ambigu.
 
 ## 5. Setelah mengubah `.env.production` di VPS
 
+Untuk mengganti link download installer Hardware Hub, gunakan **Hardware Hub → Ubah Link Installer → Simpan Link** setelah aplikasi dan migration `0032_hardware_installer_download_url` terpasang. Perubahan link melalui web berlaku langsung untuk seluruh outlet dalam organisasi tanpa redeploy; `HARDWARE_HUB_INSTALLER_DOWNLOAD_URL` hanya fallback sebelum ada link yang disimpan.
+
 Canonical environment:
 
 ```text

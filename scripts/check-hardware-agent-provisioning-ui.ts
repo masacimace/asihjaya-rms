@@ -55,9 +55,9 @@ assert(
   "Setup Hardware Hub wajib dibatasi permission hardware.agents.manage.",
 );
 assert(
-  page.includes("resolveHardwareInstallerDownloadUrl(process.env)") &&
+  page.includes("getHardwareInstallerSettings(auth.organization.id)") &&
     page.includes("installerDownloadAvailable"),
-  "Header Hardware Hub wajib mengecek availability installer dari shared server-side environment policy.",
+  "Header Hardware Hub wajib mengecek availability installer dari pengaturan organisasi.",
 );
 assert(
   page.includes("data-hardware-header-actions") &&
@@ -78,7 +78,7 @@ assert(
 assert(
   page.includes("border-amber-200 bg-amber-50") &&
     page.includes("Installer belum dipublish") &&
-    page.includes("HARDWARE_HUB_INSTALLER_DOWNLOAD_URL"),
+    page.includes("Ubah Link Installer") && page.includes("HardwareInstallerSettingsDialog"),
   "Installer yang belum tersedia wajib memakai warning card yang jelas tanpa menghilangkan setup flow.",
 );
 assert(
@@ -112,7 +112,7 @@ assert(
 );
 assert(
   installerDownloadRoute.includes('hasPermission(auth, "hardware.agents.manage")') &&
-    installerDownloadRoute.includes("resolveHardwareInstallerDownloadUrl(process.env)") &&
+    installerDownloadRoute.includes("getHardwareInstallerSettings(auth.organization.id)") &&
     installerDownloadRoute.includes("NextResponse.redirect"),
   "Installer download redirect wajib permission-gated dan memakai shared server-side URL policy.",
 );

@@ -39,6 +39,10 @@ export function collectHardwareInstallerEnvironmentIssues(
     return issues;
   }
 
+  if (raw.length > 2048) {
+    issues.push({ name: INSTALLER_ENV_NAME, message: "maksimal 2048 karakter." });
+  }
+
   if (PLACEHOLDER_PATTERN.test(raw)) {
     issues.push({
       name: INSTALLER_ENV_NAME,
@@ -112,6 +116,16 @@ export function resolveHardwareInstallerDownloadUrl(
   } catch {
     return null;
   }
+}
+
+export function resolveConfiguredHardwareInstallerUrl(
+  savedUrl: string | null,
+  environment: HardwareInstallerEnvironmentSource = process.env,
+): URL | null {
+  // A saved URL takes precedence. Invalid saved data must not redirect elsewhere.
+  return resolveHardwareInstallerDownloadUrl(savedUrl === null
+    ? environment
+    : { HARDWARE_HUB_INSTALLER_DOWNLOAD_URL: savedUrl });
 }
 
 export function assertHardwareInstallerEnvironment(

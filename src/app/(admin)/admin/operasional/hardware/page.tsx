@@ -35,6 +35,7 @@ import {
 import { HardwareHubManageDialog } from "@/components/hardware/hardware-hub-manage-dialog";
 import { ReceiptPrintSettingsPanel } from "@/components/hardware/receipt-print-settings-panel";
 import { HardwareHubSetupDialog } from "@/components/hardware/hardware-hub-setup-dialog";
+import { HardwareInstallerSettingsDialog } from "@/components/hardware/hardware-installer-settings-dialog";
 import type {
   HardwareAgentDisplayStatus,
   HardwareAgentSummary,
@@ -42,9 +43,9 @@ import type {
 } from "@/features/hardware/contracts";
 import { getHardwareHubProvisioningOptions } from "@/features/hardware/provisioning-options";
 import { getHardwareHubDashboard } from "@/features/hardware/queries";
+import { getHardwareInstallerSettings } from "@/features/hardware/installer-settings";
 import { getOutletReceiptPrintModeDashboard } from "@/features/hardware/receipt-print-settings";
 import { requirePermission } from "@/lib/auth/session";
-import { resolveHardwareInstallerDownloadUrl } from "@/lib/hardware-installer-environment";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -430,17 +431,15 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
   const canManageAgents = auth.permissionCodes.includes(
     "hardware.agents.manage",
   );
-  const installerDownloadAvailable =
-    canManageAgents &&
-    resolveHardwareInstallerDownloadUrl(process.env) !== null;
-
-  const [dashboard, provisioningOptions, printSettings] = await Promise.all([
+  const [dashboard, provisioningOptions, printSettings, installerSettings] = await Promise.all([
     getHardwareHubDashboard(auth),
     canManageAgents
       ? getHardwareHubProvisioningOptions(auth)
       : Promise.resolve([]),
     getOutletReceiptPrintModeDashboard(auth.organization.id, auth.outlets.map((outlet) => outlet.id)),
+    canManageAgents ? getHardwareInstallerSettings(auth.organization.id) : Promise.resolve(null),
   ]);
+  const installerDownloadAvailable = Boolean(installerSettings?.downloadUrl);
 
   const activeAgents = dashboard.agents.filter(
     (agent) => agent.isActive && agent.displayStatus !== "disabled",
@@ -532,7 +531,7 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                 >
                   {installerDownloadAvailable
                     ? "Download Setup.exe resmi terbaru untuk instalasi atau update Hardware Hub pada Mini PC outlet."
-                    : "Publish installer resmi dan atur HARDWARE_HUB_INSTALLER_DOWNLOAD_URL sebelum digunakan di outlet."}
+                    : "Publish installer resmi, lalu simpan tautan download melalui Ubah Link Installer."}
                 </p>
 
                 {installerDownloadAvailable ? (
@@ -547,13 +546,14 @@ export default async function HardwareHubPage({ searchParams }: PageProps) {
                   <button
                     type="button"
                     disabled
-                    title="Publish installer dan atur HARDWARE_HUB_INSTALLER_DOWNLOAD_URL terlebih dahulu."
+                    title="Simpan tautan installer melalui Ubah Link Installer terlebih dahulu."
                     className="mt-4 inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white/70 px-4 py-2.5 text-sm font-semibold text-amber-500"
                   >
                     <Download className="size-4" />
                     Installer Belum Tersedia
                   </button>
                 )}
+                <HardwareInstallerSettingsDialog currentUrl={installerSettings?.downloadUrl ?? null} />
               </div>
 
               {provisioningOptions.some((option) => !option.activeAgent) ? (

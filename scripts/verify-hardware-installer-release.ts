@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   collectHardwareInstallerEnvironmentIssues,
   resolveHardwareInstallerDownloadUrl,
+  resolveConfiguredHardwareInstallerUrl,
 } from "../src/lib/hardware-installer-environment";
 
 const root = process.cwd();
@@ -77,18 +78,34 @@ assert(
 
 assert.match(
   productionTemplate,
-  /^HARDWARE_HUB_INSTALLER_DOWNLOAD_URL=CHANGE_ME$/m,
-  ".env.production.example wajib mendokumentasikan installer release URL sebagai deployment-specific value.",
+  /^HARDWARE_HUB_INSTALLER_DOWNLOAD_URL=$/m,
+  ".env.production.example wajib mendokumentasikan installer release URL sebagai fallback opsional.",
 );
 assert(
-  environmentCli.includes("assertHardwareInstallerEnvironment") &&
-    environmentCli.includes("required: requireDeployment"),
-  "Production environment CLI wajib mewajibkan installer release URL pada deployment profile.",
+  environmentCli.includes("assertHardwareInstallerEnvironment(process.env);"),
+  "Production environment CLI wajib memvalidasi fallback tanpa mewajibkan URL environment.",
 );
 assert(
-  installerRoute.includes("resolveHardwareInstallerDownloadUrl(process.env)"),
-  "Runtime download endpoint wajib memakai URL policy yang sama dengan production validator.",
+  installerRoute.includes("getHardwareInstallerSettings(auth.organization.id)"),
+  "Runtime download endpoint wajib membaca link dari organisasi pengguna.",
 );
+
+assert.equal(resolveConfiguredHardwareInstallerUrl(validReleaseUrl, {
+  HARDWARE_HUB_INSTALLER_DOWNLOAD_URL: "https://example.com/old/ASIHJAYA-Hardware-Hub-Setup.exe",
+})?.href, validReleaseUrl, "Link web harus didahulukan dari fallback environment.");
+assert.equal(resolveConfiguredHardwareInstallerUrl(validReleaseUrl, {})?.href, validReleaseUrl);
+assert.equal(resolveConfiguredHardwareInstallerUrl(null, { HARDWARE_HUB_INSTALLER_DOWNLOAD_URL: validReleaseUrl })?.href, validReleaseUrl);
+assert.equal(resolveConfiguredHardwareInstallerUrl(null, {}), null);
+assert.equal(resolveConfiguredHardwareInstallerUrl("http://invalid.example/ASIHJAYA-Hardware-Hub-Setup.exe", {
+  HARDWARE_HUB_INSTALLER_DOWNLOAD_URL: validReleaseUrl,
+}), null, "Data tersimpan yang tidak valid harus ditolak tanpa redirect ke fallback.");
+assert.deepEqual(collectHardwareInstallerEnvironmentIssues({}, { required: false }), []);
+
+const settingsAction = read("src/app/actions/hardware-installer-settings.ts");
+assert.ok(settingsAction.includes('requirePermission("hardware.agents.manage")') &&
+  settingsAction.includes('auth.permissionCodes.includes("admin.access")') &&
+  settingsAction.includes("organizationId: auth.organization.id"),
+  "Perubahan link wajib dibatasi permission dan organisasi dari session.");
 
 assert.deepEqual(
   collectHardwareInstallerEnvironmentIssues(

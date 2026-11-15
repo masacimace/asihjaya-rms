@@ -60,9 +60,8 @@ assertServerEnvironment(process.env, {
   requireCore: mode === "production" || process.env.NODE_ENV === "production",
   requireDeployment,
 });
-assertHardwareInstallerEnvironment(process.env, {
-  required: requireDeployment,
-});
+// Installer links can be managed in the web UI; the environment is optional fallback.
+assertHardwareInstallerEnvironment(process.env);
 
 console.log(
   `Environment valid untuk mode ${mode ?? process.env.NODE_ENV ?? "development"}${

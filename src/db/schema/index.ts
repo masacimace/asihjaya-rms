@@ -316,6 +316,7 @@ export const organizations = pgTable(
       .default("Asia/Jakarta")
       .notNull(),
     currency: varchar("currency", { length: 3 }).default("IDR").notNull(),
+    hardwareInstallerDownloadUrl: varchar("hardware_installer_download_url", { length: 2048 }),
     isActive: boolean("is_active").default(true).notNull(),
     ...timestamps,
   },

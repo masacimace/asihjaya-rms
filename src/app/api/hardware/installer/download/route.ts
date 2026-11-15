@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentAuth, hasPermission } from "@/lib/auth/session";
-import { resolveHardwareInstallerDownloadUrl } from "@/lib/hardware-installer-environment";
+import { getHardwareInstallerSettings } from "@/features/hardware/installer-settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function GET() {
     return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   }
 
-  const downloadUrl = resolveHardwareInstallerDownloadUrl(process.env);
+  const { downloadUrl } = await getHardwareInstallerSettings(auth.organization.id);
   if (!downloadUrl) {
     return NextResponse.json(
       {

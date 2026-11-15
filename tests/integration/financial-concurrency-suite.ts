@@ -26,6 +26,7 @@ import {
   SaleReversalTransactionError,
 } from "@/features/sales/transaction-service";
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
+import { getHardwareInstallerSettings, updateHardwareInstallerSettings } from "@/features/hardware/installer-settings";
 import { type AuthContext } from "@/lib/auth/session";
 import {
   closeShiftWithReconciliation,
@@ -1006,6 +1007,32 @@ test("receipt preserves per-item historical labor and leaves legacy items empty"
   assert.equal(receipt.items[0]!.listPriceAmount, "1000000");
   assert.equal(receipt.sale.totalAmount, "2050000");
   assert.equal(receipt.customerDeposit.externalPaymentDueAmount, "2050000");
+});
+
+test("installer links persist per organization, override env, validate URLs and record audit", async ({ organizationA, organizationB }) => {
+  const fallback = "https://github.com/masacimace/asihjaya-rms/releases/download/hardware-hub-v0.9.3/ASIHJAYA-Hardware-Hub-Setup.exe";
+  const updated = fallback.replace("v0.9.3", "v0.9.4");
+  const environment = { HARDWARE_HUB_INSTALLER_DOWNLOAD_URL: fallback };
+  assert.equal((await getHardwareInstallerSettings(organizationA.organizationId, environment)).downloadUrl, fallback);
+  await updateHardwareInstallerSettings({ organizationId: organizationA.organizationId, actorUserId: organizationA.makerId, downloadUrl: `  ${updated}  ` });
+  assert.equal((await getHardwareInstallerSettings(organizationA.organizationId, environment)).downloadUrl, updated);
+  assert.equal((await getHardwareInstallerSettings(organizationA.organizationId, {})).downloadUrl, updated);
+  assert.equal((await getHardwareInstallerSettings(organizationB.organizationId, environment)).downloadUrl, fallback);
+  assert.equal((await getHardwareInstallerSettings(organizationB.organizationId, {})).downloadUrl, null);
+  for (const downloadUrl of ["", "http://example.com/ASIHJAYA-Hardware-Hub-Setup.exe", "https://localhost/ASIHJAYA-Hardware-Hub-Setup.exe",
+    "https://user:secret@example.com/ASIHJAYA-Hardware-Hub-Setup.exe", `${updated}?token=temporary`,
+    "https://github.com/masacimace/asihjaya-rms/actions/runs/123/ASIHJAYA-Hardware-Hub-Setup.exe", "https://example.com/file.zip", `https://example.com/${"x".repeat(2048)}/ASIHJAYA-Hardware-Hub-Setup.exe`]) {
+    await assert.rejects(updateHardwareInstallerSettings({ organizationId: organizationA.organizationId, actorUserId: organizationA.makerId, downloadUrl }));
+  }
+  assert.equal((await getHardwareInstallerSettings(organizationA.organizationId, environment)).downloadUrl, updated);
+  await updateHardwareInstallerSettings({ organizationId: organizationA.organizationId, actorUserId: organizationA.makerId, downloadUrl: updated });
+  assert.equal(await queryCount("audit_logs", "where action = 'hardware.installer_download_url_updated'"), 1);
+  const audit = await queryOne<{ organization_id: string; actor_user_id: string; after_data: { downloadUrl: string } }>(
+    "select organization_id, actor_user_id, after_data from audit_logs where action = 'hardware.installer_download_url_updated'",
+  );
+  assert.equal(audit.organization_id, organizationA.organizationId);
+  assert.equal(audit.actor_user_id, organizationA.makerId);
+  assert.equal(audit.after_data.downloadUrl, updated);
 });
 
 export async function runFinancialConcurrencySuite() {

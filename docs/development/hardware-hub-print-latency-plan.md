@@ -32,6 +32,6 @@ Verifikasi: `npm --prefix hardware-hub run check:ci`, `npm run check:hardware-ap
 
 Release: jalankan workflow **Build Hardware Hub Installer** secara manual untuk artifact UAT. Setelah pengujian fisik dan source terintegrasi ke main, push tag `hardware-hub-v0.9.4`; workflow Windows membangun Setup.exe dan job release mengunggah installer + SHA-256. Build manual tidak menerbitkan production release.
 
-Deployment aplikasi RMS juga diperlukan untuk optimasi PDF. Setelah release terbit, arahkan `HARDWARE_HUB_INSTALLER_DOWNLOAD_URL` production ke asset versi baru agar tombol download RMS mengunduh v0.9.4. Tidak diperlukan migration database.
+Deployment aplikasi RMS juga diperlukan untuk optimasi PDF. Setelah release terbit, simpan link asset versi baru melalui **Hardware Hub → Ubah Link Installer** agar tombol download RMS mengunduh v0.9.4. Pengaturan web ini memerlukan migration `0032_hardware_installer_download_url`; perubahan percepatan Hub sendiri tidak memerlukan migration. Environment URL tetap menjadi fallback sebelum link disimpan dari web.
 
 Polling 1 detik adalah interval pencarian saat idle; durasi keseluruhan tetap dipengaruhi koneksi cloud, foto, spooler, driver, dan mekanik printer. Hasil simulasi tidak menggantikan pengukuran cetak fisik di outlet.
