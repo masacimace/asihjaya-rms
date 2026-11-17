@@ -613,7 +613,7 @@ function BuybackDetailPanel({
                 className="inline-flex items-center gap-1.5 rounded-xl bg-neutral-950 px-3 py-2 !text-xs font-semibold text-white"
               >
                 <Printer className="size-3.5" />
-                Cetak Ulang Nota
+                Cetak Nota
               </button>
             </form>
           </div>
@@ -658,12 +658,12 @@ function BuybackDetailPanel({
             value={
               detail.receiptJob
                 ? receiptStatusLabel(detail.receiptJob.status)
-                : "Belum ada job print"
+                : "Belum dicetak"
             }
             helper={
               detail.receiptJob
                 ? `Attempt ${detail.receiptJob.attempts}`
-                : "Cetak ulang bila diperlukan"
+                : "Cetak nota jika pelanggan meminta"
             }
           />
         </div>

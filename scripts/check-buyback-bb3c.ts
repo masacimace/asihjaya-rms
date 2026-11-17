@@ -56,12 +56,10 @@ assert.match(
   /catch \(error\) \{[\s\S]*storedImageKeys\.map\(\(key\) => deleteImageFile\(key\)\)/,
 );
 
-// Initial receipt is part of the Buyback DB transaction and uses one stable key.
-assert.match(service, /createHardwareJobV2InTransaction/);
-assert.match(
-  service,
-  /idempotencyKey: `buyback-receipt:\$\{buyback\.id\}:initial`/,
-);
+// Completion and idempotent replay never enqueue a receipt. Printing requires
+// an explicit manual request from the detail form.
+assert.doesNotMatch(service, /createHardwareJobV2|buildBuybackReceiptDocumentPayloadV2/);
+assert.doesNotMatch(service, /buyback-receipt:.*:initial/);
 assert.match(schema, /uniqueIndex\("hardware_jobs_idempotency_uq"\)/);
 assert.match(hardwareProducer, /\.onConflictDoNothing\(\)/);
 assert.match(hardwareProducer, /return \{ job: existing, duplicate: true \}/);
@@ -70,7 +68,7 @@ assert.match(hardwareProducer, /return \{ job: existing, duplicate: true \}/);
 // so double-submit of one form resolves to one hardware job.
 assert.match(historyPanel, /name="requestId" value=\{randomUUID\(\)\}/);
 assert.match(actions, /const requestId = String\(formData\.get\("requestId"\)/);
-assert.match(actions, /Request cetak ulang nota Buyback tidak valid/);
+assert.match(actions, /Request cetak nota Buyback tidak valid/);
 assert.match(
   actions,
   /idempotencyKey: `buyback-receipt:\$\{buyback\.id\}:reprint:\$\{requestId\}`/,

@@ -30,10 +30,6 @@ import {
   calculateJewelryBasePrice,
   normalizePurityKey,
 } from "@/features/pricing/metal-price-rates";
-import { getOutletReceiptPrintMode } from "@/features/hardware/receipt-print-settings";
-import { RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1 } from "@/features/sales/documents/receipt-document-profiles";
-import { buildBuybackReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
-import { createHardwareJobV2InTransaction } from "@/lib/hardware/job-producer-v2";
 
 export class BuybackValidationError extends Error {}
 
@@ -59,7 +55,6 @@ export type CompleteBuybackResult = {
   totalAmount: number;
   itemCount: number;
   replayed: boolean;
-  receiptJobId?: string | null;
 };
 
 function getPrimaryOutlet(auth: BuybackServiceAuth) {
@@ -221,7 +216,6 @@ async function getExistingBuybackReplayResultInTransaction(
     totalAmount: Number(existing.totalAmount),
     itemCount: storedItems.length,
     replayed: true,
-    receiptJobId: null,
   };
 }
 
@@ -1077,41 +1071,12 @@ export async function completeBuybackTransaction({
       createdAt: now,
     });
 
-    const receiptJob = await createHardwareJobV2InTransaction(transaction, {
-      organizationId: auth.organization.id,
-      outletId: primaryOutlet.id,
-      registerId: register.id,
-      createdByUserId: auth.user.id,
-      jobType: "print_receipt_certificate",
-      mode: "automatic",
-      payload: buildBuybackReceiptDocumentPayloadV2({
-        buybackId: buyback.id,
-        buybackNumber,
-        requestSource: "pos.buyback",
-        documentProfileId: RECEIPT_DOCUMENT_PROFILE_A5_LANDSCAPE_V1,
-        reprint: false,
-        requestedAt: now,
-        renderMode: await getOutletReceiptPrintMode(auth.organization.id, primaryOutlet.id, transaction),
-      }),
-      idempotencyKey: `buyback-receipt:${buyback.id}:initial`,
-      sourceType: "buyback",
-      sourceId: buyback.id,
-      now,
-      audit: {
-        source: "pos.buyback",
-        requestId: payload.idempotencyKey,
-        ipAddress: requestMetadata.ipAddress,
-        userAgent: requestMetadata.userAgent,
-      },
-    });
-
     return {
       buybackId: buyback.id,
       buybackNumber,
       totalAmount: payload.totalAmount,
       itemCount: payload.items.length,
       replayed: false,
-      receiptJobId: receiptJob.job.id,
     };
   });
 }

@@ -545,7 +545,7 @@ export async function reprintBuybackReceiptAction(formData: FormData) {
     redirectBuybackDetailWithFeedback({
       buybackId,
       type: "error",
-      message: "Request cetak ulang nota Buyback tidak valid.",
+      message: "Request cetak nota Buyback tidak valid.",
     });
   }
 
@@ -618,7 +618,7 @@ export async function reprintBuybackReceiptAction(formData: FormData) {
         requestId,
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
-        reason: `Cetak ulang nota Buyback ${buyback.buybackNumber}.`,
+        reason: `Cetak manual nota Buyback ${buyback.buybackNumber}.`,
       },
     });
 
@@ -627,7 +627,7 @@ export async function reprintBuybackReceiptAction(formData: FormData) {
 
     feedbackType = result.duplicate ? "info" : "success";
     feedbackMessage = result.duplicate
-      ? `Permintaan cetak ulang nota ${buyback.buybackNumber} sudah ada di antrean.`
+      ? `Permintaan cetak nota ${buyback.buybackNumber} sudah ada di antrean.`
       : `Nota ${buyback.buybackNumber} sudah masuk antrean Document Printer.`;
   } catch (error) {
     console.error("Gagal membuat job cetak ulang nota Buyback:", error);
@@ -635,7 +635,7 @@ export async function reprintBuybackReceiptAction(formData: FormData) {
       buybackId,
       type: "error",
       message:
-        "Cetak ulang nota Buyback gagal dibuat. Coba ulang atau cek Hardware Hub.",
+        "Cetak nota Buyback gagal dibuat. Coba ulang atau cek Hardware Hub.",
     });
   }
 

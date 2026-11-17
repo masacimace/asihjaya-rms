@@ -939,11 +939,8 @@ export function BuybackWorkspace({
                   antrean Cuci/Rongsok dan belum tersedia untuk dijual di POS.
                 </p>
                 <p className="mt-1 text-xs">
-                  {state.result.receiptJobId
-                    ? "Nota Buyback sudah masuk antrean Document Printer."
-                    : state.result.replayed
-                      ? "Transaksi ini merupakan replay aman; job nota awal tidak dibuat ulang."
-                      : "Nota Buyback dapat dicetak ulang dari detail transaksi."}
+                  Jika pelanggan meminta nota, buka detail transaksi lalu pilih
+                  Cetak Nota.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <a

@@ -8,6 +8,9 @@ import { customerDepositLedger } from "@/db/schema";
 import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
 import { getPublicCustomerHistoryData } from "@/features/customers/public-history";
 import { getReceiptCertificateData } from "@/features/sales/documents/receipt-certificate";
+import { getBuybackReceiptData } from "@/features/buybacks/documents/buyback-receipt";
+import { completeBuybackTransaction } from "@/features/buybacks/service";
+import type { NormalizedBuybackPayload } from "@/features/buybacks/contracts";
 import { createPublicHistoryVerificationUrl } from "@/features/sales/verification/receipt-token";
 import {
   claimPosCheckoutAttempt,
@@ -26,6 +29,7 @@ import {
   SaleReversalTransactionError,
 } from "@/features/sales/transaction-service";
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
+import { buildBuybackReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { getHardwareInstallerSettings, updateHardwareInstallerSettings } from "@/features/hardware/installer-settings";
 import { type AuthContext } from "@/lib/auth/session";
 import { registerHardwareQueueTests } from "./hardware-queue-cases";
@@ -1034,6 +1038,48 @@ test("installer links persist per organization, override env, validate URLs and 
   assert.equal(audit.organization_id, organizationA.organizationId);
   assert.equal(audit.actor_user_id, organizationA.makerId);
   assert.equal(audit.after_data.downloadUrl, updated);
+});
+
+test("buyback completion and replay wait for an explicit manual receipt request", async ({ organizationA: f }) => {
+  await pool.query("update registers set is_hardware_hub = true where id = $1", [f.registerId]);
+  const payload: NormalizedBuybackPayload = {
+    idempotencyKey: key("manual_buyback_receipt"), customerId: f.customerId, notes: null,
+    items: [{ clientKey: "external-item", source: "external", productItemId: null, displayName: "Cincin Buyback",
+      categoryId: f.categoryId, processingType: "cleaning", weightGram: "1.000", purityPercent: "75.000", color: "Kuning", deductionAmount: 0, finalAmount: 50000 }],
+    payouts: [{ method: "cash", amount: 50000, reference: null }], totalAmount: 50000,
+  };
+  const input = {
+    auth: { organization: { id: f.organizationId, timezone: "Asia/Jakarta" }, user: { id: f.makerId },
+      outlets: [{ id: f.outletId, code: `${f.prefix}-OUT`, name: "Outlet Test", isPrimary: true }] },
+    payload, requestMetadata: { ipAddress: "127.0.0.1", userAgent: "financial-test" },
+    itemArtifacts: new Map([["external-item", { buybackItemId: id(), imageKey: "test/buyback-item.jpg" }]]),
+  };
+  const [first, retry] = await Promise.all([completeBuybackTransaction(input), completeBuybackTransaction(input)]);
+  assert.equal(first.buybackId, retry.buybackId);
+  assert.deepEqual([first.replayed, retry.replayed].sort(), [false, true]);
+  assert.equal(await queryCount("buybacks"), 1);
+  assert.equal(await queryCount("buyback_payouts"), 1);
+  assert.equal(await queryCount("buyback_item_processings", "where status = 'pending'"), 1);
+  assert.equal(await queryCount("cash_movements", "where reference_type = 'buyback' and type = 'cash_out'"), 1);
+  assert.equal(await queryCount("hardware_jobs"), 0, "Completion/replay must not enqueue any print job.");
+
+  const receipt = await getBuybackReceiptData({ buybackId: first.buybackId, organizationId: f.organizationId });
+  assert.ok(receipt, "The receipt must remain available on demand without an automatic print job.");
+  assert.equal(receipt.sale.totalAmount, "50000");
+  assert.equal(await queryCount("hardware_jobs"), 0, "Reading a receipt must not enqueue printing.");
+
+  const manualInput = {
+    organizationId: f.organizationId, outletId: f.outletId, registerId: f.registerId, createdByUserId: f.makerId,
+    jobType: "print_receipt_certificate" as const, mode: "manual" as const,
+    payload: buildBuybackReceiptDocumentPayloadV2({ buybackId: first.buybackId, buybackNumber: first.buybackNumber,
+      requestSource: "pos.buyback.detail", reprint: true, requestedAt: new Date() }),
+    idempotencyKey: `buyback-receipt:${first.buybackId}:reprint:${id()}`, sourceType: "buyback", sourceId: first.buybackId,
+  };
+  const printed = await createHardwareJobV2(manualInput);
+  const duplicate = await createHardwareJobV2(manualInput);
+  assert.equal(printed.job.id, duplicate.job.id);
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(await queryCount("hardware_jobs"), 1, "Only the explicit manual request may create a print job.");
 });
 
 registerHardwareQueueTests(test);

@@ -34,7 +34,7 @@ const hardwareCheck = read("scripts/check-hardware-job-payloads.ts");
 
 assert.match(contracts, /export type BuybackHistoryRow/);
 assert.match(contracts, /export type BuybackDetail/);
-assert.match(contracts, /receiptJobId\?: string \| null/);
+assert.doesNotMatch(contracts, /receiptJobId/);
 
 assert.match(queries, /export async function getBuybackHistoryData/);
 assert.match(queries, /eq\(hardwareJobs\.sourceType, "buyback"\)/);
@@ -66,7 +66,7 @@ assert.match(
   /href=\{detailHref\(row\.id\)\}/,
   "Link detail Buyback wajib menggunakan helper detailHref.",
 );
-assert.match(historyPanel, /Cetak Ulang Nota/);
+assert.match(historyPanel, /Cetak Nota/);
 assert.match(historyPanel, /Buka Nota PDF/);
 assert.match(receiptData, /documentKind: "buyback"/);
 assert.match(receiptData, /buybackPricePerGram/);
@@ -128,14 +128,10 @@ assert.match(
 assert.match(hardwareAdapter, /\^\\\/api\\\/buybacks\\\/\[0-9a-f\]/i);
 assert.match(hardwareCheck, /buildBuybackReceiptDocumentPayloadV2/);
 
-assert.match(service, /buildBuybackReceiptDocumentPayloadV2/);
-assert.match(service, /createHardwareJobV2InTransaction/);
-assert.match(
-  service,
-  /idempotencyKey: `buyback-receipt:\$\{buyback\.id\}:initial`/,
-);
-assert.match(service, /sourceType: "buyback"/);
-assert.match(workspace, /Nota Buyback sudah masuk antrean Document Printer/);
+assert.doesNotMatch(service, /createHardwareJobV2InTransaction|buildBuybackReceiptDocumentPayloadV2|receiptJobId/);
+assert.match(workspace, /Jika pelanggan meminta nota/);
+assert.doesNotMatch(workspace, /Nota Buyback sudah masuk antrean|job nota awal/);
+assert.match(historyPanel, /Cetak Nota/);
 
 assert.match(actions, /export async function reprintBuybackReceiptAction/);
 assert.match(actions, /mode: "manual"/);

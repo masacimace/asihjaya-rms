@@ -118,7 +118,6 @@ export type BuybackActionState = {
     totalAmount: number;
     itemCount: number;
     replayed: boolean;
-    receiptJobId?: string | null;
   };
 };
 
