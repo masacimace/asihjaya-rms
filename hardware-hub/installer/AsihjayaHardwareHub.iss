@@ -1,6 +1,6 @@
 #define MyAppName "ASIHJAYA Hardware Hub"
 #ifndef AppVersion
-  #define AppVersion "0.9.6"
+  #define AppVersion "0.9.7"
 #endif
 #ifndef AppApiUrl
   #define AppApiUrl "https://ajsystem.id"

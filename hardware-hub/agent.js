@@ -11,7 +11,7 @@ try {
   // dotenv optional agar agent tetap bisa dijalankan lewat environment variable OS.
 }
 
-const AGENT_VERSION = "2.5.3-label-quality";
+const AGENT_VERSION = "2.5.4-short-label-alias";
 const { createOperationalLogger } = require("./lib/operational-logger");
 const operationalLogger = createOperationalLogger({
   logDir: path.resolve(__dirname, process.env.HARDWARE_LOG_DIR?.trim() || "logs"),
@@ -655,6 +655,7 @@ function getCapabilitiesPayload() {
       pdf_print_command_legacy: Boolean(PDF_PRINT_COMMAND),
     },
     label_config: {
+      alias_barcode: { template_id: "jewelry_barbell_alias_v4", printer_profile_id: "sato_cg408_jewelry_barbell_alias_v4", strategy: "CODE128_C", narrow_bar_dots: 2, physical_validation: "pending_outlet_test" },
       print_quality: SATO_PRINT_QUALITY,
       template_id: SATO_JEWELRY_LABEL_TEMPLATE_ID,
       printer_profile_id: SATO_LABEL_CONFIG.config.id,
@@ -663,6 +664,7 @@ function getCapabilitiesPayload() {
       barcode_strategy: SATO_LABEL_CONFIG.config.front.barcode.strategy,
       physical_validation: SATO_LABEL_CONFIG.config.physicalValidation,
     },
+    supported_label_templates: [SATO_JEWELRY_LABEL_TEMPLATE_ID, "jewelry_barbell_alias_v4"],
     operations: {
       structured_logs: true,
       log_retention_days: HARDWARE_LOG_RETENTION_DAYS,

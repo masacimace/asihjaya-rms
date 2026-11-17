@@ -10,6 +10,8 @@ const {
 const SATO_JEWELRY_LABEL_TEMPLATE_ID = "jewelry_barbell_inter_v3";
 const SATO_JEWELRY_RENDERER = "host_inter_bmp_v3";
 const SATO_JEWELRY_LABEL_PROFILE_ID = "sato_cg408_jewelry_barbell_inter_v3";
+const SATO_SHORT_LABEL_TEMPLATE_ID = "jewelry_barbell_alias_v4";
+const SATO_SHORT_LABEL_PROFILE_ID = "sato_cg408_jewelry_barbell_alias_v4";
 const DEFAULT_SATO_LABEL_CONFIG_PATH = path.resolve(
   __dirname,
   "..",
@@ -232,16 +234,17 @@ function prepareSatoJewelryLabel(payload, { copies = 1, configPath } = {}) {
   const merged = { ...(payload || {}), ...fields };
   const requestedTemplateId = sanitizeAscii(payload?.templateId, "", 80);
   const requestedProfileId = sanitizeAscii(payload?.printerProfileId, "", 120);
+  const shortLabel = requestedTemplateId === SATO_SHORT_LABEL_TEMPLATE_ID;
   if (payload?.schemaVersion !== 1) {
     throw new SatoJewelryLabelError("Label ingress schemaVersion harus 1.", "SATO_INGRESS_SCHEMA_UNSUPPORTED");
   }
-  if (requestedTemplateId !== SATO_JEWELRY_LABEL_TEMPLATE_ID || payload?.templateVersion !== 3) {
+  if ((!shortLabel && requestedTemplateId !== SATO_JEWELRY_LABEL_TEMPLATE_ID) || payload?.templateVersion !== (shortLabel ? 4 : 3)) {
     throw new SatoJewelryLabelError(
       `Template label ingress wajib ${SATO_JEWELRY_LABEL_TEMPLATE_ID} v3.`,
       "SATO_INGRESS_TEMPLATE_UNSUPPORTED",
     );
   }
-  if (requestedProfileId !== SATO_JEWELRY_LABEL_PROFILE_ID) {
+  if (requestedProfileId !== (shortLabel ? SATO_SHORT_LABEL_PROFILE_ID : SATO_JEWELRY_LABEL_PROFILE_ID)) {
     throw new SatoJewelryLabelError(
       `Printer profile ingress wajib ${SATO_JEWELRY_LABEL_PROFILE_ID}.`,
       "SATO_INGRESS_PROFILE_UNSUPPORTED",
@@ -249,6 +252,12 @@ function prepareSatoJewelryLabel(payload, { copies = 1, configPath } = {}) {
   }
 
   const barcode = normalizeBarcode(merged.barcode);
+  if (shortLabel && (typeof merged.labelBarcode !== "string" || !/^\d{6}$/.test(merged.labelBarcode))) {
+    throw new SatoJewelryLabelError("Alias Code128 C wajib tepat 6 digit.", "SATO_LABEL_ALIAS_INVALID");
+  }
+  if (!shortLabel && merged.labelBarcode !== undefined) {
+    throw new SatoJewelryLabelError("Alias memerlukan template label v4.", "SATO_LABEL_ALIAS_INVALID");
+  }
   const masterProductName = sanitizeAscii(merged.masterProductName, "PRODUK", 220).toUpperCase();
   const itemDisplayName = sanitizeAscii(merged.itemDisplayName, masterProductName, 220).toUpperCase();
   const weight = formatDecimal(merged.weightGram);
@@ -260,16 +269,17 @@ function prepareSatoJewelryLabel(payload, { copies = 1, configPath } = {}) {
     masterProductName,
     itemDisplayName,
     barcode,
+    ...(shortLabel ? { labelBarcode: merged.labelBarcode } : {}),
     weight: `${weight} Gr`,
     copies: resolvedCopies,
   };
   const profile = {
-    id: loaded.config.id,
+    id: requestedProfileId,
     manufacturer: "SATO",
     model: "CG408",
     dpi: 203,
     language: "SBPL",
-    renderer: SATO_JEWELRY_RENDERER,
+    renderer: shortLabel ? "host_inter_bmp_alias_v4" : SATO_JEWELRY_RENDERER,
     configVersion: loaded.config.version,
     configPath: loaded.path,
     font: {
@@ -279,13 +289,18 @@ function prepareSatoJewelryLabel(payload, { copies = 1, configPath } = {}) {
     },
     barcode: {
       symbology: "CODE128",
-      strategy: loaded.config.front.barcode.strategy,
-      narrowBarDots: loaded.config.front.barcode.narrowBarDots,
+      strategy: shortLabel ? "CODE128_C" : loaded.config.front.barcode.strategy,
+      narrowBarDots: shortLabel ? 2 : loaded.config.front.barcode.narrowBarDots,
+      ...(shortLabel ? { aliasDigits: 6, quietZoneModules: 10 } : {}),
       heightDots: loaded.config.front.barcode.heightDots,
     },
-    physicalValidation: loaded.config.physicalValidation,
+    physicalValidation: shortLabel ? "pending_outlet_test" : loaded.config.physicalValidation,
+    ...(shortLabel ? { baseLayoutSha256: loaded.lock.layoutSha256 } : {}),
   };
-  const template = { id: SATO_JEWELRY_LABEL_TEMPLATE_ID, version: 3, renderer: SATO_JEWELRY_RENDERER };
+  if (shortLabel && (68 + 20) * 2 > loaded.config.front.productMasterName.canvasWidthDots) {
+    throw new SatoJewelryLabelError("Alias 2 dot tidak muat pada panel label.", "SATO_LABEL_ALIAS_TOO_WIDE");
+  }
+  const template = { id: requestedTemplateId, version: shortLabel ? 4 : 3, renderer: profile.renderer };
   const fakeCommand = Buffer.from(
     `FAKE ${template.id}\n${JSON.stringify({ renderInput, profileId: profile.id })}\n`,
     "utf8",
@@ -298,6 +313,7 @@ function prepareSatoJewelryLabel(payload, { copies = 1, configPath } = {}) {
       masterProductNamePrinted: masterProductName,
       itemDisplayNamePrinted: itemDisplayName,
       barcode,
+      ...(shortLabel ? { labelBarcode: merged.labelBarcode, barcodeTextPrinted: barcode } : {}),
       weightPrinted: renderInput.weight,
       templateId: requestedTemplateId,
       printerProfileId: requestedProfileId,
@@ -314,6 +330,8 @@ module.exports = {
   SATO_JEWELRY_LABEL_TEMPLATE_ID,
   SATO_JEWELRY_RENDERER,
   SATO_JEWELRY_LABEL_PROFILE_ID,
+  SATO_SHORT_LABEL_TEMPLATE_ID,
+  SATO_SHORT_LABEL_PROFILE_ID,
   DEFAULT_SATO_LABEL_CONFIG_PATH,
   SATO_JEWELRY_LABEL_LOCK_FILENAME,
   SatoJewelryLabelError,

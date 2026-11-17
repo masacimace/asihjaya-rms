@@ -232,6 +232,13 @@
       "when": 1794716602375,
       "tag": "0032_hardware_installer_download_url",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794896861905,
+      "tag": "0033_inventory_label_alias",
+      "breakpoints": true
     }
   ]
 }

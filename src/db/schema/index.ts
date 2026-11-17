@@ -1416,6 +1416,12 @@ export const itemBarcodes = pgTable(
   ],
 );
 
+// The cursor survives item deletion so a printed alias is never assigned again.
+export const inventoryLabelAliasCounters = pgTable("inventory_label_alias_counters", {
+  organizationId: uuid("organization_id").primaryKey().references(() => organizations.id),
+  nextValue: integer("next_value").default(1).notNull(),
+}, (table) => [check("inventory_label_alias_counters_range_ck", sql`${table.nextValue} between 1 and 1000000`)]);
+
 export const inventoryMovements = pgTable(
   "inventory_movements",
   {

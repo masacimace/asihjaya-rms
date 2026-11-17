@@ -11,8 +11,9 @@ import {
   RequestBodyTooLargeError,
 } from "@/lib/http/request-body";
 import { buildInventoryLabelPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
-import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
+import { createHardwareJobV2InTransaction } from "@/lib/hardware/job-producer-v2";
 import { getLabelHardwareTarget } from "@/lib/hardware/label-target";
+import { getOrCreateLabelBarcodeAlias, LabelBarcodeAliasError } from "@/features/inventory/label-barcode-alias";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -115,54 +116,62 @@ export async function POST(req: NextRequest) {
     const target = await getLabelHardwareTarget({
       organizationId: auth.organization.id,
       outletId: item.currentOutletId,
+      requireShortAlias: true,
     });
 
     if (!target) {
       return NextResponse.json(
         {
           error:
-            "Hardware Agent label dengan capability print_label_sato belum tersedia pada outlet ini. Pastikan Agent Hardware Hub aktif pada register yang benar lalu jalankan Test Label Printer.",
+            "Hardware Hub label belum mendukung barcode tebal. Upgrade installer ke 0.9.7 atau lebih baru, pastikan Hub aktif, lalu coba lagi.",
         },
         { status: 400 },
       );
     }
 
     const now = new Date();
-    const payload = buildInventoryLabelPayloadV2({
-      itemId: item.id,
-      copies,
-      sku: item.sku,
-      barcode: item.barcode,
-      masterProductName: item.productName,
-      itemDisplayName: item.displayName ?? item.productName,
-      weightGram: item.weightGram,
-      purityPercent: item.purityPercent,
-      exchangePurityPercent: item.exchangePurityPercent,
-      size: item.size,
-      color: item.color,
-      gemstone: item.gemstone,
-      sellingAmount: item.sellingAmount,
-    });
+    const { job, duplicate } = await db.transaction(async (transaction) => {
+      const labelBarcode = await getOrCreateLabelBarcodeAlias(transaction, {
+        organizationId: auth.organization.id, itemId: item.id,
+        createdBy: auth.user.id, outletId: item.currentOutletId!,
+      });
+      const payload = buildInventoryLabelPayloadV2({
+        itemId: item.id,
+        copies,
+        sku: item.sku,
+        barcode: item.barcode,
+        labelBarcode,
+        masterProductName: item.productName,
+        itemDisplayName: item.displayName ?? item.productName,
+        weightGram: item.weightGram,
+        purityPercent: item.purityPercent,
+        exchangePurityPercent: item.exchangePurityPercent,
+        size: item.size,
+        color: item.color,
+        gemstone: item.gemstone,
+        sellingAmount: item.sellingAmount,
+      });
 
-    const { job, duplicate } = await createHardwareJobV2({
-      organizationId: auth.organization.id,
-      outletId: item.currentOutletId,
-      registerId: target.registerId,
-      createdByUserId: auth.user.id,
-      targetAgentId: target.agentId,
-      jobType: "print_label_sato",
-      mode: "manual",
-      payload,
-      idempotencyKey: `label:${item.id}:print:${requestId}`,
-      sourceType: "product_item_label",
-      sourceId: item.id,
-      now,
-      audit: {
-        source: "admin.inventory.item",
-        requestId,
-        ipAddress: getClientIp(req),
-        userAgent: req.headers.get("user-agent"),
-      },
+      return createHardwareJobV2InTransaction(transaction, {
+        organizationId: auth.organization.id,
+        outletId: item.currentOutletId!,
+        registerId: target.registerId,
+        createdByUserId: auth.user.id,
+        targetAgentId: target.agentId,
+        jobType: "print_label_sato",
+        mode: "manual",
+        payload,
+        idempotencyKey: `label:${item.id}:print:${requestId}`,
+        sourceType: "product_item_label",
+        sourceId: item.id,
+        now,
+        audit: {
+          source: "admin.inventory.item",
+          requestId,
+          ipAddress: getClientIp(req),
+          userAgent: req.headers.get("user-agent"),
+        },
+      });
     });
 
     return NextResponse.json({
@@ -176,6 +185,9 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof LabelBarcodeAliasError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     if (error instanceof RequestBodyTooLargeError) {
       return NextResponse.json(
         { error: "Request body terlalu besar." },

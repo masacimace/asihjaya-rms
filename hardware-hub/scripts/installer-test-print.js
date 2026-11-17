@@ -61,7 +61,7 @@ function assertPrinter(printerName) {
 
 async function testLabel({ printerName, stateDir }) {
   assertPrinter(printerName);
-  const contract = JSON.parse(createSatoProductionContractFixture().toString("utf8"));
+  const contract = JSON.parse(createSatoProductionContractFixture(undefined, { shortAlias: true }).toString("utf8"));
   const factory = createHardwareAdapterFactory({
     adapterModes: {
       label_printer: "real",

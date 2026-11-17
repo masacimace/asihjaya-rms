@@ -486,6 +486,7 @@ function createHardwareAdapterFactory(config) {
           prepared.renderInput.itemDisplayName,
           "-Barcode",
           prepared.renderInput.barcode,
+          ...(prepared.renderInput.labelBarcode ? ["-LabelBarcode", prepared.renderInput.labelBarcode] : []),
           "-Weight",
           prepared.renderInput.weight,
           "-Copies",

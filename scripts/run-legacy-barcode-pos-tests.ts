@@ -74,7 +74,10 @@ process.env.PDF_RENDER_TOKEN_SECRET ??=
 process.env.HARDWARE_AGENT_CREDENTIAL_ENCRYPTION_KEY ??=
   "test-agent-encryption-key-000000000000000000000000000000000";
 
-if (process.argv.includes("--lifecycle")) {
+if (process.argv.includes("--label-alias")) {
+  const { runLabelBarcodeAliasSuite } = await import("../tests/integration/label-barcode-alias-suite");
+  await runLabelBarcodeAliasSuite();
+} else if (process.argv.includes("--lifecycle")) {
   const { runProductLifecycleSuite } = await import("../tests/integration/product-lifecycle-suite");
   await runProductLifecycleSuite();
 } else if (process.argv.includes("--sync")) {

@@ -74,6 +74,7 @@ function collectDiagnostics() {
       try { resolved = loadSatoJewelryLabelConfig(configPath); } catch {}
       return {
         configuredPrinter: process.env.LABEL_PRINTER_NAME?.trim() || null,
+        aliasLabel: { templateId: "jewelry_barbell_alias_v4", strategy: "CODE128_C", aliasDigits: 6, narrowBarDots: 2, physicalValidation: "pending_outlet_test" },
         printQuality: (() => {
           try { return resolveSatoPrintQuality({ darkness: process.env.SATO_PRINT_DARKNESS, speedIps: process.env.SATO_PRINT_SPEED_IPS }); }
           catch (error) { return { error: error.message }; }

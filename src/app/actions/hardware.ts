@@ -30,6 +30,7 @@ import { cleanupHardwareJobs } from "@/lib/hardware/job-cleanup";
 import { recoverStaleHardwareJobs } from "@/lib/hardware/job-recovery";
 import { buildHardwareTestPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
+import { supportsShortLabelAlias } from "@/lib/hardware/label-target";
 import {
   HardwareUnknownResolutionError,
   resolveHardwareUnknownOutcome,
@@ -295,6 +296,7 @@ export async function createHardwareTestJobAction(formData: FormData) {
     jobType,
     agentId: agent.id,
     requestedAt: now,
+    shortLabelSupported: supportsShortLabelAlias(agent.capabilities),
   });
 
   const createResult = await createHardwareJobV2({

@@ -3,6 +3,7 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { hardwareAgents, registers } from "@/db/schema";
 import { getEnabledHardwareCapabilities } from "@/lib/hardware/job-protocol-v2";
+import { SHORT_LABEL_TEMPLATE } from "@/lib/hardware/job-payload-contracts-v2";
 
 export type LabelHardwareTarget = {
   agentId: string;
@@ -21,9 +22,11 @@ function uniqueOutletIds(values: readonly string[]) {
 export async function getLabelHardwareTargets({
   organizationId,
   outletIds,
+  requireShortAlias = false,
 }: {
   organizationId: string;
   outletIds: readonly string[];
+  requireShortAlias?: boolean;
 }): Promise<Map<string, LabelHardwareTarget>> {
   const normalizedOutletIds = uniqueOutletIds(outletIds);
   if (normalizedOutletIds.length === 0) {
@@ -54,7 +57,7 @@ export async function getLabelHardwareTargets({
     );
 
   const compatibleRows = rows
-    .filter((row) =>
+    .filter((row) => (!requireShortAlias || supportsShortLabelAlias(row.capabilities)) &&
       getEnabledHardwareCapabilities(row.capabilities).includes(
         "print_label_sato",
       ),
@@ -104,14 +107,21 @@ export async function getLabelHardwareTargets({
 export async function getLabelHardwareTarget({
   organizationId,
   outletId,
+  requireShortAlias = false,
 }: {
   organizationId: string;
   outletId: string;
+  requireShortAlias?: boolean;
 }): Promise<LabelHardwareTarget | null> {
   const targets = await getLabelHardwareTargets({
     organizationId,
     outletIds: [outletId],
+    requireShortAlias,
   });
 
   return targets.get(outletId) ?? null;
+}
+
+export function supportsShortLabelAlias(capabilities: Record<string, unknown> | null) {
+  return Array.isArray(capabilities?.supported_label_templates) && capabilities.supported_label_templates.includes(SHORT_LABEL_TEMPLATE);
 }

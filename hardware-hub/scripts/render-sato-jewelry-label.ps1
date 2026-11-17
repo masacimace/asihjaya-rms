@@ -3,6 +3,7 @@ param(
   [string]$MasterProductName = "NAMA PRODUK MASTER",
   [string]$ItemDisplayName = "NAMA ITEM PRODUK FISIK",
   [string]$Barcode = "AJ0002416",
+  [string]$LabelBarcode = "",
   [string]$Weight = "2.75 Gr",
   [string]$OutputFile = "",
   [ValidateRange(1,20)]
@@ -595,6 +596,19 @@ try {
   $quietZoneModules = Get-RequiredInt $barcodeConfig.quietZoneModules "front.barcode.quietZoneModules" 0 100
   if ([string]$barcodeConfig.strategy -ne "CODE128_B") { throw "front.barcode.strategy wajib CODE128_B." }
   $barcodeWidth = Get-Code128BWidthDots -Value $Barcode -NarrowDots $narrowBarDots
+  $encodedBarcode = $Barcode
+  $barcodeStartCode = ">H"
+  $barcodeStrategy = "Set B"
+  $shortAlias = -not [string]::IsNullOrWhiteSpace($LabelBarcode)
+  if ($shortAlias) {
+    if ($LabelBarcode -cnotmatch '^[0-9]{6}$') { throw "Alias label Code128 C wajib tepat 6 digit." }
+    $encodedBarcode = $LabelBarcode
+    $narrowBarDots = 2
+    $quietZoneModules = 10
+    $barcodeStartCode = ">I"
+    $barcodeStrategy = "Set C"
+    $barcodeWidth = (11 * (1 + $LabelBarcode.Length / 2 + 1) + 13) * $narrowBarDots
+  }
   $quietDots = $quietZoneModules * $narrowBarDots
   if (($barcodeWidth + (2 * $quietDots)) -gt $productCanvasWidth) {
     throw "Barcode '$Barcode' terlalu lebar untuk panel front: bars=$barcodeWidth quiet=$quietDots panel=$productCanvasWidth."
@@ -656,7 +670,7 @@ try {
     Add-Ascii -Stream $stream -Text ("$ESC" + "A")
     Add-BmpGraphicCommand -Stream $stream -X $productX -Y $productY -BmpBytes $productGraphic.Bytes
     Add-Ascii -Stream $stream -Text ("$ESC" + "H" + $barcodeX.ToString("0000") + "$ESC" + "V" + $barcodeY.ToString("0000"))
-    Add-Ascii -Stream $stream -Text ("$ESC" + "BG" + $narrowBarDots.ToString("00") + $barcodeHeightDots.ToString("000") + ">H" + $Barcode)
+    Add-Ascii -Stream $stream -Text ("$ESC" + "BG" + $narrowBarDots.ToString("00") + $barcodeHeightDots.ToString("000") + $barcodeStartCode + $encodedBarcode)
     Add-BmpGraphicCommand -Stream $stream -X $barcodeTextX -Y $barcodeTextY -BmpBytes $barcodeTextGraphic.Bytes
     Add-BmpGraphicCommand -Stream $stream -X $backX -Y $backY -BmpBytes $backGraphic.Bytes
     Add-Ascii -Stream $stream -Text ("$ESC" + "Q" + $Copies + "$ESC" + "Z")
@@ -666,7 +680,7 @@ try {
 
   $meta = [ordered]@{
     configPath = $ConfigPath
-    configId = [string]$config.id
+    configId = $(if ($shortAlias) { "sato_cg408_jewelry_barbell_alias_v4" } else { [string]$config.id })
     outputFile = $OutputFile
     bytes = (Get-Item $OutputFile).Length
     fontFamilyRequested = $fontFamilyRequested
@@ -676,13 +690,14 @@ try {
     fontPath = $fontContext.Path
     inkSpreadPx = $inkSpreadPx
     copies = $Copies
-    renderer = "host_inter_bmp_v3"
+    renderer = $(if ($shortAlias) { "host_inter_bmp_alias_v4" } else { "host_inter_bmp_v3" })
+    physicalValidation = $(if ($shortAlias) { "pending_outlet_test" } else { [string]$config.physicalValidation })
     front = [ordered]@{
       productMasterName = $productGraphic.Measurement
       barcode = [ordered]@{
-        data = $Barcode
+        data = $encodedBarcode
         symbology = "CODE128"
-        strategy = "Set B"
+        strategy = $barcodeStrategy
         x = $barcodeX
         y = $barcodeY
         barsWidthDots = $barcodeWidth
@@ -710,7 +725,7 @@ try {
   Write-Host "[INFO] Config: $ConfigPath"
   Write-Host "[INFO] Font: $($fontContext.Name) $fontStyleName ($($fontContext.Source)); inkSpread=$inkSpreadPx"
   Write-Host "[INFO] Front master: '$($productGraphic.Measurement.text)' font=$($productGraphic.Measurement.fontPx)px"
-  Write-Host "[INFO] Barcode: CODE128 Set B '$Barcode'; H=$barcodeX V=$barcodeY bars=${barcodeWidth} dots height=${barcodeHeightDots}"
+  Write-Host "[INFO] Barcode: CODE128 $barcodeStrategy '$encodedBarcode'; H=$barcodeX V=$barcodeY bars=${barcodeWidth} dots height=${barcodeHeightDots}"
   Write-Host "[INFO] Barcode number: '$($barcodeTextGraphic.Measurement.text)' font=$($barcodeTextGraphic.Measurement.fontPx)px"
   Write-Host "[INFO] Back weight: '$($backGraphic.Measurements.weight.text)' font=$($backGraphic.Measurements.weight.fontPx)px"
   Write-Host "[INFO] Back item: '$($backGraphic.Measurements.itemDisplayName.text)' font=$($backGraphic.Measurements.itemDisplayName.fontPx)px truncated=$($backGraphic.Measurements.itemDisplayName.truncated)"

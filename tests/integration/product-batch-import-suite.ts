@@ -383,7 +383,7 @@ async function createOrganizationFixture(prefix: string): Promise<OrganizationFi
     secretHash: "integration-test-secret-hash",
     status: "online",
     isActive: true,
-    capabilities: { print_label_sato: true },
+    capabilities: { print_label_sato: true, supported_label_templates: ["jewelry_barbell_inter_v3", "jewelry_barbell_alias_v4"] },
     lastSeenAt: new Date(),
   });
 
@@ -742,12 +742,24 @@ test("one master with many items covers physical/master fallback, goods receipt,
       jobType: hardwareJobs.jobType,
       targetAgentId: hardwareJobs.targetAgentId,
       sourceId: hardwareJobs.sourceId,
+      payload: hardwareJobs.payload,
     })
     .from(hardwareJobs)
     .where(eq(hardwareJobs.sourceId, session.id));
   assert.equal(jobs.length, 3);
   assert.ok(jobs.every((job) => job.jobType === "print_label_sato"));
   assert.ok(jobs.every((job) => job.targetAgentId === fixture.hardwareAgentId));
+  assert.ok(jobs.every((job) => job.payload.templateId === "jewelry_barbell_alias_v4"));
+  const shortCodes = new Map<string, string>();
+  for (const job of jobs) {
+    const fields = job.payload.fields as Record<string, unknown>;
+    assert.match(String(fields.labelBarcode), /^\d{6}$/);
+    assert.match(String(fields.barcode), /^AJ/);
+    const itemId = String(job.payload.itemId);
+    if (shortCodes.has(itemId)) assert.equal(fields.labelBarcode, shortCodes.get(itemId), "Batch reprint must keep the same alias.");
+    shortCodes.set(itemId, String(fields.labelBarcode));
+  }
+  assert.equal(new Set(shortCodes.values()).size, 2);
 });
 
 test("multiple masters skip an existing PM code collision while keeping generated codes unique", async () => {

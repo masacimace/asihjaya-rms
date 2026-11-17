@@ -146,6 +146,7 @@ async function checkLiveDatabase(): Promise<void> {
       "product_batch_import_media",
       "legacy_product_master_mappings",
       "item_barcodes",
+      "inventory_label_alias_counters",
       "finance_closing_snapshots",
       "telegram_destinations",
       "telegram_report_settings",
@@ -432,6 +433,7 @@ async function checkLiveDatabase(): Promise<void> {
         ["legacy_master_code", "item_count", "status", "target_product_master_id"],
       ],
       ["item_barcodes", ["barcode_value", "source", "is_primary", "is_active"]],
+      ["inventory_label_alias_counters", ["organization_id", "next_value"]],
       ["shifts", ["business_date"]],
       ["sale_items", ["cost_amount_snapshot"]],
       [
@@ -604,6 +606,7 @@ async function checkLiveDatabase(): Promise<void> {
     );
 
     const requiredConstraints = [
+      "inventory_label_alias_counters_range_ck",
       "product_batch_import_sessions_file_sha256_ck",
       "product_batch_import_sessions_file_size_ck",
       "product_batch_import_sessions_template_version_ck",

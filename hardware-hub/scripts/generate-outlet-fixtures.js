@@ -5,6 +5,8 @@ const crypto = require("crypto");
 const {
   SATO_JEWELRY_LABEL_TEMPLATE_ID,
   SATO_JEWELRY_LABEL_PROFILE_ID,
+  SATO_SHORT_LABEL_TEMPLATE_ID,
+  SATO_SHORT_LABEL_PROFILE_ID,
   DEFAULT_SATO_LABEL_CONFIG_PATH,
   prepareSatoJewelryLabel,
 } = require("../lib/sato-jewelry-label");
@@ -115,17 +117,18 @@ function createEpsonFixturePdf() {
   return createSimplePdf({ pages: [page1, page2], width, height });
 }
 
-function createSatoProductionContractFixture(configPath = DEFAULT_SATO_LABEL_CONFIG_PATH) {
+function createSatoProductionContractFixture(configPath = DEFAULT_SATO_LABEL_CONFIG_PATH, { shortAlias = false } = {}) {
   const payload = {
     schemaVersion: 1,
-    templateId: SATO_JEWELRY_LABEL_TEMPLATE_ID,
-    templateVersion: 3,
-    printerProfileId: SATO_JEWELRY_LABEL_PROFILE_ID,
+    templateId: shortAlias ? SATO_SHORT_LABEL_TEMPLATE_ID : SATO_JEWELRY_LABEL_TEMPLATE_ID,
+    templateVersion: shortAlias ? 4 : 3,
+    printerProfileId: shortAlias ? SATO_SHORT_LABEL_PROFILE_ID : SATO_JEWELRY_LABEL_PROFILE_ID,
     itemId: "00000000-0000-4000-8000-000000000001",
     copies: 1,
     fields: {
       sku: "AJ-TEST-LABEL",
       barcode: "AJTEST123456",
+      ...(shortAlias ? { labelBarcode: "000000" } : {}),
       masterProductName: "CINCIN EMAS TEST ASIHJAYA",
       itemDisplayName: "CINCIN EMAS TEST ITEM 001",
       weightGram: "2.350",

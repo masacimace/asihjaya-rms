@@ -12,6 +12,7 @@ import { hasPermission } from "@/lib/auth/session";
 import { buildInventoryLabelPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { createHardwareJobV2InTransaction } from "@/lib/hardware/job-producer-v2";
 import { getLabelHardwareTargets } from "@/lib/hardware/label-target";
+import { getOrCreateLabelBarcodeAlias } from "@/features/inventory/label-barcode-alias";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -158,6 +159,7 @@ export async function printProductBatchImportLabels(
   const targetByOutletId = await getLabelHardwareTargets({
     organizationId: input.auth.organization.id,
     outletIds: itemOutletIds,
+    requireShortAlias: true,
   });
 
   const printableRows = candidateRows.flatMap((row) => {
@@ -188,7 +190,7 @@ export async function printProductBatchImportLabels(
     );
     if (!hasRegister) {
       throw new ProductBatchImportLabelError(
-        "Hardware Agent label dengan capability print_label_sato belum tersedia pada outlet item terpilih. Pastikan Agent Hardware Hub aktif pada register yang benar lalu jalankan Test Label Printer.",
+        "Hardware Hub label belum mendukung barcode tebal. Upgrade installer ke 0.9.7 atau lebih baru dan pastikan Hub aktif.",
         "HARDWARE_AGENT_REQUIRED",
       );
     }
@@ -206,11 +208,13 @@ export async function printProductBatchImportLabels(
       const outletId = row.currentOutletId!;
       const target = targetByOutletId.get(outletId)!;
       const registerId = target.registerId;
+      const labelBarcode = await getOrCreateLabelBarcodeAlias(transaction, { organizationId: input.auth.organization.id, itemId: row.itemId, createdBy: input.auth.user.id, outletId });
       const payload = buildInventoryLabelPayloadV2({
         itemId: row.itemId,
         copies: 1,
         sku: row.sku,
         barcode: row.barcode,
+        labelBarcode,
         masterProductName: row.productName,
         itemDisplayName: row.displayName ?? row.productName,
         weightGram: row.weightGram,

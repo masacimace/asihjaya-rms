@@ -4,6 +4,10 @@ Hardware Hub Agent berjalan pada Mini PC Windows outlet. Agent melakukan heartbe
 
 Protocol v2 dirancang agar restart agent atau putus internet setelah printer menerima command tidak menyebabkan automatic reprint.
 
+## Barcode alias v0.9.7
+
+Label produk baru memakai alias angka unik 6 digit dengan Code128 C dan narrow bar 2 dot, sambil tetap mencetak kode produk lengkap. RMS menyimpan pemetaan otomatis saat cetak pertama dan memakai alias sama saat reprint. Barcode lama tetap berlaku. Varian V4 berstatus pending uji cetak/scan fisik; kontrak V3 tetap didukung untuk antrean lama. Perubahan ini membutuhkan migration RMS `0033_inventory_label_alias`, deploy web, dan upgrade Hub. Lihat [panduan alias label](../docs/hardware-hub/sato-short-label-alias.md).
+
 ## Label quality v0.9.6
 
 Untuk label CG408 yang pudar, Hub memasang baseline darkness 4/5 dan speed 2 ips pada label pertama tiap sesi/printer. Pengaturan ini persisten di printer; label berikutnya tidak menulis konfigurasi lagi. Nomor barcode, isi, dan geometri layout V3 dipertahankan. Hasil fisik perlu diuji dengan satu cetak/scan di outlet.
@@ -26,7 +30,7 @@ Installer v0.9.4 memperbarui polling instalasi lama menjadi 1000 ms, membuat bac
 
 Durasi download PDF tersedia sebagai `deviceResult.downloadDurationMs`; event `dispatching` mencatat `prepareDurationMs` dan event `submitted` mencatat `dispatchDurationMs`. RMS mencatat `browserMs`, `navigationMs`, `assetsReadyMs`, dan `pdfMs` pada log `receipt-pdf-renderer`. Optimasi PDF memerlukan deployment aplikasi RMS, sedangkan perubahan polling/antrean memerlukan upgrade Hub.
 
-Build installer di GitHub Actions **Build Hardware Hub Installer**. `workflow_dispatch` menghasilkan artifact untuk UAT. Setelah smoke test dan integrasi ke `main`, push tag `hardware-hub-v0.9.6` yang cocok dengan versi package untuk menerbitkan GitHub Release berisi Setup.exe dan SHA-256. Workflow memvalidasi seluruh Hub checks sebelum build dan menolak overwrite release yang sudah ada.
+Build installer di GitHub Actions **Build Hardware Hub Installer**. `workflow_dispatch` menghasilkan artifact untuk UAT. Setelah smoke test dan integrasi ke `main`, push tag `hardware-hub-v0.9.7` yang cocok dengan versi package untuk menerbitkan GitHub Release berisi Setup.exe dan SHA-256. Workflow memvalidasi seluruh Hub checks sebelum build dan menolak overwrite release yang sudah ada.
 
 ## Runtime
 

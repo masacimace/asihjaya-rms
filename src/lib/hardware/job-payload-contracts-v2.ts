@@ -23,6 +23,8 @@ export const INVENTORY_LABEL_TEMPLATE_V2 =
   "jewelry_barbell_inter_v3" as const;
 export const SATO_CG408_LABEL_PROFILE_V2 =
   "sato_cg408_jewelry_barbell_inter_v3" as const;
+export const SHORT_LABEL_TEMPLATE = "jewelry_barbell_alias_v4" as const;
+export const SHORT_LABEL_PROFILE = "sato_cg408_jewelry_barbell_alias_v4" as const;
 export const DEFAULT_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 export type HardwareReceiptRenderMode =
@@ -33,14 +35,15 @@ export type HardwareReceiptRenderMode =
 
 export type HardwareLabelPayloadV2 = {
   schemaVersion: 1;
-  templateId: typeof INVENTORY_LABEL_TEMPLATE_V2;
-  templateVersion: 3;
-  printerProfileId: typeof SATO_CG408_LABEL_PROFILE_V2;
+  templateId: typeof INVENTORY_LABEL_TEMPLATE_V2 | typeof SHORT_LABEL_TEMPLATE;
+  templateVersion: 3 | 4;
+  printerProfileId: typeof SATO_CG408_LABEL_PROFILE_V2 | typeof SHORT_LABEL_PROFILE;
   itemId: string;
   copies: number;
   fields: {
     sku: string;
     barcode: string;
+    labelBarcode?: string;
     masterProductName: string;
     itemDisplayName: string;
     weightGram: string | null;
@@ -186,13 +189,14 @@ function validateLabelPayload(payload: Record<string, unknown>) {
   if (payload.schemaVersion !== 1) {
     throw new TypeError("Label payload schemaVersion harus 1.");
   }
-  if (payload.templateId !== INVENTORY_LABEL_TEMPLATE_V2) {
+  const shortLabel = payload.templateId === SHORT_LABEL_TEMPLATE;
+  if (!shortLabel && payload.templateId !== INVENTORY_LABEL_TEMPLATE_V2) {
     throw new TypeError("Label payload templateId tidak didukung.");
   }
-  if (payload.templateVersion !== 3) {
-    throw new TypeError("Label payload templateVersion harus 3.");
+  if (payload.templateVersion !== (shortLabel ? 4 : 3)) {
+    throw new TypeError("Label payload templateVersion tidak cocok dengan template.");
   }
-  if (payload.printerProfileId !== SATO_CG408_LABEL_PROFILE_V2) {
+  if (payload.printerProfileId !== (shortLabel ? SHORT_LABEL_PROFILE : SATO_CG408_LABEL_PROFILE_V2)) {
     throw new TypeError("Label payload printerProfileId tidak didukung.");
   }
 
@@ -210,6 +214,7 @@ function validateLabelPayload(payload: Record<string, unknown>) {
     [
       "sku",
       "barcode",
+      ...(shortLabel ? ["labelBarcode"] : []),
       "masterProductName",
       "itemDisplayName",
       "weightGram",
@@ -224,6 +229,9 @@ function validateLabelPayload(payload: Record<string, unknown>) {
   );
   requireString(payload.fields, "sku", 80);
   const barcode = requireString(payload.fields, "barcode", 40);
+  if (shortLabel && !/^\d{6}$/.test(requireString(payload.fields, "labelBarcode", 6))) {
+    throw new TypeError("Alias label Code128 C wajib tepat 6 digit.");
+  }
   if (!/^[0-9A-Z .$/+%-]{1,40}$/.test(barcode)) {
     throw new TypeError(
       "Label barcode wajib format CODE128 uppercase maksimal 40 karakter.",
@@ -467,6 +475,7 @@ export function buildInventoryLabelPayloadV2(input: {
   copies: number;
   sku: string;
   barcode: string;
+  labelBarcode?: string;
   masterProductName: string;
   itemDisplayName: string;
   weightGram: string | null;
@@ -479,14 +488,15 @@ export function buildInventoryLabelPayloadV2(input: {
 }): HardwareLabelPayloadV2 {
   const payload: HardwareLabelPayloadV2 = {
     schemaVersion: 1,
-    templateId: INVENTORY_LABEL_TEMPLATE_V2,
-    templateVersion: 3,
-    printerProfileId: SATO_CG408_LABEL_PROFILE_V2,
+    templateId: input.labelBarcode !== undefined ? SHORT_LABEL_TEMPLATE : INVENTORY_LABEL_TEMPLATE_V2,
+    templateVersion: input.labelBarcode !== undefined ? 4 : 3,
+    printerProfileId: input.labelBarcode !== undefined ? SHORT_LABEL_PROFILE : SATO_CG408_LABEL_PROFILE_V2,
     itemId: input.itemId,
     copies: input.copies,
     fields: {
       sku: input.sku,
       barcode: input.barcode,
+      ...(input.labelBarcode !== undefined ? { labelBarcode: input.labelBarcode } : {}),
       masterProductName: input.masterProductName,
       itemDisplayName: input.itemDisplayName,
       weightGram: input.weightGram,
@@ -610,6 +620,7 @@ export function buildHardwareTestPayloadV2(input: {
   jobType: "test_label_printer" | "test_document_printer" | "test_cash_drawer";
   agentId: string;
   requestedAt: Date;
+  shortLabelSupported?: boolean;
 }): HardwareJobPayloadV2 {
   if (input.jobType === "test_label_printer") {
     return buildInventoryLabelPayloadV2({
@@ -617,6 +628,7 @@ export function buildHardwareTestPayloadV2(input: {
       copies: 1,
       sku: "AJ-TEST-LABEL",
       barcode: "AJTEST123456",
+      ...(input.shortLabelSupported ? { labelBarcode: "000000" } : {}),
       masterProductName: "CINCIN EMAS TEST ASIHJAYA",
       itemDisplayName: "CINCIN EMAS TEST ITEM 001",
       weightGram: "2.350",
