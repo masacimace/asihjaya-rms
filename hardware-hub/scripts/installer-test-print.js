@@ -78,6 +78,8 @@ async function testLabel({ printerName, stateDir }) {
     printCommandTimeoutMs: Number(process.env.PRINT_COMMAND_TIMEOUT_MS || 60000),
     logger: createLogger(),
     satoCopies: 1,
+    satoPrintDarkness: process.env.SATO_PRINT_DARKNESS,
+    satoPrintSpeedIps: process.env.SATO_PRINT_SPEED_IPS,
     satoLabelConfigPath: path.resolve(
       process.env.SATO_LABEL_CONFIG_PATH || DEFAULT_SATO_LABEL_CONFIG_PATH,
     ),

@@ -15,6 +15,7 @@ const {
 } = require("./document-print-profiles");
 const { validatePdfFile } = require("./pdf-validation");
 const { prepareSatoJewelryLabel } = require("./sato-jewelry-label");
+const { resolveSatoPrintQuality, buildSatoPrintQualityCommands } = require("./sato-print-quality");
 
 
 const DOCUMENT_DOWNLOAD_PATH_PATTERNS = [
@@ -392,6 +393,10 @@ function buildLegacyPdfCommand(config, filePath) {
 }
 
 function createHardwareAdapterFactory(config) {
+  const satoQuality = resolveSatoPrintQuality({ darkness: config.satoPrintDarkness, speedIps: config.satoPrintSpeedIps });
+  // CS/#E settings persist in the printer. Apply once per successful session /
+  // printer, rather than writing printer configuration on every label.
+  const configuredLabelPrinters = new Set();
   const adapterModes = {
     label_printer: config.adapterModes?.label_printer || (config.dryRun ? "fake" : "real"),
     document_printer: config.adapterModes?.document_printer || (config.dryRun ? "fake" : "real"),
@@ -428,6 +433,7 @@ function createHardwareAdapterFactory(config) {
       copies: config.satoCopies,
       configPath: config.satoLabelConfigPath,
     });
+    const printerProfile = { ...prepared.profile, printQuality: satoQuality };
 
     if (isFake("label_printer")) {
       return requireFakeBackend("label_printer").prepareLabel({
@@ -437,7 +443,7 @@ function createHardwareAdapterFactory(config) {
         label: prepared.label,
         copies: prepared.copies,
         template: prepared.template,
-        printerProfile: prepared.profile,
+        printerProfile,
         commandSha256: prepared.fakeCommandSha256,
         bytes: prepared.fakeCommand.length,
       });
@@ -505,27 +511,40 @@ function createHardwareAdapterFactory(config) {
           category: "process",
         });
       }
-      const commandSha256 = crypto.createHash("sha256").update(commandBuffer).digest("hex");
+      const qualityKey = JSON.stringify([config.labelPrinterName, satoQuality.darkness, satoQuality.speedIps]);
+      const qualityCommands = configuredLabelPrinters.has(qualityKey)
+        ? Buffer.alloc(0) : buildSatoPrintQualityCommands(satoQuality);
+      const printBuffer = Buffer.concat([qualityCommands, commandBuffer]);
+      const commandSha256 = crypto.createHash("sha256").update(printBuffer).digest("hex");
       let renderMetadata = null;
       try {
         renderMetadata = JSON.parse(fs.readFileSync(renderMetaFile, "utf8"));
       } catch {}
 
-      return prepareRawWindowsJob(config, {
+      const rawJob = prepareRawWindowsJob(config, {
         printerName: config.labelPrinterName,
-        content: commandBuffer,
+        content: printBuffer,
         extension: "sbpl",
         documentName: `Asihjaya SATO ${sanitizeCode(job.id || attemptId || "label", "label")}`,
         metadata: {
           template: prepared.template,
-          printerProfile: prepared.profile,
+          printerProfile,
+          printQualityConfigured: qualityCommands.length > 0,
           copies: prepared.copies,
           label: prepared.label,
           commandSha256,
-          bytes: commandBuffer.length,
+          bytes: printBuffer.length,
           renderMetadata,
         },
       });
+      return {
+        ...rawJob,
+        async dispatch() {
+          const result = await rawJob.dispatch();
+          configuredLabelPrinters.add(qualityKey);
+          return result;
+        },
+      };
     } finally {
       try { fs.unlinkSync(renderFile); } catch {}
       try { fs.unlinkSync(renderMetaFile); } catch {}

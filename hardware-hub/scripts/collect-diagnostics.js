@@ -1,5 +1,6 @@
 /* eslint-disable */
 const fs = require("fs");
+const { resolveSatoPrintQuality } = require("../lib/sato-print-quality");
 const os = require("os");
 const path = require("path");
 const { DOCUMENT_PRINT_PROFILES } = require("../lib/document-print-profiles");
@@ -73,6 +74,10 @@ function collectDiagnostics() {
       try { resolved = loadSatoJewelryLabelConfig(configPath); } catch {}
       return {
         configuredPrinter: process.env.LABEL_PRINTER_NAME?.trim() || null,
+        printQuality: (() => {
+          try { return resolveSatoPrintQuality({ darkness: process.env.SATO_PRINT_DARKNESS, speedIps: process.env.SATO_PRINT_SPEED_IPS }); }
+          catch (error) { return { error: error.message }; }
+        })(),
         configuredTemplate: SATO_JEWELRY_LABEL_TEMPLATE_ID,
         configuredProfileId: resolved?.config.id || null,
         active: resolved

@@ -7,6 +7,8 @@ import { db, pool } from "@/db";
 import { claimProductItemsForSale } from "@/features/pos/inventory-sale-claim";
 import { getPosCatalogPage, getPosInitialData, lookupPosItemByScanValue } from "@/features/pos/queries";
 import { filterPosCatalogItems } from "@/features/pos/catalog-state";
+import { getProductItemList } from "@/features/inventory/product-item-queries";
+import { parseProductItemListFilters } from "@/features/inventory/product-item-contracts";
 
 const TEST_CASES: Array<{ name: string; run: () => Promise<void> }> = [];
 
@@ -581,6 +583,61 @@ test("multiple matching barcode aliases do not duplicate catalog rows or paginat
   assert.deepEqual(page.items.map(row=>row.id),[item.id]);assert.equal(page.hasMore,false);
   const literal = await getPosCatalogPage({organizationId:fixture.organizationId,outletId:fixture.outletId,searchQuery:"%"});
   assert.equal(literal.items.length,0);
+});
+
+test("inventory filters find full/partial legacy barcodes and preserve existing identifier searches", async () => {
+  const f = await createBaseFixture();
+  const item = await createItem(f, { legacyBarcode: "003037", sku: "INV-ONE", internalBarcode: "AJINVONE" });
+  for (const q of ["003037", "3037", " 003037 ", item.sku, item.internalBarcode]) {
+    const result = await getProductItemList(f.organizationId, parseProductItemListFilters({ q }));
+    assert.deepEqual(result.rows.map((row) => row.id), [item.id], q);
+    assert.equal(result.total, 1);
+  }
+});
+
+test("inventory barcode search respects organization, outlet, alias activity and stock/archive filters", async () => {
+  const f = await createBaseFixture();
+  const active = await createItem(f, { legacyBarcode: "OLD-91001" });
+  const sold = await createItem(f, { legacyBarcode: "OLD-91002", availability: "sold", locationState: "customer" });
+  const archived = await createItem(f, { legacyBarcode: "OLD-91003", isActive: false });
+  const otherOutlet = await createItem(f, { legacyBarcode: "OLD-91004", outletId: f.otherOutletId });
+  await createItem(f, { legacyBarcode: "OLD-91005", legacyBarcodeActive: false });
+  const other = await createBaseFixture();
+  await createItem(other, { legacyBarcode: "OLD-91006" });
+  await pool.query("insert into item_barcodes(organization_id,item_id,barcode_value,source,is_active,is_primary) values($1,$2,'FOREIGN-ALIAS','manual',true,false)", [other.organizationId, active.id]);
+
+  const find = (values: Record<string, string>) => getProductItemList(f.organizationId, parseProductItemListFilters(values));
+  assert.deepEqual(new Set((await find({ q: "OLD-910" })).rows.map((row) => row.id)), new Set([active.id, sold.id, otherOutlet.id]));
+  assert.deepEqual((await find({ q: "OLD-910", outletId: f.outletId, availability: "available" })).rows.map((row) => row.id), [active.id]);
+  assert.deepEqual((await find({ q: "OLD-910", availability: "sold" })).rows.map((row) => row.id), [sold.id]);
+  assert.deepEqual((await find({ q: "OLD-910", status: "archived" })).rows.map((row) => row.id), [archived.id]);
+  assert.equal((await find({ q: "FOREIGN-ALIAS" })).total, 0);
+});
+
+test("inventory alias matches do not duplicate totals, rows or pagination", async () => {
+  const f = await createBaseFixture();
+  const expected = new Set<string>();
+  for (let index = 0; index < 21; index++) {
+    const item = await createItem(f, { legacyBarcode: `INV-MATCH-${index}-A` });
+    expected.add(item.id);
+    await pool.query("insert into item_barcodes(organization_id,item_id,barcode_value,source,is_active,is_primary) values($1,$2,$3,'manual',true,false)", [f.organizationId, item.id, `INV-MATCH-${index}-B`]);
+  }
+  const first = await getProductItemList(f.organizationId, parseProductItemListFilters({ q: "inv-match" }));
+  const second = await getProductItemList(f.organizationId, parseProductItemListFilters({ q: "inv-match", page: "2" }));
+  assert.equal(first.total, 21);
+  assert.equal(first.pageCount, 2);
+  assert.equal(first.rows.length, 20);
+  assert.equal(second.rows.length, 1);
+  assert.deepEqual(new Set([...first.rows, ...second.rows].map((row) => row.id)), expected);
+});
+
+test("inventory search treats wildcard characters as literal barcode text", async () => {
+  const f = await createBaseFixture();
+  const item = await createItem(f, { legacyBarcode: "OLD_UNDER" });
+  await createItem(f, { legacyBarcode: "OLDXUNDER" });
+  const literal = await getProductItemList(f.organizationId, parseProductItemListFilters({ q: "old_" }));
+  assert.deepEqual(literal.rows.map((row) => row.id), [item.id]);
+  assert.equal((await getProductItemList(f.organizationId, parseProductItemListFilters({ q: "%" }))).total, 0);
 });
 
 export async function runLegacyBarcodePosSuite() {

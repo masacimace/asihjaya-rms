@@ -109,7 +109,7 @@ async function main() {
     const hardwareAdapters = fs.readFileSync(path.join(__dirname, "..", "lib", "hardware-adapters.js"), "utf8");
     assert(hardwareAdapters.includes('adapter: "windows_raw_winspool"'));
     assert(hardwareAdapters.includes('render-sato-jewelry-label.ps1'));
-    assert(hardwareAdapters.includes('content: commandBuffer'));
+    assert(hardwareAdapters.includes('content: printBuffer'));
     assert(!hardwareAdapters.includes('adapter: "windows_raw_share"'));
     assert(!hardwareAdapters.includes("copy /B"));
     assert(!hardwareAdapters.includes("\\localhost\\${printerName}"));

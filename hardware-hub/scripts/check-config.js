@@ -5,6 +5,7 @@ const { SUPPORTED_FAKE_SCENARIOS, normalizeScenario } = require("../lib/failure-
 const { createSecretProtector } = require("../lib/secret-protector");
 const { loadHardwareCredential } = require("../lib/credential-store");
 const { DOCUMENT_PRINT_PROFILES } = require("../lib/document-print-profiles");
+const { resolveSatoPrintQuality } = require("../lib/sato-print-quality");
 const {
   loadSatoJewelryLabelConfig,
   SATO_JEWELRY_LABEL_TEMPLATE_ID,
@@ -269,6 +270,9 @@ const satoLabelConfigPath = resolveLocalPath(
   "config/sato-jewelry-barbell-host-bold.json",
 );
 const satoCopies = getNumber("SATO_COPIES", 1);
+try {
+  resolveSatoPrintQuality({ darkness: getEnv("SATO_PRINT_DARKNESS"), speedIps: getEnv("SATO_PRINT_SPEED_IPS") });
+} catch (error) { errors.push(error.message); }
 let resolvedSatoLabelConfig = null;
 try {
   resolvedSatoLabelConfig = loadSatoJewelryLabelConfig(satoLabelConfigPath);

@@ -63,6 +63,8 @@ function waitForPostgres() {
         "-T",
         "postgres",
         "pg_isready",
+        "-h",
+        "127.0.0.1",
         "-U",
         "asihjaya_test",
         "-d",

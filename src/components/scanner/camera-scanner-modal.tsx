@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { type DetectedBarcode, useZxing } from "react-zxing";
+import { requestScannerAutoFocus } from "./camera-focus";
 
 type CameraScannerModalProps = {
   isOpen: boolean;
@@ -30,8 +31,8 @@ const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
   audio: false,
   video: {
     facingMode: { ideal: "environment" },
-    width: { ideal: 1280 },
-    height: { ideal: 720 },
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
   },
 };
 
@@ -102,6 +103,14 @@ function CameraScannerViewport({
     onDecodeResult: onDecode,
     onError,
   });
+  const handlePlaying = useCallback(() => {
+    onReady();
+    const stream = ref.current?.srcObject;
+    if (stream instanceof MediaStream) {
+      const track = stream.getVideoTracks()[0];
+      if (track) void requestScannerAutoFocus(track);
+    }
+  }, [onReady, ref]);
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-2xl bg-neutral-900">
@@ -111,7 +120,7 @@ function CameraScannerViewport({
         muted
         playsInline
         disablePictureInPicture
-        onPlaying={onReady}
+        onPlaying={handlePlaying}
         className="h-full w-full object-cover"
       />
 
@@ -253,7 +262,7 @@ function CameraScannerDialog({
           <p className="text-center text-sm text-[var(--muted)]">
             {isProcessing
               ? "Sedang mencari item hasil scan..."
-              : "Posisikan barcode mendatar di dalam kotak, atau masukkan kode manual."}
+              : "Penuhi kotak dengan barcode mendatar, tahan hingga fokus, dan hindari pantulan cahaya. Input manual tersedia di bawah."}
           </p>
 
           <form onSubmit={submitManualScan} className="flex gap-2">

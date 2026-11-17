@@ -4,6 +4,7 @@ import {
   count,
   desc,
   eq,
+  exists,
   ilike,
   inArray,
   or,
@@ -15,6 +16,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   inventoryMovements,
+  itemBarcodes,
   outlets,
   productItems,
   productMasters,
@@ -196,7 +198,7 @@ export async function getProductItemList(
   ];
 
   if (filters.search) {
-    const pattern = `%${filters.search}%`;
+    const pattern = `%${filters.search.replace(/[\\%_]/g, "\\$&")}%`;
 
     conditions.push(
       or(
@@ -205,6 +207,20 @@ export async function getProductItemList(
         ilike(productItems.displayName, pattern),
         ilike(productMasters.code, pattern),
         ilike(productMasters.name, pattern),
+        // Several aliases may match one item; keep counts and pagination per item.
+        exists(
+          db
+            .select({ id: itemBarcodes.id })
+            .from(itemBarcodes)
+            .where(
+              and(
+                eq(itemBarcodes.organizationId, productItems.organizationId),
+                eq(itemBarcodes.itemId, productItems.id),
+                eq(itemBarcodes.isActive, true),
+                ilike(itemBarcodes.barcodeValue, pattern),
+              ),
+            ),
+        ),
       )!,
     );
   }

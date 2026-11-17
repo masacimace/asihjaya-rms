@@ -12,6 +12,8 @@ import { parseLegacyProductWorkbook } from "@/features/legacy-migration/xlsx-par
 import { claimProductItemsForSale } from "@/features/pos/inventory-sale-claim";
 import type { AuthContext } from "@/lib/auth/session";
 import { changeProductLifecycle } from "@/features/products/lifecycle-service";
+import { getProductItemList } from "@/features/inventory/product-item-queries";
+import { parseProductItemListFilters } from "@/features/inventory/product-item-contracts";
 
 type Source = { barcode:string; name?:string; master?:string; masterName?:string; status?:string; price?:number; weight?:number };
 const headers = ["No","Kode Produk","Kategori (*)","Kode Master Produk (*)","Nama Master Produk (*)","Nama Produk Per SKU (*)","Kadar Persen (*)","Kadar Tukaran (*)","Harga (*)","Potongan / Gram (*)","Berat / Gram (*)","Warna (*)","Foto (*)"];
@@ -77,12 +79,17 @@ test("old XLSX without status remains compatible; blank or conflicting status is
 
 test("first import follows available/sold statuses without fabricated sales or sold opening stock",async()=>{
   const auth=await fixture();
-  const result=await sync(auth,[{barcode:"003037"},{barcode:"008888",status:"Stok Habis / Terjual"}]);
+  const result=await sync(auth,[{barcode:"003037",name:"Cincin Pernikahan"},{barcode:"008888",name:"Cincin Terjual",status:"Stok Habis / Terjual"}]);
   assert.equal(result.importedItemCount,2);assert.equal(result.availableItemCount,1);assert.equal(result.soldItemCount,1);
   const rows=await items(auth);
   assert.equal(rows.find(row=>row.legacyId==="003037")!.availability,"available");
   assert.equal(rows.find(row=>row.legacyId==="008888")!.locationState,"customer");
   assert.deepEqual(await counts(),{items:2,sales:0,adjustments:0,opening:1,masters:1});
+  for (const q of ["003037", "3037", "008888"]) {
+    const matches = await getProductItemList(auth.organization.id, parseProductItemListFilters({ q }));
+    assert.equal(matches.total, 1, `Imported inventory barcode ${q} must be searchable.`);
+    assert.equal(matches.rows[0]!.id, rows.find((row) => row.legacyId === (q === "3037" ? "003037" : q))!.id);
+  }
 });
 
 test("refreshed workbook skips previous imports, preserves identifiers, and adds new products only",async()=>{

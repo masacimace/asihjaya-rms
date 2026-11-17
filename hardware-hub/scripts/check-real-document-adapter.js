@@ -23,14 +23,20 @@ function createSyntheticA4LandscapePdf() {
   );
 }
 
-function loadWindowsAdapterModule(commandCalls) {
+function loadWindowsAdapterModule(commandCalls, onSpawn = () => ({})) {
   function fakeSpawn(executable, args, options) {
     commandCalls.push({ executable, args: [...args], options: { ...options } });
     const child = new EventEmitter();
     child.stdout = new EventEmitter();
     child.stderr = new EventEmitter();
     child.kill = () => {};
-    setImmediate(() => child.emit("close", 0, null));
+    setImmediate(() => {
+      try {
+        const result = onSpawn(executable, [...args], options) || {};
+        if (result.stdout) child.stdout.emit("data", Buffer.from(result.stdout));
+        child.emit("close", result.exitCode || 0, null);
+      } catch (error) { child.emit("error", error); }
+    });
     return child;
   }
 

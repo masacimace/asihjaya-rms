@@ -2,7 +2,8 @@
 const fs = require("fs");
 const path = require("path");
 
-const { updateEnvContent } = require("../lib/outlet-operations");
+const { updateEnvContent, parseEnv } = require("../lib/outlet-operations");
+const { resolveSatoPrintQuality } = require("../lib/sato-print-quality");
 
 function parseArgs(argv) {
   const result = {};
@@ -97,6 +98,8 @@ function configureInstaller(input) {
     ? fs.readFileSync(envPath, "utf8")
     : fs.readFileSync(templatePath, "utf8");
   const backupPath = backupConfig(envPath, path.join(stateDir, "config-backups"));
+  const existingEnv = parseEnv(original);
+  const satoQuality = resolveSatoPrintQuality({ darkness: existingEnv.SATO_PRINT_DARKNESS, speedIps: existingEnv.SATO_PRINT_SPEED_IPS });
 
   const updates = {
     ASIHJAYA_API_URL: apiUrl,
@@ -109,6 +112,8 @@ function configureInstaller(input) {
     HARDWARE_PROTOCOL_MODE: "v2-preferred",
     POLL_INTERVAL_MS: "1000",
     DOCUMENT_DOWNLOAD_TIMEOUT_MS: "90000",
+    SATO_PRINT_DARKNESS: String(satoQuality.darkness),
+    SATO_PRINT_SPEED_IPS: String(satoQuality.speedIps),
     HARDWARE_JOURNAL_PATH: path.join(stateDir, "hardware-executions.sqlite"),
     HARDWARE_JOURNAL_KEY_PATH: path.join(stateDir, "hardware-journal.key"),
     HARDWARE_POWERSHELL_EXECUTABLE: powershellExecutable,

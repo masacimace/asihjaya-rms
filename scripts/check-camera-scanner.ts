@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { requestScannerAutoFocus } from "../src/components/scanner/camera-focus";
 
 const scannerPath = path.join(
   process.cwd(),
@@ -43,6 +44,24 @@ assert.doesNotMatch(
   /useEffect\(\(\) => \{\s*if \(isOpen\)/,
   "Pembukaan scanner tidak boleh mereset state secara sinkron di dalam effect.",
 );
+
+assert.ok(scannerSource.includes("width: { ideal: 1920 }") && scannerSource.includes("height: { ideal: 1080 }"));
+assert.ok(scannerSource.includes("requestScannerAutoFocus(track)"));
+const focusCalls: MediaTrackConstraints[] = [];
+const makeTrack = (overrides: Record<string, unknown> = {}) => ({
+  readyState: "live", getCapabilities: () => ({ focusMode: ["manual", "continuous"] }),
+  applyConstraints: async (constraints: MediaTrackConstraints) => { focusCalls.push(constraints); },
+  ...overrides,
+} as unknown as MediaStreamTrack);
+await requestScannerAutoFocus(makeTrack());
+assert.deepEqual(focusCalls, [{ advanced: [{ focusMode: "continuous" }] }]);
+focusCalls.length = 0;
+await requestScannerAutoFocus(makeTrack({ readyState: "ended" }));
+await requestScannerAutoFocus(makeTrack({ getCapabilities: () => ({ focusMode: ["manual"] }) }));
+await requestScannerAutoFocus(makeTrack({ getCapabilities: undefined }));
+await requestScannerAutoFocus(makeTrack({ getCapabilities: () => { throw new Error("Unsupported capability query"); } }));
+assert.equal(focusCalls.length, 0, "Unsupported / closed cameras must keep their existing focus settings.");
+await requestScannerAutoFocus(makeTrack({ applyConstraints: async () => { throw new Error("Autofocus rejected"); } }));
 
 console.log(
   "OK: camera scanner memulai kamera saat modal dibuka, memakai kamera belakang, menangani lifecycle stream, dan menyediakan error recovery mobile.",

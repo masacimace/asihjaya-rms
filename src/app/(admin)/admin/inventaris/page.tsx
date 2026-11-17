@@ -448,7 +448,7 @@ export default async function InventoryPage({
                 name="q"
                 type="search"
                 defaultValue={filters.search}
-                placeholder="Cari SKU, barcode, nama, atau kode produk..."
+                placeholder="Cari SKU, barcode baru/lama, nama, atau kode produk..."
                 className="min-w-0 flex-1 bg-transparent text-sm text-neutral-950 outline-none placeholder:text-neutral-400"
               />
             </label>

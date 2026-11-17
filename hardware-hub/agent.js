@@ -11,7 +11,7 @@ try {
   // dotenv optional agar agent tetap bisa dijalankan lewat environment variable OS.
 }
 
-const AGENT_VERSION = "2.5.2-busy-queue";
+const AGENT_VERSION = "2.5.3-label-quality";
 const { createOperationalLogger } = require("./lib/operational-logger");
 const operationalLogger = createOperationalLogger({
   logDir: path.resolve(__dirname, process.env.HARDWARE_LOG_DIR?.trim() || "logs"),
@@ -180,6 +180,8 @@ const SATO_COPIES = Math.max(
     20,
   ),
 );
+const { resolveSatoPrintQuality } = require("./lib/sato-print-quality");
+let SATO_PRINT_QUALITY;
 let SATO_LABEL_CONFIG;
 
 
@@ -234,6 +236,10 @@ if (HARDWARE_LOG_RETENTION_DAYS < 1 || HARDWARE_LOG_RETENTION_DAYS > 365) {
 }
 try {
   SATO_LABEL_CONFIG = loadSatoJewelryLabelConfig(SATO_LABEL_CONFIG_PATH);
+  SATO_PRINT_QUALITY = resolveSatoPrintQuality({
+    darkness: process.env.SATO_PRINT_DARKNESS,
+    speedIps: process.env.SATO_PRINT_SPEED_IPS,
+  });
 } catch (error) {
   console.error(`[-] Konfigurasi SATO production tidak valid: ${error.message}`);
   process.exit(1);
@@ -504,6 +510,8 @@ const adapterFactory = createHardwareAdapterFactory({
   powershellExecutable: HARDWARE_POWERSHELL_EXECUTABLE,
   satoLabelConfigPath: SATO_LABEL_CONFIG_PATH,
   satoCopies: SATO_COPIES,
+  satoPrintDarkness: SATO_PRINT_QUALITY.darkness,
+  satoPrintSpeedIps: SATO_PRINT_QUALITY.speedIps,
   logger: console,
 });
 
@@ -647,6 +655,7 @@ function getCapabilitiesPayload() {
       pdf_print_command_legacy: Boolean(PDF_PRINT_COMMAND),
     },
     label_config: {
+      print_quality: SATO_PRINT_QUALITY,
       template_id: SATO_JEWELRY_LABEL_TEMPLATE_ID,
       printer_profile_id: SATO_LABEL_CONFIG.config.id,
       renderer: SATO_JEWELRY_RENDERER,

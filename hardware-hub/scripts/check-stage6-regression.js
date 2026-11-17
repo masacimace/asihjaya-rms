@@ -163,7 +163,8 @@ function main() {
     });
     fs.appendFileSync(first.envPath, "\nSTAGE6_PRESERVE_SENTINEL=keep-me\n", "utf8");
     fs.writeFileSync(first.envPath,
-      fs.readFileSync(first.envPath, "utf8").replace(/^POLL_INTERVAL_MS=.*$/m, "POLL_INTERVAL_MS=2000"));
+      fs.readFileSync(first.envPath, "utf8").replace(/^POLL_INTERVAL_MS=.*$/m, "POLL_INTERVAL_MS=2000")
+        .replace(/^SATO_PRINT_DARKNESS=.*\r?\n/gm, "").replace(/^SATO_PRINT_SPEED_IPS=.*\r?\n/gm, ""));
     const credentialPath = path.join(stateDir, "agent-credential.json");
     fs.writeFileSync(credentialPath, "existing-encrypted-credential");
 
@@ -182,6 +183,8 @@ function main() {
     assert.equal(env.STAGE6_PRESERVE_SENTINEL, "keep-me");
     assert.equal(env.POLL_INTERVAL_MS, "1000", "Upgrade wajib memperbarui polling lama menjadi 1 detik.");
     assert.equal(env.DOCUMENT_DOWNLOAD_TIMEOUT_MS, "90000", "Upgrade wajib memberi PDF deadline terpisah 90 detik.");
+    assert.equal(env.SATO_PRINT_DARKNESS, "4");
+    assert.equal(env.SATO_PRINT_SPEED_IPS, "2");
     assert.equal(env.LABEL_PRINTER_NAME, "SATO CG408");
     assert.equal(env.DOCUMENT_PRINTER_NAME, "EPSON L3251 Series");
     assert.equal(fs.readFileSync(credentialPath, "utf8"), "existing-encrypted-credential");
@@ -192,6 +195,17 @@ function main() {
     assert.ok(second.backupPath, "Repair configure wajib membuat backup config existing.");
     assert.ok(fs.existsSync(second.backupPath), "Backup config repair wajib benar-benar ada.");
     assert.equal(parseEnv(fs.readFileSync(second.backupPath, "utf8")).POLL_INTERVAL_MS, "2000");
+    fs.writeFileSync(second.envPath, fs.readFileSync(second.envPath, "utf8")
+      .replace(/^SATO_PRINT_DARKNESS=.*$/m, "SATO_PRINT_DARKNESS=0")
+      .replace(/^SATO_PRINT_SPEED_IPS=.*$/m, "SATO_PRINT_SPEED_IPS=3"));
+    const preservedQuality = configureInstaller({ appRoot,
+      stateDir: path.join(tempRoot, "custom-quality-state"), logDir, supportDir,
+      apiUrl: "https://ajsystem.id", labelPrinter: "SATO CG408", documentPrinter: "EPSON L3251 Series",
+      pdfExecutable, powershellExecutable,
+    });
+    const customEnv = parseEnv(fs.readFileSync(preservedQuality.envPath, "utf8"));
+    assert.equal(customEnv.SATO_PRINT_DARKNESS, "0", "Repair must preserve an explicit printer-managed darkness setting.");
+    assert.equal(customEnv.SATO_PRINT_SPEED_IPS, "3");
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

@@ -4,6 +4,12 @@ Hardware Hub Agent berjalan pada Mini PC Windows outlet. Agent melakukan heartbe
 
 Protocol v2 dirancang agar restart agent atau putus internet setelah printer menerima command tidak menyebabkan automatic reprint.
 
+## Label quality v0.9.6
+
+Untuk label CG408 yang pudar, Hub memasang baseline darkness 4/5 dan speed 2 ips pada label pertama tiap sesi/printer. Pengaturan ini persisten di printer; label berikutnya tidak menulis konfigurasi lagi. Nomor barcode, isi, dan geometri layout V3 dipertahankan. Hasil fisik perlu diuji dengan satu cetak/scan di outlet.
+
+Installer menambahkan `SATO_PRINT_DARKNESS=4` dan `SATO_PRINT_SPEED_IPS=2` bila belum ada, serta mempertahankan nilai custom. Nilai 0 membiarkan pengaturan printer aktif tanpa mengembalikan nilai sebelumnya. Companion RMS meminta kamera ideal 1080p dan autofocus jika didukung. Lihat [panduan kualitas label](../docs/hardware-hub/sato-label-print-quality.md).
+
 ## Auto print v0.9.5
 
 Hub mengikuti `Retry-After` saat server PDF merespons HTTP 429/503. RMS menyimpan jadwal retry dan menunda PDF lain pada register yang sama selama server meminta jeda; label tetap dapat diproses. Kuota PDF Hub terautentikasi terpisah dari download manual, dengan default 60 request/menit/agent dan 180/menit/IP. Job nota baru memiliki maksimal lima percobaan, hanya retry otomatis untuk kegagalan yang aman sebelum dispatch.
@@ -20,7 +26,7 @@ Installer v0.9.4 memperbarui polling instalasi lama menjadi 1000 ms, membuat bac
 
 Durasi download PDF tersedia sebagai `deviceResult.downloadDurationMs`; event `dispatching` mencatat `prepareDurationMs` dan event `submitted` mencatat `dispatchDurationMs`. RMS mencatat `browserMs`, `navigationMs`, `assetsReadyMs`, dan `pdfMs` pada log `receipt-pdf-renderer`. Optimasi PDF memerlukan deployment aplikasi RMS, sedangkan perubahan polling/antrean memerlukan upgrade Hub.
 
-Build installer di GitHub Actions **Build Hardware Hub Installer**. `workflow_dispatch` menghasilkan artifact untuk UAT. Setelah smoke test dan integrasi ke `main`, push tag `hardware-hub-v0.9.5` yang cocok dengan versi package untuk menerbitkan GitHub Release berisi Setup.exe dan SHA-256. Workflow memvalidasi seluruh Hub checks sebelum build dan menolak overwrite release yang sudah ada.
+Build installer di GitHub Actions **Build Hardware Hub Installer**. `workflow_dispatch` menghasilkan artifact untuk UAT. Setelah smoke test dan integrasi ke `main`, push tag `hardware-hub-v0.9.6` yang cocok dengan versi package untuk menerbitkan GitHub Release berisi Setup.exe dan SHA-256. Workflow memvalidasi seluruh Hub checks sebelum build dan menolak overwrite release yang sudah ada.
 
 ## Runtime
 
