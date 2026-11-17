@@ -1,4 +1,4 @@
-import { and, asc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/db";
@@ -40,12 +40,17 @@ export async function POST(req: NextRequest) {
           eq(hardwareJobs.organizationId, auth.agent.organizationId),
           eq(hardwareJobs.outletId, auth.agent.outletId),
           eq(hardwareJobs.registerId, auth.agent.registerId),
+          // v2-preferred agents also poll this endpoint. A v2 job arriving
+          // after their empty v2 claim must wait for an attempt-backed claim.
+          eq(hardwareJobs.protocolVersion, 1),
+          isNull(hardwareJobs.currentAttemptId),
           eq(hardwareJobs.status, "pending"),
           lte(hardwareJobs.availableAt, now),
         ),
       )
       .orderBy(asc(hardwareJobs.priority), asc(hardwareJobs.createdAt))
-      .limit(1);
+      .limit(1)
+      .for("update", { skipLocked: true });
 
     if (!candidate) {
       return null;
@@ -61,7 +66,12 @@ export async function POST(req: NextRequest) {
         updatedAt: now,
       })
       .where(
-        and(eq(hardwareJobs.id, candidate.id), eq(hardwareJobs.status, "pending")),
+        and(
+          eq(hardwareJobs.id, candidate.id),
+          eq(hardwareJobs.protocolVersion, 1),
+          isNull(hardwareJobs.currentAttemptId),
+          eq(hardwareJobs.status, "pending"),
+        ),
       )
       .returning();
 

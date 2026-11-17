@@ -65,6 +65,10 @@ function waitForPostgres() {
         "-T",
         "postgres",
         "pg_isready",
+        // The initdb bootstrap server accepts Unix sockets before the real
+        // TCP server starts. Migrations connect over TCP, so wait for that too.
+        "-h",
+        "127.0.0.1",
         "-U",
         "asihjaya_test",
         "-d",

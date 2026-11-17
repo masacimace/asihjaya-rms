@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/db";
@@ -117,6 +117,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     .where(
       and(
         eq(hardwareJobs.id, jobId),
+        // Protocol v2 status updates must go through the lease/attempt API.
+        eq(hardwareJobs.protocolVersion, 1),
+        isNull(hardwareJobs.currentAttemptId),
         eq(hardwareJobs.organizationId, auth.agent.organizationId),
         eq(hardwareJobs.outletId, auth.agent.outletId),
         eq(hardwareJobs.registerId, auth.agent.registerId),

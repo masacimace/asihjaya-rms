@@ -28,6 +28,7 @@ import {
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
 import { getHardwareInstallerSettings, updateHardwareInstallerSettings } from "@/features/hardware/installer-settings";
 import { type AuthContext } from "@/lib/auth/session";
+import { registerHardwareQueueTests } from "./hardware-queue-cases";
 import {
   closeShiftWithReconciliation,
   ShiftClosingError,
@@ -1034,6 +1035,8 @@ test("installer links persist per organization, override env, validate URLs and 
   assert.equal(audit.actor_user_id, organizationA.makerId);
   assert.equal(audit.after_data.downloadUrl, updated);
 });
+
+registerHardwareQueueTests(test);
 
 export async function runFinancialConcurrencySuite() {
   const startedAt = Date.now();

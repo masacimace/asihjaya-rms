@@ -191,10 +191,10 @@ export async function recoverStaleHardwareJobs({
     )
     .returning({ id: hardwareJobs.id });
 
-  // Historical/pre-attempt Protocol v2 data can contain a claimed job without a
-  // current attempt. Current Protocol v2 can never create that shape. A dead
-  // agent therefore cannot renew/recover it through the claim endpoint, while
-  // lifecycle actions remain blocked forever. Mark only stale orphaned claimed
+  // Older legacy claim endpoints could take a v2 job without creating an
+  // attempt during v2-preferred polling. Such orphaned jobs cannot be recovered
+  // through the v2 lease API and would block lifecycle actions indefinitely.
+  // Mark only stale orphaned claimed
   // rows failed; never detach a valid Protocol v2 attempt and never auto-retry.
   const orphanedV2Rows = await db
     .update(hardwareJobs)
