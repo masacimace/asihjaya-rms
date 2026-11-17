@@ -375,8 +375,7 @@ export default async function AdminDashboardPage({
               Selamat datang kembali, {firstName} 👋
             </h1>
             <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-              Ringkasan operasional toko berdasarkan transaksi, stok, shift,
-              kas, dan hardware terbaru. {dashboard.period.description}
+              {dashboard.period.description}
             </p>
           </div>
 
