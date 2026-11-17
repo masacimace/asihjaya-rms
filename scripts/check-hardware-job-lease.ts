@@ -134,6 +134,15 @@ await assert.rejects(
 const invalidVersionRequest = new NextRequest("http://localhost", {
   headers: { "x-hardware-protocol-version": "1" },
 });
+for (const delay of [-1, 1.5, 900_001, "60000"]) {
+  await assert.rejects(() => parseHardwareJobAttemptV2Event(new NextRequest("http://localhost", {
+    method: "PATCH", headers: { "content-type": "application/json", "idempotency-key": "retry-hint-check" },
+    body: JSON.stringify({ status: "failed_before_dispatch", eventSequence: 1,
+      error: { code: "DOCUMENT_RATE_LIMITED", message: "Busy", retrySafe: true, retryAfterMs: delay } }),
+  })), (error: unknown) => error instanceof HardwareJobProtocolV2Error && error.code === "INVALID_RETRY_AFTER");
+}
+assert.equal(getHardwareJobRetryAvailableAt({ attemptNumber: 1, now, retryAfterMs: 60_000 }).getTime(), now.getTime() + 61_000);
+assert.equal(getHardwareJobRetryAvailableAt({ attemptNumber: 3, now, retryAfterMs: 5_000 }).getTime(), now.getTime() + 45_000);
 assert.throws(
   () => assertHardwareProtocolV2Request(invalidVersionRequest),
   (error: unknown) =>

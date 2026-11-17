@@ -13,17 +13,21 @@ function positiveInteger(name: string, fallback: number): number {
   return Number.isSafeInteger(value) && value > 0 ? value : fallback;
 }
 
-function getActorPolicy(): SecurityRateLimitPolicy {
+function getActorPolicy(actor: PdfRenderActor): SecurityRateLimitPolicy {
   return {
-    limit: positiveInteger("PDF_RATE_LIMIT_ACTOR_REQUESTS", 12),
+    limit: actor.type === "hardware-agent"
+      ? positiveInteger("PDF_RATE_LIMIT_HARDWARE_AGENT_REQUESTS", 60)
+      : positiveInteger("PDF_RATE_LIMIT_ACTOR_REQUESTS", 12),
     windowMs: positiveInteger("PDF_RATE_LIMIT_WINDOW_MS", 60_000),
     blockMs: positiveInteger("PDF_RATE_LIMIT_BLOCK_MS", 60_000),
   };
 }
 
-function getIpPolicy(): SecurityRateLimitPolicy {
+function getIpPolicy(actor: PdfRenderActor): SecurityRateLimitPolicy {
   return {
-    limit: positiveInteger("PDF_RATE_LIMIT_IP_REQUESTS", 30),
+    limit: actor.type === "hardware-agent"
+      ? positiveInteger("PDF_RATE_LIMIT_HARDWARE_IP_REQUESTS", 180)
+      : positiveInteger("PDF_RATE_LIMIT_IP_REQUESTS", 30),
     windowMs: positiveInteger("PDF_RATE_LIMIT_WINDOW_MS", 60_000),
     blockMs: positiveInteger("PDF_RATE_LIMIT_BLOCK_MS", 60_000),
   };
@@ -38,22 +42,25 @@ export async function enforcePdfRenderRateLimit(input: {
     consumeSecurityRateLimit({
       scope: "pdf.render.actor",
       key: `${input.actor.type}:${input.actor.id}`,
-      policy: getActorPolicy(),
+      policy: getActorPolicy(input.actor),
     }),
   ];
 
   if (ipAddress) {
     checks.push(
       consumeSecurityRateLimit({
-        scope: "pdf.render.ip",
+        // Authenticated Hub traffic must not consume the manual download quota.
+        scope: input.actor.type === "hardware-agent" ? "pdf.render.hardware_ip" : "pdf.render.ip",
         key: ipAddress,
-        policy: getIpPolicy(),
+        policy: getIpPolicy(input.actor),
       }),
     );
   }
 
   const decisions = await Promise.all(checks);
-  const rejected = decisions.find((decision) => !decision.allowed);
+  const rejected = decisions
+    .filter((decision) => !decision.allowed)
+    .sort((a, b) => b.retryAfterSeconds - a.retryAfterSeconds)[0];
 
   if (!rejected) {
     return null;

@@ -108,6 +108,7 @@ function configureInstaller(input) {
     HARDWARE_AGENT_REQUEST_AUTH_MODE: "signed",
     HARDWARE_PROTOCOL_MODE: "v2-preferred",
     POLL_INTERVAL_MS: "1000",
+    DOCUMENT_DOWNLOAD_TIMEOUT_MS: "90000",
     HARDWARE_JOURNAL_PATH: path.join(stateDir, "hardware-executions.sqlite"),
     HARDWARE_JOURNAL_KEY_PATH: path.join(stateDir, "hardware-journal.key"),
     HARDWARE_POWERSHELL_EXECUTABLE: powershellExecutable,

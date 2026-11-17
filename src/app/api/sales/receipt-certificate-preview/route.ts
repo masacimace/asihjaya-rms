@@ -17,13 +17,13 @@ import {
 import { getConfiguredReceiptOverlayCalibration } from "@/features/sales/documents/receipt-overlay-calibration";
 import { enforcePdfRenderRateLimit } from "@/features/sales/documents/pdf-render-rate-limit";
 import { requirePermission } from "@/lib/auth/session";
-import { authenticateHardwareAgent } from "@/lib/hardware/agent-auth";
+import { authenticateOptionalHardwareAgent } from "@/lib/hardware/agent-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const hardwareAuth = await authenticateHardwareAgent(request);
+  const hardwareAuth = await authenticateOptionalHardwareAgent(request);
   const userAuth = hardwareAuth ? null : await requirePermission("sales.view");
   const renderOrganizationId =
     hardwareAuth?.agent.organizationId ?? userAuth?.organization.id;

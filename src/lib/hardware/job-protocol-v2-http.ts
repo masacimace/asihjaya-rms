@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 
 import {
   HARDWARE_JOB_PROTOCOL_V2,
+  HARDWARE_JOB_MAX_RETRY_AFTER_MS,
   hardwareCapabilities,
   hardwareJobAttemptStatuses,
   type HardwareCapability,
@@ -38,6 +39,7 @@ export type HardwareJobAttemptAgentEvent = {
     code: string;
     message: string;
     retrySafe: boolean;
+    retryAfterMs?: number;
   } | null;
 };
 
@@ -266,7 +268,19 @@ export async function parseHardwareJobAttemptV2Event(
       });
     }
 
-    error = { code, message, retrySafe };
+    const retryAfterMs = body.error.retryAfterMs;
+    if (retryAfterMs !== undefined && (
+      typeof retryAfterMs !== "number" || !Number.isSafeInteger(retryAfterMs) ||
+      retryAfterMs < 0 || retryAfterMs > HARDWARE_JOB_MAX_RETRY_AFTER_MS ||
+      status !== "failed_before_dispatch" || !retrySafe
+    )) {
+      throw new HardwareJobProtocolV2Error({
+        code: "INVALID_RETRY_AFTER",
+        message: "retryAfterMs hanya untuk kegagalan retry-safe sebelum dispatch, maksimal 15 menit.",
+        status: 422,
+      });
+    }
+    error = { code, message, retrySafe, ...(retryAfterMs !== undefined ? { retryAfterMs } : {}) };
   }
 
   if (status === "failed_before_dispatch" && !error) {

@@ -181,6 +181,7 @@ function main() {
     const env = parseEnv(fs.readFileSync(second.envPath, "utf8"));
     assert.equal(env.STAGE6_PRESERVE_SENTINEL, "keep-me");
     assert.equal(env.POLL_INTERVAL_MS, "1000", "Upgrade wajib memperbarui polling lama menjadi 1 detik.");
+    assert.equal(env.DOCUMENT_DOWNLOAD_TIMEOUT_MS, "90000", "Upgrade wajib memberi PDF deadline terpisah 90 detik.");
     assert.equal(env.LABEL_PRINTER_NAME, "SATO CG408");
     assert.equal(env.DOCUMENT_PRINTER_NAME, "EPSON L3251 Series");
     assert.equal(fs.readFileSync(credentialPath, "utf8"), "existing-encrypted-credential");

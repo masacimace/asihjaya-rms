@@ -112,14 +112,6 @@ export async function applyHardwareJobAttemptV2Event({
       });
     }
 
-    if (job.currentAttemptId !== attemptId) {
-      throw new HardwareJobProtocolV2Error({
-        code: "STALE_ATTEMPT",
-        message: "Attempt bukan current attempt untuk job ini.",
-        status: 409,
-      });
-    }
-
     const [attempt] = await tx
       .select({
         id: hardwareJobAttempts.id,
@@ -130,6 +122,7 @@ export async function applyHardwareJobAttemptV2Event({
         leaseExpiresAt: hardwareJobAttempts.leaseExpiresAt,
         attemptNumber: hardwareJobAttempts.attemptNumber,
         payloadHash: hardwareJobAttempts.payloadHash,
+        result: hardwareJobAttempts.result,
       })
       .from(hardwareJobAttempts)
       .where(
@@ -163,6 +156,22 @@ export async function applyHardwareJobAttemptV2Event({
         message: "Payload hash job dan attempt tidak konsisten.",
         status: 409,
       });
+    }
+
+    if (job.currentAttemptId !== attemptId) {
+      // Requeue detaches the old attempt atomically. If its response was lost,
+      // acknowledge only the exact committed terminal failure again. All new
+      // events from a retired attempt still fail the current-attempt guard.
+      const failureReplay = attempt.status === "failed_before_dispatch" &&
+        event.status === attempt.status && event.eventSequence === attempt.eventSequence &&
+        attempt.result.idempotencyKey === event.idempotencyKey;
+      if (!failureReplay) {
+        throw new HardwareJobProtocolV2Error({
+          code: "STALE_ATTEMPT",
+          message: "Attempt bukan current attempt untuk job ini.",
+          status: 409,
+        });
+      }
     }
 
     if (event.eventSequence < attempt.eventSequence) {
@@ -336,6 +345,7 @@ export async function applyHardwareJobAttemptV2Event({
           jobUpdate.availableAt = getHardwareJobRetryAvailableAt({
             attemptNumber: attempt.attemptNumber,
             now,
+            retryAfterMs: event.error?.retryAfterMs,
           });
           jobUpdate.claimedAt = null;
           jobUpdate.processingAt = null;
@@ -465,6 +475,7 @@ export async function applyHardwareJobAttemptV2Event({
           agentId: auth.agent.id,
           errorCode: event.error?.code ?? null,
           retrySafe: event.error?.retrySafe ?? null,
+          retryAfterMs: event.error?.retryAfterMs ?? null,
           agentOccurredAt: event.occurredAt.toISOString(),
         },
       });

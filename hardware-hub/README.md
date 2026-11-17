@@ -4,7 +4,13 @@ Hardware Hub Agent berjalan pada Mini PC Windows outlet. Agent melakukan heartbe
 
 Protocol v2 dirancang agar restart agent atau putus internet setelah printer menerima command tidak menyebabkan automatic reprint.
 
-## Auto print v0.9.4
+## Auto print v0.9.5
+
+Hub mengikuti `Retry-After` saat server PDF merespons HTTP 429/503. RMS menyimpan jadwal retry dan menunda PDF lain pada register yang sama selama server meminta jeda; label tetap dapat diproses. Kuota PDF Hub terautentikasi terpisah dari download manual, dengan default 60 request/menit/agent dan 180/menit/IP. Job nota baru memiliki maksimal lima percobaan, hanya retry otomatis untuk kegagalan yang aman sebelum dispatch.
+
+`DOCUMENT_DOWNLOAD_TIMEOUT_MS=90000` memberi waktu untuk antrean/render/transfer PDF; timeout API umum tetap terpisah. Download terputus dibersihkan sebelum retry. Lease terus diperbarui selama perintah cetak berjalan, sementara pengaman journal/ACK dan larangan auto-reprint setelah hasil cetak tidak pasti tetap berlaku.
+
+Deploy RMS terbaru terlebih dahulu, lalu upgrade installer v0.9.5 memakai Windows account semula. Upgrade mengatur deadline PDF otomatis dan mempertahankan pairing, journal serta printer. Perubahan ini tidak memerlukan migration database. Job yang sudah dibuat sebelumnya tetap memakai batas attempt semula.
 
 Saat idle, Hub mengecek antrean setiap 1 detik (`POLL_INTERVAL_MS=1000`). Setelah satu job selesai, Hub langsung memulihkan ACK/journal dan mengambil job berikutnya tanpa menunggu timer berikutnya. Hanya satu job dieksekusi pada satu waktu. Antrean kosong, error jaringan, dan recovery yang belum selesai mengembalikan kontrol ke timer idle; tidak ada loop retry cepat tanpa batas.
 
@@ -14,7 +20,7 @@ Installer v0.9.4 memperbarui polling instalasi lama menjadi 1000 ms, membuat bac
 
 Durasi download PDF tersedia sebagai `deviceResult.downloadDurationMs`; event `dispatching` mencatat `prepareDurationMs` dan event `submitted` mencatat `dispatchDurationMs`. RMS mencatat `browserMs`, `navigationMs`, `assetsReadyMs`, dan `pdfMs` pada log `receipt-pdf-renderer`. Optimasi PDF memerlukan deployment aplikasi RMS, sedangkan perubahan polling/antrean memerlukan upgrade Hub.
 
-Build installer di GitHub Actions **Build Hardware Hub Installer**. `workflow_dispatch` menghasilkan artifact untuk UAT. Setelah smoke test dan integrasi ke `main`, push tag `hardware-hub-v0.9.4` yang cocok dengan versi package untuk menerbitkan GitHub Release berisi Setup.exe dan SHA-256. Workflow memvalidasi seluruh Hub checks sebelum build dan menolak overwrite release yang sudah ada.
+Build installer di GitHub Actions **Build Hardware Hub Installer**. `workflow_dispatch` menghasilkan artifact untuk UAT. Setelah smoke test dan integrasi ke `main`, push tag `hardware-hub-v0.9.5` yang cocok dengan versi package untuk menerbitkan GitHub Release berisi Setup.exe dan SHA-256. Workflow memvalidasi seluruh Hub checks sebelum build dan menolak overwrite release yang sudah ada.
 
 ## Runtime
 

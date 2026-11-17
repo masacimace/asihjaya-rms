@@ -237,7 +237,7 @@ class HardwareProtocolV2Runner {
 
   async renewLease(record) {
     const current = this.journal.get(record.attemptId);
-    if (!current || current.dispatchStartedAt || current.state === "submitted") {
+    if (!current || !PRE_DISPATCH_STATES.has(current.state)) {
       return current;
     }
     const response = await this.client.renewLease({
@@ -294,6 +294,8 @@ class HardwareProtocolV2Runner {
           code: getErrorCode(classification, classification.code || "PREPARE_FAILED"),
           message: String(classification.message || "Hardware preparation gagal.").slice(0, 2000),
           retrySafe: classification.retrySafe === true,
+          ...(classification.retrySafe === true && Number.isSafeInteger(classification.retryAfterMs)
+            ? { retryAfterMs: classification.retryAfterMs } : {}),
         },
         result: {
           failedAt: this.now().toISOString(),
@@ -462,8 +464,8 @@ class HardwareProtocolV2Runner {
         },
         this.now(),
       );
-      stopRenewal?.();
-      stopRenewal = null;
+      // Keep the dispatching lease alive while Windows/the printer is busy.
+      // A crash still expires into unknown_after_dispatch, never an auto-reprint.
 
       let deviceResult;
       const dispatchStartedAt = Date.now();
@@ -476,6 +478,9 @@ class HardwareProtocolV2Runner {
           target: prepared.target || null,
         });
       }
+
+      stopRenewal?.();
+      stopRenewal = null;
 
       current = await this.queueAndSendEvent(current, "submitted", {
         result: {

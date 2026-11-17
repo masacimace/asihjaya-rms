@@ -235,11 +235,86 @@ async function testLeaseTokenReuseIsLimitedToActiveExecution() {
   }
 }
 
+async function testRetryHintSurvivesLostFailureAck() {
+  const context = createTempContext("busy-hint");
+  try {
+    const client = new FakeProtocolClient();
+    const runner = createRunner({ ...context, client, dispatchCounter: { count: 0 } });
+    const sendEvent = client.sendEvent.bind(client);
+    let loseAck = true;
+    const failures = [];
+    client.sendEvent = async (input) => {
+      if (input.event.status === "failed_before_dispatch") {
+        failures.push(input.event);
+        if (loseAck) { loseAck = false; throw new Error("lost failure ACK"); }
+      }
+      return sendEvent(input);
+    };
+    runner.prepareHardwareJob = async () => { throw new Error("HTTP 429"); };
+    runner.classifyPrepareError = () => ({ code: "DOCUMENT_RATE_LIMITED", retrySafe: true, retryAfterMs: 60_000 });
+    await assert.rejects(() => runner.processClaim(createClaim("6")), /lost failure ACK/);
+    assert.equal(context.journal.countRecoverable(), 1);
+    const recovery = await runner.recover();
+    assert.equal(recovery.remaining, 0);
+    assert.equal(failures.length, 2);
+    assert.equal(failures[0].error.retryAfterMs, 60_000);
+    assert.deepEqual(failures[0], failures[1], "Journal recovery must preserve the same retry hint and idempotent event.");
+  } finally {
+    context.journal.close();
+    fs.rmSync(context.root, { recursive: true, force: true });
+  }
+}
+
+async function testLeaseStaysAliveDuringSlowDispatch() {
+  const context = createTempContext("slow-dispatch-lease");
+  try {
+    const client = new FakeProtocolClient();
+    const dispatchCounter = { count: 0 };
+    const runner = createRunner({ ...context, client, dispatchCounter });
+    runner.leaseRenewIntervalMs = 10;
+    let renewedDuringDispatch = 0;
+    let releaseDispatch;
+    const renewed = new Promise((resolve) => { releaseDispatch = resolve; });
+    const renewLease = client.renewLease.bind(client);
+    client.renewLease = async (input) => {
+      if (context.journal.get(input.attemptId)?.dispatchStartedAt) {
+        renewedDuringDispatch++;
+        releaseDispatch();
+      }
+      return renewLease(input);
+    };
+    runner.prepareHardwareJob = async () => ({
+      adapter: "slow-test-printer",
+      async dispatch() {
+        dispatchCounter.count++;
+        let timer;
+        try {
+          await Promise.race([renewed, new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error("Dispatch lease was not renewed")), 1_000);
+          })]);
+          return { accepted: true };
+        } finally { clearTimeout(timer); }
+      },
+    });
+    const result = await runner.processClaim(createClaim("7"));
+    assert.equal(result.status, "acknowledged");
+    assert(renewedDuringDispatch > 0);
+    assert.equal(dispatchCounter.count, 1);
+    assert.equal((await runner.recover()).remaining, 0);
+    assert.equal(dispatchCounter.count, 1, "Slow dispatch ACK recovery must never print twice.");
+  } finally {
+    context.journal.close();
+    fs.rmSync(context.root, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   await testLostSubmittedAckDoesNotReprint();
   await testCrashAfterDispatchBecomesUnknown();
   await testPayloadHashMismatchStopsDispatch();
   await testLeaseTokenReuseIsLimitedToActiveExecution();
+  await testRetryHintSurvivesLostFailureAck();
+  await testLeaseStaysAliveDuringSlowDispatch();
   console.log("OK: Hardware Hub v2 crash-safe journal and recovery checks passed.");
 }
 

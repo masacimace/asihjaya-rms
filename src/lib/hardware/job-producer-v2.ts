@@ -89,6 +89,7 @@ function getDefaultMaxAttempts(
 ) {
   if (mode === "test" || jobType.startsWith("test_")) return 1;
   if (jobType === "open_cash_drawer") return 1;
+  if (jobType === "print_receipt_certificate") return 5;
   return 2;
 }
 

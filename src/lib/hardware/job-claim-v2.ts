@@ -1,6 +1,7 @@
 import {
   and,
   asc,
+  desc,
   eq,
   gt,
   inArray,
@@ -23,6 +24,7 @@ import {
   getHardwareJobRetryAvailableAt,
   hardwareJobLeaseRequiredStatuses,
   HARDWARE_JOB_PROTOCOL_V2,
+  HARDWARE_DOCUMENT_BUSY_CODES,
   type HardwareCapability,
 } from "@/lib/hardware/job-protocol-v2";
 
@@ -380,6 +382,28 @@ export async function claimHardwareJobV2({
   }
 
   const claimed = await db.transaction(async (tx) => {
+    let claimCapabilities = effectiveCapabilities;
+    if (claimCapabilities.includes("print_document_pdf")) {
+      // A persisted delayed PDF retry applies backpressure to this register's
+      // other PDFs too. Labels/drawer remain claimable while the server is busy.
+      const [cooldown] = await tx.select({ id: hardwareJobs.id }).from(hardwareJobs)
+        .where(and(
+          eq(hardwareJobs.organizationId, auth.agent.organizationId),
+          eq(hardwareJobs.outletId, auth.agent.outletId),
+          eq(hardwareJobs.registerId, auth.agent.registerId),
+          eq(hardwareJobs.protocolVersion, HARDWARE_JOB_PROTOCOL_V2),
+          eq(hardwareJobs.status, "pending"),
+          eq(hardwareJobs.requiredCapability, "print_document_pdf"),
+          inArray(hardwareJobs.lastErrorCode, HARDWARE_DOCUMENT_BUSY_CODES),
+          gt(hardwareJobs.availableAt, now),
+          gt(hardwareJobs.expiresAt, now),
+          or(isNull(hardwareJobs.targetAgentId), eq(hardwareJobs.targetAgentId, auth.agent.id)),
+        ))
+        .orderBy(desc(hardwareJobs.availableAt)).limit(1);
+      if (cooldown) claimCapabilities = claimCapabilities.filter((value) => value !== "print_document_pdf");
+    }
+    if (claimCapabilities.length === 0) return null;
+
     const [candidate] = await tx
       .select({
         id: hardwareJobs.id,
@@ -408,7 +432,7 @@ export async function claimHardwareJobV2({
           lte(hardwareJobs.availableAt, now),
           gt(hardwareJobs.expiresAt, now),
           lt(hardwareJobs.attempts, hardwareJobs.maxAttempts),
-          inArray(hardwareJobs.requiredCapability, effectiveCapabilities),
+          inArray(hardwareJobs.requiredCapability, claimCapabilities),
           or(
             isNull(hardwareJobs.targetAgentId),
             eq(hardwareJobs.targetAgentId, auth.agent.id),

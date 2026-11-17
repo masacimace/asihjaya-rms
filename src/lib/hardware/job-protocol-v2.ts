@@ -56,6 +56,10 @@ export const hardwareJobLeaseRequiredStatuses = [
 ] as const satisfies readonly HardwareJobAttemptStatus[];
 
 const HARDWARE_JOB_RETRY_BACKOFF_MS = [5_000, 15_000, 45_000, 120_000, 300_000] as const;
+export const HARDWARE_JOB_MAX_RETRY_AFTER_MS = 15 * 60_000;
+export const HARDWARE_DOCUMENT_BUSY_CODES = [
+  "DOCUMENT_RATE_LIMITED", "DOCUMENT_SERVER_BUSY",
+] as const;
 
 export type HardwareJobTransitionContext = {
   dispatchStarted?: boolean;
@@ -295,11 +299,16 @@ export function getHardwareJobRetryBackoffMs(attemptNumber: number): number {
 export function getHardwareJobRetryAvailableAt({
   attemptNumber,
   now = new Date(),
+  retryAfterMs = 0,
 }: {
   attemptNumber: number;
   now?: Date;
+  retryAfterMs?: number;
 }): Date {
-  return new Date(now.getTime() + getHardwareJobRetryBackoffMs(attemptNumber));
+  const serverDelay = Number.isSafeInteger(retryAfterMs) && retryAfterMs > 0
+    ? Math.min(retryAfterMs, HARDWARE_JOB_MAX_RETRY_AFTER_MS) + 1_000
+    : 0;
+  return new Date(now.getTime() + Math.max(getHardwareJobRetryBackoffMs(attemptNumber), serverDelay));
 }
 
 export function doesHardwareJobAttemptRequireLiveLease(

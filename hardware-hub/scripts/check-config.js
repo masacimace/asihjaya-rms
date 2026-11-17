@@ -200,6 +200,10 @@ if (heartbeatInterval < 5000) {
 }
 const requestTimeout = getNumber("REQUEST_TIMEOUT_MS", 15000);
 if (requestTimeout < 3000) errors.push("REQUEST_TIMEOUT_MS minimal 3000 ms.");
+const documentDownloadTimeout = getNumber("DOCUMENT_DOWNLOAD_TIMEOUT_MS", 90000);
+if (!Number.isSafeInteger(documentDownloadTimeout) || documentDownloadTimeout < 5000 || documentDownloadTimeout > 300000) {
+  errors.push("DOCUMENT_DOWNLOAD_TIMEOUT_MS harus 5000 sampai 300000 ms.");
+}
 const printTimeout = getNumber("PRINT_COMMAND_TIMEOUT_MS", 60000);
 if (printTimeout < 5000) errors.push("PRINT_COMMAND_TIMEOUT_MS minimal 5000 ms.");
 const leaseRenewInterval = getNumber("LEASE_RENEW_INTERVAL_MS", 20000);

@@ -5,6 +5,9 @@ const http = require("http");
 const https = require("https");
 const path = require("path");
 const { spawn } = require("child_process");
+const { Transform } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
+const { parseRetryAfterMs, resolveDocumentDownloadTimeoutMs } = require("./document-download-policy");
 const { createFakeHardwareBackend } = require("./fake-hardware-adapters");
 const {
   buildSumatraPdfCommand,
@@ -25,11 +28,12 @@ function isAllowedDocumentDownloadPath(pathname) {
 }
 
 class HardwareAdapterError extends Error {
-  constructor(message, { code = "HARDWARE_ADAPTER_ERROR", retrySafe = false, category = "adapter" } = {}) {
+  constructor(message, { code = "HARDWARE_ADAPTER_ERROR", retrySafe = false, category = "adapter", retryAfterMs } = {}) {
     super(message);
     this.name = "HardwareAdapterError";
     this.code = code;
     this.retrySafe = retrySafe;
+    if (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0) this.retryAfterMs = retryAfterMs;
     this.category = category;
   }
 }
@@ -256,139 +260,114 @@ function prepareRawWindowsJob(
   };
 }
 
-function downloadFile(config, urlString, destination, options = {}) {
+async function downloadFile(config, urlString, destination, options = {}) {
   const downloadStartedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    const base = new URL(config.apiUrl);
-    const url = new URL(urlString, base);
-    if (url.origin !== base.origin) {
-      reject(
-        new HardwareAdapterError("Download document lintas origin ditolak.", {
-          code: "DOCUMENT_ORIGIN_NOT_ALLOWED",
-          retrySafe: false,
-          category: "security",
-        }),
-      );
-      return;
-    }
-    if (!isAllowedDocumentDownloadPath(url.pathname)) {
-      reject(
-        new HardwareAdapterError("Path download document tidak termasuk allowlist.", {
-          code: "DOCUMENT_PATH_NOT_ALLOWED",
-          retrySafe: false,
-          category: "security",
-        }),
-      );
-      return;
-    }
-    if (typeof config.createRequestHeaders !== "function") {
-      reject(
-        new HardwareAdapterError("Request signer document belum dikonfigurasi.", {
-          code: "DOCUMENT_REQUEST_SIGNER_REQUIRED",
-          retrySafe: false,
-          category: "configuration",
-        }),
-      );
-      return;
-    }
+  const base = new URL(config.apiUrl);
+  const url = new URL(urlString, base);
+  if (url.origin !== base.origin) {
+    throw new HardwareAdapterError("Download document lintas origin ditolak.", {
+      code: "DOCUMENT_ORIGIN_NOT_ALLOWED", category: "security",
+    });
+  }
+  if (!isAllowedDocumentDownloadPath(url.pathname)) {
+    throw new HardwareAdapterError("Path download document tidak termasuk allowlist.", {
+      code: "DOCUMENT_PATH_NOT_ALLOWED", category: "security",
+    });
+  }
+  if (typeof config.createRequestHeaders !== "function") {
+    throw new HardwareAdapterError("Request signer document belum dikonfigurasi.", {
+      code: "DOCUMENT_REQUEST_SIGNER_REQUIRED", category: "configuration",
+    });
+  }
 
-    const client = url.protocol === "https:" ? https : http;
-    const file = fs.createWriteStream(destination, { flags: "wx" });
+  const client = url.protocol === "https:" ? https : http;
+  const timeoutMs = resolveDocumentDownloadTimeoutMs(config);
+  let req;
+  let res;
+  let file;
+  let fileCreated = false;
+  let success = false;
+  let timeoutError;
+  // Total deadline includes connection, waiting for render and reading the body.
+  const timer = setTimeout(() => {
+    timeoutError = new HardwareAdapterError(`Download timeout setelah ${timeoutMs} ms.`, {
+      code: "DOCUMENT_DOWNLOAD_TIMEOUT", retrySafe: true, category: "network",
+    });
+    req?.destroy(timeoutError);
+    res?.destroy(timeoutError);
+    file?.destroy(timeoutError);
+  }, timeoutMs);
+  try {
+    res = await new Promise((resolve, reject) => {
+      req = client.get(url, {
+        headers: config.createRequestHeaders({
+          method: "GET", pathAndQuery: `${url.pathname}${url.search}`, payload: null,
+        }),
+      }, resolve);
+      req.on("error", reject);
+    });
+    const status = res.statusCode || 0;
+    if (status < 200 || status >= 300) {
+      const busy = status === 429 || status === 503;
+      const retrySafe = busy || [408, 425].includes(status) || status >= 500;
+      const retryAfterMs = retrySafe
+        ? parseRetryAfterMs(res.headers["retry-after"], res.headers.date) : null;
+      throw new HardwareAdapterError(`Download failed: HTTP ${status}.`, {
+        code: status === 429 ? "DOCUMENT_RATE_LIMITED" : status === 503 ? "DOCUMENT_SERVER_BUSY" : "DOCUMENT_DOWNLOAD_FAILED",
+        retrySafe, category: "network",
+        ...(retryAfterMs !== null ? { retryAfterMs } : busy ? { retryAfterMs: status === 429 ? 60_000 : 5_000 } : {}),
+      });
+    }
+    const contentType = String(res.headers["content-type"] || "").split(";", 1)[0].trim();
+    if (options.contentType && contentType !== options.contentType) {
+      throw new HardwareAdapterError(`Content-Type document tidak sesuai: ${contentType || "-"}.`, {
+        code: "DOCUMENT_CONTENT_TYPE_MISMATCH", category: "validation",
+      });
+    }
     const hash = crypto.createHash("sha256");
     let bytes = 0;
-    let settled = false;
     const maxBytes = Math.max(1, Number(options.maxBytes) || 10 * 1024 * 1024);
-
-    function fail(error) {
-      if (settled) return;
-      settled = true;
-      file.destroy();
-      try {
-        fs.unlinkSync(destination);
-      } catch {}
-      reject(error);
-    }
-
-    const req = client.get(
-      url,
-      {
-        headers: config.createRequestHeaders({
-          method: "GET",
-          pathAndQuery: `${url.pathname}${url.search}`,
-          payload: null,
-        }),
-      },
-      (res) => {
-        if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
-          res.resume();
-          fail(
-            new HardwareAdapterError(`Download failed: HTTP ${res.statusCode}.`, {
-              code: "DOCUMENT_DOWNLOAD_FAILED",
-              retrySafe: true,
-              category: "network",
-            }),
-          );
+    const measure = new Transform({
+      transform(chunk, encoding, callback) {
+        bytes += chunk.length;
+        if (bytes > maxBytes) {
+          callback(new HardwareAdapterError("Ukuran document melebihi batas payload.", {
+            code: "DOCUMENT_TOO_LARGE", category: "validation",
+          }));
           return;
         }
-        const contentType = String(res.headers["content-type"] || "").split(";", 1)[0].trim();
-        if (options.contentType && contentType !== options.contentType) {
-          res.resume();
-          fail(
-            new HardwareAdapterError(`Content-Type document tidak sesuai: ${contentType || "-"}.`, {
-              code: "DOCUMENT_CONTENT_TYPE_MISMATCH",
-              retrySafe: false,
-              category: "validation",
-            }),
-          );
-          return;
-        }
-        res.on("data", (chunk) => {
-          bytes += chunk.length;
-          if (bytes > maxBytes) {
-            req.destroy(
-              new HardwareAdapterError("Ukuran document melebihi batas payload.", {
-                code: "DOCUMENT_TOO_LARGE",
-                retrySafe: false,
-                category: "validation",
-              }),
-            );
-            return;
-          }
-          hash.update(chunk);
-        });
-        res.pipe(file);
-        file.on("finish", () => {
-          file.close(() => {
-            if (settled) return;
-            const sha256 = hash.digest("hex");
-            if (options.sha256 && options.sha256 !== sha256) {
-              fail(
-                new HardwareAdapterError("SHA-256 document tidak cocok.", {
-                  code: "DOCUMENT_HASH_MISMATCH",
-                  retrySafe: false,
-                  category: "validation",
-                }),
-              );
-              return;
-            }
-            settled = true;
-            resolve({ bytes, sha256, contentType, downloadDurationMs: Date.now() - downloadStartedAt });
-          });
-        });
+        hash.update(chunk);
+        callback(null, chunk);
       },
-    );
-    req.setTimeout(config.requestTimeoutMs, () => {
-      req.destroy(
-        new HardwareAdapterError(`Download timeout setelah ${config.requestTimeoutMs} ms.`, {
-          code: "DOCUMENT_DOWNLOAD_TIMEOUT",
-          retrySafe: true,
-          category: "network",
-        }),
-      );
     });
-    req.on("error", fail);
-    file.on("error", fail);
-  });
+    file = fs.createWriteStream(destination, { flags: "wx" });
+    file.once("open", () => { fileCreated = true; });
+    // pipeline rejects truncated responses and closes the file before cleanup.
+    await pipeline(res, measure, file);
+    const sha256 = hash.digest("hex");
+    if (options.sha256 && options.sha256 !== sha256) {
+      throw new HardwareAdapterError("SHA-256 document tidak cocok.", {
+        code: "DOCUMENT_HASH_MISMATCH", category: "validation",
+      });
+    }
+    success = true;
+    return { bytes, sha256, contentType, downloadDurationMs: Date.now() - downloadStartedAt };
+  } catch (error) {
+    if (timeoutError) throw timeoutError;
+    if (error instanceof HardwareAdapterError) throw error;
+    const network = ["ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "ETIMEDOUT", "ERR_STREAM_PREMATURE_CLOSE"].includes(error.code);
+    throw new HardwareAdapterError(`Download document gagal: ${error.message}`, {
+      code: network ? "DOCUMENT_DOWNLOAD_INTERRUPTED" : "DOCUMENT_DOWNLOAD_FAILED",
+      retrySafe: network, category: network ? "network" : "storage",
+    });
+  } finally {
+    clearTimeout(timer);
+    if (!success) {
+      res?.destroy();
+      req?.destroy();
+      if (fileCreated) await fs.promises.unlink(destination).catch(() => {});
+    }
+  }
 }
 
 function buildLegacyPdfCommand(config, filePath) {
@@ -705,6 +684,7 @@ function createHardwareAdapterFactory(config) {
         category: error.category || "adapter",
         code: error.code || "HARDWARE_ADAPTER_ERROR",
         retrySafe: error.retrySafe === true,
+        ...(Number.isSafeInteger(error.retryAfterMs) ? { retryAfterMs: error.retryAfterMs } : {}),
       };
     }
     const message = String(error?.message || error || "Unknown error").toLowerCase();

@@ -11,7 +11,7 @@ try {
   // dotenv optional agar agent tetap bisa dijalankan lewat environment variable OS.
 }
 
-const AGENT_VERSION = "2.5.1-fast-print";
+const AGENT_VERSION = "2.5.2-busy-queue";
 const { createOperationalLogger } = require("./lib/operational-logger");
 const operationalLogger = createOperationalLogger({
   logDir: path.resolve(__dirname, process.env.HARDWARE_LOG_DIR?.trim() || "logs"),
@@ -165,6 +165,7 @@ const PDF_PRINT_COMMAND = process.env.PDF_PRINT_COMMAND?.trim() || "";
 const POLL_INTERVAL_MS = optionalNumber("POLL_INTERVAL_MS", 1000);
 const HEARTBEAT_INTERVAL_MS = optionalNumber("HEARTBEAT_INTERVAL_MS", 30000);
 const REQUEST_TIMEOUT_MS = optionalNumber("REQUEST_TIMEOUT_MS", 15000);
+const DOCUMENT_DOWNLOAD_TIMEOUT_MS = optionalNumber("DOCUMENT_DOWNLOAD_TIMEOUT_MS", 90000);
 const PRINT_COMMAND_TIMEOUT_MS = optionalNumber("PRINT_COMMAND_TIMEOUT_MS", 60000);
 const LEASE_RENEW_INTERVAL_MS = optionalNumber("LEASE_RENEW_INTERVAL_MS", 20000);
 const LOCAL_RECOVERY_LIMIT = optionalNumber("LOCAL_RECOVERY_LIMIT", 50);
@@ -209,6 +210,10 @@ if (POLL_INTERVAL_MS < 1000) {
 }
 if (REQUEST_TIMEOUT_MS < 3000) {
   console.error("[-] REQUEST_TIMEOUT_MS minimal 3000 ms.");
+  process.exit(1);
+}
+if (!Number.isSafeInteger(DOCUMENT_DOWNLOAD_TIMEOUT_MS) || DOCUMENT_DOWNLOAD_TIMEOUT_MS < 5000 || DOCUMENT_DOWNLOAD_TIMEOUT_MS > 300000) {
+  console.error("[-] DOCUMENT_DOWNLOAD_TIMEOUT_MS harus 5000 sampai 300000 ms.");
   process.exit(1);
 }
 if (PRINT_COMMAND_TIMEOUT_MS < 5000) {
@@ -494,6 +499,7 @@ const adapterFactory = createHardwareAdapterFactory({
   pdfPrintArgsJson: PDF_PRINT_ARGS_JSON,
   pdfPrintCommand: PDF_PRINT_COMMAND,
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
+  documentDownloadTimeoutMs: DOCUMENT_DOWNLOAD_TIMEOUT_MS,
   printCommandTimeoutMs: PRINT_COMMAND_TIMEOUT_MS,
   powershellExecutable: HARDWARE_POWERSHELL_EXECUTABLE,
   satoLabelConfigPath: SATO_LABEL_CONFIG_PATH,
@@ -630,6 +636,7 @@ function getCapabilitiesPayload() {
     poll_interval_ms: POLL_INTERVAL_MS,
     heartbeat_interval_ms: HEARTBEAT_INTERVAL_MS,
     request_timeout_ms: REQUEST_TIMEOUT_MS,
+    document_download_timeout_ms: DOCUMENT_DOWNLOAD_TIMEOUT_MS,
     print_command_timeout_ms: PRINT_COMMAND_TIMEOUT_MS,
     lease_renew_interval_ms: LEASE_RENEW_INTERVAL_MS,
     configured_devices: {

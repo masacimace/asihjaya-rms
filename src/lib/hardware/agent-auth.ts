@@ -247,6 +247,16 @@ function toAuth(
   };
 }
 
+// Shared web/PDF routes also accept ordinary user sessions. Absence of Hub
+// credentials there is not a failed agent login and must not block its IP.
+export async function authenticateOptionalHardwareAgent(
+  req: Request | NextRequest,
+): Promise<HardwareAgentAuth | null> {
+  if (!["x-hardware-agent-id", "x-hardware-agent-secret", HARDWARE_AUTH_VERSION_HEADER, HARDWARE_SIGNATURE_HEADER]
+    .some((name) => req.headers.has(name))) return null;
+  return authenticateHardwareAgent(req);
+}
+
 export async function authenticateHardwareAgent(
   req: Request | NextRequest,
 ): Promise<HardwareAgentAuth | null> {

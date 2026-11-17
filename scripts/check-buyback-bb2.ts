@@ -117,7 +117,7 @@ assert.match(htmlRoute, /scope: "receipt-buyback"/);
 assert.match(htmlRoute, /requirePermission\("buybacks\.view"\)/);
 assert.match(apiRoute, /getBuybackReceiptData/);
 assert.match(apiRoute, /scope: "receipt-buyback"/);
-assert.match(apiRoute, /authenticateHardwareAgent/);
+assert.match(apiRoute, /authenticateOptionalHardwareAgent/);
 
 assert.match(hardwareContracts, /"buyback_receipt"/);
 assert.match(hardwareContracts, /buildBuybackReceiptDocumentPayloadV2/);

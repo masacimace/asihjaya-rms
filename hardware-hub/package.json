@@ -1,6 +1,6 @@
 {
   "name": "asihjaya-hardware-hub",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "private": true,
   "description": "Local Hardware Hub agent for Asihjaya RMS Mini PC deployments.",
   "main": "agent.js",
@@ -47,7 +47,7 @@
     "render:sato-label": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/render-sato-jewelry-label.ps1",
     "outlet:test-sato-label": "node scripts/generate-outlet-fixtures.js",
     "label:freeze-v3": "node scripts/finalize-sato-label-v3.js",
-    "check:document-adapter": "node scripts/check-real-document-adapter.js"
+    "check:document-adapter": "node scripts/check-real-document-adapter.js && node scripts/check-document-download.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2"
