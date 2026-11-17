@@ -1,20 +1,15 @@
 import {
-  AlertTriangle,
   ArrowLeft,
   Barcode,
   Boxes,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CircleDot,
   Filter,
-  PackageCheck,
-  Scale,
   Search,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
 
 import { ProductImage } from "@/components/media/product-image";
 import {
@@ -232,37 +227,6 @@ function getPaginationTokens(page: number, pageCount: number) {
   return tokens;
 }
 
-function SummaryCard({
-  title,
-  value,
-  helper,
-  icon,
-}: {
-  title: string;
-  value: string;
-  helper: string;
-  icon: ReactNode;
-}) {
-  return (
-    <article className="rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase text-neutral-500">
-            {title}
-          </p>
-          <p className="mt-3 text-xl font-semibold text-neutral-950 sm:text-2xl">
-            {value}
-          </p>
-          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{helper}</p>
-        </div>
-        <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)] ring-1 ring-amber-100">
-          {icon}
-        </div>
-      </div>
-    </article>
-  );
-}
-
 function InventoryMetric({
   label,
   value,
@@ -372,33 +336,6 @@ export default async function InventoryPage({
             </div>
           </div>
         </div>
-      </section>
-
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          title="Item tersedia"
-          value={formatNumber(overview.available)}
-          helper={`${formatWeight(overview.availableWeightGram)} siap jual di outlet aktif`}
-          icon={<PackageCheck className="size-5" />}
-        />
-        <SummaryCard
-          title="Total berat tersedia"
-          value={formatWeight(overview.availableWeightGram)}
-          helper="Akumulasi berat item yang berstatus Tersedia"
-          icon={<Scale className="size-5" />}
-        />
-        <SummaryCard
-          title="Reserved & draft"
-          value={formatNumber(overview.reserved + overview.draft)}
-          helper={`${formatNumber(overview.reserved)} reserved · ${formatNumber(overview.draft)} draft`}
-          icon={<CircleDot className="size-5" />}
-        />
-        <SummaryCard
-          title="Perlu perhatian"
-          value={formatNumber(overview.attention)}
-          helper="Item rusak, retur, atau hilang yang perlu dicek"
-          icon={<AlertTriangle className="size-5" />}
-        />
       </section>
 
       <details className="group overflow-hidden rounded-2xl border border-[var(--border)] bg-white">

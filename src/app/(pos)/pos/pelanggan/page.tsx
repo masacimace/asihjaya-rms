@@ -13,7 +13,6 @@ import {
   Search,
   Store,
   UsersRound,
-  WalletCards,
 } from "lucide-react";
 
 import { createPosCustomerAction } from "@/app/actions/pos";
@@ -156,35 +155,6 @@ function buildTransactionsHref(customer: PosCustomerListItem) {
   });
 
   return `/pos/transaksi?${params.toString()}`;
-}
-
-function SummaryCard({
-  title,
-  value,
-  helper,
-  icon,
-}: {
-  title: string;
-  value: string;
-  helper: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <article className="min-w-0 rounded-2xl border border-[var(--border)] bg-white p-4 sm:p-5">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm text-[var(--muted)]">{title}</p>
-          <p className="mt-2 break-words text-xl font-semibold text-neutral-950">
-            {value}
-          </p>
-          <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{helper}</p>
-        </div>
-        <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-          {icon}
-        </div>
-      </div>
-    </article>
-  );
 }
 
 function OutletBadge({ data }: { data: PosCustomerListData }) {
@@ -560,29 +530,6 @@ export default async function PosCustomersPage({ searchParams }: PageProps) {
         icon={<UsersRound className="size-5 sm:size-6" />}
         actions={<OutletBadge data={data} />}
       />
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <SummaryCard
-          title="Customer tampil"
-          value={String(data.summary.totalCustomers)}
-          helper={
-            data.query ? `Search: ${data.query}` : "Customer aktif organisasi."
-          }
-          icon={<UsersRound className="size-5" />}
-        />
-        <SummaryCard
-          title="Pernah transaksi"
-          value={String(data.summary.customersWithTransactions)}
-          helper="Customer dengan transaksi completed di outlet aktif."
-          icon={<ReceiptText className="size-5" />}
-        />
-        <SummaryCard
-          title="Total nilai"
-          value={formatMoney(data.summary.totalTransactionAmount)}
-          helper="Akumulasi transaksi customer yang sedang ditampilkan."
-          icon={<WalletCards className="size-5" />}
-        />
-      </div>
 
       <QuickCreateCustomerForm returnTo={currentHref} />
 
