@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { hardwareAgents, registers } from "@/db/schema";
+import { getActiveReceiptPrintDescription } from "@/features/pos/receipt-print-notifications";
 import {
   getPosShellStatus,
   type PosShellNotification,
@@ -111,16 +112,13 @@ function reconcileNotifications(
         notification.id !== "hardware-config-warning",
     )
     .map((notification) => {
-      if (notification.id !== "active-print-jobs") {
+      if (!notification.id.endsWith("active-print-jobs")) {
         return notification;
       }
 
       return {
         ...notification,
-        description:
-          hardware.status === "online"
-            ? "Hardware Hub sedang mengambil antrean cetak otomatis."
-            : "Nota akan tercetak otomatis saat Hardware Hub kembali online.",
+        description: getActiveReceiptPrintDescription(hardware.status),
         tone: hardware.status === "online" ? "info" : "warning",
       } satisfies PosShellNotification;
     });

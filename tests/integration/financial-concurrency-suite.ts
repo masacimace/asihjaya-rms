@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db, pool } from "@/db";
-import { customerDepositLedger } from "@/db/schema";
+import { customerDepositLedger, hardwareJobs } from "@/db/schema";
 import { lockCustomerDepositBalance } from "@/features/customers/deposit-balance-lock";
 import { getPublicCustomerHistoryData } from "@/features/customers/public-history";
 import { getReceiptCertificateData } from "@/features/sales/documents/receipt-certificate";
@@ -31,6 +31,7 @@ import {
 import { createHardwareJobV2 } from "@/lib/hardware/job-producer-v2";
 import { buildBuybackReceiptDocumentPayloadV2 } from "@/lib/hardware/job-payload-contracts-v2";
 import { getHardwareInstallerSettings, updateHardwareInstallerSettings } from "@/features/hardware/installer-settings";
+import { getPosShellStatus } from "@/features/pos/queries";
 import { type AuthContext } from "@/lib/auth/session";
 import { registerHardwareQueueTests } from "./hardware-queue-cases";
 import {
@@ -1080,6 +1081,86 @@ test("buyback completion and replay wait for an explicit manual receipt request"
   assert.equal(printed.job.id, duplicate.job.id);
   assert.equal(duplicate.duplicate, true);
   assert.equal(await queryCount("hardware_jobs"), 1, "Only the explicit manual request may create a print job.");
+});
+
+async function seedReceiptNotificationJob(f: OrganizationFixture, sourceId: string,
+  status: typeof hardwareJobs.$inferSelect.status, createdAt: Date,
+  options: { sourceType?: string; initialBuyback?: boolean; registerId?: string } = {}) {
+  const jobId = id();
+  await db.insert(hardwareJobs).values({
+    id: jobId, organizationId: f.organizationId, outletId: f.outletId, registerId: options.registerId ?? f.registerId,
+    protocolVersion: 1, jobType: "print_receipt_certificate", deviceType: "document_printer", status,
+    sourceType: options.sourceType ?? "sale", sourceId,
+    idempotencyKey: options.initialBuyback ? `buyback-receipt:${sourceId}:initial` : `notification-test:${jobId}`,
+    payload: { metadata: { requestSource: options.initialBuyback ? "pos.buyback" : "pos.transaction_detail" } },
+    createdAt, updatedAt: createdAt,
+  });
+  return jobId;
+}
+
+test("POS receipt alerts deduplicate failures and clear historical failures after a successful reprint", async ({ organizationA: f }) => {
+  await pool.query("update registers set is_hardware_hub = true where id = $1", [f.registerId]);
+  const sale = await createSale(f);
+  const printAlerts = async () => (await getPosShellStatus({ organizationId: f.organizationId, outletId: f.outletId })).notifications.filter(n => n.icon === "print");
+  for (let i = 0; i < 11; i++) await seedReceiptNotificationJob(f, sale.saleId, "failed", new Date(TEST_NOW.getTime() + i * 1000));
+  let alerts = await printAlerts();
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0]!.title, "1 nota penjualan gagal dicetak", "Eleven failed attempts belong to one receipt, not eleven receipts.");
+  assert.equal(alerts[0]!.href, `/pos/transaksi?range=all&detail=${sale.saleId}`);
+  await seedReceiptNotificationJob(f, sale.saleId, "completed", new Date(TEST_NOW.getTime() + 12000));
+  assert.equal((await printAlerts()).length, 0, "A successful reprint must clear historical failed-job alerts without deleting the old jobs.");
+  assert.equal(await queryCount("hardware_jobs", "where status = 'failed'"), 11);
+
+  await seedReceiptNotificationJob(f, sale.saleId, "failed", new Date(TEST_NOW.getTime() + 13000));
+  const pendingId = await seedReceiptNotificationJob(f, sale.saleId, "pending", new Date(TEST_NOW.getTime() + 14000));
+  alerts = await printAlerts();
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0]!.id, "active-print-jobs", "A newly queued retry has its own progress notification instead of a stale failure.");
+  await pool.query("update hardware_jobs set status='completed' where id=$1", [pendingId]);
+  assert.equal((await printAlerts()).length, 0);
+});
+
+test("POS retains uncertain receipt outcomes until confirmation even after another job completes", async ({ organizationA: f, organizationB: other }) => {
+  await pool.query("update registers set is_hardware_hub = true where id = $1", [f.registerId]);
+  const sale = await createSale(f);
+  const unknown = await seedReceiptNotificationJob(f, sale.saleId, "unknown_outcome", TEST_NOW);
+  await seedReceiptNotificationJob(f, sale.saleId, "completed", new Date(TEST_NOW.getTime() + 1000));
+  await seedReceiptNotificationJob(f, id(), "failed", TEST_NOW); // Missing transaction is not an actionable POS receipt.
+  await seedReceiptNotificationJob(f, "old-legacy-document-id", "failed", TEST_NOW); // Invalid UUID references must not break shell-status.
+  await seedReceiptNotificationJob(other, sale.saleId, "failed", TEST_NOW); // Foreign tenant must not match this sale.
+  let alerts = (await getPosShellStatus({ organizationId: f.organizationId, outletId: f.outletId })).notifications.filter(n => n.icon === "print");
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0]!.id, "uncertain-print-jobs");
+  assert.equal(alerts[0]!.title, "1 nota penjualan perlu konfirmasi");
+  assert.equal(alerts[0]!.tone, "warning");
+  assert.match(alerts[0]!.description, /Periksa nota fisik/);
+  await pool.query("update hardware_jobs set status='completed' where id=$1", [unknown]);
+  alerts = (await getPosShellStatus({ organizationId: f.organizationId, outletId: f.outletId })).notifications.filter(n => n.icon === "print");
+  assert.equal(alerts.length, 0);
+  await seedReceiptNotificationJob(f, sale.saleId, "failed", new Date(TEST_NOW.getTime() + 2000));
+  const foreignStatus = await getPosShellStatus({ organizationId: other.organizationId, outletId: f.outletId });
+  assert.equal(foreignStatus.notifications.length, 0, "Outlet access must remain scoped to the organization.");
+});
+
+test("POS separates manual Buyback receipts, ignores old optional automatic failures and preserves unknown outcomes", async ({ organizationA: f }) => {
+  await pool.query("update registers set is_hardware_hub = true where id = $1", [f.registerId]);
+  const buybackId = id();
+  await pool.query(`insert into buybacks(id,organization_id,outlet_id,register_id,shift_id,customer_id,processed_by,buyback_number,idempotency_key,status,total_amount,completed_at)
+    values($1,$2,$3,$4,$5,$6,$7,$8,$9,'completed',50000,now())`,
+    [buybackId,f.organizationId,f.outletId,f.registerId,f.shiftId,f.customerId,f.makerId,key("BB"),key("BB-KEY")]);
+  const printAlerts = async () => (await getPosShellStatus({ organizationId:f.organizationId,outletId:f.outletId })).notifications.filter(n => n.icon === "print");
+  const initialId = await seedReceiptNotificationJob(f, buybackId, "failed", TEST_NOW, { sourceType:"buyback",initialBuyback:true });
+  assert.equal((await printAlerts()).length, 0);
+  await seedReceiptNotificationJob(f, buybackId, "failed", new Date(TEST_NOW.getTime()+1000), { sourceType:"buyback" });
+  let alerts = await printAlerts();
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0]!.title, "1 nota buyback gagal dicetak");
+  assert.equal(alerts[0]!.href, `/pos/buyback?detail=${buybackId}`);
+  await seedReceiptNotificationJob(f, buybackId, "completed", new Date(TEST_NOW.getTime()+2000), { sourceType:"buyback" });
+  assert.equal((await printAlerts()).length, 0);
+  await pool.query("update hardware_jobs set status='unknown_outcome' where id=$1", [initialId]);
+  alerts = await printAlerts();
+  assert.equal(alerts[0]!.id, "buyback-uncertain-print-jobs");
 });
 
 registerHardwareQueueTests(test);
