@@ -47,9 +47,20 @@ assert.match(hardware,/const isA5PreprintedOverlay/);
 assert.match(hardware,/"paper=A5",\s*"fit",\s*"color",\s*"simplex"/);
 assert.match(hardware,/"paper=A5",\s*"noscale",\s*"color",\s*"simplex"/);
 
+// Buyback completion and replay wait for an explicit print request from detail.
+assert.doesNotMatch(
+  read("src/features/buybacks/service.ts"),
+  /createHardwareJobV2|buildBuybackReceiptDocumentPayloadV2/,
+  "Buyback completion/replay must not enqueue a receipt print job",
+);
+assert.match(
+  read("src/app/actions/buybacks.ts"),
+  /mode:\s*"manual"/,
+  "Buyback receipt printing must require an explicit manual request",
+);
+
 for (const [pathName, trigger] of [
   ["src/app/actions/pos.ts", /requestSource: "pos\.checkout"/],
-  ["src/features/buybacks/service.ts", /requestSource: "pos\.buyback"/],
   ["src/features/sales/admin-actions.ts", /requestSource: "admin\.sales\.detail"/],
   ["src/app/actions/buybacks.ts", /requestSource: "pos\.buyback\.detail"/],
 ] as const) {

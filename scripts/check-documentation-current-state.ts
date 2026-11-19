@@ -160,18 +160,19 @@ for (const retired of [
   );
 }
 
+// Current legacy imports synchronize stock status and defer conflicting rows.
 for (const marker of [
-  "Direct Import Current-State",
-  "Semua Row Tetap Masuk",
-  "availability = available",
-  "condition    = good",
-  "movement_type  = migration_opening",
-  "source = legacy_import",
-  "Harga/Gram aktif ASIHJAYA",
-  "Auto Image Sync",
-  "Failure Foto Tidak Memblokir POS",
-  "DIRECT_IMPORT_EXISTING_ITEMS_INCONSISTENT",
-  "completeCommittedImport",
+  "Sinkronkan Produk",
+  "Status Stok Legacy",
+  "availability=available",
+  "availability=sold",
+  "migration_opening",
+  "legacy_stock_sync",
+  "Harga/Gram aktif",
+  "advisory lock per organisasi",
+  "syncVersion=1",
+  "rowOutcomes",
+  "Gagal download tidak menggagalkan sinkronisasi",
 ]) {
   assert(legacy.includes(marker), `Legacy doc marker hilang: ${marker}`);
 }
@@ -189,7 +190,7 @@ for (const retiredRoute of [
 }
 
 for (const marker of [
-  'availability: "available"',
+  'availability: stockStatus === "sold" ? "sold" : "available"',
   'condition: "good"',
   'movementType: "migration_opening"',
   'source: "legacy_import"',
